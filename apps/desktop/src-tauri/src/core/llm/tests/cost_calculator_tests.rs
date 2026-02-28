@@ -33,7 +33,11 @@ mod media_pricing_tests {
             hd_cost,
             std_cost
         );
-        assert!((hd_cost - 0.08).abs() < 1e-10, "expected $0.08, got ${}", hd_cost);
+        assert!(
+            (hd_cost - 0.08).abs() < 1e-10,
+            "expected $0.08, got ${}",
+            hd_cost
+        );
     }
 
     #[test]
@@ -64,7 +68,11 @@ mod media_pricing_tests {
         // OpenAI Sora: $0.10/second. 10 seconds should cost $1.00.
         let cost_1s = calc.calculate_media_cost(Provider::OpenAI, MediaType::VideoPerSecond, 1);
         let cost_10s = calc.calculate_media_cost(Provider::OpenAI, MediaType::VideoPerSecond, 10);
-        assert!((cost_1s - 0.10).abs() < 1e-10, "expected $0.10/s, got ${}", cost_1s);
+        assert!(
+            (cost_1s - 0.10).abs() < 1e-10,
+            "expected $0.10/s, got ${}",
+            cost_1s
+        );
         assert!(
             (cost_10s - cost_1s * 10.0).abs() < 1e-9,
             "cost should scale linearly: 10s=${}, 1s*10=${}",
@@ -79,7 +87,11 @@ mod media_pricing_tests {
         // Google Veo 3: $0.08/second
         let cost_1s = calc.calculate_media_cost(Provider::Google, MediaType::VideoPerSecond, 1);
         let cost_5s = calc.calculate_media_cost(Provider::Google, MediaType::VideoPerSecond, 5);
-        assert!((cost_1s - 0.08).abs() < 1e-10, "expected $0.08/s, got ${}", cost_1s);
+        assert!(
+            (cost_1s - 0.08).abs() < 1e-10,
+            "expected $0.08/s, got ${}",
+            cost_1s
+        );
         assert!(
             (cost_5s - 0.40).abs() < 1e-9,
             "5 seconds should cost $0.40, got ${}",
@@ -119,7 +131,11 @@ mod media_pricing_tests {
         // ManagedCloud should fall through to an origin provider's pricing
         // and return a non-zero cost for image generation.
         let cost = calc.calculate_media_cost(Provider::ManagedCloud, MediaType::ImageStandard, 1);
-        assert!(cost > 0.0, "ManagedCloud media cost should be > 0, got {}", cost);
+        assert!(
+            cost > 0.0,
+            "ManagedCloud media cost should be > 0, got {}",
+            cost
+        );
     }
 
     #[test]
@@ -158,8 +174,7 @@ mod tests {
         let calc = CostCalculator::new();
         // deepseek-chat: $0.28/M input, $0.42/M output
         // 1_000_000 input + 1_000_000 output = $0.28 + $0.42 = $0.70
-        let cost =
-            calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
+        let cost = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
         assert!(
             (cost - 0.70).abs() < 1e-9,
             "Expected $0.70 for deepseek-chat 1M+1M tokens, got ${}",
@@ -172,8 +187,12 @@ mod tests {
         let calc = CostCalculator::new();
         // claude-sonnet-4-6: $3.00/M input, $15.00/M output
         // 1_000_000 input + 1_000_000 output = $3.00 + $15.00 = $18.00
-        let cost =
-            calc.calculate(Provider::Anthropic, "claude-sonnet-4-6", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Anthropic,
+            "claude-sonnet-4-6",
+            1_000_000,
+            1_000_000,
+        );
         assert!(
             (cost - 18.0).abs() < 1e-9,
             "Expected $18.00 for sonnet-4-6 1M+1M tokens, got ${}",
@@ -286,8 +305,7 @@ mod tests {
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
         let cheap = calc.calculate(Provider::DeepSeek, "deepseek-chat", 100_000, 100_000);
-        let expensive =
-            calc.calculate(Provider::Anthropic, "claude-opus-4-6", 100_000, 100_000);
+        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 100_000, 100_000);
         assert!(
             expensive > cheap,
             "Opus-4-6 (${}) must cost more than deepseek-chat (${}) for equal tokens",
@@ -300,7 +318,12 @@ mod tests {
     fn test_managed_cloud_falls_through_to_origin_provider() {
         let calc = CostCalculator::new();
         // ManagedCloud with deepseek-chat should match DeepSeek pricing
-        let managed = calc.calculate(Provider::ManagedCloud, "deepseek-chat", 1_000_000, 1_000_000);
+        let managed = calc.calculate(
+            Provider::ManagedCloud,
+            "deepseek-chat",
+            1_000_000,
+            1_000_000,
+        );
         let origin = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
         assert!(
             (managed - origin).abs() < 1e-9,
@@ -315,7 +338,10 @@ mod tests {
         // DeepSeek default: $0.27/M input, $0.42/M output
         let cost = calc.calculate(Provider::DeepSeek, "unknown-future-model", 1_000_000, 0);
         // Must be positive and close to the DeepSeek default ($0.27)
-        assert!(cost > 0.0, "Unknown model must use provider default (non-zero)");
+        assert!(
+            cost > 0.0,
+            "Unknown model must use provider default (non-zero)"
+        );
         assert!(
             cost < 10.0,
             "Unknown model default cost must be sane (< $10 per 1M tokens)"

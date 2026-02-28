@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_with_correlation_id() {
-        let result = with_correlation_id("my-test-id", || current_correlation_id());
+        let result = with_correlation_id("my-test-id", current_correlation_id);
 
         assert_eq!(result, Some("my-test-id".to_string()));
         assert!(current_correlation_id().is_none());
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_with_new_correlation_id() {
-        let (id, inner_id) = with_new_correlation_id(|| current_correlation_id());
+        let (id, inner_id) = with_new_correlation_id(current_correlation_id);
 
         assert_eq!(inner_id, Some(id.clone()));
         assert!(current_correlation_id().is_none());

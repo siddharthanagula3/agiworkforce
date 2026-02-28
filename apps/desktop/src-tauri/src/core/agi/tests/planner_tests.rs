@@ -517,15 +517,15 @@ mod tests {
     #[test]
     fn test_no_circular_dependencies_linear() {
         // Linear chain: step_1 -> step_2 -> step_3
-        let steps = vec![
-            ("step_1", vec![]),
-            ("step_2", vec!["step_1"]),
-            ("step_3", vec!["step_2"]),
+        let steps: [(&str, &[&str]); 3] = [
+            ("step_1", &[]),
+            ("step_2", &["step_1"]),
+            ("step_3", &["step_2"]),
         ];
 
         // Verify no step depends on a later step (simple linear check)
         for (i, (id, deps)) in steps.iter().enumerate() {
-            for dep in deps {
+            for dep in deps.iter() {
                 let dep_index = steps.iter().position(|(sid, _)| sid == dep).unwrap();
                 assert!(dep_index < i, "Step {} depends on later step {}", id, dep);
             }
@@ -544,7 +544,7 @@ mod tests {
 
         for (id, deps) in &steps {
             // Check all dependencies are executed
-            for dep in deps {
+            for dep in deps.iter() {
                 assert!(
                     executed.contains(&dep.to_string()),
                     "Dependency {} not yet executed for {}",

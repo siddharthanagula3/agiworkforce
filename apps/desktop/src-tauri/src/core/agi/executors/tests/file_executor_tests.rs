@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_file_executor_default() {
-        let executor = FileExecutor::default();
+        let executor = FileExecutor::new();
         assert_eq!(executor.tool_names().len(), 3);
     }
 

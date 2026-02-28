@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_default_impl() {
-        let executor = CalendarExecutor::default();
+        let executor = CalendarExecutor::new();
         assert_eq!(executor.tool_names().len(), 2);
     }
 }

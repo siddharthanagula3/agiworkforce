@@ -20,7 +20,7 @@ use crate::ui::events::{
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Instant;
@@ -40,6 +40,8 @@ const FILE_LIST_MAX_LIMIT: usize = 2_000;
 const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 const FILE_LIST_MAX_OFFSET: usize = 100_000;
 const FILE_READ_MAX_CHARS: usize = 200_000;
+const FILE_READ_MAX_BYTES: u64 = 50 * 1024 * 1024;
+const FILE_WRITE_MAX_BYTES: usize = 10 * 1024 * 1024;
 const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
 
@@ -1645,44 +1647,50 @@ impl ToolExecutor {
     }
 
     async fn validate_path(&self, path_str: &str) -> Result<()> {
+        self.canonicalize_validated_path(path_str).await.map(|_| ())
+    }
+
+    async fn canonicalize_validated_path(&self, path_str: &str) -> Result<PathBuf> {
         if let Some(app_handle) = &self.app_handle {
             let settings_state = app_handle.state::<SettingsState>();
             let settings = settings_state.settings.lock().await;
 
-            let mut allowed = if settings.allowed_directories.is_empty() {
+            let allowed = if settings.allowed_directories.is_empty() {
                 let mut defaults = Vec::new();
 
                 if let Some(ref project_folder) = self.project_folder {
-                    defaults.push(project_folder.clone());
+                    defaults.push(PathBuf::from(project_folder));
                 }
                 if let Some(home) = dirs::home_dir() {
-                    defaults.push(home.to_string_lossy().to_string());
+                    defaults.push(home);
                 }
                 if let Ok(cwd) = std::env::current_dir() {
-                    defaults.push(cwd.to_string_lossy().to_string());
+                    defaults.push(cwd);
                 }
-                defaults.push(std::env::temp_dir().to_string_lossy().to_string());
+                defaults.push(std::env::temp_dir());
 
                 defaults
             } else {
-                settings.allowed_directories.clone()
+                settings
+                    .allowed_directories
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>()
             };
 
             if allowed.is_empty() {
                 return Err(anyhow!("Access denied: No allowed directories configured."));
             }
 
-            // Canonicalize allowed directories when possible
-            for dir in &mut allowed {
-                if let Ok(canon) = std::fs::canonicalize(dir.as_str()) {
-                    *dir = canon.to_string_lossy().to_string();
-                }
-            }
+            let allowed_canonical = allowed
+                .into_iter()
+                .map(|dir| std::fs::canonicalize(&dir).unwrap_or(dir))
+                .collect::<Vec<_>>();
 
             // Canonicalize the input path to resolve symlinks and .. components.
             // This prevents path traversal via symlinks or relative components.
-            let path_canonical = match std::fs::canonicalize(path_str) {
-                Ok(canon) => canon.to_string_lossy().to_string(),
+            let canonical_path = match std::fs::canonicalize(path_str) {
+                Ok(canon) => canon,
                 Err(_) => {
                     // Path doesn't exist yet (e.g., file_write to a new file).
                     // Canonicalize the parent directory and append the filename.
@@ -1691,25 +1699,22 @@ impl ToolExecutor {
                         match std::fs::canonicalize(parent) {
                             Ok(canon_parent) => {
                                 if let Some(filename) = path.file_name() {
-                                    canon_parent.join(filename).to_string_lossy().to_string()
+                                    canon_parent.join(filename)
                                 } else {
-                                    path_str.replace('\\', "/")
+                                    PathBuf::from(path_str)
                                 }
                             }
-                            Err(_) => path_str.replace('\\', "/"),
+                            Err(_) => PathBuf::from(path_str),
                         }
                     } else {
-                        path_str.replace('\\', "/")
+                        PathBuf::from(path_str)
                     }
                 }
             };
 
-            let path_normalized = path_canonical.replace('\\', "/");
-
-            for allowed_dir in &allowed {
-                let allowed_normalized = allowed_dir.replace('\\', "/");
-                if path_normalized.starts_with(&allowed_normalized) {
-                    return Ok(());
+            for allowed_dir in &allowed_canonical {
+                if canonical_path.starts_with(allowed_dir) {
+                    return Ok(canonical_path);
                 }
             }
 
@@ -1718,7 +1723,7 @@ impl ToolExecutor {
                 path_str
             ));
         }
-        Ok(())
+        Ok(PathBuf::from(path_str))
     }
 
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
@@ -3052,32 +3057,49 @@ impl ToolExecutor {
     // Extracted tool implementations (one method per tool for readability)
     // -----------------------------------------------------------------------
 
-    async fn execute_file_read_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_file_read_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
-        // Resolve relative paths against project folder
         let path = self.resolve_path(&raw_path);
         let session_id = args
             .get("session_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        if let Err(e) = self.validate_path(&path).await {
+        let validated_path = match self.canonicalize_validated_path(&path).await {
+            Ok(validated_path) => validated_path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                });
+            }
+        };
+        let validated_path_string = validated_path.to_string_lossy().to_string();
+
+        let file_size = match fs::metadata(&validated_path).await {
+            Ok(metadata) => metadata.len(),
+            Err(_) => 0,
+        };
+        if file_size > FILE_READ_MAX_BYTES {
+            let error = format!(
+                "File too large to read: {} bytes (max {} bytes).",
+                file_size, FILE_READ_MAX_BYTES
+            );
             return Ok(ToolResult {
                 success: false,
-                data: json!({ "error": e.to_string(), "success": false }),
-                error: Some(e.to_string()),
-                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
             });
         }
 
-        match fs::read_to_string(&path).await {
+        match fs::read_to_string(&validated_path).await {
             Ok(content) => {
                 let content = if content.len() > FILE_READ_MAX_CHARS {
                     format!(
@@ -3092,7 +3114,7 @@ impl ToolExecutor {
 
                 if let Some(app_handle) = &self.app_handle {
                     let file_op = create_file_read_event(
-                        &path,
+                        &validated_path_string,
                         &content,
                         true,
                         None,
@@ -3103,27 +3125,25 @@ impl ToolExecutor {
 
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "content": content, "path": &path }),
+                    data: json!({ "content": content, "path": &validated_path_string }),
                     error: None,
-                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
                 })
             }
             Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
-                let is_pdf = Path::new(&path)
+                let is_pdf = validated_path
                     .extension()
                     .and_then(|ext| ext.to_str())
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
 
                 if is_pdf {
-                    let path_clone = path.clone();
+                    let path_clone = validated_path.clone();
                     let pdf_extract_result = tokio::task::spawn_blocking(move || {
                         pdf_extract::extract_text(Path::new(&path_clone))
                     })
                     .await
                     .map_err(|join_err| join_err.to_string())
-                    .and_then(|result| {
-                        result.map_err(|extract_err| extract_err.to_string())
-                    });
+                    .and_then(|result| result.map_err(|extract_err| extract_err.to_string()));
 
                     match pdf_extract_result {
                         Ok(extracted_text) => {
@@ -3140,7 +3160,7 @@ impl ToolExecutor {
 
                             if let Some(app_handle) = &self.app_handle {
                                 let file_op = create_file_read_event(
-                                    &path,
+                                    &validated_path_string,
                                     &content,
                                     true,
                                     None,
@@ -3151,10 +3171,10 @@ impl ToolExecutor {
 
                             Ok(ToolResult {
                                 success: true,
-                                data: json!({ "content": content, "path": &path }),
+                                data: json!({ "content": content, "path": &validated_path_string }),
                                 error: None,
                                 metadata: HashMap::from([
-                                    ("path".to_string(), json!(&path)),
+                                    ("path".to_string(), json!(&validated_path_string)),
                                     ("source".to_string(), json!("pdf_extract")),
                                 ]),
                             })
@@ -3162,11 +3182,11 @@ impl ToolExecutor {
                         Err(pdf_error) => {
                             let error = format!(
                                 "Failed to read PDF '{}': {}. Try document_extract_text for structured extraction.",
-                                path, pdf_error
+                                validated_path_string, pdf_error
                             );
                             if let Some(app_handle) = &self.app_handle {
                                 let file_op = create_file_read_event(
-                                    &path,
+                                    &validated_path_string,
                                     "",
                                     false,
                                     Some(error.clone()),
@@ -3181,7 +3201,7 @@ impl ToolExecutor {
                                 error: Some(error),
                                 metadata: HashMap::from([(
                                     "path".to_string(),
-                                    json!(&path),
+                                    json!(&validated_path_string),
                                 )]),
                             })
                         }
@@ -3189,11 +3209,11 @@ impl ToolExecutor {
                 } else {
                     let error = format!(
                         "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary for binary files.",
-                        path
+                        validated_path_string
                     );
                     if let Some(app_handle) = &self.app_handle {
                         let file_op = create_file_read_event(
-                            &path,
+                            &validated_path_string,
                             "",
                             false,
                             Some(error.clone()),
@@ -3206,14 +3226,17 @@ impl ToolExecutor {
                         success: false,
                         data: json!({ "error": error.clone(), "success": false }),
                         error: Some(error),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        metadata: HashMap::from([(
+                            "path".to_string(),
+                            json!(&validated_path_string),
+                        )]),
                     })
                 }
             }
             Err(e) => {
                 if let Some(app_handle) = &self.app_handle {
                     let file_op = create_file_read_event(
-                        &path,
+                        &validated_path_string,
                         "",
                         false,
                         Some(e.to_string()),
@@ -3226,22 +3249,18 @@ impl ToolExecutor {
                     success: false,
                     data: json!({ "error": format!("Failed to read file: {}", e), "success": false }),
                     error: Some(format!("Failed to read file: {}", e)),
-                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
                 })
             }
         }
     }
 
-    async fn execute_file_write_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_file_write_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
-        // Resolve relative paths against project folder
         let path = self.resolve_path(&raw_path);
         let content = args
             .get("content")
@@ -3253,25 +3272,43 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        if let Err(e) = self.validate_path(&path).await {
+        if content.len() > FILE_WRITE_MAX_BYTES {
+            let error = format!(
+                "File content too large: {} bytes (max {} bytes).",
+                content.len(),
+                FILE_WRITE_MAX_BYTES
+            );
             return Ok(ToolResult {
                 success: false,
-                data: json!({ "error": e.to_string(), "success": false }),
-                error: Some(e.to_string()),
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
                 metadata: HashMap::from([("path".to_string(), json!(&path))]),
             });
         }
 
-        let old_content = fs::read_to_string(&path).await.ok();
-        if let Some(parent) = Path::new(&path).parent() {
+        let validated_path = match self.canonicalize_validated_path(&path).await {
+            Ok(validated_path) => validated_path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                });
+            }
+        };
+        let validated_path_string = validated_path.to_string_lossy().to_string();
+
+        let old_content = fs::read_to_string(&validated_path).await.ok();
+        if let Some(parent) = validated_path.parent() {
             let _ = fs::create_dir_all(parent).await;
         }
 
-        let write_result = fs::write(&path, content.as_bytes()).await;
+        let write_result = fs::write(&validated_path, content.as_bytes()).await;
 
         if let Some(app_handle) = &self.app_handle {
             let file_op = create_file_write_event(
-                &path,
+                &validated_path_string,
                 old_content.as_deref(),
                 &content,
                 write_result.is_ok(),
@@ -3283,22 +3320,21 @@ impl ToolExecutor {
 
         match write_result {
             Ok(_) => {
-                // Record tool execution for undo
                 if let Some(app_handle) = &self.app_handle {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = session_id
                             .clone()
                             .unwrap_or_else(|| Uuid::new_v4().to_string());
-                        let path_buf = std::path::PathBuf::from(&path);
+                        let path_buf = std::path::PathBuf::from(&validated_path);
                         let _ = undo_state
                             .change_tracker
                             .record_tool_executed_with_path(
                                 "file_write".to_string(),
                                 path_buf,
-                                old_content.clone(), // Store original content for undo
-                                Some(content.clone()), // New content
+                                old_content.clone(),
+                                Some(content.clone()),
                                 task_id,
-                                true, // File writes are reversible
+                                true,
                                 Some("Restore previous file contents".to_string()),
                             )
                             .await;
@@ -3307,10 +3343,10 @@ impl ToolExecutor {
 
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "path": &path }),
+                    data: json!({ "success": true, "path": &validated_path_string }),
                     error: None,
                     metadata: HashMap::from([
-                        ("path".to_string(), json!(&path)),
+                        ("path".to_string(), json!(&validated_path_string)),
                         ("content_length".to_string(), json!(content.len())),
                     ]),
                 })
@@ -3319,48 +3355,47 @@ impl ToolExecutor {
                 success: false,
                 data: json!({ "error": format!("Failed to write file: {}", e), "success": false }),
                 error: Some(format!("Failed to write file: {}", e)),
-                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
             }),
         }
     }
 
-    async fn execute_file_delete_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_file_delete_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
-        // Resolve relative paths against project folder
         let path = self.resolve_path(&raw_path);
         let session_id = args
             .get("session_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        if let Err(e) = self.validate_path(&path).await {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": e.to_string(), "success": false }),
-                error: Some(e.to_string()),
-                metadata: HashMap::from([("path".to_string(), json!(&path))]),
-            });
-        }
+        let validated_path = match self.canonicalize_validated_path(&path).await {
+            Ok(validated_path) => validated_path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                });
+            }
+        };
+        let validated_path_string = validated_path.to_string_lossy().to_string();
 
-        // Read file content before deletion for undo capability
-        let file_content_before = fs::read_to_string(&path).await.ok();
+        let file_content_before = fs::read_to_string(&validated_path).await.ok();
 
-        let size_bytes = fs::metadata(&path)
+        let size_bytes = fs::metadata(&validated_path)
             .await
             .ok()
             .map(|meta| meta.len() as usize);
-        let delete_result = fs::remove_file(&path).await;
+        let delete_result = fs::remove_file(&validated_path).await;
 
         if let Some(app_handle) = &self.app_handle {
             let file_op = create_file_delete_event(
-                &path,
+                &validated_path_string,
                 size_bytes,
                 delete_result.is_ok(),
                 delete_result.as_ref().err().map(|e| e.to_string()),
@@ -3371,22 +3406,21 @@ impl ToolExecutor {
 
         match delete_result {
             Ok(_) => {
-                // Record tool execution for undo
                 if let Some(app_handle) = &self.app_handle {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = session_id
                             .clone()
                             .unwrap_or_else(|| Uuid::new_v4().to_string());
-                        let path_buf = std::path::PathBuf::from(&path);
+                        let path_buf = std::path::PathBuf::from(&validated_path);
                         let _ = undo_state
                             .change_tracker
                             .record_tool_executed_with_path(
                                 "file_delete".to_string(),
                                 path_buf,
-                                file_content_before, // Store content for restoration
-                                None,                // File was deleted, no after content
+                                file_content_before,
+                                None,
                                 task_id,
-                                true, // File deletes are reversible
+                                true,
                                 Some("Restore deleted file".to_string()),
                             )
                             .await;
@@ -3395,16 +3429,16 @@ impl ToolExecutor {
 
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "path": &path }),
+                    data: json!({ "success": true, "path": &validated_path_string }),
                     error: None,
-                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
                 })
             }
             Err(e) => Ok(ToolResult {
                 success: false,
                 data: json!({ "error": format!("Failed to delete file: {}", e), "success": false }),
                 error: Some(format!("Failed to delete file: {}", e)),
-                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
             }),
         }
     }
@@ -3473,14 +3507,9 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_ui_click_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_ui_click_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::automation::{
-                input::MouseButton, types::ElementQuery, AutomationService,
-            };
+            use crate::automation::{input::MouseButton, types::ElementQuery, AutomationService};
             use tauri::Manager;
 
             let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
@@ -3534,9 +3563,7 @@ impl ToolExecutor {
                         metadata: HashMap::new(),
                     }),
                 }
-            } else if let Some(element_id) =
-                target.get("element_id").and_then(|v| v.as_str())
-            {
+            } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                 match automation.native.invoke(element_id) {
                     Ok(_) => Ok(ToolResult {
                         success: true,
@@ -3582,10 +3609,7 @@ impl ToolExecutor {
                             Ok(ToolResult {
                                 success: false,
                                 data: json!({ "error": format!("Element with text '{}' not found", text), "success": false }),
-                                error: Some(format!(
-                                    "Element with text '{}' not found",
-                                    text
-                                )),
+                                error: Some(format!("Element with text '{}' not found", text)),
                                 metadata: HashMap::new(),
                             })
                         }
@@ -3615,10 +3639,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_ui_type_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_ui_type_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::automation::{
                 input::KeyboardSimulator, types::ElementQuery, AutomationService,
@@ -3762,14 +3783,32 @@ impl ToolExecutor {
         let search_type = args
             .get("search_type")
             .and_then(|v| v.as_str())
-            .map(|s| match s.to_lowercase().as_str() {
-                "news" => ExecSearchType::News,
-                "images" => ExecSearchType::General,
-                "code" | "programming" => ExecSearchType::Code,
-                "academic" | "scholarly" => ExecSearchType::Academic,
-                _ => ExecSearchType::General,
-            })
-            .unwrap_or(ExecSearchType::General);
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| "general".to_string());
+
+        if search_type == "images" {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": "Image search is not available in the desktop hobby-tier search flow yet. Use web or news search instead.",
+                    "success": false
+                }),
+                error: Some(
+                    "Image search is not available in the desktop hobby-tier search flow yet. Use web or news search instead.".to_string(),
+                ),
+                metadata: HashMap::from([
+                    ("query".to_string(), json!(&query)),
+                    ("search_type".to_string(), json!("images")),
+                ]),
+            });
+        }
+
+        let search_type = match search_type.as_str() {
+            "news" => ExecSearchType::News,
+            "code" | "programming" => ExecSearchType::Code,
+            "academic" | "scholarly" => ExecSearchType::Academic,
+            _ => ExecSearchType::General,
+        };
 
         // Emit progress: search in progress
         if let Some(app_handle) = &self.app_handle {
@@ -3987,10 +4026,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_code_execute_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_code_execute_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let language = args
             .get("language")
             .and_then(|v| v.as_str())
@@ -4036,10 +4072,7 @@ impl ToolExecutor {
                         success: true,
                         data: json!({ "success": true, "session_id": session_id, "code": code }),
                         error: None,
-                        metadata: HashMap::from([(
-                            "session_id".to_string(),
-                            json!(session_id),
-                        )]),
+                        metadata: HashMap::from([("session_id".to_string(), json!(session_id))]),
                     })
                 }
                 Err(e) => {
@@ -4063,10 +4096,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_git_push_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_push_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -4133,10 +4163,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_db_query_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_db_query_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let query = args
             .get("query")
             .and_then(|v| v.as_str())
@@ -4148,15 +4175,17 @@ impl ToolExecutor {
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "error": "db_query only supports SELECT statements. Use db_execute for modifications.", "success": false }),
-                error: Some("db_query only supports SELECT statements. Use db_execute for modifications.".to_string()),
+                error: Some(
+                    "db_query only supports SELECT statements. Use db_execute for modifications."
+                        .to_string(),
+                ),
                 metadata: HashMap::new(),
             });
         }
 
         // Block dangerous operations even in SELECT (like subqueries with mutations)
         let blocked_keywords = [
-            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE", "GRANT",
-            "REVOKE",
+            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE", "GRANT", "REVOKE",
         ];
         for keyword in &blocked_keywords {
             if query_upper.contains(keyword) {
@@ -4191,46 +4220,46 @@ impl ToolExecutor {
             };
 
             // Execute query and collect results - using a closure to manage lifetimes
-            let query_result: Result<(Vec<String>, Vec<serde_json::Value>), String> =
-                (|| {
-                    let mut stmt = conn
-                        .prepare(query)
-                        .map_err(|e| format!("Query preparation error: {}", e))?;
-                    let column_names: Vec<String> =
-                        stmt.column_names().iter().map(|s| s.to_string()).collect();
+            let query_result: Result<(Vec<String>, Vec<serde_json::Value>), String> = (|| {
+                let mut stmt = conn
+                    .prepare(query)
+                    .map_err(|e| format!("Query preparation error: {}", e))?;
+                let column_names: Vec<String> =
+                    stmt.column_names().iter().map(|s| s.to_string()).collect();
 
-                    let mut rows_iter = stmt
-                        .query([])
-                        .map_err(|e| format!("Query execution error: {}", e))?;
-                    let mut rows: Vec<serde_json::Value> = Vec::new();
+                let mut rows_iter = stmt
+                    .query([])
+                    .map_err(|e| format!("Query execution error: {}", e))?;
+                let mut rows: Vec<serde_json::Value> = Vec::new();
 
-                    while let Some(row) = rows_iter
-                        .next()
-                        .map_err(|e| format!("Row fetch error: {}", e))?
-                    {
-                        let mut obj = serde_json::Map::new();
-                        for (idx, col_name) in column_names.iter().enumerate() {
-                            let value: rusqlite::types::Value = row
-                                .get(idx)
-                                .map_err(|e| format!("Column read error: {}", e))?;
-                            obj.insert(
-                                col_name.clone(),
-                                match value {
-                                    rusqlite::types::Value::Null => json!(null),
-                                    rusqlite::types::Value::Integer(n) => json!(n),
-                                    rusqlite::types::Value::Real(f) => json!(f),
-                                    rusqlite::types::Value::Text(s) => json!(s),
-                                    rusqlite::types::Value::Blob(b) => {
-                                        json!(format!("<blob {} bytes>", b.len()))
-                                    }
-                                },
-                            );
-                        }
-                        rows.push(serde_json::Value::Object(obj));
+                while let Some(row) = rows_iter
+                    .next()
+                    .map_err(|e| format!("Row fetch error: {}", e))?
+                {
+                    let mut obj = serde_json::Map::new();
+                    for (idx, col_name) in column_names.iter().enumerate() {
+                        let value: rusqlite::types::Value = row
+                            .get(idx)
+                            .map_err(|e| format!("Column read error: {}", e))?;
+                        obj.insert(
+                            col_name.clone(),
+                            match value {
+                                rusqlite::types::Value::Null => json!(null),
+                                rusqlite::types::Value::Integer(n) => json!(n),
+                                rusqlite::types::Value::Real(f) => json!(f),
+                                rusqlite::types::Value::Text(s) => json!(s),
+                                rusqlite::types::Value::Blob(b) => {
+                                    json!(format!("<blob {} bytes>", b.len()))
+                                }
+                            },
+                        );
                     }
+                    rows.push(serde_json::Value::Object(obj));
+                }
 
-                    Ok((column_names, rows))
-                })();
+                Ok((column_names, rows))
+            })(
+            );
 
             match query_result {
                 Ok((column_names, rows)) => {
@@ -4263,10 +4292,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_db_execute_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_db_execute_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let query = args
             .get("query")
             .and_then(|v| v.as_str())
@@ -4501,10 +4527,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_api_call_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_api_call_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -4572,10 +4595,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_image_ocr_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_image_ocr_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let image_path = args
             .get("image_path")
             .and_then(|v| v.as_str())
@@ -4589,19 +4609,13 @@ impl ToolExecutor {
                     success: true,
                     data: json!({ "text": text, "image_path": image_path }),
                     error: None,
-                    metadata: HashMap::from([(
-                        "image_path".to_string(),
-                        json!(image_path),
-                    )]),
+                    metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
                 }),
                 Err(e) => Ok(ToolResult {
                     success: false,
                     data: json!({ "error": format!("OCR failed: {}", e), "success": false }),
                     error: Some(format!("OCR failed: {}", e)),
-                    metadata: HashMap::from([(
-                        "image_path".to_string(),
-                        json!(image_path),
-                    )]),
+                    metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
                 }),
             }
         }
@@ -4616,10 +4630,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_code_analyze_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_code_analyze_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let code = args
             .get("code")
             .and_then(|v| v.as_str())
@@ -4677,9 +4688,7 @@ impl ToolExecutor {
                 n: Some(1),
             };
 
-            match crate::sys::commands::media::media_generate_image(app.clone(), request)
-                .await
-            {
+            match crate::sys::commands::media::media_generate_image(app.clone(), request).await {
                 Ok(response) => {
                     let result_data = json!({
                         "success": true,
@@ -4756,12 +4765,9 @@ impl ToolExecutor {
                 input_image_url,
             };
 
-            match crate::sys::commands::media::media_generate_video(app.clone(), request)
-                .await
-            {
+            match crate::sys::commands::media::media_generate_video(app.clone(), request).await {
                 Ok(response) => {
-                    let provider_label =
-                        provider.clone().unwrap_or_else(|| "runway".to_string());
+                    let provider_label = provider.clone().unwrap_or_else(|| "runway".to_string());
                     let result_data = json!({
                         "success": true,
                         "prompt": prompt.clone(),
@@ -4799,10 +4805,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_llm_reason_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_llm_reason_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let prompt = args
             .get("prompt")
             .and_then(|v| v.as_str())
@@ -5097,9 +5100,7 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::cloud::{
-                cloud_upload, CloudState, CloudUploadRequest,
-            };
+            use crate::sys::commands::cloud::{cloud_upload, CloudState, CloudUploadRequest};
             use tauri::Manager;
 
             let state = app.state::<CloudState>();
@@ -5162,9 +5163,7 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::cloud::{
-                cloud_download, CloudDownloadRequest, CloudState,
-            };
+            use crate::sys::commands::cloud::{cloud_download, CloudDownloadRequest, CloudState};
             use tauri::Manager;
 
             let state = app.state::<CloudState>();
@@ -5227,9 +5226,7 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::features::productivity::{Provider, Task};
-            use crate::sys::commands::productivity::{
-                productivity_create_task, ProductivityState,
-            };
+            use crate::sys::commands::productivity::{productivity_create_task, ProductivityState};
             use tauri::Manager;
 
             let state = app.state::<ProductivityState>();
@@ -5257,9 +5254,8 @@ impl ToolExecutor {
                 }
             };
 
-            let task: Task =
-                serde_json::from_value(args.get("task").cloned().unwrap_or(json!({})))
-                    .map_err(|e| anyhow!("Invalid task data: {}", e))?;
+            let task: Task = serde_json::from_value(args.get("task").cloned().unwrap_or(json!({})))
+                .map_err(|e| anyhow!("Invalid task data: {}", e))?;
 
             match productivity_create_task(state, provider, task).await {
                 Ok(response) => Ok(ToolResult {
@@ -5412,13 +5408,7 @@ impl ToolExecutor {
                 .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
                 .unwrap_or_default();
 
-            match document_create_word_simple(
-                output_path.clone(),
-                title,
-                author,
-                paragraphs,
-            )
-            .await
+            match document_create_word_simple(output_path.clone(), title, author, paragraphs).await
             {
                 Ok(path) => Ok(ToolResult {
                     success: true,
@@ -5479,13 +5469,7 @@ impl ToolExecutor {
                 .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
                 .unwrap_or_default();
 
-            match document_create_excel_simple(
-                output_path.clone(),
-                sheet_name,
-                headers,
-                rows,
-            )
-            .await
+            match document_create_excel_simple(output_path.clone(), sheet_name, headers, rows).await
             {
                 Ok(path) => Ok(ToolResult {
                     success: true,
@@ -5545,9 +5529,7 @@ impl ToolExecutor {
                 .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
                 .unwrap_or_default();
 
-            match document_create_pdf_simple(output_path.clone(), title, author, paragraphs)
-                .await
-            {
+            match document_create_pdf_simple(output_path.clone(), title, author, paragraphs).await {
                 Ok(path) => Ok(ToolResult {
                     success: true,
                     data: json!({
@@ -5635,10 +5617,7 @@ impl ToolExecutor {
                     success: false,
                     data: json!({ "error": format!("Image analysis failed: {}", e), "success": false }),
                     error: Some(format!("Image analysis failed: {}", e)),
-                    metadata: HashMap::from([(
-                        "image_path".to_string(),
-                        json!(image_path),
-                    )]),
+                    metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
                 }),
             }
         } else {
@@ -5651,10 +5630,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_git_status_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_status_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -5699,10 +5675,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_git_commit_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_commit_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -5751,10 +5724,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_git_clone_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_clone_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -5804,10 +5774,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_git_add_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_add_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -5935,9 +5902,7 @@ impl ToolExecutor {
                             let local = dt.with_timezone(&Local);
                             local.format("%I:%M %p on %B %d").to_string()
                         }
-                        ParsedSchedule::Cron(_) | ParsedSchedule::Interval(_) => {
-                            time_expr.clone()
-                        }
+                        ParsedSchedule::Cron(_) | ParsedSchedule::Interval(_) => time_expr.clone(),
                     };
 
                     let response_msg = if is_recurring {
@@ -5946,10 +5911,7 @@ impl ToolExecutor {
                             message, time_expr
                         )
                     } else {
-                        format!(
-                            "I've set a reminder for {} to '{}'",
-                            friendly_time, message
-                        )
+                        format!("I've set a reminder for {} to '{}'", friendly_time, message)
                     };
 
                     Ok(ToolResult {
@@ -6159,10 +6121,7 @@ impl ToolExecutor {
                             Some(name) => {
                                 format!("I've cancelled the scheduled task '{}'", name)
                             }
-                            None => format!(
-                                "I've cancelled the scheduled task with ID {}",
-                                job_id
-                            ),
+                            None => format!("I've cancelled the scheduled task with ID {}", job_id),
                         };
 
                         Ok(ToolResult {
@@ -6285,10 +6244,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_file_list_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_file_list_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let requested_path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -6320,13 +6276,12 @@ impl ToolExecutor {
             .and_then(|v| v.as_u64())
             .unwrap_or(FILE_LIST_TIMEOUT_MS)
             .min(300_000);
-        let mut excludes =
-            Self::parse_string_array_param(args, "exclude").unwrap_or_else(|| {
-                FILE_LIST_DEFAULT_EXCLUDES
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect()
-            });
+        let mut excludes = Self::parse_string_array_param(args, "exclude").unwrap_or_else(|| {
+            FILE_LIST_DEFAULT_EXCLUDES
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        });
         excludes.sort();
         excludes.dedup();
 
@@ -6580,27 +6535,26 @@ impl ToolExecutor {
             let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
             // Support both "key" format and "category"/"topic" format
-            let (category, topic) =
-                if let Some(key) = args.get("key").and_then(|v| v.as_str()) {
-                    (MemoryCategory::Fact, key.to_string())
-                } else {
-                    let category_str = args
-                        .get("category")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("fact");
-                    let category = match category_str.to_lowercase().as_str() {
-                        "preference" | "preferences" => MemoryCategory::Preference,
-                        "decision" | "decisions" => MemoryCategory::Decision,
-                        "context" => MemoryCategory::Context,
-                        _ => MemoryCategory::Fact,
-                    };
-                    let topic = args
-                        .get("topic")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
-                        .to_string();
-                    (category, topic)
+            let (category, topic) = if let Some(key) = args.get("key").and_then(|v| v.as_str()) {
+                (MemoryCategory::Fact, key.to_string())
+            } else {
+                let category_str = args
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("fact");
+                let category = match category_str.to_lowercase().as_str() {
+                    "preference" | "preferences" => MemoryCategory::Preference,
+                    "decision" | "decisions" => MemoryCategory::Decision,
+                    "context" => MemoryCategory::Context,
+                    _ => MemoryCategory::Fact,
                 };
+                let topic = args
+                    .get("topic")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                    .to_string();
+                (category, topic)
+            };
 
             match memory_state.manager.recall(category, &topic) {
                 Ok(Some(entry)) => Ok(ToolResult {
@@ -6807,10 +6761,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_api_download_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_api_download_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -6861,9 +6812,7 @@ impl ToolExecutor {
 
                                 // Record for undo if available
                                 if let Some(app_handle) = &self.app_handle {
-                                    if let Some(undo_state) =
-                                        app_handle.try_state::<UndoState>()
-                                    {
+                                    if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                                         let task_id = Uuid::new_v4().to_string();
                                         let path_buf = std::path::PathBuf::from(&save_path);
                                         let _ = undo_state
@@ -6933,10 +6882,7 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_api_upload_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_api_upload_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -6967,8 +6913,7 @@ impl ToolExecutor {
             .unwrap_or("upload");
 
         // Create multipart form
-        let part =
-            reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
+        let part = reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
         let form = reqwest::multipart::Form::new().part("file", part);
 
         let client = reqwest::Client::new();
@@ -7001,10 +6946,7 @@ impl ToolExecutor {
         })
     }
 
-    async fn execute_git_init_tool(
-        &self,
-        args: &HashMap<String, Value>,
-    ) -> Result<ToolResult> {
+    async fn execute_git_init_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -7199,20 +7141,39 @@ impl ToolExecutor {
             "api_call" => self.execute_api_call_tool(&args).await,
             "image_ocr" => self.execute_image_ocr_tool(&args).await,
             "code_analyze" => self.execute_code_analyze_tool(&args).await,
-            "image_generate" | "media_generate_image" => self.execute_image_generate_tool(&args).await,
-            "video_generate" | "media_generate_video" => self.execute_video_generate_tool(&args).await,
+            "image_generate" | "media_generate_image" => {
+                self.execute_image_generate_tool(&args).await
+            }
+            "video_generate" | "media_generate_video" => {
+                self.execute_video_generate_tool(&args).await
+            }
             "llm_reason" => self.execute_llm_reason_tool(&args).await,
             "email_send" => self.execute_email_send_tool(&args, &tool.id).await,
             "email_fetch" => self.execute_email_fetch_tool(&args, &tool.id).await,
-            "calendar_create_event" => self.execute_calendar_create_event_tool(&args, &tool.id).await,
-            "calendar_list_events" => self.execute_calendar_list_events_tool(&args, &tool.id).await,
+            "calendar_create_event" => {
+                self.execute_calendar_create_event_tool(&args, &tool.id)
+                    .await
+            }
+            "calendar_list_events" => {
+                self.execute_calendar_list_events_tool(&args, &tool.id)
+                    .await
+            }
             "cloud_upload" => self.execute_cloud_upload_tool(&args, &tool.id).await,
             "cloud_download" => self.execute_cloud_download_tool(&args, &tool.id).await,
-            "productivity_create_task" => self.execute_productivity_create_task_tool(&args, &tool.id).await,
+            "productivity_create_task" => {
+                self.execute_productivity_create_task_tool(&args, &tool.id)
+                    .await
+            }
             "document_read" => self.execute_document_read_tool(&args, &tool.id).await,
             "document_search" => self.execute_document_search_tool(&args, &tool.id).await,
-            "document_create_word" => self.execute_document_create_word_tool(&args, &tool.id).await,
-            "document_create_excel" => self.execute_document_create_excel_tool(&args, &tool.id).await,
+            "document_create_word" => {
+                self.execute_document_create_word_tool(&args, &tool.id)
+                    .await
+            }
+            "document_create_excel" => {
+                self.execute_document_create_excel_tool(&args, &tool.id)
+                    .await
+            }
             "document_create_pdf" => self.execute_document_create_pdf_tool(&args, &tool.id).await,
             "image_analyze" => self.execute_image_analyze_tool(&args).await,
             "git_status" => self.execute_git_status_tool(&args).await,
@@ -7220,9 +7181,18 @@ impl ToolExecutor {
             "git_clone" => self.execute_git_clone_tool(&args).await,
             "git_add" => self.execute_git_add_tool(&args).await,
             "schedule_reminder" => self.execute_schedule_reminder_tool(&args, &tool.id).await,
-            "schedule_recurring_task" => self.execute_schedule_recurring_task_tool(&args, &tool.id).await,
-            "cancel_scheduled_task" => self.execute_cancel_scheduled_task_tool(&args, &tool.id).await,
-            "list_scheduled_tasks" => self.execute_list_scheduled_tasks_tool(&args, &tool.id).await,
+            "schedule_recurring_task" => {
+                self.execute_schedule_recurring_task_tool(&args, &tool.id)
+                    .await
+            }
+            "cancel_scheduled_task" => {
+                self.execute_cancel_scheduled_task_tool(&args, &tool.id)
+                    .await
+            }
+            "list_scheduled_tasks" => {
+                self.execute_list_scheduled_tasks_tool(&args, &tool.id)
+                    .await
+            }
             "file_list" => self.execute_file_list_tool(&args).await,
             "memory_remember" => self.execute_memory_remember_tool(&args, &tool.id).await,
             "memory_recall" => self.execute_memory_recall_tool(&args, &tool.id).await,
@@ -7689,8 +7659,7 @@ mod tests {
         let result = ToolExecutor::build_job_autofill_profile(&args);
         assert!(result.is_err());
         assert!(result
-            .err()
-            .expect("missing profile should fail")
+            .expect_err("missing profile should fail")
             .to_string()
             .contains("Missing profile parameter"));
     }

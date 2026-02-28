@@ -616,6 +616,7 @@ mod tests {
 
     #[test]
     fn test_default_impl() {
+        #[allow(clippy::default_constructed_unit_structs)]
         let executor = DatabaseExecutor::default();
         assert_eq!(executor.tool_names().len(), 5);
     }
