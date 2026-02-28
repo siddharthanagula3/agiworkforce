@@ -9,7 +9,9 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
-export const OPTIONS = handleCorsPreflightRequest;
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
 
 /**
  * POST /api/agents/session
