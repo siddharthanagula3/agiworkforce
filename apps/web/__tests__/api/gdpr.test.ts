@@ -171,10 +171,10 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
   describe('Authentication', () => {
     it('should reject unauthenticated requests', async () => {
-      // Mock no session
-      mockSupabaseClient.auth.getSession.mockResolvedValue({
-        data: { session: null },
-        error: null,
+      // Mock no user — the route calls auth.getUser(), not auth.getSession()
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'No session found' },
       });
 
       const { DELETE } = await import('@/app/api/user/data/route');
@@ -431,9 +431,10 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
 
   describe('Authentication', () => {
     it('should reject unauthenticated requests', async () => {
-      mockSupabaseClient.auth.getSession.mockResolvedValue({
-        data: { session: null },
-        error: null,
+      // Mock no user — the route calls auth.getUser(), not auth.getSession()
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'No session found' },
       });
 
       const { GET } = await import('@/app/api/user/export/route');

@@ -30,6 +30,7 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
+    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
     if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
     return 'test-value';
   }),
@@ -39,9 +40,23 @@ vi.mock('@/utils/env', () => ({
   }),
 }));
 
-// Mock Supabase
+// Mock user for auth
+const mockAuthUser = {
+  id: 'auth-user-123',
+  email: 'auth@example.com',
+};
+
+// Mock Supabase — the route creates TWO clients:
+// 1. An auth client (via createClient with anon key) to verify the Bearer token
+// 2. A service client (via createClient with service role key) for DB operations
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: mockAuthUser },
+        error: null,
+      }),
+    },
     from: vi.fn(() => ({
       upsert: vi.fn().mockResolvedValue({ error: null }),
     })),
@@ -69,6 +84,7 @@ describe('Device Link API', () => {
       it('should return 400 for invalid JSON', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
+          headers: { Authorization: 'Bearer valid-test-token' },
           body: 'invalid json',
         });
 
@@ -79,7 +95,7 @@ describe('Device Link API', () => {
       it('should return 400 for missing device_id', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({ device_name: 'Test' }),
         });
 
@@ -90,7 +106,7 @@ describe('Device Link API', () => {
       it('should accept request with only required fields', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({
             device_id: 'device-123',
             device_fingerprint: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
@@ -104,7 +120,7 @@ describe('Device Link API', () => {
       it('should return 200 with valid request', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify(validRequest),
         });
 
@@ -137,7 +153,7 @@ describe('Device Link API', () => {
       it('generated link_code has non-zero length', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify(validRequest),
         });
 
@@ -152,7 +168,7 @@ describe('Device Link API', () => {
       it('generated link_code consists of hex or alphanumeric characters', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify(validRequest),
         });
 
@@ -168,7 +184,10 @@ describe('Device Link API', () => {
           POST(
             new NextRequest('http://localhost/api/device/link', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer valid-test-token',
+              },
               body: JSON.stringify({ ...validRequest, device_id: `device-${Math.random()}` }),
             }),
           );
@@ -187,7 +206,7 @@ describe('Device Link API', () => {
       it('verify_url contains the link_code', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify(validRequest),
         });
 
@@ -200,15 +219,16 @@ describe('Device Link API', () => {
       it('expires_at is a future ISO date string', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify(validRequest),
         });
 
         const response = await POST(request);
         const data = await response.json();
 
-        const expiresAt = new Date(data.expires_at);
-        expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
+        // expires_at is returned as Unix timestamp in seconds
+        const expiresAtMs = data.expires_at * 1000;
+        expect(expiresAtMs).toBeGreaterThan(Date.now());
       });
     });
 
@@ -216,7 +236,7 @@ describe('Device Link API', () => {
       it('returns 400 when device_fingerprint contains non-hex characters', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({
             ...validRequest,
             device_fingerprint: 'zzzzzzzzzzzz', // non-hex
@@ -231,7 +251,7 @@ describe('Device Link API', () => {
       it('returns 400 when device_id is empty string', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({ ...validRequest, device_id: '' }),
         });
 
@@ -242,7 +262,7 @@ describe('Device Link API', () => {
       it('returns 400 when device_name exceeds maximum length', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({
             ...validRequest,
             device_name: 'a'.repeat(300), // excessively long
@@ -263,14 +283,20 @@ describe('Device Link API', () => {
           POST(
             new NextRequest('http://localhost/api/device/link', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer valid-test-token',
+              },
               body: samePayload,
             }),
           ),
           POST(
             new NextRequest('http://localhost/api/device/link', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer valid-test-token',
+              },
               body: samePayload,
             }),
           ),
@@ -285,7 +311,7 @@ describe('Device Link API', () => {
       it('device_id is reflected back in the response', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-test-token' },
           body: JSON.stringify({ ...validRequest, device_id: 'unique-device-xyz' }),
         });
 

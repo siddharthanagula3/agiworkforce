@@ -155,7 +155,8 @@ describe('Safe Redirect', () => {
 
       it('should handle unicode in path', () => {
         const result = getSafeRedirectUrl('/path/日本語', origin);
-        expect(result).toBe('/path/日本語');
+        // The URL constructor encodes non-ASCII characters in the pathname
+        expect(result).toBe('/path/%E6%97%A5%E6%9C%AC%E8%AA%9E');
       });
     });
   });
@@ -199,7 +200,13 @@ describe('Safe Redirect', () => {
         // Use URL constructor for proper origin comparison instead of startsWith
         // to avoid CodeQL js/incomplete-url-substring-sanitization (startsWith would
         // also match 'https://evil.com.attacker.com').
-        const parsed = (() => { try { return new URL(result); } catch { return null; } })();
+        const parsed = (() => {
+          try {
+            return new URL(result);
+          } catch {
+            return null;
+          }
+        })();
         if (parsed) {
           expect(parsed.origin).not.toBe('https://evil.com');
           expect(parsed.origin).not.toBe('http://evil.com');

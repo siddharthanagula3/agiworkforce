@@ -251,8 +251,8 @@ describe('Subscription Service', () => {
       expect(CreditService.getOrCreateAccount).not.toHaveBeenCalled();
     });
 
-    it('should not allocate credits for enterprise tier (custom)', async () => {
-      const result = await SubscriptionService.allocateCreditsForPeriod(
+    it('should allocate credits for enterprise tier (100000 cents)', async () => {
+      await SubscriptionService.allocateCreditsForPeriod(
         mockUserId,
         'sub-1',
         'enterprise',
@@ -260,8 +260,13 @@ describe('Subscription Service', () => {
         periodEnd,
       );
 
-      expect(result).toBe('');
-      expect(CreditService.getOrCreateAccount).not.toHaveBeenCalled();
+      expect(CreditService.getOrCreateAccount).toHaveBeenCalledWith(
+        mockUserId,
+        'sub-1',
+        periodStart,
+        periodEnd,
+        100000,
+      );
     });
 
     it('should handle case-insensitive tier names', async () => {
@@ -325,7 +330,7 @@ describe('Subscription Service', () => {
       expect(SubscriptionService.getCreditAllocation('hobby')).toBe(350);
       expect(SubscriptionService.getCreditAllocation('pro')).toBe(1200);
       expect(SubscriptionService.getCreditAllocation('max')).toBe(15000);
-      expect(SubscriptionService.getCreditAllocation('enterprise')).toBe(0);
+      expect(SubscriptionService.getCreditAllocation('enterprise')).toBe(100000);
     });
 
     it('should return 0 for unknown tier', () => {
