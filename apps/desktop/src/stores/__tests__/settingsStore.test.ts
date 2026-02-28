@@ -116,13 +116,18 @@ describe('settingsStore', () => {
   });
 
   it('should handle provider setting errors', async () => {
+    // Suppress expected console.error from the store's error handler
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     const errorMessage = 'Failed to set provider';
     invokeMock.mockRejectedValue(new Error(errorMessage));
 
     const { setDefaultProvider } = useSettingsStore.getState();
     await expect(setDefaultProvider('ollama')).rejects.toThrow(errorMessage);
 
-    expect(useSettingsStore.getState().error).toBe(`Error: ${errorMessage}`);
+    expect(useSettingsStore.getState().error).toBe('Something went wrong. Please try again.');
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('should update temperature', () => {
@@ -232,6 +237,9 @@ describe('settingsStore', () => {
   });
 
   it('should handle save errors', async () => {
+    // Suppress expected console.error from the store's error handler
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     const errorMessage = 'Database error';
     invokeMock.mockRejectedValue(new Error(errorMessage));
 
@@ -239,7 +247,9 @@ describe('settingsStore', () => {
     await expect(saveSettings()).rejects.toThrow(errorMessage);
 
     expect(useSettingsStore.getState().loading).toBe(false);
-    expect(useSettingsStore.getState().error).toBe(`Error: ${errorMessage}`);
+    expect(useSettingsStore.getState().error).toBe('Something went wrong. Please try again.');
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('should set task routing for managed_cloud', () => {
@@ -533,8 +543,14 @@ describe('settingsStore migrate() boundaries (H16)', () => {
         },
       };
       const result = migrateSettings(old, 1);
-      expect(result.llmConfig?.taskRouting?.['code']).toEqual({ provider: 'managed_cloud', model: 'auto' });
-      expect(result.llmConfig?.taskRouting?.['chat']).toEqual({ provider: 'managed_cloud', model: 'auto' });
+      expect(result.llmConfig?.taskRouting?.['code']).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
+      expect(result.llmConfig?.taskRouting?.['chat']).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
     });
   });
 
