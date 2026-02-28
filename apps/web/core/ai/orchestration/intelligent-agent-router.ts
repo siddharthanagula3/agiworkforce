@@ -1,6 +1,7 @@
+// Skills = AI Agents (formerly employees)
 /**
  * Intelligent Agent Router
- * Automatically selects the best AI employee(s) to handle user queries
+ * Automatically selects the best AI skill/agent to handle user queries
  * Based on expertise matching, keyword analysis, and context understanding
  */
 
@@ -818,6 +819,20 @@ export class IntelligentAgentRouter {
   }
 
   /**
+   * Route directly to a skill by its ID
+   */
+  routeBySkillId(skillId: string): AgentCapability | undefined {
+    return this.agents.get(skillId);
+  }
+
+  /**
+   * Get the 9 skill categories with their member agent IDs
+   */
+  getSkillCategories(): Array<{ id: string; name: string; skills: string[] }> {
+    return SkillCategories;
+  }
+
+  /**
    * Check if query needs multiple agents
    */
   needsMultipleAgents(query: string): boolean {
@@ -882,5 +897,198 @@ export const RoutingExamples = {
   product: 'Create a PRD for a dark mode feature',
   architecture: 'Design a scalable microservices architecture',
 };
+
+/**
+ * Skill categories — groups the 140 AI agents into 9 browsable categories.
+ * Each category lists the RoleExpertiseMapping keys that belong to it.
+ */
+export const SkillCategories: Array<{ id: string; name: string; skills: string[] }> = [
+  {
+    id: 'technical',
+    name: 'Technical',
+    skills: [
+      'frontend-engineer',
+      'backend-engineer',
+      'code-reviewer',
+      'debugger',
+      'architect',
+      'senior-software-engineer',
+      'senior-devops-engineer',
+      'senior-qa-engineer',
+      'senior-ui-ux-designer',
+      'product-manager',
+      'system-architect',
+      'tech-support-specialist',
+      '3d-artist',
+      'video-editor',
+      'animator',
+      'illustrator',
+      'audio-engineer',
+    ],
+  },
+  {
+    id: 'healthcare',
+    name: 'Healthcare & Wellness',
+    skills: [
+      'health-advisor',
+      'primary-care-physician',
+      'mental-health-therapist',
+      'mental-health-counselor',
+      'psychiatrist',
+      'pediatrician',
+      'veterinarian',
+      'dentist',
+      'dermatologist',
+      'nutritionist',
+      'physical-therapist',
+      'addiction-counselor',
+      'pharmacist',
+      'nurse-practitioner',
+      'chiropractor',
+      'sleep-specialist',
+      'pain-management-specialist',
+      'yoga-instructor',
+      'meditation-coach',
+      'weight-loss-coach',
+      'sleep-coach',
+      'stress-management-coach',
+      'personal-trainer',
+      'sports-coach',
+      'pet-care-specialist',
+      'relationship-counselor',
+      'sex-therapist',
+      'grief-counselor',
+      'adhd-coach',
+    ],
+  },
+  {
+    id: 'finance',
+    name: 'Finance & Business',
+    skills: [
+      'financial-advisor',
+      'investment-advisor',
+      'cpa-tax-specialist',
+      'mortgage-broker',
+      'insurance-advisor',
+      'estate-planning-specialist',
+      'retirement-planner',
+      'credit-counselor',
+      'cryptocurrency-advisor',
+      'small-business-bookkeeper',
+      'personal-finance-coach',
+      'auto-insurance-specialist',
+    ],
+  },
+  {
+    id: 'legal',
+    name: 'Legal',
+    skills: [
+      'ai-lawyer',
+      'family-law-attorney',
+      'immigration-lawyer',
+      'real-estate-attorney',
+      'employment-lawyer',
+      'criminal-defense-attorney',
+      'personal-injury-lawyer',
+      'intellectual-property-attorney',
+      'bankruptcy-attorney',
+      'divorce-mediator',
+    ],
+  },
+  {
+    id: 'education',
+    name: 'Education',
+    skills: [
+      'expert-tutor',
+      'academic-tutor',
+      'college-admissions-advisor',
+      'sat-act-tutor',
+      'graduate-test-prep-coach',
+      'language-tutor',
+      'stem-educator',
+      'homeschool-advisor',
+      'study-skills-coach',
+      'special-education-specialist',
+      'music-teacher',
+    ],
+  },
+  {
+    id: 'creative',
+    name: 'Creative & Content',
+    skills: [
+      'youtube-channel-manager',
+      'tiktok-content-strategist',
+      'influencer-marketing-coach',
+      'podcast-consultant',
+      'streaming-consultant',
+      'instagram-growth-specialist',
+      'content-monetization-strategist',
+      'personal-brand-consultant',
+      'photographer',
+      'music-producer',
+      'podcast-producer',
+      'voice-actor',
+      'online-course-creator',
+    ],
+  },
+  {
+    id: 'ecommerce',
+    name: 'E-Commerce',
+    skills: [
+      'shopify-consultant',
+      'amazon-fba-specialist',
+      'dropshipping-advisor',
+      'affiliate-marketing-specialist',
+      'etsy-shop-consultant',
+    ],
+  },
+  {
+    id: 'trades',
+    name: 'Trades & Home',
+    skills: [
+      'home-advisor',
+      'electrician-advisor',
+      'plumber-advisor',
+      'hvac-technician',
+      'auto-mechanic-advisor',
+      'general-contractor',
+      'carpenter-advisor',
+      'landscaper-advisor',
+      'home-inspector',
+      'disaster-preparedness-specialist',
+      'moving-coordinator',
+      'real-estate-agent',
+      'property-manager',
+    ],
+  },
+  {
+    id: 'lifestyle',
+    name: 'Automotive & Lifestyle',
+    skills: [
+      'car-buying-consultant',
+      'electric-vehicle-specialist',
+      'used-car-advisor',
+      'travel-advisor',
+      'vacation-planner',
+      'wedding-planner',
+      'event-planner',
+      'personal-chef',
+      'expert-chef',
+      'party-planner',
+      'restaurant-consultant',
+      'career-counselor',
+      'life-coach',
+      'parenting-coach',
+      'childcare-advisor',
+      'elder-care-specialist',
+      'family-therapist',
+      'pregnancy-coach',
+      'gaming-coach',
+    ],
+  },
+];
+
+/** Alias: access the RoleExpertiseMapping as "skills" */
+export const skills = RoleExpertiseMapping;
 
 export default IntelligentAgentRouter;

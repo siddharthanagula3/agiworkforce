@@ -22,3 +22,5 @@ export {
 export { documentExportService } from './document-export-service';
 export { documentGenerationService } from './document-generation-service';
 export { attachmentHandler } from './attachment-handler';
+export { ChatAIService } from './chat-ai-service';
+export type { SkillInfo } from './chat-ai-service';

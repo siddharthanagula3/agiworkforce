@@ -1350,6 +1350,44 @@ Query: "Help me learn Python" → Answer: "expert-tutor"
   areEmployeesLoaded(): boolean {
     return this.employeesLoaded;
   }
+
+  /**
+   * Chat directly with a specific skill (simplified path — no Plan-Delegate-Execute).
+   * Looks up the skill by ID, loads its system prompt, calls the LLM, and returns the response.
+   */
+  async chatWithSkill(
+    skillId: string,
+    message: string,
+    sessionId: string,
+    conversationHistory?: ConversationHistoryMessage[],
+  ): Promise<string> {
+    // Ensure employees are loaded
+    if (!this.employeesLoaded) {
+      this.employees = await systemPromptsService.getAvailableEmployees();
+      if (this.employees.length > 0) {
+        this.employeesLoaded = true;
+      }
+    }
+
+    const employee = this.employees.find(
+      (e) => e.name === skillId || e.name.toLowerCase() === skillId.toLowerCase(),
+    );
+
+    if (!employee) {
+      // Fallback: process as a generic chat request without a specific skill
+      const result = await this.processRequest({
+        userId: 'anonymous',
+        input: message,
+        mode: 'chat',
+        sessionId,
+        conversationHistory,
+      });
+      return result.chatResponse || result.error || 'No response generated';
+    }
+
+    // Route directly to the matched employee
+    return this.routeMessageToEmployee(employee.name, message, conversationHistory, sessionId);
+  }
 }
 
 // Export singleton instance
