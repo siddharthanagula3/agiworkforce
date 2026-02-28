@@ -133,10 +133,10 @@ export function useMarketplaceEmployees(
       if (filters?.priceRange) {
         const { min, max } = filters.priceRange;
         if (min !== undefined) {
-          employees = employees.filter((e) => e.price >= min);
+          employees = employees.filter((e) => (e.price ?? 0) >= min);
         }
         if (max !== undefined) {
-          employees = employees.filter((e) => e.price <= max);
+          employees = employees.filter((e) => (e.price ?? 0) <= max);
         }
       }
 
@@ -147,7 +147,7 @@ export function useMarketplaceEmployees(
             employees.sort((a, b) => a.name.localeCompare(b.name));
             break;
           case 'price':
-            employees.sort((a, b) => a.price - b.price);
+            employees.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
             break;
           case 'rating':
             employees.sort((a, b) => (b.rating || 0) - (a.rating || 0));

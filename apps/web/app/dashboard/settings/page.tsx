@@ -1,7 +1,7 @@
 'use client';
 
-import SettingsPageWithErrorBoundary from '@/features/settings/pages/UserSettings';
+import SettingsPage from '@/features/settings/pages/SettingsPage';
 
-export default function SettingsPage() {
-  return <SettingsPageWithErrorBoundary />;
+export default function DashboardSettingsPage() {
+  return <SettingsPage />;
 }
