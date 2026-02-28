@@ -115,7 +115,7 @@ function SessionItem({
   return (
     <div
       className={cn(
-        'group relative flex items-center rounded-lg px-3 py-2.5 transition-colors',
+        'group relative flex items-center rounded-lg px-3 py-2.5 transition-all duration-200',
         isActive
           ? 'bg-muted/60 text-foreground'
           : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground',

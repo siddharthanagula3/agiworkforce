@@ -275,7 +275,7 @@ export const DashboardHomePage: React.FC = () => {
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
 
   return (
-    <div className="space-y-8 py-6">
+    <div className="animate-fade-in-up space-y-8 py-6">
       {/* Welcome Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">

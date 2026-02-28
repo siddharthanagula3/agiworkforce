@@ -140,7 +140,7 @@ function MessageItem({
   };
 
   return (
-    <div className={cn('group px-4 py-5', !isUser && 'hover:bg-muted/5')}>
+    <div className={cn('group message-bubble px-4 py-5', !isUser && 'hover:bg-muted/5')}>
       <div className={cn('mx-auto flex max-w-3xl gap-4', isUser && 'flex-row-reverse')}>
         {/* Avatar */}
         <div

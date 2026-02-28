@@ -161,11 +161,11 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
                   collapsed && 'justify-center px-2',
                   isActive
                     ? 'bg-white/[0.08] text-foreground'
-                    : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+                    : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground',
                 )}
                 title={collapsed ? item.name : undefined}
               >
@@ -197,8 +197,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         <Link
           href="/download"
           className={cn(
-            'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-            'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+            'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+            'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground',
             collapsed && 'justify-center px-2',
           )}
           title={collapsed ? 'Download App' : undefined}
