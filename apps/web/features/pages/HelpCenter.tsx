@@ -10,16 +10,13 @@ import {
   BookOpen,
   MessageSquare,
   Mail,
-  Phone,
   ChevronDown,
   Zap,
   Users,
   Settings,
   CreditCard,
   Lock,
-  Workflow,
   ExternalLink,
-  Check,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';

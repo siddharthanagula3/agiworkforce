@@ -26,7 +26,6 @@ import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
-import type { Components } from 'react-markdown';
 import type { PluggableList } from 'unified';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
@@ -270,7 +269,7 @@ export const EnhancedMarkdownRenderer = memo(function EnhancedMarkdownRenderer({
   content,
   className,
   enableMath = true,
-  enableCodeCopy = true,
+  enableCodeCopy: _enableCodeCopy = true,
 }: EnhancedMarkdownRendererProps) {
   // Use pre-computed plugin arrays based on configuration
   const remarkPlugins = enableMath ? REMARK_PLUGINS_WITH_MATH : REMARK_PLUGINS_BASE;

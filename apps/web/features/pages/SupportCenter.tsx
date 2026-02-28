@@ -16,7 +16,6 @@ import {
   Book,
   MessageCircle,
   Mail,
-  FileText,
   Video,
   Code,
   Zap,
@@ -30,7 +29,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supportService, FAQ as FAQType } from '@features/support/services/support-service';
+import { supportService } from '@features/support/services/support-service';
 import { useAuthStore } from '@shared/stores/authentication-store';
 
 interface FAQItem {
@@ -75,7 +74,7 @@ const HelpSupportPage: React.FC = () => {
             }));
           setFaqs(faqItems);
         }
-      } catch (error) {
+      } catch (_error) {
         setFaqs([]);
       } finally {
         setIsLoadingFAQs(false);
@@ -114,7 +113,7 @@ const HelpSupportPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supportService.submitTicket({
+      const { data: _data, error } = await supportService.submitTicket({
         name: contactForm.name,
         email: contactForm.email,
         subject: contactForm.subject,
@@ -126,14 +125,14 @@ const HelpSupportPage: React.FC = () => {
         return;
       }
 
-      toast.success("Message sent successfully! We'll get back to you soon.");
+      toast.success('Message sent successfully! We&apos;ll get back to you soon.');
       setContactForm({
         name: '',
         email: user?.email || '',
         subject: '',
         message: '',
       });
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to send message. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -346,7 +345,7 @@ const HelpSupportPage: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Send us a message</CardTitle>
-                <CardDescription>We'll get back to you as soon as possible</CardDescription>
+                <CardDescription>We&apos;ll get back to you as soon as possible</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleContactSubmit} className="space-y-4">

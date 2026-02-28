@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from './authentication-store';
-import type { AuthUser, AuthResponse } from '@core/auth/authentication-manager';
+import type { AuthUser } from '@core/auth/authentication-manager';
 
 // Mock the auth service
 vi.mock('@core/auth/authentication-manager', () => ({

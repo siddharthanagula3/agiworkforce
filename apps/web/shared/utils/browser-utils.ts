@@ -99,7 +99,7 @@ export const safeLocalStorage = {
       localStorage.setItem(testKey, testKey);
       localStorage.removeItem(testKey);
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   },

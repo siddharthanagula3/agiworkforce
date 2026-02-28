@@ -6,22 +6,11 @@
 
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import {
-  CheckCircle2,
-  Circle,
-  Loader2,
-  AlertCircle,
-  Clock,
-  User,
-  GitBranch,
-  ArrowRight,
-} from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, AlertCircle, Clock, User, GitBranch } from 'lucide-react';
 import type { VibeTask, TaskStatus } from '@features/vibe/types';
 import { Card } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Progress } from '@shared/ui/progress';
-import { Avatar } from '@shared/ui/avatar';
-import { Separator } from '@shared/ui/separator';
 import { cn } from '@shared/lib/utils';
 
 export interface TaskBreakdownProps {

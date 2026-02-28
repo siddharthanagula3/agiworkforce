@@ -518,14 +518,8 @@ export async function deploy(options: DeployOptions): Promise<string> {
 import { useCallback } from 'react';
 
 export function useDeployment() {
-  const {
-    deployments,
-    activeDeploymentId,
-    previewSession,
-    commandHistory,
-    screenshots,
-    getActiveDeployment,
-  } = useDeploymentManager();
+  const { deployments, previewSession, commandHistory, screenshots, getActiveDeployment } =
+    useDeploymentManager();
 
   const deployProject = useCallback(async (options: DeployOptions) => {
     return deploy(options);

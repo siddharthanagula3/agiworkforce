@@ -153,7 +153,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should handle concurrent calls safely', async () => {
-      const promises = Array.from({ length: 10 }, (_, i) =>
+      const promises = Array.from({ length: 10 }, (_, _i) =>
         tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1'),
       );
 

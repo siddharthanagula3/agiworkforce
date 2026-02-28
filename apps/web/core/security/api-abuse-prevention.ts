@@ -9,7 +9,7 @@
  * - Pattern-based abuse detection
  */
 
-import { checkRateLimit, RATE_LIMITS } from '@core/auth/rate-limiter';
+import { checkRateLimit } from '@core/auth/rate-limiter';
 
 export interface ApiUsageMetrics {
   requestsLastMinute: number;
@@ -261,7 +261,7 @@ export function trackRequestEnd(userId: string): void {
  */
 export function detectAbusePatterns(
   userId: string,
-  recentRequests: number,
+  _recentRequests: number,
 ): {
   isAbusive: boolean;
   patterns: string[];

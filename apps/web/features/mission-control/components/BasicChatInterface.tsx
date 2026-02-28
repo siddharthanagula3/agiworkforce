@@ -114,7 +114,7 @@ export const StandardChat: React.FC<StandardChatProps> = ({ provider = 'openai',
                 Start a Conversation
               </h3>
               <p className="max-w-sm px-4 text-xs text-muted-foreground sm:px-0 sm:text-sm">
-                Ask me anything. I'm here to help with your questions and tasks.
+                Ask me anything. I&apos;m here to help with your questions and tasks.
               </p>
             </div>
           ) : (

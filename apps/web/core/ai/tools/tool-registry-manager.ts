@@ -585,7 +585,7 @@ export class ToolManager {
       aliases: ['Bash', 'command-executor', 'code_runner'], // Employee MD uses "Bash"
       description: 'Execute bash commands',
       category: 'system',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with system execution
         return { output: '', exitCode: 0 };
       },
@@ -651,7 +651,7 @@ export class ToolManager {
       aliases: [],
       description: 'Analyze code for issues and improvements',
       category: 'code',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with code analysis
         return { issues: [], suggestions: [] };
       },
@@ -694,7 +694,7 @@ export class ToolManager {
       aliases: [],
       description: 'Run tests and report results',
       category: 'code',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with test runner
         return { passed: 0, failed: 0, results: [] };
       },
@@ -715,7 +715,7 @@ export class ToolManager {
       aliases: [],
       description: 'Generate test cases for code',
       category: 'code',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with test generation
         return { tests: '' };
       },
@@ -737,7 +737,7 @@ export class ToolManager {
       aliases: [],
       description: 'Browser automation and web scraping',
       category: 'automation',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with Puppeteer
         return { success: true, data: {} };
       },
@@ -759,7 +759,7 @@ export class ToolManager {
       aliases: [],
       description: 'Process and transform data',
       category: 'data',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with data processing
         return { processedData: {} };
       },
@@ -780,7 +780,7 @@ export class ToolManager {
       aliases: ['analyzer'],
       description: 'Analyze data and generate insights',
       category: 'data',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with data analysis
         return { insights: [], statistics: {} };
       },
@@ -802,7 +802,7 @@ export class ToolManager {
       aliases: [],
       description: 'Generate various types of content',
       category: 'ai',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with content generation
         return { content: '' };
       },
@@ -823,7 +823,7 @@ export class ToolManager {
       aliases: [],
       description: 'Generate documentation',
       category: 'ai',
-      execute: async (params: any) => {
+      execute: async (_params: any) => {
         // Integration with documentation generation
         return { documentation: '' };
       },

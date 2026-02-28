@@ -174,7 +174,7 @@ export function useStreamingResponse(): UseStreamingResponseReturn {
       progressTimerRef.current = null;
     }
 
-    const { streamingMessageId, streamingAgentId } = streamingState;
+    const { streamingMessageId: _streamingMessageId, streamingAgentId } = streamingState;
 
     // Finish the streaming message in the store
     finishStreamingMessage();

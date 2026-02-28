@@ -7,7 +7,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useUIStore } from './layout-store';
-import type { UIState } from './layout-store';
 
 describe('Layout Store', () => {
   beforeEach(() => {

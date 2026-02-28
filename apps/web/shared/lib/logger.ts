@@ -4,7 +4,7 @@
  */
 
 const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production';
+const _isProduction = process.env.NODE_ENV === 'production';
 
 class Logger {
   private shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

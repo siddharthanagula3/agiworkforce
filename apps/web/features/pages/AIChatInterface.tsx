@@ -1,21 +1,12 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import {
-  MessageSquare,
-  Zap,
-  Globe,
-  Shield,
-  Clock,
-  CheckCircle2,
-  ArrowRight,
-  Bot,
-  Users,
-} from 'lucide-react';
+import { MessageSquare, Zap, Globe, Shield, ArrowRight, Users } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const AIChatPage: React.FC = () => {
   const router = useRouter();
@@ -125,10 +116,12 @@ const AIChatPage: React.FC = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1531746790731-6c087fecd65a?w=800&h=600&fit=crop"
                 alt="AI Chat"
                 className="rounded-3xl"
+                width={800}
+                height={600}
               />
             </motion.div>
           </div>

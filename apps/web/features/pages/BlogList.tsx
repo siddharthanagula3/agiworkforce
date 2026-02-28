@@ -22,6 +22,7 @@ import { Input } from '@shared/ui/input';
 import { Particles } from '@shared/ui/particles';
 import { supabase } from '@shared/lib/supabase-client';
 import { toast } from 'sonner';
+import Image from 'next/image';
 
 interface BlogPost {
   id: string;
@@ -160,7 +161,7 @@ const BlogPage: React.FC = () => {
   }, [fetchCategories, fetchBlogPosts]);
 
   // Calculate read time based on content length
-  const calculateReadTime = (content: string) => {
+  const _calculateReadTime = (content: string) => {
     const wordsPerMinute = 200;
     const wordCount = content.split(/\s+/).length;
     const minutes = Math.ceil(wordCount / wordsPerMinute);
@@ -429,7 +430,7 @@ const FeaturedPostCard: React.FC<{ post: BlogPost }> = ({ post }) => {
     >
       <div className="grid gap-0 md:grid-cols-2">
         <div className="relative h-48 overflow-hidden sm:h-64 md:h-full">
-          <img
+          <Image
             src={
               post.image_url ||
               'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&h=500&fit=crop'
@@ -437,6 +438,8 @@ const FeaturedPostCard: React.FC<{ post: BlogPost }> = ({ post }) => {
             alt=""
             className="h-full w-full max-w-full object-cover transition-transform duration-700 group-hover:scale-110"
             aria-hidden="true"
+            fill
+            unoptimized
           />
           <div className="absolute left-4 top-4">
             <span className="rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-medium text-white">
@@ -529,7 +532,7 @@ const BlogPostCard: React.FC<{ post: BlogPost; index: number }> = ({ post, index
       aria-label={`Read article: ${post.title}. ${post.excerpt}`}
     >
       <div className="relative h-40 overflow-hidden sm:h-48">
-        <img
+        <Image
           src={
             post.image_url ||
             'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=500&fit=crop'
@@ -537,6 +540,8 @@ const BlogPostCard: React.FC<{ post: BlogPost; index: number }> = ({ post, index
           alt=""
           className="h-full w-full max-w-full object-cover transition-transform duration-700 group-hover:scale-110"
           aria-hidden="true"
+          fill
+          unoptimized
         />
         <div className="absolute left-3 top-3">
           <span className="rounded-full bg-background/80 px-2 py-1 text-xs font-medium text-foreground backdrop-blur-xl">

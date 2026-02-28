@@ -29,7 +29,7 @@ export async function createSession(
 ): Promise<ChatSessionRecord> {
   const uid = getUserIdOrThrow(userId);
   const { employeeId, role, provider } = params;
-  const supabaseClient: SupabaseClient<Database> = supabase;
+  const _supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_conversations')
     .insert({ user_id: uid, employee_id: employeeId, role, provider } as any)
@@ -43,7 +43,7 @@ export async function listSessions(
   userId: string | null | undefined,
 ): Promise<ChatSessionRecord[]> {
   const uid = getUserIdOrThrow(userId);
-  const supabaseClient: SupabaseClient<Database> = supabase;
+  const _supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_conversations')
     .select('*')
@@ -58,7 +58,7 @@ export async function listMessages(
   sessionId: string,
 ): Promise<ChatMessageRecord[]> {
   getUserIdOrThrow(userId); // validate auth; RLS enforces access
-  const supabaseClient: SupabaseClient<Database> = supabase;
+  const _supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_messages')
     .select('*')
@@ -75,7 +75,7 @@ export async function sendMessage(
   content: string,
 ): Promise<ChatMessageRecord> {
   getUserIdOrThrow(userId); // validate auth; RLS enforces access
-  const supabaseClient: SupabaseClient<Database> = supabase;
+  const _supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_messages')
     .insert({ conversation_id: sessionId, role, content } as any)

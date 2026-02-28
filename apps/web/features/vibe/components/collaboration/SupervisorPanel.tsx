@@ -24,7 +24,6 @@ import { Badge } from '@shared/ui/badge';
 import { Avatar } from '@shared/ui/avatar';
 import { Progress } from '@shared/ui/progress';
 import { Separator } from '@shared/ui/separator';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import { Button } from '@shared/ui/button';
 import { cn } from '@shared/lib/utils';
 

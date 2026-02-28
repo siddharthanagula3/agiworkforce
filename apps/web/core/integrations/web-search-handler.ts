@@ -119,7 +119,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
 
     // Extract citations/sources from the response
     const citationRegex = /\[(\d+)\]/g;
-    const citations = Array.from(answer.matchAll(citationRegex), (m: RegExpExecArray) =>
+    const _citations = Array.from(answer.matchAll(citationRegex), (m: RegExpExecArray) =>
       parseInt(m[1]),
     );
     const sources = data.citations || [];

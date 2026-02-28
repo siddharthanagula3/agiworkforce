@@ -199,7 +199,7 @@ class BackupService {
   /**
    * Create backup data
    */
-  private async createBackupData(tables: string[], type: string): Promise<BackupTableData> {
+  private async createBackupData(tables: string[], _type: string): Promise<BackupTableData> {
     const backupData: BackupTableData = {};
 
     for (const table of tables) {
@@ -228,7 +228,7 @@ class BackupService {
       data,
     };
 
-    const { data: result, error } = await db
+    const { data: _result, error } = await db
       .from('backup_storage')
       .insert({
         backup_id: backupId,
