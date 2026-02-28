@@ -10,9 +10,11 @@ describe('modelStore', () => {
     vi.clearAllMocks();
     // Reset the store state before each test
     const { useModelStore } = await import('../stores/modelStore');
+    const { useUnifiedAuthStore } = await import('../stores/auth');
+    const { useUIStore } = await import('../stores/ui');
     useModelStore.setState({
       selectedModel: 'auto',
-      selectedProvider: null,
+      selectedProvider: 'managed_cloud',
       favorites: [],
       recentModels: [],
       providerStatuses: {
@@ -37,6 +39,8 @@ describe('modelStore', () => {
       loading: false,
       error: null,
     });
+    useUnifiedAuthStore.setState({ plan: null });
+    useUIStore.setState({ mode: 'simple' });
   });
 
   afterEach(() => {
@@ -77,6 +81,56 @@ describe('modelStore', () => {
       // Should still update state even if there's an error in settings
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('invalid-model');
+    });
+
+    it('should block hobby-tier users from selecting Codex models', async () => {
+      const { useModelStore } = await import('../stores/modelStore');
+      const { useUnifiedAuthStore } = await import('../stores/auth');
+
+      useUnifiedAuthStore.setState({ plan: 'hobby' });
+
+      const store = useModelStore.getState();
+      await store.selectModel('gpt-5.2-codex-low', 'openai');
+
+      const state = useModelStore.getState();
+      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedProvider).toBe('managed_cloud');
+    });
+  });
+
+  describe('tier restrictions', () => {
+    it('should mark GPT-5.2 Codex Low as unavailable on hobby and available on pro', async () => {
+      const { isModelAllowedForTier } = await import('../constants/llm');
+
+      expect(isModelAllowedForTier('gpt-5.2-codex-low', 'hobby')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.2-codex-low', 'pro')).toBe(true);
+    });
+
+    it('should resolve the best allowed auto mode when no model is selected', async () => {
+      const { resolveEffectiveModelForTier } = await import('../stores/modelStore');
+
+      expect(resolveEffectiveModelForTier(null, 'hobby')).toBe('auto-economy');
+      expect(resolveEffectiveModelForTier(null, 'pro')).toBe('auto-balanced');
+      expect(resolveEffectiveModelForTier(null, 'max')).toBe('auto-premium');
+      expect(resolveEffectiveModelForTier('gpt-5.2', 'hobby')).toBe('gpt-5.2');
+    });
+
+    it('should downgrade stale manual selections when plan tier is hobby', async () => {
+      const { useModelStore, enforceModelTierRestriction } = await import('../stores/modelStore');
+      const { useUIStore } = await import('../stores/ui');
+
+      useUIStore.setState({ mode: 'advanced' });
+      useModelStore.setState({
+        selectedModel: 'gpt-5.2-codex-low',
+        selectedProvider: 'openai',
+      });
+
+      enforceModelTierRestriction('hobby');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = useModelStore.getState();
+      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedProvider).toBe('managed_cloud');
     });
   });
 
@@ -843,6 +897,37 @@ describe('unifiedChatStore - Extended Tests', () => {
       expect(updatedState.messages[0]?.metadata?.model).toBe('gpt-5.2');
       expect(updatedState.messages[0]?.metadata?.tokenCount).toBe(10);
       expect(updatedState.messages[0]?.metadata?.cost).toBe(0.01);
+    });
+
+    it('should update messages in inactive conversations', async () => {
+      const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
+      const store = useUnifiedChatStore.getState();
+
+      const firstConversationId = store.createConversation('First chat');
+      const firstMessageId = store.addMessage({
+        role: 'assistant',
+        content: 'Original first conversation content',
+      });
+
+      const secondConversationId = store.createConversation('Second chat');
+      store.addMessage({
+        role: 'assistant',
+        content: 'Second conversation content',
+      });
+
+      expect(useUnifiedChatStore.getState().activeConversationId).toBe(secondConversationId);
+
+      store.updateMessage(firstMessageId, {
+        content: 'Updated first conversation content',
+      });
+
+      const updatedState = useUnifiedChatStore.getState();
+      expect(updatedState.messagesByConversation[firstConversationId]?.[0]?.content).toBe(
+        'Updated first conversation content',
+      );
+      expect(updatedState.messagesByConversation[secondConversationId]?.[0]?.content).toBe(
+        'Second conversation content',
+      );
     });
 
     it('should delete a message', async () => {

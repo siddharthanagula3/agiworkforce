@@ -13,11 +13,21 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import type { ModelMetadata } from '../constants/llm';
-import { getAllModels, getModelMetadata, PROVIDERS_IN_ORDER } from '../constants/llm';
+import {
+  getAllModels,
+  getAllowedAutoModesForTier,
+  getBestAutoModeForTier as getBestAutoModeForSubscriptionTier,
+  getModelMetadata,
+  isModelAllowedForTier,
+  normalizeSubscriptionTier,
+  PROVIDERS_IN_ORDER,
+} from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { getModelForRequest, isManualSelection, type TaskType } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
+import type { SubscriptionTier } from '../constants/planModels';
+import { useAccountStore } from './auth';
 import { useSettingsStore } from './settingsStore';
 import { storageFallback } from '../lib/storageFallback';
 
@@ -230,18 +240,44 @@ export const useModelStore = create<ModelState>()(
 
         selectModel: async (modelId: string, provider: Provider) => {
           try {
-            useSettingsStore.getState().setDefaultModel(provider, modelId);
+            let nextModelId = modelId;
+            let nextProvider = provider;
+
+            if (provider !== 'ollama' && modelId !== 'auto') {
+              const { useUnifiedAuthStore } = await import('./auth');
+              const currentPlan = useUnifiedAuthStore.getState().plan;
+              const normalizedTier = normalizeSubscriptionTier(currentPlan);
+
+              if (modelId.startsWith('auto-')) {
+                const allowedAutoModes = getAllowedAutoModesForTier(normalizedTier);
+                if (!allowedAutoModes.includes(modelId)) {
+                  console.warn(
+                    `[ModelStore] Blocking disallowed auto-mode for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
+                  );
+                  nextModelId = 'auto-economy';
+                  nextProvider = 'managed_cloud';
+                }
+              } else if (!isModelAllowedForTier(modelId, normalizedTier)) {
+                console.warn(
+                  `[ModelStore] Blocking disallowed model selection for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
+                );
+                nextModelId = 'auto-economy';
+                nextProvider = 'managed_cloud';
+              }
+            }
+
+            useSettingsStore.getState().setDefaultModel(nextProvider, nextModelId);
 
             set(
               {
-                selectedModel: modelId,
-                selectedProvider: provider,
+                selectedModel: nextModelId,
+                selectedProvider: nextProvider,
               },
               undefined,
               'model/selectModel',
             );
 
-            get().addToRecent(modelId);
+            get().addToRecent(nextModelId);
           } catch (error) {
             console.error('Failed to select model:', error);
             set({ error: getSimpleErrorMessage(error) }, undefined, 'model/selectModel/error');
@@ -509,9 +545,10 @@ export const useModelStore = create<ModelState>()(
         // Intelligent routing implementation
         getRoutedModel: (message: string, hasImages: boolean = false): RoutingDecision => {
           const { selectedModel } = get();
+          const currentPlan = useAccountStore.getState().account.plan;
 
-          // If no model selected, default to auto-balanced
-          const effectiveModel = selectedModel || 'auto-balanced';
+          // If no model is selected yet, use the best auto mode the current plan allows.
+          const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
 
           // Use the model router to determine the actual model
           const routingResult = getModelForRequest(effectiveModel, message, hasImages);
@@ -595,11 +632,9 @@ export const useModelStore = create<ModelState>()(
           recentModels: state.recentModels,
           thinkingModeEnabled: state.thinkingModeEnabled,
         }),
-        migrate: (persistedState: unknown, version: number) => {
-          // Migration logic for future schema changes
-          if (version === 0) {
-            return persistedState as ModelState;
-          }
+        migrate: (persistedState: unknown, _version: number) => {
+          // No schema changes yet — MODEL_STORE_VERSION started at 1.
+          // Add sequential if (version < N) blocks here when schema changes are needed.
           return persistedState as ModelState;
         },
       },
@@ -629,11 +664,15 @@ export const selectLoading = (state: ModelState) => state.loading;
 export const selectError = (state: ModelState) => state.error;
 
 export const selectFavoriteModelsMetadata = (state: ModelState): ModelMetadata[] => {
-  return state.favorites.map((id) => getModelMetadata(id)).filter(Boolean) as ModelMetadata[];
+  return state.favorites
+    .map((id) => getModelMetadata(id))
+    .filter((m): m is ModelMetadata => m !== null && m !== undefined);
 };
 
 export const selectRecentModelsMetadata = (state: ModelState): ModelMetadata[] => {
-  return state.recentModels.map((id) => getModelMetadata(id)).filter(Boolean) as ModelMetadata[];
+  return state.recentModels
+    .map((id) => getModelMetadata(id))
+    .filter((m): m is ModelMetadata => m !== null && m !== undefined);
 };
 
 export const selectSelectedModelMetadata = (state: ModelState): ModelMetadata | null => {
@@ -698,6 +737,8 @@ export const initializeModelStoreFromSettings = async () => {
     await waitForSettingsHydration();
 
     const settingsStore = useSettingsStore.getState();
+    const { useUnifiedAuthStore } = await import('./auth');
+    const currentPlan = useUnifiedAuthStore.getState().plan;
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
     // For subscription-only model, only managed_cloud and ollama are in defaultModels
@@ -709,6 +750,12 @@ export const initializeModelStoreFromSettings = async () => {
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store
       // Use 'auto-economy' as the default auto mode (lowest common denominator for all tiers)
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
+        await modelStore.selectModel('auto-economy', 'managed_cloud');
+      } else if (
+        defaultProvider !== 'ollama' &&
+        currentPlan &&
+        !isModelAllowedForTier(defaultModel, currentPlan as SubscriptionTier)
+      ) {
         await modelStore.selectModel('auto-economy', 'managed_cloud');
       } else {
         await modelStore.selectModel(defaultModel, defaultProvider);
@@ -724,13 +771,14 @@ export const initializeModelStoreFromSettings = async () => {
  * Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
  */
 export const getBestAutoModeForTier = (tier: string): string => {
-  const normalizedTier = tier.toLowerCase();
-  if (normalizedTier === 'max' || normalizedTier === 'enterprise') {
-    return 'auto-premium';
-  } else if (normalizedTier === 'pro') {
-    return 'auto-balanced';
-  }
-  return 'auto-economy';
+  return getBestAutoModeForSubscriptionTier(tier);
+};
+
+export const resolveEffectiveModelForTier = (
+  selectedModel: string | null,
+  tier: string | null | undefined,
+): string => {
+  return selectedModel || getBestAutoModeForSubscriptionTier(tier ?? 'hobby');
 };
 
 /**
@@ -748,45 +796,52 @@ export const getBestAutoModeForTier = (tier: string): string => {
  */
 export const enforceModelTierRestriction = (planTier: string | null): void => {
   const modelStore = useModelStore.getState();
-  const { selectedModel, selectModel } = modelStore;
+  const { selectedModel, selectedProvider, selectModel } = modelStore;
 
-  const tier = planTier?.toLowerCase() || 'free';
-
-  // Define which auto modes are allowed per tier
-  const allowedModes: Record<string, string[]> = {
-    free: ['auto-economy'],
-    none: ['auto-economy'],
-    hobby: ['auto-economy'],
-    pro: ['auto-economy', 'auto-balanced'],
-    max: ['auto-economy', 'auto-balanced', 'auto-premium'],
-    enterprise: ['auto-economy', 'auto-balanced', 'auto-premium'],
-  };
-
-  const allowed = allowedModes[tier] || ['auto-economy'];
+  const normalizedTier = normalizeSubscriptionTier(planTier) as SubscriptionTier;
+  const allowed = getAllowedAutoModesForTier(normalizedTier);
 
   // Check if user is in Simple Mode (dynamic import to avoid circular deps)
-  import('./ui').then(({ useUIStore }) => {
-    const isSimpleMode = useUIStore.getState().mode === 'simple';
+  import('./ui')
+    .then(({ useUIStore }) => {
+      const isSimpleMode = useUIStore.getState().mode === 'simple';
+      const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
+      const isAutoSelection = selectedModel === 'auto' || selectedModel?.startsWith('auto');
+      const isOllamaSelection =
+        selectedProvider === 'ollama' || selectedMetadata?.provider === 'ollama';
 
-    if (isSimpleMode) {
-      // In Simple Mode: Always use the BEST auto mode for the tier
-      const bestAutoMode = getBestAutoModeForTier(tier);
-      if (selectedModel !== bestAutoMode) {
-        console.log(
-          `[ModelStore] Simple Mode: Setting ${tier} tier to best auto mode: ${bestAutoMode}`,
-        );
-        void selectModel(bestAutoMode, 'managed_cloud');
+      if (isSimpleMode) {
+        // In Simple Mode: Always use the BEST auto mode for the tier
+        const bestAutoMode = getBestAutoModeForTier(normalizedTier);
+        if (selectedModel !== bestAutoMode) {
+          console.log(
+            `[ModelStore] Simple Mode: Setting ${normalizedTier} tier to best auto mode: ${bestAutoMode}`,
+          );
+          void selectModel(bestAutoMode, 'managed_cloud');
+        }
+      } else {
+        // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
+        if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
+          console.log(
+            `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
+          );
+          void selectModel('auto-economy', 'managed_cloud');
+        } else if (
+          selectedModel &&
+          !isAutoSelection &&
+          !isOllamaSelection &&
+          !isModelAllowedForTier(selectedModel, normalizedTier)
+        ) {
+          console.log(
+            `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
+          );
+          void selectModel('auto-economy', 'managed_cloud');
+        }
       }
-    } else {
-      // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
-      if (selectedModel?.startsWith('auto') && !allowed.includes(selectedModel)) {
-        console.log(
-          `[ModelStore] Enforcing tier restriction: ${tier} tier cannot use ${selectedModel}, switching to auto-economy`,
-        );
-        void selectModel('auto-economy', 'managed_cloud');
-      }
-    }
-  });
+    })
+    .catch((err) => {
+      console.error('[ModelStore] enforceModelTierRestriction failed:', err);
+    });
 };
 
 // Subscribe to auth store plan changes to enforce tier restrictions

@@ -497,6 +497,7 @@ export const UnifiedAgenticChat: React.FC<{
     Map<
       string,
       {
+        conversationId: number;
         softTimeoutId: ReturnType<typeof setTimeout>;
         hardTimeoutId: ReturnType<typeof setTimeout>;
       }
@@ -669,7 +670,7 @@ export const UnifiedAgenticChat: React.FC<{
           return state.currentStreamingMessageId;
         }
 
-        // FALLBACK: Find ANY assistant message in this conversation (even if not streaming)
+        // Fallback: find an assistant message still marked streaming in this conversation.
         if (conversationMessages.length > 0) {
           const streamingAssistant = conversationMessages.find(
             (m) => m.role === 'assistant' && m.metadata?.streaming,
@@ -677,17 +678,6 @@ export const UnifiedAgenticChat: React.FC<{
           if (streamingAssistant) {
             return streamingAssistant.id;
           }
-          const lastAssistant = [...conversationMessages]
-            .reverse()
-            .find((m) => m.role === 'assistant');
-          if (lastAssistant) {
-            return lastAssistant.id;
-          }
-        }
-
-        // Last resort: use currentStreamingMessageId even if not in this conversation's messages
-        if (state.currentStreamingMessageId) {
-          return state.currentStreamingMessageId;
         }
 
         return null;
@@ -842,6 +832,37 @@ export const UnifiedAgenticChat: React.FC<{
         }
       };
 
+      const clearToolExecutionTimeoutsForConversation = (conversationId: number) => {
+        for (const [toolCallId, timeoutEntry] of toolExecutionTimeoutsRef.current.entries()) {
+          if (timeoutEntry.conversationId !== conversationId) {
+            continue;
+          }
+          clearTimeout(timeoutEntry.softTimeoutId);
+          clearTimeout(timeoutEntry.hardTimeoutId);
+          toolExecutionTimeoutsRef.current.delete(toolCallId);
+        }
+      };
+
+      const syncGlobalStreamingState = () => {
+        const state = useUnifiedChatStore.getState();
+        const activeConversationDbId = state.activeConversationId
+          ? uuidToDbId(state.activeConversationId)
+          : undefined;
+        const activeConversationStreamId =
+          typeof activeConversationDbId === 'number'
+            ? (activeStreamSessionsRef.current.get(activeConversationDbId) ?? null)
+            : null;
+        const streamSessionValues = [...activeStreamSessionsRef.current.values()];
+        const fallbackStreamId =
+          streamSessionValues.length > 0
+            ? streamSessionValues[streamSessionValues.length - 1]!
+            : null;
+        const nextStreamingMessageId = activeConversationStreamId ?? fallbackStreamId;
+
+        state.setIsLoading(nextStreamingMessageId !== null);
+        state.setStreamingMessage(nextStreamingMessageId);
+      };
+
       const scheduleToolExecutionTimeout = (
         toolCallId: string,
         toolName: string,
@@ -910,15 +931,19 @@ export const UnifiedAgenticChat: React.FC<{
             });
 
             const state = useUnifiedChatStore.getState();
-            state.setIsLoading(false);
-            state.setStreamingMessage(null);
-            if (state.currentStreamingMessageId) {
-              state.updateMessage(state.currentStreamingMessageId, {
+            const conversationStreamMessageId =
+              activeStreamSessionsRef.current.get(conversationId) ?? null;
+            if (conversationStreamMessageId) {
+              clearQueuedStreamUpdates(conversationStreamMessageId);
+              state.updateMessage(conversationStreamMessageId, {
                 metadata: { streaming: false },
               });
             }
+            activeStreamSessionsRef.current.delete(conversationId);
+            clearToolExecutionTimeoutsForConversation(conversationId);
+            syncGlobalStreamingState();
             if (isTauri) {
-              void ipcInvoke('chat_stop_generation').catch((error: unknown) => {
+              void ipcInvoke('chat_stop_generation', { conversationId }).catch((error: unknown) => {
                 console.warn(
                   '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
                   error,
@@ -955,6 +980,7 @@ export const UnifiedAgenticChat: React.FC<{
         }, toolHardTimeoutMs);
 
         toolExecutionTimeoutsRef.current.set(toolCallId, {
+          conversationId,
           softTimeoutId,
           hardTimeoutId,
         });
@@ -965,6 +991,7 @@ export const UnifiedAgenticChat: React.FC<{
        * Clears queued updates, abort controller, loading state, tool timeouts, and agent status.
        */
       const finalizeStream = (
+        conversationId: number,
         finalizedMessageId: string | null,
         agentOutcome: 'completed' | 'failed',
         agentError?: string,
@@ -976,14 +1003,8 @@ export const UnifiedAgenticChat: React.FC<{
         }
         abortControllerRef.current = null;
 
-        const s = useUnifiedChatStore.getState();
-        s.setIsLoading(false);
-        s.setStreamingMessage(null);
-        toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-          clearTimeout(timeoutEntry.softTimeoutId);
-          clearTimeout(timeoutEntry.hardTimeoutId);
-        });
-        toolExecutionTimeoutsRef.current.clear();
+        clearToolExecutionTimeoutsForConversation(conversationId);
+        syncGlobalStreamingState();
 
         const currentAgent = useUnifiedChatStore.getState().agentStatus;
         if (currentAgent?.status === 'running') {
@@ -1105,7 +1126,7 @@ export const UnifiedAgenticChat: React.FC<{
           } else {
             // Fallback: clear any assistant message still marked as streaming to
             // avoid stale "Generating" UI when stream-end IDs don't resolve cleanly.
-            const fallbackStreaming = [...state.messages]
+            const fallbackStreaming = [...getConversationMessagesForStream(payload.conversation_id)]
               .reverse()
               .find((m) => m.role === 'assistant' && m.metadata?.streaming);
             if (fallbackStreaming) {
@@ -1157,7 +1178,7 @@ export const UnifiedAgenticChat: React.FC<{
           }
 
           if (shouldClearGlobalState) {
-            finalizeStream(finalizedMessageId, 'completed');
+            finalizeStream(payload.conversation_id, finalizedMessageId, 'completed');
           }
         }),
       );
@@ -1218,7 +1239,9 @@ export const UnifiedAgenticChat: React.FC<{
             } else {
               // Fallback: clear any assistant message still marked as streaming to
               // avoid stale "Generating" UI when stream-error IDs don't resolve cleanly.
-              const fallbackStreaming = [...state.messages]
+              const fallbackStreaming = [
+                ...getConversationMessagesForStream(payload.conversation_id),
+              ]
                 .reverse()
                 .find((m) => m.role === 'assistant' && m.metadata?.streaming);
               if (fallbackStreaming) {
@@ -1264,7 +1287,7 @@ export const UnifiedAgenticChat: React.FC<{
             }
 
             if (shouldClearGlobalState) {
-              finalizeStream(finalizedMessageId, 'failed', payload.error);
+              finalizeStream(payload.conversation_id, finalizedMessageId, 'failed', payload.error);
             }
           },
         ),
@@ -1326,25 +1349,6 @@ export const UnifiedAgenticChat: React.FC<{
             const pending = payload.pending_messages[i];
             if (!pending) continue;
 
-            // Remove from pending queue in store
-            useUnifiedChatStore.getState().removePendingMessage(pending.id);
-
-            // Clear from backend queue - pass conversation_id to ensure we pop the right message
-            try {
-              await ipcInvoke('chat_pop_pending_message', {
-                request: { conversation_id: payload.conversation_id },
-              });
-            } catch (err) {
-              console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
-              // CHT-002 fix: Show user-visible error for pending message processing failure
-              toast({
-                variant: 'destructive',
-                title: 'Failed to process queued message. Please try again.',
-              });
-              // AUDIT-005-010 fix: Abort processing this message on pop failure to prevent inconsistent state
-              continue;
-            }
-
             // Actually send the pending message as a follow-up
             // Add delay between messages to avoid race conditions
             if (i > 0) {
@@ -1355,7 +1359,12 @@ export const UnifiedAgenticChat: React.FC<{
               // Dispatch a custom event that ChatInputArea listens to for auto-send
               window.dispatchEvent(
                 new CustomEvent('chat:auto-send-pending', {
-                  detail: { content: pending.content, pendingId: pending.id },
+                  detail: {
+                    pendingMessage: {
+                      ...pending,
+                      conversation_id: payload.conversation_id,
+                    },
+                  },
                 }),
               );
             } catch (err) {
