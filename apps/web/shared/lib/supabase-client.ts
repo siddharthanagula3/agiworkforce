@@ -3,9 +3,11 @@
  * Prevents multiple GoTrueClient instances
  * Updated: Jan 10th 2026 - Removed hardcoded token fallback for security
  * Updated: Feb 27th 2026 - Lazy initialization for SSR compatibility
+ * Updated: Feb 28th 2026 - Use @supabase/ssr createBrowserClient for cookie-based auth
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@shared/types/supabase';
 
 // Lazy singleton — avoids throwing at module scope during SSR/build
@@ -18,13 +20,7 @@ function getSupabaseClient(): SupabaseClient<Database> {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    // During SSR/build the env vars may not be set yet.
-    // Return a dummy client that will fail gracefully on actual calls
-    // rather than crashing the entire module graph at import time.
     if (typeof window === 'undefined') {
-      // Server-side: create a client with placeholder values.
-      // Any actual Supabase calls on the server should use
-      // utils/supabase/server.ts instead.
       _supabase = createClient<Database>(
         supabaseUrl || 'http://localhost:54321',
         supabaseAnonKey || 'placeholder-key',
@@ -35,26 +31,24 @@ function getSupabaseClient(): SupabaseClient<Database> {
       );
       return _supabase;
     }
-    // Client-side: env vars are genuinely missing
     throw new Error(
       'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required. ' +
         'For local development, run: supabase start',
     );
   }
 
+  // On the client side, use createBrowserClient from @supabase/ssr
+  // This reads auth tokens from cookies (set by SSR middleware) instead of localStorage,
+  // keeping client-side auth in sync with server-side auth.
+  if (typeof window !== 'undefined') {
+    _supabase = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+    return _supabase;
+  }
+
+  // Server-side fallback (should use utils/supabase/server.ts instead)
   _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      storageKey: 'agi-workforce-auth',
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'agi-workforce@1.0.0',
-      },
-    },
+    auth: { persistSession: false },
+    global: { headers: { 'X-Client-Info': 'agi-workforce@1.0.0' } },
   });
 
   return _supabase;
