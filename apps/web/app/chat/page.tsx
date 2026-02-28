@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useChatStore, getGreetingTime } from '@features/chat/stores/chat-store';
@@ -9,9 +9,15 @@ import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposer
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { ChatAIService } from '@features/chat/services/chat-ai-service';
 
-export default function ChatPage() {
+/**
+ * Inner component that reads ?skill= search params.
+ * Wrapped in <Suspense> by the default export (Next.js 16 requirement).
+ */
+function ChatPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
   const {
     sessions,
@@ -28,6 +34,8 @@ export default function ChatPage() {
   } = useChatStore();
 
   const [mounted, setMounted] = useState(false);
+  const skillHandled = useRef(false);
+
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
@@ -38,6 +46,36 @@ export default function ChatPage() {
       loadSessionsFromDb(user.id);
     }
   }, [user?.id, dbLoaded, loadSessionsFromDb]);
+
+  // Handle ?skill= query parameter (from marketplace navigation)
+  useEffect(() => {
+    if (!mounted || skillHandled.current) return;
+
+    const skillParam = searchParams.get('skill');
+    if (!skillParam) return;
+
+    skillHandled.current = true;
+
+    // Look up skill info for the system message
+    const skills = ChatAIService.getAvailableSkillsSync();
+    const skill = skills.find((s) => s.id === skillParam);
+    const skillName =
+      skill?.name ??
+      skillParam
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    const skillCategory = skill?.category ?? 'General';
+
+    // Create a new session and seed it with a system-style assistant message
+    const sessionId = createSession(user?.id);
+    addMessage(sessionId, {
+      role: 'assistant',
+      content: `Chatting with @${skillName} — an AI agent specialized in ${skillCategory}.`,
+    });
+
+    router.replace(`/chat/${sessionId}`);
+  }, [mounted, searchParams, createSession, addMessage, router, user?.id]);
 
   const greeting = getGreetingTime();
 
@@ -66,12 +104,12 @@ export default function ChatPage() {
   );
 
   if (!mounted) {
-    return <div className="flex h-screen items-center justify-center bg-background" />;
+    return <div className="flex h-full items-center justify-center bg-background" />;
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
+    <div className="relative flex h-full bg-background">
+      {/* Chat conversation sidebar */}
       <div
         className={cn(
           'border-r border-border/30 bg-card/30 backdrop-blur-sm transition-all duration-300 ease-in-out',
@@ -94,7 +132,7 @@ export default function ChatPage() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed left-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
           aria-label="Open sidebar"
         >
           <Menu className="h-4 w-4" />
@@ -129,5 +167,13 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center bg-background" />}>
+      <ChatPageInner />
+    </Suspense>
   );
 }
