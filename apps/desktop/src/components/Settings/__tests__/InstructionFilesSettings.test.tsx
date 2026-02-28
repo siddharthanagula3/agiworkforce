@@ -32,6 +32,10 @@ global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 const mockInvoke = vi.fn();
 const mockIsTauriContext = vi.fn(() => true);
 
+vi.mock('@tauri-apps/api/path', () => ({
+  homeDir: vi.fn(() => Promise.resolve('/home/user')),
+}));
+
 vi.mock('../../../lib/tauri-mock', () => ({
   isTauriContext: () => mockIsTauriContext(),
   invoke: (...args: unknown[]) => mockInvoke(...args),
