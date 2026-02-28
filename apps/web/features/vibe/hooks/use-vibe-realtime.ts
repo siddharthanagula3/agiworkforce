@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@shared/lib/supabase-client';
-import { useVibeViewStore } from '../stores/vibe-view-store';
+import { useVibeViewStore, type FileMetadata } from '../stores/vibe-view-store';
 import { buildFileTree, mapFileRowToMetadata, type VibeFileRow } from '../utils/file-tree';
 
 type AgentActionStatus = 'in_progress' | 'completed' | 'failed';
@@ -144,19 +144,21 @@ const toTerminalStatus = (
 };
 
 export function useVibeRealtime({ sessionId, onAction }: UseVibeRealtimeOptions) {
-  const setFileMetadata = useVibeViewStore((state) => state.setFileMetadata);
-  const upsertFileMetadata = useVibeViewStore((state) => state.upsertFileMetadata);
-  const removeFileMetadata = useVibeViewStore((state) => state.removeFileMetadata);
-  const setFileTree = useVibeViewStore((state) => state.setFileTree);
-  const addTerminalCommand = useVibeViewStore((state) => state.addTerminalCommand);
-  const updateTerminalCommand = useVibeViewStore((state) => state.updateTerminalCommand);
-  const setAppViewerUrl = useVibeViewStore((state) => state.setAppViewerUrl);
-  const updateAppViewerState = useVibeViewStore((state) => state.updateAppViewerState);
+  const setFileMetadata = useVibeViewStore((state: any) => state.setFileMetadata);
+  const upsertFileMetadata = useVibeViewStore((state: any) => state.upsertFileMetadata);
+  const removeFileMetadata = useVibeViewStore((state: any) => state.removeFileMetadata);
+  const setFileTree = useVibeViewStore((state: any) => state.setFileTree);
+  const addTerminalCommand = useVibeViewStore((state: any) => state.addTerminalCommand);
+  const updateTerminalCommand = useVibeViewStore((state: any) => state.updateTerminalCommand);
+  const setAppViewerUrl = useVibeViewStore((state: any) => state.setAppViewerUrl);
+  const updateAppViewerState = useVibeViewStore((state: any) => state.updateAppViewerState);
 
   const commandMap = useRef<Map<string, string>>(new Map());
 
   const rebuildTree = useCallback(() => {
-    const metadataValues = Object.values(useVibeViewStore.getState().fileMetadata);
+    const metadataValues = Object.values(
+      useVibeViewStore.getState().fileMetadata,
+    ) as FileMetadata[];
     setFileTree(buildFileTree(metadataValues));
   }, [setFileTree]);
 

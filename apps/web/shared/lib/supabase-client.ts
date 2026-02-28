@@ -8,7 +8,9 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@shared/types/supabase';
+import type { ExtendedDatabase } from '@shared/types/supabase-extended';
+
+type Database = ExtendedDatabase;
 
 // Lazy singleton — avoids throwing at module scope during SSR/build
 let _supabase: SupabaseClient<Database> | null = null;

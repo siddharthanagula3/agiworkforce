@@ -42,7 +42,13 @@ interface AccessibilityAuditProps {
 }
 
 const AccessibilityAudit: React.FC<AccessibilityAuditProps> = ({ onClose }) => {
-  const [auditResults, setAuditResults] = useState(accessibilityService.getAuditResults());
+  const [auditResults, setAuditResults] = useState<{
+    score: number;
+    passed: number;
+    failed: number;
+    warnings: number;
+    issues: AccessibilityIssue[];
+  } | null>(accessibilityService.getAuditResults());
   const [isRunning, setIsRunning] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 

@@ -28,9 +28,12 @@ export interface Tool {
   aliases?: string[];
   description: string;
   category: ToolCategory;
-  execute: (params: unknown) => Promise<unknown>;
-  validate: (params: unknown) => ValidationResult;
-  estimateCost: (params: unknown) => number;
+
+  execute: (params: any) => Promise<any>;
+
+  validate: (params: any) => ValidationResult;
+
+  estimateCost: (params: any) => number;
   requiredPermissions: string[];
   supportedAgents: AgentType[];
   rateLimit?: RateLimit;
@@ -477,17 +480,17 @@ export class ToolManager {
       aliases: ['Read', 'read_files', 'file_reader'], // Employee MD uses "Read"
       description: 'Read file contents',
       category: 'file',
-      execute: async (params: { path: string }) => {
+      execute: async (params: any) => {
         // Integration with filesystem API
         return { content: 'file content', path: params.path };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.path) {
           return { valid: false, errors: ['Path is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.01,
+      estimateCost: (_params: any) => 0.01,
       requiredPermissions: ['file:read'],
       supportedAgents: ['claude-code', 'cursor-agent', 'replit-agent', 'mcp-tool'],
     });
@@ -498,17 +501,17 @@ export class ToolManager {
       aliases: ['Write', 'write_files', 'file_writer'], // Employee MD uses "Write"
       description: 'Write content to file',
       category: 'file',
-      execute: async (params: { path: string; content: string }) => {
+      execute: async (params: any) => {
         // Integration with filesystem API
         return { success: true, path: params.path };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.path || !params.content) {
           return { valid: false, errors: ['Path and content are required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.02,
+      estimateCost: (_params: any) => 0.02,
       requiredPermissions: ['file:write'],
       supportedAgents: ['cursor-agent', 'replit-agent', 'mcp-tool', 'claude-code'],
     });
@@ -519,17 +522,17 @@ export class ToolManager {
       aliases: ['Edit', 'delete_files'], // Employee MD uses "Edit"
       description: 'Edit file with find/replace',
       category: 'file',
-      execute: async (params: { path: string; old_string: string; new_string: string }) => {
+      execute: async (params: any) => {
         // Integration with filesystem API
         return { success: true, path: params.path };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.path || !params.old_string) {
           return { valid: false, errors: ['Path and old_string are required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.02,
+      estimateCost: (_params: any) => 0.02,
       requiredPermissions: ['file:write'],
       supportedAgents: ['cursor-agent', 'replit-agent', 'mcp-tool', 'claude-code'],
     });
@@ -541,16 +544,16 @@ export class ToolManager {
       aliases: ['Grep', 'search_files'], // Employee MD uses "Grep"
       description: 'Search for patterns in files using regex',
       category: 'search',
-      execute: async (params: { pattern: string; path?: string }) => {
+      execute: async (params: any) => {
         return { matches: [], pattern: params.pattern };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.pattern) {
           return { valid: false, errors: ['Pattern is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.01,
+      estimateCost: (_params: any) => 0.01,
       requiredPermissions: ['file:read'],
       supportedAgents: ['claude-code', 'cursor-agent', 'replit-agent', 'mcp-tool'],
     });
@@ -561,16 +564,16 @@ export class ToolManager {
       aliases: ['Glob', 'list_files'], // Employee MD uses "Glob"
       description: 'Find files matching glob pattern',
       category: 'search',
-      execute: async (params: { pattern: string; path?: string }) => {
+      execute: async (params: any) => {
         return { files: [], pattern: params.pattern };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.pattern) {
           return { valid: false, errors: ['Pattern is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.01,
+      estimateCost: (_params: any) => 0.01,
       requiredPermissions: ['file:read'],
       supportedAgents: ['claude-code', 'cursor-agent', 'replit-agent', 'mcp-tool'],
     });
@@ -582,17 +585,17 @@ export class ToolManager {
       aliases: ['Bash', 'command-executor', 'code_runner'], // Employee MD uses "Bash"
       description: 'Execute bash commands',
       category: 'system',
-      execute: async (params: { command: string }) => {
+      execute: async (params: any) => {
         // Integration with system execution
         return { output: '', exitCode: 0 };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.command) {
           return { valid: false, errors: ['Command is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.01,
+      estimateCost: (_params: any) => 0.01,
       requiredPermissions: ['system:execute'],
       supportedAgents: ['bash-executor', 'replit-agent', 'claude-code'],
     });
@@ -604,17 +607,17 @@ export class ToolManager {
       aliases: ['WebSearch', 'web_search'],
       description: 'Search the web for information',
       category: 'search',
-      execute: async (params: { query: string }) => {
+      execute: async (params: any) => {
         // Integration with search API
         return { results: [], query: params.query };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.query) {
           return { valid: false, errors: ['Query is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.05,
+      estimateCost: (_params: any) => 0.05,
       requiredPermissions: ['web:search'],
       supportedAgents: ['gemini-cli', 'web-search', 'claude-code'],
       rateLimit: { maxRequests: 100, windowMs: 60000 },
@@ -626,17 +629,17 @@ export class ToolManager {
       aliases: ['WebFetch'],
       description: 'Fetch content from a URL',
       category: 'search',
-      execute: async (params: { url: string }) => {
+      execute: async (params: any) => {
         // Integration with fetch API
         return { content: '', url: params.url };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.url) {
           return { valid: false, errors: ['URL is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.03,
+      estimateCost: (_params: any) => 0.03,
       requiredPermissions: ['web:fetch'],
       supportedAgents: ['gemini-cli', 'web-search', 'claude-code', 'puppeteer-agent'],
     });
@@ -648,17 +651,17 @@ export class ToolManager {
       aliases: [],
       description: 'Analyze code for issues and improvements',
       category: 'code',
-      execute: async (params: { code: string; language: string }) => {
+      execute: async (params: any) => {
         // Integration with code analysis
         return { issues: [], suggestions: [] };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.code) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.1,
+      estimateCost: (_params: any) => 0.1,
       requiredPermissions: ['code:analyze'],
       supportedAgents: ['claude-code', 'cursor-agent'],
     });
@@ -669,17 +672,17 @@ export class ToolManager {
       aliases: [],
       description: 'Generate code based on specifications',
       category: 'code',
-      execute: async (params: { prompt: string; language: string }) => {
+      execute: async (params: any) => {
         // Integration with code generation
         return { code: '', language: params.language };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.prompt) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.15,
+      estimateCost: (_params: any) => 0.15,
       requiredPermissions: ['code:generate'],
       supportedAgents: ['claude-code', 'cursor-agent', 'replit-agent'],
     });
@@ -691,17 +694,17 @@ export class ToolManager {
       aliases: [],
       description: 'Run tests and report results',
       category: 'code',
-      execute: async (params: { testPath: string }) => {
+      execute: async (params: any) => {
         // Integration with test runner
         return { passed: 0, failed: 0, results: [] };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.testPath) {
           return { valid: false, errors: ['Test path is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.05,
+      estimateCost: (_params: any) => 0.05,
       requiredPermissions: ['code:test'],
       supportedAgents: ['claude-code', 'replit-agent'],
     });
@@ -712,17 +715,17 @@ export class ToolManager {
       aliases: [],
       description: 'Generate test cases for code',
       category: 'code',
-      execute: async (params: { code: string; testType: string }) => {
+      execute: async (params: any) => {
         // Integration with test generation
         return { tests: '' };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.code) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.1,
+      estimateCost: (_params: any) => 0.1,
       requiredPermissions: ['code:test'],
       supportedAgents: ['claude-code'],
     });
@@ -734,17 +737,17 @@ export class ToolManager {
       aliases: [],
       description: 'Browser automation and web scraping',
       category: 'automation',
-      execute: async (params: { action: string; url?: string }) => {
+      execute: async (params: any) => {
         // Integration with Puppeteer
         return { success: true, data: {} };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.action) {
           return { valid: false, errors: ['Action is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.2,
+      estimateCost: (_params: any) => 0.2,
       requiredPermissions: ['automation:browser'],
       supportedAgents: ['puppeteer-agent'],
     });
@@ -756,17 +759,17 @@ export class ToolManager {
       aliases: [],
       description: 'Process and transform data',
       category: 'data',
-      execute: async (params: { data: unknown; operation: string }) => {
+      execute: async (params: any) => {
         // Integration with data processing
         return { processedData: {} };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.data || !params.operation) {
           return { valid: false, errors: ['Data and operation are required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.05,
+      estimateCost: (_params: any) => 0.05,
       requiredPermissions: ['data:process'],
       supportedAgents: ['claude-code', 'gemini-cli'],
     });
@@ -777,17 +780,17 @@ export class ToolManager {
       aliases: ['analyzer'],
       description: 'Analyze data and generate insights',
       category: 'data',
-      execute: async (params: { data: unknown }) => {
+      execute: async (params: any) => {
         // Integration with data analysis
         return { insights: [], statistics: {} };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.data) {
           return { valid: false, errors: ['Data is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.08,
+      estimateCost: (_params: any) => 0.08,
       requiredPermissions: ['data:analyze'],
       supportedAgents: ['gemini-cli', 'claude-code'],
     });
@@ -799,17 +802,17 @@ export class ToolManager {
       aliases: [],
       description: 'Generate various types of content',
       category: 'ai',
-      execute: async (params: { prompt: string; type: string }) => {
+      execute: async (params: any) => {
         // Integration with content generation
         return { content: '' };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.prompt) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.1,
+      estimateCost: (_params: any) => 0.1,
       requiredPermissions: ['ai:generate'],
       supportedAgents: ['gemini-cli', 'claude-code'],
     });
@@ -820,17 +823,17 @@ export class ToolManager {
       aliases: [],
       description: 'Generate documentation',
       category: 'ai',
-      execute: async (params: { code: string; format: string }) => {
+      execute: async (params: any) => {
         // Integration with documentation generation
         return { documentation: '' };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.code) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.1,
+      estimateCost: (_params: any) => 0.1,
       requiredPermissions: ['ai:generate'],
       supportedAgents: ['claude-code'],
     });
@@ -842,16 +845,16 @@ export class ToolManager {
       aliases: ['image_gen'],
       description: 'Generate images from text descriptions',
       category: 'ai',
-      execute: async (params: { prompt: string; size?: string }) => {
+      execute: async (params: any) => {
         return { imageUrl: '', prompt: params.prompt };
       },
-      validate: (params) => {
+      validate: (params: any) => {
         if (!params.prompt) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
       },
-      estimateCost: () => 0.2,
+      estimateCost: (_params: any) => 0.2,
       requiredPermissions: ['media:image'],
       supportedAgents: ['claude-code', 'gemini-cli'],
     });

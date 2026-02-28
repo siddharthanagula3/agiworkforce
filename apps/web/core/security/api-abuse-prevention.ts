@@ -179,14 +179,9 @@ export async function checkApiAbuse(
     };
   }
 
-  // Updated: Jan 15th 2026 - Fixed race condition by incrementing before check
-  // Atomically increment concurrent requests before checking limit
-  metrics.concurrentRequests++;
-
-  // Check concurrent requests (after increment)
-  if (metrics.concurrentRequests > limits.maxConcurrent) {
-    // Rollback the increment since we're rejecting the request
-    metrics.concurrentRequests--;
+  // Check concurrent requests BEFORE incrementing to avoid counter leaks
+  // on subsequent rejections (input size, token count)
+  if (metrics.concurrentRequests >= limits.maxConcurrent) {
     return {
       allowed: false,
       reason: `Too many concurrent requests (${metrics.concurrentRequests}/${limits.maxConcurrent})`,
@@ -216,6 +211,9 @@ export async function checkApiAbuse(
       reason: `Input too large (estimated ${estimatedTokens} tokens, max ${REQUEST_LIMITS.maxInputTokens})`,
     };
   }
+
+  // Increment concurrent counter only after all checks pass
+  metrics.concurrentRequests++;
 
   return {
     allowed: true,

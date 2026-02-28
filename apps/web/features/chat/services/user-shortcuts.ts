@@ -32,13 +32,21 @@ export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]
 
     // Convert database format to PromptShortcut format
     return (
-      data?.map((shortcut) => ({
-        id: shortcut.id,
-        label: shortcut.label,
-        icon: () => null, // Custom shortcuts don't have icons
-        prompt: shortcut.prompt,
-        category: shortcut.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
-      })) || []
+      data?.map((rawShortcut) => {
+        const shortcut = rawShortcut as any;
+        return {
+          id: shortcut.id,
+          label: shortcut.label,
+          icon: () => null, // Custom shortcuts don't have icons
+          prompt: shortcut.prompt,
+          category: shortcut.category as
+            | 'coding'
+            | 'writing'
+            | 'business'
+            | 'analysis'
+            | 'creative',
+        };
+      }) || []
     );
   } catch (error) {
     console.error('[User Shortcuts] Error:', error);
@@ -67,7 +75,7 @@ export async function createUserShortcut(
         category: shortcut.category,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .maybeSingle();
 
@@ -81,12 +89,13 @@ export async function createUserShortcut(
       return null;
     }
 
+    const d = data as any;
     return {
-      id: data.id,
-      label: data.label,
+      id: d.id,
+      label: d.label,
       icon: () => null,
-      prompt: data.prompt,
-      category: data.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
+      prompt: d.prompt,
+      category: d.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
     };
   } catch (error) {
     console.error('[User Shortcuts] Error:', error);
@@ -109,8 +118,7 @@ export async function updateUserShortcut(
 ): Promise<boolean> {
   try {
     // SECURITY: Add user_id check to prevent unauthorized updates
-    const { error } = await supabase
-      .from('user_shortcuts')
+    const { error } = await (supabase.from('user_shortcuts') as any)
       .update({
         ...updates,
         updated_at: new Date().toISOString(),

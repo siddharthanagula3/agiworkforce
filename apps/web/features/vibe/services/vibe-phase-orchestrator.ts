@@ -189,7 +189,7 @@ export class BlueprintStreamParser {
     try {
       const parsed = JSON.parse(this.buffer);
       if (this.isRecord(parsed)) {
-        return this.blueprintToMarkdown(parsed as Blueprint);
+        return this.blueprintToMarkdown(parsed as unknown as Blueprint);
       }
     } catch {
       // Partial JSON: extract available fields with regex
@@ -208,7 +208,7 @@ export class BlueprintStreamParser {
     try {
       const parsed = JSON.parse(this.buffer);
       if (this.isRecord(parsed)) {
-        return parsed as Blueprint;
+        return parsed as unknown as Blueprint;
       }
     } catch {
       return null;

@@ -1115,9 +1115,7 @@ if (typeof window !== 'undefined') {
       useUnifiedAuthStore.subscribe(
         (state) => state.plan,
         (plan) => {
-          if (plan) {
-            enforceTaskRoutingTierRestriction(plan);
-          }
+          enforceTaskRoutingTierRestriction(plan ?? 'free');
         },
       );
     }

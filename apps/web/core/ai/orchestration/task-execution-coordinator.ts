@@ -212,8 +212,8 @@ export class ExecutionCoordinator extends SimpleEventEmitter {
           }
         }
 
-        // Check if execution was paused
-        if (context.status === 'paused') {
+        // Check if execution was paused (status may change externally)
+        if ((context.status as ExecutionStatus) === 'paused') {
           yield {
             type: 'status',
             executionId: context.id,
@@ -223,8 +223,8 @@ export class ExecutionCoordinator extends SimpleEventEmitter {
           return;
         }
 
-        // Check if execution was cancelled
-        if (context.status === 'cancelled') {
+        // Check if execution was cancelled (status may change externally)
+        if ((context.status as ExecutionStatus) === 'cancelled') {
           yield {
             type: 'status',
             executionId: context.id,
@@ -587,7 +587,9 @@ export class ExecutionCoordinator extends SimpleEventEmitter {
     agentCommunicator.addListener((message: AgentMessage) => {
       // Find execution context for this message
       const context = Array.from(this.activeExecutions.values()).find(
-        (ctx) => ctx.currentTask && message.payload?.taskId === ctx.currentTask.id,
+        (ctx) =>
+          ctx.currentTask &&
+          (message.payload as Record<string, unknown>)?.taskId === ctx.currentTask.id,
       );
 
       if (context) {

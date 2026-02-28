@@ -174,15 +174,18 @@ export const useVibeFileStore = create<VibeFileState>()(
       updateSyncState: (path, updates) => {
         set((state) => {
           const existing = state.syncStates[path];
-          state.syncStates[path] = {
-            path,
-            status: 'pending',
-            lastSyncedAt: null,
-            lastModifiedAt: new Date(),
-            retryCount: 0,
-            ...existing,
-            ...updates,
-          };
+          if (existing) {
+            Object.assign(existing, updates);
+          } else {
+            const defaults: FileSyncState = {
+              path,
+              status: 'pending',
+              lastSyncedAt: null,
+              lastModifiedAt: new Date(),
+              retryCount: 0,
+            };
+            state.syncStates[path] = { ...defaults, ...updates };
+          }
         });
       },
 

@@ -19,7 +19,7 @@ export async function updateVibeSessionTokens(
   cost: number,
 ): Promise<void> {
   try {
-    const { error } = await supabase.rpc('increment_vibe_session_tokens', {
+    const { error } = await (supabase as any).rpc('increment_vibe_session_tokens', {
       p_session_id: sessionId,
       p_input_tokens: inputTokens,
       p_output_tokens: outputTokens,

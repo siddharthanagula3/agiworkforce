@@ -85,8 +85,7 @@ export class VibeMessageService {
       is_streaming: params.isStreaming || false,
     };
 
-    const { data, error } = await supabase
-      .from('vibe_messages')
+    const { data, error } = await (supabase.from('vibe_messages') as any)
       .insert(message)
       .select()
       .maybeSingle();
@@ -110,8 +109,7 @@ export class VibeMessageService {
     messageId: string,
     updates: Partial<VibeMessage>,
   ): Promise<VibeMessage> {
-    const { data, error } = await supabase
-      .from('vibe_messages')
+    const { data, error } = await (supabase.from('vibe_messages') as any)
       .update(updates)
       .eq('id', messageId)
       .select()
@@ -171,7 +169,7 @@ export class VibeMessageService {
         input: content,
         mode: 'chat',
         sessionId,
-        conversationHistory: [...conversationHistory, { role: 'user', content }],
+        conversationHistory: [...conversationHistory, { role: 'user', content }] as any,
       });
 
       if (!orchestratorResponse.success || !orchestratorResponse.chatResponse) {
@@ -186,7 +184,7 @@ export class VibeMessageService {
         userId,
         role: 'assistant',
         content: '', // Will be updated as chunks arrive
-        employeeName: orchestratorResponse.assignedEmployee || 'AI Assistant',
+        employeeName: (orchestratorResponse as any).assignedEmployee || 'AI Assistant',
         isStreaming: true,
       });
       assistantMessageId = assistantMessage.id;

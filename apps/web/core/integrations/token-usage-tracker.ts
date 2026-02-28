@@ -145,7 +145,7 @@ class AsyncMutex {
   }
 }
 
-class TokenLoggerService {
+export class TokenLoggerService {
   private usageTracker: UsageTracker;
   private sessionCache: Map<string, SessionTokenSummary>;
   private logEntries: Map<string, TokenLogEntry[]>; // sessionId -> entries

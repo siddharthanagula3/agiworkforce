@@ -315,12 +315,12 @@ export type ConversationMetadataUpdate = Partial<
 // EXTENDED TYPES (with joins)
 // =============================================
 
-export interface ConversationWithParticipants extends MultiAgentConversation {
+export interface ConversationWithParticipants extends Omit<MultiAgentConversation, 'metadata'> {
   participants: ConversationParticipant[];
-  metadata?: ConversationMetadata;
+  metadata?: ConversationMetadata | Record<string, unknown>;
 }
 
-export interface ConversationWithDetails extends MultiAgentConversation {
+export interface ConversationWithDetails extends Omit<MultiAgentConversation, 'metadata'> {
   participants: ConversationParticipant[];
   collaborations: AgentCollaboration[];
   metadata: ConversationMetadata;

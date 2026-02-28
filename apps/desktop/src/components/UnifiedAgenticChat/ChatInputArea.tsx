@@ -374,12 +374,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           focusMode,
         });
 
+        // Clear local pending state first so UI is never stale
+        useUnifiedChatStore.getState().removePendingMessage(pendingMessage.id);
+
+        // Then clean up backend state (best-effort)
         if (isTauri) {
-          await invoke<PendingUserMessage | null>('chat_pop_pending_message', {
-            request: { conversation_id: targetConversationId },
-          });
-        } else {
-          useUnifiedChatStore.getState().removePendingMessage(pendingMessage.id);
+          try {
+            await invoke<PendingUserMessage | null>('chat_pop_pending_message', {
+              request: { conversation_id: targetConversationId },
+            });
+          } catch (backendErr) {
+            console.warn(
+              '[ChatInputArea] Failed to pop backend pending message (local state already cleared):',
+              backendErr,
+            );
+          }
         }
 
         console.log('[ChatInputArea] Successfully sent pending message:', pendingMessage.id);

@@ -9,6 +9,10 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+
+// Some RPC functions not yet in generated Database type
+
+const db = supabase as any;
 import { logger } from '@shared/lib/logger';
 
 // ============================================================================
@@ -132,7 +136,7 @@ class ConversationBranchService {
    */
   async getRootSession(sessionId: string): Promise<string | null> {
     try {
-      const { data, error } = await supabase.rpc('get_root_session', {
+      const { data, error } = await db.rpc('get_root_session', {
         session_id: sessionId,
       });
 
@@ -157,7 +161,7 @@ class ConversationBranchService {
    */
   async getSessionBranches(sessionId: string): Promise<SessionBranchInfo[]> {
     try {
-      const { data, error } = await supabase.rpc('get_session_branches', {
+      const { data, error } = await db.rpc('get_session_branches', {
         p_session_id: sessionId,
       });
 
@@ -171,7 +175,7 @@ class ConversationBranchService {
       }
 
       // Transform from snake_case to camelCase
-      return (data as SessionBranchRow[]).map((row) => ({
+      return (data as unknown as SessionBranchRow[]).map((row) => ({
         branchId: row.branch_id,
         childSessionId: row.child_session_id,
         branchPointMessageId: row.branch_point_message_id,
@@ -193,7 +197,7 @@ class ConversationBranchService {
    */
   async getBranchHistory(sessionId: string): Promise<BranchHistoryEntry[]> {
     try {
-      const { data, error } = await supabase.rpc('get_branch_history', {
+      const { data, error } = await db.rpc('get_branch_history', {
         p_session_id: sessionId,
       });
 
@@ -231,7 +235,7 @@ class ConversationBranchService {
    */
   async createBranch(params: CreateBranchParams): Promise<ConversationBranch> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('conversation_branches')
         .insert({
           parent_session_id: params.parentSessionId,
@@ -350,7 +354,7 @@ class ConversationBranchService {
    */
   async updateBranchName(params: UpdateBranchParams): Promise<ConversationBranch> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('conversation_branches')
         .update({ branch_name: params.branchName })
         .eq('id', params.branchId)

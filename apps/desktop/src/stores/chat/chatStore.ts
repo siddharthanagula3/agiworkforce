@@ -421,7 +421,8 @@ export const useChatStore = create<ChatState>()(
                   // tail. slice(length - excess) takes from the end = the oldest conversations.
                   const nonPinned = state.conversations.filter((c) => !c.pinned && c.id !== id);
                   const excess = state.conversations.length - 500;
-                  const toRemove = nonPinned.slice(nonPinned.length - excess);
+                  const removeCount = Math.min(excess, nonPinned.length);
+                  const toRemove = nonPinned.slice(nonPinned.length - removeCount);
                   for (const conv of toRemove) {
                     delete state.messagesByConversation[conv.id];
                   }

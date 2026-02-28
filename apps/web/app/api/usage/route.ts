@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
+import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
@@ -33,7 +33,7 @@ async function handler(request: NextRequest) {
       error,
     } = await supabase.auth.getUser(token);
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Invalid or expired token');
+      throw createError.unauthorized('Invalid or expired token');
     }
     userId = user.id;
   } else {
@@ -54,7 +54,7 @@ async function handler(request: NextRequest) {
       error,
     } = await ssrClient.auth.getUser();
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Authentication required');
+      throw createError.unauthorized('Authentication required');
     }
     userId = user.id;
   }
@@ -90,11 +90,11 @@ async function handler(request: NextRequest) {
     });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch usage data');
-    throw createError('INTERNAL', 'Failed to fetch usage data');
+    throw createError.internal('Failed to fetch usage data');
   }
 }
 
-export const GET = withErrorHandler(withRateLimit(handler, { maxRequests: 60, windowMs: 60000 }));
+export const GET = withErrorHandler(withRateLimitHandler(handler, 'credits-balance'));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

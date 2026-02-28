@@ -191,7 +191,7 @@ const HelpPage: React.FC = () => {
           'customer support',
         ]}
         ogType="website"
-        schema={{
+        structuredData={{
           '@context': 'https://schema.org',
           '@type': 'WebPage',
           name: 'Help & Support',

@@ -21,8 +21,8 @@ type ApiResponse<T> =
 
 const HTTP_RETRY_DEFAULTS: NormalizedRetryConfig = {
   enabled: true,
-  initialDelayMs: 1_000,
-  maxDelayMs: 10_000,
+  initialDelay: 1_000,
+  maxDelay: 10_000,
   maxRetries: 3,
 };
 

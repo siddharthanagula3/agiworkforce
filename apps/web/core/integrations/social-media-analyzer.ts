@@ -8,6 +8,8 @@
 import { grokProvider, GrokProvider } from '@core/ai/llm/providers/grok-ai';
 import { supabase } from '@shared/lib/supabase-client';
 
+const db = supabase as any;
+
 export interface SocialMediaQuery {
   topic: string;
   platforms?: ('twitter' | 'x' | 'reddit' | 'linkedin')[];
@@ -174,7 +176,7 @@ export class SocialMediaAnalyzer {
    */
   async quickSentiment(
     topic: string,
-    timeframe: '1h' | '6h' | '24h' = '24h',
+    timeframe: '1h' | '6h' | '24h' | '7d' = '24h',
   ): Promise<{
     sentiment: 'positive' | 'negative' | 'neutral';
     score: number;
@@ -187,8 +189,9 @@ export class SocialMediaAnalyzer {
       platforms: ['x', 'twitter'],
     });
 
+    const overall = result.sentiment?.overall || 'neutral';
     return {
-      sentiment: result.sentiment?.overall || 'neutral',
+      sentiment: overall === 'mixed' ? 'neutral' : overall,
       score: result.sentiment?.scores.positive || result.sentiment?.scores.negative || 50,
       summary: result.summary,
     };
@@ -426,13 +429,13 @@ Your analysis should be data-driven, actionable, and insightful.`;
 
       return {
         query,
-        summary: parsed.summary || 'Analysis completed',
-        sentiment: parsed.sentiment,
-        trends: parsed.trends,
-        influencers: parsed.influencers,
-        topContent: parsed.topContent,
-        insights: parsed.insights || [],
-        recommendations: parsed.recommendations || [],
+        summary: (parsed.summary as string) || 'Analysis completed',
+        sentiment: parsed.sentiment as SentimentAnalysis | undefined,
+        trends: parsed.trends as TrendAnalysis | undefined,
+        influencers: parsed.influencers as InfluencerAnalysis | undefined,
+        topContent: parsed.topContent as TopContent | undefined,
+        insights: (parsed.insights as string[]) || [],
+        recommendations: (parsed.recommendations as string[]) || [],
         metadata: {
           analyzedAt: new Date().toISOString(),
           dataSourcesCount: this.estimateDataSources(parsed),
@@ -466,15 +469,18 @@ Your analysis should be data-driven, actionable, and insightful.`;
    */
   private estimateDataSources(parsed: Record<string, unknown>): number {
     let count = 0;
+    const topContent = parsed.topContent as TopContent | undefined;
+    const influencers = parsed.influencers as InfluencerAnalysis | undefined;
+    const trends = parsed.trends as TrendAnalysis | undefined;
 
-    if (parsed.topContent?.posts) {
-      count += parsed.topContent.posts.length;
+    if (topContent?.posts) {
+      count += topContent.posts.length;
     }
-    if (parsed.influencers?.topInfluencers) {
-      count += parsed.influencers.topInfluencers.length;
+    if (influencers?.topInfluencers) {
+      count += influencers.topInfluencers.length;
     }
-    if (parsed.trends?.trending) {
-      count += parsed.trends.trending.length;
+    if (trends?.trending) {
+      count += trends.trending.length;
     }
 
     return count;
@@ -485,13 +491,19 @@ Your analysis should be data-driven, actionable, and insightful.`;
    */
   private calculateConfidenceScore(parsed: Record<string, unknown>): number {
     let score = 50; // Base score
+    const sentiment = parsed.sentiment as SentimentAnalysis | undefined;
+    const trends = parsed.trends as TrendAnalysis | undefined;
+    const influencers = parsed.influencers as InfluencerAnalysis | undefined;
+    const topContent = parsed.topContent as TopContent | undefined;
+    const insights = parsed.insights as string[] | undefined;
+    const recommendations = parsed.recommendations as string[] | undefined;
 
-    if (parsed.sentiment?.scores) score += 10;
-    if (parsed.trends?.trending?.length > 0) score += 10;
-    if (parsed.influencers?.topInfluencers?.length > 0) score += 10;
-    if (parsed.topContent?.posts?.length > 0) score += 10;
-    if (parsed.insights?.length > 0) score += 5;
-    if (parsed.recommendations?.length > 0) score += 5;
+    if (sentiment?.scores) score += 10;
+    if (trends?.trending?.length && trends.trending.length > 0) score += 10;
+    if (influencers?.topInfluencers?.length && influencers.topInfluencers.length > 0) score += 10;
+    if (topContent?.posts?.length && topContent.posts.length > 0) score += 10;
+    if (insights?.length && insights.length > 0) score += 5;
+    if (recommendations?.length && recommendations.length > 0) score += 5;
 
     return Math.min(score, 100);
   }
@@ -505,7 +517,7 @@ Your analysis should be data-driven, actionable, and insightful.`;
     analysis: SocialMediaAnalysisResult,
   ): Promise<void> {
     try {
-      const { error } = await supabase.from('social_media_analyses').insert({
+      const { error } = await db.from('social_media_analyses').insert({
         user_id: userId,
         query: query,
         result: analysis,

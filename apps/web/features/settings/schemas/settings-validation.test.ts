@@ -16,7 +16,7 @@ import {
 } from './settings-validation';
 
 // Helper to get error messages from Zod result (compatible with Zod v4)
-function getErrorMessages(result: z.SafeParseReturnType<unknown, unknown>): string[] {
+function getErrorMessages(result: { success: boolean; error?: any; data?: any }): string[] {
   if (result.success) return [];
   // Zod v4 uses issues instead of errors in some cases
   const issues = (result.error as { issues?: Array<{ message: string }> }).issues || [];
@@ -24,7 +24,7 @@ function getErrorMessages(result: z.SafeParseReturnType<unknown, unknown>): stri
 }
 
 function hasErrorContaining(
-  result: z.SafeParseReturnType<unknown, unknown>,
+  result: { success: boolean; error?: any; data?: any },
   text: string,
 ): boolean {
   const messages = getErrorMessages(result);

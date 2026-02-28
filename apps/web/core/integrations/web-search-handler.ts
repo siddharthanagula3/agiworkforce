@@ -119,7 +119,9 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
 
     // Extract citations/sources from the response
     const citationRegex = /\[(\d+)\]/g;
-    const citations = Array.from(answer.matchAll(citationRegex), (m) => parseInt(m[1]));
+    const citations = Array.from(answer.matchAll(citationRegex), (m: RegExpExecArray) =>
+      parseInt(m[1]),
+    );
     const sources = data.citations || [];
 
     // Parse results, filtering out entries with invalid URLs
@@ -137,13 +139,18 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
           typeof source === 'object' &&
           isValidUrl((source as Record<string, unknown>).url),
       )
-      .map((source, index: number) => ({
-        title: (source.title as string) || `Source ${index + 1}`,
-        url: source.url,
-        snippet: (source.snippet as string) || '',
-        source: safeGetHostname(source.url),
-        publishedDate: source.publishedDate as string | undefined,
-      }));
+      .map(
+        (
+          source: { url: string; title?: string; snippet?: string; publishedDate?: string },
+          index: number,
+        ) => ({
+          title: (source.title as string) || `Source ${index + 1}`,
+          url: source.url,
+          snippet: (source.snippet as string) || '',
+          source: safeGetHostname(source.url),
+          publishedDate: source.publishedDate as string | undefined,
+        }),
+      );
 
     // Extract valid source URLs
     const validSourceUrls = sources
@@ -151,7 +158,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
         (s: unknown): s is { url: string } =>
           s !== null && typeof s === 'object' && isValidUrl((s as Record<string, unknown>).url),
       )
-      .map((s) => s.url);
+      .map((s: any) => s.url);
 
     return {
       query,
@@ -223,7 +230,7 @@ export async function searchWithGoogle(
           (isValidUrl((item as Record<string, unknown>).link) ||
             isValidUrl((item as Record<string, unknown>).url)),
       )
-      .map((item) => {
+      .map((item: any) => {
         const url = item.link || item.url || '';
         const hostname = safeGetHostname(url);
         return {

@@ -11,6 +11,8 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
+const db = supabase as any;
+
 // ================================================
 // TYPES
 // ================================================
@@ -299,7 +301,7 @@ export class EmployeeMemoryService {
 
     // Try to load from database
     try {
-      const { data } = await supabase
+      const { data } = await db
         .from('employee_memories')
         .select('*')
         .eq('user_id', userId)
@@ -307,13 +309,14 @@ export class EmployeeMemoryService {
         .maybeSingle();
 
       if (data) {
+        const row = data as any;
         const memory: EmployeeMemory = {
-          employeeId: data.employee_id,
-          userId: data.user_id,
-          knowledgeBase: data.knowledge_base || [],
-          preferences: data.preferences || {},
-          lastInteraction: new Date(data.last_interaction),
-          interactionCount: data.interaction_count || 0,
+          employeeId: row.employee_id,
+          userId: row.user_id,
+          knowledgeBase: row.knowledge_base || [],
+          preferences: row.preferences || {},
+          lastInteraction: new Date(row.last_interaction),
+          interactionCount: row.interaction_count || 0,
         };
         this.memories[key] = memory;
         return memory;
@@ -458,7 +461,7 @@ export class EmployeeMemoryService {
    */
   private async persistMemory(memory: EmployeeMemory): Promise<void> {
     try {
-      await supabase.from('employee_memories').upsert(
+      await db.from('employee_memories').upsert(
         {
           user_id: memory.userId,
           employee_id: memory.employeeId,

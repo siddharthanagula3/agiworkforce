@@ -288,10 +288,9 @@ class PerformanceService {
           .pop();
 
         if (lcpEntry) {
-          monitoringService.trackPerformance('lcp', lcpEntry.startTime, {
-            element: lcpEntry.element?.tagName,
-            url: lcpEntry.url,
-          });
+          monitoringService.trackPerformance({
+            lcp: lcpEntry.startTime,
+          } as any);
         }
       });
 
@@ -304,13 +303,9 @@ class PerformanceService {
         entries.forEach((entry) => {
           if (entry.entryType === 'first-input') {
             const eventTiming = entry as PerformanceEventTiming;
-            monitoringService.trackPerformance(
-              'fid',
-              eventTiming.processingStart - eventTiming.startTime,
-              {
-                eventType: eventTiming.name,
-              },
-            );
+            monitoringService.trackPerformance({
+              fid: eventTiming.processingStart - eventTiming.startTime,
+            } as any);
           }
         });
       });
@@ -324,14 +319,14 @@ class PerformanceService {
         const entries = list.getEntries();
         entries.forEach((entry) => {
           if (entry.entryType === 'layout-shift') {
-            const layoutShift = entry as LayoutShift;
+            const layoutShift = entry as any;
             if (!layoutShift.hadRecentInput) {
               clsValue += layoutShift.value;
             }
           }
         });
 
-        monitoringService.trackPerformance('cls', clsValue);
+        monitoringService.trackPerformance({ cls: clsValue } as any);
       });
 
       clsObserver.observe({ entryTypes: ['layout-shift'] });
@@ -349,11 +344,9 @@ class PerformanceService {
         entries.forEach((entry) => {
           if (entry.entryType === 'resource' && entry.duration > 1000) {
             const resource = entry as PerformanceResourceTiming;
-            monitoringService.trackPerformance('slow_resource', resource.duration, {
-              name: resource.name,
-              type: resource.initiatorType,
-              size: resource.transferSize,
-            });
+            monitoringService.trackPerformance({
+              slowResource: resource.duration,
+            } as any);
           }
         });
       });
@@ -372,9 +365,9 @@ class PerformanceService {
         const entries = list.getEntries();
         entries.forEach((entry) => {
           if (entry.entryType === 'longtask') {
-            monitoringService.trackPerformance('long_task', entry.duration, {
-              startTime: entry.startTime,
-            });
+            monitoringService.trackPerformance({
+              longTask: entry.duration,
+            } as any);
           }
         });
       });
@@ -424,8 +417,8 @@ class PerformanceService {
 
     return {
       domContentLoaded:
-        navigation?.domContentLoadedEventEnd - navigation?.domContentLoadedEventStart,
-      loadComplete: navigation?.loadEventEnd - navigation?.loadEventStart,
+        (navigation?.domContentLoadedEventEnd ?? 0) - (navigation?.domContentLoadedEventStart ?? 0),
+      loadComplete: (navigation?.loadEventEnd ?? 0) - (navigation?.loadEventStart ?? 0),
       firstPaint: paint.find((p) => p.name === 'first-paint')?.startTime || 0,
       firstContentfulPaint: paint.find((p) => p.name === 'first-contentful-paint')?.startTime || 0,
     };

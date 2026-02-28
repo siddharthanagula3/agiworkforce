@@ -7,7 +7,7 @@
  */
 
 // Re-export common types for backward compatibility
-export { Status, BaseEntity, ApiError } from './common';
+export type { Status, BaseEntity, ApiError } from './common';
 export type { PaginatedResponse } from './common';
 
 // Store-specific paginated response with items array

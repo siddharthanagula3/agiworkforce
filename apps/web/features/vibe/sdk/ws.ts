@@ -27,8 +27,8 @@ function toWsCloseEvent(ev: CloseEvent | { code?: number; reason?: string }): {
 
 const WS_RETRY_DEFAULTS: NormalizedRetryConfig = {
   enabled: true,
-  initialDelayMs: 1_000,
-  maxDelayMs: 30_000,
+  initialDelay: 1_000,
+  maxDelay: 30_000,
   maxRetries: Infinity,
 };
 

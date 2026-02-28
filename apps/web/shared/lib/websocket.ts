@@ -165,7 +165,9 @@ export class WebSocketClient {
         const pending = this.pendingMessages.get(message.id)!;
         clearTimeout(pending.timeout);
         this.pendingMessages.delete(message.id);
-        pending.reject(new Error(message.payload.message || 'WebSocket error'));
+        pending.reject(
+          new Error((message.payload as { message?: string })?.message || 'WebSocket error'),
+        );
         return;
       }
 
@@ -227,7 +229,7 @@ export class WebSocketClient {
 
       // Store pending message
       this.pendingMessages.set(messageId, {
-        resolve,
+        resolve: resolve as any,
         reject,
         timeout: timeoutHandle,
       });
@@ -334,8 +336,8 @@ export class WebSocketClient {
   }
 
   // Event handlers
-  on(event: keyof WebSocketEventHandlers, handler: unknown): void {
-    this.handlers[event] = handler;
+  on(event: keyof WebSocketEventHandlers, handler: any): void {
+    (this.handlers as Record<string, unknown>)[event] = handler;
   }
 
   off(event: keyof WebSocketEventHandlers): void {

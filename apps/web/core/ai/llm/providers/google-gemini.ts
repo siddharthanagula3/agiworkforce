@@ -4,9 +4,12 @@
  * Updated: Jan 6th 2026 - Migrated to @google/genai SDK
  */
 
+// @ts-expect-error -- @google/genai types may not be installed
 import { GoogleGenAI } from '@google/genai';
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+
+const db = supabase as any;
 
 /**
  * Helper function to get the current Supabase session token
@@ -377,7 +380,7 @@ export class GoogleProvider {
     metadata: Record<string, unknown>;
   }): Promise<void> {
     try {
-      const { error } = await supabase.from('agent_messages').insert({
+      const { error } = await db.from('agent_messages').insert({
         session_id: message.sessionId,
         user_id: message.userId,
         role: message.role,

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
+import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -35,7 +35,7 @@ async function handler(request: NextRequest) {
       error,
     } = await supabase.auth.getUser(token);
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Invalid or expired token');
+      throw createError.unauthorized('Invalid or expired token');
     }
     userId = user.id;
   } else {
@@ -55,7 +55,7 @@ async function handler(request: NextRequest) {
       error,
     } = await ssrClient.auth.getUser();
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Authentication required');
+      throw createError.unauthorized('Authentication required');
     }
     userId = user.id;
   }
@@ -76,8 +76,8 @@ async function handler(request: NextRequest) {
         .single();
 
       if (error) {
-        logger.error('Failed to create session', { userId, error });
-        throw createError('INTERNAL', 'Failed to create chat session');
+        logger.error({ userId, error }, 'Failed to create session');
+        throw createError.internal('Failed to create chat session');
       }
 
       return NextResponse.json({ session: data });
@@ -92,8 +92,8 @@ async function handler(request: NextRequest) {
         .limit(50);
 
       if (error) {
-        logger.error('Failed to list sessions', { userId, error });
-        throw createError('INTERNAL', 'Failed to list sessions');
+        logger.error({ userId, error }, 'Failed to list sessions');
+        throw createError.internal('Failed to list sessions');
       }
 
       return NextResponse.json({ sessions: data });
@@ -101,7 +101,7 @@ async function handler(request: NextRequest) {
 
     case 'get': {
       if (!sessionId) {
-        throw createError('BAD_REQUEST', 'sessionId is required');
+        throw createError.badRequest('sessionId is required');
       }
 
       const { data: session, error: sessionError } = await supabase
@@ -112,7 +112,7 @@ async function handler(request: NextRequest) {
         .single();
 
       if (sessionError || !session) {
-        throw createError('NOT_FOUND', 'Session not found');
+        throw createError.notFound('Session not found');
       }
 
       const { data: messages, error: messagesError } = await supabase
@@ -122,8 +122,8 @@ async function handler(request: NextRequest) {
         .order('created_at', { ascending: true });
 
       if (messagesError) {
-        logger.error('Failed to get messages', { sessionId, error: messagesError });
-        throw createError('INTERNAL', 'Failed to get messages');
+        logger.error({ sessionId, error: messagesError }, 'Failed to get messages');
+        throw createError.internal('Failed to get messages');
       }
 
       return NextResponse.json({ session, messages });
@@ -131,7 +131,7 @@ async function handler(request: NextRequest) {
 
     case 'delete': {
       if (!sessionId) {
-        throw createError('BAD_REQUEST', 'sessionId is required');
+        throw createError.badRequest('sessionId is required');
       }
 
       const { error } = await supabase
@@ -141,16 +141,16 @@ async function handler(request: NextRequest) {
         .eq('user_id', userId);
 
       if (error) {
-        logger.error('Failed to delete session', { sessionId, error });
-        throw createError('INTERNAL', 'Failed to delete session');
+        logger.error({ sessionId, error }, 'Failed to delete session');
+        throw createError.internal('Failed to delete session');
       }
 
       return NextResponse.json({ success: true });
     }
 
     default:
-      throw createError('BAD_REQUEST', `Unknown action: ${action}`);
+      throw createError.badRequest(`Unknown action: ${action}`);
   }
 }
 
-export const POST = withErrorHandler(withRateLimit(handler, { maxRequests: 60, windowMs: 60000 }));
+export const POST = withErrorHandler(withRateLimitHandler(handler, 'chat-conversation'));

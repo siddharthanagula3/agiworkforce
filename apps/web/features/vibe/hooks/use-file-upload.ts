@@ -193,7 +193,7 @@ export function useFileUpload(): UseFileUploadReturn {
           session_id: sessionId,
         };
 
-        const { error: dbError } = await supabase.from('vibe_files').insert({
+        const { error: dbError } = await (supabase.from('vibe_files') as any).insert({
           id: vibeFile.id,
           name: vibeFile.name,
           type: vibeFile.type,
@@ -202,7 +202,7 @@ export function useFileUpload(): UseFileUploadReturn {
           uploaded_at: vibeFile.uploaded_at.toISOString(),
           uploaded_by: vibeFile.uploaded_by,
           session_id: vibeFile.session_id,
-        });
+        } as any);
 
         if (dbError) throw dbError;
 

@@ -48,6 +48,14 @@ interface MessageMetadata {
 }
 
 /**
+ * Validates a single metadata field against a runtime type check.
+ * Returns the value cast to T if it matches, or undefined otherwise.
+ */
+function validateField<T>(value: unknown, type: string): T | undefined {
+  return typeof value === type ? (value as T) : undefined;
+}
+
+/**
  * Type guard to safely extract metadata from ChatMessage
  * Returns a validated MessageMetadata object with proper types
  */
@@ -63,52 +71,24 @@ function getValidatedMetadata(
   const result: MessageMetadata = {};
 
   // String fields
-  if (typeof md.employeeId === 'string') {
-    result.employeeId = md.employeeId;
-  }
-  if (typeof md.employeeName === 'string') {
-    result.employeeName = md.employeeName;
-  }
-  if (typeof md.employeeAvatar === 'string') {
-    result.employeeAvatar = md.employeeAvatar;
-  }
-  if (typeof md.model === 'string') {
-    result.model = md.model;
-  }
-  if (typeof md.selectionReason === 'string') {
-    result.selectionReason = md.selectionReason;
-  }
+  result.employeeId = validateField<string>(md.employeeId, 'string');
+  result.employeeName = validateField<string>(md.employeeName, 'string');
+  result.employeeAvatar = validateField<string>(md.employeeAvatar, 'string');
+  result.model = validateField<string>(md.model, 'string');
+  result.selectionReason = validateField<string>(md.selectionReason, 'string');
 
   // Number fields
-  if (typeof md.inputTokens === 'number') {
-    result.inputTokens = md.inputTokens;
-  }
-  if (typeof md.outputTokens === 'number') {
-    result.outputTokens = md.outputTokens;
-  }
-  if (typeof md.tokens === 'number') {
-    result.tokens = md.tokens;
-  }
-  if (typeof md.tokensUsed === 'number') {
-    result.tokensUsed = md.tokensUsed;
-  }
-  if (typeof md.cost === 'number') {
-    result.cost = md.cost;
-  }
+  result.inputTokens = validateField<number>(md.inputTokens, 'number');
+  result.outputTokens = validateField<number>(md.outputTokens, 'number');
+  result.tokens = validateField<number>(md.tokens, 'number');
+  result.tokensUsed = validateField<number>(md.tokensUsed, 'number');
+  result.cost = validateField<number>(md.cost, 'number');
 
   // Boolean fields
-  if (typeof md.isPinned === 'boolean') {
-    result.isPinned = md.isPinned;
-  }
-  if (typeof md.isThinking === 'boolean') {
-    result.isThinking = md.isThinking;
-  }
-  if (typeof md.isSearching === 'boolean') {
-    result.isSearching = md.isSearching;
-  }
-  if (typeof md.isToolProcessing === 'boolean') {
-    result.isToolProcessing = md.isToolProcessing;
-  }
+  result.isPinned = validateField<boolean>(md.isPinned, 'boolean');
+  result.isThinking = validateField<boolean>(md.isThinking, 'boolean');
+  result.isSearching = validateField<boolean>(md.isSearching, 'boolean');
+  result.isToolProcessing = validateField<boolean>(md.isToolProcessing, 'boolean');
 
   // Array fields
   if (
@@ -119,24 +99,16 @@ function getValidatedMetadata(
   }
 
   // Tool execution result fields for inline display
-  if (typeof md.toolType === 'string') {
-    result.toolType = md.toolType;
-  }
+  result.toolType = validateField<string>(md.toolType, 'string');
   if (md.toolResult !== undefined) {
     result.toolResult = md.toolResult;
   }
-  if (typeof md.imageUrl === 'string') {
-    result.imageUrl = md.imageUrl;
-  }
+  result.imageUrl = validateField<string>(md.imageUrl, 'string');
   if (md.imageData && typeof md.imageData === 'object') {
     result.imageData = md.imageData as MessageMetadata['imageData'];
   }
-  if (typeof md.videoUrl === 'string') {
-    result.videoUrl = md.videoUrl;
-  }
-  if (typeof md.thumbnailUrl === 'string') {
-    result.thumbnailUrl = md.thumbnailUrl;
-  }
+  result.videoUrl = validateField<string>(md.videoUrl, 'string');
+  result.thumbnailUrl = validateField<string>(md.thumbnailUrl, 'string');
   if (md.videoData && typeof md.videoData === 'object') {
     result.videoData = md.videoData as MessageMetadata['videoData'];
   }

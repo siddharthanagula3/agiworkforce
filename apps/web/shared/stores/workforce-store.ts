@@ -98,7 +98,7 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const { data, error } = await supabase
+          const { data, error } = await (supabase as any)
             .from('hired_employees')
             .upsert(
               {

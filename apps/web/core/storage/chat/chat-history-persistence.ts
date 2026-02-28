@@ -56,7 +56,8 @@ export interface ChatState {
 
 export class ChatPersistenceService {
   private static instance: ChatPersistenceService;
-  private supabase: unknown;
+
+  private supabase: any;
   private state: ChatState;
   // Updated: Jan 15th 2026 - Fixed NodeJS.Timeout type mismatch for browser compatibility
   private syncInterval: ReturnType<typeof setInterval> | null = null;
@@ -378,15 +379,15 @@ export class ChatPersistenceService {
         return;
       }
 
-      this.state.sessions = sessions.map((s) => ({
+      this.state.sessions = sessions.map((s: any) => ({
         id: s.id,
         userId: s.user_id,
         employeeId: s.employee_id,
         role: s.role,
         provider: s.provider,
         title: s.title,
-        createdAt: new Date(s.created_at),
-        updatedAt: new Date(s.updated_at),
+        createdAt: new Date(s.created_at as string),
+        updatedAt: new Date(s.updated_at as string),
         isActive: s.is_active,
       }));
 
@@ -405,12 +406,12 @@ export class ChatPersistenceService {
 
         this.state.messages.set(
           session.id,
-          messages.map((m) => ({
+          messages.map((m: any) => ({
             id: m.id,
             sessionId: m.session_id,
             role: m.role,
             content: m.content,
-            timestamp: new Date(m.created_at),
+            timestamp: new Date(m.created_at as string),
             metadata: m.metadata,
           })),
         );
