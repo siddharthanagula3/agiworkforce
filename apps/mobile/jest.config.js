@@ -11,5 +11,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
+    '^react$': '<rootDir>/node_modules/react',
   },
 };
