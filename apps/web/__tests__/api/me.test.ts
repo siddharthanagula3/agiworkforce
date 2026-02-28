@@ -80,16 +80,13 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-// Mock Supabase SSR client
+// Mock Supabase SSR client — the route calls auth.getUser() (not getSession)
 vi.mock('@supabase/ssr', () => ({
   createServerClient: vi.fn(() => ({
     auth: {
-      getSession: vi.fn().mockResolvedValue({
-        data: {
-          session: {
-            user: mockUser,
-          },
-        },
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
       }),
     },
   })),
@@ -172,12 +169,13 @@ describe('Me API', () => {
       });
 
       it('should return 401 for unauthenticated request', async () => {
-        // Override mock to return no session
+        // Override mock to return no user
         const { createServerClient } = await import('@supabase/ssr');
         vi.mocked(createServerClient).mockReturnValueOnce({
           auth: {
-            getSession: vi.fn().mockResolvedValue({
-              data: { session: null },
+            getUser: vi.fn().mockResolvedValue({
+              data: { user: null },
+              error: { message: 'No session' },
             }),
           },
         } as never);
@@ -274,8 +272,9 @@ describe('Me API', () => {
         const { createServerClient } = await import('@supabase/ssr');
         vi.mocked(createServerClient).mockReturnValueOnce({
           auth: {
-            getSession: vi.fn().mockResolvedValue({
-              data: { session: { user: userWithoutName } },
+            getUser: vi.fn().mockResolvedValue({
+              data: { user: userWithoutName },
+              error: null,
             }),
           },
         } as never);
