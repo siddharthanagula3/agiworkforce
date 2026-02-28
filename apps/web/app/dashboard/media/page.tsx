@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { redirect } from 'next/navigation';
-import { MediaGallery } from '@/components/Media/MediaGallery';
+import { MediaStudio } from '@/components/Media/MediaStudio';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +16,7 @@ export default async function MediaPage() {
 
   return (
     <div className="py-6">
-      <div className="space-y-2 mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Media Generation</h1>
-        <p className="text-zinc-400 text-sm">
-          Generate images using AI. Powered by Google Imagen, DALL·E, and Stable Diffusion.
-        </p>
-      </div>
-      <MediaGallery />
+      <MediaStudio />
     </div>
   );
 }

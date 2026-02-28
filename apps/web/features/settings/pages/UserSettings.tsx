@@ -397,7 +397,7 @@ const SettingsPageContent: React.FC = () => {
     );
   }
 
-  if (isError || !profile || !settings) {
+  if (isError && !settings) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
