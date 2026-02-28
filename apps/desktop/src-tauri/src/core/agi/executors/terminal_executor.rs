@@ -1146,7 +1146,7 @@ mod tests {
 
     #[test]
     fn test_default_trait() {
-        let executor = TerminalExecutor::default();
+        let executor = TerminalExecutor::new();
         assert_eq!(executor.tool_names(), vec!["terminal_execute"]);
     }
 }

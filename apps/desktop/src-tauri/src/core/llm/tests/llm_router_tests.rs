@@ -319,7 +319,7 @@ mod router_fallback_tests {
         let cap = EXPECTED_SESSION_COST_SAFETY_CAP;
         let at_cap = 50.0_f64;
         assert!(
-            !(at_cap > cap),
+            at_cap <= cap,
             "exactly $50.00 should NOT trigger the cap (> not >=)"
         );
     }
@@ -339,7 +339,7 @@ mod router_fallback_tests {
         let cap = EXPECTED_SESSION_COST_SAFETY_CAP;
         let cost = 49.99_f64;
         assert!(
-            !(cost > cap),
+            cost <= cap,
             "$49.99 must not trigger the session cost cap"
         );
     }

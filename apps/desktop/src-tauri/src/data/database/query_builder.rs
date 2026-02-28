@@ -15,15 +15,15 @@ fn validate_sql(sql: &str) -> Result<()> {
         ("DROP TABLE", "DROP TABLE is not allowed"),
         ("DROP DATABASE", "DROP DATABASE is not allowed"),
         ("TRUNCATE", "TRUNCATE is not allowed"),
-        ("ALTER TABLE", "ALTER TABLE is not allowed through the query builder"),
+        (
+            "ALTER TABLE",
+            "ALTER TABLE is not allowed through the query builder",
+        ),
     ];
 
     for (pattern, message) in &dangerous_patterns {
         if upper.contains(pattern) {
-            return Err(Error::Other(format!(
-                "Dangerous SQL rejected: {}",
-                message
-            )));
+            return Err(Error::Other(format!("Dangerous SQL rejected: {}", message)));
         }
     }
 

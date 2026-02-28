@@ -162,9 +162,16 @@ mod tests {
     async fn test_capture_screenshot_primary_screen() {
         let vision = VisionAutomation::new().unwrap();
         let result = vision.capture_screenshot(None).await;
-        assert!(result.is_ok(), "Should capture primary screen: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should capture primary screen: {:?}",
+            result.err()
+        );
         let path = result.unwrap();
-        assert!(std::path::Path::new(&path).exists(), "Screenshot file must exist");
+        assert!(
+            std::path::Path::new(&path).exists(),
+            "Screenshot file must exist"
+        );
     }
 
     #[tokio::test]

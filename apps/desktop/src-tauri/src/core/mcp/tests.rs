@@ -766,9 +766,8 @@ mod malformed_message_tests {
 
         // Without method, this should not parse as a valid Request
         // It might parse as Response if it has result field, or fail
-        match result {
-            Ok(McpMessage::Request(_)) => panic!("Should not parse as request without method"),
-            _ => {} // Any other result is acceptable
+        if let Ok(McpMessage::Request(_)) = result {
+            panic!("Should not parse as request without method");
         }
     }
 
@@ -799,12 +798,9 @@ mod malformed_message_tests {
 
         // A response without result or error is malformed
         // The parser might try to interpret this differently
-        match result {
-            Ok(McpMessage::Response(resp)) => {
-                // If parsed as response, result should be null or default
-                assert!(resp.result.is_null());
-            }
-            _ => {} // Other interpretations are acceptable
+        if let Ok(McpMessage::Response(resp)) = result {
+            // If parsed as response, result should be null or default
+            assert!(resp.result.is_null());
         }
     }
 

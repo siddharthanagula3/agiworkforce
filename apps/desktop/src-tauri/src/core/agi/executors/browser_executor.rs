@@ -1692,8 +1692,9 @@ mod tests {
 
     fn create_test_automation() -> Arc<AutomationService> {
         Arc::new(
-            AutomationService::new()
-                .unwrap_or_else(|e| panic!("Failed to create automation service for testing: {}", e)),
+            AutomationService::new().unwrap_or_else(|e| {
+                panic!("Failed to create automation service for testing: {}", e)
+            }),
         )
     }
 

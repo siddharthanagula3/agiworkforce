@@ -177,8 +177,14 @@ mod tests {
 
     #[test]
     fn test_status_equality() {
-        assert_eq!(BackgroundAgentStatus::Running, BackgroundAgentStatus::Running);
-        assert_ne!(BackgroundAgentStatus::Running, BackgroundAgentStatus::Paused);
+        assert_eq!(
+            BackgroundAgentStatus::Running,
+            BackgroundAgentStatus::Running
+        );
+        assert_ne!(
+            BackgroundAgentStatus::Running,
+            BackgroundAgentStatus::Paused
+        );
     }
 
     // ------------------------------------------------------------------
@@ -206,8 +212,8 @@ mod tests {
 
     #[test]
     fn test_status_serde_uses_snake_case() {
-        let json = serde_json::to_string(&BackgroundAgentStatus::TakenOver)
-            .expect("serialize taken_over");
+        let json =
+            serde_json::to_string(&BackgroundAgentStatus::TakenOver).expect("serialize taken_over");
         assert_eq!(json, "\"taken_over\"");
     }
 
@@ -273,10 +279,26 @@ mod tests {
         let p = AgentProgress::default();
         let json = serde_json::to_string(&p).expect("serialize");
         // camelCase field names per #[serde(rename_all = "camelCase")]
-        assert!(json.contains("currentStep"), "expected camelCase key currentStep in {}", json);
-        assert!(json.contains("totalSteps"), "expected camelCase key totalSteps in {}", json);
-        assert!(json.contains("currentStepDescription"), "expected camelCase key in {}", json);
-        assert!(json.contains("elapsedSecs"), "expected camelCase key elapsedSecs in {}", json);
+        assert!(
+            json.contains("currentStep"),
+            "expected camelCase key currentStep in {}",
+            json
+        );
+        assert!(
+            json.contains("totalSteps"),
+            "expected camelCase key totalSteps in {}",
+            json
+        );
+        assert!(
+            json.contains("currentStepDescription"),
+            "expected camelCase key in {}",
+            json
+        );
+        assert!(
+            json.contains("elapsedSecs"),
+            "expected camelCase key elapsedSecs in {}",
+            json
+        );
     }
 
     // ------------------------------------------------------------------
@@ -351,10 +373,7 @@ mod tests {
             active_mcp_servers: vec!["gmail".to_string()],
             custom_instructions: Some("Be concise.".to_string()),
         };
-        assert_eq!(
-            ctx.working_directory.as_deref(),
-            Some("/home/user/project")
-        );
+        assert_eq!(ctx.working_directory.as_deref(), Some("/home/user/project"));
         assert_eq!(
             ctx.environment.get("API_KEY").map(|s| s.as_str()),
             Some("secret")
@@ -384,7 +403,10 @@ mod tests {
         let back: BackgroundAgentContext =
             serde_json::from_str(&json).expect("deserialize context");
         assert_eq!(back.working_directory.as_deref(), Some("/tmp/work"));
-        assert_eq!(back.environment.get("TOKEN").map(|s| s.as_str()), Some("abc123"));
+        assert_eq!(
+            back.environment.get("TOKEN").map(|s| s.as_str()),
+            Some("abc123")
+        );
         assert_eq!(back.conversation_snapshot.len(), 1);
         assert_eq!(back.active_mcp_servers.len(), 2);
         assert_eq!(back.custom_instructions.as_deref(), Some("Be verbose."));
@@ -614,7 +636,9 @@ mod tests {
         assert_eq!(agent.status, BackgroundAgentStatus::Completed);
         assert!(agent.completed_at.is_some());
         assert_eq!(agent.progress.percentage, 100);
-        let s = agent.summary.expect("summary should be set after complete()");
+        let s = agent
+            .summary
+            .expect("summary should be set after complete()");
         assert_eq!(s.description, "All done");
         assert!(s.goal_achieved);
         assert_eq!(s.files_changed, vec!["main.rs"]);
@@ -633,10 +657,7 @@ mod tests {
             ..AgentSummary::default()
         });
 
-        assert_eq!(
-            agent.summary.expect("summary").description,
-            "New"
-        );
+        assert_eq!(agent.summary.expect("summary").description, "New");
     }
 
     // ------------------------------------------------------------------
@@ -963,10 +984,7 @@ mod tests {
         assert_eq!(back.progress.total_steps, 5);
         assert!(back.started_at.is_some());
         assert!(back.completed_at.is_none());
-        assert_eq!(
-            back.context.working_directory.as_deref(),
-            Some("/tmp")
-        );
+        assert_eq!(back.context.working_directory.as_deref(), Some("/tmp"));
     }
 
     #[test]
@@ -1021,7 +1039,10 @@ mod tests {
         // AgentCommand derives Debug.
         let cmd = AgentCommand::Pause;
         let dbg = format!("{:?}", cmd);
-        assert!(dbg.contains("Pause"), "Debug output should contain variant name");
+        assert!(
+            dbg.contains("Pause"),
+            "Debug output should contain variant name"
+        );
     }
 
     #[test]

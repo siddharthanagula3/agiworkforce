@@ -278,7 +278,8 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_content_filter_finish() {
-        let event = r#"data: {"choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}]}"#;
+        let event =
+            r#"data: {"choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}]}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -479,7 +480,8 @@ mod production_parser_tests {
 
     #[test]
     fn test_anthropic_content_block_stop_is_noop() {
-        let event = "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
+        let event =
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
 
         let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
 
@@ -508,7 +510,8 @@ mod production_parser_tests {
 
     #[test]
     fn test_google_streaming_partial_no_finish() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"Partial "}],"role":"model"}}]}"#;
+        let event =
+            r#"data: {"candidates":[{"content":{"parts":[{"text":"Partial "}],"role":"model"}}]}"#;
 
         let chunk = parse_sse_event(event, Provider::Google).unwrap();
 
@@ -731,8 +734,10 @@ mod production_parser_tests {
     #[test]
     fn test_data_prefix_with_and_without_space() {
         // "data: {...}" and "data:{...}" should both work
-        let event_with_space = r#"data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}"#;
-        let event_without_space = r#"data:{"choices":[{"delta":{"content":"B"},"finish_reason":null}]}"#;
+        let event_with_space =
+            r#"data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}"#;
+        let event_without_space =
+            r#"data:{"choices":[{"delta":{"content":"B"},"finish_reason":null}]}"#;
 
         let chunk_a = parse_sse_event(event_with_space, Provider::OpenAI).unwrap();
         let chunk_b = parse_sse_event(event_without_space, Provider::OpenAI).unwrap();
@@ -807,10 +812,7 @@ mod keepalive_tests {
 
     #[test]
     fn test_colon_ping_is_keepalive() {
-        assert!(
-            classify_keepalive(":ping"),
-            "':ping' should be a keepalive"
-        );
+        assert!(classify_keepalive(":ping"), "':ping' should be a keepalive");
     }
 
     #[test]

@@ -100,14 +100,18 @@ pub async fn web_search(
 
     let requested_type = search_type.as_deref().unwrap_or("general").to_lowercase();
 
+    if requested_type == "images" {
+        return Err(
+            "Image search is not available in the desktop hobby-tier search flow yet. Use web or news search instead.".to_string(),
+        );
+    }
+
     let exec_search_type = match requested_type.as_str() {
         // Map UI-friendly terms to executor types
         "web" | "general" => ExecSearchType::General,
         "code" | "programming" => ExecSearchType::Code,
         "academic" | "scholarly" | "research" => ExecSearchType::Academic,
         "news" => ExecSearchType::News,
-        // Images are not supported by the executor; fallback to general web search
-        "images" => ExecSearchType::General,
         _ => ExecSearchType::General,
     };
 
@@ -446,6 +450,15 @@ fn html_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn web_search_rejects_unsupported_image_search() {
+        let error = web_search("cats".to_string(), Some(5), Some("images".to_string()))
+            .await
+            .expect_err("images search should fail fast");
+
+        assert!(error.contains("Image search is not available"));
+    }
 
     #[tokio::test]
     async fn test_duckduckgo_search() {

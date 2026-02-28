@@ -1019,7 +1019,7 @@ mod tests {
 
     #[test]
     fn test_default_trait() {
-        let executor = OutcomeExecutor::default();
+        let executor = OutcomeExecutor::new();
         assert_eq!(executor.tool_names().len(), 6);
     }
 }

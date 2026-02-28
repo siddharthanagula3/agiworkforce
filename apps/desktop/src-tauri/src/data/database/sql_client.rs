@@ -4,9 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::data::database::{
-    ConnectionConfig, ConnectionPool, DatabaseType, PoolConfig,
-};
+use crate::data::database::{ConnectionConfig, ConnectionPool, DatabaseType, PoolConfig};
 #[cfg(feature = "remote-databases")]
 use crate::data::database::{MySqlClient, PostgresClient};
 use crate::sys::error::{Error, Result};

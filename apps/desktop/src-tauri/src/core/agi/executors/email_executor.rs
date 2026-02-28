@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn test_default_implementation() {
-        let executor = EmailExecutor::default();
+        let executor = EmailExecutor::new();
         assert_eq!(executor.tool_names().len(), 2);
     }
 }

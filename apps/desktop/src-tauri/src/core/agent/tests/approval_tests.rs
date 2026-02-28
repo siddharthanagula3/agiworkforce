@@ -227,7 +227,10 @@ mod tests {
         let mut task = make_destructive_task();
         task.auto_approve = false;
         let result = manager.should_approve(&task).await.unwrap();
-        assert!(!result, "AlwaysRequire should deny tasks that are not auto-approved");
+        assert!(
+            !result,
+            "AlwaysRequire should deny tasks that are not auto-approved"
+        );
     }
 
     #[tokio::test]
@@ -253,7 +256,10 @@ mod tests {
     async fn test_approval_controller_new_from_temp_dir() {
         let temp_dir = TempDir::new().unwrap();
         let controller = ApprovalController::new(temp_dir.path().to_path_buf());
-        assert!(controller.is_ok(), "ApprovalController::new should succeed with a valid path");
+        assert!(
+            controller.is_ok(),
+            "ApprovalController::new should succeed with a valid path"
+        );
     }
 
     #[tokio::test]
@@ -264,7 +270,10 @@ mod tests {
             .is_action_trusted(Some("workflow_hash_abc"), "sig_xyz")
             .await
             .unwrap();
-        assert!(!trusted, "No actions should be trusted in a fresh controller");
+        assert!(
+            !trusted,
+            "No actions should be trusted in a fresh controller"
+        );
     }
 
     #[tokio::test]
@@ -272,7 +281,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
         let trusted = controller.is_action_trusted(None, "any_sig").await.unwrap();
-        assert!(!trusted, "Without a workflow hash, action must not be trusted");
+        assert!(
+            !trusted,
+            "Without a workflow hash, action must not be trusted"
+        );
     }
 
     #[tokio::test]
@@ -299,7 +311,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
         let workflows = controller.list_trusted_workflows().await.unwrap();
-        assert!(workflows.is_empty(), "No trusted workflows in a fresh controller");
+        assert!(
+            workflows.is_empty(),
+            "No trusted workflows in a fresh controller"
+        );
     }
 
     #[tokio::test]
