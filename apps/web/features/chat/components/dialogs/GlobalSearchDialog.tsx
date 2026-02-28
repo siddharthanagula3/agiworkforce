@@ -71,13 +71,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load recent and popular searches when dialog opens
-  useEffect(() => {
-    if (open && user?.id) {
-      loadSearchHistory();
-    }
-  }, [open, user?.id]);
-
   const loadSearchHistory = useCallback(async () => {
     if (!user?.id) return;
 
@@ -95,6 +88,13 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       setIsLoadingHistory(false);
     }
   }, [user?.id]);
+
+  // Load recent and popular searches when dialog opens
+  useEffect(() => {
+    if (open && user?.id) {
+      loadSearchHistory();
+    }
+  }, [open, user?.id, loadSearchHistory]);
 
   const handleClearHistory = useCallback(async () => {
     if (!user?.id) return;
