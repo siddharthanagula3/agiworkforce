@@ -1,5 +1,5 @@
 /**
- * Employee Grid Skeleton Component
+ * Agent Grid Skeleton Component
  * Displays a grid of loading placeholders for the marketplace
  */
 
@@ -26,12 +26,12 @@ export const EmployeeGridSkeleton: React.FC<EmployeeGridSkeletonProps> = ({
         className,
       )}
       role="status"
-      aria-label="Loading employees"
+      aria-label="Loading AI agents"
     >
       {Array.from({ length: count }).map((_, index) => (
         <EmployeeCardSkeleton key={`skeleton-${index}`} viewMode={viewMode} />
       ))}
-      <span className="sr-only">Loading marketplace employees...</span>
+      <span className="sr-only">Loading AI agents...</span>
     </div>
   );
 };

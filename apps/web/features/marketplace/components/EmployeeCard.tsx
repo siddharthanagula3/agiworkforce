@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Employee Card Component
+ * AI Agent Card Component
  * Displays an AI agent card with details and chat functionality
  *
  * Performance optimizations:

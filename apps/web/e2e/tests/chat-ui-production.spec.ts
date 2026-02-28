@@ -38,7 +38,7 @@ test.describe('Production Chat UI Tests', () => {
 
     // ========== STEP 2: NAVIGATE TO CHAT ==========
     console.log('\n========== STEP 2: NAVIGATE TO CHAT ==========');
-    await page.goto(`${PROD_URL}/dashboard/chat`);
+    await page.goto(`${PROD_URL}/chat`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(3000);
     await page.screenshot({ path: 'e2e/screenshots/04-chat-page.png', fullPage: true });
