@@ -348,7 +348,7 @@ export class SecurityManager {
       'style',
     ],
     ALLOWED_URI_REGEXP:
-      /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+      /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
     FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'textarea'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     KEEP_CONTENT: true,
@@ -387,8 +387,13 @@ export class SecurityManager {
   static sanitizeUrl(url: string): string {
     if (!url) return '';
 
-    // Remove dangerous schemes
-    const sanitized = url.replace(/^(javascript|data|vbscript):/i, '');
+    // Remove dangerous schemes — loop until stable to prevent bypass via nesting
+    let sanitized = url;
+    let prev;
+    do {
+      prev = sanitized;
+      sanitized = sanitized.replace(/^(javascript|data|vbscript):/i, '');
+    } while (sanitized !== prev);
 
     // Ensure it starts with allowed schemes or is relative
     if (!/^(https?:|mailto:|tel:|#|\/)/i.test(sanitized)) {
