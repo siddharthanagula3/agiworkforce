@@ -84,13 +84,13 @@ const PublicHeader: React.FC = () => {
   const resourcesMenu = [
     {
       label: 'Documentation',
-      path: '/documentation',
+      path: '/docs',
       icon: BookOpen,
       description: 'Product guides and docs',
     },
     {
       label: 'API Reference',
-      path: '/api-reference',
+      path: '/api-docs',
       icon: FileCode,
       description: 'Endpoints and examples',
     },
@@ -183,10 +183,10 @@ const PublicHeader: React.FC = () => {
             ) : (
               <>
                 <Button variant="ghost" asChild className="text-sm">
-                  <Link href="/auth/login">Sign In</Link>
+                  <Link href="/login">Sign In</Link>
                 </Button>
                 <Button asChild className="btn-glow gradient-primary text-sm text-white">
-                  <Link href="/auth/register">Get Started Free</Link>
+                  <Link href="/signup">Get Started Free</Link>
                 </Button>
               </>
             )}
@@ -233,20 +233,12 @@ const PublicHeader: React.FC = () => {
                     </Button>
                   ) : (
                     <>
-                      <Link
-                        href="/auth/login"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block"
-                      >
+                      <Link href="/login" onClick={() => setIsMenuOpen(false)} className="block">
                         <Button variant="ghost" className="w-full justify-start">
                           Sign In
                         </Button>
                       </Link>
-                      <Link
-                        href="/auth/register"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block"
-                      >
+                      <Link href="/signup" onClick={() => setIsMenuOpen(false)} className="block">
                         <Button className="gradient-primary w-full text-white">
                           Get Started Free
                         </Button>

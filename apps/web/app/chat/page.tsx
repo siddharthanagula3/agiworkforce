@@ -8,12 +8,15 @@ import { useChatStore, getGreetingTime } from '@features/chat/stores/chat-store'
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
+import { useAuthStore } from '@shared/stores/authentication-store';
 
 export default function ChatPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const {
     sessions,
     sidebarOpen,
+    dbLoaded,
     setSidebarOpen,
     createSession,
     deleteSession,
@@ -21,58 +24,38 @@ export default function ChatPage() {
     addMessage,
     setLoading,
     isLoading,
+    loadSessionsFromDb,
   } = useChatStore();
 
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
+
+  // Load sessions from Supabase on mount
+  useEffect(() => {
+    if (user?.id && !dbLoaded) {
+      loadSessionsFromDb(user.id);
+    }
+  }, [user?.id, dbLoaded, loadSessionsFromDb]);
 
   const greeting = getGreetingTime();
 
   const handleNewChat = useCallback(() => {
-    const id = createSession();
+    const id = createSession(user?.id);
     router.push(`/chat/${id}`);
-  }, [createSession, router]);
+  }, [createSession, router, user?.id]);
 
   const handleSend = useCallback(
     (content: string, _attachments?: File[]) => {
       // Create a new session, add the user message, navigate to it
-      const sessionId = createSession();
+      const sessionId = createSession(user?.id);
       addMessage(sessionId, { role: 'user', content });
 
-      // Simulate AI response
-      setLoading(true);
-      const assistantId = addMessage(sessionId, {
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-      });
-
+      // Navigate to session page — AI response handled there
       router.push(`/chat/${sessionId}`);
-
-      // Simulate streaming response
-      const responses = [
-        "I'd be happy to help with that! ",
-        'Let me think about this for a moment...\n\n',
-        "Here's what I can tell you:\n\n",
-        'This is a simulated response. ',
-        'Once connected to an AI backend, ',
-        "you'll get real responses here. ",
-        'The chat interface supports **markdown**, `code blocks`, and more.',
-      ];
-
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index < responses.length) {
-          useChatStore.getState().appendToMessage(sessionId, assistantId, responses[index]);
-          index++;
-        } else {
-          clearInterval(interval);
-          useChatStore.getState().setStreaming(sessionId, assistantId, false);
-          useChatStore.getState().setLoading(false);
-        }
-      }, 100);
     },
-    [createSession, addMessage, setLoading, router],
+    [createSession, addMessage, router, user?.id],
   );
 
   const handleSuggestedPrompt = useCallback(
