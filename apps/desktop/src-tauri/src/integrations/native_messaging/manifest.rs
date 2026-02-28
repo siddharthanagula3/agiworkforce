@@ -1,7 +1,9 @@
 //! Native Messaging Manifest Generation and Installation
 
 use super::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(target_os = "macos")]
+use std::path::Path;
 
 #[cfg(target_os = "macos")]
 fn normalize_macos_home_for_native_host_paths(home: &Path) -> PathBuf {
@@ -618,9 +620,8 @@ mod tests {
         }
 
         // Restore original
-        match original {
-            Some(val) => std::env::set_var("HOME", val),
-            None => {}
+        if let Some(val) = original {
+            std::env::set_var("HOME", val);
         }
     }
 }
