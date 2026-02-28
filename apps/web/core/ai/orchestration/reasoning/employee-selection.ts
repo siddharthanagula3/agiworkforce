@@ -463,7 +463,7 @@ export class AgentSelector {
   /**
    * Generate human-readable selection reason
    */
-  private generateSelectionReason(evaluation: AgentEvaluation, task: Task): string {
+  private generateSelectionReason(evaluation: AgentEvaluation, _task: Task): string {
     const capability = this.capabilities.get(evaluation.agent)!;
 
     const topReasons = evaluation.reasons.slice(0, 3).join(', ');
@@ -517,7 +517,7 @@ export class AgentSelector {
   /**
    * Check if agent is available/online
    */
-  async checkAgentAvailability(agent: AgentType): Promise<boolean> {
+  async checkAgentAvailability(_agent: AgentType): Promise<boolean> {
     // In a real implementation, this would ping the agent's API
     // For now, return true for all agents
     return true;

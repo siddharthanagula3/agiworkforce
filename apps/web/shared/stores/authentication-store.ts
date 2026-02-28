@@ -128,7 +128,7 @@ async function cleanupAllStores(): Promise<void> {
     keysToRemove.forEach((key) => {
       try {
         localStorage.removeItem(key);
-      } catch (e) {
+      } catch (_e) {
         // Ignore localStorage errors
       }
     });
@@ -216,7 +216,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               localStorage.removeItem('supabase.auth.token');
               localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
-            } catch (e) {
+            } catch (_e) {
               logger.debug('Could not clear localStorage');
             }
             set({ user: null, isAuthenticated: false, isLoading: false });
@@ -230,7 +230,7 @@ export const useAuthStore = create<AuthState>()(
           try {
             localStorage.removeItem('supabase.auth.token');
             localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
-          } catch (e) {
+          } catch (_e) {
             logger.debug('Could not clear localStorage');
           }
           set({ user: null, isAuthenticated: false, isLoading: false });
@@ -311,7 +311,7 @@ export const useAuthStore = create<AuthState>()(
           } else {
             set({ user, isAuthenticated: !!user, isLoading: false });
           }
-        } catch (error) {
+        } catch (_error) {
           set({ user: null, isAuthenticated: false, isLoading: false });
         }
       },

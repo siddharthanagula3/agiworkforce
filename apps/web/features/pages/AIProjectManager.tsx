@@ -6,6 +6,7 @@ import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const AIProjectManagerPage: React.FC = () => {
   const router = useRouter();
@@ -91,10 +92,12 @@ const AIProjectManagerPage: React.FC = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&h=600&fit=crop"
                 alt="Project Management"
                 className="rounded-3xl"
+                width={800}
+                height={600}
               />
             </motion.div>
           </div>

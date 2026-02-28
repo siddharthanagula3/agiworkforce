@@ -17,7 +17,7 @@ async function loadStripe(key: string): Promise<any> {
     return null;
   }
 }
-function getStripe() {
+function _getStripe() {
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   if (!publishableKey || !publishableKey.startsWith('pk_')) {
     return Promise.resolve(null);
@@ -25,7 +25,7 @@ function getStripe() {
   if (!stripePromise) {
     try {
       stripePromise = loadStripe(publishableKey);
-    } catch (e) {
+    } catch (_e) {
       stripePromise = Promise.resolve(null);
     }
   }

@@ -108,7 +108,7 @@ class MultiAgentCollaborationService {
     const requiredExpertise: string[] = [];
 
     // Check for build/create keywords
-    const hasBuildKeywords = complexityKeywords.some((keyword) => {
+    const _hasBuildKeywords = complexityKeywords.some((keyword) => {
       if (messageLower.includes(keyword)) {
         detectedKeywords.push(keyword);
         complexityScore += 2;
@@ -118,7 +118,7 @@ class MultiAgentCollaborationService {
     });
 
     // Check for multi-domain requirements
-    const hasMultiDomain = multiDomainKeywords.some((keyword) => {
+    const _hasMultiDomain = multiDomainKeywords.some((keyword) => {
       if (messageLower.includes(keyword)) {
         detectedKeywords.push(keyword);
         complexityScore += 3;
@@ -128,7 +128,7 @@ class MultiAgentCollaborationService {
     });
 
     // Check for technical depth
-    const hasTechnicalDepth = technicalDepthKeywords.some((keyword) => {
+    const _hasTechnicalDepth = technicalDepthKeywords.some((keyword) => {
       if (messageLower.includes(keyword)) {
         detectedKeywords.push(keyword);
         complexityScore += 2;

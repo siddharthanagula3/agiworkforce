@@ -171,7 +171,7 @@ export class ConversationBranchingService {
    */
   async getBranchesForSession(
     sessionId: string,
-    userId?: string,
+    _userId?: string,
   ): Promise<ConversationBranchWithDetails[]> {
     const { data, error } = await (supabase as any)
       .from('conversation_branches')

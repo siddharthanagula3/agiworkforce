@@ -30,7 +30,7 @@ const AccessibleInput = forwardRef<HTMLInputElement, AccessibleInputProps>(
     ref,
   ) => {
     const { announce, trackInteraction } = useAccessibility();
-    const { setAriaDescribedBy } = useAriaAttributes();
+    const { setAriaDescribedBy: _setAriaDescribedBy } = useAriaAttributes();
     const inputId = useId();
     const labelId = `${inputId}-label`;
     const descriptionId = `${inputId}-description`;

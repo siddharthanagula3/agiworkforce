@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useNotificationStore, type Notification, type Toast } from './notification-store';
+import { useNotificationStore } from './notification-store';
 
 describe('Notification Store', () => {
   beforeEach(() => {
@@ -62,7 +62,8 @@ describe('Notification Store', () => {
       });
 
       it('should auto-close notification if autoClose is specified', () => {
-        const { addNotification, removeNotification } = useNotificationStore.getState();
+        const { addNotification, removeNotification: _removeNotification } =
+          useNotificationStore.getState();
 
         const id = addNotification({
           type: 'info',
@@ -562,7 +563,8 @@ describe('Notification Store', () => {
   describe('Utility Functions', () => {
     describe('getNotificationsByCategory', () => {
       it('should filter notifications by category', () => {
-        const { addNotification, getNotificationsByCategory } = useNotificationStore.getState();
+        const { addNotification, getNotificationsByCategory: _getNotificationsByCategory } =
+          useNotificationStore.getState();
 
         addNotification({
           type: 'info',
@@ -592,8 +594,11 @@ describe('Notification Store', () => {
 
     describe('getUnreadNotifications', () => {
       it('should return only unread notifications', () => {
-        const { addNotification, markAsRead, getUnreadNotifications } =
-          useNotificationStore.getState();
+        const {
+          addNotification,
+          markAsRead,
+          getUnreadNotifications: _getUnreadNotifications,
+        } = useNotificationStore.getState();
 
         const id1 = addNotification({
           type: 'info',

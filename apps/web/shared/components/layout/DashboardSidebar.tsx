@@ -5,11 +5,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@shared/ui/button';
 import { cn } from '@shared/lib/utils';
-import { Users, MessageSquare, Store, Sparkles, Plus, Download, Image } from 'lucide-react';
-import { motion } from 'framer-motion';
+import {
+  Users,
+  MessageSquare,
+  Store,
+  Sparkles,
+  Plus,
+  Download,
+  Image,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
 
 interface DashboardSidebarProps {
   collapsed?: boolean;
+  onToggle?: () => void;
   className?: string;
 }
 
@@ -47,133 +57,76 @@ const PRODUCT_NAVIGATION: NavigationItem[] = [
   },
 ];
 
-const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, className }) => {
+const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
+  collapsed = false,
+  onToggle,
+  className,
+}) => {
   const pathname = usePathname();
 
   const isActiveLink = (href: string) => {
+    if (href === '/chat') {
+      return pathname === '/chat' || pathname.startsWith('/chat/');
+    }
     return pathname === href || pathname.startsWith(href + '/');
-  };
-
-  const renderNavItem = (item: NavigationItem, index: number) => {
-    const isActive = isActiveLink(item.href);
-
-    return (
-      <motion.div
-        key={item.name}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3, delay: index * 0.05 }}
-      >
-        <Link
-          href={item.href}
-          className={cn(
-            'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
-            'hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10',
-            collapsed ? 'justify-center' : '',
-            isActive
-              ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-          title={collapsed ? item.name : undefined}
-        >
-          {/* Active indicator */}
-          {isActive && !collapsed && (
-            <motion.div
-              layoutId="active-indicator"
-              className="absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-primary to-primary/50"
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            />
-          )}
-
-          {/* Icon with background */}
-          <div
-            className={cn(
-              'rounded-lg p-2 transition-all duration-300',
-              isActive
-                ? 'scale-110 bg-primary/10'
-                : 'bg-muted/50 group-hover:scale-105 group-hover:bg-muted',
-            )}
-          >
-            <item.icon
-              className={cn('h-4 w-4 transition-all duration-300', isActive && 'text-primary')}
-            />
-          </div>
-
-          {/* Label */}
-          {!collapsed && (
-            <div className="flex-1">
-              <div className="font-semibold">{item.name}</div>
-            </div>
-          )}
-
-          {/* Tooltip for collapsed state */}
-          {collapsed && (
-            <div
-              className={cn(
-                'absolute left-full z-50 ml-3 rounded-lg border bg-popover/95 px-3 py-2 shadow-lg backdrop-blur-sm',
-                'pointer-events-none opacity-0 transition-all duration-300 group-hover:opacity-100',
-                'whitespace-nowrap',
-              )}
-            >
-              <p className="text-sm font-medium">{item.name}</p>
-            </div>
-          )}
-        </Link>
-      </motion.div>
-    );
   };
 
   return (
     <div
       className={cn(
-        'glass-strong flex h-full flex-col border-r border-border/50 backdrop-blur-xl',
-        'overflow-visible',
+        'flex h-full flex-col bg-black/40 backdrop-blur-xl',
+        'border-r border-white/[0.06]',
         className,
       )}
     >
-      {/* Logo Section */}
+      {/* Logo + Collapse Toggle */}
       <div
         className={cn(
-          'flex items-center gap-3 border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-4 py-5',
-          collapsed && 'justify-center px-2',
+          'flex items-center border-b border-white/[0.06] px-4 py-4',
+          collapsed ? 'justify-center px-2' : 'justify-between',
         )}
       >
-        {collapsed ? (
-          <motion.div
-            whileHover={{ scale: 1.1, rotate: 10 }}
-            whileTap={{ scale: 0.95 }}
-            className="gradient-primary flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
+        <Link
+          href="/chat"
+          className={cn('flex items-center gap-2.5', collapsed && 'justify-center')}
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          {!collapsed && (
+            <span className="text-sm font-semibold text-foreground">AGI Workforce</span>
+          )}
+        </Link>
+        {!collapsed && onToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            aria-label="Collapse sidebar"
           >
-            <Sparkles className="h-5 w-5 text-white" />
-          </motion.div>
-        ) : (
-          <>
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 10 }}
-              whileTap={{ scale: 0.95 }}
-              className="gradient-primary flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
-            >
-              <Sparkles className="h-5 w-5 text-white" />
-            </motion.div>
-            <div className="flex flex-col">
-              <h1 className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-base font-bold text-transparent">
-                AI Workforce
-              </h1>
-              <p className="text-xs text-muted-foreground">Powered by AGI</p>
-            </div>
-          </>
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
+        )}
+        {collapsed && onToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="absolute -right-3 top-5 z-50 hidden h-6 w-6 rounded-full border border-white/[0.06] bg-background text-muted-foreground shadow-md hover:text-foreground lg:flex"
+            aria-label="Expand sidebar"
+          >
+            <PanelLeftOpen className="h-3 w-3" />
+          </Button>
         )}
       </div>
 
       {/* New Chat Button */}
-      <div className={cn('border-b border-border/50 px-4 py-4', collapsed && 'px-2')}>
+      <div className={cn('px-3 py-3', collapsed && 'px-2')}>
         {collapsed ? (
           <Button
-            className={cn(
-              'gradient-primary w-full text-white shadow-lg',
-              'transition-all duration-300 hover:scale-[1.02] hover:shadow-xl',
-              'aspect-square p-0',
-            )}
+            className="w-full bg-primary px-0 text-primary-foreground shadow-sm hover:bg-primary/90"
+            size="icon"
             asChild
           >
             <Link href="/chat" aria-label="New Chat">
@@ -182,10 +135,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
           </Button>
         ) : (
           <Button
-            className={cn(
-              'btn-glow gradient-primary w-full text-white shadow-lg',
-              'transition-all duration-300 hover:scale-[1.02] hover:shadow-xl',
-            )}
+            className="w-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
             asChild
           >
             <Link href="/chat">
@@ -197,64 +147,70 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
       </div>
 
       {/* Product Navigation */}
-      <div className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent flex-1 overflow-y-auto px-3 py-4">
-        <nav className="space-y-1">
+      <div className="flex-1 overflow-y-auto px-2 py-1">
+        <nav className="space-y-0.5">
           {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mb-3 flex items-center justify-between px-3"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Product
-              </p>
-              <div className="ml-3 h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
-            </motion.div>
+            <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              Product
+            </p>
           )}
-          {PRODUCT_NAVIGATION.map((item, index) => renderNavItem(item, index))}
+          {PRODUCT_NAVIGATION.map((item) => {
+            const isActive = isActiveLink(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  collapsed && 'justify-center px-2',
+                  isActive
+                    ? 'bg-white/[0.08] text-foreground'
+                    : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+                )}
+                title={collapsed ? item.name : undefined}
+              >
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+                )}
+                <item.icon
+                  className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-primary')}
+                />
+                {!collapsed && <span>{item.name}</span>}
+
+                {/* Tooltip for collapsed */}
+                {collapsed && (
+                  <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md border border-white/[0.06] bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+                    {item.name}
+                  </div>
+                )}
+              </Link>
+            );
+          })}
         </nav>
       </div>
 
+      {/* Divider */}
+      <div className="mx-3 h-px bg-white/[0.06]" />
+
       {/* Footer: Download App */}
-      <div className="border-t border-border/50 bg-gradient-to-t from-muted/20 to-transparent p-3">
-        {collapsed ? (
-          <Link
-            href="/download"
-            className={cn(
-              'group relative flex min-h-11 items-center justify-center rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
-              'text-muted-foreground hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-foreground',
-            )}
-            title="Download App"
-          >
-            <div className="rounded-lg bg-muted/50 p-2 transition-all duration-300 group-hover:scale-105 group-hover:bg-muted">
-              <Download className="h-4 w-4" />
+      <div className="p-2">
+        <Link
+          href="/download"
+          className={cn(
+            'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+            collapsed && 'justify-center px-2',
+          )}
+          title={collapsed ? 'Download App' : undefined}
+        >
+          <Download className="h-[18px] w-[18px] shrink-0" />
+          {!collapsed && <span>Download App</span>}
+          {collapsed && (
+            <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md border border-white/[0.06] bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+              Download App
             </div>
-            <div
-              className={cn(
-                'absolute left-full z-50 ml-3 rounded-lg border bg-popover/95 px-3 py-2 shadow-lg backdrop-blur-sm',
-                'pointer-events-none opacity-0 transition-all duration-300 group-hover:opacity-100',
-                'whitespace-nowrap',
-              )}
-            >
-              <p className="text-sm font-medium">Download App</p>
-            </div>
-          </Link>
-        ) : (
-          <Link
-            href="/download"
-            className={cn(
-              'group flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
-              'text-muted-foreground hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-foreground',
-            )}
-          >
-            <div className="rounded-lg bg-muted/50 p-2 transition-all duration-300 group-hover:scale-105 group-hover:bg-muted">
-              <Download className="h-4 w-4" />
-            </div>
-            <div className="flex-1">
-              <div className="font-semibold">Download App</div>
-            </div>
-          </Link>
-        )}
+          )}
+        </Link>
       </div>
     </div>
   );

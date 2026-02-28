@@ -20,14 +20,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import {
-  sanitizeArtifact,
-  sanitizeSVG,
-  hasXSSRisk,
-} from '@shared/utils/html-sanitizer';
+import { sanitizeArtifact, sanitizeSVG, hasXSSRisk } from '@shared/utils/html-sanitizer';
 import { Alert, AlertDescription } from '@shared/ui/alert';
 
 export interface ArtifactVersion {
@@ -201,19 +196,13 @@ export function ArtifactPreview({
   <body>${content}</body>
 </html>`;
     }
-  }, [
-    artifact.content,
-    artifact.currentVersion,
-    artifact.versions,
-    artifact.type,
-  ]);
+  }, [artifact.content, artifact.currentVersion, artifact.versions, artifact.type]);
 
   // Update iframe content when artifact changes
   useEffect(() => {
     if (activeTab === 'preview' && iframeRef.current) {
       const iframe = iframeRef.current;
-      const iframeDoc =
-        iframe.contentDocument || iframe.contentWindow?.document;
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
 
       if (iframeDoc) {
         iframeDoc.open();
@@ -279,8 +268,7 @@ export function ArtifactPreview({
   const handleRefresh = () => {
     if (iframeRef.current) {
       const iframe = iframeRef.current;
-      const iframeDoc =
-        iframe.contentDocument || iframe.contentWindow?.document;
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
       if (iframeDoc) {
         iframeDoc.open();
         iframeDoc.write(getPreviewHTML());
@@ -299,9 +287,7 @@ export function ArtifactPreview({
     }
   };
 
-  const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(
-    artifact.type
-  );
+  const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
 
   return (
     <div
@@ -309,7 +295,7 @@ export function ArtifactPreview({
       className={cn(
         'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-lg',
         isFullscreen && 'fixed inset-0 z-modal rounded-none',
-        className
+        className,
       )}
     >
       {/* Header */}
@@ -317,9 +303,7 @@ export function ArtifactPreview({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Code className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">
-              {artifact.title || 'Artifact'}
-            </span>
+            <span className="text-sm font-semibold">{artifact.title || 'Artifact'}</span>
           </div>
           {artifact.type && (
             <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
@@ -335,9 +319,7 @@ export function ArtifactPreview({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-7 px-2">
                   <History className="h-3.5 w-3.5" />
-                  <span className="ml-1 text-xs">
-                    v{(artifact.currentVersion || 0) + 1}
-                  </span>
+                  <span className="ml-1 text-xs">v{(artifact.currentVersion || 0) + 1}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -345,14 +327,10 @@ export function ArtifactPreview({
                   <DropdownMenuItem
                     key={version.id}
                     onClick={() => onVersionChange?.(index)}
-                    className={cn(
-                      artifact.currentVersion === index && 'bg-accent'
-                    )}
+                    className={cn(artifact.currentVersion === index && 'bg-accent')}
                   >
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium">
-                        Version {index + 1}
-                      </span>
+                      <span className="text-xs font-medium">Version {index + 1}</span>
                       <span className="text-xs text-muted-foreground">
                         {version.timestamp.toLocaleString()}
                       </span>
@@ -363,12 +341,7 @@ export function ArtifactPreview({
             </DropdownMenu>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopy}
-            className="h-7 px-2"
-          >
+          <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
             {copied ? (
               <>
                 <Check className="h-3.5 w-3.5 text-green-500" />
@@ -403,42 +376,22 @@ export function ArtifactPreview({
           </DropdownMenu>
 
           {onShare && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onShare}
-              className="h-7 px-2"
-            >
+            <Button variant="ghost" size="sm" onClick={onShare} className="h-7 px-2">
               <Share2 className="h-3.5 w-3.5" />
             </Button>
           )}
 
           {canPreview && (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefresh}
-                className="h-7 px-2"
-              >
+              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 px-2">
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenInNewTab}
-                className="h-7 px-2"
-              >
+              <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-7 px-2">
                 <ExternalLink className="h-3.5 w-3.5" />
               </Button>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleFullscreen}
-                className="h-7 px-2"
-              >
+              <Button variant="ghost" size="sm" onClick={handleFullscreen} className="h-7 px-2">
                 <Maximize2 className="h-3.5 w-3.5" />
               </Button>
             </>
@@ -451,9 +404,8 @@ export function ArtifactPreview({
         <Alert className="m-4 border-yellow-500 bg-yellow-50">
           <Shield className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
-            <strong>Security Notice:</strong> This artifact contains potentially
-            risky content. It has been sanitized for your protection, but some
-            functionality may be limited.
+            <strong>Security Notice:</strong> This artifact contains potentially risky content. It
+            has been sanitized for your protection, but some functionality may be limited.
           </AlertDescription>
         </Alert>
       )}
@@ -480,12 +432,7 @@ export function ArtifactPreview({
         {/* Preview Tab */}
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
-            <div
-              className={cn(
-                'bg-white',
-                isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]'
-              )}
-            >
+            <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
               <iframe
                 ref={iframeRef}
                 title={artifact.title || 'Artifact Preview'}
@@ -499,10 +446,7 @@ export function ArtifactPreview({
         {/* Code Tab */}
         <TabsContent value="code" className="m-0 p-0">
           <ScrollArea
-            className={cn(
-              'bg-gray-900',
-              isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]'
-            )}
+            className={cn('bg-gray-900', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           >
             <pre className="p-4">
               <code className="text-sm text-gray-100">

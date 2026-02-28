@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useChatStore, type Conversation, type Message } from './chat-store';
+import { useChatStore, type Conversation } from './chat-store';
 
 // Mock crypto.randomUUID
 vi.stubGlobal('crypto', {
@@ -711,7 +711,7 @@ describe('Chat Store', () => {
 
     describe('selectEmployee/deselectEmployee', () => {
       it('should manage active employees', () => {
-        const { selectEmployee, deselectEmployee } = useChatStore.getState();
+        const { selectEmployee, deselectEmployee: _deselectEmployee } = useChatStore.getState();
 
         selectEmployee('employee-1');
         expect(useChatStore.getState().activeEmployees).toContain('employee-1');
@@ -773,7 +773,7 @@ describe('Chat Store', () => {
       });
 
       it('should restore checkpoint', () => {
-        const { saveCheckpoint, restoreCheckpoint } = useChatStore.getState();
+        const { saveCheckpoint, restoreCheckpoint: _restoreCheckpoint } = useChatStore.getState();
         const now = new Date();
 
         saveCheckpoint({

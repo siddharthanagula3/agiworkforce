@@ -6,7 +6,7 @@
  * artifact generation, and dependency management.
  */
 
-import { AgentMessage, AgentCapability } from './agent-collaboration-protocol';
+import { AgentMessage } from './agent-collaboration-protocol';
 
 // Workflow Types
 export type WorkflowType =

@@ -29,7 +29,6 @@ import {
   Trash2,
   ThumbsUp,
   ThumbsDown,
-  ExternalLink,
   GitFork,
 } from 'lucide-react';
 import {

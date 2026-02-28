@@ -5,12 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useMultiAgentChatStore, clearMessageFingerprintCache } from './multi-agent-chat-store';
-import type {
-  ChatMessage,
-  ConversationParticipant,
-  MessageReaction,
-  AgentPresence,
-} from './multi-agent-chat-store';
+import type { ChatMessage, MessageReaction, AgentPresence } from './multi-agent-chat-store';
 
 // Mock crypto.randomUUID
 vi.stubGlobal('crypto', {

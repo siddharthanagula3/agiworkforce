@@ -154,7 +154,7 @@ const enableDevtools = process.env.NODE_ENV !== 'production';
 export const useCompanyHubStore = create<CompanyHubStore>()(
   devtools(
     persist(
-      immer((set, get) => ({
+      immer((set, _get) => ({
         ...INITIAL_STATE,
 
         // Session management

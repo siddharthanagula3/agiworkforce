@@ -15,7 +15,7 @@ import {
 } from '@tanstack/react-query';
 import { queryKeys } from '@shared/stores/query-client';
 import { supabase } from '@shared/lib/supabase-client';
-import { chatPersistenceService, type PaginatedResponse } from '../services/conversation-storage';
+import { chatPersistenceService } from '../services/conversation-storage';
 import type { ChatSession, ChatMessage } from '../types';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
@@ -100,7 +100,7 @@ interface SessionMutationContext {
 /**
  * Optimistic update context for message mutations
  */
-interface MessageMutationContext {
+interface _MessageMutationContext {
   previousMessages: ChatMessage[] | undefined;
   sessionId: string;
 }

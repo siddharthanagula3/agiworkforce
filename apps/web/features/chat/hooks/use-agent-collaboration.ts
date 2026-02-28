@@ -53,7 +53,12 @@ export interface UseAgentCollaborationReturn {
 export function useAgentCollaboration(
   options: CollaborationOptions = {},
 ): UseAgentCollaborationReturn {
-  const { sessionId, userId, maxConcurrentAgents = 5, requireApproval = false } = options;
+  const {
+    sessionId,
+    userId,
+    maxConcurrentAgents = 5,
+    requireApproval: _requireApproval = false,
+  } = options;
 
   // Store state
   const collaborativeAgents = useMissionStore((state) => state.collaborativeAgents);

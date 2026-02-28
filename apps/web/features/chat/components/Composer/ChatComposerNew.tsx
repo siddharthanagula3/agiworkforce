@@ -1,0 +1,405 @@
+'use client';
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  ArrowUp,
+  Plus,
+  Paperclip,
+  X,
+  Loader2,
+  Image as ImageIcon,
+  Video,
+  FileText,
+  Globe,
+  Sparkles,
+} from 'lucide-react';
+import { cn } from '@shared/lib/utils';
+
+interface ChatComposerProps {
+  onSend: (content: string, attachments?: File[]) => void;
+  isLoading?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+const TOOLS = [
+  { id: 'image', label: 'Generate Image', icon: ImageIcon, color: 'text-purple-400' },
+  { id: 'video', label: 'Generate Video', icon: Video, color: 'text-pink-400' },
+  { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
+  { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
+];
+
+const SKILLS = [
+  { id: 'auto', name: 'Auto-Select', description: 'Let AI choose the best skill', icon: Sparkles },
+  { id: 'code-review', name: 'Code Reviewer', description: 'Review and improve code' },
+  { id: 'researcher', name: 'Researcher', description: 'Deep research on any topic' },
+  { id: 'writer', name: 'Content Writer', description: 'Write articles, docs, copy' },
+  { id: 'designer', name: 'UI Designer', description: 'Design guidance and feedback' },
+  { id: 'analyst', name: 'Data Analyst', description: 'Analyze data and trends' },
+];
+
+export function ChatComposerNew({
+  onSend,
+  isLoading = false,
+  placeholder = 'Message AI...',
+  disabled = false,
+}: ChatComposerProps) {
+  const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [showTools, setShowTools] = useState(false);
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const mentionsRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 52), 200);
+    textarea.style.height = `${newHeight}px`;
+  }, [message]);
+
+  // Close popover on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+        setShowTools(false);
+      }
+      if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
+        setShowMentions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle @mention detection
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    setMessage(value);
+
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setShowMentions(true);
+        setMentionQuery(textAfterAt);
+        setMentionStartIndex(lastAtIndex);
+        return;
+      }
+    }
+    setShowMentions(false);
+  }, []);
+
+  const filteredSkills = SKILLS.filter(
+    (skill) =>
+      skill.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+      skill.description.toLowerCase().includes(mentionQuery.toLowerCase()),
+  );
+
+  const handleMentionSelect = useCallback(
+    (skill: (typeof SKILLS)[0]) => {
+      if (mentionStartIndex === -1) return;
+      const before = message.substring(0, mentionStartIndex);
+      const cursorPos = textareaRef.current?.selectionStart || message.length;
+      const after = message.substring(cursorPos);
+      const newMessage = `${before}@${skill.name} ${after}`;
+      setMessage(newMessage);
+      setShowMentions(false);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [message, mentionStartIndex],
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!message.trim() && attachments.length === 0) return;
+    if (isLoading || disabled) return;
+
+    // Build tool prefix
+    const toolPrefixes: Record<string, string> = {
+      image: '[Generate Image] ',
+      video: '[Generate Video] ',
+      document: '[Create Document] ',
+      search: '[Web Search] ',
+    };
+    const prefix = selectedTools.map((t) => toolPrefixes[t] || '').join('');
+
+    onSend(prefix + message, attachments.length > 0 ? attachments : undefined);
+    setMessage('');
+    setAttachments([]);
+    setSelectedTools([]);
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [message, attachments, isLoading, disabled, selectedTools, onSend]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      if (e.key === 'Escape') {
+        setShowMentions(false);
+        setShowTools(false);
+      }
+    },
+    [handleSubmit, showMentions],
+  );
+
+  const toggleTool = (toolId: string) => {
+    setSelectedTools((prev) =>
+      prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId],
+    );
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const canSend = (message.trim() || attachments.length > 0) && !isLoading && !disabled;
+
+  return (
+    <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
+      {/* Selected Tools Tags */}
+      {selectedTools.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {selectedTools.map((toolId) => {
+            const tool = TOOLS.find((t) => t.id === toolId);
+            if (!tool) return null;
+            const Icon = tool.icon;
+            return (
+              <span
+                key={toolId}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-xs"
+              >
+                <Icon className={cn('h-3 w-3', tool.color)} />
+                {tool.label}
+                <button
+                  onClick={() => toggleTool(toolId)}
+                  className="rounded-full p-0.5 hover:bg-muted"
+                  aria-label={`Remove ${tool.label}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Attachments */}
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {attachments.map((file, i) => (
+            <div
+              key={`${file.name}-${file.size}`}
+              className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-1.5"
+            >
+              <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="max-w-[150px] truncate text-xs">{file.name}</span>
+              <button
+                onClick={() => removeAttachment(i)}
+                className="rounded-full p-0.5 hover:bg-muted"
+                aria-label={`Remove ${file.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Main Input Container — pill shaped */}
+      <div
+        className={cn(
+          'relative rounded-2xl border bg-card/80 shadow-sm backdrop-blur-xl transition-all duration-200',
+          isFocused ? 'border-border/80 shadow-md ring-1 ring-ring/20' : 'border-border/40',
+        )}
+      >
+        {/* @Mention Dropdown */}
+        {showMentions && filteredSkills.length > 0 && (
+          <div
+            ref={mentionsRef}
+            className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
+          >
+            <div className="p-1.5">
+              <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Skills
+              </div>
+              {filteredSkills.map((skill) => {
+                const Icon = skill.icon;
+                return (
+                  <button
+                    key={skill.id}
+                    onClick={() => handleMentionSelect(skill)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      {Icon ? (
+                        <Icon className="h-3.5 w-3.5" />
+                      ) : (
+                        <span className="text-[10px] font-bold">
+                          {skill.name.substring(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{skill.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {skill.description}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-end gap-1 p-2">
+          {/* + Tools Button */}
+          <div className="relative" ref={toolsRef}>
+            <button
+              onClick={() => setShowTools(!showTools)}
+              disabled={isLoading || disabled}
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                selectedTools.length > 0
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Add tools"
+              aria-expanded={showTools}
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+
+            {/* Tools Popover */}
+            {showTools && (
+              <div className="absolute bottom-full left-0 z-50 mb-2 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Tools
+                </div>
+                {TOOLS.map((tool) => {
+                  const Icon = tool.icon;
+                  const isSelected = selectedTools.includes(tool.id);
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => toggleTool(tool.id)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <Icon className={cn('h-4 w-4', tool.color)} />
+                      <span className="flex-1 text-left">{tool.label}</span>
+                      {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Attach Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading || disabled}
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+              (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+            )}
+            aria-label="Attach file"
+          >
+            <Paperclip className="h-5 w-5" />
+          </button>
+
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={placeholder}
+            disabled={isLoading || disabled}
+            className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-2 py-3 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+            rows={1}
+            aria-label="Message input"
+          />
+
+          {/* Send Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={!canSend}
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200',
+              canSend
+                ? 'bg-foreground text-background hover:bg-foreground/90'
+                : 'bg-muted/40 text-muted-foreground/40',
+            )}
+            aria-label={isLoading ? 'Sending message' : 'Send message'}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            setAttachments((prev) => [...prev, ...files]);
+            e.target.value = '';
+          }}
+          aria-label="File upload"
+        />
+      </div>
+
+      {/* Helper text */}
+      <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-muted-foreground/50">
+        <span>
+          Type{' '}
+          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
+            @
+          </kbd>{' '}
+          to mention a skill
+        </span>
+        <span className="hidden sm:inline">
+          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
+            Enter
+          </kbd>{' '}
+          to send,{' '}
+          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
+            Shift+Enter
+          </kbd>{' '}
+          for new line
+        </span>
+      </div>
+    </div>
+  );
+}

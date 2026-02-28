@@ -1,21 +1,12 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import {
-  TrendingUp,
-  Target,
-  Users,
-  Zap,
-  CheckCircle2,
-  ArrowRight,
-  Mail,
-  Phone,
-  BarChart3,
-} from 'lucide-react';
+import { TrendingUp, Target, Zap, CheckCircle2, ArrowRight, Mail, BarChart3 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const SalesTeamsPage: React.FC = () => {
   const router = useRouter();
@@ -137,10 +128,12 @@ const SalesTeamsPage: React.FC = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1553484771-371a605b060b?w=800&h=600&fit=crop"
                 alt="Sales Team"
                 className="rounded-3xl"
+                width={800}
+                height={600}
               />
             </motion.div>
           </div>
@@ -231,7 +224,7 @@ const SalesTeamsPage: React.FC = () => {
             viewport={{ once: true }}
             className="rounded-3xl border border-border/40 bg-background/60 p-6 backdrop-blur-xl sm:p-8 md:p-12"
           >
-            <div className="mb-6 text-4xl opacity-20">"</div>
+            <div className="mb-6 text-4xl opacity-20">&quot;</div>
             <p className="mb-8 text-2xl font-medium">
               Our AI sales reps handle all lead qualification and outreach. Our human team closes 3x
               more deals because they only talk to qualified, warmed-up prospects.

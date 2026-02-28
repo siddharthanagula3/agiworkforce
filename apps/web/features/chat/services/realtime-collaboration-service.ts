@@ -524,7 +524,7 @@ export class RealtimeCollaborationService {
     }
 
     // Return the callback directly since we handle it in handlePresenceSync
-    const handler = () => {
+    const _handler = () => {
       callback(this.getParticipants(sessionId));
     };
 
@@ -548,7 +548,7 @@ export class RealtimeCollaborationService {
     }
 
     // We'll emit via a custom event system
-    const handler = () => {
+    const _handler = () => {
       callback(this.getTypingUsers(sessionId));
     };
 
@@ -567,7 +567,7 @@ export class RealtimeCollaborationService {
       return () => {};
     }
 
-    const handler = () => {
+    const _handler = () => {
       callback(this.getCursors(sessionId));
     };
 
@@ -589,7 +589,7 @@ export class RealtimeCollaborationService {
       return () => {};
     }
 
-    const handler = () => {
+    const _handler = () => {
       callback(this.getActivities(sessionId));
     };
 
@@ -606,7 +606,7 @@ export class RealtimeCollaborationService {
     if (!session) return;
 
     // Update participants based on presence state
-    for (const [key, presences] of Object.entries(state)) {
+    for (const [_key, presences] of Object.entries(state)) {
       const presenceList = presences as UserPresence[];
       for (const presence of presenceList) {
         session.participants.set(presence.userId, presence);

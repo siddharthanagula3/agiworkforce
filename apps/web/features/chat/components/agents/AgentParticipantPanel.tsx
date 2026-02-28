@@ -24,7 +24,6 @@ import {
   ChevronRight,
   Info,
   Activity,
-  CheckCircle2,
   Clock,
   XCircle,
   MessageSquare,
@@ -46,7 +45,7 @@ interface AgentParticipantPanelProps {
   className?: string;
 }
 
-interface AgentGroup {
+interface _AgentGroup {
   role: string;
   agents: Agent[];
   expanded: boolean;

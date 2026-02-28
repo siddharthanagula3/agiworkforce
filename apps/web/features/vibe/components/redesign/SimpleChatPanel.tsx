@@ -97,7 +97,7 @@ function SimpleChatPanelContent({
               </div>
               <h3 className="mt-4 font-medium">Ready to build</h3>
               <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-                Describe what you want to create and I'll help you build it
+                Describe what you want to create and I&apos;ll help you build it
               </p>
             </div>
           )}

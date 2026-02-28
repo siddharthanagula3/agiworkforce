@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Button } from '@shared/ui/button';
@@ -15,10 +14,8 @@ import { Textarea } from '@shared/ui/textarea';
 import { Switch } from '@shared/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Alert, AlertDescription } from '@shared/ui/alert';
-import { Separator } from '@shared/ui/separator';
 import {
   Bot,
-  Key,
   Settings,
   CheckCircle,
   AlertCircle,
@@ -27,25 +24,20 @@ import {
   Eye,
   EyeOff,
   TestTube,
-  Zap,
-  Brain,
-  Search,
-  Shield,
   DollarSign,
   Clock,
-  Users,
   Save,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 // Stubs for functions not yet migrated
-function getConfiguredProviders(): string[] {
+function _getConfiguredProviders(): string[] {
   return ['openai', 'anthropic', 'google', 'perplexity'];
 }
-function getAvailableModels(_provider: string): string[] {
+function _getAvailableModels(_provider: string): string[] {
   return [];
 }
-function createCustomSystemPrompt(_prompt: string): string {
+function _createCustomSystemPrompt(_prompt: string): string {
   return _prompt;
 }
 import { settingsService } from '@features/settings/services/user-preferences';
@@ -257,7 +249,7 @@ const AIConfigurationPageContent: React.FC = () => {
       } else {
         toast.error(`${provider} API test failed. Check your API key.`);
       }
-    } catch (error) {
+    } catch (_error) {
       setTestResults((prev) => ({ ...prev, [provider]: 'error' }));
       toast.error(`Failed to test ${provider} API`);
     }
@@ -689,7 +681,7 @@ const AIConfigurationPageContent: React.FC = () => {
                 <div>
                   <Label>Enable Streaming</Label>
                   <p className="text-sm text-muted-foreground">
-                    Stream responses in real-time as they're generated
+                    Stream responses in real-time as they&apos;re generated
                   </p>
                 </div>
                 <Switch checked={preferStreaming} onCheckedChange={setPreferStreaming} />
@@ -766,7 +758,7 @@ const AIConfigurationPageContent: React.FC = () => {
                 <Clock className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-medium">Usage tracking coming soon</h3>
                 <p className="text-muted-foreground">
-                  We're working on detailed usage analytics and cost tracking.
+                  We&apos;re working on detailed usage analytics and cost tracking.
                 </p>
               </div>
             </CardContent>

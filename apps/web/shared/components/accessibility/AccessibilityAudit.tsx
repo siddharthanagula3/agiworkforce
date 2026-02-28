@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -83,7 +83,7 @@ const AccessibilityAudit: React.FC<AccessibilityAuditProps> = ({ onClose }) => {
     return 'text-red-600';
   };
 
-  const getScoreBadgeVariant = (score: number) => {
+  const _getScoreBadgeVariant = (score: number) => {
     if (score >= 90) return 'default';
     if (score >= 70) return 'secondary';
     return 'destructive';
