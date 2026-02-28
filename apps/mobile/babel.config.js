@@ -1,8 +1,8 @@
 module.exports = function (api) {
   // Cache the config per NODE_ENV so switching between test and non-test
   // environments produces distinct cached configs (important for CI).
-  const isTest = api.env('test');
-  api.cache.using(() => api.env());
+  api.cache.using(() => process.env.NODE_ENV);
+  const isTest = process.env.NODE_ENV === 'test';
 
   return {
     presets: [
