@@ -32,7 +32,7 @@ export async function createSession(
   const supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_conversations')
-    .insert({ user_id: uid, employee_id: employeeId, role, provider })
+    .insert({ user_id: uid, employee_id: employeeId, role, provider } as any)
     .select('*')
     .single();
   if (error) throw error;
@@ -78,7 +78,7 @@ export async function sendMessage(
   const supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_messages')
-    .insert({ conversation_id: sessionId, role, content })
+    .insert({ conversation_id: sessionId, role, content } as any)
     .select('*')
     .single();
   if (error) throw error;

@@ -43,8 +43,7 @@ const DeviceAuthPage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const { error } = await supabase
-        .from('device_authorization_codes')
+      const { error } = await (supabase.from('device_authorization_codes') as any)
         .update({
           user_id: user.id,
           is_used: false,

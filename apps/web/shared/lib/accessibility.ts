@@ -280,13 +280,13 @@ export const ariaHelpers = {
   }),
 
   // Create disabled state
-  createDisabledState: (isDisabled: boolean): Record<string, string> => ({
+  createDisabledState: (isDisabled: boolean): Record<string, string | number> => ({
     'aria-disabled': String(isDisabled),
     ...(isDisabled && { tabIndex: -1 }),
   }),
 
   // Create hidden state
-  createHiddenState: (isHidden: boolean): Record<string, string> => ({
+  createHiddenState: (isHidden: boolean): Record<string, string | number> => ({
     'aria-hidden': String(isHidden),
     ...(isHidden && { tabIndex: -1 }),
   }),

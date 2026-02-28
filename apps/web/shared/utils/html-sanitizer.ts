@@ -5,7 +5,7 @@
  * CRITICAL SECURITY: Prevents XSS attacks in artifacts and user-generated content
  */
 
-import DOMPurify from 'dompurify';
+import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 
 /**
  * Sanitization configuration levels
@@ -108,7 +108,7 @@ export function sanitizeHTML(html: string, level: SanitizeLevel = 'standard'): s
     return '';
   }
 
-  let config: DOMPurify.Config;
+  let config: DOMPurifyConfig;
 
   switch (level) {
     case 'strict':
@@ -249,7 +249,7 @@ export function sanitizeHTML(html: string, level: SanitizeLevel = 'standard'): s
     ],
   });
 
-  return sanitized;
+  return sanitized as string;
 }
 
 /**

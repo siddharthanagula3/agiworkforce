@@ -497,9 +497,7 @@ describe('Token Usage Tracker', () => {
     it('should handle database persistence errors gracefully', async () => {
       // Get the mock from the module
       const { __getMockTrackAPICall } =
-        (await import('@features/billing/services/usage-monitor')) as {
-          __getMockTrackAPICall: () => ReturnType<typeof vi.fn>;
-        };
+        (await import('@features/billing/services/usage-monitor')) as any;
       const mockTrackAPICall = __getMockTrackAPICall();
 
       // Make the mock trackAPICall reject for this test

@@ -199,7 +199,7 @@ export class MessagePool extends EventEmitter {
    */
   private async persistMessage(message: VibeAgentMessage): Promise<void> {
     try {
-      await supabase.from('vibe_agent_messages').insert({
+      await (supabase.from('vibe_agent_messages') as any).insert({
         id: message.id,
         session_id: message.session_id,
         type: message.type,
@@ -223,8 +223,7 @@ export class MessagePool extends EventEmitter {
    */
   async loadMessagesFromDatabase(sessionId: string): Promise<void> {
     try {
-      const { data, error } = await supabase
-        .from('vibe_agent_messages')
+      const { data, error } = await (supabase.from('vibe_agent_messages') as any)
         .select('*')
         .eq('session_id', sessionId)
         .order('timestamp', { ascending: true });
@@ -232,7 +231,7 @@ export class MessagePool extends EventEmitter {
       if (error) throw error;
 
       if (data) {
-        data.forEach((row) => {
+        (data as any[]).forEach((row: any) => {
           const message: VibeAgentMessage = {
             id: row.id,
             session_id: row.session_id,

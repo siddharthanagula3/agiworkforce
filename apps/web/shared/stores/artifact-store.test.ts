@@ -128,6 +128,7 @@ describe('Artifact Store', () => {
 
       addArtifact(messageId, artifact);
       addVersion(messageId, artifact.id, {
+        id: 'v-1',
         content: 'Version 1 content',
         timestamp: new Date(),
         description: 'Initial version',
@@ -146,14 +147,17 @@ describe('Artifact Store', () => {
       addArtifact(messageId, artifact);
 
       addVersion(messageId, artifact.id, {
+        id: 'v-a1',
         content: 'Version 1',
         timestamp: new Date(),
       });
       addVersion(messageId, artifact.id, {
+        id: 'v-a2',
         content: 'Version 2',
         timestamp: new Date(),
       });
       addVersion(messageId, artifact.id, {
+        id: 'v-a3',
         content: 'Version 3',
         timestamp: new Date(),
       });
@@ -172,14 +176,17 @@ describe('Artifact Store', () => {
       addArtifact(messageId, artifact);
 
       addVersion(messageId, artifact.id, {
+        id: 'v-b0',
         content: 'Version 0',
         timestamp: new Date(),
       });
       addVersion(messageId, artifact.id, {
+        id: 'v-b1',
         content: 'Version 1',
         timestamp: new Date(),
       });
       addVersion(messageId, artifact.id, {
+        id: 'v-b2',
         content: 'Version 2',
         timestamp: new Date(),
       });
@@ -199,6 +206,7 @@ describe('Artifact Store', () => {
 
       addArtifact(messageId, artifact);
       addVersion(messageId, artifact.id, {
+        id: 'v-c0',
         content: 'Version 0',
         timestamp: new Date(),
       });
@@ -219,6 +227,7 @@ describe('Artifact Store', () => {
 
       addArtifact(messageId, artifact);
       addVersion(messageId, artifact.id, {
+        id: 'v-d0',
         content: 'Version 0',
         timestamp: new Date(),
       });
@@ -385,6 +394,7 @@ describe('Artifact Store', () => {
 
       addArtifact(messageId, artifact);
       addVersion(messageId, artifact.id, {
+        id: 'v-e0',
         content: 'New version',
         timestamp: new Date(),
       });
@@ -405,6 +415,7 @@ describe('Artifact Store', () => {
       // Simulate concurrent operations
       updateArtifact(messageId, artifact.id, { title: 'Updated' });
       addVersion(messageId, artifact.id, {
+        id: 'v-f0',
         content: 'V1',
         timestamp: new Date(),
       });

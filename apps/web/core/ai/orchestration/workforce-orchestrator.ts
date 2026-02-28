@@ -117,18 +117,18 @@ export class WorkforceOrchestratorRefactored {
 
     if (userId) {
       try {
-        const { data: hiredEmployees, error } = await supabase
+        const { data: hiredEmployees, error } = await (supabase as any)
           .from('hired_employees')
           .select('employee_id, employee_name')
           .eq('user_id', userId);
 
         if (!error && hiredEmployees && hiredEmployees.length > 0) {
           // Create set of hired employee IDs for quick lookup
-          const hiredIds = new Set(hiredEmployees.map((e) => e.employee_id));
+          const hiredIds = new Set((hiredEmployees as any[]).map((e: any) => e.employee_id));
 
           // Filter to only employees user has hired (or free employees with price 0)
           availableEmployees = this.employees.filter(
-            (emp) => hiredIds.has(emp.id) || emp.price === 0,
+            (emp) => hiredIds.has(emp.name) || emp.price === 0,
           );
         }
       } catch (error) {
@@ -337,7 +337,12 @@ export class WorkforceOrchestratorRefactored {
 
         if (selectedEmployee) {
           store.updateTaskStatus(task.id, 'in_progress', selectedEmployee.name);
-          store.updateEmployeeStatus(selectedEmployee.name, 'thinking', null, task.description);
+          store.updateEmployeeStatus(
+            selectedEmployee.name,
+            'thinking',
+            undefined,
+            task.description,
+          );
 
           store.addMessage({
             from: 'system',
@@ -586,18 +591,18 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
 
       if (user) {
         try {
-          const { data: hiredEmployees, error } = await supabase
+          const { data: hiredEmployees, error } = await (supabase as any)
             .from('hired_employees')
             .select('employee_id, employee_name')
             .eq('user_id', user.id);
 
           if (!error && hiredEmployees && hiredEmployees.length > 0) {
             // Create set of hired employee IDs for quick lookup
-            const hiredIds = new Set(hiredEmployees.map((e) => e.employee_id));
+            const hiredIds = new Set((hiredEmployees as any[]).map((e: any) => e.employee_id));
 
             // Filter to only employees user has hired (or free employees with price 0)
             availableEmployees = this.employees.filter(
-              (emp) => hiredIds.has(emp.id) || emp.price === 0,
+              (emp) => hiredIds.has(emp.name) || emp.price === 0,
             );
 
             if (availableEmployees.length === 0) {
@@ -811,7 +816,7 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
     if (failedTasks.length > 0 && succeededTasks.length > 0) {
       store.addMessage({
         from: 'system',
-        type: 'warning',
+        type: 'status',
         content: `⚠️ Partial completion: ${succeededTasks.length} task(s) succeeded, ${failedTasks.length} task(s) failed`,
       });
     }
@@ -1001,7 +1006,7 @@ Please complete this task according to your role and capabilities.`;
 
       // Update employee statuses
       selectedEmployees.forEach((employee) => {
-        store.updateEmployeeStatus(employee.name, 'thinking', null, 'Analyzing query');
+        store.updateEmployeeStatus(employee.name, 'thinking', undefined, 'Analyzing query');
       });
 
       // Start multi-agent conversation protocol
@@ -1252,7 +1257,7 @@ Query: "Help me learn Python" → Answer: "expert-tutor"
 
     const store = useMissionStore.getState();
 
-    store.updateEmployeeStatus(employee.name, 'thinking', null, 'Processing message');
+    store.updateEmployeeStatus(employee.name, 'thinking', undefined, 'Processing message');
 
     try {
       // SECURITY: Build secure messages with sandwich defense

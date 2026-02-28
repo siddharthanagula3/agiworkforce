@@ -5,16 +5,24 @@ import { Dot } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const InputOTP = React.forwardRef<
-  React.ElementRef<typeof OTPInput>,
-  React.ComponentPropsWithoutRef<typeof OTPInput>
+  HTMLInputElement,
+  {
+    maxLength?: number;
+    containerClassName?: string;
+    className?: string;
+    render?: (props: {
+      slots: Array<{ char: string | undefined; hasFakeCaret: boolean; isActive: boolean }>;
+    }) => React.ReactNode;
+    [key: string]: unknown;
+  }
 >(({ className, containerClassName, ...props }, ref) => (
   <OTPInput
     ref={ref}
     containerClassName={cn(
       'flex items-center gap-2 has-[:disabled]:opacity-50',
-      containerClassName,
+      containerClassName as string,
     )}
-    className={cn('disabled:cursor-not-allowed', className)}
+    className={cn('disabled:cursor-not-allowed', className as string)}
     {...props}
   />
 ));

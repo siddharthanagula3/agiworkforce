@@ -50,8 +50,8 @@ async function cleanupAllStores(): Promise<void> {
     const chatState = useChatStore.getState();
     if (typeof chatState.clearHistory === 'function') {
       chatState.clearHistory();
-    } else if (typeof chatState.reset === 'function') {
-      chatState.reset();
+    } else if (typeof (chatState as unknown as Record<string, unknown>).reset === 'function') {
+      (chatState as unknown as Record<string, unknown> & { reset: () => void }).reset();
     } else {
       logger.auth('Warning: Chat store has no clearHistory or reset method');
     }

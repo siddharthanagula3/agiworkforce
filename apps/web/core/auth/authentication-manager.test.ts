@@ -42,7 +42,7 @@ describe('AuthService', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as typeof mockSupabase;
+    mockSupabase = supabase as any;
 
     // Default mock for lockout checks (account not locked)
     mockSupabase.rpc.mockImplementation((fnName: string) => {

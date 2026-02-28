@@ -33,9 +33,13 @@ export async function sendAIMessage(
       })),
       model: model || getDefaultModel(provider),
       temperature: options?.temperature,
-      max_tokens: options?.maxTokens,
+      maxTokens: options?.maxTokens,
       stream: options?.stream || false,
-    });
+    } as any);
+
+    if (!response?.content) {
+      throw new Error('Empty response from LLM service');
+    }
 
     return response.content;
   } catch (error) {

@@ -94,7 +94,7 @@ export const MarketplacePublicPage: React.FC = () => {
   const { data: dbEmployees = [], isLoading: isLoadingEmployees } = useQuery<AIEmployee[]>({
     queryKey: ['public-marketplace-employees', selectedCategory, searchQuery],
     queryFn: async () => {
-      let query = supabase.from('ai_employees').select('*').eq('status', 'active');
+      let query = (supabase.from('ai_employees') as any).select('*').eq('status', 'active');
 
       // Apply category filter
       if (selectedCategory !== 'all') {
@@ -117,7 +117,7 @@ export const MarketplacePublicPage: React.FC = () => {
       }
 
       // Transform database employees to marketplace format
-      return (data || []).map((dbEmp): AIEmployee => {
+      return (data || []).map((dbEmp: any): AIEmployee => {
         const cost = dbEmp.cost || { monthly: 0, yearly: 0 };
         const monthlyPrice = typeof cost === 'object' && cost.monthly ? cost.monthly : 0;
         const yearlyPrice = typeof cost === 'object' && cost.yearly ? cost.yearly : 0;

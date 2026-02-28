@@ -19,7 +19,7 @@ import {
 
 // Mock the rate limiter
 vi.mock('@core/auth/rate-limiter', () => ({
-  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true } as any),
   RATE_LIMITS: {
     AI_REQUEST: { windowMs: 60000, maxRequests: 60 },
   },
@@ -58,7 +58,7 @@ describe('API Abuse Prevention Service', () => {
 
     describe('Rate limiting', () => {
       it('should allow request when rate limit is not exceeded', async () => {
-        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true });
+        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as any);
 
         const result = await checkApiAbuse(userId, 'gpt-4o-mini', 1000);
 
@@ -70,7 +70,7 @@ describe('API Abuse Prevention Service', () => {
         mockCheckRateLimit.mockResolvedValueOnce({
           allowed: false,
           retryAfter: 60,
-        });
+        } as any);
 
         const result = await checkApiAbuse(userId, 'gpt-4o-mini', 1000);
 
@@ -83,7 +83,7 @@ describe('API Abuse Prevention Service', () => {
     describe('Input size limits', () => {
       it('should deny request when input is too long', async () => {
         const sizeTestUser = 'user-size-test-long';
-        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true });
+        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as any);
 
         // Input exceeds maxMessageLength (200000 chars)
         const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 250000);
@@ -94,7 +94,7 @@ describe('API Abuse Prevention Service', () => {
 
       it('should deny request when estimated tokens exceed limit', async () => {
         const sizeTestUser = 'user-size-test-tokens';
-        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true });
+        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as any);
 
         // 500000 chars / 4 = 125000 tokens (exceeds 100000)
         const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 500000);
@@ -105,7 +105,7 @@ describe('API Abuse Prevention Service', () => {
 
       it('should allow request with acceptable input size', async () => {
         const sizeTestUser = 'user-size-test-ok';
-        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true });
+        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as any);
 
         const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 1000);
 
@@ -117,7 +117,7 @@ describe('API Abuse Prevention Service', () => {
       it('should apply stricter limits for high-cost models', async () => {
         // High cost model: gpt-4o - max 10 per minute, max 2 concurrent
         const highCostUser = 'user-throttle-high-cost';
-        mockCheckRateLimit.mockResolvedValue({ allowed: true });
+        mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
         // Make requests up to per-minute limit
         // Note: Each checkApiAbuse increments concurrent count, so we also need to end them
@@ -137,7 +137,7 @@ describe('API Abuse Prevention Service', () => {
       it('should apply more lenient limits for low-cost models', async () => {
         // Low cost model: gemini-2.0-flash - max 30 per minute
         const lowCostUser = 'user-throttle-low-cost';
-        mockCheckRateLimit.mockResolvedValue({ allowed: true });
+        mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
         // Should allow up to 30 requests per minute (minus concurrent limit)
         for (let i = 0; i < 10; i++) {
@@ -152,7 +152,7 @@ describe('API Abuse Prevention Service', () => {
     describe('Concurrent request limits', () => {
       it('should track concurrent requests', async () => {
         const concurrentUser = 'user-concurrent-test';
-        mockCheckRateLimit.mockResolvedValue({ allowed: true });
+        mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
         // Start multiple concurrent requests (high-cost model max 2)
         const result1 = await checkApiAbuse(concurrentUser, 'gpt-4o', 1000);
@@ -169,7 +169,7 @@ describe('API Abuse Prevention Service', () => {
 
       it('should allow more concurrent requests for low-cost models', async () => {
         const concurrentLowUser = 'user-concurrent-low';
-        mockCheckRateLimit.mockResolvedValue({ allowed: true });
+        mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
         // Low-cost models allow 5 concurrent
         for (let i = 0; i < 5; i++) {
@@ -186,7 +186,7 @@ describe('API Abuse Prevention Service', () => {
 
     describe('Usage metrics', () => {
       it('should return current metrics when allowed', async () => {
-        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true });
+        mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as any);
 
         const result = await checkApiAbuse('user-metrics', 'gpt-4o-mini', 1000);
 
@@ -203,7 +203,7 @@ describe('API Abuse Prevention Service', () => {
     it('should track request cost and model', async () => {
       const trackUser = 'user-track-start';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       // Initialize the user metrics by making a check first
       await checkApiAbuse(trackUser, 'gpt-4o', 1000);
@@ -226,7 +226,7 @@ describe('API Abuse Prevention Service', () => {
     it('should decrement concurrent request count', async () => {
       const endUser = 'user-track-end';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       // Start requests
       await checkApiAbuse(endUser, 'gpt-4o-mini', 1000);
@@ -245,7 +245,7 @@ describe('API Abuse Prevention Service', () => {
     it('should not go below zero concurrent requests', async () => {
       const zeroUser = 'user-track-zero';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       await checkApiAbuse(zeroUser, 'gpt-4o-mini', 1000);
 
@@ -269,7 +269,7 @@ describe('API Abuse Prevention Service', () => {
     it('should detect rapid-fire requests', async () => {
       const rapidUser = 'user-rapid-fire';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       // Make many requests quickly
       for (let i = 0; i < 60; i++) {
@@ -286,7 +286,7 @@ describe('API Abuse Prevention Service', () => {
     it('should detect model spam', async () => {
       const spamUser = 'user-model-spam';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       // Make many requests to the same model
       for (let i = 0; i < 35; i++) {
@@ -328,7 +328,7 @@ describe('API Abuse Prevention Service', () => {
     it('should return accurate stats for active user', async () => {
       const activeUser = 'user-active-stats';
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
 
       // Make some requests
       for (let i = 0; i < 5; i++) {
@@ -362,7 +362,7 @@ describe('API Abuse Prevention Service', () => {
     const mockCheckRateLimit = vi.mocked(checkRateLimit);
 
     beforeEach(() => {
-      mockCheckRateLimit.mockResolvedValue({ allowed: true });
+      mockCheckRateLimit.mockResolvedValue({ allowed: true } as any);
     });
 
     it('should categorize high-cost models correctly', async () => {

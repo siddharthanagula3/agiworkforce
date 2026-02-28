@@ -4,6 +4,10 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+
+// Tables not yet in generated Database type — use untyped client for these
+
+const db = supabase as any;
 import { monitoringService } from '@core/monitoring/system-monitor';
 
 interface BackupConfig {
@@ -71,7 +75,7 @@ class BackupService {
     this.isInitialized = true;
 
     console.log('BackupService initialized with config:', this.config);
-    monitoringService.trackEvent('backup_service_initialized', this.config);
+    monitoringService.trackEvent('backup_service_initialized', this.config as any);
   }
 
   /**
@@ -177,7 +181,7 @@ class BackupService {
    */
   private async getTablesToBackup(): Promise<string[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('information_schema.tables')
         .select('table_name')
         .eq('table_schema', 'public')
@@ -185,7 +189,7 @@ class BackupService {
 
       if (error) throw error;
 
-      return data.map((row) => row.table_name);
+      return data.map((row: any) => row.table_name as string);
     } catch (error) {
       console.error('Error getting tables to backup:', error);
       return [];
@@ -200,7 +204,7 @@ class BackupService {
 
     for (const table of tables) {
       try {
-        const { data, error } = await supabase.from(table).select('*');
+        const { data, error } = await db.from(table).select('*');
 
         if (error) throw error;
 
@@ -224,7 +228,7 @@ class BackupService {
       data,
     };
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await db
       .from('backup_storage')
       .insert({
         backup_id: backupId,
@@ -258,7 +262,7 @@ class BackupService {
    */
   private async saveBackupMetadata(backup: BackupMetadata): Promise<void> {
     try {
-      const { error } = await supabase.from('backup_metadata').insert({
+      const { error } = await db.from('backup_metadata').insert({
         id: backup.id,
         timestamp: backup.timestamp.toISOString(),
         type: backup.type,
@@ -283,7 +287,7 @@ class BackupService {
    */
   private async loadBackupHistory(): Promise<void> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('backup_metadata')
         .select('*')
         .order('timestamp', { ascending: false });
@@ -318,15 +322,15 @@ class BackupService {
         return;
       }
 
-      this.backups = data.map((row) => ({
-        id: row.id,
-        timestamp: new Date(row.timestamp),
-        type: row.type,
-        size: row.size,
-        status: row.status,
-        tables: row.tables,
-        checksum: row.checksum,
-        location: row.location,
+      this.backups = data.map((row: any) => ({
+        id: row.id as string,
+        timestamp: new Date(row.timestamp as string),
+        type: row.type as string,
+        size: row.size as number,
+        status: row.status as string,
+        tables: row.tables as string[],
+        checksum: row.checksum as string,
+        location: row.location as string,
       }));
     } catch (error) {
       console.debug(
@@ -358,21 +362,24 @@ class BackupService {
         throw new Error(`Backup data for ${backupId} not found`);
       }
 
+      const backupDataTyped = backupData as Record<string, unknown>;
+      const backupDataContent = (backupDataTyped.data || {}) as Record<string, unknown[]>;
+
       if (dryRun) {
         console.log('Dry run restore - would restore:', {
           backupId,
-          tables: tables || Object.keys(backupData.data),
+          tables: tables || Object.keys(backupDataContent),
           pointInTime,
         });
         return;
       }
 
       // Restore tables
-      const tablesToRestore = tables || Object.keys(backupData.data);
+      const tablesToRestore = tables || Object.keys(backupDataContent);
 
       for (const table of tablesToRestore) {
-        if (backupData.data[table]) {
-          await this.restoreTable(table, backupData.data[table]);
+        if (backupDataContent[table]) {
+          await this.restoreTable(table, backupDataContent[table]);
         }
       }
 
@@ -395,7 +402,7 @@ class BackupService {
    */
   private async loadBackupData(backupId: string): Promise<unknown> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('backup_storage')
         .select('data')
         .eq('backup_id', backupId)
@@ -416,7 +423,7 @@ class BackupService {
   private async restoreTable(tableName: string, data: unknown[]): Promise<void> {
     try {
       // Clear existing data
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await db
         .from(tableName)
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
@@ -425,7 +432,7 @@ class BackupService {
 
       // Insert backup data
       if (data.length > 0) {
-        const { error: insertError } = await supabase.from(tableName).insert(data);
+        const { error: insertError } = await db.from(tableName).insert(data);
 
         if (insertError) throw insertError;
       }
@@ -450,7 +457,7 @@ class BackupService {
       try {
         // Delete from cloud storage
         if (this.config.enableCloudBackup) {
-          await supabase.from('backup_storage').delete().eq('backup_id', backup.id);
+          await db.from('backup_storage').delete().eq('backup_id', backup.id);
         }
 
         // Delete from local storage
@@ -459,7 +466,7 @@ class BackupService {
         }
 
         // Delete metadata
-        await supabase.from('backup_metadata').delete().eq('id', backup.id);
+        await db.from('backup_metadata').delete().eq('id', backup.id);
 
         console.log(`Cleaned up old backup: ${backup.id}`);
       } catch (error) {

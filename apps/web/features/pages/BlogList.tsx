@@ -66,7 +66,7 @@ const BlogPage: React.FC = () => {
   const [hasMore, setHasMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
-  const categoryIcons: Record<string, unknown> = {
+  const categoryIcons: Record<string, React.ComponentType<any>> = {
     'ai-automation': Zap,
     productivity: Rocket,
     'case-studies': Building2,
@@ -261,7 +261,10 @@ const BlogPage: React.FC = () => {
                   transition={{ delay: (idx + 1) * 0.05 }}
                   aria-pressed={selectedCategory === category.slug}
                 >
-                  <IconComponent size={16} aria-hidden="true" />
+                  {React.createElement(IconComponent as React.ComponentType<any>, {
+                    size: 16,
+                    'aria-hidden': 'true',
+                  })}
                   {category.name}
                 </motion.button>
               );

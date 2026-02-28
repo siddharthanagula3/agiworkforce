@@ -89,7 +89,7 @@ const BlogPostPage: React.FC = () => {
       // Updated: Jan 15th 2026 - Removed console statements for production
       setPost(data as BlogPost);
     } catch (err) {
-      setError(err.message || 'Failed to fetch blog post');
+      setError((err as Error).message || 'Failed to fetch blog post');
       toast.error('Failed to load blog post');
     } finally {
       setIsLoading(false);
@@ -156,8 +156,8 @@ const BlogPostPage: React.FC = () => {
       <SEOHead
         title={`${post.title} | AGI Workforce Blog`}
         description={post.excerpt}
-        image={post.image_url}
-        url={`/blog/${post.slug}`}
+        ogImage={post.image_url}
+        canonicalUrl={`/blog/${post.slug}`}
       />
 
       <div className="min-h-screen bg-background">

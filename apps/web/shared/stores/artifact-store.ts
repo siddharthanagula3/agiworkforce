@@ -133,7 +133,8 @@ export const useArtifactStore = create<ArtifactState>()(
           } = await supabase.auth.getUser();
 
           // Persist to Supabase for sharing across sessions
-          const { error } = await supabase.from('shared_artifacts').insert({
+
+          const { error } = await (supabase as any).from('shared_artifacts').insert({
             id: shareId,
             user_id: user?.id,
             message_id: messageId,
@@ -175,7 +176,7 @@ export const useArtifactStore = create<ArtifactState>()(
 
         // Try to fetch from database
         try {
-          const { data, error } = await supabase
+          const { data, error } = await (supabase as any)
             .from('shared_artifacts')
             .select('artifact_data')
             .eq('id', shareId)

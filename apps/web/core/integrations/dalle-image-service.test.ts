@@ -40,7 +40,7 @@ describe('DALL-E Image Service', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as any;
 
     // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});

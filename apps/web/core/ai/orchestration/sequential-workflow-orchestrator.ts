@@ -357,7 +357,7 @@ export class SequentialWorkflowOrchestrator {
       store.updateEmployeeStatus(
         employee.name,
         'thinking',
-        null,
+        undefined,
         `Step ${i + 1}: ${step.instructions || 'Processing'}`,
       );
 
@@ -761,7 +761,7 @@ If no useful information, respond with "NO_LEARNING"`;
     // Get optimized messages
     const contextMessages = employeeMemoryService.getOptimizedMessages(sessionId, employee.name);
 
-    store.updateEmployeeStatus(employee.name, 'thinking', null, 'Processing message');
+    store.updateEmployeeStatus(employee.name, 'thinking', undefined, 'Processing message');
 
     try {
       const response = await unifiedLLMService.sendMessage({

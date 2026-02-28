@@ -5,11 +5,18 @@
  * UPDATED: January 17, 2026 - Added authorization headers to all API calls
  */
 
-import { loadStripe } from '@stripe/stripe-js';
 import { supabase } from '@shared/lib/supabase-client';
 
 // Lazy loader with guard
-let stripePromise: Promise<import('@stripe/stripe-js').Stripe | null> | null = null;
+let stripePromise: Promise<any> | null = null;
+async function loadStripe(key: string): Promise<any> {
+  try {
+    const mod = await import('@stripe/stripe-js');
+    return mod.loadStripe(key);
+  } catch {
+    return null;
+  }
+}
 function getStripe() {
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   if (!publishableKey || !publishableKey.startsWith('pk_')) {

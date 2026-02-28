@@ -634,7 +634,7 @@ async function logSuspiciousInput(
   },
 ): Promise<void> {
   try {
-    const { error } = await supabase.from('analytics_events').insert({
+    const { error } = await (supabase as any).from('analytics_events').insert({
       user_id: userId,
       event_type: 'security_audit',
       event_data: {

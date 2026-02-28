@@ -140,7 +140,7 @@ describe('Workforce Store', () => {
 
       // Create a delayed response to capture loading state
       const originalFrom = vi.mocked((await import('@shared/lib/supabase-client')).supabase.from);
-      originalFrom.mockImplementationOnce(() => ({
+      originalFrom.mockImplementationOnce((() => ({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
             eq: vi.fn(() => ({
@@ -153,7 +153,7 @@ describe('Workforce Store', () => {
         })),
         upsert: vi.fn(),
         update: vi.fn(),
-      }));
+      })) as unknown as typeof originalFrom);
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
