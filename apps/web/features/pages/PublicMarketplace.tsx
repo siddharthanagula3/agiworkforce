@@ -21,7 +21,6 @@ import {
   Filter,
   X,
   ArrowRight,
-  Plus,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { categories, providerInfo, type AIEmployee } from '@/data/marketplace-employees';
@@ -536,8 +535,8 @@ export const MarketplacePublicPage: React.FC = () => {
               </div>
               <h3 className="mb-2 text-2xl font-semibold">No Employees Found</h3>
               <p className="mb-6 max-w-md text-center text-muted-foreground">
-                We couldn't find any AI employees matching your criteria. Try adjusting your search
-                or filters.
+                We couldn&apos;t find any AI employees matching your criteria. Try adjusting your
+                search or filters.
               </p>
               <Button
                 onClick={() => {
@@ -566,7 +565,7 @@ export const MarketplacePublicPage: React.FC = () => {
             <CardContent className="relative z-10 p-6 text-center sm:p-8 md:p-12">
               <Sparkles className="mx-auto mb-4 h-12 w-12 text-primary" />
               <h3 className="mb-4 text-xl font-bold sm:text-2xl md:text-3xl">
-                You've Hired {purchasedEmployees.size} AI{' '}
+                You&apos;ve Hired {purchasedEmployees.size} AI{' '}
                 {purchasedEmployees.size === 1 ? 'Employee' : 'Employees'}!
               </h3>
               <p className="mx-auto mb-8 max-w-2xl text-xl text-muted-foreground">

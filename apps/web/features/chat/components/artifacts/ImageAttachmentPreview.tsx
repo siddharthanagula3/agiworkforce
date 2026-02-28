@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { X, Download, ZoomIn, ExternalLink } from 'lucide-react';
+import { Download, ZoomIn, ExternalLink } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 interface ImageAttachment {
@@ -24,13 +24,8 @@ interface ImageAttachmentPreviewProps {
   className?: string;
 }
 
-export function ImageAttachmentPreview({
-  attachments,
-  className,
-}: ImageAttachmentPreviewProps) {
-  const [selectedImage, setSelectedImage] = useState<ImageAttachment | null>(
-    null
-  );
+export function ImageAttachmentPreview({ attachments, className }: ImageAttachmentPreviewProps) {
+  const [selectedImage, setSelectedImage] = useState<ImageAttachment | null>(null);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -64,7 +59,7 @@ export function ImageAttachmentPreview({
             'grid gap-2',
             imageAttachments.length === 1 && 'grid-cols-1',
             imageAttachments.length === 2 && 'grid-cols-2',
-            imageAttachments.length >= 3 && 'grid-cols-2 md:grid-cols-3'
+            imageAttachments.length >= 3 && 'grid-cols-2 md:grid-cols-3',
           )}
         >
           {imageAttachments.map((attachment) => (
@@ -102,15 +97,10 @@ export function ImageAttachmentPreview({
               {/* Image info */}
               <div className="flex items-center justify-between gap-2 p-2">
                 <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate text-xs font-medium"
-                    title={attachment.name}
-                  >
+                  <p className="truncate text-xs font-medium" title={attachment.name}>
                     {attachment.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatFileSize(attachment.size)}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size)}</p>
                 </div>
 
                 {/* Actions */}
@@ -147,10 +137,7 @@ export function ImageAttachmentPreview({
       </div>
 
       {/* Lightbox Dialog */}
-      <Dialog
-        open={!!selectedImage}
-        onOpenChange={() => setSelectedImage(null)}
-      >
+      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
         <DialogContent className="max-w-5xl">
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           {selectedImage && (
@@ -177,11 +164,7 @@ export function ImageAttachmentPreview({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(selectedImage)}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => handleDownload(selectedImage)}>
                     <Download className="mr-2 h-4 w-4" />
                     Download
                   </Button>

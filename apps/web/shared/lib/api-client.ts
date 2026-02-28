@@ -76,7 +76,7 @@ class ApiClient {
   /**
    * Handle HTTP response errors with specific handling for common status codes
    */
-  private async handleResponseError(response: Response, context: string): Promise<never> {
+  private async handleResponseError(response: Response, _context: string): Promise<never> {
     // Handle 402 Payment Required specifically
     if (response.status === 402) {
       handlePaymentRequired();

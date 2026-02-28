@@ -308,7 +308,7 @@ export class AIEmployeeExecutor {
   /**
    * Extract data reference from task
    */
-  private extractDataReference(task: string): Record<string, unknown> {
+  private extractDataReference(_task: string): Record<string, unknown> {
     // This would typically extract actual data references
     // For now, return a mock dataset
     return {

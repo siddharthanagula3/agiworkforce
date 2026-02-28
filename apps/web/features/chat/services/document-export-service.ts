@@ -6,18 +6,7 @@
  */
 
 import jsPDF from 'jspdf';
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-  AlignmentType,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-} from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import type { DocumentFormat } from './document-generation-service';
 
 export interface ExportOptions {
@@ -487,9 +476,9 @@ function parseInlineMarkdown(text: string): TextRun[] {
       }
       i++; // Skip ]
       i++; // Skip (
-      let url = '';
+      let _url = '';
       while (i < text.length && text[i] !== ')') {
-        url += text[i];
+        _url += text[i];
         i++;
       }
       runs.push(

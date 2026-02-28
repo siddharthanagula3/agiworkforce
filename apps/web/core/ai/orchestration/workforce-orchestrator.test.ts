@@ -9,7 +9,6 @@ import { useMissionStore } from '@shared/stores/mission-control-store';
 import {
   createMockMissionPlan,
   createCodeReviewPlan,
-  createDebugPlan,
   createMockEmployee,
   createCodeReviewerEmployee,
   createDebuggerEmployee,

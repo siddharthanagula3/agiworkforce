@@ -12,17 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Textarea } from '@shared/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
-import {
-  Bot,
-  Send,
-  Users,
-  Plus,
-  Minimize2,
-  Maximize2,
-  Settings,
-  Loader2,
-  Sparkles,
-} from 'lucide-react';
+import { Send, Plus, Minimize2, Maximize2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -30,7 +20,6 @@ import {
   createCollaborationContext,
   AgentMessage,
   AgentCapability,
-  parseAgentMentions,
 } from '@core/ai/orchestration/agent-collaboration-protocol';
 import { CollaborativeMessageDisplay } from '../messages/CollaborativeMessageDisplay';
 import { useAuthStore } from '@shared/stores/authentication-store';

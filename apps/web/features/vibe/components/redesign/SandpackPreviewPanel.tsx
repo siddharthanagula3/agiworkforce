@@ -17,14 +17,11 @@ import {
   SandpackProvider,
   SandpackPreview,
   SandpackConsole,
-  SandpackLayout,
   useSandpack,
-  SandpackThemeProvider,
 } from '@codesandbox/sandpack-react';
 import type { SandpackFiles, SandpackPredefinedTemplate } from '@codesandbox/sandpack-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import {
   Monitor,
   Tablet,
@@ -33,7 +30,6 @@ import {
   ExternalLink,
   Loader2,
   Terminal,
-  X,
   Play,
   Pause,
   Maximize2,
@@ -267,7 +263,7 @@ function SandpackPreviewInner({ showConsole }: { showConsole: boolean }) {
   );
 }
 
-export function SandpackPreviewPanel({ className, onError }: SandpackPreviewPanelProps) {
+export function SandpackPreviewPanel({ className, onError: _onError }: SandpackPreviewPanelProps) {
   const { appViewerState, setViewport } = useVibeViewStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showConsole, setShowConsole] = useState(false);

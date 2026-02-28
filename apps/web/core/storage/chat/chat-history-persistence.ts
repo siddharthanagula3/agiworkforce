@@ -337,7 +337,7 @@ export class ChatPersistenceService {
       }
 
       // Sync messages
-      for (const [sessionId, messages] of this.state.messages) {
+      for (const [_sessionId, messages] of this.state.messages) {
         for (const message of messages) {
           const { error } = await this.supabase.from('web_messages').upsert({
             id: message.id,

@@ -243,7 +243,7 @@ class ToolInvocationService {
   private async executeOpenAIAPI(
     tool: ToolDefinition,
     parameters: Record<string, unknown>,
-    context?: unknown,
+    _context?: unknown,
   ) {
     const { model, temperature, maxTokens } = (tool as any).config;
 
@@ -284,7 +284,7 @@ class ToolInvocationService {
   private async executeAnthropicAPI(
     tool: ToolDefinition,
     parameters: Record<string, unknown>,
-    context?: unknown,
+    _context?: unknown,
   ) {
     const { model, maxTokens } = (tool as any).config;
 
@@ -582,8 +582,8 @@ class ToolInvocationService {
   // File System Operation Execution
   private async executeFileSystemOperation(
     tool: ToolDefinition,
-    parameters: Record<string, unknown>,
-    context?: unknown,
+    _parameters: Record<string, unknown>,
+    _context?: unknown,
   ) {
     const { operation, path } = (tool as any).config;
 

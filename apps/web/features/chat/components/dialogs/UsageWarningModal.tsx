@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -114,8 +113,8 @@ export function UsageWarningModal({
                   🚨 Service May Be Interrupted Soon
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  You're at 95% usage. Buy more tokens now to avoid interruption. Your AI employees
-                  need tokens to continue working.
+                  You&apos;re at 95% usage. Buy more tokens now to avoid interruption. Your AI
+                  employees need tokens to continue working.
                 </p>
               </div>
             ) : (
@@ -124,7 +123,7 @@ export function UsageWarningModal({
                   ⚡ Running Low on Tokens
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  You've used 85% of your monthly tokens. Consider buying more to ensure
+                  You&apos;ve used 85% of your monthly tokens. Consider buying more to ensure
                   uninterrupted service.
                 </p>
               </div>

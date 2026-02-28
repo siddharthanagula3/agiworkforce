@@ -257,9 +257,9 @@ export class GoogleProvider {
    */
   // eslint-disable-next-line require-yield -- Intentionally throws for security; no yield needed
   async *streamMessage(
-    messages: GoogleMessage[],
-    sessionId?: string,
-    userId?: string,
+    _messages: GoogleMessage[],
+    _sessionId?: string,
+    _userId?: string,
   ): AsyncGenerator<{
     content: string;
     done: boolean;

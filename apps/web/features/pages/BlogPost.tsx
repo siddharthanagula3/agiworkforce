@@ -19,6 +19,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import { SEOHead } from '@shared/components/seo/SEOHead';
+import Image from 'next/image';
 
 interface BlogPost {
   id: string;
@@ -111,7 +112,7 @@ const BlogPostPage: React.FC = () => {
           text: post.excerpt,
           url: window.location.href,
         });
-      } catch (err) {
+      } catch (_err) {
         // Fallback to clipboard
         navigator.clipboard.writeText(window.location.href);
         toast.success('Link copied to clipboard');
@@ -234,10 +235,13 @@ const BlogPostPage: React.FC = () => {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="relative overflow-hidden rounded-2xl"
               >
-                <img
+                <Image
                   src={post.image_url}
                   alt={post.title}
                   className="h-64 w-full max-w-full object-cover md:h-96"
+                  width={800}
+                  height={400}
+                  unoptimized
                 />
               </motion.div>
             </div>

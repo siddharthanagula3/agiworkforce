@@ -31,7 +31,8 @@ interface SEOHeadProps {
 
 const SEOHead: React.FC<SEOHeadProps> = ({
   title = 'AGI Workforce - AI Workforce Platform',
-  description = 'Transform your business with AI employees. Hire, manage, and scale your AI workforce with our comprehensive automation platform.',
+  description:
+    _description = 'Transform your business with AI employees. Hire, manage, and scale your AI workforce with our comprehensive automation platform.',
   structuredData,
 }) => {
   // In Next.js App Router, metadata is best handled via generateMetadata

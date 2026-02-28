@@ -12,7 +12,6 @@
 import { supabase } from '@shared/lib/supabase-client';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type {
-  MultiAgentConversation,
   ConversationParticipant,
   AgentCollaboration,
   RealtimeConversationUpdate,
@@ -392,7 +391,7 @@ export class ChatRealtimeSubscriptionManager {
    */
   // Updated: Jan 15th 2026 - Enhanced cleanup to prevent memory leaks from subscription tokens
   unsubscribeAll(): void {
-    this.channels.forEach((channel, channelName) => {
+    this.channels.forEach((channel, _channelName) => {
       supabase.removeChannel(channel);
     });
     this.channels.clear();
@@ -633,9 +632,9 @@ export function cleanupSubscriptions(): void {
  * }
  */
 export function useConversationSubscription(
-  conversationId: string,
-  callbacks: Parameters<typeof subscribeToConversationUpdates>[1],
-  options?: Parameters<typeof subscribeToConversationUpdates>[2],
+  _conversationId: string,
+  _callbacks: Parameters<typeof subscribeToConversationUpdates>[1],
+  _options?: Parameters<typeof subscribeToConversationUpdates>[2],
 ) {
   // This would need React imports to work properly
   // For now, it's a placeholder showing the intended API

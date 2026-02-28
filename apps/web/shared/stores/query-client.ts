@@ -4,15 +4,7 @@
  */
 
 import React from 'react';
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-  useMutation,
-  useInfiniteQuery,
-  QueryCache,
-  MutationCache,
-} from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 // ReactQueryDevtools loaded lazily in dev only
 
 let ReactQueryDevtools: React.ComponentType<any> | null = null;

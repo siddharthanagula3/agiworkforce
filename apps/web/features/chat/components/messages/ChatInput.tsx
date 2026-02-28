@@ -2,7 +2,7 @@ import React, { useState, useRef, KeyboardEvent } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@/shared/components/ui/badge';
-import { Plus, Send, Mic, MicOff, Users, User, ChevronDown, Loader2 } from 'lucide-react';
+import { Plus, Send, Mic, MicOff, Users, User, Loader2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 interface ChatInputProps {
