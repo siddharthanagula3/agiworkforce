@@ -50,11 +50,13 @@ export async function updateSession(request: NextRequest) {
   // Protected routes that require authentication
   const protectedPaths = [
     '/dashboard',
+    '/chat',
     '/settings',
     '/billing',
     '/api/llm',
     '/api/checkout',
     '/api/portal',
+    '/api/agents',
   ];
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
