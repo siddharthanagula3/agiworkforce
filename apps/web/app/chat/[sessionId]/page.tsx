@@ -5,10 +5,15 @@ import { useRouter, useParams } from 'next/navigation';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useChatStore, getGreetingTime } from '@features/chat/stores/chat-store';
+import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { MessageListNew } from '@features/chat/components/messages/MessageListNew';
 import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
+import {
+  ArtifactsPanel,
+  ArtifactsToggleButton,
+} from '@features/chat/components/artifacts/ArtifactsPanel';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useModelStore } from '@shared/stores/model-store';
 import { ChatAIService } from '@features/chat/services/chat-ai-service';
@@ -29,8 +34,6 @@ export default function ChatSessionPage() {
     deleteSession,
     renameSession,
     addMessage,
-    appendToMessage,
-    setStreaming,
     deleteMessage,
     setLoading,
     setActiveSession,
@@ -39,6 +42,8 @@ export default function ChatSessionPage() {
     saveMessageToDb,
     saveSessionToDb,
   } = useChatStore();
+
+  const { extractArtifactsFromContent, clearArtifacts } = useArtifactsStore();
 
   const [mounted, setMounted] = useState(false);
   const abortRef = useRef(false);
@@ -54,6 +59,21 @@ export default function ChatSessionPage() {
       setActiveSession(sessionId);
     }
   }, [sessionId, setActiveSession]);
+
+  // Clear artifacts when switching sessions
+  useEffect(() => {
+    clearArtifacts();
+  }, [sessionId, clearArtifacts]);
+
+  // Extract artifacts from existing messages when they load
+  useEffect(() => {
+    if (!mounted || messages.length === 0) return;
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && !msg.isStreaming && msg.content) {
+        extractArtifactsFromContent(msg.content, msg.id);
+      }
+    }
+  }, [mounted, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load messages from DB if we have none locally
   useEffect(() => {
@@ -103,6 +123,9 @@ export default function ChatSessionPage() {
       const store = useChatStore.getState();
       store.setStreaming(sessionId, assistantId, false);
       store.setLoading(false);
+
+      // Extract artifacts from the completed AI response
+      extractArtifactsFromContent(fullResponse, assistantId);
 
       // Save to DB in background
       const finalMessages = store.messages[sessionId] || [];
@@ -243,16 +266,23 @@ export default function ChatSessionPage() {
         )}
       </div>
 
-      {/* Sidebar toggle (when closed) */}
+      {/* Sidebar toggle + artifacts toggle (when sidebar closed) */}
       {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
-          aria-label="Open sidebar"
-        >
-          <Menu className="h-4 w-4" />
-        </button>
+        <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+            aria-label="Open sidebar"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+        </div>
       )}
+
+      {/* Artifacts toggle (always visible, top right) */}
+      <div className="absolute right-3 top-3 z-20">
+        <ArtifactsToggleButton />
+      </div>
 
       {/* Main chat area */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -299,6 +329,9 @@ export default function ChatSessionPage() {
           </>
         )}
       </div>
+
+      {/* Artifacts panel (slides in from right) */}
+      <ArtifactsPanel />
     </div>
   );
 }
