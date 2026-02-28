@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
-import { useSettingsStore, type Provider } from '../../stores/settingsStore';
+import {
+  enforceTaskRoutingTierRestriction,
+  isTaskRoutingModelAllowedForTier,
+  useSettingsStore,
+  type Provider,
+} from '../../stores/settingsStore';
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
@@ -101,7 +106,7 @@ describe('settingsStore', () => {
       await expect(useSettingsStore.getState().setDefaultProvider('ollama')).rejects.toThrow();
 
       const state = useSettingsStore.getState();
-      expect(state.error).toBe('Error: Provider error');
+      expect(state.error).toBe('Something went wrong. Please try again.');
     });
 
     it('should set temperature', () => {
@@ -261,7 +266,7 @@ describe('settingsStore', () => {
       await useSettingsStore.getState().loadSettings();
 
       const state = useSettingsStore.getState();
-      expect(state.error).toBe('Error: Load failed');
+      expect(state.error).toBe('Something went wrong. Please try again.');
       expect(state.loading).toBe(false);
     });
 
@@ -311,7 +316,7 @@ describe('settingsStore', () => {
       await expect(useSettingsStore.getState().saveSettings()).rejects.toThrow();
 
       const state = useSettingsStore.getState();
-      expect(state.error).toBe('Error: Save failed');
+      expect(state.error).toBe('Something went wrong. Please try again.');
       expect(state.loading).toBe(false);
     });
   });
@@ -387,6 +392,31 @@ describe('settingsStore', () => {
         model: 'auto',
       });
       expect(state.llmConfig.taskRouting.code).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
+    });
+
+    it('should block hobby tier from selecting higher-tier routed models', () => {
+      expect(isTaskRoutingModelAllowedForTier('code', 'gpt-5.2-codex-low', 'hobby')).toBe(false);
+      expect(isTaskRoutingModelAllowedForTier('code', 'gpt-5.2-codex-low', 'pro')).toBe(true);
+      expect(isTaskRoutingModelAllowedForTier('code', 'auto-balanced', 'hobby')).toBe(false);
+      expect(isTaskRoutingModelAllowedForTier('code', 'auto-balanced', 'pro')).toBe(true);
+      expect(isTaskRoutingModelAllowedForTier('image', 'dall-e-3', 'hobby')).toBe(true);
+    });
+
+    it('should downgrade disallowed hobby-tier task routing models back to auto', () => {
+      useSettingsStore.getState().setTaskRouting('code', 'managed_cloud', 'gpt-5.2-codex-low');
+      useSettingsStore.getState().setTaskRouting('search', 'managed_cloud', 'auto-balanced');
+
+      enforceTaskRoutingTierRestriction('hobby');
+
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig.taskRouting.code).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
+      expect(state.llmConfig.taskRouting.search).toEqual({
         provider: 'managed_cloud',
         model: 'auto',
       });
