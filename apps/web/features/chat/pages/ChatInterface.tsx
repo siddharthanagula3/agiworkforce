@@ -9,7 +9,6 @@ import { useExport } from '../hooks/use-export-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { useAIPreferences } from '../hooks/use-ai-preferences';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
-import { ChatHeader } from '../components/Main/ChatHeader';
 import { MessageList } from '../components/Main/MessageList';
 import { ChatComposer } from '../components/Composer/ChatComposer';
 import { ModeSelector } from '../components/Tools/ModeSelector';
@@ -28,7 +27,7 @@ import {
   DropdownMenuSeparator,
 } from '@shared/ui/dropdown-menu';
 import { Button } from '@shared/ui/button';
-import { FileText, FileJson, FileCode, Download } from 'lucide-react';
+import { FileText, FileJson, FileCode, Download, Menu } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { UsageWarningBanner, useUsageMonitoring } from '../components/tokens/UsageWarningBanner';
 import { UsageWarningModal } from '../components/dialogs/UsageWarningModal';
@@ -397,7 +396,7 @@ const ChatPage: React.FC = () => {
         <div
           className={cn(
             'border-r border-border bg-card/50 backdrop-blur-sm transition-all duration-300 ease-in-out',
-            sidebarOpen ? 'w-0 sm:w-64 md:w-80' : 'w-0',
+            sidebarOpen ? 'w-0 sm:w-72' : 'w-0',
             'overflow-hidden', // Prevent content overflow when collapsed
           )}
         >
@@ -422,30 +421,21 @@ const ChatPage: React.FC = () => {
           )}
         </div>
 
+        {/* Floating sidebar toggle — visible when sidebar is closed */}
+        {!sidebarOpen && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
+            className="fixed left-3 top-3 z-30 h-8 w-8 rounded-lg bg-card/80 shadow-sm backdrop-blur-sm hover:bg-muted"
+            aria-label="Open sidebar"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        )}
+
         {/* Main Chat Area - Optimized for full screen usage */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Header - Compact and clean */}
-          <ChatHeader
-            session={currentSession}
-            onRename={(title) => currentSession && handleSessionRename(currentSession.id, title)}
-            onShare={handleShare}
-            onExport={() => setExportDialogOpen(true)}
-            onSettings={() => {
-              router.push('/settings');
-            }}
-            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-            onSearch={() => setGlobalSearchOpen(true)}
-            onAnalytics={() => setAnalyticsOpen(true)}
-            onBookmarks={() => setBookmarksOpen(true)}
-          />
-
-          {/* Usage Warning Banner */}
-          {usageData.length > 0 && (
-            <div className="border-b border-border px-4 py-2">
-              <UsageWarningBanner usageData={usageData} />
-            </div>
-          )}
-
           {/* Message List - Maximum vertical space */}
           <div className="flex-1 overflow-hidden">
             <MessageList
@@ -470,9 +460,9 @@ const ChatPage: React.FC = () => {
             )}
           </div>
 
-          {/* Composer - Sticky at bottom with backdrop */}
-          <div className="sticky bottom-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="mx-auto max-w-4xl p-3 sm:p-4">
+          {/* Composer */}
+          <div className="pb-4 pt-2">
+            <div className="mx-auto max-w-3xl">
               <ChatComposer
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}

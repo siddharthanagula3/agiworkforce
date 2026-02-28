@@ -138,13 +138,18 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const getPageTitle = () => {
     const path = pathname;
     if (path === '/dashboard') return 'Dashboard';
-    if (path.includes('/workforce')) return 'AI Workforce';
+    if (path.includes('/dashboard/media')) return 'Media Studio';
+    if (path.includes('/dashboard/vibe')) return 'VIBE Workspace';
+    if (path.includes('/dashboard/agents')) return 'AI Workforce';
+    if (path.includes('/dashboard/hire')) return 'Marketplace';
+    if (path.includes('/dashboard/support')) return 'Help & Support';
+    if (path.includes('/dashboard/billing')) return 'Billing & Usage';
+    if (path.includes('/dashboard/settings')) return 'Settings';
     if (path.includes('/chat')) return 'Chat';
-    if (path.includes('/hire')) return 'Hire AI Employees';
+    if (path.includes('/workforce')) return 'AI Workforce';
     if (path.includes('/automation')) return 'Automation';
     if (path.includes('/analytics')) return 'Analytics';
     if (path.includes('/integrations')) return 'Integrations';
-    if (path.includes('/settings')) return 'Settings';
     return 'AI Workforce';
   };
 
