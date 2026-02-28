@@ -977,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_default_trait() {
-        let executor = CodeExecutor::default();
+        let executor = CodeExecutor::new();
         assert_eq!(executor.tool_names().len(), 2);
     }
 

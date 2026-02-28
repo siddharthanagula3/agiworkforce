@@ -735,6 +735,19 @@ impl LLMRouter {
         self.rate_limit_tracker = Some(tracker);
     }
 
+    pub fn rate_limit_tracker(
+        &self,
+    ) -> Option<Arc<crate::core::llm::fallback_chain::RateLimitTracker>> {
+        self.rate_limit_tracker.clone()
+    }
+
+    pub async fn is_provider_available(&self, provider: Provider) -> bool {
+        match self.providers.get(&provider) {
+            Some(instance) => instance.is_available().await,
+            None => false,
+        }
+    }
+
     pub fn has_provider(&self, provider: Provider) -> bool {
         self.providers
             .get(&provider)
@@ -1896,8 +1909,7 @@ pub(crate) fn contains_word(text: &str, word: &str) -> bool {
     WORD_REGEX_CACHE.with(|cache| {
         let mut map = cache.borrow_mut();
         let re = map.entry(word.to_owned()).or_insert_with(|| {
-            regex::Regex::new(&format!(r"\b{}\b", regex::escape(word)))
-                .expect("valid word regex")
+            regex::Regex::new(&format!(r"\b{}\b", regex::escape(word))).expect("valid word regex")
         });
         re.is_match(text)
     })

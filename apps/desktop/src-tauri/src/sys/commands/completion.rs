@@ -1,3 +1,8 @@
+use std::time::Duration;
+
+use chrono::{DateTime, Utc};
+
+use crate::core::llm::fallback_chain::{is_rate_limit_error, parse_retry_after};
 use crate::core::llm::{LLMRequest, Provider, RouteCandidate, RouterPreferences, RoutingStrategy};
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::ollama::ollama_list_models;
@@ -203,6 +208,71 @@ pub struct PromptCompletionResponse {
     pub latency_ms: u64,
 }
 
+const PROMPT_COMPLETION_RATE_LIMIT_MESSAGE: &str = "Prompt completion is temporarily rate-limited.";
+const MIN_PROMPT_COMPLETION_COOLDOWN: Duration = Duration::from_secs(1);
+
+fn merge_retry_after(
+    current_retry_after: &mut Option<Duration>,
+    candidate_retry_after: Option<Duration>,
+) {
+    if let Some(candidate_retry_after) = candidate_retry_after {
+        *current_retry_after = Some(
+            current_retry_after
+                .unwrap_or(Duration::ZERO)
+                .max(candidate_retry_after),
+        );
+    }
+}
+
+fn parse_retry_after_with_timestamp(error: &str) -> Option<Duration> {
+    parse_retry_after(error).or_else(|| {
+        let marker = "try again after";
+        let error_lower = error.to_lowercase();
+        let marker_pos = error_lower.find(marker)?;
+        let retry_at_text = error[marker_pos + marker.len()..].trim_start();
+        let retry_at_token = retry_at_text
+            .split_whitespace()
+            .next()?
+            .trim_end_matches(['.', ',', ';', '"', '\'']);
+        let retry_at = DateTime::parse_from_rfc3339(retry_at_token)
+            .ok()?
+            .with_timezone(&Utc);
+        let remaining = retry_at.signed_duration_since(Utc::now());
+
+        match remaining.to_std() {
+            Ok(duration) => Some(duration.max(MIN_PROMPT_COMPLETION_COOLDOWN)),
+            Err(_) => Some(MIN_PROMPT_COMPLETION_COOLDOWN),
+        }
+    })
+}
+
+fn format_prompt_completion_rate_limit_error(retry_after: Option<Duration>) -> String {
+    match retry_after {
+        Some(retry_after) => {
+            let retry_after_secs = retry_after.as_secs().max(1);
+            format!(
+                "{} Retry after {} second{}.",
+                PROMPT_COMPLETION_RATE_LIMIT_MESSAGE,
+                retry_after_secs,
+                if retry_after_secs == 1 { "" } else { "s" }
+            )
+        }
+        None => PROMPT_COMPLETION_RATE_LIMIT_MESSAGE.to_string(),
+    }
+}
+
+fn is_server_error(error: &str) -> bool {
+    let error_lower = error.to_lowercase();
+    error_lower.contains("500")
+        || error_lower.contains("502")
+        || error_lower.contains("503")
+        || error_lower.contains("504")
+        || error_lower.contains("internal server error")
+        || error_lower.contains("bad gateway")
+        || error_lower.contains("service unavailable")
+        || error_lower.contains("gateway timeout")
+}
+
 /// Get AI-powered prompt completion for ghost text suggestions
 /// Similar to Gemini CLI's implementation
 #[tauri::command]
@@ -277,13 +347,14 @@ Rules:
         ..Default::default()
     };
 
-    let (has_managed_cloud, has_zhipu, has_ollama, mut candidates) = {
+    let (has_managed_cloud, has_zhipu, has_ollama, mut candidates, rate_limit_tracker) = {
         let router = state.router.read().await;
         (
             router.has_provider(Provider::ManagedCloud),
             router.has_provider(Provider::Zhipu),
             router.has_provider(Provider::Ollama),
             router.candidates(&llm_request, &preferences),
+            router.rate_limit_tracker(),
         )
     };
 
@@ -350,10 +421,48 @@ Rules:
         return Err("No LLM providers configured for prompt completion".to_string());
     }
 
+    if let Some(rate_limit_tracker) = rate_limit_tracker.as_ref() {
+        rate_limit_tracker.cleanup_expired();
+    }
+
     // Try candidates in order until one succeeds
     let router = state.router.read().await;
     let mut failures: Vec<String> = Vec::new();
+    let mut retry_after: Option<Duration> = None;
+    let mut skipped_rate_limited = 0usize;
+    let mut skipped_unavailable = 0usize;
+    let mut saw_rate_limit = false;
+
     for candidate in &candidates {
+        if let Some(rate_limit_tracker) = rate_limit_tracker.as_ref() {
+            if rate_limit_tracker.is_rate_limited(candidate.provider, Some(&candidate.model)) {
+                skipped_rate_limited += 1;
+                merge_retry_after(
+                    &mut retry_after,
+                    Some(
+                        rate_limit_tracker
+                            .cooldown_remaining(candidate.provider, Some(&candidate.model)),
+                    ),
+                );
+                tracing::debug!(
+                    provider = %candidate.provider.as_string(),
+                    model = %candidate.model,
+                    "Skipping prompt completion candidate in cooldown"
+                );
+                continue;
+            }
+        }
+
+        if !router.is_provider_available(candidate.provider).await {
+            skipped_unavailable += 1;
+            tracing::debug!(
+                provider = %candidate.provider.as_string(),
+                model = %candidate.model,
+                "Skipping unavailable prompt completion provider"
+            );
+            continue;
+        }
+
         match router.invoke_candidate(candidate, &llm_request).await {
             Ok(outcome) => {
                 let latency = start_time.elapsed().as_millis() as u64;
@@ -374,6 +483,10 @@ Rules:
                     suggestion
                 );
 
+                if let Some(rate_limit_tracker) = rate_limit_tracker.as_ref() {
+                    rate_limit_tracker.record_success(candidate.provider, Some(&candidate.model));
+                }
+
                 return Ok(PromptCompletionResponse {
                     suggestion,
                     model: outcome.model,
@@ -381,26 +494,57 @@ Rules:
                 });
             }
             Err(e) => {
+                let error_message = e.to_string();
+                let is_rate_limited = is_rate_limit_error(&error_message);
+
+                if is_rate_limited {
+                    saw_rate_limit = true;
+                    let provider_retry_after = parse_retry_after_with_timestamp(&error_message);
+                    merge_retry_after(&mut retry_after, provider_retry_after);
+
+                    if let Some(rate_limit_tracker) = rate_limit_tracker.as_ref() {
+                        rate_limit_tracker.record_rate_limit(
+                            candidate.provider,
+                            Some(&candidate.model),
+                            provider_retry_after,
+                        );
+                    }
+                } else if is_server_error(&error_message) {
+                    if let Some(rate_limit_tracker) = rate_limit_tracker.as_ref() {
+                        rate_limit_tracker
+                            .record_server_error(candidate.provider, Some(&candidate.model));
+                    }
+                }
+
                 failures.push(format!(
                     "{:?}/{}: {}",
-                    candidate.provider, candidate.model, e
+                    candidate.provider, candidate.model, error_message
                 ));
                 tracing::warn!(
+                    provider = %candidate.provider.as_string(),
+                    model = %candidate.model,
+                    is_rate_limited = is_rate_limited,
                     "[PromptCompletion] Provider {:?} failed: {}. Trying next...",
                     candidate.provider,
-                    e
+                    error_message
                 );
                 continue;
             }
         }
     }
 
-    if failures.is_empty() {
-        Err("All providers failed to generate prompt completion".to_string())
+    if saw_rate_limit || skipped_rate_limited > 0 {
+        Err(format_prompt_completion_rate_limit_error(retry_after))
+    } else if failures.is_empty() {
+        if skipped_unavailable > 0 {
+            Err("No available LLM providers configured for prompt completion".to_string())
+        } else {
+            Err("Prompt completion is temporarily unavailable".to_string())
+        }
     } else {
         Err(format!(
-            "All providers failed to generate prompt completion: {}",
-            failures.into_iter().take(3).collect::<Vec<_>>().join(" | ")
+            "Prompt completion failed: {}",
+            failures.into_iter().take(2).collect::<Vec<_>>().join(" | ")
         ))
     }
 }
@@ -433,5 +577,38 @@ mod tests {
         let req: PromptCompletionRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.input, "help me write a function");
         assert_eq!(req.context, Some("TypeScript project".to_string()));
+    }
+
+    #[test]
+    fn test_parse_prompt_completion_retry_after_timestamp() {
+        let retry_at = (Utc::now() + chrono::Duration::seconds(45)).to_rfc3339();
+        let parsed = parse_retry_after_with_timestamp(&format!(
+            "Rate limit exceeded. Please try again after {}",
+            retry_at
+        ))
+        .unwrap();
+
+        assert!(parsed >= Duration::from_secs(30));
+        assert!(parsed <= Duration::from_secs(45));
+    }
+
+    #[test]
+    fn test_parse_prompt_completion_retry_after_timestamp_uses_minimum_cooldown() {
+        let retry_at = (Utc::now() - chrono::Duration::seconds(5)).to_rfc3339();
+        let parsed = parse_retry_after_with_timestamp(&format!(
+            "Rate limit exceeded. Please try again after {}",
+            retry_at
+        ))
+        .unwrap();
+
+        assert_eq!(parsed, MIN_PROMPT_COMPLETION_COOLDOWN);
+    }
+
+    #[test]
+    fn test_format_prompt_completion_rate_limit_error() {
+        assert_eq!(
+            format_prompt_completion_rate_limit_error(Some(Duration::from_secs(12))),
+            "Prompt completion is temporarily rate-limited. Retry after 12 seconds."
+        );
     }
 }

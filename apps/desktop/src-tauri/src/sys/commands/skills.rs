@@ -125,13 +125,12 @@ pub struct SkillMatchResult {
 
 /// Common English stopwords to filter out during tokenization.
 const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "is", "it", "in", "on", "at", "to", "for", "of", "and",
-    "or", "but", "not", "with", "from", "by", "as", "this", "that", "be", "are",
-    "was", "were", "been", "being", "have", "has", "had", "do", "does", "did",
-    "will", "would", "could", "should", "may", "might", "can", "i", "me", "my",
-    "you", "your", "we", "our", "they", "them", "their", "he", "she", "his",
-    "her", "its", "what", "which", "who", "how", "when", "where", "why", "so",
-    "if", "then", "just", "also", "about", "up", "out", "no", "yes",
+    "a", "an", "the", "is", "it", "in", "on", "at", "to", "for", "of", "and", "or", "but", "not",
+    "with", "from", "by", "as", "this", "that", "be", "are", "was", "were", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
+    "can", "i", "me", "my", "you", "your", "we", "our", "they", "them", "their", "he", "she",
+    "his", "her", "its", "what", "which", "who", "how", "when", "where", "why", "so", "if", "then",
+    "just", "also", "about", "up", "out", "no", "yes",
 ];
 
 /// Tokenize a string into lowercase words, stripping punctuation and filtering

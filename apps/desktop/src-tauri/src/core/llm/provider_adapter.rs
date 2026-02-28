@@ -1752,11 +1752,20 @@ impl ProviderAdapter for GoogleAdapter {
             let function_declarations: Vec<Value> = tools
                 .iter()
                 .map(|tool| {
-                    serde_json::json!({
+                    let normalized_parameters =
+                        Self::normalize_google_tool_schema(tool.parameters());
+                    let mut declaration = serde_json::json!({
                         "name": tool.name(),
                         "description": tool.description(),
-                        "parameters": tool.parameters()
-                    })
+                    });
+
+                    if Self::requires_google_json_schema(tool.parameters()) {
+                        declaration["parametersJsonSchema"] = normalized_parameters;
+                    } else {
+                        declaration["parameters"] = normalized_parameters;
+                    }
+
+                    declaration
                 })
                 .collect();
 
@@ -1845,6 +1854,115 @@ impl ProviderAdapter for GoogleAdapter {
 
     fn provider_name(&self) -> &str {
         "Google"
+    }
+}
+
+impl GoogleAdapter {
+    fn normalize_google_tool_schema(schema: &Value) -> Value {
+        let mut normalized = schema.clone();
+        Self::normalize_google_tool_schema_mut(&mut normalized, true);
+
+        if normalized.is_object() && normalized.as_object().is_some_and(|map| !map.is_empty()) {
+            normalized
+        } else {
+            serde_json::json!({
+                "type": "object",
+                "properties": {}
+            })
+        }
+    }
+
+    fn normalize_google_tool_schema_mut(schema: &mut Value, is_root: bool) {
+        match schema {
+            Value::Object(map) => {
+                if is_root
+                    && map
+                        .get("schema")
+                        .is_some_and(Self::has_google_schema_shape)
+                {
+                    if let Some(unwrapped) = map.get("schema").cloned() {
+                        *schema = unwrapped;
+                        Self::normalize_google_tool_schema_mut(schema, true);
+                    }
+                    return;
+                }
+
+                map.remove("$schema");
+                if is_root {
+                    map.remove("schema");
+                }
+
+                let keys: Vec<String> = map.keys().cloned().collect();
+                for key in keys {
+                    if let Some(value) = map.get_mut(&key) {
+                        Self::normalize_google_tool_schema_mut(value, false);
+                    }
+                }
+
+                if map.get("type").and_then(Value::as_str) == Some("array")
+                    && !map.contains_key("items")
+                {
+                    map.insert("items".to_string(), serde_json::json!({}));
+                }
+
+                if !map.contains_key("type") && map.contains_key("properties") {
+                    map.insert("type".to_string(), serde_json::json!("object"));
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    Self::normalize_google_tool_schema_mut(item, false);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn has_google_schema_shape(value: &Value) -> bool {
+        value.as_object().is_some_and(|map| {
+            map.contains_key("type")
+                || map.contains_key("properties")
+                || map.contains_key("items")
+                || map.contains_key("required")
+                || map.contains_key("$defs")
+                || map.contains_key("definitions")
+        })
+    }
+
+    fn requires_google_json_schema(schema: &Value) -> bool {
+        match schema {
+            Value::Object(map) => map.iter().any(|(key, value)| {
+                if key == "schema" && Self::has_google_schema_shape(value) {
+                    return true;
+                }
+
+                matches!(
+                    key.as_str(),
+                    "$schema"
+                        | "$defs"
+                        | "definitions"
+                        | "additionalProperties"
+                        | "allOf"
+                        | "anyOf"
+                        | "const"
+                        | "contains"
+                        | "dependentRequired"
+                        | "dependentSchemas"
+                        | "else"
+                        | "examples"
+                        | "if"
+                        | "not"
+                        | "oneOf"
+                        | "patternProperties"
+                        | "prefixItems"
+                        | "then"
+                        | "unevaluatedItems"
+                        | "unevaluatedProperties"
+                ) || Self::requires_google_json_schema(value)
+            }),
+            Value::Array(items) => items.iter().any(Self::requires_google_json_schema),
+            _ => false,
+        }
     }
 }
 

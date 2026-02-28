@@ -36,11 +36,13 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_max_iterations_is_positive() {
         assert!(MAX_ITERATIONS > 0);
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_max_iterations_reasonable_upper_bound() {
         // Iteration limit should not be excessive to prevent runaway processes
         assert!(

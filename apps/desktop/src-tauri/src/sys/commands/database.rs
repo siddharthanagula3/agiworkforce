@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::HashMap;
 use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::data::database::{
-    ConnectionConfig, DeleteQuery, InsertQuery, PoolConfig, QueryBuilder,
-    QueryValidation, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
+    ConnectionConfig, DeleteQuery, InsertQuery, PoolConfig, QueryBuilder, QueryValidation,
+    SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
 };
 #[cfg(feature = "remote-databases")]
 use crate::data::database::{MongoClient, RedisClient};
@@ -28,16 +28,13 @@ static PROC_NAME_RE: Lazy<Regex> = Lazy::new(|| {
 /// whitespace tricks (`SELECT\n...`), or embedded keywords inside identifiers.
 static BLOCKED_KEYWORD_RE: Lazy<Regex> = Lazy::new(|| {
     // Each keyword is wrapped in \b…\b so partial matches inside names are ignored.
-    Regex::new(
-        r"(?i)\b(DROP|TRUNCATE|DELETE|INSERT|UPDATE|ALTER|CREATE\s+USER|GRANT|REVOKE)\b",
-    )
-    .expect("static regex is valid")
+    Regex::new(r"(?i)\b(DROP|TRUNCATE|DELETE|INSERT|UPDATE|ALTER|CREATE\s+USER|GRANT|REVOKE)\b")
+        .expect("static regex is valid")
 });
 
 /// Matches SQL block comments which can hide keywords from naive substring checks.
-static BLOCK_COMMENT_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"/\*[\s\S]*?\*/").expect("static regex is valid")
-});
+static BLOCK_COMMENT_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"/\*[\s\S]*?\*/").expect("static regex is valid"));
 
 /// Validates that a SQL query is a read-only SELECT/WITH statement.
 ///
@@ -58,7 +55,10 @@ fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String
 
     // 2. Reject multi-statement separators.
     if without_comments.contains(';') {
-        tracing::error!("Blocked SQL query{} containing semicolon (multi-statement attempt)", loc);
+        tracing::error!(
+            "Blocked SQL query{} containing semicolon (multi-statement attempt)",
+            loc
+        );
         return Err(format!(
             "Semicolons are not allowed in SELECT queries{loc}. \
              Only a single SELECT statement is permitted."
@@ -68,7 +68,11 @@ fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String
     // 3. Blocked keyword detection with word-boundary matching.
     if let Some(m) = BLOCKED_KEYWORD_RE.find(&without_comments) {
         let keyword = m.as_str().to_uppercase();
-        tracing::error!("Blocked dangerous SQL query{} with keyword: {}", loc, keyword);
+        tracing::error!(
+            "Blocked dangerous SQL query{} with keyword: {}",
+            loc,
+            keyword
+        );
         return Err(format!(
             "SQL operation '{keyword}' is not allowed{loc}. \
              Only SELECT queries are permitted for security."
@@ -1158,7 +1162,6 @@ pub async fn db_delete_stored_password(connection_id: String) -> Result<(), Stri
     );
     Ok(())
 }
-
 
 // MySQL stub implementations when remote-databases feature is disabled.
 #[cfg(not(feature = "remote-databases"))]

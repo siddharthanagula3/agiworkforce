@@ -31,7 +31,10 @@ mod tests {
         let tokens = TokenCounter::estimate_text_tokens(text);
         // Empirically this sentence is ~10 tokens; we just assert it's sane
         assert!(tokens > 5, "Expected at least 5 tokens for a full sentence");
-        assert!(tokens < 50, "Expected fewer than 50 tokens for a short sentence");
+        assert!(
+            tokens < 50,
+            "Expected fewer than 50 tokens for a short sentence"
+        );
     }
 
     #[test]
@@ -208,7 +211,10 @@ mod tests {
     fn test_estimate_prompt_tokens_empty_messages() {
         // No messages → only the reply primer (3 tokens)
         let tokens = TokenCounter::estimate_prompt_tokens(&[]);
-        assert_eq!(tokens, 3, "Empty message list must return reply-primer tokens (3)");
+        assert_eq!(
+            tokens, 3,
+            "Empty message list must return reply-primer tokens (3)"
+        );
     }
 
     #[test]
@@ -216,7 +222,10 @@ mod tests {
         let msgs = [simple_message("user", "Hello")];
         let tokens = TokenCounter::estimate_prompt_tokens(&msgs);
         // At minimum: 3 (per-message) + tokens("user") + tokens("Hello") + 3 (primer) > 3
-        assert!(tokens > 3, "A single message must produce more than the primer alone");
+        assert!(
+            tokens > 3,
+            "A single message must produce more than the primer alone"
+        );
     }
 
     #[test]
@@ -302,7 +311,8 @@ mod tests {
         let msgs = [simple_message("user", "Hello world")];
         let completion = "Hi there!";
 
-        let (openai_p, _) = TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
+        let (openai_p, _) =
+            TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
         let (anthropic_p, _) =
             TokenCounter::estimate_for_provider(Provider::Anthropic, &msgs, completion);
 
@@ -318,8 +328,10 @@ mod tests {
         let msgs = [simple_message("user", "Hello world")];
         let completion = "Hi there!";
 
-        let (openai_p, _) = TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
-        let (ollama_p, _) = TokenCounter::estimate_for_provider(Provider::Ollama, &msgs, completion);
+        let (openai_p, _) =
+            TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
+        let (ollama_p, _) =
+            TokenCounter::estimate_for_provider(Provider::Ollama, &msgs, completion);
 
         // Ollama has 1.10× multiplier — must be >= OpenAI
         assert!(
@@ -333,8 +345,10 @@ mod tests {
         let msgs = [simple_message("user", "Hello world")];
         let completion = "Hi there!";
 
-        let (openai_p, _) = TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
-        let (google_p, _) = TokenCounter::estimate_for_provider(Provider::Google, &msgs, completion);
+        let (openai_p, _) =
+            TokenCounter::estimate_for_provider(Provider::OpenAI, &msgs, completion);
+        let (google_p, _) =
+            TokenCounter::estimate_for_provider(Provider::Google, &msgs, completion);
 
         // Google has 0.95× multiplier — must be <= OpenAI
         assert!(

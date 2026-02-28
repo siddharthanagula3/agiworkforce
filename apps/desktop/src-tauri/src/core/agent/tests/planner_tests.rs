@@ -51,9 +51,15 @@ mod tests {
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].id, "step_1");
         assert_eq!(steps[0].description, "Take a screenshot");
-        assert_eq!(steps[0].expected_result.as_deref(), Some("Screenshot captured"));
+        assert_eq!(
+            steps[0].expected_result.as_deref(),
+            Some("Screenshot captured")
+        );
         assert!(!steps[0].retry_on_failure);
-        assert!(matches!(steps[0].action, Action::Screenshot { region: None }));
+        assert!(matches!(
+            steps[0].action,
+            Action::Screenshot { region: None }
+        ));
     }
 
     #[test]

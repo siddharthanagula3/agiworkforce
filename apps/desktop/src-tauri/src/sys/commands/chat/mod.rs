@@ -190,11 +190,8 @@ fn check_billing_and_budget(
                         .ok_or_else(|| "Failed to set time for start of month".to_string())?
                         .and_utc();
 
-                    let current_usage =
-                        repository::sum_cost_since(&conn, start_of_month, user_id)
-                            .map_err(|e| {
-                                format!("Failed to query usage for budget check: {}", e)
-                            })?;
+                    let current_usage = repository::sum_cost_since(&conn, start_of_month, user_id)
+                        .map_err(|e| format!("Failed to query usage for budget check: {}", e))?;
 
                     if current_usage >= budget_limit {
                         return Err(format!(
@@ -326,37 +323,36 @@ fn process_multimodal_attachments(
     model: &str,
     content: &str,
 ) -> Option<Vec<ContentPart>> {
-    let mut multimodal_parts: Option<Vec<ContentPart>> =
-        if let Some(attachments) = attachments {
-            if !attachments.is_empty() {
-                // Check if the model supports vision
-                if model_likely_supports_vision(model) {
-                    let parts = convert_attachments_to_content_parts(attachments);
-                    if parts.is_empty() {
-                        debug!("[Chat] No valid image attachments found after conversion");
-                        None
-                    } else {
-                        info!(
-                            "[Chat] Including {} image(s) in multimodal message for model '{}'",
-                            parts.len(),
-                            model
-                        );
-                        Some(parts)
-                    }
+    let mut multimodal_parts: Option<Vec<ContentPart>> = if let Some(attachments) = attachments {
+        if !attachments.is_empty() {
+            // Check if the model supports vision
+            if model_likely_supports_vision(model) {
+                let parts = convert_attachments_to_content_parts(attachments);
+                if parts.is_empty() {
+                    debug!("[Chat] No valid image attachments found after conversion");
+                    None
                 } else {
-                    warn!(
+                    info!(
+                        "[Chat] Including {} image(s) in multimodal message for model '{}'",
+                        parts.len(),
+                        model
+                    );
+                    Some(parts)
+                }
+            } else {
+                warn!(
                         "[Chat] Model '{}' may not support vision - image attachments will be skipped. \
                         Consider using a vision-capable model like GPT-4, Claude 3+, or Gemini.",
                         model
                     );
-                    None
-                }
-            } else {
                 None
             }
         } else {
             None
-        };
+        }
+    } else {
+        None
+    };
 
     if multimodal_parts.is_none() && should_attach_screen_context(content) {
         if model_likely_supports_vision(model) {
@@ -480,9 +476,7 @@ fn build_tool_definitions(
     // "web" focus mode with a Claude model. This uses Anthropic's built-in
     // server tool (web_search_20250305) which requires no API key.
     if is_web_focus && model.to_lowercase().contains("claude") {
-        let already_has_web_search = tool_defs
-            .iter()
-            .any(|t| t.name == "web_search" || t.name == "search_web");
+        let already_has_web_search = tool_defs.iter().any(|t| t.name == "web_search");
         if !already_has_web_search {
             use crate::core::llm::ToolDefinition;
             tool_defs.push(ToolDefinition {
@@ -590,7 +584,16 @@ fn save_or_skip_assistant_message(
             created_at: Utc::now(),
         })
     } else {
-        save_assistant_message(db, conversation_id, user_id, content, tokens, cost, provider, model)
+        save_assistant_message(
+            db,
+            conversation_id,
+            user_id,
+            content,
+            tokens,
+            cost,
+            provider,
+            model,
+        )
     }
 }
 
@@ -637,9 +640,7 @@ async fn ensure_managed_cloud_provider(
                     Ok(provider) => {
                         let mut r = router.write().await;
                         r.set_managed_cloud(Box::new(provider));
-                        info!(
-                            "[Chat] Initialized ManagedCloud provider for authenticated user"
-                        );
+                        info!("[Chat] Initialized ManagedCloud provider for authenticated user");
                     }
                     Err(e) => {
                         warn!("[Chat] Failed to create ManagedCloud provider: {}", e);
@@ -728,10 +729,7 @@ async fn execute_tool_calls_batch(
             continue;
         }
 
-        info!(
-            "[Chat] Executing tool: {} (id: {})",
-            tc.name, tc.id
-        );
+        info!("[Chat] Executing tool: {} (id: {})", tc.name, tc.id);
 
         // Emit tool executing event
         let _ = app_handle.emit(
@@ -755,6 +753,7 @@ async fn execute_tool_calls_batch(
             &tc.name,
             &tc.arguments,
             app_handle,
+            conversation_id,
             project_folder.clone(),
             conversation_mode.clone(),
             Some(tc.id.as_str()),
@@ -778,8 +777,7 @@ async fn execute_tool_calls_batch(
             tool_failure_summaries.push(format!("{}: {}", tc.name, summary));
         }
 
-        let result_data =
-            serde_json::from_str::<serde_json::Value>(&result_content).ok();
+        let result_data = serde_json::from_str::<serde_json::Value>(&result_content).ok();
 
         // Emit tool result event (full result for richer UI display)
         tracing::info!(
@@ -1085,7 +1083,10 @@ Please select or allow a project folder and retry.",
     )
 }
 
-fn resolve_followup_invoke_timeout_secs(only_fast_metadata_tools: bool, has_media_tools: bool) -> u64 {
+fn resolve_followup_invoke_timeout_secs(
+    only_fast_metadata_tools: bool,
+    has_media_tools: bool,
+) -> u64 {
     if only_fast_metadata_tools {
         FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS
     } else if has_media_tools {
@@ -1123,6 +1124,7 @@ async fn execute_chat_tool_with_timeout(
     tool_name: &str,
     arguments_json: &str,
     app_handle: &tauri::AppHandle,
+    conversation_id: i64,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
@@ -1200,7 +1202,7 @@ async fn execute_chat_tool_with_timeout(
 
                 // AUDIT-STREAM-021 fix: Check if generation was stopped BEFORE processing result.
                 // This prevents continuing to process tool output after user requested stop.
-                if should_stop_generation() {
+                if should_stop_for_conversation(conversation_id) {
                     if let Some(tool_id) = normalized_tool_call_id {
                         crate::ui::events::tool_stream::emit_tool_cancelled(
                             app_handle,
@@ -1314,7 +1316,7 @@ async fn execute_chat_tool_with_timeout(
                     }
                 }
                 // Also check global stop generation flag
-                if should_stop_generation() {
+                if should_stop_for_conversation(conversation_id) {
                     // AUDIT-CANCEL-060 fix: Abort the spawned task to stop the running tool
                     exec_abort_handle.abort();
                     let elapsed_ms = started_at.elapsed().as_millis() as u64;
@@ -2388,8 +2390,7 @@ pub fn search_chat_history_semantic(
     let mut scored: Vec<(usize, f64)> = Vec::with_capacity(candidates.len());
     for (idx, tokens) in doc_tokens.iter().enumerate() {
         // Compute TF for this document
-        let mut term_freq: std::collections::HashMap<&str, f64> =
-            std::collections::HashMap::new();
+        let mut term_freq: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
         let total = tokens.len() as f64;
         if total == 0.0 {
             scored.push((idx, 0.0));
@@ -3046,7 +3047,8 @@ pub async fn chat_send_message(
                 let mut scored: Vec<(String, String, f64)> = skills
                     .iter()
                     .filter_map(|skill| {
-                        let skill_text = format!("{} {}", skill.name, skill.description).to_lowercase();
+                        let skill_text =
+                            format!("{} {}", skill.name, skill.description).to_lowercase();
                         let skill_tokens: std::collections::HashSet<String> = skill_text
                             .split(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
                             .filter(|w| !w.is_empty() && w.len() > 1)
@@ -3057,7 +3059,11 @@ pub async fn chat_send_message(
                         }
                         let intersection = msg_tokens.intersection(&skill_tokens).count() as f64;
                         let union = msg_tokens.union(&skill_tokens).count() as f64;
-                        let mut score = if union > 0.0 { intersection / union } else { 0.0 };
+                        let mut score = if union > 0.0 {
+                            intersection / union
+                        } else {
+                            0.0
+                        };
                         if msg_lower.contains(&skill.name.to_lowercase()) {
                             score += 0.3;
                         }
@@ -3075,8 +3081,15 @@ pub async fn chat_send_message(
         };
 
         if !skill_matches.is_empty() {
-            let skill_names: Vec<&str> = skill_matches.iter().map(|(name, _, _)| name.as_str()).collect();
-            debug!("[Chat] Auto-injecting {} skill(s): {:?}", skill_matches.len(), skill_names);
+            let skill_names: Vec<&str> = skill_matches
+                .iter()
+                .map(|(name, _, _)| name.as_str())
+                .collect();
+            debug!(
+                "[Chat] Auto-injecting {} skill(s): {:?}",
+                skill_matches.len(),
+                skill_names
+            );
 
             for (name, context, score) in &skill_matches {
                 llm_messages.push(ChatMessage {
@@ -3103,17 +3116,12 @@ pub async fn chat_send_message(
     }
 
     // Process image attachments (and auto-capture screen context if needed)
-    let multimodal_parts = process_multimodal_attachments(
-        request.attachments.as_ref(),
-        &model,
-        &request.content,
-    );
+    let multimodal_parts =
+        process_multimodal_attachments(request.attachments.as_ref(), &model, &request.content);
 
     // Extract text from document attachments (non-image files)
-    let attachment_text_context = process_document_attachments(
-        request.attachments.as_ref(),
-        &mut llm_messages,
-    );
+    let attachment_text_context =
+        process_document_attachments(request.attachments.as_ref(), &mut llm_messages);
 
     let mut agent_instruction = request.content.clone();
     if let Some(ref context) = project_context_for_agent {
@@ -3196,11 +3204,11 @@ pub async fn chat_send_message(
     if stream_mode {
         reset_stop_flag();
 
-        // Use frontend message ID if provided, otherwise use 0 as fallback
         let frontend_message_id = request
             .frontend_message_id
             .clone()
-            .unwrap_or_else(|| "0".to_string());
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| "Streaming chat requires a frontend message id".to_string())?;
 
         // Emit stream start event
         let _ = app_handle.emit(
@@ -3877,7 +3885,7 @@ pub async fn chat_send_message(
                             break;
                         };
 
-                        if should_stop_generation() {
+                        if should_stop_for_conversation(conversation_id_clone) {
                             info!("[Chat] Generation stopped by user");
                             was_stopped = true;
                             break;
@@ -4252,7 +4260,10 @@ pub async fn chat_send_message(
                                 let followup_total_timeout_secs =
                                     resolve_followup_total_timeout_secs(only_fast_metadata_tools);
                                 let followup_invoke_timeout_secs =
-                                    resolve_followup_invoke_timeout_secs(only_fast_metadata_tools, has_media_tools);
+                                    resolve_followup_invoke_timeout_secs(
+                                        only_fast_metadata_tools,
+                                        has_media_tools,
+                                    );
                                 for candidate in candidates {
                                     let elapsed = followup_budget_started.elapsed();
                                     let total_budget =
@@ -4355,7 +4366,10 @@ pub async fn chat_send_message(
                                                 // AUDIT-STREAM-072 fix: Normalize tool call IDs
                                                 let normalized_tool_calls = normalize_tool_calls(
                                                     new_tool_calls,
-                                                    &format!("followup_tool_call_{}", streaming_tool_iteration),
+                                                    &format!(
+                                                        "followup_tool_call_{}",
+                                                        streaming_tool_iteration
+                                                    ),
                                                 );
 
                                                 // Emit tool calls event with normalized IDs
@@ -4371,15 +4385,16 @@ pub async fn chat_send_message(
                                                 );
 
                                                 // Execute the new tool calls
-                                                let (new_results, batch_failures) = execute_tool_calls_batch(
-                                                    &normalized_tool_calls,
-                                                    &app_handle_clone,
-                                                    conversation_id_clone,
-                                                    &frontend_message_id_clone,
-                                                    project_folder_clone.clone(),
-                                                    conversation_mode_clone.clone(),
-                                                )
-                                                .await;
+                                                let (new_results, batch_failures) =
+                                                    execute_tool_calls_batch(
+                                                        &normalized_tool_calls,
+                                                        &app_handle_clone,
+                                                        conversation_id_clone,
+                                                        &frontend_message_id_clone,
+                                                        project_folder_clone.clone(),
+                                                        conversation_mode_clone.clone(),
+                                                    )
+                                                    .await;
                                                 tool_failure_summaries.extend(batch_failures);
 
                                                 // Reconstruct streaming tool calls for the next iteration
@@ -4421,9 +4436,10 @@ pub async fn chat_send_message(
                                                     // Continue the loop with the new tool results
                                                     current_tool_calls = new_streaming_tcs;
                                                     current_tool_results = new_results;
-                                                    has_media_tools = current_tool_results
-                                                        .iter()
-                                                        .any(|r| is_media_generation_tool(&r.tool_name));
+                                                    has_media_tools =
+                                                        current_tool_results.iter().any(|r| {
+                                                            is_media_generation_tool(&r.tool_name)
+                                                        });
                                                     only_fast_metadata_tools =
                                                         is_fast_metadata_batch(
                                                             &current_tool_results,
@@ -5011,10 +5027,8 @@ Please confirm the tool permissions or try a different approach.",
                     );
 
                     // AUDIT-STREAM-072 fix: Normalize tool call IDs
-                    let normalized_tool_calls = normalize_tool_calls(
-                        tool_calls,
-                        &format!("tool_call_{}", tool_iteration),
-                    );
+                    let normalized_tool_calls =
+                        normalize_tool_calls(tool_calls, &format!("tool_call_{}", tool_iteration));
 
                     // Emit agent progress event
                     let _ = app_handle.emit(
@@ -5098,9 +5112,8 @@ Please confirm the tool permissions or try a different approach.",
                     let batch_has_media = tool_results
                         .iter()
                         .any(|r| is_media_generation_tool(&r.tool_name));
-                    let nonstream_followup_timeout = resolve_followup_invoke_timeout_secs(
-                        false, batch_has_media,
-                    );
+                    let nonstream_followup_timeout =
+                        resolve_followup_invoke_timeout_secs(false, batch_has_media);
 
                     let followup_result = {
                         let router = _llm_state.router.read().await;
@@ -5819,15 +5832,51 @@ pub async fn chat_handle_stop(app_handle: tauri::AppHandle) -> Result<bool, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
     use std::sync::atomic::Ordering;
+    use std::sync::Mutex;
+
+    static STOP_FLAG_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     #[test]
     fn stop_flag_can_be_reset_between_runs() {
+        let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
+        reset_stop_flag();
         STOP_GENERATION.store(true, Ordering::SeqCst);
         assert!(should_stop_generation());
 
         reset_stop_flag();
         assert!(!should_stop_generation());
+    }
+
+    #[test]
+    fn scoped_stop_only_applies_to_matching_conversation() {
+        let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
+        reset_stop_flag();
+        STOP_GENERATION.store(true, Ordering::SeqCst);
+        if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
+            *active = Some(42);
+        }
+
+        assert!(should_stop_for_conversation(42));
+        assert!(!should_stop_for_conversation(7));
+
+        reset_stop_flag();
+    }
+
+    #[test]
+    fn global_stop_applies_when_no_conversation_is_scoped() {
+        let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
+        reset_stop_flag();
+        STOP_GENERATION.store(true, Ordering::SeqCst);
+        if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
+            *active = None;
+        }
+
+        assert!(should_stop_for_conversation(42));
+        assert!(should_stop_for_conversation(7));
+
+        reset_stop_flag();
     }
 
     #[test]

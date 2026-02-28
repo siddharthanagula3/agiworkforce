@@ -271,11 +271,11 @@ impl ManagedCloudProvider {
         if is_claude_model {
             if let Some(ref cache_control) = request.cache_control {
                 transformed["cache_control"] =
-                    serde_json::to_value(cache_control).unwrap_or_else(|_| serde_json::json!(null));
+                    serde_json::to_value(cache_control).unwrap_or(serde_json::Value::Null);
             }
             if let Some(ref thinking) = request.thinking {
                 transformed["thinking"] =
-                    serde_json::to_value(thinking).unwrap_or_else(|_| serde_json::json!(null));
+                    serde_json::to_value(thinking).unwrap_or(serde_json::Value::Null);
             }
             if let Some(ref effort) = request.effort {
                 transformed["effort"] = serde_json::json!(effort);

@@ -519,7 +519,12 @@ async fn test_concurrent_checkpoint_writes() {
     use std::sync::Arc;
 
     let dir = tempdir().unwrap();
-    let db_path = dir.path().join("concurrent.db").to_str().unwrap().to_string();
+    let db_path = dir
+        .path()
+        .join("concurrent.db")
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Shared persistence instance (mirrors production: one db_path, many callers)
     let persistence = Arc::new(ExecutionStatePersistence::new(db_path).unwrap());
@@ -583,7 +588,10 @@ async fn test_concurrent_checkpoint_writes() {
 
     // Verify internal consistency: the writer tag in metadata must match the
     // writer tag embedded in context_json.
-    let writer = latest.metadata.get("writer").expect("metadata must have writer key");
+    let writer = latest
+        .metadata
+        .get("writer")
+        .expect("metadata must have writer key");
     assert!(
         writer == "A" || writer == "B",
         "writer metadata must be A or B, got: {}",
@@ -593,7 +601,9 @@ async fn test_concurrent_checkpoint_writes() {
     // Parse context_json and verify it matches the same writer
     let ctx: serde_json::Value =
         serde_json::from_str(&latest.context_json).expect("context_json must be valid JSON");
-    let ctx_writer = ctx["writer"].as_str().expect("context must have writer field");
+    let ctx_writer = ctx["writer"]
+        .as_str()
+        .expect("context must have writer field");
     assert_eq!(
         ctx_writer, writer,
         "context_json writer ({}) must match metadata writer ({})",
@@ -643,10 +653,10 @@ fn test_corrupt_checkpoint_recovery() {
             task_id_truncated,
             5,
             5,
-            r#"{"key": "val"#,                   // truncated JSON
-            r#"[{"result": "su"#,                 // truncated JSON
+            r#"{"key": "val"#,    // truncated JSON
+            r#"[{"result": "su"#, // truncated JSON
             r#""goal""#,
-            r#"{"tok"#,                           // truncated metadata JSON
+            r#"{"tok"#, // truncated metadata JSON
             "2026-01-15T10:30:00Z",
         ],
     )
@@ -687,7 +697,7 @@ fn test_corrupt_checkpoint_recovery() {
             "",
             "",
             "",
-            "not-a-date",  // invalid RFC3339 timestamp
+            "not-a-date", // invalid RFC3339 timestamp
         ],
     )
     .unwrap();
@@ -738,9 +748,21 @@ fn test_corrupt_checkpoint_recovery() {
     // The critical assertion: we reached this point without any panic.
     // At least one of the three corrupt rows should have been loadable
     // (since the implementation uses fallback parsing), proving resilience.
-    let any_loaded = result_truncated.as_ref().ok().and_then(|o| o.as_ref()).is_some()
-        || result_invalid.as_ref().ok().and_then(|o| o.as_ref()).is_some()
-        || result_empty.as_ref().ok().and_then(|o| o.as_ref()).is_some();
+    let any_loaded = result_truncated
+        .as_ref()
+        .ok()
+        .and_then(|o| o.as_ref())
+        .is_some()
+        || result_invalid
+            .as_ref()
+            .ok()
+            .and_then(|o| o.as_ref())
+            .is_some()
+        || result_empty
+            .as_ref()
+            .ok()
+            .and_then(|o| o.as_ref())
+            .is_some();
 
     assert!(
         any_loaded,

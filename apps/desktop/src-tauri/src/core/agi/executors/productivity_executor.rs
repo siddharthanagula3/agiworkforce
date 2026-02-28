@@ -755,7 +755,7 @@ mod tests {
 
     #[test]
     fn test_default_impl() {
-        let executor = ProductivityExecutor::default();
+        let executor = ProductivityExecutor::new();
         assert_eq!(executor.tool_names().len(), 6);
     }
 

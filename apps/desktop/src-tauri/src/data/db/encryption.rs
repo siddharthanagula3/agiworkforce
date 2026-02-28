@@ -47,7 +47,9 @@ pub fn apply_encryption_key(conn: &Connection, key: &[u8]) -> Result<(), String>
     // [M24] Error message is redacted to avoid leaking the hex key into rusqlite
     // error logs or tracing output in the event of a failure.
     conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", hex_key))
-        .map_err(|_| "Failed to set database encryption key (key redacted from logs)".to_string())?;
+        .map_err(|_| {
+            "Failed to set database encryption key (key redacted from logs)".to_string()
+        })?;
 
     // Configure cipher page size for optimal security/performance balance
     conn.execute_batch("PRAGMA cipher_page_size = 4096;")
