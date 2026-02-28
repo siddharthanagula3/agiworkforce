@@ -388,23 +388,32 @@ export interface AIEmployeeBasic {
 }
 
 /**
- * AI employee for marketplace display
+ * AI agent for marketplace display
+ * All agents are freely available — no ownership or pricing model
  */
 export interface MarketplaceEmployee extends AIEmployeeBasic {
   category: string;
   provider: AIProvider;
-  price: number;
+  /** @deprecated Pricing removed — all agents are free to chat with */
+  price?: number;
+  /** @deprecated Pricing removed */
   originalPrice?: number;
+  /** @deprecated Pricing removed */
   yearlyPrice?: number;
   skills: string[];
   specialty: string;
   fitLevel?: 'excellent' | 'good' | 'fair';
   popular?: boolean;
   new?: boolean;
+  /** @deprecated Ownership model removed — all agents always available */
   isHired?: boolean;
+  /** @deprecated Ratings removed */
   rating?: number;
+  /** @deprecated Reviews removed */
   reviews?: number;
+  /** @deprecated Reviews removed */
   successRate?: number;
+  /** @deprecated Reviews removed */
   avgResponseTime?: string;
   examples?: string[];
   defaultTools?: string[];
