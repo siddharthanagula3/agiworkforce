@@ -2,7 +2,9 @@
 
 import { I18nextProvider } from 'react-i18next';
 import { useEffect, useState } from 'react';
+import { Toaster } from 'sonner';
 import i18n from './i18n';
+import { QueryProvider } from '@shared/stores/query-client';
 import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPaletteProvider';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -24,9 +26,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <I18nextProvider i18n={i18n}>
-      {children}
-      <CommandPaletteProvider />
-    </I18nextProvider>
+    <QueryProvider>
+      <I18nextProvider i18n={i18n}>
+        {children}
+        <CommandPaletteProvider />
+        <Toaster position="top-center" richColors closeButton />
+      </I18nextProvider>
+    </QueryProvider>
   );
 }

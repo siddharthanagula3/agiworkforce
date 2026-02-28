@@ -50,12 +50,17 @@ export function verifyCsrfToken(
     return false;
   }
 
-  const parts = token.split(':');
-  if (parts.length !== 3) {
+  // Parse from the right so sessionIds containing colons are handled correctly.
+  // timestamp is always a numeric string (no colons); signature is always hex (no colons).
+  // Only sessionId may contain colons, so we find the last two delimiters from the right.
+  const lastColon = token.lastIndexOf(':');
+  const secondLastColon = token.lastIndexOf(':', lastColon - 1);
+  if (lastColon === -1 || secondLastColon === -1 || secondLastColon === lastColon) {
     return false;
   }
-
-  const [tokenSessionId, timestamp, signature] = parts;
+  const tokenSessionId = token.slice(0, secondLastColon);
+  const timestamp = token.slice(secondLastColon + 1, lastColon);
+  const signature = token.slice(lastColon + 1);
 
   // Verify session ID matches
   if (tokenSessionId !== sessionId) {

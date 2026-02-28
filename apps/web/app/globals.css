@@ -396,3 +396,89 @@
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(75, 85, 99, 0.8);
 }
+
+/* =====================================================
+   AGI Dashboard Theme (agiagentautomation design tokens)
+   Scoped to dashboard + chat routes only.
+   Marketing pages (/, /pricing, /about, etc.) are NOT affected.
+   ===================================================== */
+.agi-dashboard-theme {
+  /* Surface colors */
+  --agi-bg: hsl(240, 10%, 3.9%);
+  --agi-fg: hsl(0, 0%, 98%);
+  --agi-surface: hsl(240, 9%, 6%);
+  --agi-surface-elevated: hsl(240, 8%, 9%);
+  --agi-surface-overlay: hsl(240, 7%, 12%);
+
+  /* Card */
+  --agi-card: hsl(240, 8%, 9%);
+  --agi-card-fg: hsl(0, 0%, 98%);
+
+  /* Borders & muted */
+  --agi-border: hsl(240, 6%, 15%);
+  --agi-muted: hsl(240, 6%, 15%);
+  --agi-muted-fg: hsl(240, 5%, 64.9%);
+  --agi-accent: hsl(240, 6%, 12%);
+  --agi-accent-fg: hsl(0, 0%, 98%);
+
+  /* Primary brand */
+  --agi-primary: hsl(200, 98%, 39%);
+  --agi-primary-fg: hsl(0, 0%, 98%);
+  --agi-primary-glow: hsl(200, 100%, 80%);
+  --agi-primary-muted: hsl(200, 50%, 20%);
+
+  /* Agent colors */
+  --agi-agent: hsl(280, 60%, 50%);
+  --agi-agent-fg: hsl(0, 0%, 98%);
+  --agi-agent-glow: hsl(280, 100%, 85%);
+
+  /* Workforce colors */
+  --agi-workforce: hsl(45, 93%, 47%);
+  --agi-workforce-fg: hsl(30, 10%, 9%);
+  --agi-workforce-glow: hsl(45, 100%, 85%);
+
+  /* State colors */
+  --agi-success: hsl(120, 60%, 50%);
+  --agi-error: hsl(0, 84%, 60%);
+  --agi-warning: hsl(38, 92%, 50%);
+
+  /* Glow shadows */
+  --agi-glow-primary: 0 4px 20px hsl(200 98% 39% / 0.25);
+  --agi-glow-agent: 0 4px 20px hsl(280 60% 50% / 0.25);
+  --agi-glow-workforce: 0 4px 20px hsl(45 93% 47% / 0.25);
+  --agi-glow-elevated: 0 8px 32px hsl(240 10% 3.9% / 0.8);
+
+  /* Override the shadcn/radix semantic HSL variables for dashboard */
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 8% 9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 8% 9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 200 98% 39%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 6% 15%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 6% 15%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 6% 12%;
+  --accent-foreground: 0 0% 98%;
+  --border: 240 6% 15%;
+  --input: 240 6% 15%;
+  --ring: 200 98% 39%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+
+  color-scheme: dark;
+  background-color: hsl(240, 10%, 3.9%);
+  color: hsl(0, 0%, 98%);
+}
+
+/* Dashboard-scoped scrollbar for the agi theme */
+.agi-dashboard-theme ::-webkit-scrollbar-thumb {
+  background: rgba(100, 110, 130, 0.4);
+}
+
+.agi-dashboard-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 110, 130, 0.7);
+}

@@ -12,11 +12,39 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 // Constants similar to Gemini CLI
 const PROMPT_COMPLETION_DEBOUNCE_MS = 250;
 const MIN_INPUT_LENGTH = 5;
+const PROMPT_COMPLETION_ERROR_COOLDOWN_MS = 30_000;
+const PROMPT_COMPLETION_RATE_LIMIT_MESSAGE = 'prompt completion is temporarily rate-limited';
+
+function parsePromptCompletionCooldownMs(errorMessage: string): number {
+  const retryAfterMatch = errorMessage.match(/retry after\s+(\d+(?:\.\d+)?)\s*seconds?/i);
+  if (retryAfterMatch) {
+    return Math.max(Math.ceil(Number(retryAfterMatch[1]) * 1000), 1000);
+  }
+
+  const retryAtMatch = errorMessage.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
+  if (retryAtMatch) {
+    const retryAt = Date.parse(retryAtMatch[0]);
+    if (Number.isFinite(retryAt)) {
+      return Math.max(retryAt - Date.now(), 1000);
+    }
+  }
+
+  return PROMPT_COMPLETION_ERROR_COOLDOWN_MS;
+}
+
+function isPromptCompletionRateLimited(errorMessage: string): boolean {
+  const errorLower = errorMessage.toLowerCase();
+  return (
+    errorLower.includes(PROMPT_COMPLETION_RATE_LIMIT_MESSAGE) ||
+    errorLower.includes('rate limit') ||
+    errorLower.includes('too many requests') ||
+    errorLower.includes('429')
+  );
+}
 
 export interface PromptCompletionState {
   /** The ghost text suggestion */
@@ -66,26 +94,29 @@ export function useApiPromptCompletion(
   });
 
   // Refs for managing async operations
-  // AUDIT-007-009: AbortController is kept for API consistency but Tauri invoke
-  // calls cannot actually be aborted. We use isMountedRef and request ID tracking
-  // to handle stale responses instead.
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputRef = useRef<string>('');
+  const cooldownUntilRef = useRef(0);
   // AUDIT-007-009 fix: Track mount state to prevent state updates after unmount
   const isMountedRef = useRef(true);
   // AUDIT-007-009 fix: Track current request ID to ignore stale responses
   const currentRequestIdRef = useRef(0);
 
+  const invalidatePendingRequest = useCallback(() => {
+    currentRequestIdRef.current += 1;
+  }, []);
+
   // Clear suggestion
   const clear = useCallback(() => {
+    invalidatePendingRequest();
     setState((prev) => ({
       ...prev,
       suggestion: '',
       error: null,
     }));
     onSuggestionChange?.('');
-  }, [onSuggestionChange]);
+  }, [invalidatePendingRequest, onSuggestionChange]);
 
   // Accept the current suggestion
   const accept = useCallback((): string => {
@@ -97,12 +128,11 @@ export function useApiPromptCompletion(
   // Fetch completion from API
   const fetchCompletion = useCallback(
     async (inputText: string) => {
-      // Cancel any in-flight request (signals intent, though Tauri invoke won't actually abort)
+      // Cancel any in-flight request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
 
-      // Create new abort controller for consistency with standard patterns
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
@@ -110,6 +140,17 @@ export function useApiPromptCompletion(
       // This allows us to ignore responses from stale requests
       currentRequestIdRef.current += 1;
       const thisRequestId = currentRequestIdRef.current;
+
+      if (cooldownUntilRef.current > Date.now()) {
+        setState((prev) => ({
+          ...prev,
+          suggestion: '',
+          isLoading: false,
+          error: null,
+        }));
+        onSuggestionChange?.('');
+        return;
+      }
 
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
@@ -119,14 +160,23 @@ export function useApiPromptCompletion(
           return;
         }
 
-        // AUDIT-007-009: Note that Tauri invoke cannot be aborted once started.
-        // We rely on checking isMountedRef and requestId after completion instead.
-        const response = await invoke<PromptCompletionResponse>('get_prompt_completion', {
-          request: {
+        // TODO: Implement /api/completion route in apps/web/app/api/completion/route.ts
+        // that proxies to the LLM router or handles prompt completion server-side.
+        const fetchResponse = await fetch('/api/completion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: abortController.signal,
+          body: JSON.stringify({
             input: inputText,
             context: context || null,
-          },
+          }),
         });
+
+        if (!fetchResponse.ok) {
+          throw new Error(`HTTP ${fetchResponse.status}: ${await fetchResponse.text()}`);
+        }
+
+        const response: PromptCompletionResponse = await fetchResponse.json();
 
         // AUDIT-007-009 fix: Check if component is still mounted
         if (!isMountedRef.current) {
@@ -157,6 +207,7 @@ export function useApiPromptCompletion(
           .replace(/^[\s,.:;]+/, '') // Remove leading punctuation
           .trim();
 
+        cooldownUntilRef.current = 0;
         setState({
           suggestion,
           isLoading: false,
@@ -192,6 +243,18 @@ export function useApiPromptCompletion(
             isLoading: false,
             error: null,
           }));
+          return;
+        }
+
+        if (isPromptCompletionRateLimited(errorMessage)) {
+          cooldownUntilRef.current = Date.now() + parsePromptCompletionCooldownMs(errorMessage);
+          setState((prev) => ({
+            ...prev,
+            suggestion: '',
+            isLoading: false,
+            error: null,
+          }));
+          onSuggestionChange?.('');
           return;
         }
 
@@ -247,11 +310,12 @@ export function useApiPromptCompletion(
     }, PROMPT_COMPLETION_DEBOUNCE_MS);
 
     return () => {
+      invalidatePendingRequest();
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [input, enabled, fetchCompletion, clear]);
+  }, [input, enabled, fetchCompletion, clear, invalidatePendingRequest]);
 
   // Cleanup on unmount
   useEffect(() => {
