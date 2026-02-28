@@ -941,6 +941,7 @@ export async function logInjectionAttempt(
 
     // Store in database for security analysis and audit trail
     // Note: Uses analytics_events table which should exist with proper RLS
+
     const { error } = await (supabase as any).from('analytics_events').insert({
       user_id: userId,
       event_type: 'security_incident',

@@ -172,6 +172,11 @@ export default function ChatSessionPage() {
     [deleteSession, sessionId, router],
   );
 
+  const processAIResponseRef = useRef(processAIResponse);
+  useEffect(() => {
+    processAIResponseRef.current = processAIResponse;
+  });
+
   const handleSend = useCallback(
     (content: string, _attachments?: File[], skillId?: string) => {
       if (!sessionId || !user?.id) return;
@@ -180,9 +185,9 @@ export default function ChatSessionPage() {
 
       // Get current messages for conversation history
       const currentMsgs = useChatStore.getState().messages[sessionId] || [];
-      processAIResponse(content, currentMsgs, skillId);
+      processAIResponseRef.current(content, currentMsgs, skillId);
     },
-    [sessionId, user?.id, addMessage, processAIResponse],
+    [sessionId, user?.id, addMessage],
   );
 
   const handleDeleteMessage = useCallback(
@@ -210,12 +215,21 @@ export default function ChatSessionPage() {
 
   return (
     <div className="relative flex h-full bg-background">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm sm:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Chat conversation sidebar */}
       <div
         className={cn(
           'border-r border-border/30 bg-card/30 backdrop-blur-sm transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'w-0 sm:w-72' : 'w-0',
-          'overflow-hidden',
+          sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 sm:relative sm:z-auto' : 'w-0',
+          !sidebarOpen && 'overflow-hidden',
         )}
       >
         {sidebarOpen && (
@@ -233,7 +247,7 @@ export default function ChatSessionPage() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
           aria-label="Open sidebar"
         >
           <Menu className="h-4 w-4" />

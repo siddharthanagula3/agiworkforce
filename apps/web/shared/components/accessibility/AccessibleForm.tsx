@@ -48,6 +48,7 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
       }
 
       // Call original onSubmit handler
+
       onSubmit?.(event as any);
     };
 

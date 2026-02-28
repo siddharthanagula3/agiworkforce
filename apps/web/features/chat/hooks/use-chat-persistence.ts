@@ -78,15 +78,15 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         throw new Error('Session not found');
       }
 
-      const sd = sessionData as any;
+      const sd = sessionData as Record<string, unknown>;
       const session: ChatSession = {
-        id: sd.id,
-        userId: sd.user_id,
-        title: sd.title ?? 'Untitled',
-        mode: ((sd as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-        createdAt: new Date(sd.created_at ?? Date.now()),
-        updatedAt: new Date(sd.updated_at ?? Date.now()),
-        metadata: (sd.metadata as unknown as ChatSession['metadata']) ?? {
+        id: sd.id as string,
+        userId: sd.user_id as string,
+        title: (sd.title as string) ?? 'Untitled',
+        mode: (sd.mode as ChatSession['mode']) || 'chat',
+        createdAt: new Date((sd.created_at as string) ?? Date.now()),
+        updatedAt: new Date((sd.updated_at as string) ?? Date.now()),
+        metadata: (sd.metadata as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
@@ -107,12 +107,10 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       // Restore messages to mission store
       if (messagesData && messagesData.length > 0) {
         const restoredMessages = messagesData.map((rawMsg) => {
-          const msg = rawMsg as any;
-          const md = (msg as Record<string, unknown>).metadata as
-            | Record<string, unknown>
-            | undefined;
+          const msg = rawMsg as Record<string, unknown>;
+          const md = msg.metadata as Record<string, unknown> | undefined;
           return {
-            id: msg.id,
+            id: msg.id as string,
             from: (md?.from as string) || (msg.role === 'user' ? 'user' : 'assistant'),
             type:
               (md?.type as string) ||
@@ -126,8 +124,8 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
                 | 'task_update'
                 | 'plan'
                 | 'error'),
-            content: msg.content,
-            timestamp: new Date(msg.created_at ?? Date.now()),
+            content: msg.content as string,
+            timestamp: new Date((msg.created_at as string) ?? Date.now()),
             metadata: md || {},
           };
         });
@@ -241,21 +239,21 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
                 lastActivity: new Date().toISOString(),
               },
             },
-          ] as any)
+          ] as never)
           .select()
           .single();
 
         if (createError) throw createError;
 
-        const d = data as any;
+        const d = data as Record<string, unknown>;
         const newSession: ChatSession = {
-          id: d.id,
-          userId: d.user_id,
-          title: d.title ?? 'Untitled',
-          mode: ((d as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-          createdAt: new Date(d.created_at ?? Date.now()),
-          updatedAt: new Date(d.updated_at ?? Date.now()),
-          metadata: (d.metadata as unknown as ChatSession['metadata']) ?? {
+          id: d.id as string,
+          userId: d.user_id as string,
+          title: (d.title as string) ?? 'Untitled',
+          mode: (d.mode as ChatSession['mode']) || 'chat',
+          createdAt: new Date((d.created_at as string) ?? Date.now()),
+          updatedAt: new Date((d.updated_at as string) ?? Date.now()),
+          metadata: (d.metadata as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -265,7 +263,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         setCurrentSession(newSession);
         toast.success('Chat session created');
 
-        return d.id;
+        return d.id as string;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create session';
         setError(errorMsg);
@@ -354,16 +352,15 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (error) throw error;
 
       return data.map((rawSession) => {
-        const session = rawSession as any;
+        const session = rawSession as Record<string, unknown>;
         return {
-          id: session.id,
-          userId: session.user_id,
-          title: session.title ?? 'Untitled',
-          mode:
-            ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-          createdAt: new Date(session.created_at ?? Date.now()),
-          updatedAt: new Date(session.updated_at ?? Date.now()),
-          metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
+          id: session.id as string,
+          userId: session.user_id as string,
+          title: (session.title as string) ?? 'Untitled',
+          mode: (session.mode as ChatSession['mode']) || 'chat',
+          createdAt: new Date((session.created_at as string) ?? Date.now()),
+          updatedAt: new Date((session.updated_at as string) ?? Date.now()),
+          metadata: (session.metadata as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -389,16 +386,15 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (error) throw error;
 
       return data.map((rawSession) => {
-        const session = rawSession as any;
+        const session = rawSession as Record<string, unknown>;
         return {
-          id: session.id,
-          userId: session.user_id,
-          title: session.title ?? 'Untitled',
-          mode:
-            ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-          createdAt: new Date(session.created_at ?? Date.now()),
-          updatedAt: new Date(session.updated_at ?? Date.now()),
-          metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
+          id: session.id as string,
+          userId: session.user_id as string,
+          title: (session.title as string) ?? 'Untitled',
+          mode: (session.mode as ChatSession['mode']) || 'chat',
+          createdAt: new Date((session.created_at as string) ?? Date.now()),
+          updatedAt: new Date((session.updated_at as string) ?? Date.now()),
+          metadata: (session.metadata as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),

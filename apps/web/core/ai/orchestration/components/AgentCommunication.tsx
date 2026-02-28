@@ -346,7 +346,7 @@ export const AgentCommunication: React.FC<AgentCommunicationProps> = ({ agentId,
                             <div className="flex items-center space-x-2">
                               {getStatusIcon(message.status)}
                               <span className="text-xs text-muted-foreground">
-                                {formatTimestamp(message.createdAt as any)}
+                                {formatTimestamp(message.createdAt as unknown as Date)}
                               </span>
                             </div>
                           </div>

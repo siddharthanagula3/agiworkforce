@@ -324,6 +324,7 @@ export const useComponentPerformance = (componentName: string) => {
 
     if (renderTime > 16) {
       // Log slow renders (> 16ms)
+
       monitoringService.trackPerformance({ slowRender: renderTime } as any);
     }
 

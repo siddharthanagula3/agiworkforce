@@ -8,7 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.ts'],
-    include: ['**/__tests__/**/*.{test,spec}.{ts,tsx}', '!e2e/**', '!.next/**'],
+    include: ['**/*.{test,spec}.{ts,tsx}', '!e2e/**', '!.next/**'],
     exclude: ['node_modules/', '.next/', 'e2e/', 'dist/', 'playwright.config.ts'],
     coverage: {
       provider: 'v8',
@@ -29,6 +29,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      '@shared': path.resolve(__dirname, './shared'),
+      '@core': path.resolve(__dirname, './core'),
+      '@features': path.resolve(__dirname, './features'),
     },
   },
 });
