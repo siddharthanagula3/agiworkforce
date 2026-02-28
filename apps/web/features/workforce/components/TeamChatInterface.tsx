@@ -18,10 +18,39 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react';
-import {
-  executeWorkforce,
-  type WorkforceResponse,
-} from '@core/ai/orchestration/workforce-orchestrator';
+// Workforce response type (local stub — no longer depends on workforce-orchestrator)
+interface WorkforceResponse {
+  success: boolean;
+  error?: string;
+  chatResponse?: string;
+  missionId?: string;
+  plan?: unknown[];
+}
+
+// Skills-based model: execute via direct API call instead of workforce orchestrator
+async function executeWorkforce(userId: string, input: string): Promise<WorkforceResponse> {
+  try {
+    const response = await fetch('/api/llm/completion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, input, mode: 'mission' }),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `API request failed: ${response.statusText}` };
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      chatResponse: data.response || data.chatResponse || 'Request processed.',
+      missionId: data.missionId,
+      plan: data.plan,
+    };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
 
 // Use a unified Task type compatible with both mission-control and task-breakdown
 interface Task {
