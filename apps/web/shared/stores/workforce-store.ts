@@ -13,20 +13,13 @@ export interface HiredEmployee {
   id: string;
   user_id: string;
   employee_id: string;
-  name: string;
-  role: string;
-  provider: string;
-  is_active: boolean;
-  purchased_at: string;
-  created_at: string;
-  updated_at: string;
+  employee_name: string | null;
+  hired_at: string | null;
 }
 
 export interface HireEmployeeParams {
   employee_id: string;
-  name: string;
-  role: string;
-  provider: string;
+  employee_name: string;
 }
 
 export interface WorkforceState {
@@ -64,11 +57,10 @@ export const useWorkforceStore = create<WorkforceState>()(
 
         try {
           const { data, error } = await supabase
-            .from('purchased_employees')
+            .from('hired_employees')
             .select('*')
             .eq('user_id', user.id)
-            .eq('is_active', true)
-            .order('purchased_at', { ascending: false });
+            .order('hired_at', { ascending: false });
 
           if (error) {
             console.error('[WorkforceStore] Error fetching hired employees:', error);
@@ -76,7 +68,7 @@ export const useWorkforceStore = create<WorkforceState>()(
             return;
           }
 
-          set({ hiredEmployees: data || [], isLoading: false });
+          set({ hiredEmployees: (data as HiredEmployee[]) || [], isLoading: false });
         } catch (error) {
           console.error('[WorkforceStore] Unexpected error:', error);
           set({
@@ -106,18 +98,13 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const now = new Date().toISOString();
           const { data, error } = await supabase
-            .from('purchased_employees')
+            .from('hired_employees')
             .upsert(
               {
                 user_id: user.id,
                 employee_id: params.employee_id,
-                name: params.name,
-                role: params.role,
-                provider: params.provider,
-                is_active: true,
-                purchased_at: now,
+                employee_name: params.employee_name,
               },
               { onConflict: 'user_id,employee_id' },
             )
@@ -131,21 +118,24 @@ export const useWorkforceStore = create<WorkforceState>()(
           }
 
           if (data) {
+            const hired = data as unknown as HiredEmployee;
             // Add to local state (real-time subscription might also do this, but better to be responsive)
             const exists = get().hiredEmployees.some(
               (emp) => emp.employee_id === params.employee_id,
             );
             if (!exists) {
               set((state) => ({
-                hiredEmployees: [data as HiredEmployee, ...state.hiredEmployees],
+                hiredEmployees: [hired, ...state.hiredEmployees],
                 isLoading: false,
               }));
             } else {
               set({ isLoading: false });
             }
+            return hired;
           }
 
-          return data as HiredEmployee;
+          set({ isLoading: false });
+          return null;
         } catch (error) {
           console.error('[WorkforceStore] Unexpected error hiring employee:', error);
           set({
@@ -177,8 +167,8 @@ export const useWorkforceStore = create<WorkforceState>()(
 
         try {
           const { error } = await supabase
-            .from('purchased_employees')
-            .update({ is_active: false })
+            .from('hired_employees')
+            .delete()
             .eq('user_id', user.id)
             .eq('employee_id', employeeId);
 
@@ -255,7 +245,7 @@ export const setupWorkforceSubscription = () => {
       {
         event: '*',
         schema: 'public',
-        table: 'purchased_employees',
+        table: 'hired_employees',
         filter: `user_id=eq.${user.id}`,
       },
       (payload) => {

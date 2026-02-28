@@ -40,7 +40,7 @@ vi.mock('@shared/lib/supabase-client', () => ({
             maybeSingle: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
           })),
         })),
-        update: vi.fn(() => ({
+        delete: vi.fn(() => ({
           eq: vi.fn(() => ({
             eq: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
           })),
@@ -65,13 +65,8 @@ describe('Workforce Store', () => {
     id: 'emp-1',
     user_id: 'test-user-123',
     employee_id: 'code-reviewer',
-    name: 'Code Reviewer',
-    role: 'reviewer',
-    provider: 'anthropic',
-    is_active: true,
-    purchased_at: '2025-01-01T00:00:00Z',
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-01T00:00:00Z',
+    employee_name: 'Code Reviewer',
+    hired_at: '2025-01-01T00:00:00Z',
   };
 
   beforeEach(() => {
@@ -115,7 +110,7 @@ describe('Workforce Store', () => {
 
       const state = useWorkforceStore.getState();
       expect(state.hiredEmployees).toHaveLength(1);
-      expect(state.hiredEmployees[0].name).toBe('Code Reviewer');
+      expect(state.hiredEmployees[0].employee_name).toBe('Code Reviewer');
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
     });
@@ -177,15 +172,15 @@ describe('Workforce Store', () => {
     });
 
     it('should add employee at the beginning of the list', () => {
-      const employee1 = { ...mockEmployee, id: 'emp-1', name: 'Employee 1' };
-      const employee2 = { ...mockEmployee, id: 'emp-2', name: 'Employee 2' };
+      const employee1 = { ...mockEmployee, id: 'emp-1', employee_name: 'Employee 1' };
+      const employee2 = { ...mockEmployee, id: 'emp-2', employee_name: 'Employee 2' };
 
       useWorkforceStore.getState().addHiredEmployee(employee1);
       useWorkforceStore.getState().addHiredEmployee(employee2);
 
       const state = useWorkforceStore.getState();
-      expect(state.hiredEmployees[0].name).toBe('Employee 2');
-      expect(state.hiredEmployees[1].name).toBe('Employee 1');
+      expect(state.hiredEmployees[0].employee_name).toBe('Employee 2');
+      expect(state.hiredEmployees[1].employee_name).toBe('Employee 1');
     });
   });
 
@@ -193,9 +188,7 @@ describe('Workforce Store', () => {
     it('should hire employee successfully', async () => {
       const params = {
         employee_id: 'new-employee',
-        name: 'New Employee',
-        role: 'developer',
-        provider: 'openai',
+        employee_name: 'New Employee',
       };
 
       const hiredEmployee = {
@@ -220,9 +213,7 @@ describe('Workforce Store', () => {
 
       const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'emp-1',
-        name: 'Employee',
-        role: 'developer',
-        provider: 'openai',
+        employee_name: 'Employee',
       });
 
       expect(result).toBeNull();
@@ -245,9 +236,7 @@ describe('Workforce Store', () => {
 
       await useWorkforceStore.getState().hireEmployee({
         employee_id: 'existing-employee',
-        name: 'Employee',
-        role: 'developer',
-        provider: 'openai',
+        employee_name: 'Employee',
       });
 
       const state = useWorkforceStore.getState();
@@ -263,9 +252,7 @@ describe('Workforce Store', () => {
 
       const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'emp-1',
-        name: 'Employee',
-        role: 'developer',
-        provider: 'openai',
+        employee_name: 'Employee',
       });
 
       expect(result).toBeNull();
@@ -395,9 +382,7 @@ describe('Workforce Store', () => {
 
       const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'emp-1',
-        name: 'Employee',
-        role: 'developer',
-        provider: 'openai',
+        employee_name: 'Employee',
       });
 
       expect(result).toBeNull();
@@ -423,7 +408,7 @@ describe('Workforce Store', () => {
         ...mockEmployee,
         id: `emp-${i}`,
         employee_id: `employee-${i}`,
-        name: `Employee ${i}`,
+        employee_name: `Employee ${i}`,
       }));
 
       mockSupabaseResponse = { data: largeList, error: null };
