@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { Send, Bot, Paperclip, Mic, CornerDownLeft } from 'lucide-react';
+import { Bot, Paperclip, Mic, CornerDownLeft } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { ChatBubble, ChatBubbleAvatar, ChatBubbleMessage } from '@shared/ui/chat-bubble';
 import { ChatInput } from '@shared/ui/chat-input';

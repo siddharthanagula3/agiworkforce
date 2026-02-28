@@ -30,7 +30,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Search className="h-4 w-4" />
         <span className="font-medium">Search results for:</span>
-        <span className="font-semibold text-foreground">"{query}"</span>
+        <span className="font-semibold text-foreground">&quot;{query}&quot;</span>
         {timestamp && (
           <div className="ml-auto flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -94,7 +94,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         <Card className="p-6 text-center">
           <Search className="mx-auto h-12 w-12 text-muted-foreground/30" />
           <p className="mt-4 text-sm text-muted-foreground">
-            No search results found for "{query}"
+            No search results found for &quot;{query}&quot;
           </p>
         </Card>
       )}

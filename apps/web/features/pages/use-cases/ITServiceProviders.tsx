@@ -1,20 +1,12 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { motion, useInView } from 'framer-motion';
-import {
-  Server,
-  Shield,
-  Zap,
-  Clock,
-  CheckCircle2,
-  ArrowRight,
-  AlertTriangle,
-  BarChart3,
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Server, Shield, Clock, CheckCircle2, ArrowRight, BarChart3 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const ITServiceProvidersPage: React.FC = () => {
   const router = useRouter();
@@ -144,10 +136,12 @@ const ITServiceProvidersPage: React.FC = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&h=600&fit=crop"
                 alt="IT professionals managing server infrastructure and network operations"
                 className="rounded-3xl"
+                width={800}
+                height={600}
               />
             </motion.div>
           </div>

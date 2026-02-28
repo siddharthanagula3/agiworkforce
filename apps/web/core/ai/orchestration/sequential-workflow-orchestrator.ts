@@ -363,7 +363,7 @@ export class SequentialWorkflowOrchestrator {
 
       try {
         // Get employee's context window
-        const contextWindow = employeeMemoryService.getContextWindow(
+        const _contextWindow = employeeMemoryService.getContextWindow(
           request.sessionId,
           employee.name,
           employee.name,
@@ -629,7 +629,7 @@ export class SequentialWorkflowOrchestrator {
     response: string,
   ): Promise<void> {
     // Extract key information to remember
-    const learningPrompt = `Analyze this interaction and extract 1-2 key facts about the user that would be helpful to remember for future interactions.
+    const _learningPrompt = `Analyze this interaction and extract 1-2 key facts about the user that would be helpful to remember for future interactions.
 
 User said: "${userInput.slice(0, 500)}"
 

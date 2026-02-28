@@ -17,7 +17,6 @@ import {
 } from '@shared/ui/command';
 import { Badge } from '@shared/ui/badge';
 import { Avatar } from '@shared/ui/avatar';
-import { cn } from '@shared/lib/utils';
 
 export interface AgentSelectorProps {
   employees: AIEmployee[];

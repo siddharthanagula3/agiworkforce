@@ -7,7 +7,6 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
-import { realtimeService } from '../services/realtimeService';
 
 export interface Message {
   id: string;

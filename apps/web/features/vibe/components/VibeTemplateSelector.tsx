@@ -82,7 +82,7 @@ export function VibeTemplateSelector({
               currentPath += '/' + pathParts[i];
               try {
                 vibeFileSystem.createFolder(currentPath);
-              } catch (error) {
+              } catch (_error) {
                 // Folder might already exist, ignore
               }
             }

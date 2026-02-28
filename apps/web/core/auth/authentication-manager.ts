@@ -94,7 +94,7 @@ class AuthService {
       if (message?.includes('timeout')) {
         try {
           await supabase.auth.signOut();
-        } catch (e) {
+        } catch (_e) {
           // Ignore signout errors
         }
       }

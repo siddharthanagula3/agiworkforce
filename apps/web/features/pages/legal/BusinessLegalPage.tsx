@@ -22,10 +22,8 @@ import {
   Award,
   BookOpen,
   Download,
-  Upload,
   Eye,
   Edit,
-  Save,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -61,7 +59,7 @@ export const BusinessLegalPage: React.FC<BusinessLegalPageProps> = ({ className 
   const [activeTab, setActiveTab] = useState<'o1-visa' | 'legal' | 'business' | 'compliance'>(
     'o1-visa',
   );
-  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [_selectedDocument, _setSelectedDocument] = useState<string | null>(null);
 
   // Data is loaded dynamically; removed mock placeholders
   const o1Documents: O1VisaDocument[] = [
@@ -176,7 +174,7 @@ export const BusinessLegalPage: React.FC<BusinessLegalPageProps> = ({ className 
     },
   ];
 
-  const getStatusIcon = (status: string) => {
+  const _getStatusIcon = (status: string) => {
     switch (status) {
       case 'approved':
       case 'filed':

@@ -11,10 +11,9 @@
  */
 
 import type {
-  ToolCall as CanonicalToolCall,
-  Attachment as CanonicalAttachment,
-  ApiResponse,
-  PaginatedResponse as CanonicalPaginatedResponse,
+  ToolCall as _CanonicalToolCall,
+  Attachment as _CanonicalAttachment,
+  PaginatedResponse as _CanonicalPaginatedResponse,
 } from './common';
 
 export type EmployeeCategory =

@@ -64,7 +64,6 @@ export function useFileUpload(): UseFileUploadReturn {
     files: fileMap,
     selectedFileIds,
     uploadProgress,
-    addFile,
     removeFile: removeFileFromStore,
     selectFile: selectFileInStore,
     deselectFile: deselectFileInStore,
@@ -161,7 +160,7 @@ export function useFileUpload(): UseFileUploadReturn {
         // Upload to Supabase Storage
         const filePath = `vibe/${userId}/${sessionId}/${fileId}-${file.name}`;
 
-        const { data, error: uploadError } = await supabase.storage
+        const { data: _data, error: uploadError } = await supabase.storage
           .from('vibe-files')
           .upload(filePath, file, {
             cacheControl: '3600',

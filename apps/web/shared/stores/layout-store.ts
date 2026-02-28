@@ -127,7 +127,7 @@ const enableDevtools = process.env.NODE_ENV !== 'production';
 export const useUIStore = create<UIStore>()(
   devtools(
     persist(
-      immer((set, get) => ({
+      immer((set, _get) => ({
         ...INITIAL_STATE,
 
         // Sidebar actions

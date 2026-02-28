@@ -81,7 +81,11 @@ export interface UseVibeChatReturn {
  * ```
  */
 export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
-  const { employees, sessionId: initialSessionId, enableAutoSave = true } = options;
+  const {
+    employees,
+    sessionId: initialSessionId,
+    enableAutoSave: _enableAutoSave = true,
+  } = options;
 
   // Chat store
   const {
@@ -108,7 +112,7 @@ export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
   // Hooks
   const streaming = useStreamingResponse();
   const agentSelection = useAgentSelection();
-  const fileUpload = useFileUpload();
+  const _fileUpload = useFileUpload();
 
   const [error, setError] = useState<string | null>(null);
   const lastMessageRef = useRef<VibeMessage | null>(null);
@@ -298,7 +302,7 @@ export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
       .findIndex((m) => m.role === 'assistant');
 
     if (lastAssistantIndex !== -1) {
-      const messageId = messages[messages.length - 1 - lastAssistantIndex].id;
+      const _messageId = messages[messages.length - 1 - lastAssistantIndex].id;
       // In a real implementation, we'd delete from the store
       // For now, just resend
     }

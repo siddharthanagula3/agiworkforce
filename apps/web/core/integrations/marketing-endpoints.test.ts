@@ -340,7 +340,7 @@ describe('Marketing Endpoints', () => {
 
     it('should not filter when type is "All"', async () => {
       const eqCalls: Array<[string, unknown]> = [];
-      const createQueryBuilder = (finalData: unknown) => {
+      const createQueryBuilder = (_finalData: unknown) => {
         const builder: Record<string, ReturnType<typeof vi.fn>> = {};
         builder.select = vi.fn().mockReturnValue(builder);
         builder.eq = vi.fn().mockImplementation((col, val) => {

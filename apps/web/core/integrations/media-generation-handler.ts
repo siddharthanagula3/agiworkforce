@@ -6,7 +6,7 @@
 
 import {
   googleImagenService,
-  type ImagenGenerationRequest as GoogleImagenRequest,
+  type ImagenGenerationRequest as _GoogleImagenRequest,
   type ImagenGenerationResponse,
 } from './google-imagen-service';
 import {
@@ -17,7 +17,7 @@ import {
 import {
   dallEImageService,
   type DallEGenerationRequest,
-  type ImageGenerationResult as DallEImageResult,
+  type ImageGenerationResult as _DallEImageResult,
 } from './dalle-image-service';
 
 export interface ImageGenerationRequest {
@@ -90,7 +90,7 @@ export interface MediaGenerationStats {
  * All API calls route through authenticated proxies to keep keys secure.
  * Client-side code no longer has access to API keys.
  */
-const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+const _IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export class MediaGenerationService {
   private static instance: MediaGenerationService;

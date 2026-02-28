@@ -10,17 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
-import {
-  Code,
-  Key,
-  Globe,
-  FileText,
-  BookOpen,
-  ExternalLink,
-  Copy,
-  CheckCircle2,
-  AlertCircle,
-} from 'lucide-react';
+import { Code, Key, BookOpen, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
 import { SEOHead } from '@shared/components/seo/SEOHead';
 import { toast } from 'sonner';
 

@@ -102,8 +102,8 @@ export const CookieConsent = () => {
                       <h3 className="mb-1 font-semibold">We Value Your Privacy</h3>
                       <p className="text-sm text-muted-foreground">
                         We use cookies to enhance your browsing experience, provide personalized
-                        content, and analyze our traffic. By clicking "Accept All", you consent to
-                        our use of cookies.
+                        content, and analyze our traffic. By clicking &quot;Accept All&quot;, you
+                        consent to our use of cookies.
                       </p>
                     </div>
                   </div>

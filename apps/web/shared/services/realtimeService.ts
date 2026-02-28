@@ -76,7 +76,7 @@ class RealtimeServiceImpl implements RealtimeService {
    * Disconnect from all channels
    */
   disconnect(): void {
-    this.channels.forEach((channel, name) => {
+    this.channels.forEach((channel, _name) => {
       supabase.removeChannel(channel);
     });
     this.channels.clear();

@@ -7,10 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAgentMetricsStore } from './agent-metrics-store';
-import type {
-  AgentStatus,
-  AgentCommunication,
-} from '@core/ai/orchestration/agent-collaboration-manager';
+import type { AgentStatus } from '@core/ai/orchestration/agent-collaboration-manager';
 
 describe('Agent Metrics Store', () => {
   beforeEach(() => {

@@ -53,16 +53,13 @@ interface ConversationListItemProps {
 }
 
 export const ConversationListItem = memo(function ConversationListItem({
-  id,
   title,
-  summary,
   updatedAt,
-  totalMessages,
   isActive,
   isStarred,
   isPinned,
   isArchived,
-  tags = [],
+  tags: _tags = [],
   onClick,
   onRename,
   onDelete,
@@ -260,7 +257,7 @@ export const ConversationListItem = memo(function ConversationListItem({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{title}" and all its messages.
+              This will permanently delete &quot;{title}&quot; and all its messages.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

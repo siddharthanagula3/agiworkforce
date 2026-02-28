@@ -1,21 +1,12 @@
 import React, { useRef } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion, useInView } from 'framer-motion';
-import {
-  Rocket,
-  Zap,
-  TrendingUp,
-  Users,
-  DollarSign,
-  Clock,
-  CheckCircle2,
-  ArrowRight,
-} from 'lucide-react';
+import { Rocket, Zap, TrendingUp, Users, DollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
-import { BentoGrid, BentoCard } from '@shared/ui/bento-grid';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const StartupsPage: React.FC = () => {
   const router = useRouter();
@@ -203,10 +194,12 @@ const StartupsPage: React.FC = () => {
               className="relative"
             >
               <div className="relative overflow-hidden rounded-3xl border border-border/40 bg-gradient-to-br from-primary/20 via-accent/20 to-secondary/20 p-8 backdrop-blur-xl">
-                <img
+                <Image
                   src="https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop"
                   alt="Startup team"
                   className="h-auto w-full max-w-full rounded-2xl"
+                  width={800}
+                  height={600}
                 />
               </div>
             </motion.div>
@@ -277,7 +270,7 @@ const StartupsPage: React.FC = () => {
               AI for Every Stage of Your Journey
             </h2>
             <p className="mx-auto max-w-2xl text-xl text-muted-foreground">
-              Whether you're validating your idea or scaling to Series B, we have you covered
+              Whether you&apos;re validating your idea or scaling to Series B, we have you covered
             </p>
           </motion.div>
 
@@ -425,7 +418,7 @@ const TestimonialCard: React.FC<{ testimonial: any }> = ({ testimonial }) => {
       transition={{ duration: 0.6 }}
       className="relative overflow-hidden rounded-3xl border border-border/40 bg-background/60 p-6 backdrop-blur-xl sm:p-8 md:p-12"
     >
-      <div className="mb-6 text-4xl opacity-20">"</div>
+      <div className="mb-6 text-4xl opacity-20">&quot;</div>
       <p className="mb-8 text-2xl font-medium leading-relaxed">{testimonial.quote}</p>
       <div className="flex flex-wrap items-center justify-between gap-6">
         <div className="flex items-center gap-4">

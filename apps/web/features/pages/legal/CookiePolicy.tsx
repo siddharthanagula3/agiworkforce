@@ -2,7 +2,7 @@ import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
 import { Badge } from '@shared/ui/badge';
-import { Cookie, Settings, BarChart3, Shield } from 'lucide-react';
+import { Cookie, Settings, Shield } from 'lucide-react';
 
 const CookiePolicyPage: React.FC = () => {
   return (
@@ -112,7 +112,8 @@ const CookiePolicyPage: React.FC = () => {
                 <p className="leading-relaxed text-muted-foreground">
                   You can control cookies through your browser settings. Note that disabling
                   essential cookies may affect platform functionality. Most browsers allow you to
-                  refuse cookies or delete them. Visit your browser's help section for instructions.
+                  refuse cookies or delete them. Visit your browser&apos;s help section for
+                  instructions.
                 </p>
               </div>
             </div>

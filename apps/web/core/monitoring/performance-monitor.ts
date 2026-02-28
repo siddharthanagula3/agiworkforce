@@ -148,7 +148,14 @@ class PerformanceService {
       placeholder?: string;
     } = {},
   ): string {
-    const { width, height, quality = 80, format = 'webp', lazy = true, placeholder } = options;
+    const {
+      width,
+      height,
+      quality = 80,
+      format = 'webp',
+      lazy: _lazy = true,
+      placeholder: _placeholder,
+    } = options;
 
     // Check if we have a cached optimized version
     const cacheKey = `${src}-${width}-${height}-${quality}-${format}`;

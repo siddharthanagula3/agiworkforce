@@ -629,7 +629,7 @@ class MultiAgentOrchestrator {
   private createTasks(
     userRequest: string,
     requiredAgents: string[],
-    complexity: OrchestrationPlan['complexity'],
+    _complexity: OrchestrationPlan['complexity'],
   ): AgentTask[] {
     const tasks: AgentTask[] = [];
     let taskId = 1;

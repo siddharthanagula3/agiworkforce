@@ -52,7 +52,6 @@ interface BranchNavigatorProps {
 
 export function BranchNavigator({
   sessionId,
-  userId,
   onNavigateToBranch,
   className,
 }: BranchNavigatorProps) {

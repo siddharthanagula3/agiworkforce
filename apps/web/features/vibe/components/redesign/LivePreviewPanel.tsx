@@ -26,10 +26,7 @@ import {
   RefreshCw,
   ExternalLink,
   Loader2,
-  AlertCircle,
   Terminal,
-  ChevronDown,
-  ChevronUp,
   X,
   Hammer,
   Sparkles,
@@ -40,7 +37,7 @@ import { useVibeViewStore } from '../../stores/vibe-view-store';
 import { vibeFileSystem } from '@features/vibe/services/vibe-file-system';
 import { toast } from 'sonner';
 import { SandpackPreviewPanel } from './SandpackPreviewPanel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 
 // Build service API endpoint
@@ -234,9 +231,9 @@ function LivePreviewPanelContent({ defaultMode = 'sandpack' }: LivePreviewPanelP
   const [showConsole, setShowConsole] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<ConsoleMessage[]>([]);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
-  const [autoPreview, setAutoPreview] = useState(true);
+  const [autoPreview, _setAutoPreview] = useState(true);
   const [projectType, setProjectType] = useState<'react' | 'typescript' | 'html'>('html');
-  const [lastBuildTime, setLastBuildTime] = useState<number | null>(null);
+  const [_lastBuildTime, setLastBuildTime] = useState<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // Track refresh timeout for cleanup - must be declared before any early returns
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

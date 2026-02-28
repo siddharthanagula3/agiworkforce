@@ -16,7 +16,6 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useWorkforceStore } from '@shared/stores/workforce-store';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 import { useVibeChatStore } from '../stores/vibe-chat-store';
-import { useVibeViewStore } from '../stores/vibe-view-store';
 import { VibeLayout } from '../layouts/VibeLayout';
 import { SimpleChatPanel } from '../components/redesign/SimpleChatPanel';
 import { CodeEditorPanel } from '../components/redesign/CodeEditorPanel';
@@ -182,12 +181,11 @@ const VibeDashboard: React.FC = () => {
     session: orchestratorSession,
     initSession,
     processEvent,
-    updatePhase,
-    reset: resetOrchestrator,
+    reset: _resetOrchestrator,
   } = useVibeOrchestrator();
 
   const [activeAgent, setActiveAgent] = useState<AgentStatus | null>(null);
-  const [workingSteps, setWorkingSteps] = useState<WorkingStep[]>([]);
+  const [_workingSteps, setWorkingSteps] = useState<WorkingStep[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
