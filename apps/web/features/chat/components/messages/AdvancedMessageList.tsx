@@ -12,9 +12,9 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-// react-window v2 has different types; using any for interop
+// react-window v2 has different types; using dynamic import interop
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { List } = require('react-window') as { List: any };
+const { List } = require('react-window') as { List: React.ComponentType<Record<string, unknown>> };
 import { cn } from '@shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/components/ui/avatar';
 import { Badge } from '@shared/components/ui/badge';

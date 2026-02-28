@@ -116,6 +116,7 @@ export const MarketplacePublicPage: React.FC = () => {
       }
 
       // Transform database employees to marketplace format
+
       return (data || []).map((dbEmp: any): AIEmployee => {
         const cost = dbEmp.cost || { monthly: 0, yearly: 0 };
         const monthlyPrice = typeof cost === 'object' && cost.monthly ? cost.monthly : 0;

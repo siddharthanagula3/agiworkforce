@@ -81,7 +81,7 @@ class MessageReactionsService {
         user_id: userId,
         message_id: messageId,
         emoji,
-      } as any)
+      } as never)
       .select()
       .single();
 
@@ -149,10 +149,10 @@ class MessageReactionsService {
    */
   async getReactions(messageId: string): Promise<ReactionSummary[]> {
     const { data, error } = await supabase.rpc(
-      'get_message_reactions' as any,
+      'get_message_reactions' as never,
       {
         message_ids: [messageId],
-      } as any,
+      } as never,
     );
 
     if (error) {
@@ -160,7 +160,7 @@ class MessageReactionsService {
       throw new Error(`Failed to get reactions: ${error.message}`);
     }
 
-    return ((data || []) as any[])
+    return ((data || []) as DBAggregatedReaction[])
       .filter((r: DBAggregatedReaction) => r.message_id === messageId)
       .map((r: DBAggregatedReaction) => ({
         emoji: r.emoji,
@@ -179,10 +179,10 @@ class MessageReactionsService {
     }
 
     const { data, error } = await supabase.rpc(
-      'get_message_reactions' as any,
+      'get_message_reactions' as never,
       {
         message_ids: messageIds,
-      } as any,
+      } as never,
     );
 
     if (error) {
@@ -193,7 +193,7 @@ class MessageReactionsService {
     // Group reactions by message_id
     const reactionsMap = new Map<string, ReactionSummary[]>();
 
-    for (const row of (data || []) as any[]) {
+    for (const row of (data || []) as DBAggregatedReaction[]) {
       const r = row as DBAggregatedReaction;
       const existing = reactionsMap.get(r.message_id) || [];
       existing.push({
@@ -243,7 +243,7 @@ class MessageReactionsService {
       return [];
     }
 
-    return (data || []).map((r: any) => r.emoji);
+    return (data || []).map((r: { emoji: string }) => r.emoji);
   }
 
   /**

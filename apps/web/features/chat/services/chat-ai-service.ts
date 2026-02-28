@@ -1,10 +1,11 @@
 /**
  * Chat AI Service
- * Bridges the chat UI to the AI backend (workforce orchestrator + skill routing).
+ * Bridges the chat UI to the real /api/llm/completion backend with SSE streaming.
  * Provides methods for sending messages, listing skills, and auto-detecting skills.
  */
 
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
+import { createClient } from '@/utils/supabase/client';
+import { useModelStore } from '@shared/stores/model-store';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import {
   IntelligentAgentRouter,
@@ -71,10 +72,57 @@ function getCategoryForSkill(skillId: string): string {
   return 'General';
 }
 
+/**
+ * Get the Supabase auth token for API calls
+ */
+async function getAuthToken(): Promise<string> {
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Not authenticated. Please sign in to continue.');
+  }
+  return session.access_token;
+}
+
+/**
+ * Parse an SSE line and extract content delta.
+ * Handles OpenAI-compatible format: data: {"choices":[{"delta":{"content":"..."}}]}
+ */
+function extractContentFromSSE(line: string): string | null {
+  if (!line.startsWith('data: ')) return null;
+  const jsonStr = line.slice(6).trim();
+  if (jsonStr === '[DONE]') return null;
+
+  try {
+    const event = JSON.parse(jsonStr) as {
+      choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+      type?: string;
+      delta?: { text?: string };
+      content_block?: { text?: string };
+    };
+
+    // OpenAI-compatible format (used by the API route for streaming)
+    if (event.choices?.[0]?.delta?.content) {
+      return event.choices[0].delta.content;
+    }
+
+    // Anthropic streaming format
+    if (event.type === 'content_block_delta' && event.delta && 'text' in event.delta) {
+      return event.delta.text ?? null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export class ChatAIService {
   /**
-   * Send a message and get a response (with optional skill).
-   * Calls the workforce orchestrator and simulates streaming by chunking the response.
+   * Send a message and get a streamed response via /api/llm/completion.
+   * Uses SSE streaming with native fetch + ReadableStream.
    */
   static async sendMessage(params: {
     sessionId: string;
@@ -83,49 +131,112 @@ export class ChatAIService {
     conversationHistory: Array<{ role: string; content: string }>;
     onChunk?: (chunk: string) => void;
   }): Promise<string> {
-    const { sessionId, content, skillId, conversationHistory, onChunk } = params;
+    const { content, skillId, conversationHistory, onChunk } = params;
 
     try {
-      let fullResponse: string;
+      const token = await getAuthToken();
+      const modelId = useModelStore.getState().selectedModelId;
 
+      // Build messages array: conversation history + current user message
+      const messages = [
+        ...conversationHistory.map((msg) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+        })),
+        { role: 'user' as const, content },
+      ];
+
+      const requestBody: Record<string, unknown> = {
+        model: modelId,
+        messages,
+        stream: true,
+        max_tokens: 4096,
+        temperature: 0.7,
+      };
+
+      // Pass skillId as metadata if a specific skill was chosen
       if (skillId && skillId !== 'auto') {
-        // Route to a specific skill via the simplified chatWithSkill path
-        fullResponse = await workforceOrchestratorRefactored.chatWithSkill(
-          skillId,
-          content,
-          sessionId,
-          conversationHistory as Array<{
-            role: 'user' | 'assistant' | 'system';
-            content: string;
-          }>,
-        );
-      } else {
-        // Let the orchestrator auto-route (chat mode)
-        const result = await workforceOrchestratorRefactored.processRequest({
-          userId: 'anonymous',
-          input: content,
-          mode: 'chat',
-          sessionId,
-          conversationHistory: conversationHistory as Array<{
-            role: 'user' | 'assistant' | 'system';
-            content: string;
-          }>,
-        });
-
-        if (!result.success || !result.chatResponse) {
-          throw new Error(result.error || 'No response from AI');
-        }
-
-        fullResponse = result.chatResponse;
+        requestBody.metadata = { skillId };
       }
 
-      // Simulate streaming by splitting into word chunks
-      if (onChunk) {
-        const chunks = fullResponse.split(/(\s+)/).filter((part) => part.length > 0);
-        for (const chunk of chunks) {
-          onChunk(chunk);
-          await new Promise((resolve) => setTimeout(resolve, 25));
+      const response = await fetch('/api/llm/completion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({ error: 'Request failed' }))) as {
+          error?: string;
+          code?: string;
+        };
+        const errorMsg = errorData.error || `API request failed with status ${response.status}`;
+
+        if (response.status === 401) {
+          throw new Error('Authentication expired. Please sign in again.');
         }
+        if (response.status === 402) {
+          throw new Error(errorMsg);
+        }
+        if (response.status === 403) {
+          throw new Error(errorMsg);
+        }
+        throw new Error(errorMsg);
+      }
+
+      // Non-streaming response fallback
+      if (!response.body) {
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const text = data.choices?.[0]?.message?.content || '';
+        if (onChunk) onChunk(text);
+        return text;
+      }
+
+      // Stream SSE response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete lines from the buffer
+        const lines = buffer.split('\n');
+        // Keep the last (potentially incomplete) line in the buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          const content_piece = extractContentFromSSE(trimmed);
+          if (content_piece) {
+            fullResponse += content_piece;
+            if (onChunk) onChunk(content_piece);
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const content_piece = extractContentFromSSE(buffer.trim());
+        if (content_piece) {
+          fullResponse += content_piece;
+          if (onChunk) onChunk(content_piece);
+        }
+      }
+
+      if (!fullResponse) {
+        throw new Error('No response received from AI');
       }
 
       return fullResponse;

@@ -118,6 +118,7 @@ export async function updateUserShortcut(
 ): Promise<boolean> {
   try {
     // SECURITY: Add user_id check to prevent unauthorized updates
+
     const { error } = await (supabase.from('user_shortcuts') as any)
       .update({
         ...updates,

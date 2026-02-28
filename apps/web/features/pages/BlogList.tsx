@@ -262,6 +262,7 @@ const BlogPage: React.FC = () => {
                   transition={{ delay: (idx + 1) * 0.05 }}
                   aria-pressed={selectedCategory === category.slug}
                 >
+                  {}
                   {React.createElement(IconComponent as React.ComponentType<any>, {
                     size: 16,
                     'aria-hidden': 'true',

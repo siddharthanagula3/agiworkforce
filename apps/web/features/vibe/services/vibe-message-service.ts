@@ -169,6 +169,7 @@ export class VibeMessageService {
         input: content,
         mode: 'chat',
         sessionId,
+
         conversationHistory: [...conversationHistory, { role: 'user', content }] as any,
       });
 
@@ -184,6 +185,7 @@ export class VibeMessageService {
         userId,
         role: 'assistant',
         content: '', // Will be updated as chunks arrive
+
         employeeName: (orchestratorResponse as any).assignedEmployee || 'AI Assistant',
         isStreaming: true,
       });

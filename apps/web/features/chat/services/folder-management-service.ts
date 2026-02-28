@@ -98,7 +98,7 @@ class FolderManagementService {
         description: folderData.description,
         parent_folder_id: folderData.parentFolderId,
         sort_order: 0, // New folders go to top by default
-      } as any)
+      } as never)
       .select()
       .maybeSingle();
 
@@ -129,7 +129,7 @@ class FolderManagementService {
     },
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('chat_folders') as any)
+    let query = (supabase.from('chat_folders' as never) as any)
       .update({
         ...(updates.name && { name: updates.name }),
         ...(updates.color && { color: updates.color }),
@@ -181,10 +181,13 @@ class FolderManagementService {
    * Move a session to a folder
    */
   async moveSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
-    const { error } = await (supabase as any).rpc('move_session_to_folder', {
-      p_session_id: sessionId,
-      p_folder_id: folderId,
-    });
+    const { error } = await supabase.rpc(
+      'move_session_to_folder' as never,
+      {
+        p_session_id: sessionId,
+        p_folder_id: folderId,
+      } as never,
+    );
 
     if (error) {
       console.error('[FolderService] Failed to move session:', error);
@@ -231,7 +234,7 @@ class FolderManagementService {
       return [];
     }
 
-    return (data || []).map((s: any) => s.id);
+    return (data || []).map((s: { id: string }) => s.id);
   }
 
   /**
@@ -243,7 +246,7 @@ class FolderManagementService {
   ): Promise<void> {
     // Update each folder's sort order
     const updates = folderOrders.map(({ id, sortOrder }) => {
-      let query = (supabase.from('chat_folders') as any)
+      let query = (supabase.from('chat_folders' as never) as any)
         .update({ sort_order: sortOrder })
         .eq('id', id);
 

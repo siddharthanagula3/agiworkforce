@@ -68,6 +68,7 @@ export class AgentCollaborationManager {
       from_agent: this.employeeName,
       to_agents: to,
       timestamp: new Date(),
+
       content: content as any,
       metadata: {
         ...metadata,

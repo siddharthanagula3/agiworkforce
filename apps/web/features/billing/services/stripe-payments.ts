@@ -8,7 +8,9 @@
 import { supabase } from '@shared/lib/supabase-client';
 
 // Lazy loader with guard
+
 let stripePromise: Promise<any> | null = null;
+
 async function loadStripe(key: string): Promise<any> {
   try {
     const mod = await import('@stripe/stripe-js');

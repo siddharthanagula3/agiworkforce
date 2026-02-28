@@ -144,14 +144,30 @@ const toTerminalStatus = (
 };
 
 export function useVibeRealtime({ sessionId, onAction }: UseVibeRealtimeOptions) {
-  const setFileMetadata = useVibeViewStore((state: any) => state.setFileMetadata);
-  const upsertFileMetadata = useVibeViewStore((state: any) => state.upsertFileMetadata);
-  const removeFileMetadata = useVibeViewStore((state: any) => state.removeFileMetadata);
-  const setFileTree = useVibeViewStore((state: any) => state.setFileTree);
-  const addTerminalCommand = useVibeViewStore((state: any) => state.addTerminalCommand);
-  const updateTerminalCommand = useVibeViewStore((state: any) => state.updateTerminalCommand);
-  const setAppViewerUrl = useVibeViewStore((state: any) => state.setAppViewerUrl);
-  const updateAppViewerState = useVibeViewStore((state: any) => state.updateAppViewerState);
+  const setFileMetadata = useVibeViewStore(
+    (state: Record<string, unknown>) => state.setFileMetadata,
+  ) as (metadata: FileMetadata[]) => void;
+  const upsertFileMetadata = useVibeViewStore(
+    (state: Record<string, unknown>) => state.upsertFileMetadata,
+  ) as (metadata: FileMetadata) => void;
+  const removeFileMetadata = useVibeViewStore(
+    (state: Record<string, unknown>) => state.removeFileMetadata,
+  ) as (path: string) => void;
+  const setFileTree = useVibeViewStore((state: Record<string, unknown>) => state.setFileTree) as (
+    tree: unknown[],
+  ) => void;
+  const addTerminalCommand = useVibeViewStore(
+    (state: Record<string, unknown>) => state.addTerminalCommand,
+  ) as (cmd: Record<string, unknown>) => string;
+  const updateTerminalCommand = useVibeViewStore(
+    (state: Record<string, unknown>) => state.updateTerminalCommand,
+  ) as (id: string, updates: Record<string, unknown>) => void;
+  const setAppViewerUrl = useVibeViewStore(
+    (state: Record<string, unknown>) => state.setAppViewerUrl,
+  ) as (url: string) => void;
+  const updateAppViewerState = useVibeViewStore(
+    (state: Record<string, unknown>) => state.updateAppViewerState,
+  ) as (updates: Record<string, unknown>) => void;
 
   const commandMap = useRef<Map<string, string>>(new Map());
 
@@ -164,8 +180,8 @@ export function useVibeRealtime({ sessionId, onAction }: UseVibeRealtimeOptions)
 
   const loadInitialFiles = useCallback(
     async (currentSessionId: string) => {
-      const { data, error } = await (supabase as any)
-        .from('vibe_files')
+      const { data, error } = await supabase
+        .from('vibe_files' as never)
         .select('id,name,url,metadata,size,uploaded_at')
         .eq('session_id', currentSessionId)
         .order('uploaded_at', { ascending: true });

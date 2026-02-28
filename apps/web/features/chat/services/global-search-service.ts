@@ -139,13 +139,13 @@ class GlobalSearchService {
       };
 
       const { error } = await supabase.rpc(
-        'track_search' as any,
+        'track_search' as never,
         {
           p_user_id: userId,
           p_query: query,
           p_result_count: resultCount,
           p_filters: filtersJson,
-        } as any,
+        } as never,
       );
 
       if (error) {
@@ -162,11 +162,11 @@ class GlobalSearchService {
   async getRecentSearches(userId: string, limit: number = 10): Promise<RecentSearch[]> {
     try {
       const { data, error } = await supabase.rpc(
-        'get_recent_searches' as any,
+        'get_recent_searches' as never,
         {
           p_user_id: userId,
           p_limit: limit,
-        } as any,
+        } as never,
       );
 
       if (error) {
@@ -174,13 +174,13 @@ class GlobalSearchService {
         return [];
       }
 
-      return ((data || []) as any[]).map(
-        (row: { query: string; result_count: number; created_at: string }) => ({
-          query: row.query,
-          resultCount: row.result_count,
-          createdAt: new Date(row.created_at),
-        }),
-      );
+      return (
+        (data || []) as Array<{ query: string; result_count: number; created_at: string }>
+      ).map((row: { query: string; result_count: number; created_at: string }) => ({
+        query: row.query,
+        resultCount: row.result_count,
+        createdAt: new Date(row.created_at),
+      }));
     } catch (error) {
       console.error('[GlobalSearch] Failed to get recent searches:', error);
       return [];
@@ -193,11 +193,11 @@ class GlobalSearchService {
   async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
     try {
       const { data, error } = await supabase.rpc(
-        'get_popular_searches' as any,
+        'get_popular_searches' as never,
         {
           p_limit: limit,
           p_days: days,
-        } as any,
+        } as never,
       );
 
       if (error) {
@@ -205,13 +205,13 @@ class GlobalSearchService {
         return [];
       }
 
-      return ((data || []) as any[]).map(
-        (row: { query: string; search_count: number; avg_results: number }) => ({
-          query: row.query,
-          searchCount: row.search_count,
-          avgResults: row.avg_results || 0,
-        }),
-      );
+      return (
+        (data || []) as Array<{ query: string; search_count: number; avg_results: number }>
+      ).map((row: { query: string; search_count: number; avg_results: number }) => ({
+        query: row.query,
+        searchCount: row.search_count,
+        avgResults: row.avg_results || 0,
+      }));
     } catch (error) {
       console.error('[GlobalSearch] Failed to get popular searches:', error);
       return [];
@@ -224,10 +224,10 @@ class GlobalSearchService {
   async clearSearchHistory(userId: string): Promise<number> {
     try {
       const { data, error } = await supabase.rpc(
-        'clear_search_history' as any,
+        'clear_search_history' as never,
         {
           p_user_id: userId,
-        } as any,
+        } as never,
       );
 
       if (error) {
@@ -281,7 +281,12 @@ class GlobalSearchService {
     }
 
     return (data || []).map((rawSession) => {
-      const session = rawSession as any;
+      const session = rawSession as {
+        id: string;
+        title: string | null;
+        created_at: string;
+        updated_at: string;
+      };
       return {
         type: 'session' as const,
         sessionId: session.id,
@@ -322,7 +327,7 @@ class GlobalSearchService {
 
     if (!sessions || sessions.length === 0) return [];
 
-    const sessionIds = sessions.map((s: any) => s.id);
+    const sessionIds = sessions.map((s: { id: string }) => s.id);
 
     // Search messages
     let messageQuery = supabase
@@ -426,12 +431,12 @@ class GlobalSearchService {
 
     try {
       const { data, error } = await supabase.rpc(
-        'get_search_suggestions' as any,
+        'get_search_suggestions' as never,
         {
           p_user_id: userId,
           p_partial_query: partialQuery,
           p_limit: limit,
-        } as any,
+        } as never,
       );
 
       if (error) {
@@ -439,7 +444,7 @@ class GlobalSearchService {
         return [];
       }
 
-      return ((data || []) as any[]).map(
+      return ((data || []) as Array<{ suggestion: string; source: string; score: number }>).map(
         (row: { suggestion: string; source: string; score: number }) => ({
           suggestion: row.suggestion,
           source: row.source as 'recent' | 'popular',
@@ -471,7 +476,11 @@ class GlobalSearchService {
 
       if (error || !data) return [];
 
-      return [...new Set(data.map((s: any) => s.title).filter(Boolean))].slice(0, limit);
+      return [
+        ...new Set(
+          data.map((s: { title: string | null }) => s.title).filter((t): t is string => Boolean(t)),
+        ),
+      ].slice(0, limit);
     } catch (error) {
       console.error('[GlobalSearch] Autocomplete failed:', error);
       return [];

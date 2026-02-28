@@ -257,6 +257,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                 ...(toolsUsing !== undefined && { toolsUsing }),
                 ...(output !== undefined && { output: String(output) }),
               };
+
               state.assignedAgents[agentId] = updatedAgent as any;
 
               // Also update in session's assignedAgents for consistency

@@ -146,8 +146,7 @@ export class ConversationBranchingService {
   ): Promise<ConversationBranch> {
     // conversation_branches is a custom table not in Supabase generated types
 
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .insert({
         parent_session_id: parentSessionId,
         child_session_id: childSessionId,
@@ -173,8 +172,7 @@ export class ConversationBranchingService {
     sessionId: string,
     _userId?: string,
   ): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .select(
         `
         *,
@@ -244,10 +242,10 @@ export class ConversationBranchingService {
    */
   async getBranchHistory(sessionId: string): Promise<BranchHistoryEntry[]> {
     const { data, error } = await supabase.rpc(
-      'get_branch_history' as any,
+      'get_branch_history' as never,
       {
         p_session_id: sessionId,
-      } as any,
+      } as never,
     );
 
     if (error) {
@@ -255,7 +253,14 @@ export class ConversationBranchingService {
       return [{ sessionId, branchName: null, branchPointMessageId: null, depth: 0 }];
     }
 
-    return ((data || []) as any[]).map(
+    return (
+      (data || []) as Array<{
+        session_id: string;
+        branch_name: string | null;
+        branch_point_message_id: string | null;
+        depth: number;
+      }>
+    ).map(
       (row: {
         session_id: string;
         branch_name: string | null;
@@ -275,10 +280,10 @@ export class ConversationBranchingService {
    */
   async getRootSessionId(sessionId: string): Promise<string> {
     const { data, error } = await supabase.rpc(
-      'get_root_session' as any,
+      'get_root_session' as never,
       {
         session_id: sessionId,
-      } as any,
+      } as never,
     );
 
     if (error) {
@@ -293,8 +298,7 @@ export class ConversationBranchingService {
    * Check if a session is a branch (has a parent)
    */
   async isBranchSession(sessionId: string): Promise<boolean> {
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .select('id')
       .eq('child_session_id', sessionId)
       .maybeSingle();
@@ -311,8 +315,7 @@ export class ConversationBranchingService {
    * Get branch info for a session if it is a branch
    */
   async getBranchInfo(sessionId: string): Promise<ConversationBranch | null> {
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .select('*')
       .eq('child_session_id', sessionId)
       .maybeSingle();
@@ -328,8 +331,7 @@ export class ConversationBranchingService {
    * Update branch name
    */
   async updateBranchName(branchId: string, newName: string): Promise<ConversationBranch> {
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .update({ branch_name: newName })
       .eq('id', branchId)
       .select()
@@ -346,8 +348,7 @@ export class ConversationBranchingService {
    * Delete a branch record (does not delete the session)
    */
   async deleteBranch(branchId: string): Promise<void> {
-    const { error } = await (supabase as any)
-      .from('conversation_branches')
+    const { error } = await (supabase.from('conversation_branches' as never) as any)
       .delete()
       .eq('id', branchId);
 
@@ -552,8 +553,7 @@ export class ConversationBranchingService {
    * Get branches at a specific message point
    */
   async getBranchesAtMessage(messageId: string): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { data, error } = await (supabase.from('conversation_branches' as never) as any)
       .select(
         `
         *,
@@ -621,8 +621,7 @@ export class ConversationBranchingService {
    * Count branches for a session
    */
   async countBranches(sessionId: string): Promise<number> {
-    const { count, error } = await (supabase as any)
-      .from('conversation_branches')
+    const { count, error } = await (supabase.from('conversation_branches' as never) as any)
       .select('*', { count: 'exact', head: true })
       .eq('parent_session_id', sessionId);
 
