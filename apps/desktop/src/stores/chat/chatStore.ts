@@ -416,13 +416,12 @@ export const useChatStore = create<ChatState>()(
                 state.conversations.unshift(convo);
                 // AUDIT-006-012 fix: Cap active conversations at 500
                 if (state.conversations.length > 500) {
-                  // Remove oldest non-pinned, non-active conversations
-                  // Fix [M8]: use slice(0, excess) to evict exactly the overage from the oldest
-                  // first. The previous .slice(499) always started at index 499, returning an
-                  // empty array when fewer than 499 non-pinned conversations existed.
+                  // Remove oldest non-pinned, non-active conversations.
+                  // After unshift(), conversations are newest-first, so oldest entries are at the
+                  // tail. slice(length - excess) takes from the end = the oldest conversations.
                   const nonPinned = state.conversations.filter((c) => !c.pinned && c.id !== id);
                   const excess = state.conversations.length - 500;
-                  const toRemove = nonPinned.slice(0, excess);
+                  const toRemove = nonPinned.slice(nonPinned.length - excess);
                   for (const conv of toRemove) {
                     delete state.messagesByConversation[conv.id];
                   }
@@ -883,25 +882,34 @@ export const useChatStore = create<ChatState>()(
                 };
 
                 const updatedInMessages = applyUpdate(state.messages);
-                const convoId = state.activeConversationId;
-                if (convoId && state.messagesByConversation[convoId]) {
-                  applyUpdate(state.messagesByConversation[convoId]!);
+                const activeConversationId = state.activeConversationId;
+                let updatedInConversation = false;
+
+                if (activeConversationId && state.messagesByConversation[activeConversationId]) {
+                  updatedInConversation = applyUpdate(
+                    state.messagesByConversation[activeConversationId]!,
+                  );
                 }
 
-                if (!updatedInMessages && !convoId) {
+                if (!updatedInConversation) {
                   for (const [convId, messages] of Object.entries(state.messagesByConversation)) {
-                    if (messages && applyUpdate(messages)) {
-                      if (convId === state.activeConversationId) {
-                        const msgIdx = messages.findIndex((m) => m.id === id);
-                        if (msgIdx !== -1) {
-                          const existingMsgIdx = state.messages.findIndex((m) => m.id === id);
-                          if (existingMsgIdx !== -1) {
-                            state.messages[existingMsgIdx] = messages[msgIdx]!;
-                          }
-                        }
-                      }
+                    if (!messages || convId === activeConversationId) {
+                      continue;
+                    }
+                    if (applyUpdate(messages)) {
+                      updatedInConversation = true;
                       break;
                     }
+                  }
+                }
+
+                if (!updatedInMessages && activeConversationId && updatedInConversation) {
+                  const activeMessages = state.messagesByConversation[activeConversationId];
+                  const activeMessageIndex = activeMessages?.findIndex((m) => m.id === id) ?? -1;
+                  const stateMessageIndex = state.messages.findIndex((m) => m.id === id);
+
+                  if (activeMessageIndex !== -1 && stateMessageIndex !== -1 && activeMessages) {
+                    state.messages[stateMessageIndex] = activeMessages[activeMessageIndex]!;
                   }
                 }
               },

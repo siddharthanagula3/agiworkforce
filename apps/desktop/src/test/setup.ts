@@ -1,7 +1,95 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
-Object.defineProperty(window, 'matchMedia', {
+const globalWindow =
+  typeof window !== 'undefined'
+    ? window
+    : (() => {
+        const fallbackWindow = globalThis as typeof globalThis & Window;
+        Object.defineProperty(globalThis, 'window', {
+          value: fallbackWindow,
+          writable: true,
+          configurable: true,
+        });
+        return fallbackWindow;
+      })();
+
+if (!('document' in globalThis)) {
+  Object.defineProperty(globalThis, 'document', {
+    value: {
+      createElement: vi.fn(() => ({
+        getContext: vi.fn(),
+      })),
+      documentElement: {
+        style: {},
+      },
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (!('navigator' in globalThis)) {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      userAgent: 'vitest',
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (!('localStorage' in globalThis)) {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+      clear: vi.fn(() => {
+        storage.clear();
+      }),
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (!('sessionStorage' in globalThis)) {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+      clear: vi.fn(() => {
+        storage.clear();
+      }),
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (!('HTMLCanvasElement' in globalThis)) {
+  class CanvasElementMock {}
+
+  Object.defineProperty(globalThis, 'HTMLCanvasElement', {
+    value: CanvasElementMock,
+    writable: true,
+    configurable: true,
+  });
+}
+
+Object.defineProperty(globalWindow, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query) => ({
     matches: false,
@@ -13,7 +101,22 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-Object.defineProperty(window, 'scrollTo', {
+Object.defineProperty(globalWindow, 'scrollTo', {
+  writable: true,
+  value: vi.fn(),
+});
+
+Object.defineProperty(globalWindow, 'addEventListener', {
+  writable: true,
+  value: vi.fn(),
+});
+
+Object.defineProperty(globalWindow, 'removeEventListener', {
+  writable: true,
+  value: vi.fn(),
+});
+
+Object.defineProperty(globalWindow, 'dispatchEvent', {
   writable: true,
   value: vi.fn(),
 });
@@ -140,6 +243,10 @@ vi.mock('@supabase/supabase-js', () => ({
       subscribe: vi.fn(),
     })),
   })),
+}));
+
+vi.mock('sonner', () => ({
+  toast: vi.fn(),
 }));
 
 (HTMLCanvasElement.prototype as any).getContext = vi.fn(() => ({
