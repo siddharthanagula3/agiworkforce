@@ -15,11 +15,11 @@
 //  • `PENDING_TASK_APPROVALS` static (accessible without runtime)
 #[cfg(test)]
 mod tests {
+    use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
     use crate::core::agent::{
         Action, AgentConfig, ClickTarget, ScreenRegion, ScreenshotQuality, ScrollDirection,
         StepResult, Task, TaskStatus, TaskStep, VisionModel,
     };
-    use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
     use std::time::{Duration, Instant};
 
     // ------------------------------------------------------------------
@@ -155,7 +155,11 @@ mod tests {
 
     #[test]
     fn test_vision_model_serde() {
-        let models = vec![VisionModel::LocalOCR, VisionModel::CloudVision, VisionModel::Hybrid];
+        let models = vec![
+            VisionModel::LocalOCR,
+            VisionModel::CloudVision,
+            VisionModel::Hybrid,
+        ];
         for m in models {
             let json = serde_json::to_string(&m).unwrap();
             let _decoded: VisionModel = serde_json::from_str(&json).unwrap();

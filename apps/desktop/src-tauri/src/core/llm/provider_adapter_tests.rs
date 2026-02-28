@@ -333,6 +333,140 @@ mod tests {
     }
 
     #[test]
+    fn test_google_adapter_uses_parameters_json_schema_for_mcp_style_schemas() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "List MCP resources".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gemini-3-flash-preview".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "list_resources".to_string(),
+                description: "List resources from an MCP server".to_string(),
+                parameters: json!({
+                    "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                            "server": { "type": "string" },
+                            "tags": { "type": "array" }
+                        },
+                        "required": ["server"],
+                        "additionalProperties": false
+                    }
+                }),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("request should adapt");
+        let declaration = &adapted["tools"][0]["functionDeclarations"][0];
+
+        assert!(
+            declaration.get("parameters").is_none(),
+            "MCP-style JSON Schema should use parametersJsonSchema"
+        );
+        assert_eq!(
+            declaration["parametersJsonSchema"],
+            json!({
+                "type": "object",
+                "properties": {
+                    "server": { "type": "string" },
+                    "tags": { "type": "array", "items": {} }
+                },
+                "required": ["server"],
+                "additionalProperties": false
+            })
+        );
+    }
+
+    #[test]
+    fn test_google_adapter_keeps_simple_tool_schemas_on_parameters() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Check weather".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gemini-3-flash-preview".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "city": { "type": "string" }
+                    },
+                    "required": ["city"]
+                }),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("request should adapt");
+        let declaration = &adapted["tools"][0]["functionDeclarations"][0];
+
+        assert_eq!(
+            declaration["parameters"],
+            json!({
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string" }
+                },
+                "required": ["city"]
+            })
+        );
+        assert!(declaration.get("parametersJsonSchema").is_none());
+    }
+
+    #[test]
     fn test_openai_apply_patch_drops_non_standard_validate_before_apply() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 

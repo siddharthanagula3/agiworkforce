@@ -116,7 +116,9 @@ impl MediaExecutor {
             .timeout(std::time::Duration::from_secs(90))
             .build()
             .unwrap_or_else(|e| {
-                eprintln!("Warning: Failed to create HTTP client with timeout ({e}), using default");
+                eprintln!(
+                    "Warning: Failed to create HTTP client with timeout ({e}), using default"
+                );
                 reqwest::Client::new()
             });
 

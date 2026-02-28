@@ -281,13 +281,14 @@ mod orchestrator_tests {
 
     #[test]
     fn test_swarm_stats() {
-        let mut stats = SwarmStats::default();
-
-        stats.goals_processed = 5;
-        stats.subtasks_completed = 20;
-        stats.subtasks_failed = 2;
-        stats.peak_agents = 10;
-        stats.avg_speedup_ratio = 4.2;
+        let stats = SwarmStats {
+            goals_processed: 5,
+            subtasks_completed: 20,
+            subtasks_failed: 2,
+            peak_agents: 10,
+            avg_speedup_ratio: 4.2,
+            ..SwarmStats::default()
+        };
 
         assert_eq!(stats.goals_processed, 5);
         assert!(stats.avg_speedup_ratio > 4.0);
@@ -451,10 +452,11 @@ mod integration_tests {
 
     #[test]
     fn test_swarm_metrics_calculation() {
-        let mut metrics = SwarmMetrics::default();
-
-        metrics.total_agent_time_ms = 4500;
-        metrics.wall_clock_time_ms = 1000;
+        let mut metrics = SwarmMetrics {
+            total_agent_time_ms: 4500,
+            wall_clock_time_ms: 1000,
+            ..SwarmMetrics::default()
+        };
         metrics.calculate_speedup();
 
         // Should achieve 4.5x speedup (matching Kimi K2.5 target)

@@ -1164,8 +1164,8 @@ mod tests {
         let result = parse_schedule("daily at noon");
         // Note: "noon" keyword is not directly supported, user should use "12pm"
         // This test verifies the behavior
-        if result.is_ok() {
-            match result.unwrap() {
+        if let Ok(parsed) = result {
+            match parsed {
                 ParsedSchedule::Cron(expr) => {
                     assert_eq!(expr, "0 12 * * *");
                 }
