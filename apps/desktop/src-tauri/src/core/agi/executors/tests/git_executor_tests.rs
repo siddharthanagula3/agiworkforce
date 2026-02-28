@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_git_executor_default() {
-        let executor = GitExecutor::default();
+        let executor = GitExecutor::new();
         assert_eq!(executor.tool_names().len(), 6);
     }
 

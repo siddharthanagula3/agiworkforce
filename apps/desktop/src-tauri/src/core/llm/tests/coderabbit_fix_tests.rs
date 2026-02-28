@@ -226,82 +226,58 @@ mod h13_resolve_model_for_strategy {
     #[test]
     fn auto_economy_boundary_at_1000() {
         // token_count == 1000 should NOT pick nano (< 1000)
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoEconomy,
-            1000,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 1000, "fallback");
         assert_eq!(model, "deepseek-chat");
     }
 
     #[test]
     fn auto_economy_boundary_at_8000() {
         // token_count == 8000 should NOT pick deepseek (< 8000)
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoEconomy,
-            8000,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 8000, "fallback");
         assert_eq!(model, "gemini-3-flash-preview");
     }
 
     #[test]
     fn auto_balanced_boundary_at_500() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoBalanced,
-            500,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 500, "fallback");
         assert_eq!(model, "claude-sonnet-4-5");
     }
 
     #[test]
     fn auto_premium_boundary_at_16000() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoPremium,
-            16000,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 16000, "fallback");
         assert_eq!(model, "claude-opus-4-6");
     }
 
     #[test]
     fn auto_economy_boundary_at_999() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoEconomy,
-            999,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 999, "fallback");
         assert_eq!(model, "gpt-5-nano");
     }
 
     #[test]
     fn auto_balanced_boundary_at_499() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoBalanced,
-            499,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 499, "fallback");
         assert_eq!(model, "gpt-5-nano");
     }
 
     #[test]
     fn auto_balanced_boundary_at_4000() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoBalanced,
-            4000,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 4000, "fallback");
         assert_eq!(model, "gpt-5.2");
     }
 
     #[test]
     fn auto_premium_boundary_at_15999() {
-        let model = LLMRouter::resolve_model_for_strategy(
-            RoutingStrategy::AutoPremium,
-            15999,
-            "fallback",
-        );
+        let model =
+            LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 15999, "fallback");
         assert_eq!(model, "claude-sonnet-4-5");
     }
 }
@@ -489,7 +465,7 @@ mod h12_arg_merge_pattern {
 
     #[test]
     fn float_passes_guard() {
-        assert!(ToolExecutor::value_is_present(&json!(3.14)));
+        assert!(ToolExecutor::value_is_present(&json!(std::f64::consts::PI)));
     }
 
     #[test]
@@ -554,10 +530,7 @@ mod h8_approval_required_result_pattern {
     #[test]
     fn metadata_contains_tool_name() {
         let result = build_approval_result("git_push", "Approval needed");
-        assert_eq!(
-            result.metadata.get("tool_name"),
-            Some(&json!("git_push"))
-        );
+        assert_eq!(result.metadata.get("tool_name"), Some(&json!("git_push")));
     }
 
     #[test]
@@ -579,29 +552,27 @@ mod m2_serde_status_strings {
 
     #[test]
     fn completed_serializes_to_quoted_snake_case() {
-        let s = serde_json::to_string(&ContinuousTaskStatus::Completed)
-            .expect("serialize Completed");
+        let s =
+            serde_json::to_string(&ContinuousTaskStatus::Completed).expect("serialize Completed");
         assert_eq!(s, "\"completed\"");
     }
 
     #[test]
     fn failed_serializes_to_quoted_snake_case() {
-        let s =
-            serde_json::to_string(&ContinuousTaskStatus::Failed).expect("serialize Failed");
+        let s = serde_json::to_string(&ContinuousTaskStatus::Failed).expect("serialize Failed");
         assert_eq!(s, "\"failed\"");
     }
 
     #[test]
     fn cancelled_serializes_to_quoted_snake_case() {
-        let s = serde_json::to_string(&ContinuousTaskStatus::Cancelled)
-            .expect("serialize Cancelled");
+        let s =
+            serde_json::to_string(&ContinuousTaskStatus::Cancelled).expect("serialize Cancelled");
         assert_eq!(s, "\"cancelled\"");
     }
 
     #[test]
     fn pending_serializes_to_quoted_snake_case() {
-        let s =
-            serde_json::to_string(&ContinuousTaskStatus::Pending).expect("serialize Pending");
+        let s = serde_json::to_string(&ContinuousTaskStatus::Pending).expect("serialize Pending");
         assert_eq!(s, "\"pending\"");
     }
 
@@ -614,8 +585,8 @@ mod m2_serde_status_strings {
 
     #[test]
     fn recovering_serializes_to_quoted_snake_case() {
-        let s = serde_json::to_string(&ContinuousTaskStatus::Recovering)
-            .expect("serialize Recovering");
+        let s =
+            serde_json::to_string(&ContinuousTaskStatus::Recovering).expect("serialize Recovering");
         assert_eq!(s, "\"recovering\"");
     }
 

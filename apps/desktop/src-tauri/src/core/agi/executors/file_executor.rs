@@ -249,6 +249,20 @@ impl FileExecutor {
         }
     }
 
+    fn invalidate_file_read_cache(
+        context: &ExecutorContext,
+        original_path: &str,
+        canonical_path: &Path,
+    ) {
+        let canonical_string = canonical_path.to_string_lossy().to_string();
+
+        for candidate_path in [original_path, canonical_string.as_str()] {
+            let mut read_params = HashMap::new();
+            read_params.insert("path".to_string(), json!(candidate_path));
+            let _ = context.tool_cache.invalidate("file_read", &read_params);
+        }
+    }
+
     /// Execute file_read operation.
     ///
     /// Reads the contents of a file and returns it as a string.
@@ -438,9 +452,7 @@ impl FileExecutor {
         }
 
         // Invalidate cache for file_read on this path
-        let mut read_params = HashMap::new();
-        read_params.insert("path".to_string(), json!(canonical_path.to_string_lossy()));
-        let _ = context.tool_cache.invalidate("file_read", &read_params);
+        Self::invalidate_file_read_cache(context, path, &canonical_path);
 
         tracing::info!(
             "[FileExecutor] file_write completed: path='{}' size={} bytes created={}",
@@ -548,9 +560,7 @@ impl FileExecutor {
         }
 
         // Invalidate any cached file_read results for this path
-        let mut read_params = HashMap::new();
-        read_params.insert("path".to_string(), json!(canonical_path.to_string_lossy()));
-        let _ = context.tool_cache.invalidate("file_read", &read_params);
+        Self::invalidate_file_read_cache(context, path, &canonical_path);
 
         tracing::info!(
             "[FileExecutor] file_delete completed: path='{}' size={} bytes",
@@ -889,6 +899,7 @@ mod tests {
 
     #[test]
     fn test_default_impl() {
+        #[allow(clippy::default_constructed_unit_structs)]
         let executor = FileExecutor::default();
         assert_eq!(executor.tool_names().len(), 3);
     }

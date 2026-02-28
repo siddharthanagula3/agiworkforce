@@ -559,9 +559,9 @@ mod integration {
         const MAX_CONSECUTIVE_FAILURES: u32 = 3;
         let mut consecutive_failures = 0u32;
         let mut should_abandon = false;
-        let results = vec![false, false, false, true]; // 3 failures then success
+        let results = [false, false, false, true]; // 3 failures then success
 
-        for (_i, success) in results.iter().enumerate() {
+        for success in &results {
             if *success {
                 consecutive_failures = 0;
             } else {
@@ -611,7 +611,7 @@ mod integration {
 
     #[test]
     fn test_approval_required_for_dangerous_operations() {
-        let dangerous_keywords = vec![
+        let dangerous_keywords = [
             "delete",
             "remove",
             "uninstall",
@@ -720,7 +720,7 @@ mod integration {
 
     #[test]
     fn test_cost_tracking_accuracy() {
-        let costs = vec![0.001, 0.002, 0.0015, 0.003, 0.0005];
+        let costs = [0.001, 0.002, 0.0015, 0.003, 0.0005];
         let expected_total = 0.008; // 0.001 + 0.002 + 0.0015 + 0.003 + 0.0005 = 0.008
         let actual_total: f64 = costs.iter().sum();
 
@@ -982,7 +982,7 @@ mod integration {
     #[test]
     fn test_parallel_plan_execution_speedup() {
         // Simulate sequential vs parallel execution
-        let step_durations = vec![100u64, 100, 100];
+        let step_durations = [100u64, 100, 100];
 
         // Sequential
         let sequential_time: u64 = step_durations.iter().sum();
@@ -1017,13 +1017,12 @@ mod integration {
 
     #[test]
     fn test_learning_experience_recording() {
-        let mut experiences: Vec<(String, bool, u64)> = Vec::new();
-
-        // Record experiences (tool_id, success, duration_ms)
-        experiences.push(("file_read".to_string(), true, 50));
-        experiences.push(("file_read".to_string(), true, 45));
-        experiences.push(("file_read".to_string(), false, 100));
-        experiences.push(("web_search".to_string(), true, 500));
+        let experiences: Vec<(String, bool, u64)> = vec![
+            ("file_read".to_string(), true, 50),
+            ("file_read".to_string(), true, 45),
+            ("file_read".to_string(), false, 100),
+            ("web_search".to_string(), true, 500),
+        ];
 
         // Calculate success rate for file_read
         let file_read_experiences: Vec<_> = experiences
@@ -1077,7 +1076,7 @@ mod integration {
 
     #[test]
     fn test_complete_automation_workflow_stages() {
-        let workflow_stages = vec!["goal", "plan", "execute", "verify", "complete"];
+        let workflow_stages = ["goal", "plan", "execute", "verify", "complete"];
         let mut current_stage_index = 0;
 
         // Simulate workflow progression

@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_default_impl() {
-        let executor = OcrExecutor::default();
+        let executor = OcrExecutor::new();
         assert_eq!(executor.tool_names().len(), 1);
     }
 

@@ -1632,7 +1632,7 @@ mod tests {
     #[test]
     fn test_truncate_string_long_is_truncated() {
         let s = "abcdefghij"; // 10 chars
-        // max_len=7 -> &s[..7-3] = &s[..4] = "abcd"
+                              // max_len=7 -> &s[..7-3] = &s[..4] = "abcd"
         let result = truncate_string(s, 7);
         assert_eq!(result, "abcd");
         assert!(result.len() < s.len());
@@ -1715,12 +1715,7 @@ mod tests {
         for i in 0..2 {
             let context = BackgroundAgentContext::default();
             manager
-                .push_to_background(
-                    format!("conv_{}", i),
-                    format!("Task {}", i),
-                    context,
-                    0,
-                )
+                .push_to_background(format!("conv_{}", i), format!("Task {}", i), context, 0)
                 .await
                 .unwrap();
         }
@@ -1803,9 +1798,7 @@ mod tests {
             .prepare("SELECT goal, priority FROM background_agents WHERE id = ?1")
             .unwrap();
         let (goal, priority): (String, u8) = stmt
-            .query_row([&agent_id], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })
+            .query_row([&agent_id], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap();
 
         assert_eq!(goal, "Persist me");
@@ -1990,9 +1983,7 @@ mod tests {
             .prepare("SELECT status, error FROM background_agents WHERE id = ?1")
             .unwrap();
         let (status, error): (String, Option<String>) = stmt
-            .query_row([&agent.id], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })
+            .query_row([&agent.id], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap();
 
         assert_eq!(status, "failed");
