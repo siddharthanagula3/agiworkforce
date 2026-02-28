@@ -5,8 +5,13 @@ import { VerifyDeviceClient } from './verify-client';
 
 export const dynamic = 'force-dynamic';
 
-export default async function VerifyPage({ searchParams }: { searchParams: { code?: string } }) {
-  const code = (searchParams.code || '').trim();
+export default async function VerifyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const resolvedParams = await searchParams;
+  const code = (resolvedParams.code || '').trim();
 
   if (!code) {
     return (
