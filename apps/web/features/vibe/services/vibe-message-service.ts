@@ -2,12 +2,12 @@
  * VIBE Message Service
  *
  * Handles all database operations for vibe_messages table
- * Integrates with workforce orchestrator for AI-powered chat
+ * Uses /api/llm/completion SSE streaming for AI responses
  * Provides real-time message streaming and chunking
  */
 
 import { supabase } from '@shared/lib/supabase-client';
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
+import { useModelStore } from '@shared/stores/model-store';
 
 export interface VibeMessage {
   id: string;
@@ -85,6 +85,7 @@ export class VibeMessageService {
       is_streaming: params.isStreaming || false,
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_messages not in generated types
     const { data, error } = await (supabase.from('vibe_messages') as any)
       .insert(message)
       .select()
@@ -109,6 +110,7 @@ export class VibeMessageService {
     messageId: string,
     updates: Partial<VibeMessage>,
   ): Promise<VibeMessage> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_messages not in generated types
     const { data, error } = await (supabase.from('vibe_messages') as any)
       .update(updates)
       .eq('id', messageId)
@@ -140,11 +142,11 @@ export class VibeMessageService {
   }
 
   /**
-   * Process user message through workforce orchestrator
+   * Process user message through /api/llm/completion SSE streaming.
    * Handles the complete flow:
    * 1. Create user message in database
-   * 2. Call workforce orchestrator
-   * 3. Stream response chunks
+   * 2. Call /api/llm/completion with SSE streaming
+   * 3. Stream response chunks via onChunk callback
    * 4. Save assistant response to database
    */
   static async processUserMessage(params: ProcessUserMessageParams): Promise<VibeMessage> {
@@ -163,53 +165,105 @@ export class VibeMessageService {
         content,
       });
 
-      // Step 2: Call workforce orchestrator
-      const orchestratorResponse = await workforceOrchestratorRefactored.processRequest({
-        userId,
-        input: content,
-        mode: 'chat',
-        sessionId,
+      // Step 2: Get auth token and model
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const selectedModelId = useModelStore.getState().selectedModelId;
 
-        conversationHistory: [...conversationHistory, { role: 'user', content }] as any,
-      });
-
-      if (!orchestratorResponse.success || !orchestratorResponse.chatResponse) {
-        throw new Error(orchestratorResponse.error || 'No response from workforce orchestrator');
-      }
-
-      const fullResponse = orchestratorResponse.chatResponse;
+      // Build messages for API
+      const messages = [
+        ...conversationHistory.map((msg) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+        })),
+        { role: 'user' as const, content },
+      ];
 
       // Step 3: Create streaming assistant message
       const assistantMessage = await this.createMessage({
         sessionId,
         userId,
         role: 'assistant',
-        content: '', // Will be updated as chunks arrive
-
-        employeeName: (orchestratorResponse as any).assignedEmployee || 'AI Assistant',
+        content: '',
+        employeeName: 'Vibe Assistant',
         isStreaming: true,
       });
       assistantMessageId = assistantMessage.id;
 
-      // Step 4: Stream response chunks
-      let currentContent = '';
-      const chunks = fullResponse.split(/(\s+)/).filter((part) => part.length);
+      // Step 4: Call /api/llm/completion with SSE
+      const response = await fetch('/api/llm/completion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          model: selectedModelId,
+          messages,
+          stream: true,
+          max_tokens: 4096,
+          temperature: 0.7,
+        }),
+      });
 
-      for (const chunk of chunks) {
-        currentContent += chunk;
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({ error: 'Request failed' }))) as {
+          error?: string;
+        };
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
 
-        // Update database with new chunk
-        await this.updateMessage(assistantMessageId, {
-          content: currentContent,
-        });
+      let fullResponse = '';
 
-        // Notify UI
-        if (onChunk) {
-          onChunk(chunk);
+      if (!response.body) {
+        // Non-streaming fallback
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        fullResponse = data.choices?.[0]?.message?.content || '';
+        if (onChunk) onChunk(fullResponse);
+      } else {
+        // Stream SSE response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const jsonStr = trimmed.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(jsonStr) as {
+                choices?: Array<{ delta?: { content?: string } }>;
+                delta?: { text?: string };
+              };
+              const chunk =
+                parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
+              if (chunk) {
+                fullResponse += chunk;
+                if (onChunk) onChunk(chunk);
+              }
+            } catch {
+              // Skip malformed SSE lines
+            }
+          }
         }
+      }
 
-        // Small delay for realistic streaming
-        await new Promise((resolve) => setTimeout(resolve, 40));
+      if (!fullResponse) {
+        throw new Error('No response received from AI');
       }
 
       // Step 5: Mark as complete
