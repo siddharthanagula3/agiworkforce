@@ -129,7 +129,7 @@ export class ChatPersistenceService {
     provider: string,
   ): Promise<PersistenceChatSession> {
     const session: PersistenceChatSession = {
-      id: `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      id: `session-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
       userId,
       employeeId,
       role,
@@ -177,7 +177,7 @@ export class ChatPersistenceService {
     metadata?: unknown,
   ): Promise<PersistenceChatMessage> {
     const message: PersistenceChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      id: `msg-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
       sessionId,
       role,
       content,
