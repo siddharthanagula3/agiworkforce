@@ -103,10 +103,10 @@ export const ConversationListItem = memo(function ConversationListItem({
     <>
       <div
         className={cn(
-          'group relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-colors',
+          'group relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-all',
           isActive
-            ? 'bg-primary/10 text-foreground'
-            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+            ? 'bg-teal-100 dark:bg-teal-900/30 text-foreground'
+            : 'text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground',
           isArchived && 'opacity-50',
         )}
         onClick={onClick}
@@ -122,9 +122,9 @@ export const ConversationListItem = memo(function ConversationListItem({
         )}
 
         {/* Main content */}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm" title={title}>
+            <span className="truncate text-sm font-medium" title={title}>
               {title}
             </span>
             {isStarred && (
@@ -136,7 +136,7 @@ export const ConversationListItem = memo(function ConversationListItem({
           </div>
 
           {/* Time - always visible but subtle */}
-          <div className="text-[11px] text-muted-foreground/70">
+          <div className="truncate text-xs text-gray-500 dark:text-gray-400">
             {formatDistanceToNow(updatedAt, { addSuffix: true })}
           </div>
         </div>
@@ -148,7 +148,7 @@ export const ConversationListItem = memo(function ConversationListItem({
               variant="ghost"
               size="icon"
               className={cn(
-                'h-7 w-7 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100',
+                'h-7 w-7 flex-shrink-0 text-gray-400 hover:text-teal-500 opacity-0 transition-opacity group-hover:opacity-100',
                 isActive && 'opacity-100',
               )}
               onClick={(e) => e.stopPropagation()}

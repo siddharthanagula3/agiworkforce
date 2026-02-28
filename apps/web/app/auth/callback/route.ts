@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     }
 
     // Validate and sanitize the redirect URL to prevent open redirect attacks
-    const safeRedirectPath = getSafeRedirectUrl(next, requestUrl.origin, '/dashboard');
+    const safeRedirectPath = getSafeRedirectUrl(next, requestUrl.origin, '/chat');
 
     if (code) {
       const supabase = await createSupabaseServerClient();

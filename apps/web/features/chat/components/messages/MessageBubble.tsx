@@ -15,7 +15,6 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import {
-  User,
   Copy,
   Check,
   ChevronDown,
@@ -247,7 +246,16 @@ export const MessageBubble = React.memo(function MessageBubble({
     message.employeeColor || employeeChatService.getEmployeeAvatar(message.employeeName || '');
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+
+    if (diffSeconds < 60) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
   const handleCopy = async () => {
@@ -265,363 +273,355 @@ export const MessageBubble = React.memo(function MessageBubble({
     message.metadata.collaborationMessages.length > 0;
 
   return (
-    <div className={cn('group px-4 py-4', !isUser && 'hover:bg-muted/30')}>
-      <div className={cn('mx-auto flex max-w-3xl gap-4', isUser && 'flex-row-reverse')}>
-        {/* Avatar */}
-        <Avatar className="h-8 w-8 flex-shrink-0">
-          {isUser ? (
-            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600">
-              <User className="h-4 w-4 text-white" aria-hidden="true" />
-            </AvatarFallback>
+    <div
+      className={cn(
+        'group flex gap-3 px-4 py-3 transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50',
+        isUser && 'flex-row-reverse',
+      )}
+    >
+      {/* Avatar — only shown for assistant messages */}
+      {!isUser && (
+        <Avatar className="h-8 w-8 flex-shrink-0 mt-0.5">
+          <AvatarImage
+            src={message.employeeAvatar?.startsWith('/') ? message.employeeAvatar : undefined}
+          />
+          <AvatarFallback
+            className="text-xs font-semibold text-white"
+            style={{ backgroundColor: employeeColor }}
+          >
+            {employeeInitials}
+          </AvatarFallback>
+        </Avatar>
+      )}
+
+      {/* Content */}
+      <div className={cn(isUser ? 'max-w-[60%] ml-auto' : 'flex-1 min-w-0')}>
+        {/* Header: Name + Time */}
+        <div className="mb-1 flex items-center gap-2 text-sm">
+          <span className="font-medium">
+            {isUser
+              ? 'You'
+              : message.employeeName
+                  ?.split('-')
+                  .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(' ') || 'AI'}
+          </span>
+          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
+          {message.metadata?.isPinned && (
+            <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
+          )}
+          {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+        </div>
+
+        {/* Message Content */}
+        <div className={cn('prose prose-sm dark:prose-invert max-w-none', isUser && 'text-right')}>
+          {message.isStreaming && !cleanedContent.trim() ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+              <span className="text-sm">Thinking...</span>
+            </div>
           ) : (
             <>
-              <AvatarImage
-                src={message.employeeAvatar?.startsWith('/') ? message.employeeAvatar : undefined}
-              />
-              <AvatarFallback
-                className="text-xs font-semibold text-white"
-                style={{ backgroundColor: employeeColor }}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+                rehypePlugins={[rehypeHighlight, rehypeRaw]}
+                components={markdownComponents}
               >
-                {employeeInitials}
-              </AvatarFallback>
+                {cleanedContent}
+              </ReactMarkdown>
+              {message.isStreaming && cleanedContent.trim() && (
+                <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+              )}
             </>
           )}
-        </Avatar>
+        </div>
 
-        {/* Content */}
-        <div className={cn('min-w-0 flex-1', isUser && 'text-right')}>
-          {/* Header: Name + Time */}
-          <div className={cn('mb-1 flex items-center gap-2 text-sm', isUser && 'flex-row-reverse')}>
-            <span className="font-medium">
-              {isUser
-                ? 'You'
-                : message.employeeName
-                    ?.split('-')
-                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join(' ') || 'AI'}
-            </span>
-            <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
-            {message.metadata?.isPinned && (
-              <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
-            )}
-            {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+        {/* Artifacts */}
+        {!isUser && artifacts.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {artifacts.map((artifact) => (
+              <ArtifactPreview key={artifact.id} artifact={artifact} />
+            ))}
           </div>
+        )}
 
-          {/* Message Content */}
-          <div
-            className={cn(
-              'prose prose-sm dark:prose-invert max-w-none',
-              isUser && 'prose-p:text-right',
-            )}
-          >
-            {message.isStreaming && !cleanedContent.trim() ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
-                <span className="text-sm">Thinking...</span>
-              </div>
-            ) : (
-              <>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-                  rehypePlugins={[rehypeHighlight, rehypeRaw]}
-                  components={markdownComponents}
-                >
-                  {cleanedContent}
-                </ReactMarkdown>
-                {message.isStreaming && cleanedContent.trim() && (
-                  <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Artifacts */}
-          {!isUser && artifacts.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {artifacts.map((artifact) => (
-                <ArtifactPreview key={artifact.id} artifact={artifact} />
-              ))}
-            </div>
-          )}
-
-          {/* Image Result with Error Handling */}
-          {!isUser &&
-            message.metadata?.toolType === 'image-generation' &&
-            message.metadata?.imageUrl && (
-              <div className="mt-4">
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <img
-                    src={message.metadata.imageUrl}
-                    alt="Generated image"
-                    className="max-h-96 w-auto"
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.style.display = 'none';
-                      const errorDiv = document.createElement('div');
-                      errorDiv.className =
-                        'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground';
-                      errorDiv.innerHTML = '<span class="text-sm">⚠️ Image failed to load</span>';
-                      target.parentNode?.appendChild(errorDiv);
-                    }}
-                  />
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                    <a href={message.metadata.imageUrl} download>
-                      <Download className="mr-1.5 h-3 w-3" aria-hidden="true" />
-                      Download
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            )}
-
-          {/* Video Result with Error Handling */}
-          {!isUser &&
-            message.metadata?.toolType === 'video-generation' &&
-            message.metadata?.videoUrl && (
-              <div className="mt-4">
-                <video
-                  src={message.metadata.videoUrl}
-                  controls
-                  className="max-h-96 rounded-xl"
-                  poster={message.metadata.thumbnailUrl}
+        {/* Image Result with Error Handling */}
+        {!isUser &&
+          message.metadata?.toolType === 'image-generation' &&
+          message.metadata?.imageUrl && (
+            <div className="mt-4">
+              <div className="overflow-hidden rounded-xl border border-border">
+                <img
+                  src={message.metadata.imageUrl}
+                  alt="Generated image"
+                  className="max-h-96 w-auto"
+                  loading="lazy"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.style.display = 'none';
                     const errorDiv = document.createElement('div');
                     errorDiv.className =
-                      'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl';
-                    errorDiv.innerHTML = '<span class="text-sm">⚠️ Video failed to load</span>';
+                      'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground';
+                    errorDiv.innerHTML = '<span class="text-sm">⚠️ Image failed to load</span>';
                     target.parentNode?.appendChild(errorDiv);
                   }}
                 />
               </div>
-            )}
-
-          {/* Search Results */}
-          {!isUser && message.metadata?.searchResults && (
-            <div className="mt-4">
-              <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
+              <div className="mt-2 flex gap-2">
+                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                  <a href={message.metadata.imageUrl} download>
+                    <Download className="mr-1.5 h-3 w-3" aria-hidden="true" />
+                    Download
+                  </a>
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Thinking Steps (Collapsible) */}
-          {hasThinkingSteps && (
-            <Collapsible open={showThinking} onOpenChange={setShowThinking} className="mt-3">
-              <CollapsibleTrigger asChild>
-                <button
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-                  aria-expanded={showThinking}
-                  aria-label="Toggle thinking process visibility"
-                >
-                  {showThinking ? (
-                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                  )}
-                  <Brain className="h-3 w-3" aria-hidden="true" />
-                  Thinking process ({message.metadata?.thinkingSteps?.length} steps)
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <div className="space-y-2 rounded-lg bg-muted/50 p-3">
-                  {message.metadata?.thinkingSteps?.map((step, stepIndex) => (
-                    <div
-                      key={`thinking-step-${stepIndex}-${step.slice(0, 20)}`}
-                      className="flex gap-2 text-xs text-muted-foreground"
-                    >
-                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary">
-                        {stepIndex + 1}
-                      </span>
-                      <span>{step}</span>
-                    </div>
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+        {/* Video Result with Error Handling */}
+        {!isUser &&
+          message.metadata?.toolType === 'video-generation' &&
+          message.metadata?.videoUrl && (
+            <div className="mt-4">
+              <video
+                src={message.metadata.videoUrl}
+                controls
+                className="max-h-96 rounded-xl"
+                poster={message.metadata.thumbnailUrl}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  target.style.display = 'none';
+                  const errorDiv = document.createElement('div');
+                  errorDiv.className =
+                    'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl';
+                  errorDiv.innerHTML = '<span class="text-sm">⚠️ Video failed to load</span>';
+                  target.parentNode?.appendChild(errorDiv);
+                }}
+              />
+            </div>
           )}
 
-          {/* Agent Contributions (Collapsible) */}
-          {hasContributions && (
-            <Collapsible
-              open={showContributions}
-              onOpenChange={setShowContributions}
-              className="mt-3"
-            >
-              <CollapsibleTrigger asChild>
-                <button
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-                  aria-expanded={showContributions}
-                  aria-label="Toggle agent contributions visibility"
-                >
-                  {showContributions ? (
-                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                  )}
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {message.metadata?.collaborationMessages?.length} agents contributed
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-2">
-                {message.metadata?.collaborationMessages?.map((collab, collabIndex) => (
+        {/* Search Results */}
+        {!isUser && message.metadata?.searchResults && (
+          <div className="mt-4">
+            <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
+          </div>
+        )}
+
+        {/* Thinking Steps (Collapsible) */}
+        {hasThinkingSteps && (
+          <Collapsible open={showThinking} onOpenChange={setShowThinking} className="mt-3">
+            <CollapsibleTrigger asChild>
+              <button
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                aria-expanded={showThinking}
+                aria-label="Toggle thinking process visibility"
+              >
+                {showThinking ? (
+                  <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                )}
+                <Brain className="h-3 w-3" aria-hidden="true" />
+                Thinking process ({message.metadata?.thinkingSteps?.length} steps)
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="space-y-2 rounded-lg bg-muted/50 p-3">
+                {message.metadata?.thinkingSteps?.map((step, stepIndex) => (
                   <div
-                    key={`collab-${collabIndex}-${collab.employeeName}`}
-                    className="rounded-lg border border-border bg-card p-3"
+                    key={`thinking-step-${stepIndex}-${step.slice(0, 20)}`}
+                    className="flex gap-2 text-xs text-muted-foreground"
                   >
-                    <div className="mb-2 flex items-center gap-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback
-                          className="text-[10px] font-semibold text-white"
-                          style={{ backgroundColor: collab.employeeAvatar }}
-                        >
-                          {collab.employeeName
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs font-medium">{collab.employeeName}</span>
-                      {collab.messageType && (
-                        <Badge variant="secondary" className="h-4 text-[10px]">
-                          {collab.messageType}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{collab.content}</ReactMarkdown>
-                    </div>
+                    <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary">
+                      {stepIndex + 1}
+                    </span>
+                    <span>{step}</span>
                   </div>
                 ))}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-          {/* Actions (show on hover) */}
-          {!message.isStreaming && (
-            <div
-              className={cn(
-                'mt-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
-                isUser && 'flex-row-reverse',
-              )}
-            >
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={handleCopy}
-                      aria-label={copied ? 'Message copied' : 'Copy message'}
-                    >
-                      {copied ? (
-                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Copy</TooltipContent>
-                </Tooltip>
-
-                {!isUser && onReact && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onReact(message.id, 'up')}
-                          aria-label="Rate as good response"
-                        >
-                          <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Good response</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onReact(message.id, 'down')}
-                          aria-label="Rate as poor response"
-                        >
-                          <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Poor response</TooltipContent>
-                    </Tooltip>
-                  </>
+        {/* Agent Contributions (Collapsible) */}
+        {hasContributions && (
+          <Collapsible
+            open={showContributions}
+            onOpenChange={setShowContributions}
+            className="mt-3"
+          >
+            <CollapsibleTrigger asChild>
+              <button
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                aria-expanded={showContributions}
+                aria-label="Toggle agent contributions visibility"
+              >
+                {showContributions ? (
+                  <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" aria-hidden="true" />
                 )}
-
-                {/* More actions menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      aria-label="More message actions"
-                    >
-                      <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                    {onPin && (
-                      <DropdownMenuItem onClick={() => onPin(message.id)}>
-                        <Pin className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {message.metadata?.isPinned ? 'Unpin' : 'Pin'}
-                      </DropdownMenuItem>
-                    )}
-                    {onBranch && (
-                      <DropdownMenuItem onClick={() => onBranch(message.id)}>
-                        <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Create branch from here
-                      </DropdownMenuItem>
-                    )}
-                    {isUser && onEdit && (
-                      <DropdownMenuItem onClick={() => onEdit(message.id)}>
-                        <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    {!isUser && onRegenerate && (
-                      <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
-                        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Regenerate
-                      </DropdownMenuItem>
-                    )}
-                    {message.metadata?.tokensUsed && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                          {message.metadata.tokensUsed.toLocaleString()} tokens
-                          {message.metadata.model && ` · ${message.metadata.model}`}
-                        </div>
-                      </>
-                    )}
-                    <DropdownMenuSeparator />
-                    {onDelete && (
-                      <DropdownMenuItem
-                        onClick={() => onDelete(message.id)}
-                        className="text-destructive focus:text-destructive"
+                <Sparkles className="h-3 w-3" aria-hidden="true" />
+                {message.metadata?.collaborationMessages?.length} agents contributed
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 space-y-2">
+              {message.metadata?.collaborationMessages?.map((collab, collabIndex) => (
+                <div
+                  key={`collab-${collabIndex}-${collab.employeeName}`}
+                  className="rounded-lg border border-border bg-card p-3"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <Avatar className="h-5 w-5">
+                      <AvatarFallback
+                        className="text-[10px] font-semibold text-white"
+                        style={{ backgroundColor: collab.employeeAvatar }}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Delete
-                      </DropdownMenuItem>
+                        {collab.employeeName
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs font-medium">{collab.employeeName}</span>
+                    {collab.messageType && (
+                      <Badge variant="secondary" className="h-4 text-[10px]">
+                        {collab.messageType}
+                      </Badge>
                     )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TooltipProvider>
-            </div>
-          )}
-        </div>
+                  </div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{collab.content}</ReactMarkdown>
+                  </div>
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Actions (show on hover) */}
+        {!message.isStreaming && (
+          <div
+            className={cn(
+              'mt-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
+              isUser && 'justify-end',
+            )}
+          >
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleCopy}
+                    aria-label={copied ? 'Message copied' : 'Copy message'}
+                  >
+                    {copied ? (
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Copy</TooltipContent>
+              </Tooltip>
+
+              {!isUser && onReact && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onReact(message.id, 'up')}
+                        aria-label="Rate as good response"
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Good response</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onReact(message.id, 'down')}
+                        aria-label="Rate as poor response"
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Poor response</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+
+              {/* More actions menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label="More message actions"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={isUser ? 'end' : 'start'}>
+                  {onPin && (
+                    <DropdownMenuItem onClick={() => onPin(message.id)}>
+                      <Pin className="mr-2 h-4 w-4" aria-hidden="true" />
+                      {message.metadata?.isPinned ? 'Unpin' : 'Pin'}
+                    </DropdownMenuItem>
+                  )}
+                  {onBranch && (
+                    <DropdownMenuItem onClick={() => onBranch(message.id)}>
+                      <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Create branch from here
+                    </DropdownMenuItem>
+                  )}
+                  {isUser && onEdit && (
+                    <DropdownMenuItem onClick={() => onEdit(message.id)}>
+                      <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {!isUser && onRegenerate && (
+                    <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
+                      <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Regenerate
+                    </DropdownMenuItem>
+                  )}
+                  {message.metadata?.tokensUsed && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {message.metadata.tokensUsed.toLocaleString()} tokens
+                        {message.metadata.model && ` · ${message.metadata.model}`}
+                      </div>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  {onDelete && (
+                    <DropdownMenuItem
+                      onClick={() => onDelete(message.id)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TooltipProvider>
+          </div>
+        )}
       </div>
     </div>
   );

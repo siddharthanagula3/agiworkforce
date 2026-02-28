@@ -22,7 +22,7 @@ function LoginForm() {
   // Validate and sanitize the redirect URL to prevent open redirect attacks
   const redirectTo = useMemo(() => {
     const rawRedirect = searchParams.get('redirectTo');
-    return getSafeRedirectUrl(rawRedirect, appUrl, '/dashboard');
+    return getSafeRedirectUrl(rawRedirect, appUrl, '/chat');
   }, [searchParams, appUrl]);
 
   const [email, setEmail] = useState('');
