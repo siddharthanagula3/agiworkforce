@@ -276,8 +276,8 @@ const ChatSidebarContent = memo(function ChatSidebarContent({
                   ? session.updatedAt
                   : new Date(session.updatedAt || 0);
 
-              // Validate date
-              const safeUpdatedAt = isNaN(updatedAt.getTime()) ? new Date() : updatedAt;
+              // Validate date - use epoch start as stable fallback (not new Date() which changes every render)
+              const safeUpdatedAt = isNaN(updatedAt.getTime()) ? new Date(0) : updatedAt;
 
               return (
                 <ConversationListItem

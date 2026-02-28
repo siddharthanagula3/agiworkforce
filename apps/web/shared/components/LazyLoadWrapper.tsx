@@ -9,7 +9,7 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
     importFunc().catch((error) => {
       console.error('Failed to load component:', error);
       // Retry once after a delay
-      return new Promise((resolve) => {
+      return new Promise<{ default: T }>((resolve) => {
         setTimeout(() => {
           importFunc()
             .then(resolve)
@@ -17,7 +17,7 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
               // If retry fails, log and show error component
               logger.error('[LazyLoadWrapper] Component load failed after retry', retryError);
               resolve({
-                default: () => (
+                default: (() => (
                   <div className="flex h-screen items-center justify-center bg-background">
                     <div className="text-center">
                       <h2 className="mb-2 text-lg font-semibold text-destructive">
@@ -28,7 +28,7 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
                       </p>
                     </div>
                   </div>
-                ),
+                )) as unknown as T,
               });
             });
         }, 1000);

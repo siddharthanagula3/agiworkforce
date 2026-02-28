@@ -73,6 +73,7 @@ export default function SupportPage() {
     message: '',
   });
 
+  // TODO: Wire to actual support ticket API (e.g., POST /api/support)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Support form submitted:', form);

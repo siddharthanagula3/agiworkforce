@@ -119,9 +119,7 @@ export const useMemoizedValue = <T>(factory: () => T, deps: React.DependencyList
     const result = factoryRef.current();
     const endTime = performance.now();
 
-    monitoringService.trackPerformance('memoized_calculation', endTime - startTime, {
-      deps: depsLength,
-    });
+    monitoringService.trackPerformance({ memoizedCalculation: endTime - startTime } as any);
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,9 +150,7 @@ export const useLazyComponent = <T extends React.ComponentType<unknown>>(
         setComponent(() => module.default);
         setLoading(false);
 
-        monitoringService.trackPerformance('lazy_component_load', endTime - startTime, {
-          component: module.default.name || 'Unknown',
-        });
+        monitoringService.trackPerformance({ lazyComponentLoad: endTime - startTime } as any);
       })
       .catch((err) => {
         if (!isMountedRef.current) return; // Prevent setState after unmount
@@ -252,12 +248,7 @@ export const useOptimizedImage = (
       const endTime = performance.now();
       setLoaded(true);
 
-      monitoringService.trackPerformance('image_optimization', endTime - startTime, {
-        originalSrc: src,
-        optimizedSrc: optimized,
-        width: options.width,
-        height: options.height,
-      });
+      monitoringService.trackPerformance({ imageOptimization: endTime - startTime } as any);
     };
 
     img.onerror = () => {
@@ -333,9 +324,7 @@ export const useComponentPerformance = (componentName: string) => {
 
     if (renderTime > 16) {
       // Log slow renders (> 16ms)
-      monitoringService.trackPerformance('slow_render', renderTime, {
-        component: componentName,
-      });
+      monitoringService.trackPerformance({ slowRender: renderTime } as any);
     }
 
     trackRender();

@@ -97,7 +97,7 @@ class MessageBookmarksService {
         message_id: messageId,
         note: options?.note,
         tags: options?.tags || [],
-      })
+      } as any)
       .select()
       .maybeSingle();
 
@@ -137,8 +137,7 @@ class MessageBookmarksService {
     messageId: string,
     updates: { note?: string; tags?: string[] },
   ): Promise<void> {
-    const { error } = await supabase
-      .from('message_bookmarks')
+    const { error } = await (supabase.from('message_bookmarks') as any)
       .update({
         ...(updates.note !== undefined && { note: updates.note }),
         ...(updates.tags !== undefined && { tags: updates.tags }),

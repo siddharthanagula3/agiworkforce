@@ -292,7 +292,7 @@ const ResourcesPage: React.FC = () => {
           'ai workforce resources',
         ]}
         ogType="website"
-        schema={{
+        structuredData={{
           '@context': 'https://schema.org',
           '@type': 'CollectionPage',
           name: 'AI Automation Resources',

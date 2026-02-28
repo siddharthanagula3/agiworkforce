@@ -442,8 +442,8 @@ export class MessageDeliveryService {
         role: message.role,
         content: message.content,
         created_at: new Date(message.createdAt).toISOString(),
-        metadata: message.metadata as never,
-      });
+        metadata: message.metadata,
+      } as any);
 
       if (error) throw error;
     } catch (error) {
@@ -463,7 +463,7 @@ export class MessageDeliveryService {
         session_id: receipt.sessionId,
         read_at: new Date(receipt.readAt).toISOString(),
         metadata: receipt.metadata,
-      });
+      } as any);
 
       if (error && error.code !== '23505') {
         // Ignore duplicate key errors

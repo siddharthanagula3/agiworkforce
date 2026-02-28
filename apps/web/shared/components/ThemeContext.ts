@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { Theme } from './theme-constants';
+type Theme = 'light' | 'dark' | 'system';
 
 export interface ThemeContextType {
   theme: Theme;

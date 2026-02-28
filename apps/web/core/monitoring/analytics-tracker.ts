@@ -23,7 +23,7 @@ interface PageView {
 
 class AnalyticsService {
   private isInitialized = false;
-  private trackingId: string | null = null;
+  private trackingId: string | null | undefined = null;
   private sessionStartTime: number;
   private pageViews: PageView[] = [];
   private events: AnalyticsEvent[] = [];
@@ -42,7 +42,7 @@ class AnalyticsService {
   initialize(trackingId?: string): void {
     if (this.isInitialized) return;
 
-    this.trackingId = trackingId || process.env.NEXT_PUBLIC_GA_TRACKING_ID;
+    this.trackingId = (trackingId || process.env.NEXT_PUBLIC_GA_TRACKING_ID) ?? null;
 
     if (this.trackingId) {
       this.initializeGoogleAnalytics();

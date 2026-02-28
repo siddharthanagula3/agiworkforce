@@ -1,14 +1,51 @@
 import { supabase } from '@shared/lib/supabase-client';
-import type {
-  AIEmployee,
-  EmployeeCategory,
-  EmployeeLevel,
-  EmployeeStatus,
-  ToolDefinition,
-  WorkflowDefinition,
-  JobAssignment,
-  AIEmployeeSystemConfig,
-} from '../types/ai-employee';
+
+const db = supabase as any;
+
+// Local type definitions for the employee management service
+type EmployeeCategory = string;
+type EmployeeLevel = string;
+type EmployeeStatus = string;
+
+interface ToolDefinition {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+}
+
+interface WorkflowDefinition {
+  id: string;
+  name: string;
+  steps: unknown[];
+}
+
+interface JobAssignment {
+  id?: string;
+  jobId: string;
+  employeeId: string;
+  assignedAt: string;
+  status: string;
+  priority: number;
+  estimatedDuration: number;
+  toolsUsed: string[];
+  workflowsExecuted: string[];
+  performance: Record<string, unknown>;
+}
+
+interface AIEmployeeSystemConfig {
+  maxConcurrentEmployees: number;
+  defaultResponseTime: number;
+  qualityThreshold: number;
+  autoAssignment: boolean;
+  loadBalancing: boolean;
+  monitoringEnabled: boolean;
+  alertingEnabled: boolean;
+  backupEmployees: string[];
+  escalationRules: unknown[];
+}
+
+type AIEmployee = Record<string, any>;
 
 class AIEmployeeService {
   private config: AIEmployeeSystemConfig = {
@@ -32,7 +69,7 @@ class AIEmployeeService {
     available?: boolean;
   }) {
     try {
-      let query = supabase.from('ai_employees').select('*');
+      let query = db.from('ai_employees').select('*');
 
       if (filters?.category) {
         query = query.eq('category', filters.category);
@@ -82,7 +119,7 @@ class AIEmployeeService {
   // Create new AI employee
   async createEmployee(employee: Omit<AIEmployee, 'id' | 'createdAt' | 'updatedAt'>) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .insert({
           ...employee,
@@ -105,7 +142,7 @@ class AIEmployeeService {
   // Update employee
   async updateEmployee(id: string, updates: Partial<AIEmployee>) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .update({
           ...updates,
@@ -128,7 +165,7 @@ class AIEmployeeService {
   // Delete employee
   async deleteEmployee(id: string) {
     try {
-      const { error } = await supabase.from('ai_employees').delete().eq('id', id);
+      const { error } = await db.from('ai_employees').delete().eq('id', id);
 
       if (error) throw error;
       return { data: true, error: null };
@@ -152,7 +189,7 @@ class AIEmployeeService {
     department?: string;
   }) {
     try {
-      let query = supabase.from('ai_employees').select('*').eq('status', 'available');
+      let query = db.from('ai_employees').select('*').eq('status', 'available');
 
       if (requirements?.department) {
         query = query.eq('department', requirements.department);
@@ -162,10 +199,10 @@ class AIEmployeeService {
       if (error) throw error;
 
       // Filter by additional requirements
-      let filteredEmployees = data || [];
+      let filteredEmployees = (data || []) as any[];
 
       if (requirements?.skills && requirements.skills.length > 0) {
-        filteredEmployees = filteredEmployees.filter((emp) =>
+        filteredEmployees = filteredEmployees.filter((emp: any) =>
           requirements.skills!.some(
             (skill) =>
               emp.capabilities?.core_skills?.includes(skill) ||
@@ -175,12 +212,14 @@ class AIEmployeeService {
       }
 
       if (requirements?.level) {
-        filteredEmployees = filteredEmployees.filter((emp) => emp.level === requirements.level);
+        filteredEmployees = filteredEmployees.filter(
+          (emp: any) => emp.level === requirements.level,
+        );
       }
 
       if (requirements?.maxCost) {
         filteredEmployees = filteredEmployees.filter(
-          (emp) => emp.cost?.hourly_rate <= requirements.maxCost!,
+          (emp: any) => emp.cost?.hourly_rate <= requirements.maxCost!,
         );
       }
 
@@ -214,7 +253,7 @@ class AIEmployeeService {
         },
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('job_assignments')
         .insert(assignment)
         .select()
@@ -237,14 +276,14 @@ class AIEmployeeService {
   // Get employee performance stats
   async getEmployeePerformance(employeeId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .select('performance')
         .eq('id', employeeId)
         .maybeSingle();
 
       if (error) throw error;
-      return { data: data?.performance, error: null };
+      return { data: (data as any)?.performance, error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -255,7 +294,7 @@ class AIEmployeeService {
   // Update employee performance
   async updateEmployeePerformance(employeeId: string, performance: unknown) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .update({
           performance,
@@ -289,14 +328,14 @@ class AIEmployeeService {
   // Get employee tools
   async getEmployeeTools(employeeId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .select('tools')
         .eq('id', employeeId)
         .maybeSingle();
 
       if (error) throw error;
-      return { data: data?.tools || [], error: null };
+      return { data: (data as any)?.tools || [], error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -307,7 +346,7 @@ class AIEmployeeService {
   // Update employee tools
   async updateEmployeeTools(employeeId: string, tools: ToolDefinition[]) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .update({
           tools,
@@ -330,14 +369,14 @@ class AIEmployeeService {
   // Get employee workflows
   async getEmployeeWorkflows(employeeId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .select('workflows')
         .eq('id', employeeId)
         .maybeSingle();
 
       if (error) throw error;
-      return { data: data?.workflows || [], error: null };
+      return { data: (data as any)?.workflows || [], error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -348,7 +387,7 @@ class AIEmployeeService {
   // Update employee workflows
   async updateEmployeeWorkflows(employeeId: string, workflows: WorkflowDefinition[]) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .update({
           workflows,
@@ -371,7 +410,7 @@ class AIEmployeeService {
   // Search employees by skills
   async searchEmployeesBySkills(skills: string[], limit: number = 10) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_employees')
         .select('*')
         .eq('status', 'available')
@@ -380,7 +419,7 @@ class AIEmployeeService {
       if (error) throw error;
 
       // Filter employees by skills match
-      const matchedEmployees = (data || []).filter((emp) => {
+      const matchedEmployees = ((data || []) as any[]).filter((emp: any) => {
         const allSkills = [
           ...(emp.capabilities?.core_skills || []),
           ...(emp.capabilities?.technical_skills || []),
@@ -403,7 +442,7 @@ class AIEmployeeService {
   // Get employee assignments
   async getEmployeeAssignments(employeeId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('job_assignments')
         .select('*')
         .eq('employee_id', employeeId)
@@ -421,26 +460,27 @@ class AIEmployeeService {
   // Get system statistics
   async getSystemStats() {
     try {
-      const { data: employees, error: empError } = await supabase
+      const { data: employees, error: empError } = await db
         .from('ai_employees')
         .select('status, category, level');
 
       if (empError) throw empError;
 
-      const { data: assignments, error: assignError } = await supabase
+      const { data: assignments, error: assignError } = await db
         .from('job_assignments')
         .select('status, employee_id');
 
       if (assignError) throw assignError;
 
+      const emps = (employees || []) as any[];
+      const assigns = (assignments || []) as any[];
+
       const stats = {
-        totalEmployees: employees?.length || 0,
-        availableEmployees: employees?.filter((emp) => emp.status === 'available').length || 0,
-        workingEmployees: employees?.filter((emp) => emp.status === 'working').length || 0,
-        activeAssignments:
-          assignments?.filter((assign) => assign.status === 'in_progress').length || 0,
-        completedAssignments:
-          assignments?.filter((assign) => assign.status === 'completed').length || 0,
+        totalEmployees: emps.length,
+        availableEmployees: emps.filter((emp: any) => emp.status === 'available').length,
+        workingEmployees: emps.filter((emp: any) => emp.status === 'working').length,
+        activeAssignments: assigns.filter((assign: any) => assign.status === 'in_progress').length,
+        completedAssignments: assigns.filter((assign: any) => assign.status === 'completed').length,
         categories: this.groupByCategory(employees || []),
         levels: this.groupByLevel(employees || []),
       };
@@ -453,15 +493,15 @@ class AIEmployeeService {
     }
   }
 
-  private groupByCategory(employees: unknown[]) {
-    return employees.reduce((acc, emp) => {
+  private groupByCategory(employees: AIEmployee[]) {
+    return employees.reduce((acc: Record<string, number>, emp: AIEmployee) => {
       acc[emp.category] = (acc[emp.category] || 0) + 1;
       return acc;
     }, {});
   }
 
-  private groupByLevel(employees: unknown[]) {
-    return employees.reduce((acc, emp) => {
+  private groupByLevel(employees: AIEmployee[]) {
+    return employees.reduce((acc: Record<string, number>, emp: AIEmployee) => {
       acc[emp.level] = (acc[emp.level] || 0) + 1;
       return acc;
     }, {});

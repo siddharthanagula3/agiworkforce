@@ -46,9 +46,9 @@ export interface AnalysisResult {
  * NLPProcessor - Main class for processing natural language input
  */
 export class NLPProcessor {
-  private intentPatterns: Map<IntentType, RegExp[]>;
-  private domainKeywords: Map<DomainType, string[]>;
-  private complexityIndicators: Map<ComplexityLevel, string[]>;
+  private intentPatterns!: Map<IntentType, RegExp[]>;
+  private domainKeywords!: Map<DomainType, string[]>;
+  private complexityIndicators!: Map<ComplexityLevel, string[]>;
 
   constructor() {
     this.initializePatterns();

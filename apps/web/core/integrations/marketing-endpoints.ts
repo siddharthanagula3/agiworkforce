@@ -3,6 +3,10 @@
 
 import { supabase } from '@shared/lib/supabase-client';
 
+// Tables not yet in generated Database type
+
+const db = supabase as any;
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 // ============================================================================
@@ -119,7 +123,7 @@ export async function getBlogPosts(params: BlogPostsParams = {}) {
 }
 
 export async function getBlogCategories() {
-  const { data, error } = await supabase.from('blog_categories').select('*').order('name');
+  const { data, error } = await db.from('blog_categories').select('*').order('name');
 
   if (error) throw error;
   return data;
@@ -142,7 +146,7 @@ export interface Resource {
 }
 
 export async function getResources(type?: string) {
-  let query = supabase
+  let query = db
     .from('resources')
     .select('*')
     .eq('published', true)
@@ -194,7 +198,7 @@ export interface PricingPlan {
 }
 
 export async function getPricingPlans() {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('subscription_plans')
     .select('*')
     .eq('active', true)
@@ -236,17 +240,14 @@ export interface FAQItem {
 }
 
 export async function getSupportCategories() {
-  const { data, error } = await supabase
-    .from('support_categories')
-    .select('*')
-    .order('display_order');
+  const { data, error } = await db.from('support_categories').select('*').order('display_order');
 
   if (error) throw error;
   return data as SupportCategory[];
 }
 
 export async function getHelpArticles(categorySlug?: string) {
-  let query = supabase
+  let query = db
     .from('help_articles')
     .select(
       `
@@ -257,7 +258,7 @@ export async function getHelpArticles(categorySlug?: string) {
     .eq('published', true);
 
   if (categorySlug) {
-    const { data: category } = await supabase
+    const { data: category } = await db
       .from('support_categories')
       .select('id')
       .eq('slug', categorySlug)
@@ -275,7 +276,7 @@ export async function getHelpArticles(categorySlug?: string) {
 }
 
 export async function getFAQItems() {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('faq_items')
     .select('*')
     .eq('published', true)
@@ -297,14 +298,14 @@ export interface SupportTicket {
 }
 
 export async function createSupportTicket(ticket: SupportTicket) {
-  const { data, error } = await supabase.from('support_tickets').insert(ticket).select().single();
+  const { data, error } = await db.from('support_tickets').insert(ticket).select().single();
 
   if (error) throw error;
   return data;
 }
 
 export async function getUserTickets() {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('support_tickets')
     .select(
       `

@@ -52,7 +52,7 @@ describe('GoogleProvider', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     provider = new GoogleProvider();
   });

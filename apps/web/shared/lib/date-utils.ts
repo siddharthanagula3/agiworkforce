@@ -15,7 +15,7 @@ export function ensureValidDate(value: unknown): Date {
 
   // Try to parse as date
   if (value !== null && value !== undefined) {
-    const parsed = new Date(value);
+    const parsed = new Date(value as string | number);
     if (!isNaN(parsed.getTime())) {
       return parsed;
     }

@@ -83,7 +83,7 @@ export class ChatPersistenceService {
         role: metadata?.role || 'assistant',
         provider: metadata?.provider || 'openai',
         is_active: true,
-      })
+      } as any)
       .select()
       .maybeSingle();
 
@@ -107,7 +107,7 @@ export class ChatPersistenceService {
 
     if (error) throw new Error(`Failed to load sessions: ${error.message}`);
 
-    return (data || []).map((session) => {
+    return (data || []).map((session: any) => {
       // Extract message count from nested select result
       // Supabase returns count as an array with single object or direct count
       const chatMessages = session.web_messages as
@@ -162,7 +162,7 @@ export class ChatPersistenceService {
     const hasMore = items.length > limit;
     const resultItems = hasMore ? items.slice(0, limit) : items;
 
-    const sessions = resultItems.map((session) => {
+    const sessions = resultItems.map((session: any) => {
       const chatMessages = session.web_messages as
         | { count: number }[]
         | { count: number }
@@ -181,7 +181,7 @@ export class ChatPersistenceService {
     });
 
     // The next cursor is the updated_at of the last item
-    const lastItem = resultItems[resultItems.length - 1];
+    const lastItem = resultItems[resultItems.length - 1] as any;
     const nextCursor = hasMore && lastItem ? lastItem.updated_at : null;
 
     return {
@@ -224,8 +224,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only update their own sessions
    */
   async updateSessionTitle(sessionId: string, title: string, userId?: string): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({
         title,
         updated_at: new Date().toISOString(),
@@ -253,8 +252,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only delete their own sessions
    */
   async deleteSession(sessionId: string, userId?: string): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', sessionId);
 
@@ -282,8 +280,7 @@ export class ChatPersistenceService {
     role: 'user' | 'assistant' | 'system',
     content: string,
   ): Promise<ChatMessage> {
-    const { data, error } = await supabase
-      .from('web_messages')
+    const { data, error } = await (supabase.from('web_messages') as any)
       .insert({
         conversation_id: sessionId,
         role,
@@ -296,8 +293,7 @@ export class ChatPersistenceService {
     if (!data) throw new Error('Failed to save message: No data returned');
 
     // Update session's last_message_at
-    await supabase
-      .from('web_conversations')
+    await (supabase.from('web_conversations') as any)
       .update({
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -373,7 +369,7 @@ export class ChatPersistenceService {
     );
 
     // The next cursor is the created_at of the last item
-    const lastItem = resultItems[resultItems.length - 1];
+    const lastItem = resultItems[resultItems.length - 1] as any;
     const nextCursor = hasMore && lastItem ? lastItem.created_at : null;
 
     return {
@@ -427,7 +423,7 @@ export class ChatPersistenceService {
       .map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
 
     // The next cursor is the created_at of the first item (oldest in this batch)
-    const oldestItem = resultItems[resultItems.length - 1];
+    const oldestItem = resultItems[resultItems.length - 1] as any;
     const nextCursor = hasMore && oldestItem ? oldestItem.created_at : null;
 
     return {
@@ -443,8 +439,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only update messages from their own sessions
    */
   async updateMessage(messageId: string, newContent: string): Promise<ChatMessage> {
-    const { data, error } = await supabase
-      .from('web_messages')
+    const { data, error } = await (supabase.from('web_messages') as any)
       .update({
         content: newContent,
         // updated_at, edited, and edit_count are automatically handled by the database trigger
@@ -557,8 +552,7 @@ export class ChatPersistenceService {
     isStarred: boolean,
     userId?: string,
   ): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({
         is_starred: isStarred,
         updated_at: new Date().toISOString(),
@@ -583,8 +577,7 @@ export class ChatPersistenceService {
    * Update session pinned state
    */
   async updateSessionPinned(sessionId: string, isPinned: boolean, userId?: string): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({
         is_pinned: isPinned,
         updated_at: new Date().toISOString(),
@@ -613,8 +606,7 @@ export class ChatPersistenceService {
     isArchived: boolean,
     userId?: string,
   ): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({
         is_archived: isArchived,
         updated_at: new Date().toISOString(),
@@ -643,8 +635,7 @@ export class ChatPersistenceService {
     sharedLink: string | null,
     userId?: string,
   ): Promise<void> {
-    let query = supabase
-      .from('web_conversations')
+    let query = (supabase.from('web_conversations') as any)
       .update({
         shared_link: sharedLink,
         updated_at: new Date().toISOString(),
@@ -697,7 +688,7 @@ export class ChatPersistenceService {
           role: msg.role,
           content: msg.content,
           created_at: new Date(msg.createdAt).toISOString(),
-        })),
+        })) as any,
       );
 
       if (error) {
@@ -705,8 +696,7 @@ export class ChatPersistenceService {
       }
 
       // Update target session's last_message_at
-      await supabase
-        .from('web_conversations')
+      await (supabase.from('web_conversations') as any)
         .update({
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

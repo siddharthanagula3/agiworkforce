@@ -98,7 +98,7 @@ class FolderManagementService {
         description: folderData.description,
         parent_folder_id: folderData.parentFolderId,
         sort_order: 0, // New folders go to top by default
-      })
+      } as any)
       .select()
       .maybeSingle();
 
@@ -129,8 +129,7 @@ class FolderManagementService {
     },
     userId?: string,
   ): Promise<void> {
-    let query = supabase
-      .from('chat_folders')
+    let query = (supabase.from('chat_folders') as any)
       .update({
         ...(updates.name && { name: updates.name }),
         ...(updates.color && { color: updates.color }),
@@ -232,7 +231,7 @@ class FolderManagementService {
       return [];
     }
 
-    return (data || []).map((s) => s.id);
+    return (data || []).map((s: any) => s.id);
   }
 
   /**
@@ -244,7 +243,9 @@ class FolderManagementService {
   ): Promise<void> {
     // Update each folder's sort order
     const updates = folderOrders.map(({ id, sortOrder }) => {
-      let query = supabase.from('chat_folders').update({ sort_order: sortOrder }).eq('id', id);
+      let query = (supabase.from('chat_folders') as any)
+        .update({ sort_order: sortOrder })
+        .eq('id', id);
 
       if (userId) {
         query = query.eq('user_id', userId);

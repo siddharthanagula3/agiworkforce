@@ -102,10 +102,10 @@ export class TokenTrackingService {
     const modelKey = model.toLowerCase();
 
     // Get pricing for the model
-    const pricing =
-      PRICING[providerKey as keyof typeof PRICING]?.[
-        modelKey as keyof (typeof PRICING)[typeof providerKey]
-      ];
+    const providerPricing = PRICING[providerKey as keyof typeof PRICING] as
+      | Record<string, { input: number; output: number }>
+      | undefined;
+    const pricing = providerPricing?.[modelKey];
 
     if (!pricing) {
       console.warn(`No pricing found for ${provider}/${model}, using default rates`);

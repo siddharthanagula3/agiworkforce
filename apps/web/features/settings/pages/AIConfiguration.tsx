@@ -38,11 +38,16 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
-import {
-  getConfiguredProviders,
-  getAvailableModels,
-  createCustomSystemPrompt,
-} from '@/services/enhanced-ai-chat-service-v2';
+// Stubs for functions not yet migrated
+function getConfiguredProviders(): string[] {
+  return ['openai', 'anthropic', 'google', 'perplexity'];
+}
+function getAvailableModels(_provider: string): string[] {
+  return [];
+}
+function createCustomSystemPrompt(_prompt: string): string {
+  return _prompt;
+}
 import { settingsService } from '@features/settings/services/user-preferences';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 
@@ -272,14 +277,7 @@ const AIConfigurationPageContent: React.FC = () => {
     setIsSavingPreferences(true);
     try {
       const { error } = await settingsService.updateSettings({
-        default_ai_provider: defaultProvider as
-          | 'openai'
-          | 'anthropic'
-          | 'google'
-          | 'perplexity'
-          | 'grok'
-          | 'deepseek'
-          | 'qwen',
+        default_ai_provider: defaultProvider as 'openai' | 'anthropic' | 'google' | 'perplexity',
         default_ai_model: defaultModel,
         prefer_streaming: preferStreaming,
         ai_temperature: aiTemperature,

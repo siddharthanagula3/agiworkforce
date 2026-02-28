@@ -443,7 +443,7 @@ export function useToggle2FA(): UseMutationResult<
     mutationFn: async (enabled: boolean): Promise<boolean> => {
       const { error } = enabled
         ? await settingsService.enable2FA()
-        : await settingsService.disable2FA();
+        : await settingsService.disable2FA('');
 
       if (error) {
         throw new Error(error);
@@ -565,7 +565,7 @@ export function useOrganizationSettings(
     queryKey: ['settings', 'organization', organizationId ?? 'current'],
     queryFn: async (): Promise<OrganizationSettings | null> => {
       // Try to get organization from database
-      let query = supabase.from('organizations').select('*');
+      let query = (supabase as any).from('organizations').select('*');
 
       if (organizationId) {
         query = query.eq('id', organizationId);
@@ -583,20 +583,21 @@ export function useOrganizationSettings(
 
       if (!data) return null;
 
+      const row = data as any;
       return {
-        id: data.id,
-        name: data.name,
-        slug: data.slug,
-        logoUrl: data.logo_url,
-        description: data.description,
-        website: data.website,
-        billingEmail: data.billing_email,
-        plan: data.plan || 'free',
-        memberCount: data.member_count || 1,
-        maxMembers: data.max_members || 5,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-        settings: data.settings || {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        logoUrl: row.logo_url,
+        description: row.description,
+        website: row.website,
+        billingEmail: row.billing_email,
+        plan: row.plan || 'free',
+        memberCount: row.member_count || 1,
+        maxMembers: row.max_members || 5,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        settings: row.settings || {
           allowMemberInvites: true,
           requireEmailVerification: true,
           defaultRole: 'member',
@@ -633,7 +634,7 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     { organizationId: string; updates: Partial<OrganizationSettings> }
   >({
     mutationFn: async ({ organizationId, updates }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('organizations')
         .update({
           name: updates.name,
@@ -697,7 +698,7 @@ export function useTeamMembers(
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organizationId) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('organization_members')
         .select(
           `
@@ -728,7 +729,7 @@ export function useTeamMembers(
         throw error;
       }
 
-      return (data || []).map((member) => {
+      return ((data || []) as any[]).map((member) => {
         const user = member.users as {
           email: string;
           display_name: string;
@@ -777,7 +778,7 @@ export function useInviteTeamMember(): UseMutationResult<
     { organizationId: string; email: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ organizationId, email, role }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('organization_members')
         .insert({
           organization_id: organizationId,
@@ -791,16 +792,17 @@ export function useInviteTeamMember(): UseMutationResult<
 
       if (error) throw error;
 
+      const row = data as any;
       return {
-        id: data.id,
-        userId: data.user_id,
-        organizationId: data.organization_id,
+        id: row.id,
+        userId: row.user_id,
+        organizationId: row.organization_id,
         email: email,
         name: '',
         avatarUrl: null,
-        role: data.role,
-        status: 'pending',
-        invitedAt: data.invited_at,
+        role: row.role,
+        status: 'pending' as const,
+        invitedAt: row.invited_at,
         joinedAt: null,
         lastActiveAt: null,
         permissions: [],
@@ -833,7 +835,10 @@ export function useRemoveTeamMember(): UseMutationResult<
 
   return useMutation<void, Error, { memberId: string; organizationId: string }>({
     mutationFn: async ({ memberId }) => {
-      const { error } = await supabase.from('organization_members').delete().eq('id', memberId);
+      const { error } = await (supabase as any)
+        .from('organization_members')
+        .delete()
+        .eq('id', memberId);
 
       if (error) throw error;
     },
@@ -868,7 +873,7 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
     { memberId: string; organizationId: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ memberId, role }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('organization_members')
         .update({ role })
         .eq('id', memberId);
@@ -933,7 +938,7 @@ export function useUserActivity(
 
       if (!targetUserId) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_activity')
         .select('*')
         .eq('user_id', targetUserId)
@@ -948,7 +953,7 @@ export function useUserActivity(
         throw error;
       }
 
-      return (data || []).map((activity) => ({
+      return ((data || []) as any[]).map((activity) => ({
         id: activity.id,
         userId: activity.user_id,
         type: activity.type || 'other',
@@ -1034,7 +1039,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       },
     ],
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      let query = supabase
+      let query = (supabase as any)
         .from('audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
@@ -1070,7 +1075,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         throw error;
       }
 
-      return (data || []).map((log) => ({
+      return ((data || []) as any[]).map((log) => ({
         id: log.id,
         userId: log.user_id,
         action: log.action,
@@ -1098,7 +1103,10 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
   return useQuery<string[], Error>({
     queryKey: ['audit', 'actions'],
     queryFn: async (): Promise<string[]> => {
-      const { data, error } = await supabase.from('audit_logs').select('action').limit(1000);
+      const { data, error } = await (supabase as any)
+        .from('audit_logs')
+        .select('action')
+        .limit(1000);
 
       if (error) {
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
@@ -1108,7 +1116,7 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
       }
 
       const actions = new Set<string>();
-      (data || []).forEach((row) => {
+      ((data || []) as any[]).forEach((row) => {
         if (row.action) actions.add(row.action);
       });
 

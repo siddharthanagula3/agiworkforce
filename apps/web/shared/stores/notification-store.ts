@@ -442,9 +442,8 @@ export const useNotificationStore = create<NotificationStore>()(
               icon: '/favicon.ico', // Adjust path as needed
               badge: '/badge.png', // Adjust path as needed
               tag: notification.id,
-              renotify: false,
               requireInteraction: notification.priority === 'high',
-            });
+            } as NotificationOptions);
 
             desktopNotification.onclick = () => {
               window.focus();

@@ -15,7 +15,7 @@ import {
   createUserMessage,
   createSystemMessage,
   createEmployeeMessage,
-} from '../../../tests/fixtures/test-data-factory';
+} from '../../tests/fixtures/test-data-factory';
 
 describe('Mission Control Store', () => {
   beforeEach(() => {

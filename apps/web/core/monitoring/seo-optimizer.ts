@@ -84,24 +84,24 @@ class SEOService {
     // Update meta tags
     this.updateMetaTag('description', fullSEO.description);
     this.updateMetaTag('keywords', fullSEO.keywords.join(', '));
-    this.updateMetaTag('author', fullSEO.author);
-    this.updateMetaTag('robots', fullSEO.robots);
+    this.updateMetaTag('author', fullSEO.author || '');
+    this.updateMetaTag('robots', fullSEO.robots || '');
 
     // Update Open Graph tags
     this.updateMetaTag('og:title', fullSEO.title, 'property');
     this.updateMetaTag('og:description', fullSEO.description, 'property');
-    this.updateMetaTag('og:type', fullSEO.ogType, 'property');
+    this.updateMetaTag('og:type', fullSEO.ogType || '', 'property');
     this.updateMetaTag('og:url', this.getCanonicalUrl(currentPath), 'property');
-    this.updateMetaTag('og:image', fullSEO.ogImage, 'property');
+    this.updateMetaTag('og:image', fullSEO.ogImage || '', 'property');
     this.updateMetaTag('og:site_name', 'AGI Workforce', 'property');
 
     // Update Twitter Card tags
-    this.updateMetaTag('twitter:card', fullSEO.twitterCard);
-    this.updateMetaTag('twitter:site', fullSEO.twitterSite);
-    this.updateMetaTag('twitter:creator', fullSEO.twitterCreator);
+    this.updateMetaTag('twitter:card', fullSEO.twitterCard || '');
+    this.updateMetaTag('twitter:site', fullSEO.twitterSite || '');
+    this.updateMetaTag('twitter:creator', fullSEO.twitterCreator || '');
     this.updateMetaTag('twitter:title', fullSEO.title);
     this.updateMetaTag('twitter:description', fullSEO.description);
-    this.updateMetaTag('twitter:image', fullSEO.ogImage);
+    this.updateMetaTag('twitter:image', fullSEO.ogImage || '');
 
     // Update canonical URL
     this.updateCanonicalUrl(fullSEO.canonicalUrl || this.getCanonicalUrl(currentPath));
@@ -394,7 +394,8 @@ class SEOService {
       title: document.title,
       description: this.getMetaContent('description'),
       keywords: this.getMetaContent('keywords').split(', '),
-      canonicalUrl: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+      canonicalUrl:
+        document.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? undefined,
       ogImage: this.getMetaContent('og:image'),
       ogType: this.getMetaContent('og:type'),
       twitterCard: this.getMetaContent('twitter:card'),

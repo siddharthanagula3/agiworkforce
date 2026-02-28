@@ -75,6 +75,7 @@ const TOOLS = [
   { id: 'search', label: 'Web Search', icon: Search, color: 'text-green-500' },
 ];
 
+// ~5k tokens at 4 chars/token average — prevents excessive context and API costs
 const MAX_CHAR_LENGTH = 20000;
 
 const DEFAULT_EMPLOYEES: AIEmployee[] = [
@@ -129,25 +130,25 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value;
 
+      setMessage(value);
+
       if (value.length > MAX_CHAR_LENGTH) {
         setSubmitError(`Character limit exceeded by ${value.length - MAX_CHAR_LENGTH} characters`);
-        return;
-      }
-
-      const charPercentage = (value.length / MAX_CHAR_LENGTH) * 100;
-      if (charPercentage > 90) {
-        setSubmitError(
-          `${MAX_CHAR_LENGTH - value.length} characters remaining (${charPercentage.toFixed(0)}% used)`,
-        );
-      } else if (
-        submitError?.includes('Character limit') ||
-        submitError?.includes('characters remaining')
-      ) {
-        setSubmitError(null);
+      } else {
+        const charPercentage = (value.length / MAX_CHAR_LENGTH) * 100;
+        if (charPercentage > 90) {
+          setSubmitError(
+            `${MAX_CHAR_LENGTH - value.length} characters remaining (${charPercentage.toFixed(0)}% used)`,
+          );
+        } else if (
+          submitError?.includes('Character limit') ||
+          submitError?.includes('characters remaining')
+        ) {
+          setSubmitError(null);
+        }
       }
 
       const cursorPos = e.target.selectionStart || 0;
-      setMessage(value);
 
       // Check for @ mention
       const textBeforeCursor = value.substring(0, cursorPos);
@@ -213,6 +214,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
   const handleSubmit = async () => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading) return;
+    if (message.length > MAX_CHAR_LENGTH) return;
 
     setSubmitError(null);
 

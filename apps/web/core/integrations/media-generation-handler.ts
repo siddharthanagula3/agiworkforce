@@ -138,7 +138,6 @@ export class MediaGenerationService {
           size: dallEResult.size,
           model: dallEResult.model,
           style: dallEResult.style,
-          revisedPrompt: dallEResult.revisedPrompt,
         },
         cost,
         tokensUsed: 0, // DALL-E doesn't report tokens for image generation
@@ -184,7 +183,7 @@ export class MediaGenerationService {
         model: request.model || 'veo-3.1-generate-preview',
         resolution: request.resolution === '4k' ? '1080p' : request.resolution, // Veo 3.1 doesn't support 4k yet
         duration: request.duration || 8,
-        aspectRatio: request.aspectRatio || '16:9',
+        aspectRatio: (request.aspectRatio === '4:3' ? '16:9' : request.aspectRatio) || '16:9',
         fps: request.fps || 24,
         seed: request.seed,
       };

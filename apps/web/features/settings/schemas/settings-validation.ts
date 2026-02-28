@@ -52,24 +52,19 @@ export const profileSettingsSchema = z.object({
         .optional(),
     ),
 
-  timezone: z.enum(
-    [
-      'America/New_York',
-      'America/Chicago',
-      'America/Denver',
-      'America/Los_Angeles',
-      'Europe/London',
-      'Europe/Paris',
-      'Asia/Tokyo',
-      'Asia/Shanghai',
-      'Australia/Sydney',
-    ],
-    { errorMap: () => ({ message: 'Please select a valid timezone' }) },
-  ),
+  timezone: z.enum([
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Europe/London',
+    'Europe/Paris',
+    'Asia/Tokyo',
+    'Asia/Shanghai',
+    'Australia/Sydney',
+  ]),
 
-  language: z.enum(['en', 'es', 'fr', 'de', 'zh', 'ja'], {
-    errorMap: () => ({ message: 'Please select a valid language' }),
-  }),
+  language: z.enum(['en', 'es', 'fr', 'de', 'zh', 'ja']),
 
   bio: z
     .string()
@@ -150,9 +145,7 @@ export type NotificationPreferencesFormData = z.infer<typeof notificationPrefere
 // ============================================================================
 
 export const appearanceSettingsSchema = z.object({
-  theme: z.enum(['dark', 'light', 'auto'], {
-    errorMap: () => ({ message: 'Please select a valid theme' }),
-  }),
+  theme: z.enum(['dark', 'light', 'auto']),
   auto_save: z.boolean(),
   debug_mode: z.boolean(),
   analytics_enabled: z.boolean(),
@@ -165,12 +158,8 @@ export type AppearanceSettingsFormData = z.infer<typeof appearanceSettingsSchema
 // ============================================================================
 
 export const advancedSettingsSchema = z.object({
-  cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB'], {
-    errorMap: () => ({ message: 'Please select a valid cache size' }),
-  }),
-  backup_frequency: z.enum(['hourly', 'daily', 'weekly', 'monthly'], {
-    errorMap: () => ({ message: 'Please select a valid backup frequency' }),
-  }),
+  cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB']),
+  backup_frequency: z.enum(['hourly', 'daily', 'weekly', 'monthly']),
   retention_period: z
     .number()
     .int('Retention period must be a whole number')
@@ -295,7 +284,7 @@ export function getFirstError(error: z.ZodError): string {
 export function zodErrorsToFormErrors(error: z.ZodError): Record<string, { message: string }> {
   const formErrors: Record<string, { message: string }> = {};
 
-  for (const zodError of error.errors) {
+  for (const zodError of error.issues) {
     const path = zodError.path.join('.');
     if (path && !formErrors[path]) {
       formErrors[path] = { message: zodError.message };

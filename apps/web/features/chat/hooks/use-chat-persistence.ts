@@ -78,16 +78,15 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
         throw new Error('Session not found');
       }
 
+      const sd = sessionData as any;
       const session: ChatSession = {
-        id: sessionData.id,
-        userId: sessionData.user_id,
-        title: sessionData.title ?? 'Untitled',
-        mode:
-          ((sessionData as Record<string, unknown>).mode as string as ChatSession['mode']) ||
-          'chat',
-        createdAt: new Date(sessionData.created_at ?? Date.now()),
-        updatedAt: new Date(sessionData.updated_at ?? Date.now()),
-        metadata: (sessionData.metadata as unknown as ChatSession['metadata']) ?? {
+        id: sd.id,
+        userId: sd.user_id,
+        title: sd.title ?? 'Untitled',
+        mode: ((sd as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
+        createdAt: new Date(sd.created_at ?? Date.now()),
+        updatedAt: new Date(sd.updated_at ?? Date.now()),
+        metadata: (sd.metadata as unknown as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
@@ -107,7 +106,8 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
 
       // Restore messages to mission store
       if (messagesData && messagesData.length > 0) {
-        const restoredMessages = messagesData.map((msg) => {
+        const restoredMessages = messagesData.map((rawMsg) => {
+          const msg = rawMsg as any;
           const md = (msg as Record<string, unknown>).metadata as
             | Record<string, unknown>
             | undefined;
@@ -177,8 +177,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
         new Set(Object.keys(activeEmployees).concat(currentSession.metadata.agentsInvolved || [])),
       );
 
-      const { error: updateError } = await supabase
-        .from('web_conversations')
+      const { error: updateError } = await (supabase.from('web_conversations') as any)
         .update({
           metadata: {
             messageCount: messages.length,
@@ -242,20 +241,21 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
                 lastActivity: new Date().toISOString(),
               },
             },
-          ])
+          ] as any)
           .select()
           .single();
 
         if (createError) throw createError;
 
+        const d = data as any;
         const newSession: ChatSession = {
-          id: data.id,
-          userId: data.user_id,
-          title: data.title ?? 'Untitled',
-          mode: ((data as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-          createdAt: new Date(data.created_at ?? Date.now()),
-          updatedAt: new Date(data.updated_at ?? Date.now()),
-          metadata: (data.metadata as unknown as ChatSession['metadata']) ?? {
+          id: d.id,
+          userId: d.user_id,
+          title: d.title ?? 'Untitled',
+          mode: ((d as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
+          createdAt: new Date(d.created_at ?? Date.now()),
+          updatedAt: new Date(d.updated_at ?? Date.now()),
+          metadata: (d.metadata as unknown as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -265,7 +265,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
         setCurrentSession(newSession);
         toast.success('Chat session created');
 
-        return data.id;
+        return d.id;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create session';
         setError(errorMsg);
@@ -284,8 +284,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
       if (!currentSession) return;
 
       try {
-        const { error: updateError } = await supabase
-          .from('web_conversations')
+        const { error: updateError } = await (supabase.from('web_conversations') as any)
           .update({ title, updated_at: new Date().toISOString() })
           .eq('id', currentSession.id);
 
@@ -354,20 +353,23 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
 
       if (error) throw error;
 
-      return data.map((session) => ({
-        id: session.id,
-        userId: session.user_id,
-        title: session.title ?? 'Untitled',
-        mode:
-          ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-        createdAt: new Date(session.created_at ?? Date.now()),
-        updatedAt: new Date(session.updated_at ?? Date.now()),
-        metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
-          messageCount: 0,
-          agentsInvolved: [],
-          lastActivity: new Date(),
-        },
-      }));
+      return data.map((rawSession) => {
+        const session = rawSession as any;
+        return {
+          id: session.id,
+          userId: session.user_id,
+          title: session.title ?? 'Untitled',
+          mode:
+            ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
+          createdAt: new Date(session.created_at ?? Date.now()),
+          updatedAt: new Date(session.updated_at ?? Date.now()),
+          metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
+            messageCount: 0,
+            agentsInvolved: [],
+            lastActivity: new Date(),
+          },
+        };
+      });
     } catch (err) {
       console.error('Failed to get recent sessions:', err);
       return [];
@@ -386,20 +388,23 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
 
       if (error) throw error;
 
-      return data.map((session) => ({
-        id: session.id,
-        userId: session.user_id,
-        title: session.title ?? 'Untitled',
-        mode:
-          ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
-        createdAt: new Date(session.created_at ?? Date.now()),
-        updatedAt: new Date(session.updated_at ?? Date.now()),
-        metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
-          messageCount: 0,
-          agentsInvolved: [],
-          lastActivity: new Date(),
-        },
-      }));
+      return data.map((rawSession) => {
+        const session = rawSession as any;
+        return {
+          id: session.id,
+          userId: session.user_id,
+          title: session.title ?? 'Untitled',
+          mode:
+            ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
+          createdAt: new Date(session.created_at ?? Date.now()),
+          updatedAt: new Date(session.updated_at ?? Date.now()),
+          metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
+            messageCount: 0,
+            agentsInvolved: [],
+            lastActivity: new Date(),
+          },
+        };
+      });
     } catch (err) {
       console.error('Failed to search sessions:', err);
       return [];
