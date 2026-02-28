@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import * as Sentry from '@shared/lib/sentry';
 
 // Performance monitoring interface
 interface PerformanceMetrics {
@@ -8,20 +8,6 @@ interface PerformanceMetrics {
   cumulativeLayoutShift: number;
   firstInputDelay: number;
   timeToInteractive: number;
-}
-
-// Error tracking interface
-interface ErrorContext {
-  userId?: string;
-  userEmail?: string;
-  sessionId: string;
-  url: string;
-  timestamp: number;
-  userAgent: string;
-  viewport: {
-    width: number;
-    height: number;
-  };
 }
 
 class MonitoringService {
@@ -41,59 +27,6 @@ class MonitoringService {
     if (this.isInitialized) return;
 
     try {
-      // Initialize Sentry for error tracking
-      Sentry.init({
-        dsn:
-          typeof import.meta !== 'undefined'
-            ? (import.meta as { env?: { VITE_SENTRY_DSN?: string } }).env?.VITE_SENTRY_DSN
-            : undefined,
-        environment:
-          typeof import.meta !== 'undefined'
-            ? (import.meta as { env?: { MODE?: string } }).env?.MODE || 'development'
-            : 'development',
-        integrations: [
-          // BrowserTracing is now included in @sentry/react by default
-        ],
-        // Performance Monitoring
-        tracesSampleRate:
-          typeof import.meta !== 'undefined'
-            ? (import.meta as { env?: { MODE?: string } }).env?.MODE === 'production'
-              ? 0.1
-              : 1.0
-            : 1.0,
-        // Session Replay
-        replaysSessionSampleRate:
-          typeof import.meta !== 'undefined'
-            ? (import.meta as { env?: { MODE?: string } }).env?.MODE === 'production'
-              ? 0.1
-              : 0.5
-            : 0.5,
-        replaysOnErrorSampleRate: 1.0,
-        // Release tracking
-        release:
-          typeof import.meta !== 'undefined'
-            ? (import.meta as { env?: { VITE_APP_VERSION?: string } }).env?.VITE_APP_VERSION ||
-              '1.0.0'
-            : '1.0.0',
-        // User context
-        beforeSend(event) {
-          // Filter out non-critical errors in production
-          if (
-            typeof import.meta !== 'undefined' &&
-            (import.meta as { env?: { MODE?: string } }).env?.MODE === 'production'
-          ) {
-            // Don't send network errors for external resources
-            if (event.exception) {
-              const error = event.exception.values?.[0];
-              if (error?.type === 'NetworkError' && error.value?.includes('net::ERR_')) {
-                return null;
-              }
-            }
-          }
-          return event;
-        },
-      });
-
       // Set up performance monitoring
       this.setupPerformanceMonitoring();
 
@@ -101,9 +34,9 @@ class MonitoringService {
       this.setupErrorBoundary();
 
       this.isInitialized = true;
-      console.log('✅ Monitoring service initialized');
+      console.log('Monitoring service initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize monitoring service:', error);
+      console.error('Failed to initialize monitoring service:', error);
     }
   }
 
@@ -111,77 +44,36 @@ class MonitoringService {
    * Set user context for error tracking
    */
   setUserContext(user: { id: string; email: string; name?: string }): void {
-    Sentry.setUser({
-      id: user.id,
-      email: user.email,
-      username: user.name,
-    });
+    Sentry.setUser({ id: user.id, email: user.email, username: user.name });
   }
 
   /**
    * Clear user context
    */
   clearUserContext(): void {
-    Sentry.setUser(null);
+    Sentry.clearUser();
   }
 
   /**
    * Track custom events
    */
-  trackEvent(eventName: string, properties?: Record<string, unknown>): void {
-    Sentry.addBreadcrumb({
-      message: eventName,
-      category: 'custom',
-      data: properties,
-      level: 'info',
-    });
-
-    // Also send as custom event
-    Sentry.captureMessage(eventName, {
-      level: 'info',
-      tags: {
-        event_type: 'custom',
-      },
-      extra: properties,
-    });
+  trackEvent(eventName: string, _properties?: Record<string, unknown>): void {
+    Sentry.addBreadcrumb(eventName, 'ui.click');
+    Sentry.captureMessage(eventName, 'info');
   }
 
   /**
    * Track performance metrics
    */
-  trackPerformance(metrics: Partial<PerformanceMetrics>): void {
-    Sentry.addBreadcrumb({
-      message: 'Performance metrics',
-      category: 'performance',
-      data: metrics,
-      level: 'info',
-    });
-
-    // Send performance data to Sentry
-    Sentry.captureMessage('Performance metrics', {
-      level: 'info',
-      tags: {
-        event_type: 'performance',
-      },
-      extra: metrics,
-    });
+  trackPerformance(_metrics: Partial<PerformanceMetrics>): void {
+    Sentry.addBreadcrumb('Performance metrics', 'api');
   }
 
   /**
    * Track API calls
    */
-  trackApiCall(endpoint: string, method: string, statusCode: number, duration: number): void {
-    Sentry.addBreadcrumb({
-      message: `API ${method} ${endpoint}`,
-      category: 'http',
-      data: {
-        method,
-        url: endpoint,
-        status_code: statusCode,
-        duration,
-      },
-      level: statusCode >= 400 ? 'error' : 'info',
-    });
+  trackApiCall(endpoint: string, method: string, _statusCode: number, _duration: number): void {
+    Sentry.addBreadcrumb(`API ${method} ${endpoint}`, 'api');
   }
 
   /**
@@ -318,25 +210,8 @@ class MonitoringService {
   /**
    * Capture error with context
    */
-  captureError(error: Error, context?: Record<string, unknown>): void {
-    const errorContext: ErrorContext = {
-      sessionId: this.sessionId,
-      url: window.location.href,
-      timestamp: Date.now(),
-      userAgent: navigator.userAgent,
-      viewport: {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      },
-    };
-
-    Sentry.withScope((scope) => {
-      scope.setContext('error_context', errorContext);
-      if (context) {
-        scope.setContext('additional_context', context);
-      }
-      Sentry.captureException(error);
-    });
+  captureError(error: Error, _context?: Record<string, unknown>): void {
+    Sentry.captureError(error);
   }
 
   /**
@@ -357,7 +232,7 @@ class MonitoringService {
    * Flush pending events
    */
   async flush(): Promise<void> {
-    await Sentry.flush(2000);
+    await Sentry.flush();
   }
 
   /**

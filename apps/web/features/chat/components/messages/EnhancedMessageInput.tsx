@@ -141,12 +141,14 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
 
   // Cleanup all pending timeouts and media recorder on unmount
   useEffect(() => {
+    const timeouts = timeoutRefs.current;
+    const recorder = mediaRecorderRef.current;
     return () => {
-      timeoutRefs.current.forEach(clearTimeout);
-      timeoutRefs.current.clear();
+      timeouts.forEach(clearTimeout);
+      timeouts.clear();
       // Stop any ongoing recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (recorder && recorder.state === 'recording') {
+        recorder.stop();
       }
     };
   }, []);
