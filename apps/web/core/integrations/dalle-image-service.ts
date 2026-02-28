@@ -10,7 +10,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 export interface DallEGenerationRequest {
   prompt: string;
-  size?: '1024x1024' | '1024x1792' | '1792x1024';
+  size?: '1024x1024' | '1024x1792' | '1792x1024' | '512x512' | '256x256';
   quality?: 'standard' | 'hd';
   style?: 'vivid' | 'natural';
   n?: number; // Number of images (1-10 for standard, 1 for HD)
@@ -171,8 +171,8 @@ export class DallEImageService {
     } else {
       // DALL-E 2 pricing
       if (size === '1024x1024') return 0.02;
-      if (size === '512x512') return 0.018;
-      if (size === '256x256') return 0.016;
+      if ((size as string) === '512x512') return 0.018;
+      if ((size as string) === '256x256') return 0.016;
     }
 
     return 0.04; // Default fallback

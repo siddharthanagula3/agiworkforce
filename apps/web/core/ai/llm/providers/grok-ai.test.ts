@@ -44,7 +44,7 @@ describe('GrokProvider', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     provider = new GrokProvider();
   });
@@ -377,7 +377,7 @@ describe('GrokProvider', () => {
       expect(chunks[0].done).toBe(false);
       expect(chunks[1].content).toBe('');
       expect(chunks[1].done).toBe(true);
-      expect(chunks[1].usage).toBeDefined();
+      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
     });
 
     it('should throw error when not logged in', async () => {

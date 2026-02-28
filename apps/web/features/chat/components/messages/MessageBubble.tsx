@@ -215,6 +215,8 @@ export const MessageBubble = React.memo(function MessageBubble({
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
 
   const { addArtifact, getMessageArtifacts } = useArtifactStore();
@@ -351,21 +353,19 @@ export const MessageBubble = React.memo(function MessageBubble({
           message.metadata?.imageUrl && (
             <div className="mt-4">
               <div className="overflow-hidden rounded-xl border border-border">
-                <img
-                  src={message.metadata.imageUrl}
-                  alt="Generated image"
-                  className="max-h-96 w-auto"
-                  loading="lazy"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className =
-                      'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground';
-                    errorDiv.innerHTML = '<span class="text-sm">⚠️ Image failed to load</span>';
-                    target.parentNode?.appendChild(errorDiv);
-                  }}
-                />
+                {imageError ? (
+                  <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground">
+                    <span className="text-sm">Image failed to load</span>
+                  </div>
+                ) : (
+                  <img
+                    src={message.metadata.imageUrl}
+                    alt="Generated image"
+                    className="max-h-96 w-auto"
+                    loading="lazy"
+                    onError={() => setImageError(true)}
+                  />
+                )}
               </div>
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
@@ -383,21 +383,19 @@ export const MessageBubble = React.memo(function MessageBubble({
           message.metadata?.toolType === 'video-generation' &&
           message.metadata?.videoUrl && (
             <div className="mt-4">
-              <video
-                src={message.metadata.videoUrl}
-                controls
-                className="max-h-96 rounded-xl"
-                poster={message.metadata.thumbnailUrl}
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  target.style.display = 'none';
-                  const errorDiv = document.createElement('div');
-                  errorDiv.className =
-                    'flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl';
-                  errorDiv.innerHTML = '<span class="text-sm">⚠️ Video failed to load</span>';
-                  target.parentNode?.appendChild(errorDiv);
-                }}
-              />
+              {videoError ? (
+                <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl">
+                  <span className="text-sm">Video failed to load</span>
+                </div>
+              ) : (
+                <video
+                  src={message.metadata.videoUrl}
+                  controls
+                  className="max-h-96 rounded-xl"
+                  poster={message.metadata.thumbnailUrl}
+                  onError={() => setVideoError(true)}
+                />
+              )}
             </div>
           )}
 
@@ -474,9 +472,21 @@ export const MessageBubble = React.memo(function MessageBubble({
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <Avatar className="h-5 w-5">
+                      {collab.employeeAvatar &&
+                        (collab.employeeAvatar.startsWith('http') ||
+                          collab.employeeAvatar.startsWith('/')) && (
+                          <AvatarImage src={collab.employeeAvatar} />
+                        )}
                       <AvatarFallback
                         className="text-[10px] font-semibold text-white"
-                        style={{ backgroundColor: collab.employeeAvatar }}
+                        style={{
+                          backgroundColor:
+                            collab.employeeAvatar &&
+                            !collab.employeeAvatar.startsWith('http') &&
+                            !collab.employeeAvatar.startsWith('/')
+                              ? collab.employeeAvatar
+                              : '#6366f1',
+                        }}
                       >
                         {collab.employeeName
                           .split(' ')
@@ -607,15 +617,17 @@ export const MessageBubble = React.memo(function MessageBubble({
                       </div>
                     </>
                   )}
-                  <DropdownMenuSeparator />
                   {onDelete && (
-                    <DropdownMenuItem
-                      onClick={() => onDelete(message.id)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Delete
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onDelete(message.id)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>

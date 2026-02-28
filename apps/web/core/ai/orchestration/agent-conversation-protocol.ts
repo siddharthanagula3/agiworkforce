@@ -195,10 +195,9 @@ export class AgentConversationProtocol {
 
       // Update UI with current turn
       useMissionStore.getState().addMessage({
-        id: crypto.randomUUID(),
+        from: 'system',
         type: 'status',
         content: `Turn ${state.turnCount}/${MAX_TURNS}`,
-        timestamp: new Date(),
       });
 
       // Check for completion signals
@@ -240,11 +239,7 @@ export class AgentConversationProtocol {
       });
 
       // Update mission control UI
-      useMissionStore.getState().addEmployeeLog(nextEmployee.name, {
-        timestamp: new Date(),
-        message: response,
-        type: 'contribution',
-      });
+      useMissionStore.getState().addEmployeeLog(nextEmployee.name, response, 'info');
     }
 
     // Supervisor synthesizes final answer
@@ -518,10 +513,9 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
 
     // Also update mission control store for real-time UI
     useMissionStore.getState().addMessage({
-      id: message.id,
+      from: message.employeeName,
       type: 'agent',
       content: message.content,
-      timestamp: message.timestamp,
       metadata: {
         employeeName: message.employeeName,
         employeeAvatar: message.employeeAvatar,
@@ -557,9 +551,9 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
    * Get employee avatar from definition or generate fallback
    */
   private getEmployeeAvatar(employee: AIEmployee): string {
-    // Check if employee has an avatar_url defined
-    if (employee.avatar_url) {
-      return employee.avatar_url;
+    // Check if employee has an avatar defined
+    if (employee.avatar) {
+      return employee.avatar;
     }
 
     // Try static avatar path based on employee name
@@ -595,16 +589,11 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
    */
   private createSupervisor(): AIEmployee {
     return {
-      id: 'supervisor',
       name: 'Supervisor',
       description: 'Orchestrates multi-agent conversations',
       systemPrompt: `You are the Supervisor AI that coordinates multiple AI employees to solve user queries efficiently.`,
       model: 'claude-3-5-sonnet-20241022',
       tools: [],
-      capabilities: ['coordination', 'synthesis', 'quality-control'],
-      pricing: { inputCost: 0, outputCost: 0 },
-      createdAt: new Date(),
-      updatedAt: new Date(),
     };
   }
 }

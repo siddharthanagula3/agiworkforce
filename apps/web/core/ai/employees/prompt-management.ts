@@ -574,7 +574,14 @@ export class SystemPromptsService {
 
       if (typeof window !== 'undefined') {
         // Browser environment - use import.meta.glob for Vite
-        const employeeFiles = import.meta.glob('/.agi/employees/*.md', {
+        const employeeFiles = (
+          import.meta as unknown as {
+            glob: (
+              pattern: string,
+              opts: Record<string, unknown>,
+            ) => Record<string, () => Promise<string>>;
+          }
+        ).glob('/.agi/employees/*.md', {
           as: 'raw',
           eager: false,
         });

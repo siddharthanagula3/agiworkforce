@@ -1148,7 +1148,7 @@ export class ConsultingOrchestrator {
         content: `👤 **${agent.name}** (${agent.role}) is analyzing your request...`,
       });
 
-      store.updateEmployeeStatus(agent.name, 'thinking', null, step.description);
+      store.updateEmployeeStatus(agent.name, 'thinking', undefined, step.description);
 
       try {
         const stepResult = await this.executeAgentStep(request, agent, step, previousOutputs);
@@ -1168,7 +1168,7 @@ export class ConsultingOrchestrator {
           content: stepResult.output,
           metadata: {
             employeeName: agent.name,
-            role: agent.role,
+            role: 'agent' as const,
             stepId: step.id,
           },
         });
@@ -1252,7 +1252,7 @@ export class ConsultingOrchestrator {
         const agent = this.agents[step.agentId];
         if (!agent) return null;
 
-        store.updateEmployeeStatus(agent.name, 'thinking', null, step.description);
+        store.updateEmployeeStatus(agent.name, 'thinking', undefined, step.description);
 
         try {
           const result = await this.executeAgentStep(request, agent, step, {});
@@ -1262,7 +1262,7 @@ export class ConsultingOrchestrator {
             from: agent.name,
             type: 'employee',
             content: result.output,
-            metadata: { employeeName: agent.name, role: agent.role },
+            metadata: { employeeName: agent.name, role: 'agent' as const },
           });
 
           return result;
@@ -1342,7 +1342,7 @@ Respond in JSON format:
       const agent = this.agents[step.agentId];
       if (!agent) continue;
 
-      store.updateEmployeeStatus(agent.name, 'thinking', null, step.description);
+      store.updateEmployeeStatus(agent.name, 'thinking', undefined, step.description);
 
       try {
         const result = await this.executeAgentStep(request, agent, step, {});
@@ -1353,7 +1353,7 @@ Respond in JSON format:
           from: agent.name,
           type: 'employee',
           content: result.output,
-          metadata: { employeeName: agent.name, role: agent.role },
+          metadata: { employeeName: agent.name, role: 'agent' as const },
         });
       } catch (error) {
         store.updateEmployeeStatus(agent.name, 'error');

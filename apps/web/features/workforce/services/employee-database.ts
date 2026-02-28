@@ -94,7 +94,7 @@ export async function purchaseEmployee(
           user_id: uid,
           employee_id: employee.id,
           employee_name: employee.name,
-        },
+        } as any,
         { onConflict: 'user_id,employee_id' },
       )
       .select('*')

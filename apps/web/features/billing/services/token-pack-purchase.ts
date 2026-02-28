@@ -111,7 +111,7 @@ export async function addTokensToUserBalance(
     // Use the add_user_tokens RPC function which handles everything atomically
     // This ensures the user_token_balances record exists (via get_or_create_token_balance)
     // and properly logs the transaction
-    const { data: newBalance, error: rpcError } = await supabase.rpc('add_user_tokens', {
+    const { data: newBalance, error: rpcError } = await (supabase as any).rpc('add_user_tokens', {
       p_user_id: userId,
       p_token_count: tokens,
       p_transaction_type: 'purchase',
@@ -129,7 +129,7 @@ export async function addTokensToUserBalance(
       console.log('[Add Tokens] Attempting fallback direct update...');
 
       // Get current balance from user_token_balances
-      const { data: balanceData, error: fetchError } = await supabase
+      const { data: balanceData, error: fetchError } = await (supabase as any)
         .from('user_token_balances')
         .select('current_balance')
         .eq('user_id', userId)
@@ -149,7 +149,7 @@ export async function addTokensToUserBalance(
 
       if (balanceData) {
         // Update existing record
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as any)
           .from('user_token_balances')
           .update({
             current_balance: updatedBalance,
@@ -167,7 +167,7 @@ export async function addTokensToUserBalance(
         }
       } else {
         // Create new record with default monthly allowance
-        const { error: insertError } = await supabase.from('user_token_balances').insert({
+        const { error: insertError } = await (supabase as any).from('user_token_balances').insert({
           user_id: userId,
           current_balance: tokens,
           monthly_allowance: 1000000, // Default free tier
@@ -186,7 +186,7 @@ export async function addTokensToUserBalance(
       }
 
       // Log transaction
-      const { error: logError } = await supabase.from('token_transactions').insert({
+      const { error: logError } = await (supabase as any).from('token_transactions').insert({
         user_id: userId,
         tokens,
         transaction_type: 'purchase',
@@ -216,7 +216,7 @@ export async function addTokensToUserBalance(
 
     console.log('[Add Tokens] Token balance updated via RPC:', {
       tokensAdded: tokens.toLocaleString(),
-      newBalance: (newBalance as number).toLocaleString(),
+      newBalance: (newBalance as unknown as number).toLocaleString(),
     });
   } catch (error) {
     console.error('[Add Tokens] Error:', error);
@@ -237,16 +237,19 @@ export async function addTokensToUserBalance(
 export async function getUserTokenBalance(userId: string): Promise<number> {
   try {
     // Try using the get_or_create_token_balance RPC function first
-    const { data: rpcData, error: rpcError } = await supabase.rpc('get_or_create_token_balance', {
-      p_user_id: userId,
-    });
+    const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+      'get_or_create_token_balance',
+      {
+        p_user_id: userId,
+      },
+    );
 
-    if (!rpcError && rpcData && rpcData.length > 0) {
-      return rpcData[0].current_balance || 0;
+    if (!rpcError && rpcData && (rpcData as any[]).length > 0) {
+      return (rpcData as any[])[0].current_balance || 0;
     }
 
     // Fallback: Query user_token_balances table directly
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('user_token_balances')
       .select('current_balance')
       .eq('user_id', userId)
@@ -262,7 +265,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
       return 0;
     }
 
-    return data?.current_balance || 0;
+    return (data as any)?.current_balance || 0;
   } catch (error) {
     console.error('[Get Token Balance] Error:', error);
     captureError(error as Error, {

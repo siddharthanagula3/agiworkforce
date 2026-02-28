@@ -58,28 +58,16 @@ vi.mock('../stores/vibe-file-store', () => ({
 }));
 
 // Now import the service class
-import { VibeFileSyncService } from './vibe-file-sync';
-
-// Type for internal access in tests
-type VibeFileSyncServiceInternal = InstanceType<typeof VibeFileSyncService> & {
-  currentSessionId: string | null;
-  syncStates: Map<string, unknown>;
-  debounceTimers: Map<string, ReturnType<typeof setTimeout>>;
-  pendingOperations: Map<string, { content?: string }>;
-  operationQueue: unknown[];
-  updateSyncState: (path: string, updates: Record<string, unknown>) => void;
-  inferMimeType: (fileName: string) => string;
-  inferLanguage: (fileName: string) => string;
-  extractPathFromMetadata: (metadata: Record<string, unknown>, fallbackName: string) => string;
-};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { VibeFileSyncService } = require('./vibe-file-sync') as { VibeFileSyncService: any };
 
 describe('VibeFileSyncService', () => {
-  let service: VibeFileSyncServiceInternal;
+  let service: any;
 
   beforeEach(() => {
     vi.useFakeTimers();
     // Create a new instance for each test to avoid state pollution
-    service = new VibeFileSyncService() as VibeFileSyncServiceInternal;
+    service = new VibeFileSyncService();
   });
 
   afterEach(() => {

@@ -33,6 +33,18 @@ import {
 } from '@features/marketplace/components';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 
+/** Short labels for mobile category buttons */
+const CATEGORY_ABBREVIATIONS: Record<string, string> = {
+  all: 'All',
+  engineering: 'Eng',
+  design: 'Design',
+  product: 'Prod',
+  data: 'Data',
+  marketing: 'Mktg',
+  sales: 'Sales',
+  general: 'Gen',
+};
+
 interface MarketplacePageProps {
   className?: string;
 }
@@ -66,7 +78,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
   }, [trackMarketplaceView, selectedCategory, searchQuery, sortBy, viewMode]);
 
   // Fetch AI agents using React Query
-  const { data: employees = [], isLoading } = useQuery<AIEmployee[]>({
+  const { data: employees = [], isLoading } = useQuery({
     queryKey: queryKeys.employees.marketplace({
       category: selectedCategory,
       search: searchQuery,
@@ -125,7 +137,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
           break;
       }
 
-      return transformedEmployees;
+      return transformedEmployees as AIEmployee[];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -198,21 +210,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
                       <Icon className="mr-1 h-3 w-3 md:h-4 md:w-4" />
                       <span className="hidden sm:inline">{category.label}</span>
                       <span className="sm:hidden">
-                        {category.id === 'all'
-                          ? 'All'
-                          : category.id === 'engineering'
-                            ? 'Eng'
-                            : category.id === 'design'
-                              ? 'Design'
-                              : category.id === 'product'
-                                ? 'Prod'
-                                : category.id === 'data'
-                                  ? 'Data'
-                                  : category.id === 'marketing'
-                                    ? 'Mktg'
-                                    : category.id === 'sales'
-                                      ? 'Sales'
-                                      : 'Gen'}
+                        {CATEGORY_ABBREVIATIONS[category.id] ?? category.label}
                       </span>
                     </Button>
                   );

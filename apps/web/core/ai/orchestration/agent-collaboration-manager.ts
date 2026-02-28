@@ -81,13 +81,14 @@ const buildCapabilityMap = (): Record<string, AgentCapability> => {
   const capabilities: Record<string, AgentCapability> = {};
 
   AI_EMPLOYEES.forEach((emp) => {
-    const key = emp.role.toLowerCase().replace(/\s+/g, '-');
+    const role = emp.role || emp.name;
+    const key = role.toLowerCase().replace(/\s+/g, '-');
 
     // Determine specialization from role and category
     const specialization = [
       ...emp.skills.map((s) => s.toLowerCase()),
       emp.category.toLowerCase(),
-      emp.role.toLowerCase(),
+      role.toLowerCase(),
     ];
 
     // Determine if can delegate (leadership roles)
@@ -103,20 +104,20 @@ const buildCapabilityMap = (): Record<string, AgentCapability> => {
       'head',
       'orchestrator',
       'coordinator',
-    ].some((title) => emp.role.toLowerCase().includes(title));
+    ].some((title) => role.toLowerCase().includes(title));
 
     // Determine priority (1-10)
     let priority = 5;
-    if (emp.role.includes('Chief')) priority = 10;
-    else if (emp.role.includes('Architect')) priority = 9;
-    else if (emp.role.includes('Manager')) priority = 8;
-    else if (emp.role.includes('Lead')) priority = 7;
-    else if (emp.role.includes('Senior')) priority = 6;
+    if (role.includes('Chief')) priority = 10;
+    else if (role.includes('Architect')) priority = 9;
+    else if (role.includes('Manager')) priority = 8;
+    else if (role.includes('Lead')) priority = 7;
+    else if (role.includes('Senior')) priority = 6;
 
     capabilities[key] = {
       employeeId: emp.id,
       employeeName: emp.name,
-      role: emp.role,
+      role,
       provider: emp.provider,
       skills: emp.skills,
       tools: emp.defaultTools || [],
@@ -342,7 +343,7 @@ class MultiAgentOrchestrator {
         agentName,
         {
           agentName,
-          status: 'failed',
+          status: 'error',
           currentTask: task.description,
           progress: 0,
           output: errorMsg,
@@ -1218,7 +1219,7 @@ Provide your complete, production-ready implementation following this structure.
         agentName,
         {
           agentName,
-          status: 'failed',
+          status: 'error',
           currentTask: task.description,
           progress: 0,
           output: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,

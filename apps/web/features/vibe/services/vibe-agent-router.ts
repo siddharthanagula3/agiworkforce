@@ -416,7 +416,7 @@ Respond in JSON format:
             description: task.description,
             assigned_to: assignedEmployee,
             dependencies: [], // Will be populated below
-            priority: task.priority || 'medium',
+            priority: (task.priority || 'medium') as 'low' | 'medium' | 'high',
           });
         },
       );

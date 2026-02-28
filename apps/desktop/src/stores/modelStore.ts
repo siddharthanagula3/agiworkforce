@@ -245,7 +245,13 @@ export const useModelStore = create<ModelState>()(
 
             if (provider !== 'ollama' && modelId !== 'auto') {
               const { useUnifiedAuthStore } = await import('./auth');
-              const currentPlan = useUnifiedAuthStore.getState().plan;
+              const currentPlan = (() => {
+                try {
+                  return useUnifiedAuthStore.getState()?.plan ?? 'hobby';
+                } catch {
+                  return 'hobby' as const;
+                }
+              })();
               const normalizedTier = normalizeSubscriptionTier(currentPlan);
 
               if (modelId.startsWith('auto-')) {
@@ -545,7 +551,13 @@ export const useModelStore = create<ModelState>()(
         // Intelligent routing implementation
         getRoutedModel: (message: string, hasImages: boolean = false): RoutingDecision => {
           const { selectedModel } = get();
-          const currentPlan = useAccountStore.getState().account.plan;
+          const currentPlan = (() => {
+            try {
+              return useAccountStore.getState()?.account?.plan ?? 'hobby';
+            } catch {
+              return 'hobby' as const;
+            }
+          })();
 
           // If no model is selected yet, use the best auto mode the current plan allows.
           const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
@@ -738,7 +750,13 @@ export const initializeModelStoreFromSettings = async () => {
 
     const settingsStore = useSettingsStore.getState();
     const { useUnifiedAuthStore } = await import('./auth');
-    const currentPlan = useUnifiedAuthStore.getState().plan;
+    const currentPlan = (() => {
+      try {
+        return useUnifiedAuthStore.getState()?.plan ?? 'hobby';
+      } catch {
+        return 'hobby' as const;
+      }
+    })();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
     // For subscription-only model, only managed_cloud and ollama are in defaultModels
@@ -754,7 +772,7 @@ export const initializeModelStoreFromSettings = async () => {
       } else if (
         defaultProvider !== 'ollama' &&
         currentPlan &&
-        !isModelAllowedForTier(defaultModel, currentPlan as SubscriptionTier)
+        !isModelAllowedForTier(defaultModel, normalizeSubscriptionTier(currentPlan))
       ) {
         await modelStore.selectModel('auto-economy', 'managed_cloud');
       } else {

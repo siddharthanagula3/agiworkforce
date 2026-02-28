@@ -7,13 +7,13 @@
  * It uses the consolidated error utilities from @shared/lib/error-utils.
  */
 
-import { apiClient, type APIResponse as BaseAPIResponse } from './api';
-import { APIException } from '@shared/stores/query-client';
+import { apiClient } from './api';
+import { APIException, type APIResponse as BaseAPIResponse } from '@shared/stores/query-client';
 import { toast } from 'sonner';
 import { isRetryableError, getRetryDelay, getErrorMessage } from './error-utils';
 
-// Re-export APIResponse type from base api module
-export type { APIResponse } from './api';
+// Re-export APIResponse type from query-client
+export type { APIResponse } from '@shared/stores/query-client';
 
 // Enhanced error types
 export interface APIErrorDetails {

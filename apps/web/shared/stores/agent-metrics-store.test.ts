@@ -7,7 +7,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAgentMetricsStore } from './agent-metrics-store';
-import type { AgentStatus } from '@core/ai/orchestration/agent-collaboration-manager';
+import type {
+  AgentStatus,
+  AgentCommunication,
+} from '@core/ai/orchestration/agent-collaboration-manager';
 
 describe('Agent Metrics Store', () => {
   beforeEach(() => {
@@ -172,9 +175,10 @@ describe('Agent Metrics Store', () => {
       const { updateAgentStatus } = useAgentMetricsStore.getState();
 
       const status: AgentStatus = {
-        name: 'agent-1',
+        agentName: 'agent-1',
         status: 'working',
         currentTask: 'Processing request',
+        progress: 0,
       };
 
       updateAgentStatus('agent-1', status);
@@ -190,12 +194,14 @@ describe('Agent Metrics Store', () => {
       const { updateAgentStatus } = useAgentMetricsStore.getState();
 
       updateAgentStatus('agent-1', {
-        name: 'agent-1',
+        agentName: 'agent-1',
         status: 'idle',
+        progress: 0,
       });
       updateAgentStatus('agent-2', {
-        name: 'agent-2',
+        agentName: 'agent-2',
         status: 'idle',
+        progress: 0,
       });
 
       const state = useAgentMetricsStore.getState();
@@ -207,9 +213,10 @@ describe('Agent Metrics Store', () => {
       const { updateAgentStatus } = useAgentMetricsStore.getState();
 
       updateAgentStatus('agent-1', {
-        name: 'agent-1',
+        agentName: 'agent-1',
         status: 'analyzing',
         currentTask: 'Analyzing code',
+        progress: 0,
       });
 
       const state = useAgentMetricsStore.getState();
@@ -219,9 +226,9 @@ describe('Agent Metrics Store', () => {
     it('should update agent counts correctly', () => {
       const { updateAgentStatus } = useAgentMetricsStore.getState();
 
-      updateAgentStatus('agent-1', { name: 'agent-1', status: 'working' });
-      updateAgentStatus('agent-2', { name: 'agent-2', status: 'idle' });
-      updateAgentStatus('agent-3', { name: 'agent-3', status: 'analyzing' });
+      updateAgentStatus('agent-1', { agentName: 'agent-1', status: 'working', progress: 0 });
+      updateAgentStatus('agent-2', { agentName: 'agent-2', status: 'idle', progress: 0 });
+      updateAgentStatus('agent-3', { agentName: 'agent-3', status: 'analyzing', progress: 0 });
 
       let state = useAgentMetricsStore.getState();
       expect(state.totalAgents).toBe(3);
@@ -229,7 +236,7 @@ describe('Agent Metrics Store', () => {
       expect(state.idleAgents).toBe(1);
 
       // Update agent-1 to idle
-      updateAgentStatus('agent-1', { name: 'agent-1', status: 'idle' });
+      updateAgentStatus('agent-1', { agentName: 'agent-1', status: 'idle', progress: 0 });
 
       state = useAgentMetricsStore.getState();
       expect(state.activeAgents).toBe(1);
@@ -242,6 +249,7 @@ describe('Agent Metrics Store', () => {
       const { addCommunication } = useAgentMetricsStore.getState();
 
       addCommunication({
+        id: 'comm-1',
         from: 'agent-1',
         to: 'agent-2',
         type: 'request',
@@ -258,6 +266,7 @@ describe('Agent Metrics Store', () => {
       const { addCommunication } = useAgentMetricsStore.getState();
 
       addCommunication({
+        id: 'comm-2',
         from: 'agent-1',
         to: 'agent-2',
         type: 'request',
@@ -265,6 +274,7 @@ describe('Agent Metrics Store', () => {
         timestamp: new Date(),
       });
       addCommunication({
+        id: 'comm-3',
         from: 'agent-2',
         to: 'agent-1',
         type: 'response',
@@ -477,8 +487,9 @@ describe('Agent Metrics Store', () => {
         tokensUsed: 0,
         status: 'pending',
       });
-      updateAgentStatus('agent-1', { name: 'agent-1', status: 'working' });
+      updateAgentStatus('agent-1', { agentName: 'agent-1', status: 'working', progress: 0 });
       addCommunication({
+        id: 'comm-test',
         from: 'agent-1',
         to: 'agent-2',
         type: 'request',

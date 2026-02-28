@@ -234,13 +234,17 @@ const PublicHeader: React.FC = () => {
                     </Button>
                   ) : (
                     <>
-                      <Link to="/auth/login" onClick={() => setIsMenuOpen(false)} className="block">
+                      <Link
+                        href="/auth/login"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="block"
+                      >
                         <Button variant="ghost" className="w-full justify-start">
                           Sign In
                         </Button>
                       </Link>
                       <Link
-                        to="/auth/register"
+                        href="/auth/register"
                         onClick={() => setIsMenuOpen(false)}
                         className="block"
                       >

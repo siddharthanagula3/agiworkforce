@@ -15,8 +15,22 @@ export * from './stores';
 // Hooks
 export * from './hooks';
 
-// Services
-export * from './services';
+// Services (FileSyncState already exported from stores, so exclude from services)
+export {
+  vibeAgentRouter,
+  vibeComplexityAnalyzer,
+  vibeExecutionCoordinator,
+  messagePool,
+  AgentCollaborationManager,
+  createCollaborationManager,
+  vibeToolOrchestrator,
+  vibeFileManager,
+  vibeFileSyncService,
+  useFileSyncStatus,
+  useHasUnsavedChanges,
+  type SyncStatus,
+  type FileSyncConfig,
+} from './services';
 
 // Types - import from ./types directly to avoid name conflicts with component exports
 export type { VibeMessage as VibeMessageType, ActiveAgent, AgentStatus } from './types';

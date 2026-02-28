@@ -138,13 +138,13 @@ const PublicFooter: React.FC = () => {
             © {currentYear} AGI Workforce. All rights reserved. Built with AI for the AI age.
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <Link to="/privacy-policy" className="transition-colors hover:text-foreground">
+            <Link href="/privacy-policy" className="transition-colors hover:text-foreground">
               Privacy
             </Link>
-            <Link to="/terms-of-service" className="transition-colors hover:text-foreground">
+            <Link href="/terms-of-service" className="transition-colors hover:text-foreground">
               Terms
             </Link>
-            <Link to="/help" className="transition-colors hover:text-foreground">
+            <Link href="/help" className="transition-colors hover:text-foreground">
               Support
             </Link>
           </div>

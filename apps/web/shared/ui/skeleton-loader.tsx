@@ -59,12 +59,19 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     }),
   };
 
+  const motionProps =
+    animation !== 'none'
+      ? (animationVariants[animation] as {
+          animate: Record<string, unknown>;
+          transition: Record<string, unknown>;
+        })
+      : {};
+
   return (
     <motion.div
       className={cn(baseClasses, variantClasses[variant], className)}
       style={style}
-      variants={animationVariants[animation]}
-      {...(animation !== 'none' && animationVariants[animation])}
+      {...motionProps}
     />
   );
 };

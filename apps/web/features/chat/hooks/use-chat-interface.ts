@@ -69,6 +69,7 @@ export const useChat = (sessionId?: string) => {
       const loadedMessages = await chatPersistenceService.getSessionMessages(sid);
 
       // Ensure all message timestamps are valid Date objects
+      const fallbackDate = new Date();
       const validatedMessages = loadedMessages.map((msg) => {
         let createdAt: Date;
 
@@ -77,13 +78,12 @@ export const useChat = (sessionId?: string) => {
         } else if (typeof msg.createdAt === 'string' || typeof msg.createdAt === 'number') {
           createdAt = new Date(msg.createdAt);
         } else {
-          createdAt = new Date();
+          createdAt = fallbackDate;
         }
 
-        // Updated: Jan 15th 2026 - Removed console statements for production
-        // Validate date - if invalid, use current date
-        if (isNaN(createdAt.getTime())) {
-          createdAt = new Date();
+        // Validate date - if invalid or missing, use fallback date
+        if (!createdAt || isNaN(createdAt.getTime())) {
+          createdAt = fallbackDate;
         }
 
         return {
