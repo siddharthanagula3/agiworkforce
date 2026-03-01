@@ -238,6 +238,10 @@ fn detect_agent_mode(
     content: &str,
     app_handle: &tauri::AppHandle,
 ) -> bool {
+    // User explicitly disabled agent mode — respect that, never auto-detect.
+    if request_enable_agent_mode == Some(false) {
+        return false;
+    }
     let explicitly_requested_agent = request_enable_agent_mode == Some(true);
     let wants_agent = explicitly_requested_agent || detect_agentic_intent(content);
 
