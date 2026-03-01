@@ -211,7 +211,7 @@ export interface TokenUsage {
 
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
-export type ActiveView = 'chat' | 'projects' | 'artifacts';
+export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'computer-use';
 
 /**
  * Conversation Mode controls AI autonomy level
