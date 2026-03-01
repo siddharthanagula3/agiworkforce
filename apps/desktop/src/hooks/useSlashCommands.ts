@@ -38,7 +38,7 @@ export function useSlashCommands() {
     }
 
     return {
-      command: lowerCommand as 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact',
+      command: lowerCommand as ParsedSlashCommand['command'],
       args: args.trim(),
       rawInput: input,
     };
