@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const DeviceIdSchema = z
   .string()
   .min(1, 'device_id is required')
-  .max(255, 'device_id must be 255 characters or less')
+  .max(128, 'device_id must be 128 characters or less')
   .regex(
     /^[a-zA-Z0-9._-]+$/,
     'device_id contains invalid characters. Only alphanumeric, dashes, underscores, and dots are allowed.',
