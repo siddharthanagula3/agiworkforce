@@ -100,6 +100,23 @@ export interface SyncStatistics {
   queueSize: number;
 }
 
+/**
+ * Validates that a realtime payload record has the required DatabaseChatMessage fields.
+ */
+function isDatabaseChatMessage(value: unknown): value is DatabaseChatMessage {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.conversation_id === 'string' &&
+    typeof record.sender_id === 'string' &&
+    typeof record.sender_name === 'string' &&
+    typeof record.sender_type === 'string' &&
+    typeof record.content === 'string' &&
+    typeof record.timestamp === 'string'
+  );
+}
+
 // ============================================================================
 // ENHANCED CHAT SYNCHRONIZATION SERVICE CLASS
 // ============================================================================
@@ -193,7 +210,9 @@ export class EnhancedChatSynchronizationService {
             filter: `conversation_id=eq.${conversationId}`,
           },
           (payload) => {
-            this.handleRemoteInsert(payload.new as DatabaseChatMessage);
+            if (isDatabaseChatMessage(payload.new)) {
+              this.handleRemoteInsert(payload.new);
+            }
           },
         )
         .on(
@@ -205,10 +224,9 @@ export class EnhancedChatSynchronizationService {
             filter: `conversation_id=eq.${conversationId}`,
           },
           (payload) => {
-            this.handleRemoteUpdate(
-              payload.new as DatabaseChatMessage,
-              payload.old as DatabaseChatMessage,
-            );
+            if (isDatabaseChatMessage(payload.new) && isDatabaseChatMessage(payload.old)) {
+              this.handleRemoteUpdate(payload.new, payload.old);
+            }
           },
         )
         .on(
@@ -220,7 +238,9 @@ export class EnhancedChatSynchronizationService {
             filter: `conversation_id=eq.${conversationId}`,
           },
           (payload) => {
-            this.handleRemoteDelete(payload.old as DatabaseChatMessage);
+            if (isDatabaseChatMessage(payload.old)) {
+              this.handleRemoteDelete(payload.old);
+            }
           },
         )
         .subscribe((status) => {

@@ -1,5 +1,3 @@
-'use client';
-
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
@@ -63,6 +61,7 @@ interface ChatActions {
   loadMessagesFromDb: (sessionId: string) => Promise<void>;
   saveMessageToDb: (message: ChatMessage, userId: string) => Promise<void>;
   saveSessionToDb: (session: ChatSession, userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 // ============================================================================
@@ -70,7 +69,7 @@ interface ChatActions {
 // ============================================================================
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 function getGreetingTime(): string {
@@ -249,6 +248,17 @@ export const useChatStore = create<ChatState & ChatActions>()(
         });
       },
 
+      reset: () => {
+        set((state) => {
+          state.sessions = [];
+          state.messages = {};
+          state.activeSessionId = null;
+          state.isLoading = false;
+          state.sidebarOpen = true;
+          state.dbLoaded = false;
+        });
+      },
+
       // ========================================================================
       // Supabase Persistence
       // ========================================================================
@@ -282,7 +292,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
               const dbIds = new Set(dbSessions.map((s) => s.id));
               const localOnly = state.sessions.filter((s) => !dbIds.has(s.id));
               state.sessions = [...dbSessions, ...localOnly].sort(
-                (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+                (a, b) =>
+                  new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
               );
               state.dbLoaded = true;
             });

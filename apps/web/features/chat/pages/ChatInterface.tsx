@@ -148,6 +148,8 @@ const ChatPage: React.FC = () => {
 
   // Refs
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  // Guard to ensure auto-session creation fires at most once per mount
+  const sessionCreationPending = useRef(false);
 
   // Persist sidebar state
   useEffect(() => {
@@ -166,18 +168,24 @@ const ChatPage: React.FC = () => {
     }
   }, [sessionId, currentSession, loadSession]);
 
-  // Create new session if none exists
+  // Create new session if none exists — guarded to fire at most once per mount
   useEffect(() => {
-    if (!currentSession && !sessionId) {
+    if (!currentSession && !sessionId && !sessionCreationPending.current) {
+      sessionCreationPending.current = true;
       createSession('New Chat')
         .then((session) => {
           router.push(`/chat/${session.id}`);
         })
         .catch((error) => {
           console.error('Failed to create session:', error);
+          sessionCreationPending.current = false;
         });
     }
-  }, [currentSession, sessionId, createSession, router]);
+    // Intentionally omit createSession and router from deps — changes to the
+    // mutation object (React Query state transitions) must not re-trigger this.
+    // The ref guard is the source of truth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSession, sessionId]);
 
   const handleSendMessage = async (
     content: string,

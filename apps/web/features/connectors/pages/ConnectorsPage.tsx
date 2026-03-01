@@ -582,7 +582,9 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
 export function ConnectorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
-  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set(['local-filesystem', 'terminal', 'screen-vision']));
+  // TODO: Persist connected connector state to Supabase (e.g. a `user_connectors` table keyed by
+  // user_id + connector_id). For now this is session-only; connections reset on page reload.
+  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
 
   const filteredConnectors = useMemo(() => {
     return CONNECTORS.filter((c) => {
@@ -599,7 +601,8 @@ export function ConnectorsPage() {
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
 
   const handleConnect = (id: string) => {
-    // In production: open OAuth flow or API key dialog
+    // TODO: Replace with real OAuth flow or API key dialog, then persist to Supabase `user_connectors`.
+    // Currently updates local state only (resets on reload).
     setConnectedIds((prev) => new Set([...prev, id]));
   };
 

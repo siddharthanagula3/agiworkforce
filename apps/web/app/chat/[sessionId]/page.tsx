@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useChatStore, getGreetingTime } from '@features/chat/stores/chat-store';
+import { useChatStore, getGreetingTime, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
@@ -21,7 +21,13 @@ import { ChatAIService } from '@features/chat/services/chat-ai-service';
 export default function ChatSessionPage() {
   const router = useRouter();
   const params = useParams();
-  const sessionId = params?.sessionId as string;
+  const rawSessionId = params?.sessionId;
+  const sessionId: string | undefined =
+    typeof rawSessionId === 'string'
+      ? rawSessionId
+      : Array.isArray(rawSessionId)
+        ? rawSessionId[0]
+        : undefined;
   const { user } = useAuthStore();
   const { selectedModelId } = useModelStore();
 
@@ -50,7 +56,10 @@ export default function ChatSessionPage() {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  const messages = useMemo(() => allMessages[sessionId] || [], [allMessages, sessionId]);
+  const messages = useMemo(
+    () => (sessionId ? allMessages[sessionId] || [] : []),
+    [allMessages, sessionId],
+  );
 
   // Set active session on mount
   useEffect(() => {
@@ -64,11 +73,20 @@ export default function ChatSessionPage() {
     clearArtifacts();
   }, [sessionId, clearArtifacts]);
 
+  // Track which messages have already been processed for artifact extraction
+  const processedArtifactIdsRef = useRef<Set<string>>(new Set());
+
   // Extract artifacts from existing messages when they load
   useEffect(() => {
     if (!mounted || messages.length === 0) return;
     for (const msg of messages) {
-      if (msg.role === 'assistant' && !msg.isStreaming && msg.content) {
+      if (
+        msg.role === 'assistant' &&
+        !msg.isStreaming &&
+        msg.content &&
+        !processedArtifactIdsRef.current.has(msg.id)
+      ) {
+        processedArtifactIdsRef.current.add(msg.id);
         extractArtifactsFromContent(msg.content, msg.id);
       }
     }
@@ -83,7 +101,7 @@ export default function ChatSessionPage() {
 
   const processAIResponse = async (
     userContent: string,
-    currentMessages: typeof messages,
+    currentMessages: ChatMessage[],
     skillId?: string,
     userMessageId?: string,
   ) => {
