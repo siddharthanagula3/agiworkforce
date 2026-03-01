@@ -8,7 +8,6 @@ import {
   GoogleImagenService,
   googleImagenService,
   type ImagenGenerationRequest,
-  type ImagenGenerationResponse,
   type ImagenServiceError,
 } from './google-imagen-service';
 
@@ -41,7 +40,7 @@ describe('Google Imagen Service', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch as any;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});

@@ -61,7 +61,7 @@ export class UsageTracker {
 
       // Store in database
 
-      const { error } = await (supabase.from('api_usage' as never) as any).insert({
+      const { error } = await (supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>).insert({
         user_id: call.userId,
         timestamp: call.timestamp.toISOString(),
         agent_type: call.agentType,
@@ -104,7 +104,7 @@ export class UsageTracker {
 
   async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
     try {
-      const { data, error } = await (supabase.from('api_usage' as never) as any)
+      const { data, error } = await (supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>)
         .select('*')
         .eq('user_id', userId)
         .gte('timestamp', period.start.toISOString())

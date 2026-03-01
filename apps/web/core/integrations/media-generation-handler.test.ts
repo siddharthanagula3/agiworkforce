@@ -9,7 +9,6 @@ import {
   mediaGenerationService,
   type ImageGenerationRequest,
   type VideoGenerationRequest,
-  type MediaGenerationResult,
 } from './media-generation-handler';
 
 // Mock the underlying services

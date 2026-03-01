@@ -36,7 +36,7 @@ describe('AccountLockoutService', () => {
     vi.useFakeTimers();
 
     const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as any;
+    mockSupabase = supabase as unknown as { rpc: ReturnType<typeof vi.fn> };
 
     // Create fresh service instance for each test
     service = new AccountLockoutService(testConfig);
@@ -391,7 +391,7 @@ describe('AccountLockoutService Integration', () => {
 
   it('should handle complete lockout flow in-memory', async () => {
     const { supabase } = await import('@shared/lib/supabase-client');
-    const mockSupabase = supabase as any;
+    const mockSupabase = supabase as unknown as { rpc: ReturnType<typeof vi.fn> };
 
     // Force in-memory mode
     mockSupabase.rpc.mockResolvedValue({
@@ -430,7 +430,7 @@ describe('AccountLockoutService Integration', () => {
 
   it('should handle successful login resetting lockout counter', async () => {
     const { supabase } = await import('@shared/lib/supabase-client');
-    const mockSupabase = supabase as any;
+    const mockSupabase = supabase as unknown as { rpc: ReturnType<typeof vi.fn> };
 
     // Force in-memory mode
     mockSupabase.rpc.mockResolvedValue({

@@ -7,7 +7,6 @@ import {
   validatePromptInput,
   sanitizePromptInput,
   checkUserInput,
-  type HomoglyphDetectionResult,
 } from './prompt-injection-detector';
 
 describe('Homoglyph Detection', () => {

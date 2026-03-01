@@ -1,9 +1,10 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
@@ -100,6 +101,63 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
       'Missing required metadata for credit top-up',
     );
     throw new Error('Missing user_id or credit_amount_cents in session metadata');
+  }
+
+  // M7: Validate credit amount against actual Stripe PaymentIntent amount
+  // Prevents granting credits that don't match the actual payment
+  if (stripe && session.payment_intent) {
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent.id;
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      logger.error(
+        {
+          sessionId: session.id,
+          paymentIntentId,
+          status: paymentIntent.status,
+        },
+        'Credit top-up: PaymentIntent has not succeeded',
+      );
+      throw new Error(
+        `PaymentIntent ${paymentIntentId} has status ${paymentIntent.status}, expected succeeded`,
+      );
+    }
+
+    if (paymentIntent.amount_received !== creditAmountCents) {
+      logger.error(
+        {
+          sessionId: session.id,
+          userId,
+          paymentIntentId,
+          metadataAmount: creditAmountCents,
+          actualAmountReceived: paymentIntent.amount_received,
+        },
+        'SECURITY: Credit top-up amount mismatch - metadata does not match PaymentIntent amount_received',
+      );
+      throw new Error(
+        `Credit amount mismatch: metadata says ${creditAmountCents} cents but PaymentIntent received ${paymentIntent.amount_received} cents`,
+      );
+    }
+
+    logger.info(
+      {
+        sessionId: session.id,
+        userId,
+        paymentIntentId,
+        amountVerified: creditAmountCents,
+      },
+      'Credit top-up: PaymentIntent amount verified successfully',
+    );
+  } else if (!session.payment_intent) {
+    logger.error(
+      { sessionId: session.id, userId },
+      'SECURITY: Credit top-up session has no payment_intent - cannot verify payment',
+    );
+    throw new Error('Credit top-up session missing payment_intent');
   }
 
   logger.info(
@@ -1056,7 +1114,13 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // H5: Rate limit webhook endpoint to prevent abuse (generous limit for legitimate Stripe traffic)
+  const rateLimitResponse = await withRateLimit(request, 'stripe-webhook');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
     logger.error('Stripe not configured');
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });

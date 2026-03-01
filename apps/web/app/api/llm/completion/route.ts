@@ -15,6 +15,7 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 /**
  * Model tier requirements - maps models to minimum required subscription tier
@@ -240,6 +241,12 @@ function handleCreditError(
 }
 
 async function handleLLMCompletion(request: NextRequest) {
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
+
   // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) {

@@ -159,7 +159,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
           s !== null && typeof s === 'object' && isValidUrl((s as Record<string, unknown>).url),
       )
 
-      .map((s: any) => s.url);
+      .map((s: { url: string }) => s.url);
 
     return {
       query,
@@ -232,13 +232,13 @@ export async function searchWithGoogle(
             isValidUrl((item as Record<string, unknown>).url)),
       )
 
-      .map((item: any) => {
+      .map((item: { link?: string; url?: string; title?: string; snippet?: string; pagemap?: { metatags?: Array<Record<string, string>> } }) => {
         const url = item.link || item.url || '';
         const hostname = safeGetHostname(url);
         return {
-          title: (item.title as string) || '',
+          title: item.title || '',
           url,
-          snippet: (item.snippet as string) || '',
+          snippet: item.snippet || '',
           source: hostname,
           publishedDate: item.pagemap?.metatags?.[0]?.['article:published_time'],
           favicon: `https://www.google.com/s2/favicons?domain=${hostname}`,

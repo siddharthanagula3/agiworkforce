@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -46,12 +46,11 @@ export default function ChatSessionPage() {
   const { extractArtifactsFromContent, clearArtifacts } = useArtifactsStore();
 
   const [mounted, setMounted] = useState(false);
-  const abortRef = useRef(false);
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  const messages = allMessages[sessionId] || [];
+  const messages = useMemo(() => allMessages[sessionId] || [], [allMessages, sessionId]);
 
   // Set active session on mount
   useEffect(() => {
@@ -73,19 +72,20 @@ export default function ChatSessionPage() {
         extractArtifactsFromContent(msg.content, msg.id);
       }
     }
-  }, [mounted, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mounted, messages, extractArtifactsFromContent]);
 
   // Load messages from DB if we have none locally
   useEffect(() => {
     if (mounted && sessionId && messages.length === 0) {
       loadMessagesFromDb(sessionId);
     }
-  }, [mounted, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mounted, sessionId, messages.length, loadMessagesFromDb]);
 
   const processAIResponse = async (
     userContent: string,
     currentMessages: typeof messages,
     skillId?: string,
+    userMessageId?: string,
   ) => {
     if (!sessionId || !user?.id) return;
 
@@ -106,16 +106,16 @@ export default function ChatSessionPage() {
         .map((m) => ({ role: m.role, content: m.content }));
 
       // Use ChatAIService for unified skill-aware routing
+      // NOTE: conversationHistory already includes the user message (added by handleSend
+      // via addMessage before calling processAIResponse), so don't append it again.
       const fullResponse = await ChatAIService.sendMessage({
         sessionId,
         content: userContent,
         skillId,
-        conversationHistory: [...conversationHistory, { role: 'user', content: userContent }],
+        conversationHistory,
         onChunk: (chunk) => {
-          if (!abortRef.current) {
-            const store = useChatStore.getState();
-            store.appendToMessage(sessionId, assistantId, chunk);
-          }
+          const store = useChatStore.getState();
+          store.appendToMessage(sessionId, assistantId, chunk);
         },
       });
 
@@ -129,7 +129,9 @@ export default function ChatSessionPage() {
 
       // Save to DB in background
       const finalMessages = store.messages[sessionId] || [];
-      const userMsg = finalMessages.find((m) => m.role === 'user' && m.content === userContent);
+      const userMsg = userMessageId
+        ? finalMessages.find((m) => m.id === userMessageId)
+        : finalMessages.find((m) => m.role === 'user' && m.content === userContent);
       const assistantMsg = finalMessages.find((m) => m.id === assistantId);
 
       if (userMsg) {
@@ -158,22 +160,25 @@ export default function ChatSessionPage() {
     }
   };
 
-  // Process pending user messages that need AI responses
-  const pendingProcessedRef = useRef<Set<string>>(new Set());
+  // Process pending user messages from navigation (e.g., /chat → /chat/[sessionId]).
+  // Runs ONCE on mount only. handleSend handles messages sent on this page directly.
+  const initialProcessedRef = useRef(false);
   useEffect(() => {
-    if (!mounted || !sessionId || !user?.id) return;
+    if (!mounted || !sessionId || !user?.id || initialProcessedRef.current) return;
+    initialProcessedRef.current = true;
+
     const msgs = useChatStore.getState().messages[sessionId] || [];
     if (msgs.length === 0) return;
 
     const lastMsg = msgs[msgs.length - 1];
-    if (lastMsg.role === 'user' && !pendingProcessedRef.current.has(lastMsg.id)) {
-      pendingProcessedRef.current.add(lastMsg.id);
-      const hasStreamingAssistant = msgs.some((m) => m.role === 'assistant' && m.isStreaming);
-      if (!hasStreamingAssistant) {
-        processAIResponse(lastMsg.content, msgs);
-      }
+    const hasStreamingAssistant = msgs.some((m) => m.role === 'assistant' && m.isStreaming);
+
+    if (lastMsg.role === 'user' && !hasStreamingAssistant) {
+      processAIResponse(lastMsg.content, msgs);
     }
-  }, [mounted, sessionId, user?.id, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    // processAIResponse is intentionally excluded from deps — a ref keeps it current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, sessionId, user?.id]);
 
   const handleNewChat = useCallback(() => {
     const id = createSession(user?.id);
@@ -204,11 +209,11 @@ export default function ChatSessionPage() {
     (content: string, _attachments?: File[], skillId?: string) => {
       if (!sessionId || !user?.id) return;
 
-      addMessage(sessionId, { role: 'user', content });
+      const userMessageId = addMessage(sessionId, { role: 'user', content });
 
       // Get current messages for conversation history
       const currentMsgs = useChatStore.getState().messages[sessionId] || [];
-      processAIResponseRef.current(content, currentMsgs, skillId);
+      processAIResponseRef.current(content, currentMsgs, skillId, userMessageId);
     },
     [sessionId, user?.id, addMessage],
   );
@@ -230,6 +235,10 @@ export default function ChatSessionPage() {
   );
 
   if (!mounted) {
+    return <div className="flex h-full items-center justify-center bg-background" />;
+  }
+
+  if (!sessionId) {
     return <div className="flex h-full items-center justify-center bg-background" />;
   }
 

@@ -242,7 +242,7 @@ class ApiClient {
     context: string = 'Supabase query',
   ): Promise<ApiResponse<T>> {
     try {
-      const { data, error } = (await query) as any as {
+      const { data, error } = (await query) as unknown as {
         data: T;
         error: { message: string } | null;
       };

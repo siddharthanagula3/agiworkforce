@@ -11,7 +11,7 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 // ================================================
 // TYPES
@@ -309,14 +309,14 @@ export class EmployeeMemoryService {
         .maybeSingle();
 
       if (data) {
-        const row = data as any;
+        const row = data as Record<string, unknown>;
         const memory: EmployeeMemory = {
-          employeeId: row.employee_id,
-          userId: row.user_id,
-          knowledgeBase: row.knowledge_base || [],
-          preferences: row.preferences || {},
-          lastInteraction: new Date(row.last_interaction),
-          interactionCount: row.interaction_count || 0,
+          employeeId: row.employee_id as string,
+          userId: row.user_id as string,
+          knowledgeBase: (row.knowledge_base as MemoryEntry[]) || [],
+          preferences: (row.preferences as Record<string, unknown>) || {},
+          lastInteraction: new Date(row.last_interaction as string),
+          interactionCount: (row.interaction_count as number) || 0,
         };
         this.memories[key] = memory;
         return memory;

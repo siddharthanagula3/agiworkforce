@@ -177,6 +177,12 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 admin security actions per minute
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  // Stripe webhook endpoint - generous limit since real Stripe events are legitimate
+  'stripe-webhook': {
+    limit: 100,
+    window: '1 m', // 100 webhook events per minute per IP (generous for real Stripe traffic)
+    failClosed: false, // Allow webhooks through if Redis fails - business critical
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
@@ -344,21 +350,42 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
 
 /**
  * Get identifier for rate limiting (user ID, IP, device ID, etc.)
+ *
+ * Priority:
+ * 1. Explicit identifier (e.g., validated user ID from handler)
+ * 2. User ID extracted from JWT Bearer token (prevents IP rotation bypass)
+ * 3. x-real-ip header (set by reverse proxies, harder to spoof)
+ * 4. Rightmost IP from x-forwarded-for (Vercel appends real client IP at end)
+ * 5. 'unknown' fallback
  */
 function getRateLimitIdentifier(request: NextRequest, identifier?: string): string {
   if (identifier) {
     return identifier;
   }
 
-  // NOTE: x-user-id header is not trusted as it can be forged by clients.
-  // User-specific rate limiting requires passing the validated user ID as the
-  // explicit identifier parameter (obtained from supabase.auth.getUser() in the handler).
+  // H4: Extract user ID from JWT Bearer token for authenticated rate limiting.
+  // This prevents bypass via IP rotation — authenticated users are tracked by sub claim.
+  // We only base64-decode the payload (no cryptographic verification needed here;
+  // the route handler is responsible for full auth validation).
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    try {
+      const payload = JSON.parse(atob(authHeader.slice(7).split('.')[1]));
+      if (payload.sub) {
+        return `user:${payload.sub}`;
+      }
+    } catch {
+      // Malformed token — fall through to IP-based limiting
+    }
+  }
 
-  // Fallback to IP address
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
+  // H3: Prefer x-real-ip (set by Vercel/reverse proxy, not client-controlled).
+  // For x-forwarded-for, use the RIGHTMOST IP because Vercel (and most proxies)
+  // append the real client IP at the end. The leftmost value is client-supplied
+  // and trivially spoofable.
+  const xRealIp = request.headers.get('x-real-ip');
+  const xff = request.headers.get('x-forwarded-for');
+  const ip = xRealIp ?? (xff ? xff.split(',').at(-1)?.trim() : null) ?? 'unknown';
   return `ip:${ip}`;
 }
 

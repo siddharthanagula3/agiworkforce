@@ -8,7 +8,6 @@ import {
   GoogleVeoService,
   googleVeoService,
   type VeoGenerationRequest,
-  type VeoGenerationResponse,
   type VeoServiceError,
 } from './google-veo-service';
 
@@ -41,7 +40,7 @@ describe('Google Veo Service', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch as any;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});

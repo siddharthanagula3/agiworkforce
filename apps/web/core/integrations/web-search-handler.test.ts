@@ -12,8 +12,6 @@ import {
   searchAndSummarize,
   isWebSearchConfigured,
   getAvailableSearchProviders,
-  type SearchResult,
-  type SearchResponse,
 } from './web-search-handler';
 
 // Mock Supabase client

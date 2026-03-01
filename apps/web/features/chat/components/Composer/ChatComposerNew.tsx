@@ -141,7 +141,7 @@ export function ChatComposerNew({
     [message, mentionStartIndex],
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
 
@@ -164,7 +164,7 @@ export function ChatComposerNew({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  };
+  }, [message, attachments, selectedTools, selectedSkill, isLoading, disabled, onSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

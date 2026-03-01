@@ -5,7 +5,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // Tables not yet in generated Database type
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 

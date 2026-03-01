@@ -7,7 +7,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // Tables not yet in generated Database type
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 export interface CacheEntry<T = unknown> {
   key: string;

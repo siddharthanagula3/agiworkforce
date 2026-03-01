@@ -7,8 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   tokenLogger,
   logTokenUsage,
-  type TokenLogEntry,
-  type SessionTokenSummary,
 } from './token-usage-tracker';
 
 // Mock the UsageTracker class - define inside factory to avoid hoisting issues
@@ -497,7 +495,7 @@ describe('Token Usage Tracker', () => {
     it('should handle database persistence errors gracefully', async () => {
       // Get the mock from the module
       const { __getMockTrackAPICall } =
-        (await import('@features/billing/services/usage-monitor')) as any;
+        (await import('@features/billing/services/usage-monitor')) as unknown as { __getMockTrackAPICall: () => ReturnType<typeof vi.fn> };
       const mockTrackAPICall = __getMockTrackAPICall();
 
       // Make the mock trackAPICall reject for this test

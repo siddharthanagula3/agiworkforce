@@ -125,6 +125,7 @@ const SettingsPageContent: React.FC = () => {
 
   // Profile Form
   const profileForm = useForm<ProfileSettingsFormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(profileSettingsSchema) as any,
     defaultValues: {
       name: '',
@@ -505,13 +506,14 @@ const SettingsPageContent: React.FC = () => {
                 <CardContent>
                   <Form {...profileForm}>
                     <form
-                      onSubmit={profileForm.handleSubmit(handleSaveProfile as any)}
+                      onSubmit={profileForm.handleSubmit(handleSaveProfile)}
                       className="space-y-6"
                     >
                       {/* Avatar with 3D Hover Effect */}
                       <div className="flex items-center space-x-4">
                         <InteractiveHoverCard>
                           <Avatar className="h-20 w-20 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                            {/* eslint-disable-next-line react-hooks/incompatible-library */}
                             <AvatarImage src={profileForm.watch('avatar_url')} />
                             <AvatarFallback className="bg-accent text-lg text-foreground">
                               {profileForm
@@ -551,7 +553,7 @@ const SettingsPageContent: React.FC = () => {
                       {/* Profile Form Fields */}
                       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <FormField
-                          control={profileForm.control as any}
+                          control={profileForm.control}
                           name="name"
                           render={({ field }) => (
                             <FormItem>
@@ -582,7 +584,7 @@ const SettingsPageContent: React.FC = () => {
                         </div>
 
                         <FormField
-                          control={profileForm.control as any}
+                          control={profileForm.control}
                           name="phone"
                           render={({ field }) => (
                             <FormItem>
@@ -601,7 +603,7 @@ const SettingsPageContent: React.FC = () => {
                         />
 
                         <FormField
-                          control={profileForm.control as any}
+                          control={profileForm.control}
                           name="timezone"
                           render={({ field }) => (
                             <FormItem>
@@ -634,7 +636,7 @@ const SettingsPageContent: React.FC = () => {
                         />
 
                         <FormField
-                          control={profileForm.control as any}
+                          control={profileForm.control}
                           name="language"
                           render={({ field }) => (
                             <FormItem>
@@ -661,7 +663,7 @@ const SettingsPageContent: React.FC = () => {
                       </div>
 
                       <FormField
-                        control={profileForm.control as any}
+                        control={profileForm.control}
                         name="bio"
                         render={({ field }) => (
                           <FormItem>
