@@ -67,13 +67,6 @@ function basicCleanup(raw: string): string {
   return raw.replace(FILLER_WORD_PATTERN, ' ').replace(/\s+/g, ' ').trim();
 }
 
-interface LLMSendMessageRequest {
-  messages: Array<{ role: string; content: string }>;
-  model: string | null;
-  provider: string | null;
-  max_tokens: number;
-}
-
 interface LLMResponse {
   content: string;
 }
@@ -195,7 +188,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             const { useModelStore } = await import('./modelStore');
             const { selectedModel, selectedProvider } = useModelStore.getState();
 
-            const systemPrompt = isCommand
+            const systemContent = isCommand
               ? `You are a voice command interpreter. The user has dictated a command to apply to text.
 Interpret the command and output ONLY the instruction (e.g. "Rewrite this text in a formal tone.").
 Remove filler words, fix the phrasing. Output only the cleaned command, no explanation.`
@@ -208,19 +201,20 @@ Remove filler words, fix the phrasing. Output only the cleaned command, no expla
 
 Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the input is already clean, return it unchanged.`;
 
-            const request: LLMSendMessageRequest = {
+            // LLMSendMessageRequest is serialised as a plain object by Tauri's serde layer.
+            // We cast via `as Record<string, unknown>` to satisfy the invoke signature.
+            const invokeArgs: Record<string, unknown> = {
               messages: [
-                {
-                  role: 'user',
-                  content: raw,
-                },
+                { role: 'system', content: systemContent },
+                { role: 'user', content: raw },
               ],
               model: selectedModel ?? 'claude-haiku-4.5',
               provider: selectedProvider ?? 'anthropic',
               max_tokens: 500,
+              prefer_cloud_credits: false,
             };
 
-            const response = await invoke<LLMResponse>('llm_send_message', request);
+            const response = await invoke<LLMResponse>('llm_send_message', invokeArgs);
             const cleaned = response?.content?.trim() ?? '';
 
             if (!cleaned) {
