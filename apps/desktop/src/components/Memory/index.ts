@@ -24,3 +24,13 @@ export type { MemorySidebarProps } from './MemorySidebar';
 
 export { MemoryBrowserModal, useMemoryBrowserModal } from './MemoryBrowserModal';
 export type { MemoryBrowserModalProps } from './MemoryBrowserModal';
+
+export { MemoryPanel } from './MemoryPanel';
+export { readMemoryPanelSettings } from './MemoryPanel';
+export type { MemoryPanelProps, MemoryPanelSettings } from './MemoryPanel';
+
+export { MemoryBadge } from './MemoryBadge';
+export type { MemoryBadgeProps } from './MemoryBadge';
+
+export { SaveToMemoryButton } from './SaveToMemoryButton';
+export type { SaveToMemoryButtonProps } from './SaveToMemoryButton';
