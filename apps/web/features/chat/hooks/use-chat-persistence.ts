@@ -175,7 +175,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         new Set(Object.keys(activeEmployees).concat(currentSession.metadata.agentsInvolved || [])),
       );
 
-      const { error: updateError } = await (supabase.from('web_conversations') as any)
+      const { error: updateError } = await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
         .update({
           metadata: {
             messageCount: messages.length,
@@ -282,7 +282,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (!currentSession) return;
 
       try {
-        const { error: updateError } = await (supabase.from('web_conversations') as any)
+        const { error: updateError } = await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
           .update({ title, updated_at: new Date().toISOString() })
           .eq('id', currentSession.id);
 

@@ -7,7 +7,7 @@ import type { Task } from '@shared/stores/mission-control-store';
 
 // Counter for unique IDs
 let taskCounter = 0;
-let messageCounter = 0;
+let _messageCounter = 0;
 
 // ===== Mission Plan Factories =====
 
@@ -75,7 +75,7 @@ export function createDebuggerEmployee() {
 
 // ===== LLM Response Factory =====
 
-export function createMockLLMResponse(content: string): any {
+export function createMockLLMResponse(content: string): { content: string; model: string; tokens: { input: number; output: number; total: number } } {
   return {
     content,
     model: 'gpt-4o-mini',
@@ -132,7 +132,7 @@ export function createFailedTask(description: string, error: string): Task {
 // ===== Message Factories =====
 
 export function createUserMessage(content: string) {
-  messageCounter++;
+  _messageCounter++;
   return {
     from: 'user',
     type: 'user' as const,
@@ -141,7 +141,7 @@ export function createUserMessage(content: string) {
 }
 
 export function createSystemMessage(content: string) {
-  messageCounter++;
+  _messageCounter++;
   return {
     from: 'system',
     type: 'system' as const,
@@ -150,7 +150,7 @@ export function createSystemMessage(content: string) {
 }
 
 export function createEmployeeMessage(employeeName: string, content: string) {
-  messageCounter++;
+  _messageCounter++;
   return {
     from: employeeName,
     type: 'employee' as const,

@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Loader2, Image, Video, FileText, Search, Users, Code, MessageSquare } from 'lucide-react';
+import { Loader2, Image as ImageIcon, Video, FileText, Search, Users, Code, MessageSquare } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ToolType } from '../../services/chat-tool-router';
 
@@ -15,7 +15,7 @@ interface ToolProgressIndicatorProps {
 }
 
 const toolIcons: Record<ToolType, React.ReactNode> = {
-  'image-generation': <Image className="h-4 w-4" />,
+  'image-generation': <ImageIcon className="h-4 w-4" />,
   'video-generation': <Video className="h-4 w-4" />,
   'document-creation': <FileText className="h-4 w-4" />,
   'web-search': <Search className="h-4 w-4" />,

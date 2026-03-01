@@ -25,6 +25,7 @@ export interface VibeMessage {
 }
 
 export interface CreateMessageParams {
+  id?: string;
   sessionId: string;
   userId: string;
   role: 'user' | 'assistant' | 'system';
@@ -72,7 +73,7 @@ export class VibeMessageService {
    * Create a new message in the database
    */
   static async createMessage(params: CreateMessageParams): Promise<VibeMessage> {
-    const messageId = crypto.randomUUID();
+    const messageId = params.id || crypto.randomUUID();
     const message: Partial<VibeMessage> = {
       id: messageId,
       session_id: params.sessionId,
@@ -85,8 +86,7 @@ export class VibeMessageService {
       is_streaming: params.isStreaming || false,
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_messages not in generated types
-    const { data, error } = await (supabase.from('vibe_messages') as any)
+    const { data, error } = await (supabase.from('vibe_messages') as ReturnType<typeof supabase.from>)
       .insert(message)
       .select()
       .maybeSingle();
@@ -110,8 +110,7 @@ export class VibeMessageService {
     messageId: string,
     updates: Partial<VibeMessage>,
   ): Promise<VibeMessage> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_messages not in generated types
-    const { data, error } = await (supabase.from('vibe_messages') as any)
+    const { data, error } = await (supabase.from('vibe_messages') as ReturnType<typeof supabase.from>)
       .update(updates)
       .eq('id', messageId)
       .select()
@@ -157,20 +156,20 @@ export class VibeMessageService {
     let assistantMessageId: string | null = null;
 
     try {
-      // Step 1: Create user message
+      // Step 1: Get auth session BEFORE creating messages (H10: auth must precede DB writes)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      const selectedModelId = useModelStore.getState().selectedModelId;
+
+      // Step 2: Create user message
       const _userMessage = await this.createMessage({
         sessionId,
         userId,
         role: 'user',
         content,
       });
-
-      // Step 2: Get auth token and model
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const selectedModelId = useModelStore.getState().selectedModelId;
 
       // Build messages for API
       const messages = [
@@ -197,7 +196,7 @@ export class VibeMessageService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           model: selectedModelId,
@@ -292,8 +291,8 @@ export class VibeMessageService {
         }
       }
 
-      if (onError && error instanceof Error) {
-        onError(error);
+      if (onError) {
+        onError(error instanceof Error ? error : new Error(String(error)));
       }
       throw error;
     }
@@ -318,7 +317,8 @@ export class VibeMessageService {
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
-          if (payload.new) {
+          // Guard: DELETE events have empty payload.new — only forward INSERT/UPDATE
+          if (payload.eventType !== 'DELETE' && payload.new) {
             onMessage(payload.new as VibeMessage);
           }
         },

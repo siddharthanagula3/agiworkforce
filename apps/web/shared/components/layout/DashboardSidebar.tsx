@@ -15,6 +15,7 @@ import {
   Image,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
 } from 'lucide-react';
 
 interface DashboardSidebarProps {
@@ -41,12 +42,12 @@ const PRODUCT_NAVIGATION: NavigationItem[] = [
     icon: Sparkles,
   },
   {
-    name: 'AI Workforce',
+    name: 'AI Agents',
     href: '/dashboard/agents',
     icon: Users,
   },
   {
-    name: 'Marketplace',
+    name: 'Skills',
     href: '/dashboard/hire',
     icon: Store,
   },
@@ -54,6 +55,11 @@ const PRODUCT_NAVIGATION: NavigationItem[] = [
     name: 'Media Studio',
     href: '/dashboard/media',
     icon: Image,
+  },
+  {
+    name: 'Connectors',
+    href: '/dashboard/connectors',
+    icon: Plug,
   },
 ];
 
@@ -74,7 +80,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   return (
     <div
       className={cn(
-        'flex h-full flex-col bg-black/40 backdrop-blur-xl',
+        'relative flex h-full flex-col bg-black/40 backdrop-blur-xl',
         'border-r border-white/[0.06]',
         className,
       )}

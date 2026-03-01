@@ -13,7 +13,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // Tables not yet in generated Database type — use untyped client for these
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { MultiAgentChatError } from '@shared/types/multi-agent-chat';
 import type {
   MultiAgentConversation,
@@ -339,7 +339,7 @@ export async function listConversations(
 
     const conversationsWithParticipants: ConversationWithParticipants[] =
       conversations?.map((conv: Record<string, unknown>) => ({
-        ...conv,
+        ...(conv as unknown as ConversationWithParticipants),
         participants: participantsMap[conv.id as string] || [],
       })) || [];
 

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Download, Maximize2, X, Loader2 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent } from '@shared/ui/card';
@@ -68,15 +69,16 @@ export const GeneratedImagePreview: React.FC<GeneratedImagePreviewProps> = ({
                   <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                 </div>
               )}
-              <img
+              <Image
                 src={imageUrl}
                 alt={prompt}
+                width={800}
+                height={600}
                 className={cn(
                   'h-auto w-full object-contain transition-opacity duration-300',
                   imageLoaded ? 'opacity-100' : 'opacity-0',
                 )}
                 onLoad={() => setImageLoaded(true)}
-                loading="lazy"
               />
             </div>
 
@@ -146,9 +148,11 @@ export const GeneratedImagePreview: React.FC<GeneratedImagePreviewProps> = ({
           >
             <X className="h-6 w-6" />
           </Button>
-          <img
+          <Image
             src={imageUrl}
             alt={prompt}
+            width={1200}
+            height={900}
             className="max-h-full max-w-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />

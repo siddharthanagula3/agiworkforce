@@ -6,68 +6,69 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
 
 // Mock shared UI components
 vi.mock('@shared/ui/card', () => ({
-  Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  CardContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  CardTitle: ({ children, ...props }: any) => <h3 {...props}>{children}</h3>,
+  Card: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  CardContent: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  CardHeader: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  CardTitle: ({ children, ...props }: Record<string, unknown>) => <h3 {...props}>{children as React.ReactNode}</h3>,
 }));
 
 vi.mock('@shared/ui/button', () => ({
-  Button: ({ children, type, ...props }: any) => (
-    <button type={type || 'button'} {...props}>
-      {children}
+  Button: ({ children, type, ...props }: Record<string, unknown>) => (
+    <button type={(type as 'submit' | 'reset' | 'button') || 'button'} {...props}>
+      {children as React.ReactNode}
     </button>
   ),
 }));
 
 vi.mock('@shared/ui/input', () => ({
-  Input: (props: any) => <input {...props} />,
+  Input: (props: Record<string, unknown>) => <input {...props} />,
 }));
 
 vi.mock('@shared/ui/textarea', () => ({
-  Textarea: (props: any) => <textarea {...props} />,
+  Textarea: (props: Record<string, unknown>) => <textarea {...props} />,
 }));
 
 vi.mock('@shared/ui/badge', () => ({
-  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Badge: ({ children, ...props }: Record<string, unknown>) => <span {...props}>{children as React.ReactNode}</span>,
 }));
 
 vi.mock('@shared/ui/label', () => ({
-  Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
+  Label: ({ children, ...props }: Record<string, unknown>) => <label {...props}>{children as React.ReactNode}</label>,
 }));
 
 vi.mock('@shared/ui/accordion', () => ({
-  Accordion: ({ children, ...props }: any) => (
+  Accordion: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="accordion" {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   ),
-  AccordionItem: ({ children, value, ...props }: any) => (
-    <div data-testid={`accordion-item-${value}`} {...props}>
-      {children}
+  AccordionItem: ({ children, value, ...props }: Record<string, unknown>) => (
+    <div data-testid={`accordion-item-${value as string}`} {...props}>
+      {children as React.ReactNode}
     </div>
   ),
-  AccordionTrigger: ({ children, ...props }: any) => (
+  AccordionTrigger: ({ children, ...props }: Record<string, unknown>) => (
     <button data-testid="accordion-trigger" type="button" {...props}>
-      {children}
+      {children as React.ReactNode}
     </button>
   ),
-  AccordionContent: ({ children, ...props }: any) => (
+  AccordionContent: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="accordion-content" {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   ),
 }));
 
 vi.mock('@shared/ui/select', () => ({
-  Select: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  SelectContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  SelectItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  SelectTrigger: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  SelectValue: (props: any) => <span {...props} />,
+  Select: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  SelectContent: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  SelectItem: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  SelectTrigger: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  SelectValue: (props: Record<string, unknown>) => <span {...props} />,
 }));
 
 vi.mock('@shared/lib/utils', () => ({

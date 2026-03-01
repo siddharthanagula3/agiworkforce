@@ -173,6 +173,9 @@ export interface AuthState {
 // SECURITY FIX: Only enable devtools in development, not production
 const enableDevtools = process.env.NODE_ENV !== 'production';
 
+// Module-level flag to prevent double-init race condition
+let _initializingPromise: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>()(
   devtools(
     immer((set, get) => ({
@@ -184,9 +187,12 @@ export const useAuthStore = create<AuthState>()(
 
       initialize: async () => {
         if (get().initialized) return;
+        // Prevent concurrent initializations (race condition guard)
+        if (_initializingPromise) return _initializingPromise;
 
+        _initializingPromise = (async () => {
         logger.auth('Initializing auth state...');
-        set({ isLoading: true, initialized: true });
+        set({ isLoading: true });
 
         try {
           const timeoutPromise = new Promise<AuthResponse>((resolve) =>
@@ -204,7 +210,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (!result) {
             logger.debug('Initialization skipped: empty auth response');
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
             return;
           }
 
@@ -219,10 +225,10 @@ export const useAuthStore = create<AuthState>()(
             } catch (_e) {
               logger.debug('Could not clear localStorage');
             }
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
           } else {
             logger.auth('Restored user session:', user?.email);
-            set({ user, isAuthenticated: !!user, isLoading: false });
+            set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
           }
         } catch (error) {
           logger.error('Initialization error:', error);
@@ -233,8 +239,12 @@ export const useAuthStore = create<AuthState>()(
           } catch (_e) {
             logger.debug('Could not clear localStorage');
           }
-          set({ user: null, isAuthenticated: false, isLoading: false });
+          set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
         }
+        })().finally(() => {
+          _initializingPromise = null;
+        });
+        return _initializingPromise;
       },
 
       login: async (loginData) => {
@@ -286,11 +296,11 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
 
+        // Logout from auth service first — if this throws, stores stay intact
+        await authService.logout();
+
         // Clean up all stores to prevent data leaks between sessions
         await cleanupAllStores();
-
-        // Logout from auth service
-        await authService.logout();
 
         set({
           user: null,

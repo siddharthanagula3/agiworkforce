@@ -72,7 +72,7 @@ export interface FileMetadata {
   [key: string]: unknown;
 }
 
-interface VibeViewStore {
+export interface VibeViewStore {
   // Active view
   activeView: ViewMode;
   setActiveView: (view: ViewMode) => void;
@@ -166,7 +166,7 @@ const initialState = {
 // Only enable devtools in development/staging, not production
 const enableDevtools = process.env.NODE_ENV !== 'production';
 
-export const useVibeViewStore: any = create<VibeViewStore>()(
+export const useVibeViewStore = create<VibeViewStore>()(
   devtools(
     persist(
       immer((set) => ({
@@ -384,7 +384,7 @@ export const useVibeViewStore: any = create<VibeViewStore>()(
           // Cannot use get() inside immer middleware
           // This function should be called from outside the store
 
-          const state: VibeViewStore = (useVibeViewStore as any).getState();
+          const state: VibeViewStore = useVibeViewStore.getState();
           return state.fileMetadata[path];
         },
 

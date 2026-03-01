@@ -265,7 +265,7 @@ export class APIClient {
         message: data.message || `HTTP ${response.status}: ${response.statusText}`,
         status: response.status,
 
-        details: (data.errors || data) as any,
+        details: (data.errors || data) as unknown as Record<string, unknown>,
       });
     }
 

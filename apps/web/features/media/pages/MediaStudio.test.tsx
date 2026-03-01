@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
 
 // Must mock before import. Use a factory function approach.
 // Mock ALL lucide-react exports as simple span components.
@@ -16,7 +17,7 @@ vi.mock('lucide-react', () => {
       const { children, ...rest } = props;
       return (
         <span data-icon={name} {...rest}>
-          {children as any}
+          {children as React.ReactNode}
         </span>
       );
     };

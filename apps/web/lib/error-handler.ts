@@ -105,9 +105,9 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
  * Wrapper for API route handlers with error handling
  */
 export function withErrorHandler<T extends unknown[]>(
-  handler: (...args: T) => Promise<NextResponse>,
+  handler: (...args: T) => Promise<NextResponse | Response>,
 ) {
-  return async (...args: T): Promise<NextResponse> => {
+  return async (...args: T): Promise<NextResponse | Response> => {
     try {
       return await handler(...args);
     } catch (error) {

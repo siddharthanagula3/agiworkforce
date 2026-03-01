@@ -116,7 +116,7 @@ export const AgentCommunication: React.FC<AgentCommunicationProps> = ({ agentId,
       delegationId: string;
       response: 'accepted' | 'rejected';
     }) => {
-      return interAgentService.respondToDelegation(delegationId, response, agentId as any);
+      return interAgentService.respondToDelegation(delegationId, response, response === 'accepted');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

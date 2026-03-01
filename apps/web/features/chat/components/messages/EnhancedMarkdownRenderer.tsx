@@ -19,7 +19,9 @@
  */
 
 import React, { memo, useMemo, useState } from 'react';
+import NextImage from 'next/image';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
@@ -159,10 +161,11 @@ const LinkComponent = ({ href, children }: { href?: string; children: React.Reac
 
 // Custom image component with lazy loading
 const ImageComponent = ({ src, alt }: { src?: string; alt?: string }) => (
-  <img
-    src={src}
-    alt={alt}
-    loading="lazy"
+  <NextImage
+    src={src || ''}
+    alt={alt || ''}
+    width={800}
+    height={600}
     className="my-4 max-w-full rounded-lg border border-border shadow-sm"
   />
 );
@@ -210,8 +213,7 @@ const ListItem = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Enhanced markdown components
-
-const markdownComponents: Record<string, any> = {
+const markdownComponents: Components = ({
   code: CodeBlock as React.ComponentType<React.HTMLAttributes<HTMLElement> & { inline?: boolean }>,
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="mb-4 mt-8 scroll-m-20 border-b border-border pb-2 text-3xl font-bold tracking-tight first:mt-0">
@@ -238,24 +240,19 @@ const markdownComponents: Record<string, any> = {
   p: ({ children }: { children?: React.ReactNode }) => (
     <p className="mb-4 leading-7 [&:not(:first-child)]:mt-4">{children}</p>
   ),
-  table: TableComponent as React.ComponentType<{ children: React.ReactNode }>,
-  thead: TableHead as React.ComponentType<{ children: React.ReactNode }>,
-  tbody: TableBody as React.ComponentType<{ children: React.ReactNode }>,
-  tr: TableRow as React.ComponentType<{ children: React.ReactNode }>,
-  th: TableHeader as React.ComponentType<{ children: React.ReactNode }>,
-  td: TableCell as React.ComponentType<{ children: React.ReactNode }>,
-  a: LinkComponent as React.ComponentType<{
-    href?: string;
-    children: React.ReactNode;
-  }>,
-  img: ImageComponent as React.ComponentType<{ src?: string; alt?: string }>,
-  blockquote: BlockquoteComponent as React.ComponentType<{
-    children: React.ReactNode;
-  }>,
-  hr: HorizontalRule as React.ComponentType<Record<string, never>>,
-  ol: OrderedList as React.ComponentType<{ children: React.ReactNode }>,
-  ul: UnorderedList as React.ComponentType<{ children: React.ReactNode }>,
-  li: ListItem as React.ComponentType<{ children: React.ReactNode }>,
+  table: TableComponent,
+  thead: TableHead,
+  tbody: TableBody,
+  tr: TableRow,
+  th: TableHeader,
+  td: TableCell,
+  a: LinkComponent,
+  img: ImageComponent,
+  blockquote: BlockquoteComponent,
+  hr: HorizontalRule,
+  ol: OrderedList,
+  ul: UnorderedList,
+  li: ListItem,
   strong: ({ children }: { children?: React.ReactNode }) => (
     <strong className="font-semibold">{children}</strong>
   ),
@@ -263,7 +260,7 @@ const markdownComponents: Record<string, any> = {
   del: ({ children }: { children?: React.ReactNode }) => (
     <del className="line-through opacity-70">{children}</del>
   ),
-};
+} as unknown) as Components;
 
 export const EnhancedMarkdownRenderer = memo(function EnhancedMarkdownRenderer({
   content,

@@ -229,7 +229,7 @@ export class WebSocketClient {
 
       // Store pending message
       this.pendingMessages.set(messageId, {
-        resolve: resolve as any,
+        resolve: resolve as (value: unknown) => void,
         reject,
         timeout: timeoutHandle,
       });
@@ -337,7 +337,7 @@ export class WebSocketClient {
 
   // Event handlers
 
-  on(event: keyof WebSocketEventHandlers, handler: any): void {
+  on(event: keyof WebSocketEventHandlers, handler: WebSocketEventHandlers[keyof WebSocketEventHandlers]): void {
     (this.handlers as Record<string, unknown>)[event] = handler;
   }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import NextImage from 'next/image';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
@@ -423,9 +424,11 @@ const FeaturedResourceCard: React.FC<{ resource: Resource }> = ({ resource }) =>
       <div className="grid gap-0 md:grid-cols-2">
         <div className="relative h-48 overflow-hidden sm:h-64 md:h-full">
           {resource.thumbnail && (
-            <img
+            <NextImage
               src={resource.thumbnail}
               alt={resource.title}
+              width={800}
+              height={400}
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
             />
           )}
@@ -481,9 +484,11 @@ const ResourceCard: React.FC<{ resource: Resource; index: number }> = ({ resourc
     >
       <div className="relative h-32 overflow-hidden sm:h-40">
         {resource.thumbnail && (
-          <img
+          <NextImage
             src={resource.thumbnail}
             alt={resource.title}
+            width={400}
+            height={160}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         )}

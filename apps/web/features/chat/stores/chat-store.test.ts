@@ -5,7 +5,7 @@
  * streaming state, and Supabase persistence.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock supabase-client before importing the store
 vi.mock('@shared/lib/supabase-client', () => ({
@@ -417,13 +417,409 @@ describe('ChatStore (features/chat)', () => {
   });
 
   // ==========================================================================
+  // addMessage — Truncation & Auto-Title (M35)
+  // ==========================================================================
+
+  describe('addMessage truncation and auto-title', () => {
+    it('truncates preview to 100 chars for long content', () => {
+      const { createSession } = useChatStore.getState();
+      const sessionId = createSession();
+
+      const longContent = 'x'.repeat(150);
+      useChatStore.getState().addMessage(sessionId, { role: 'user', content: longContent });
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.preview).toHaveLength(100);
+      expect(session?.preview).toBe('x'.repeat(100));
+    });
+
+    it('truncates title to 50 chars with "..." for long first user message', () => {
+      const { createSession } = useChatStore.getState();
+      const sessionId = createSession();
+
+      const longContent = 'a'.repeat(80);
+      useChatStore.getState().addMessage(sessionId, { role: 'user', content: longContent });
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.title).toBe('a'.repeat(50) + '...');
+      expect(session?.title).toHaveLength(53);
+    });
+
+    it('does not append "..." when first user message is exactly 50 chars', () => {
+      const { createSession } = useChatStore.getState();
+      const sessionId = createSession();
+
+      const exactContent = 'b'.repeat(50);
+      useChatStore.getState().addMessage(sessionId, { role: 'user', content: exactContent });
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.title).toBe('b'.repeat(50));
+    });
+
+    it('does NOT auto-title when session.title is not "New Chat"', () => {
+      const { createSession } = useChatStore.getState();
+      const sessionId = createSession();
+
+      // Manually rename the session before adding message
+      useChatStore.getState().renameSession(sessionId, 'My Custom Title');
+
+      useChatStore.getState().addMessage(sessionId, { role: 'user', content: 'Some new content' });
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.title).toBe('My Custom Title');
+    });
+
+    it('does NOT auto-title for assistant messages', () => {
+      const { createSession } = useChatStore.getState();
+      const sessionId = createSession();
+
+      useChatStore.getState().addMessage(sessionId, {
+        role: 'assistant',
+        content: 'This is an assistant response',
+      });
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.title).toBe('New Chat');
+    });
+  });
+
+  // ==========================================================================
+  // Supabase Persistence (C2)
+  // ==========================================================================
+
+  describe('Supabase Persistence', () => {
+    let mockSupabase: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      const mod = await import('@shared/lib/supabase-client');
+      mockSupabase = vi.mocked(mod.supabase.from);
+    });
+
+    describe('loadSessionsFromDb', () => {
+      it('maps DB rows to ChatSession and merges with local, sorted by updatedAt', async () => {
+        const dbRows = [
+          {
+            id: 'db-1',
+            title: 'DB Session',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-02T00:00:00Z',
+            preview: 'hello',
+            message_count: 3,
+            user_id: 'u1',
+          },
+          {
+            id: 'db-2',
+            title: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            preview: null,
+            message_count: null,
+            user_id: 'u1',
+          },
+        ];
+
+        // Set up a local-only session first
+        useChatStore.getState().createSession();
+        const localId = useChatStore.getState().sessions[0].id;
+
+        // Mock supabase chain
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: dbRows, error: null }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        await useChatStore.getState().loadSessionsFromDb('u1');
+
+        const state = useChatStore.getState();
+        expect(state.dbLoaded).toBe(true);
+
+        // DB sessions should be present
+        const ids = state.sessions.map((s) => s.id);
+        expect(ids).toContain('db-1');
+        expect(ids).toContain('db-2');
+        expect(ids).toContain(localId);
+
+        // Check mapping
+        const dbSession = state.sessions.find((s) => s.id === 'db-1');
+        expect(dbSession?.title).toBe('DB Session');
+        expect(dbSession?.preview).toBe('hello');
+        expect(dbSession?.messageCount).toBe(3);
+        expect(dbSession?.createdAt).toEqual(new Date('2024-01-01T00:00:00Z'));
+        expect(dbSession?.updatedAt).toEqual(new Date('2024-01-02T00:00:00Z'));
+
+        // Null title should fallback to 'Untitled'
+        const dbSession2 = state.sessions.find((s) => s.id === 'db-2');
+        expect(dbSession2?.title).toBe('Untitled');
+        expect(dbSession2?.preview).toBe('');
+        expect(dbSession2?.messageCount).toBe(0);
+
+        // Sorted by updatedAt descending — db-1 (Jan 2) should come before db-2 (Jan 1)
+        const db1Idx = state.sessions.findIndex((s) => s.id === 'db-1');
+        const db2Idx = state.sessions.findIndex((s) => s.id === 'db-2');
+        expect(db1Idx).toBeLessThan(db2Idx);
+      });
+
+      it('sets dbLoaded=true even when no DB data', async () => {
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        await useChatStore.getState().loadSessionsFromDb('u1');
+
+        expect(useChatStore.getState().dbLoaded).toBe(true);
+      });
+
+      it('handles DB error gracefully and sets dbLoaded=true', async () => {
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: null, error: { message: 'Query failed' } }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        await useChatStore.getState().loadSessionsFromDb('u1');
+
+        // Should not throw, dbLoaded stays as-is (error path just returns)
+        expect(useChatStore.getState().sessions).toHaveLength(0);
+      });
+
+      it('handles thrown exceptions and sets dbLoaded=true', async () => {
+        mockSupabase.mockImplementation(() => {
+          throw new Error('Unexpected');
+        });
+
+        await useChatStore.getState().loadSessionsFromDb('u1');
+
+        expect(useChatStore.getState().dbLoaded).toBe(true);
+      });
+    });
+
+    describe('loadMessagesFromDb', () => {
+      it('maps DB rows to ChatMessage with timestamp fallback', async () => {
+        const dbRows = [
+          {
+            id: 'm1',
+            session_id: 's1',
+            role: 'user',
+            content: 'hello',
+            timestamp: '2024-06-01T10:00:00Z',
+            metadata: { model: 'gpt-4' },
+          },
+          {
+            id: 'm2',
+            session_id: 's1',
+            role: 'assistant',
+            content: null,
+            timestamp: null,
+            created_at: '2024-06-01T10:01:00Z',
+            metadata: null,
+          },
+          {
+            id: 'm3',
+            session_id: 's1',
+            role: 'user',
+            content: 'test',
+            timestamp: null,
+            created_at: null,
+            metadata: null,
+          },
+        ];
+
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: dbRows, error: null }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        await useChatStore.getState().loadMessagesFromDb('s1');
+
+        const msgs = useChatStore.getState().messages['s1'];
+        expect(msgs).toHaveLength(3);
+
+        // First msg: has timestamp
+        expect(msgs[0].id).toBe('m1');
+        expect(msgs[0].content).toBe('hello');
+        expect(msgs[0].createdAt).toEqual(new Date('2024-06-01T10:00:00Z'));
+        expect(msgs[0].metadata).toEqual({ model: 'gpt-4' });
+        expect(msgs[0].isStreaming).toBe(false);
+
+        // Second msg: null timestamp, falls back to created_at
+        expect(msgs[1].createdAt).toEqual(new Date('2024-06-01T10:01:00Z'));
+        expect(msgs[1].content).toBe('');
+
+        // Third msg: both null, falls back to new Date()
+        expect(msgs[2].createdAt).toBeInstanceOf(Date);
+      });
+
+      it('handles DB error gracefully', async () => {
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: null, error: { message: 'err' } }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        // Should not throw
+        await useChatStore.getState().loadMessagesFromDb('s1');
+      });
+
+      it('does nothing when data is empty', async () => {
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        await useChatStore.getState().loadMessagesFromDb('s1');
+
+        // Messages for s1 should be undefined (not set)
+        expect(useChatStore.getState().messages['s1']).toBeUndefined();
+      });
+    });
+
+    describe('saveMessageToDb', () => {
+      it('calls upsert with correct fields', async () => {
+        const upsertMock = vi.fn().mockResolvedValue({ error: null });
+        const chain = { upsert: upsertMock };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        const message = {
+          id: 'msg-1',
+          sessionId: 's1',
+          role: 'user' as const,
+          content: 'hello',
+          createdAt: new Date(),
+          metadata: { model: 'gpt-4' },
+        };
+
+        await useChatStore.getState().saveMessageToDb(message, 'u1');
+
+        expect(upsertMock).toHaveBeenCalledWith({
+          id: 'msg-1',
+          session_id: 's1',
+          user_id: 'u1',
+          role: 'user',
+          content: 'hello',
+          metadata: { model: 'gpt-4' },
+          is_streaming: false,
+        });
+      });
+
+      it('defaults metadata to empty object when undefined', async () => {
+        const upsertMock = vi.fn().mockResolvedValue({ error: null });
+        const chain = { upsert: upsertMock };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        const message = {
+          id: 'msg-2',
+          sessionId: 's1',
+          role: 'assistant' as const,
+          content: 'reply',
+          createdAt: new Date(),
+        };
+
+        await useChatStore.getState().saveMessageToDb(message, 'u1');
+
+        expect(upsertMock).toHaveBeenCalledWith(
+          expect.objectContaining({ metadata: {} }),
+        );
+      });
+
+      it('handles upsert error gracefully', async () => {
+        mockSupabase.mockImplementation(() => {
+          throw new Error('DB error');
+        });
+
+        const message = {
+          id: 'msg-3',
+          sessionId: 's1',
+          role: 'user' as const,
+          content: 'x',
+          createdAt: new Date(),
+        };
+
+        // Should not throw
+        await useChatStore.getState().saveMessageToDb(message, 'u1');
+      });
+    });
+
+    describe('saveSessionToDb', () => {
+      it('calls upsert with correct fields', async () => {
+        const upsertMock = vi.fn().mockResolvedValue({ error: null });
+        const chain = { upsert: upsertMock };
+        mockSupabase.mockReturnValue(chain as unknown);
+
+        const now = new Date('2024-06-01T12:00:00Z');
+        const session = {
+          id: 'sess-1',
+          title: 'My Chat',
+          createdAt: now,
+          updatedAt: now,
+          preview: 'hello there',
+          messageCount: 5,
+          userId: 'u1',
+        };
+
+        await useChatStore.getState().saveSessionToDb(session, 'u1');
+
+        expect(upsertMock).toHaveBeenCalledWith({
+          id: 'sess-1',
+          user_id: 'u1',
+          title: 'My Chat',
+          preview: 'hello there',
+          message_count: 5,
+          created_at: now.toISOString(),
+          updated_at: now.toISOString(),
+        });
+      });
+
+      it('handles upsert error gracefully', async () => {
+        mockSupabase.mockImplementation(() => {
+          throw new Error('DB error');
+        });
+
+        const session = {
+          id: 'sess-2',
+          title: 'Chat',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          preview: '',
+          messageCount: 0,
+        };
+
+        // Should not throw
+        await useChatStore.getState().saveSessionToDb(session, 'u1');
+      });
+    });
+  });
+
+  // ==========================================================================
   // Utility: getGreetingTime
   // ==========================================================================
 
   describe('getGreetingTime', () => {
-    it('returns morning, afternoon, or evening based on current hour', () => {
-      const result = getGreetingTime();
-      expect(['morning', 'afternoon', 'evening']).toContain(result);
+    afterEach(() => vi.useRealTimers());
+
+    it('returns "morning" for hours before 12', () => {
+      vi.setSystemTime(new Date('2024-01-01T09:00:00'));
+      expect(getGreetingTime()).toBe('morning');
+    });
+
+    it('returns "afternoon" for hours 12–16', () => {
+      vi.setSystemTime(new Date('2024-01-01T14:00:00'));
+      expect(getGreetingTime()).toBe('afternoon');
+    });
+
+    it('returns "evening" for hours 17 and later', () => {
+      vi.setSystemTime(new Date('2024-01-01T18:00:00'));
+      expect(getGreetingTime()).toBe('evening');
     });
   });
 });

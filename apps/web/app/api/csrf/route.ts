@@ -26,7 +26,7 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
     // validate against the same session identifier.
     // getOrCreateAnonSession() returns a stable session ID and a Set-Cookie value when a new
     // anonymous session has been created, ensuring CSRF tokens are usable across requests.
-    const { id: sessionId, newCookie } = getOrCreateAnonSession(request);
+    const { id: sessionId, newCookie } = await getOrCreateAnonSession(request);
 
     // Generate CSRF token
     const token = generateCsrfToken(sessionId);

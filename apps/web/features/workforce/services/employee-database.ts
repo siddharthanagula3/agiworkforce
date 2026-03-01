@@ -1,4 +1,7 @@
-import { supabase } from '@shared/lib/supabase-client';
+import { supabase as _supabase } from '@shared/lib/supabase-client';
+
+// Use untyped client to allow unregistered table names
+const supabase = _supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { AI_EMPLOYEES, type AIEmployee } from '@/data/marketplace-employees';
 
 export interface PurchasedEmployeeRecord {
@@ -94,7 +97,7 @@ export async function purchaseEmployee(
           user_id: uid,
           employee_id: employee.id,
           employee_name: employee.name,
-        } as any,
+        } as Record<string, unknown>,
         { onConflict: 'user_id,employee_id' },
       )
       .select('*')

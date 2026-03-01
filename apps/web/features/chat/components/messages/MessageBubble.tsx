@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import NextImage from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -357,11 +358,12 @@ export const MessageBubble = React.memo(function MessageBubble({
                     <span className="text-sm">Image failed to load</span>
                   </div>
                 ) : (
-                  <img
-                    src={message.metadata.imageUrl}
+                  <NextImage
+                    src={message.metadata.imageUrl as string}
                     alt="Generated image"
+                    width={800}
+                    height={600}
                     className="max-h-96 w-auto"
-                    loading="lazy"
                     onError={() => setImageError(true)}
                   />
                 )}

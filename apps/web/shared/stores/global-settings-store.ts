@@ -29,6 +29,9 @@ export interface AppSettings {
   };
 }
 
+/** Environment type for the application */
+export type AppEnvironment = 'development' | 'production';
+
 export interface AppState {
   // Core app state
   initialized: boolean;
@@ -48,7 +51,7 @@ export interface AppState {
   // App metadata
   version: string;
   buildNumber: string;
-  environment: 'development' | 'staging' | 'production';
+  environment: AppEnvironment;
 }
 
 export interface AppActions {
@@ -75,9 +78,6 @@ export interface AppActions {
 }
 
 export type AppStore = AppState & AppActions;
-
-/** Environment type for the application */
-export type AppEnvironment = 'development' | 'staging' | 'production';
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -116,11 +116,7 @@ const INITIAL_STATE: AppState = {
   },
   version: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
   buildNumber: process.env.NEXT_PUBLIC_BUILD_NUMBER || 'dev',
-  environment: (process.env.NODE_ENV === 'production'
-    ? 'production'
-    : (process.env.NODE_ENV as string) === 'staging'
-      ? 'staging'
-      : 'development') as AppEnvironment,
+  environment: (process.env.NODE_ENV === 'production' ? 'production' : 'development') as AppEnvironment,
 };
 
 // SECURITY FIX: Only enable devtools in development/staging, not production
@@ -140,9 +136,6 @@ export const useAppStore = create<AppStore>()(
           });
 
           try {
-            // Simulate initialization
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-
             set((state) => {
               state.initialized = true;
               state.loading = false;
@@ -170,7 +163,12 @@ export const useAppStore = create<AppStore>()(
         // Settings management
         updateSettings: (newSettings: Partial<AppSettings>) =>
           set((state) => {
-            state.settings = { ...state.settings, ...newSettings };
+            // Deep merge to preserve nested notification/privacy/performance sub-fields
+            const { notifications, privacy, performance, ...topLevel } = newSettings;
+            Object.assign(state.settings, topLevel);
+            if (notifications) Object.assign(state.settings.notifications, notifications);
+            if (privacy) Object.assign(state.settings.privacy, privacy);
+            if (performance) Object.assign(state.settings.performance, performance);
           }),
 
         resetSettings: () =>
@@ -210,7 +208,15 @@ export const useAppStore = create<AppStore>()(
         // Utility actions
         reset: () =>
           set((state) => {
+            // Deep-copy to avoid sharing object references with INITIAL_STATE
             Object.assign(state, INITIAL_STATE);
+            state.settings = {
+              ...DEFAULT_SETTINGS,
+              notifications: { ...DEFAULT_SETTINGS.notifications },
+              privacy: { ...DEFAULT_SETTINGS.privacy },
+              performance: { ...DEFAULT_SETTINGS.performance },
+            };
+            state.features = { ...INITIAL_STATE.features };
           }),
       })),
       {

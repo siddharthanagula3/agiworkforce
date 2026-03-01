@@ -11,7 +11,7 @@ const SkipLink: React.FC<SkipLinkProps> = ({ href, children, className = '' }) =
   const { handleEnter } = useKeyboardNavigation();
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLAnchorElement>) => {
-    handleEnter(event as any, () => {
+    handleEnter(event as unknown as KeyboardEvent, () => {
       const target = document.querySelector(href);
       if (target) {
         (target as HTMLElement).focus();

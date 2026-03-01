@@ -10,12 +10,14 @@
 import type { Database } from './supabase';
 
 // Permissive stub types for tables not yet in the Supabase schema.
-// Using `any` ensures supabase .select(), .insert(), .update(), .upsert()
-// all compile without narrowing to `never`.
+// Using `any` for Row/Insert/Update ensures supabase .select(), .insert(),
+// .update(), .upsert() all compile without narrowing to `never`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StubRow = Record<string, any>;
 type StubTable = {
-  Row: Record<string, unknown>;
-  Insert: Record<string, unknown>;
-  Update: Record<string, unknown>;
+  Row: StubRow;
+  Insert: StubRow;
+  Update: StubRow;
   Relationships: [];
 };
 
@@ -68,6 +70,7 @@ interface MissingTables {
   vibe_agent_actions: StubTable;
   vibe_agent_messages: StubTable;
   vibe_messages: StubTable;
+  vibe_sessions: StubTable;
   workforce_executions: StubTable;
   workforce_tasks: StubTable;
 }
