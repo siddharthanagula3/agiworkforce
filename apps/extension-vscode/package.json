@@ -30,7 +30,7 @@
     "gemini"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onChatParticipant:agiworkforce.agi"
   ],
   "main": "./out/extension.js",
   "icon": "media/icon.png",
