@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { invoke } from '../lib/tauri-mock';
 import {
   DocumentType,
@@ -7,10 +8,18 @@ import {
   type SearchResult,
 } from '../types/document';
 
+interface GeneratedDocument {
+  path: string;
+  format: 'pdf' | 'word' | 'excel';
+  title: string;
+}
+
 interface DocumentState {
   currentDocument: DocumentContent | null;
   searchResults: SearchResult[];
   loading: boolean;
+  isGenerating: boolean;
+  lastGenerated: GeneratedDocument | null;
   error: string | null;
 
   readDocument: (filePath: string) => Promise<void>;
@@ -18,6 +27,24 @@ interface DocumentState {
   getMetadata: (filePath: string) => Promise<DocumentMetadata>;
   search: (filePath: string, query: string) => Promise<SearchResult[]>;
   detectType: (filePath: string) => Promise<DocumentType>;
+  generatePdf: (
+    outputPath: string,
+    title: string,
+    content: string,
+    options?: { author?: string },
+  ) => Promise<string>;
+  generateWord: (
+    outputPath: string,
+    title: string,
+    content: string,
+    options?: { author?: string },
+  ) => Promise<string>;
+  generateExcel: (
+    outputPath: string,
+    sheetName: string,
+    headers: string[],
+    rows: string[][],
+  ) => Promise<string>;
   clearError: () => void;
   reset: () => void;
 }
@@ -26,6 +53,8 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   currentDocument: null,
   searchResults: [],
   loading: false,
+  isGenerating: false,
+  lastGenerated: null,
   error: null,
 
   readDocument: async (filePath: string) => {
@@ -103,6 +132,92 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     }
   },
 
+  generatePdf: async (
+    outputPath: string,
+    title: string,
+    content: string,
+    options?: { author?: string },
+  ) => {
+    set({ isGenerating: true, error: null });
+    try {
+      const paragraphs = content.split('\n').filter((p) => p.trim());
+      const result = await invoke<string>('document_create_pdf_simple', {
+        outputPath,
+        title,
+        author: options?.author ?? null,
+        paragraphs,
+      });
+      set({
+        isGenerating: false,
+        lastGenerated: { path: result, format: 'pdf', title },
+      });
+      toast.success(`PDF created: ${title}`);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, isGenerating: false });
+      toast.error(`Failed to create PDF: ${message}`);
+      throw err;
+    }
+  },
+
+  generateWord: async (
+    outputPath: string,
+    title: string,
+    content: string,
+    options?: { author?: string },
+  ) => {
+    set({ isGenerating: true, error: null });
+    try {
+      const paragraphs = content.split('\n').filter((p) => p.trim());
+      const result = await invoke<string>('document_create_word_simple', {
+        outputPath,
+        title,
+        author: options?.author ?? null,
+        paragraphs,
+      });
+      set({
+        isGenerating: false,
+        lastGenerated: { path: result, format: 'word', title },
+      });
+      toast.success(`Word document created: ${title}`);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, isGenerating: false });
+      toast.error(`Failed to create Word document: ${message}`);
+      throw err;
+    }
+  },
+
+  generateExcel: async (
+    outputPath: string,
+    sheetName: string,
+    headers: string[],
+    rows: string[][],
+  ) => {
+    set({ isGenerating: true, error: null });
+    try {
+      const result = await invoke<string>('document_create_excel_simple', {
+        outputPath,
+        sheetName,
+        headers,
+        rows,
+      });
+      set({
+        isGenerating: false,
+        lastGenerated: { path: result, format: 'excel', title: sheetName },
+      });
+      toast.success(`Excel spreadsheet created: ${sheetName}`);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, isGenerating: false });
+      toast.error(`Failed to create Excel spreadsheet: ${message}`);
+      throw err;
+    }
+  },
+
   clearError: () => set({ error: null }),
 
   reset: () =>
@@ -110,6 +225,8 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       currentDocument: null,
       searchResults: [],
       loading: false,
+      isGenerating: false,
+      lastGenerated: null,
       error: null,
     }),
 }));
