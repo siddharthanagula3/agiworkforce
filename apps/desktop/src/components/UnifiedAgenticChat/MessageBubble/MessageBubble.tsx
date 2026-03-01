@@ -30,6 +30,9 @@ import { MessageAvatar } from './MessageAvatar';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolResultCard } from '../../ToolCalling/ToolResultCard';
 import type { ToolResultUI } from '../../../types/toolCalling';
+import { McpAppCard } from '../../MCP/McpAppCard';
+import { useMcpAppStore } from '../../../stores/mcpAppStore';
+import type { McpAppContent } from '../../../stores/mcpAppStore';
 import { ThinkingMessageBlock } from './ThinkingMessageBlock';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
@@ -653,6 +656,59 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 }
               })();
 
+              // ── MCP App detection ─────────────────────────────────────────
+              // If the result contains a __mcp_app key, register + render as
+              // a sandboxed interactive app instead of a plain JSON result card.
+              const mcpAppPayload = (() => {
+                if (!resultData) return null;
+                try {
+                  const parsed: unknown =
+                    typeof resultData === 'string' ? JSON.parse(resultData) : resultData;
+                  if (
+                    parsed &&
+                    typeof parsed === 'object' &&
+                    !Array.isArray(parsed) &&
+                    '__mcp_app' in (parsed as Record<string, unknown>)
+                  ) {
+                    return (parsed as Record<string, unknown>)['__mcp_app'] as McpAppContent;
+                  }
+                } catch {
+                  // Not JSON — not an MCP app payload
+                }
+                return null;
+              })();
+
+              if (mcpAppPayload && success) {
+                // Register the app in the store (idempotent via actionId key check)
+                const registerApp = useMcpAppStore.getState().registerApp;
+                const existingApps = useMcpAppStore.getState().apps;
+                // Access mcpServer via unknown cast since it's not in the typed interface
+                const metaRecord = (message.metadata ?? {}) as Record<string, unknown>;
+                const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
+                // Avoid duplicate registrations for the same tool call
+                const existingEntry = Object.values(existingApps).find(
+                  (a) =>
+                    a.toolName === String(toolName || '') &&
+                    a.mcpServer === mcpServerName,
+                );
+                const appId = existingEntry
+                  ? existingEntry.id
+                  : registerApp(
+                      String(toolName || 'mcp_tool'),
+                      mcpServerName,
+                      mcpAppPayload,
+                    );
+
+                const app = useMcpAppStore.getState().apps[appId];
+                if (app) {
+                  return (
+                    <div className="mt-3">
+                      <McpAppCard app={app} />
+                    </div>
+                  );
+                }
+              }
+
               const resultUI: ToolResultUI = {
                 tool_call_id: actionId || 'unknown', // Should exist if toolState exists
                 success: success,
@@ -843,6 +899,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               canRegenerate={!!onRegenerate}
               isSpeaking={isSpeaking}
               ttsSupported={ttsSupported}
+              messageContent={isAssistant ? message.content : undefined}
             />
           )}
         </div>

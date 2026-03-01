@@ -6,16 +6,27 @@
  */
 
 import 'katex/dist/katex.min.css';
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { Code2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { EnhancedMessage } from '../../../stores/unifiedChatStore';
 import { parseCitations } from '../CitationBadge';
 import { SourcesFooter } from '../SourcesFooter';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 import { useSettingsStore } from '../../../stores/settingsStore';
+import { useCanvasStore } from '../../../stores/canvasStore';
+
+// Determine the CanvasArtifact type from a code language string
+function inferArtifactType(lang: string): 'code' | 'html' | 'markdown' {
+  const l = lang.toLowerCase();
+  if (l === 'html') return 'html';
+  if (l === 'markdown' || l === 'md') return 'markdown';
+  return 'code';
+}
 
 export interface MessageContentProps {
   message: EnhancedMessage;
@@ -29,11 +40,22 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   isStreaming = false,
 }) => {
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+  const { createArtifact, openPanel } = useCanvasStore();
 
   const applyCitations = (children: React.ReactNode) =>
     React.Children.map(children, (child) =>
       typeof child === 'string' ? parseCitations(child) : child,
     );
+
+  const handleOpenInCanvas = useCallback(
+    (code: string, language: string) => {
+      const artifactType = inferArtifactType(language);
+      const id = createArtifact(artifactType, code, language, undefined, message.id);
+      openPanel(id);
+      toast.success('Opened in Canvas');
+    },
+    [createArtifact, openPanel, message.id],
+  );
 
   return (
     <div
@@ -60,12 +82,25 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               }
 
               return isBlockCode ? (
-                <CodeBlock
-                  code={code}
-                  language={language || 'text'}
-                  showLineNumbers={true}
-                  enableCopy={true}
-                />
+                <div className="relative group/codeblock">
+                  <CodeBlock
+                    code={code}
+                    language={language || 'text'}
+                    showLineNumbers={true}
+                    enableCopy={true}
+                  />
+                  {/* Open in Canvas button — shown on hover for assistant messages */}
+                  {!isUser && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenInCanvas(code, language || 'text')}
+                      className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-teal-500/20 text-teal-400 border border-teal-500/30 opacity-0 group-hover/codeblock:opacity-100 transition-opacity hover:bg-teal-500/30"
+                    >
+                      <Code2 className="h-3 w-3" />
+                      Open in Canvas
+                    </button>
+                  )}
+                </div>
               ) : (
                 <code
                   className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
