@@ -2195,7 +2195,7 @@ impl LLMRouter {
             );
 
             // Add timeout to the streaming connection attempt
-            let stream_timeout = Duration::from_secs(30); // 30 second timeout for initial connection
+            let stream_timeout = Duration::from_secs(90); // 90s timeout for initial connection (thinking/reasoning models need 60-90s)
             let stream_result = tokio::time::timeout(
                 stream_timeout,
                 provider.send_message_streaming(&routed_request),
