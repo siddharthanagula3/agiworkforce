@@ -24,6 +24,7 @@ import {
   Wand2,
   X,
   Monitor as MonitorIcon,
+  Smartphone,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -944,6 +945,22 @@ export function Sidebar({
                 <MonitorIcon className="w-3.5 h-3.5" />
               </span>
               Computer Use
+            </button>
+
+            {/* Mobile Companion button */}
+            <button
+              onClick={() => setActiveView('mobile-companion')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'mobile-companion'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
+                <Smartphone className="w-3.5 h-3.5" />
+              </span>
+              Mobile Companion
             </button>
 
             {/* Project filter dropdown */}
