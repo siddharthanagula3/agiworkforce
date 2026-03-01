@@ -14,6 +14,7 @@ import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
 import { MemoryPanel } from '../MemoryPanel';
+import { AgentTaskPanel } from '../AGI/AgentTaskPanel';
 import { toast } from 'sonner';
 
 // Lazy load MediaLab for code splitting
@@ -37,6 +38,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
+  const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
   const openArtifactPanel = useArtifactStore((state) => state.openPanel);
   const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
@@ -233,6 +235,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         onToggleArtifactPanel={handleToggleArtifactPanel}
         onToggleMediaLab={handleToggleMediaLab}
         onOpenMemory={() => setIsMemoryPanelOpen(true)}
+        onOpenTasks={() => setIsTaskPanelOpen(true)}
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
@@ -337,6 +340,27 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
 
       {/* Memory Panel */}
       <MemoryPanel isOpen={isMemoryPanelOpen} onClose={() => setIsMemoryPanelOpen(false)} />
+
+      {/* Agent Task Panel */}
+      {isTaskPanelOpen && (
+        <div
+          className="fixed inset-y-0 right-0 z-30 w-[400px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold text-white">Agent Tasks</h2>
+            <button
+              type="button"
+              onClick={() => setIsTaskPanelOpen(false)}
+              className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <AgentTaskPanel />
+        </div>
+      )}
 
       {/* MediaLab Panel */}
       {isMediaLabOpen && (
