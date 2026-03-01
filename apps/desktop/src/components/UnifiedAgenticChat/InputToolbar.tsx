@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Paperclip } from 'lucide-react';
+import { Globe, Paperclip } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getModelMetadata } from '../../constants/llm';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -46,6 +46,10 @@ export interface InputToolbarProps {
   onScreenCapture?: (result: CaptureResult) => void;
   /** Current conversation ID for screenshot association */
   conversationId?: number;
+  /** Whether the research panel is open */
+  researchOpen?: boolean;
+  /** Callback to toggle the research panel */
+  onToggleResearch?: () => void;
 }
 
 export const InputToolbar: React.FC<InputToolbarProps> = ({
@@ -65,6 +69,8 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   onPreferWhisperCloudChange,
   onScreenCapture,
   conversationId,
+  researchOpen = false,
+  onToggleResearch,
 }) => {
   const modelMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
   const visionUnsupported = modelMetadata?.capabilities.vision === false;
@@ -109,6 +115,26 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
           suppressToasts={false}
           className="p-2"
         />
+      )}
+
+      {/* Research toggle button */}
+      {onToggleResearch && (
+        <button
+          type="button"
+          onClick={onToggleResearch}
+          disabled={disabled}
+          className={cn(
+            'p-2 rounded-lg transition-colors',
+            researchOpen
+              ? 'text-teal-500 bg-teal-500/10 dark:text-teal-400 dark:bg-teal-400/10'
+              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+          title="Deep Research"
+          aria-label={researchOpen ? 'Close research panel' : 'Open research panel'}
+        >
+          <Globe size={18} aria-hidden="true" />
+        </button>
       )}
 
       <VoiceInputButton
