@@ -208,6 +208,17 @@ fn check_billing_and_budget(
     Ok(())
 }
 
+/// Check if the user explicitly selected a specific model (not auto-routing).
+/// When a concrete model is selected, skip intent-based agent detection.
+fn is_explicit_model_selection(model_override: Option<&str>) -> bool {
+    matches!(
+        model_override.map(str::trim),
+        Some(model) if !model.is_empty()
+            && model != "auto"
+            && !model.starts_with("auto-")
+    )
+}
+
 /// Determine whether agent mode should be used and emit a permission warning
 /// if the user explicitly requested it but automation is unavailable.
 ///
@@ -2750,8 +2761,15 @@ pub async fn chat_send_message(
         check_billing_and_budget(&_db, &request.user_id)?;
     }
 
-    // Determine whether agent mode should be used
-    let agent_mode = detect_agent_mode(request.enable_agent_mode, &request.content, &app_handle);
+    // Determine whether agent mode should be used.
+    // When the user explicitly selected a concrete model (not auto/auto-*),
+    // skip intent-based agent detection to avoid unwanted mode switching.
+    let explicit_model = is_explicit_model_selection(request.model_override.as_deref());
+    let agent_mode = if explicit_model {
+        request.enable_agent_mode == Some(true)
+    } else {
+        detect_agent_mode(request.enable_agent_mode, &request.content, &app_handle)
+    };
 
     let is_deep_research = matches!(request.focus_mode.as_deref(), Some("deep-research"))
         || request.research_task_id.is_some();
