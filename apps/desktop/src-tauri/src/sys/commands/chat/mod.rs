@@ -223,6 +223,16 @@ fn is_explicit_model_selection(model_override: Option<&str>) -> bool {
 /// if the user explicitly requested it but automation is unavailable.
 ///
 /// Returns `true` if agent mode is available and should be activated.
+/// Check whether the macOS Accessibility permission has been granted.
+/// AXUIElementCreateSystemWide() always succeeds (even without permission),
+/// so we use AXIsProcessTrusted() which reads the actual TCC grant.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn accessibility_permission_granted() -> bool {
+    use accessibility_sys::AXIsProcessTrusted;
+    unsafe { AXIsProcessTrusted() }
+}
+
 fn detect_agent_mode(
     request_enable_agent_mode: Option<bool>,
     content: &str,
@@ -231,22 +241,39 @@ fn detect_agent_mode(
     let explicitly_requested_agent = request_enable_agent_mode == Some(true);
     let wants_agent = explicitly_requested_agent || detect_agentic_intent(content);
 
-    let agent_mode = if wants_agent {
+    #[cfg(target_os = "macos")]
+    let has_accessibility = accessibility_permission_granted();
+    #[cfg(not(target_os = "macos"))]
+    let has_accessibility = true;
+
+    let agent_mode = if wants_agent && has_accessibility {
         use crate::automation::AutomationService;
         AutomationService::new().is_ok()
     } else {
         false
     };
 
-    // When the user explicitly enabled agent mode but automation is unavailable, emit
-    // a toast-style notification so they know to grant permissions -- but still let the
-    // LLM response through.
+    // When explicitly requested but unavailable — non-blocking permission toast.
     if explicitly_requested_agent && !agent_mode {
         let _ = app_handle.emit(
             "automation:permission_required",
             serde_json::json!({
-                "reason": "agent_mode_unavailable",
-                "message": "Agent automation is unavailable on this machine. Using standard LLM mode instead. To enable automation go to System Settings → Privacy & Security → Accessibility/Screen Recording/Input Monitoring and enable AGI Workforce."
+                "reason": "accessibility",
+                "message": "Grant Accessibility permission to use Agent mode: System Settings → Privacy & Security → Accessibility → enable AGI Workforce.",
+                "graceful": false
+            }),
+        );
+    }
+
+    // When auto-detected from content but permissions missing — fall back to LLM
+    // silently and emit a soft (non-blocking) toast so the user can enable if desired.
+    if !explicitly_requested_agent && wants_agent && !agent_mode {
+        let _ = app_handle.emit(
+            "automation:permission_required",
+            serde_json::json!({
+                "reason": "accessibility",
+                "message": "Agent automation needs Accessibility permission. Answering with standard chat instead.",
+                "graceful": true
             }),
         );
     }
