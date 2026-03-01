@@ -22,6 +22,7 @@ import {
 import { cn } from '../../../lib/utils';
 import { MessageReaction } from '../../../stores/unifiedChatStore';
 import { ReactionConfig } from './types';
+import { SaveToMemoryButton } from '../../Memory/SaveToMemoryButton';
 
 export interface MessageActionsProps {
   // State
@@ -55,6 +56,9 @@ export interface MessageActionsProps {
   canRegenerate: boolean;
   isSpeaking?: boolean;
   ttsSupported?: boolean;
+
+  /** Raw text content of the message (for Save to Memory) */
+  messageContent?: string;
 }
 
 const MessageActionsComponent: React.FC<MessageActionsProps> = ({
@@ -82,6 +86,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
   canRegenerate,
   isSpeaking,
   ttsSupported,
+  messageContent,
 }) => {
   return (
     <div
@@ -104,6 +109,11 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
         )}
       </button>
+
+      {/* Save to Memory button — assistant messages only */}
+      {isAssistant && messageContent && (
+        <SaveToMemoryButton content={messageContent} />
+      )}
 
       {/* Speak button — assistant only, requires browser TTS */}
       {isAssistant && ttsSupported && onSpeak && (

@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
+  BookOpen,
   Brain,
   Calendar,
   ChevronDown,
@@ -26,6 +27,8 @@ import {
   Monitor as MonitorIcon,
   Smartphone,
   Zap,
+  Code2,
+  LayoutGrid,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState, memo } from 'react';
@@ -77,6 +80,9 @@ interface SidebarProps {
   onToggleMediaLab?: () => void;
   onOpenMemory?: () => void;
   onOpenTasks?: () => void;
+  onOpenResearch?: () => void;
+  onOpenMcpApps?: () => void;
+  onOpenCanvas?: () => void;
   canAccessMediaLab?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -334,6 +340,9 @@ export function Sidebar({
   onToggleMediaLab,
   onOpenMemory,
   onOpenTasks,
+  onOpenResearch,
+  onOpenMcpApps,
+  onOpenCanvas,
   canAccessMediaLab = false,
   collapsed = false,
   onToggleCollapse,
@@ -929,6 +938,39 @@ export function Sidebar({
                 <Zap className="w-3.5 h-3.5" />
               </span>
               Tasks
+            </button>
+
+            {/* Canvas button */}
+            <button
+              onClick={onOpenCanvas}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
+                <Code2 className="w-3.5 h-3.5" />
+              </span>
+              Canvas
+            </button>
+
+            {/* Research button */}
+            <button
+              onClick={onOpenResearch}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-indigo-400/20 text-indigo-400">
+                <BookOpen className="w-3.5 h-3.5" />
+              </span>
+              Deep Research
+            </button>
+
+            {/* MCP Apps button */}
+            <button
+              onClick={onOpenMcpApps}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </span>
+              MCP Apps
             </button>
 
             {/* Computer Use button */}
