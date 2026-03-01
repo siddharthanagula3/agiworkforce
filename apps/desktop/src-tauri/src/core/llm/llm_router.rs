@@ -110,6 +110,21 @@ fn is_server_error(error: &str) -> bool {
         || e.contains("gateway timeout")
 }
 
+/// Determine if an error indicates a 429 rate limit specifically.
+/// Used to immediately skip to the next provider candidate instead of
+/// retrying the same rate-limited provider with backoff.
+fn is_rate_limit_error(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.contains("rate limit")
+        || e.contains("too many requests")
+        || e.contains("429")
+        || e.contains("rate_limit_exceeded")
+        || e.contains("tokens per min")
+        || e.contains("requests per min")
+        || e.contains("rpm limit")
+        || e.contains("tpm limit")
+}
+
 /// Calculate delay for exponential backoff
 fn calculate_backoff_delay(attempt: u32, config: &RetryConfig) -> Duration {
     let delay_ms =
@@ -1089,6 +1104,7 @@ impl LLMRouter {
                 Err(e) => {
                     let error_str = e.to_string();
                     let is_retryable = is_retryable_error(&error_str);
+                    let is_rate_limited = is_rate_limit_error(&error_str);
 
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
@@ -1096,9 +1112,25 @@ impl LLMRouter {
                         attempt = attempt + 1,
                         max_retries = retry_config.max_retries,
                         is_retryable = is_retryable,
+                        is_rate_limited = is_rate_limited,
                         error = %error_str,
                         "LLM request failed"
                     );
+
+                    // 429 rate limit: record in tracker and break immediately
+                    // to skip to the next provider candidate instead of wasting
+                    // retries on a provider that told us to slow down.
+                    if is_rate_limited {
+                        if let Some(ref tracker) = self.rate_limit_tracker {
+                            tracker.record_rate_limit(
+                                candidate.provider,
+                                Some(&candidate.model),
+                                None,
+                            );
+                        }
+                        last_error = Some(e);
+                        break;
+                    }
 
                     if !is_retryable || attempt == retry_config.max_retries {
                         // Record 5xx server errors in the circuit breaker
@@ -1166,8 +1198,23 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
+        let mut all_rate_limited = true;
+        let mut candidates_skipped_rate_limit: usize = 0;
 
         for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
+            // Skip candidates already known to be rate-limited from previous requests
+            if let Some(ref tracker) = self.rate_limit_tracker {
+                if tracker.is_rate_limited(candidate.provider, Some(&candidate.model)) {
+                    tracing::info!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        "Skipping rate-limited candidate (429 cooldown active)"
+                    );
+                    candidates_skipped_rate_limit += 1;
+                    continue;
+                }
+            }
+
             tracing::info!(
                 provider = %candidate.provider.as_string(),
                 model = %candidate.model,
@@ -1189,15 +1236,31 @@ impl LLMRouter {
                     return Ok(outcome);
                 }
                 Err(e) => {
+                    let err_str = e.to_string();
+                    if !is_rate_limit_error(&err_str) {
+                        all_rate_limited = false;
+                    }
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
-                        error = %e,
+                        error = %err_str,
                         "Candidate exhausted after retries, trying next candidate"
                     );
                     last_error = Some(e);
                 }
             }
+        }
+
+        // User-friendly message when every provider hit 429
+        if all_rate_limited && last_error.is_some() {
+            return Err(anyhow!(
+                "All AI providers are currently busy. Please try again in a moment."
+            ));
+        }
+        if candidates_skipped_rate_limit > 0 && last_error.is_none() {
+            return Err(anyhow!(
+                "All AI providers are currently busy. Please try again in a moment."
+            ));
         }
 
         Err(last_error.unwrap_or_else(|| anyhow!("All LLM providers failed")))
@@ -2055,8 +2118,23 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
+        let mut all_rate_limited = true;
+        let mut candidates_skipped_rate_limit: usize = 0;
 
         for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
+            // Skip candidates already known to be rate-limited from previous requests
+            if let Some(ref tracker) = self.rate_limit_tracker {
+                if tracker.is_rate_limited(candidate.provider, Some(&candidate.model)) {
+                    tracing::info!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        "Skipping rate-limited streaming candidate (429 cooldown active)"
+                    );
+                    candidates_skipped_rate_limit += 1;
+                    continue;
+                }
+            }
+
             tracing::info!(
                 provider = %candidate.provider.as_string(),
                 model = %candidate.model,
@@ -2081,15 +2159,31 @@ impl LLMRouter {
                     return Ok(stream);
                 }
                 Err(e) => {
+                    let err_str = e.to_string();
+                    if !is_rate_limit_error(&err_str) {
+                        all_rate_limited = false;
+                    }
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
-                        error = %e,
+                        error = %err_str,
                         "Streaming candidate exhausted after retries, trying next candidate"
                     );
                     last_error = Some(e);
                 }
             }
+        }
+
+        // User-friendly message when every provider hit 429
+        if all_rate_limited && last_error.is_some() {
+            return Err(anyhow!(
+                "All AI providers are currently busy. Please try again in a moment."
+            ));
+        }
+        if candidates_skipped_rate_limit > 0 && last_error.is_none() {
+            return Err(anyhow!(
+                "All AI providers are currently busy. Please try again in a moment."
+            ));
         }
 
         Err(last_error.unwrap_or_else(|| anyhow!("All LLM providers failed for streaming")))
@@ -2214,6 +2308,7 @@ impl LLMRouter {
                 Ok(Err(e)) => {
                     let error_str = e.to_string();
                     let is_retryable = is_retryable_error(&error_str);
+                    let is_rate_limited = is_rate_limit_error(&error_str);
 
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
@@ -2221,9 +2316,25 @@ impl LLMRouter {
                         attempt = attempt + 1,
                         max_retries = retry_config.max_retries,
                         is_retryable = is_retryable,
+                        is_rate_limited = is_rate_limited,
                         error = %error_str,
                         "Streaming LLM request failed"
                     );
+
+                    // 429 rate limit: record in tracker and break immediately
+                    // to skip to the next provider candidate instead of wasting
+                    // retries on a provider that told us to slow down.
+                    if is_rate_limited {
+                        if let Some(ref tracker) = self.rate_limit_tracker {
+                            tracker.record_rate_limit(
+                                candidate.provider,
+                                Some(&candidate.model),
+                                None,
+                            );
+                        }
+                        last_error = Some(anyhow!(error_str));
+                        break;
+                    }
 
                     if !is_retryable || attempt == retry_config.max_retries {
                         // Mirror the non-streaming path: record 5xx server errors so the
