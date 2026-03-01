@@ -903,30 +903,6 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   return typeof msg['type'] === 'string';
 }
 
-/**
- * Create request ID for tracking
- */
-function _createRequestId(): string {
-  return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-/**
- * Get pending request or create new one
- */
-function _getPendingRequest(id: string) {
-  return pendingRequests.get(id);
-}
-
-/**
- * Clean up pending request
- */
-function _removePendingRequest(id: string): void {
-  const request = pendingRequests.get(id);
-  if (request) {
-    clearTimeout(request.timeout);
-    pendingRequests.delete(id);
-  }
-}
 
 // Initialize on service worker start
 initialize();
