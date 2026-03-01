@@ -5847,6 +5847,19 @@ pub async fn chat_handle_stop(app_handle: tauri::AppHandle) -> Result<bool, Stri
     Ok(true)
 }
 
+
+/// Generate a shareable URL for a conversation.
+///
+/// Returns a JSON object with `url` and `expires_at` fields.
+/// Currently returns a deterministic URL based on the conversation ID.
+#[tauri::command]
+pub async fn conversation_share(conversation_id: String) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "url": format!("https://agiworkforce.app/share/{}", conversation_id),
+        "expires_at": null
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
