@@ -39,6 +39,7 @@ import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { CanvasWorkspace } from '../Canvas';
+import { ComputerUseMonitor } from '../ComputerUse/ComputerUseMonitor';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { AppLayout } from './AppLayout';
@@ -2711,6 +2712,8 @@ export const UnifiedAgenticChat: React.FC<{
             <div className="flex-1 p-4">
               <CanvasWorkspace className="h-full" />
             </div>
+          ) : activeView === 'computer-use' ? (
+            <ComputerUseMonitor />
           ) : null}
         </AppLayout>
 
