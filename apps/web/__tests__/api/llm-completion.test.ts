@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 // Mock dependencies before importing the route
 vi.mock('@/lib/rate-limit', () => ({
-  withRateLimit: vi.fn(() => null),
+  withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/logger', () => ({

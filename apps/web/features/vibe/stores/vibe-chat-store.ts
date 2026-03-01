@@ -227,7 +227,8 @@ export const useVibeChatStore = create<VibeChatState>()(
         // First-pass duplicate check using fingerprint cache (fast, outside set())
         // This catches most duplicates without needing to enter the Immer transaction
 
-        if (isDuplicateMessage((message as any).sender || message.role, message.content)) {
+        type MessageWithSender = VibeMessage & { sender?: string };
+        if (isDuplicateMessage((message as MessageWithSender).sender || message.role, message.content)) {
           return; // Skip duplicate
         }
 
@@ -237,7 +238,7 @@ export const useVibeChatStore = create<VibeChatState>()(
           // This handles edge cases where fingerprint cache might have been cleared
           const recentDuplicate = state.messages.find(
             (m) =>
-              ((m as any).sender || m.role) === ((message as any).sender || message.role) &&
+              ((m as MessageWithSender).sender || m.role) === ((message as MessageWithSender).sender || message.role) &&
               m.content === message.content &&
               Date.now() - new Date(m.timestamp).getTime() < DEDUP_CONFIG.TIME_WINDOW_MS,
           );

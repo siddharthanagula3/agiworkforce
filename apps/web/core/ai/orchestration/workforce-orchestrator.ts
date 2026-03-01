@@ -117,9 +117,8 @@ export class WorkforceOrchestratorRefactored {
 
     if (userId) {
       try {
-        const { data: hiredEmployees, error } = await (
-          supabase.from('hired_employees' as never) as any
-        )
+        const { data: hiredEmployees, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+          .from('hired_employees')
           .select('employee_id, employee_name')
           .eq('user_id', userId);
 
@@ -594,9 +593,8 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
 
       if (user) {
         try {
-          const { data: hiredEmployees, error } = await (
-            supabase.from('hired_employees' as never) as any
-          )
+          const { data: hiredEmployees, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+            .from('hired_employees')
             .select('employee_id, employee_name')
             .eq('user_id', user.id);
 

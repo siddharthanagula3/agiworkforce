@@ -129,7 +129,7 @@ class FolderManagementService {
     },
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('chat_folders' as never) as any)
+    let query = (supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>)
       .update({
         ...(updates.name && { name: updates.name }),
         ...(updates.color && { color: updates.color }),
@@ -246,7 +246,7 @@ class FolderManagementService {
   ): Promise<void> {
     // Update each folder's sort order
     const updates = folderOrders.map(({ id, sortOrder }) => {
-      let query = (supabase.from('chat_folders' as never) as any)
+      let query = (supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>)
         .update({ sort_order: sortOrder })
         .eq('id', id);
 

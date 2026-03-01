@@ -8,7 +8,6 @@ import {
   DallEImageService,
   dallEImageService,
   type DallEGenerationRequest,
-  type ImageGenerationResult,
 } from './dalle-image-service';
 
 // Mock Supabase client
@@ -40,7 +39,7 @@ describe('DALL-E Image Service', () => {
 
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch as any;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});

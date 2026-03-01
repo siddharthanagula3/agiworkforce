@@ -5,7 +5,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WorkforceOrchestratorRefactored } from './workforce-orchestrator';
-import { useMissionStore } from '@shared/stores/mission-control-store';
+import { useMissionStore, type MissionState } from '@shared/stores/mission-control-store';
+import { type UnifiedResponse } from '@core/ai/llm/unified-language-model';
+import { type ConversationResult } from './agent-conversation-protocol';
+import { type AIEmployee } from '@core/types/ai-employee';
 import {
   createMockMissionPlan,
   createCodeReviewPlan,
@@ -74,7 +77,7 @@ describe('WorkforceOrchestrator', () => {
   // Updated: Jan 15th 2026 - Fixed any type
   let mockLLMService: typeof import('@core/ai/llm/unified-language-model').unifiedLLMService;
   let mockPromptService: typeof import('@core/ai/employees/prompt-management').promptManagement;
-  let mockStore: any;
+  let mockStore: Record<string, unknown>;
 
   beforeEach(async () => {
     orchestrator = new WorkforceOrchestratorRefactored();
@@ -94,7 +97,7 @@ describe('WorkforceOrchestrator', () => {
         name: 'general-assistant',
         tools: ['Read', 'Write'],
       }),
-    ] as any);
+    ] as unknown as AIEmployee[]);
 
     // Setup mock store with all methods used by the orchestrator
     mockStore = {
@@ -113,7 +116,7 @@ describe('WorkforceOrchestrator', () => {
       isPaused: false,
     };
 
-    vi.mocked(useMissionStore.getState).mockReturnValue(mockStore as any);
+    vi.mocked(useMissionStore.getState).mockReturnValue(mockStore as unknown as MissionState);
   });
 
   afterEach(() => {
@@ -124,7 +127,7 @@ describe('WorkforceOrchestrator', () => {
     it('should generate valid execution plan from user input', async () => {
       const mockPlan = createMockMissionPlan(3);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -149,7 +152,7 @@ describe('WorkforceOrchestrator', () => {
     it('should handle invalid JSON from LLM with fallback plan', async () => {
       // The orchestrator has a fallback that creates a single-task plan when JSON parsing fails
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse('This is not valid JSON') as any,
+        createMockLLMResponse('This is not valid JSON') as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -167,7 +170,7 @@ describe('WorkforceOrchestrator', () => {
       // When LLM returns empty plan, implementation creates a fallback single-task plan
       const emptyPlan = { plan: [], reasoning: 'Nothing to do' };
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(emptyPlan)) as any,
+        createMockLLMResponse(JSON.stringify(emptyPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -183,7 +186,7 @@ describe('WorkforceOrchestrator', () => {
     it('should include reasoning in plan response', async () => {
       const mockPlan = createCodeReviewPlan();
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -244,7 +247,7 @@ describe('WorkforceOrchestrator', () => {
       };
 
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       await orchestrator.processRequest({
@@ -254,12 +257,12 @@ describe('WorkforceOrchestrator', () => {
 
       // Verify that employees with matching tools were selected
       // Note: updateTaskStatus is called during delegation with 'in_progress' status
-      const calls = vi.mocked(mockStore.updateTaskStatus).mock.calls;
+      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
       // Filter for delegation calls (status = 'in_progress')
-      const delegationCalls = calls.filter((call: any) => call[1] === 'in_progress');
+      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
       expect(delegationCalls.length).toBe(3);
       // Each task should have an assigned employee (third argument)
-      delegationCalls.forEach((call: any) => {
+      delegationCalls.forEach((call: unknown[]) => {
         expect(call[2]).toBeDefined();
         expect(typeof call[2]).toBe('string');
       });
@@ -274,7 +277,7 @@ describe('WorkforceOrchestrator', () => {
       };
 
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       await orchestrator.processRequest({
@@ -283,8 +286,8 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Both tasks should get assigned during delegation
-      const calls = vi.mocked(mockStore.updateTaskStatus).mock.calls;
-      const delegationCalls = calls.filter((call: any) => call[1] === 'in_progress');
+      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
       expect(delegationCalls.length).toBe(2);
     });
 
@@ -295,7 +298,7 @@ describe('WorkforceOrchestrator', () => {
       };
 
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -316,7 +319,7 @@ describe('WorkforceOrchestrator', () => {
       };
 
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       await orchestrator.processRequest({
@@ -325,8 +328,8 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Verify an employee was selected (selection happens in delegation)
-      const calls = vi.mocked(mockStore.updateTaskStatus).mock.calls;
-      const delegationCalls = calls.filter((call: any) => call[1] === 'in_progress');
+      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
       expect(delegationCalls.length).toBeGreaterThan(0);
       // Debugger should be selected because it has Bash tool
       expect(delegationCalls[0][2]).toBe('debugger');
@@ -344,7 +347,7 @@ describe('WorkforceOrchestrator', () => {
     it('should handle chat mode with agent conversation protocol', async () => {
       // Chat mode uses auto-select employees and agentConversationProtocol
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse('code-reviewer') as any,
+        createMockLLMResponse('code-reviewer') as unknown as UnifiedResponse,
       );
       vi.mocked(mockConversationProtocol.startConversation).mockResolvedValue({
         finalAnswer: 'I can help you with that!',
@@ -355,7 +358,7 @@ describe('WorkforceOrchestrator', () => {
           wasInterrupted: false,
           loopDetected: false,
         },
-      } as any);
+      } as unknown as ConversationResult);
 
       const result = await orchestrator.processRequest({
         userId: 'test-user-11',
@@ -373,7 +376,7 @@ describe('WorkforceOrchestrator', () => {
     it('should auto-select employees for chat mode', async () => {
       // First call is for employee selection, returns employee name
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse('code-reviewer') as any,
+        createMockLLMResponse('code-reviewer') as unknown as UnifiedResponse,
       );
       vi.mocked(mockConversationProtocol.startConversation).mockResolvedValue({
         finalAnswer: 'Here is my analysis',
@@ -384,7 +387,7 @@ describe('WorkforceOrchestrator', () => {
           wasInterrupted: false,
           loopDetected: false,
         },
-      } as any);
+      } as unknown as ConversationResult);
 
       await orchestrator.processRequest({
         userId: 'test-user-12',
@@ -404,7 +407,7 @@ describe('WorkforceOrchestrator', () => {
       // First request: mission mode
       const mockPlan = createMockMissionPlan(2);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const missionResult = await orchestrator.processRequest({
@@ -418,7 +421,7 @@ describe('WorkforceOrchestrator', () => {
 
       // Reset mock for chat mode
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse('code-reviewer') as any,
+        createMockLLMResponse('code-reviewer') as unknown as UnifiedResponse,
       );
       vi.mocked(mockConversationProtocol.startConversation).mockResolvedValue({
         finalAnswer: 'Chat response',
@@ -429,7 +432,7 @@ describe('WorkforceOrchestrator', () => {
           wasInterrupted: false,
           loopDetected: false,
         },
-      } as any);
+      } as unknown as ConversationResult);
 
       // Second request: chat mode
       const chatResult = await orchestrator.processRequest({
@@ -507,7 +510,7 @@ describe('WorkforceOrchestrator', () => {
     it('should call startMission when processing request', async () => {
       const mockPlan = createMockMissionPlan(1);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       await orchestrator.processRequest({
@@ -523,7 +526,7 @@ describe('WorkforceOrchestrator', () => {
     it('should add user message to store', async () => {
       const mockPlan = createMockMissionPlan(1);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const userInput = 'Review my code please';
@@ -544,7 +547,7 @@ describe('WorkforceOrchestrator', () => {
     it('should update task status to in_progress during delegation', async () => {
       const mockPlan = createMockMissionPlan(2);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       await orchestrator.processRequest({
@@ -553,11 +556,11 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Delegation stage updates status to 'in_progress' with assigned employee
-      const calls = vi.mocked(mockStore.updateTaskStatus).mock.calls;
-      const delegationCalls = calls.filter((call: any) => call[1] === 'in_progress');
+      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
       expect(delegationCalls.length).toBe(2);
       // Each delegation call should have task id, 'in_progress' status, and employee name
-      delegationCalls.forEach((call: any) => {
+      delegationCalls.forEach((call: unknown[]) => {
         expect(call[0]).toMatch(/^task-\d+$/);
         expect(call[1]).toBe('in_progress');
         expect(call[2]).toBeDefined();
@@ -570,7 +573,7 @@ describe('WorkforceOrchestrator', () => {
       const longInput = 'a'.repeat(10000);
       const mockPlan = createMockMissionPlan(1);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -586,7 +589,7 @@ describe('WorkforceOrchestrator', () => {
       const specialInput = '<script>alert("xss")</script> & DROP TABLE users;';
       const mockPlan = createMockMissionPlan(1);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const result = await orchestrator.processRequest({
@@ -601,7 +604,7 @@ describe('WorkforceOrchestrator', () => {
     it('should handle concurrent requests for same user', async () => {
       const mockPlan = createMockMissionPlan(1);
       vi.mocked(mockLLMService.sendMessage).mockResolvedValue(
-        createMockLLMResponse(JSON.stringify(mockPlan)) as any,
+        createMockLLMResponse(JSON.stringify(mockPlan)) as unknown as UnifiedResponse,
       );
 
       const userId = 'test-user-22';

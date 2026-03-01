@@ -8,10 +8,6 @@ import {
   SocialMediaAnalyzer,
   socialMediaAnalyzer,
   type SocialMediaQuery,
-  type SocialMediaAnalysisResult,
-  type SentimentAnalysis,
-  type TrendAnalysis,
-  type InfluencerAnalysis,
 } from './social-media-analyzer';
 
 // Mock Grok provider

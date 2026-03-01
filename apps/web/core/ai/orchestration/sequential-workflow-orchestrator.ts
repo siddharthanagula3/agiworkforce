@@ -8,11 +8,7 @@
 
 import { unifiedLLMService } from '@core/ai/llm/unified-language-model';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
-import {
-  employeeMemoryService,
-  type HandoffPackage,
-  type EmployeeContextMessage,
-} from '@core/ai/employees/employee-memory-service';
+import { employeeMemoryService } from '@core/ai/employees/employee-memory-service';
 import { useMissionStore } from '@shared/stores/mission-control-store';
 import type { AIEmployee } from '@core/types/ai-employee';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';

@@ -89,7 +89,7 @@ function languageLabel(lang: string): string {
  * Supports patterns like:
  *   // filename.ts
  *   # filename.py
- *   /* filename.css *​/
+ *   filename.css (block comment style)
  *   -- filename.sql
  */
 function extractFilename(content: string): string | null {
@@ -119,7 +119,7 @@ function parseCodeBlocks(
   messageId: string,
 ): Omit<Artifact, 'id' | 'createdAt'>[] {
   const results: Omit<Artifact, 'id' | 'createdAt'>[] = [];
-  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  const regex = /```(\w+)?\s*\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
@@ -174,7 +174,8 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
     removeArtifact: (id) => {
       set((state) => {
         state.artifacts = state.artifacts.filter((a) => a.id !== id);
-        if (state.selectedArtifactId === id) {
+        // Validate selectedArtifactId still exists after removal (covers stale selections too)
+        if (!state.artifacts.some((a) => a.id === state.selectedArtifactId)) {
           state.selectedArtifactId = state.artifacts[0]?.id ?? null;
         }
         // Close panel if no artifacts remain

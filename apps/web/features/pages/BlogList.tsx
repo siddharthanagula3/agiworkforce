@@ -16,6 +16,7 @@ import {
   Building2,
   Loader2,
   AlertCircle,
+  type LucideProps,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -67,7 +68,7 @@ const BlogPage: React.FC = () => {
   const [hasMore, setHasMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
-  const categoryIcons: Record<string, React.ComponentType<any>> = {
+  const categoryIcons: Record<string, React.ComponentType<LucideProps>> = {
     'ai-automation': Zap,
     productivity: Rocket,
     'case-studies': Building2,
@@ -263,7 +264,7 @@ const BlogPage: React.FC = () => {
                   aria-pressed={selectedCategory === category.slug}
                 >
                   {}
-                  {React.createElement(IconComponent as React.ComponentType<any>, {
+                  {React.createElement(IconComponent as React.ComponentType<LucideProps>, {
                     size: 16,
                     'aria-hidden': 'true',
                   })}

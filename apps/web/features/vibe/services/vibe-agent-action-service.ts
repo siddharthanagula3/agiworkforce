@@ -5,7 +5,10 @@
  * Provides real-time updates to the VIBE workspace UI
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { supabase as _supabase } from '@shared/lib/supabase-client';
+
+// Use untyped client to allow unregistered table names
+const supabase = _supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 export type AgentActionType =
   | 'file_edit'
@@ -72,7 +75,7 @@ export class VibeAgentActionService {
     const { data, error } = await supabase
       .from('vibe_agent_actions')
 
-      .insert(action as any)
+      .insert(action as Record<string, unknown>)
       .select()
       .single();
 
@@ -91,7 +94,7 @@ export class VibeAgentActionService {
     actionId: string,
     updates: UpdateAgentActionParams,
   ): Promise<VibeAgentAction> {
-    const { data, error } = await (supabase.from('vibe_agent_actions') as any)
+    const { data, error } = await (supabase.from('vibe_agent_actions') as ReturnType<typeof supabase.from>)
       .update(updates)
       .eq('id', actionId)
       .select()

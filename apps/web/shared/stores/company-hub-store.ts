@@ -258,7 +258,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                 ...(output !== undefined && { output: String(output) }),
               };
 
-              state.assignedAgents[agentId] = updatedAgent as any;
+              state.assignedAgents[agentId] = updatedAgent as (typeof state.assignedAgents)[string];
 
               // Also update in session's assignedAgents for consistency
               if (state.activeSessionId && state.sessions[state.activeSessionId]) {
@@ -267,7 +267,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                   (a) => a.agentId === agentId,
                 );
                 if (sessionAgentIndex >= 0) {
-                  session.assignedAgents[sessionAgentIndex] = updatedAgent as any;
+                  session.assignedAgents[sessionAgentIndex] = updatedAgent as AgentAssignment;
                 }
               }
 
@@ -327,7 +327,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                 state.tokenUsage[model].cost += stats.cost;
                 state.tokenUsage[model].callCount += stats.callCount || 1;
               } else {
-                state.tokenUsage[model] = { ...stats } as any;
+                state.tokenUsage[model] = { ...stats } as TokenUsageByModel[string];
               }
             });
 

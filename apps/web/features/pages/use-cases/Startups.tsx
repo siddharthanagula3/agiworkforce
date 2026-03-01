@@ -327,7 +327,14 @@ const StartupsPage: React.FC = () => {
   );
 };
 
-const BenefitCard: React.FC<{ benefit: any; index: number }> = ({ benefit, index }) => {
+interface BenefitItem {
+  icon: React.ComponentType<{ size?: number }>;
+  title: string;
+  description: string;
+  color: string;
+}
+
+const BenefitCard: React.FC<{ benefit: BenefitItem; index: number }> = ({ benefit, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
   const Icon = benefit.icon;
@@ -354,7 +361,13 @@ const BenefitCard: React.FC<{ benefit: any; index: number }> = ({ benefit, index
   );
 };
 
-const UseCaseCard: React.FC<{ useCase: any; index: number }> = ({ useCase, index }) => {
+interface UseCaseItem {
+  title: string;
+  description: string;
+  metrics: string[];
+}
+
+const UseCaseCard: React.FC<{ useCase: UseCaseItem; index: number }> = ({ useCase, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 
@@ -380,7 +393,14 @@ const UseCaseCard: React.FC<{ useCase: any; index: number }> = ({ useCase, index
   );
 };
 
-const StageCard: React.FC<{ stage: any; index: number }> = ({ stage, index }) => {
+interface StageItem {
+  stage: string;
+  focus: string;
+  aiEmployees: string[];
+  benefit: string;
+}
+
+const StageCard: React.FC<{ stage: StageItem; index: number }> = ({ stage, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 
@@ -406,7 +426,15 @@ const StageCard: React.FC<{ stage: any; index: number }> = ({ stage, index }) =>
   );
 };
 
-const TestimonialCard: React.FC<{ testimonial: any }> = ({ testimonial }) => {
+interface TestimonialItem {
+  quote: string;
+  author: string;
+  role: string;
+  avatar: string;
+  metrics: Array<{ label: string; value: string }>;
+}
+
+const TestimonialCard: React.FC<{ testimonial: TestimonialItem }> = ({ testimonial }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 

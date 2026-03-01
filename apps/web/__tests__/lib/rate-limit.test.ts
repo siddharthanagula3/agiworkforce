@@ -211,10 +211,11 @@ describe('Rate Limiting', () => {
     it('should allow request under rate limit', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `192.168.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-forwarded-for': '192.168.1.1',
+          'x-forwarded-for': uniqueIp,
         },
       });
 
@@ -252,14 +253,18 @@ describe('Rate Limiting', () => {
     it('should track different identifiers separately', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const base = Math.floor(Math.random() * 65536);
+      const ip1 = `10.0.${(base >> 8) & 0xff}.${base & 0xff}`;
+      const ip2 = `10.0.${((base + 1) >> 8) & 0xff}.${(base + 1) & 0xff}`;
+
       const request1 = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.0.0.1' },
+        headers: { 'x-forwarded-for': ip1 },
       });
 
       const request2 = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.0.0.2' },
+        headers: { 'x-forwarded-for': ip2 },
       });
 
       // First IP makes 50 requests
@@ -277,11 +282,12 @@ describe('Rate Limiting', () => {
     it('should use user ID when available', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `192.168.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-user-id': 'user-123',
-          'x-forwarded-for': '192.168.1.1',
+          'x-user-id': `user-${Date.now()}`,
+          'x-forwarded-for': uniqueIp,
         },
       });
 
@@ -293,9 +299,10 @@ describe('Rate Limiting', () => {
     it('should include rate limit headers in response', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.0.1.1' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       const result = await checkRateLimit(request, 'default');
@@ -308,9 +315,10 @@ describe('Rate Limiting', () => {
     it('should include Retry-After header when limit exceeded', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.0.2.1' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       // Exhaust the limit
@@ -338,9 +346,10 @@ describe('Rate Limiting', () => {
     it('should return null when rate limit not exceeded', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.1.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/checkout', {
         method: 'POST',
-        headers: { 'x-forwarded-for': '10.1.0.1' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       const result = await withRateLimit(request, 'checkout');
@@ -351,9 +360,10 @@ describe('Rate Limiting', () => {
     it('should return 429 response when rate limit exceeded', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.1.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/checkout', {
         method: 'POST',
-        headers: { 'x-forwarded-for': '10.1.0.2' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       // Exhaust the checkout limit (15 requests)
@@ -374,9 +384,10 @@ describe('Rate Limiting', () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
       const { logRateLimitExceeded } = await import('@/lib/security-audit');
 
+      const uniqueIp = `10.1.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/checkout', {
         method: 'POST',
-        headers: { 'x-forwarded-for': '10.1.0.3' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       // Exhaust the limit (15 requests)
@@ -392,12 +403,13 @@ describe('Rate Limiting', () => {
     it('should use custom identifier when provided', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.1.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.1.0.4' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
-      const result = await withRateLimit(request, 'default', 'custom-identifier');
+      const result = await withRateLimit(request, 'default', `custom-identifier-${Date.now()}`);
 
       expect(result).toBeNull();
     });
@@ -421,9 +433,10 @@ describe('Rate Limiting', () => {
 
       const wrappedHandler = withRateLimitHandler(mockHandler, 'default');
 
+      const uniqueIp = `10.2.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.2.0.1' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       const result = await wrappedHandler(request);
@@ -441,9 +454,10 @@ describe('Rate Limiting', () => {
 
       const wrappedHandler = withRateLimitHandler(mockHandler, 'checkout');
 
+      const uniqueIp = `10.2.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/checkout', {
         method: 'POST',
-        headers: { 'x-forwarded-for': '10.2.0.2' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       // Exhaust limit (15 requests)
@@ -465,13 +479,14 @@ describe('Rate Limiting', () => {
       const { NextResponse } = await import('next/server');
 
       const mockHandler = vi.fn().mockResolvedValue(NextResponse.json({ success: true }));
-      const getIdentifier = vi.fn().mockReturnValue('custom-id');
+      const getIdentifier = vi.fn().mockReturnValue(`custom-id-${Date.now()}`);
 
       const wrappedHandler = withRateLimitHandler(mockHandler, 'default', getIdentifier);
 
+      const uniqueIp = `10.2.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.2.0.3' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       await wrappedHandler(request);
@@ -536,9 +551,10 @@ describe('Rate Limiting', () => {
     it('should return all required fields', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.4.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
-        headers: { 'x-forwarded-for': '10.4.0.1' },
+        headers: { 'x-forwarded-for': uniqueIp },
       });
 
       const result = await checkRateLimit(request, 'default');
@@ -595,11 +611,15 @@ describe('Rate Limiting', () => {
     it('should use separate buckets for different IP addresses', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const base = Math.floor(Math.random() * 65536);
+      const ip1 = `10.5.${(base >> 8) & 0xff}.${base & 0xff}`;
+      const ip2 = `10.5.${((base + 1) >> 8) & 0xff}.${(base + 1) & 0xff}`;
+
       // First IP makes 50 requests
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-forwarded-for': '10.5.0.1',
+          'x-forwarded-for': ip1,
         },
       });
 
@@ -611,7 +631,7 @@ describe('Rate Limiting', () => {
       const request2 = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-forwarded-for': '10.5.0.2',
+          'x-forwarded-for': ip2,
         },
       });
 
@@ -624,10 +644,11 @@ describe('Rate Limiting', () => {
     it('should use x-real-ip as fallback', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.5.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-real-ip': '10.5.0.2',
+          'x-real-ip': uniqueIp,
         },
       });
 
@@ -651,10 +672,11 @@ describe('Rate Limiting', () => {
     it('should use first IP from x-forwarded-for when multiple present', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      const uniqueIp = `10.5.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-forwarded-for': '10.5.0.3, 10.5.0.4, 10.5.0.5',
+          'x-forwarded-for': `${uniqueIp}, 10.5.0.4, 10.5.0.5`,
         },
       });
 

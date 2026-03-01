@@ -402,8 +402,8 @@ export function stripHTML(html: string): string {
 export function sanitizeURL(url: string): string {
   try {
     const parsed = new URL(url);
-    // Only allow http, https, and mailto protocols
-    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+    // Only allow http and https protocols (mailto: excluded to prevent social engineering)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
       return '';
     }
     return url;

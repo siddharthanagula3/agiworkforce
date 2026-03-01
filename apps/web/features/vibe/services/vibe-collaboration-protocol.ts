@@ -69,7 +69,7 @@ export class AgentCollaborationManager {
       to_agents: to,
       timestamp: new Date(),
 
-      content: content as any,
+      content: content as Record<string, unknown>,
       metadata: {
         ...metadata,
       },

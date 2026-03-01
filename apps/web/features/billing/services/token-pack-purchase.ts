@@ -134,7 +134,7 @@ export async function addTokensToUserBalance(
       // Get current balance from user_token_balances
 
       const { data: balanceData, error: fetchError } = await (
-        supabase.from('user_token_balances' as never) as any
+        supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
       )
         .select('current_balance')
         .eq('user_id', userId)
@@ -155,7 +155,7 @@ export async function addTokensToUserBalance(
       if (balanceData) {
         // Update existing record
 
-        const { error: updateError } = await (supabase.from('user_token_balances' as never) as any)
+        const { error: updateError } = await (supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>)
           .update({
             current_balance: updatedBalance,
             updated_at: new Date().toISOString(),
@@ -174,7 +174,7 @@ export async function addTokensToUserBalance(
         // Create new record with default monthly allowance
 
         const { error: insertError } = await (
-          supabase.from('user_token_balances' as never) as any
+          supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
         ).insert({
           user_id: userId,
           current_balance: tokens,
@@ -196,7 +196,7 @@ export async function addTokensToUserBalance(
       // Log transaction
 
       const { error: logError } = await (
-        supabase.from('token_transactions' as never) as any
+        supabase.from('token_transactions' as never) as unknown as ReturnType<typeof supabase.from>
       ).insert({
         user_id: userId,
         tokens,
@@ -261,7 +261,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
 
     // Fallback: Query user_token_balances table directly
 
-    const { data, error } = await (supabase.from('user_token_balances' as never) as any)
+    const { data, error } = await (supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>)
       .select('current_balance')
       .eq('user_id', userId)
       .maybeSingle();

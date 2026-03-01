@@ -279,7 +279,7 @@ export function validateData<T>(
  * Formats Zod errors for display
  */
 export function formatZodErrors(errors: z.ZodError): string[] {
-  return errors.issues.map((err: any) => {
+  return errors.issues.map((err) => {
     const path = err.path.join('.');
     return path ? `${path}: ${err.message}` : err.message;
   });
