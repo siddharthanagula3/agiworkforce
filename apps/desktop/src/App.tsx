@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
+import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
+import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
@@ -71,6 +73,7 @@ const LoadingFallback = () => (
 
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
+  useVoiceHotkey();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
@@ -539,6 +542,7 @@ const DesktopShell = () => {
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
+        <VoiceInputOverlay />
         <StatusBanner />
         {subscriptionFetchFailed && (
           <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
