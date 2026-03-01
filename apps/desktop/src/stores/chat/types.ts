@@ -144,7 +144,7 @@ export interface InlinePanel {
 }
 
 export interface SlashCommandMetadata {
-  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact';
+  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact' | 'pdf' | 'word' | 'excel';
   args: string;
   rawInput: string;
 }
@@ -211,7 +211,7 @@ export interface TokenUsage {
 
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
-export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'computer-use';
+export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'computer-use' | 'mobile-companion';
 
 /**
  * Conversation Mode controls AI autonomy level
