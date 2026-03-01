@@ -113,6 +113,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Inline suggestion state
   const [inlineSuggestion, setInlineSuggestion] = useState<string>('');
 
+  // Research panel state
+  const [researchOpen, setResearchOpen] = useState(false);
+
   // Voice transcription state
   // AUDIT-VOICE-043 fix: Renamed to preferWhisperCloud for clarity (true = Whisper Cloud, false = Web Speech)
   const [preferWhisperCloud, setPreferWhisperCloud] = useState(false);
@@ -1060,6 +1063,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   const activeId = useUnifiedChatStore.getState().activeConversationId;
                   return activeId ? uuidToDbId(activeId) : undefined;
                 })()}
+                researchOpen={researchOpen}
+                onToggleResearch={() => setResearchOpen((prev) => !prev)}
               />
               <BrowserActivityBadge />
             </div>
