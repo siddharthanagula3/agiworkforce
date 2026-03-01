@@ -49,6 +49,24 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     example: '/undo or /undo list',
     icon: '↩️',
   },
+  {
+    command: '/pdf',
+    description: 'Generate a PDF document',
+    example: '/pdf Monthly Report',
+    icon: '📄',
+  },
+  {
+    command: '/word',
+    description: 'Generate a Word document',
+    example: '/word Meeting Notes',
+    icon: '📝',
+  },
+  {
+    command: '/excel',
+    description: 'Generate an Excel spreadsheet',
+    example: '/excel Sales Data',
+    icon: '📊',
+  },
 ];
 
 export function useSlashCommandAutocomplete() {
