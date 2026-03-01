@@ -56,8 +56,12 @@
         {
           "photosPermission": "Allow AGI Workforce to access your photos to send images to AI."
         }
-      ]
+      ],
+      "expo-updates"
     ],
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "experiments": {
       "typedRoutes": true
     }

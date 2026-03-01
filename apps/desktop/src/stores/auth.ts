@@ -384,6 +384,12 @@ export function scheduleSubscriptionRetry(userId: string): void {
 
   retryTimeout = setTimeout(async () => {
     console.log('[UnifiedAuth] Retrying subscription fetch for user:', userId);
+    // [C2 fix] Guard: skip retry if the active session has changed since scheduling
+    const currentUserId = useUnifiedAuthStore.getState().user?.id;
+    if (currentUserId && currentUserId !== userId) {
+      console.log('[UnifiedAuth] User session changed since retry was scheduled, skipping stale retry');
+      return;
+    }
     await supabaseAuth.refreshUserData();
   }, delay);
 }
