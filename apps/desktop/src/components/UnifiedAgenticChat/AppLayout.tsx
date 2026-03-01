@@ -28,7 +28,9 @@ interface AppLayoutProps {
   onOpenSettings?: () => void;
 }
 
-const ARTIFACT_PANEL_WIDTH = 400;
+const ARTIFACT_PANEL_DEFAULT_WIDTH = 400;
+const ARTIFACT_PANEL_MIN_WIDTH = 280;
+const ARTIFACT_PANEL_MAX_WIDTH = 900;
 
 export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -39,6 +41,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     string | undefined
   >(undefined);
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
+  const [artifactPanelWidthState, setArtifactPanelWidthState] = useState(
+    ARTIFACT_PANEL_DEFAULT_WIDTH,
+  );
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
   const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
@@ -141,7 +146,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const lastContentLengthRef = useRef(0);
-  const artifactPanelWidth = isArtifactPanelOpen ? ARTIFACT_PANEL_WIDTH : 0;
+  const artifactPanelWidth = isArtifactPanelOpen ? artifactPanelWidthState : 0;
   const rightPanelOffset = (sidecarOpen ? sidecarWidth : 0) + artifactPanelWidth;
 
   const lastMessage = messages[messages.length - 1];
@@ -322,13 +327,21 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{
-            width: ARTIFACT_PANEL_WIDTH,
+            width: artifactPanelWidthState,
             position: 'absolute',
             top: 0,
             right: sidecarOpen ? sidecarWidth : 0,
             bottom: 0,
           }}
         >
+          <ResizeHandle
+            direction="left"
+            width={artifactPanelWidthState}
+            minWidth={ARTIFACT_PANEL_MIN_WIDTH}
+            maxWidth={ARTIFACT_PANEL_MAX_WIDTH}
+            onResize={setArtifactPanelWidthState}
+            isResizing={setIsResizing}
+          />
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-full">
@@ -352,9 +365,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
 
       {/* Agent Task Panel */}
       {isTaskPanelOpen && (
-        <div
-          className="fixed inset-y-0 right-0 z-30 w-[400px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col"
-        >
+        <div className="fixed inset-y-0 right-0 z-30 w-[400px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">Agent Tasks</h2>
             <button
@@ -363,7 +374,12 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
               className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -372,11 +388,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
       )}
 
       {/* Canvas / Code Execution Workspace */}
-      {isCanvasPanelOpen && (
-        <CanvasContainer
-          onClose={() => setIsCanvasPanelOpen(false)}
-        />
-      )}
+      {isCanvasPanelOpen && <CanvasContainer onClose={() => setIsCanvasPanelOpen(false)} />}
 
       {/* MCP Apps Panel */}
       {isMcpAppsPanelOpen && (
@@ -391,8 +403,18 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
             <div className="flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-500/20">
-                <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                <svg
+                  className="h-3.5 w-3.5 text-indigo-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
                 </svg>
               </span>
               <h2 className="text-sm font-semibold text-white">Deep Research</h2>
@@ -404,7 +426,12 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
               aria-label="Close research panel"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
