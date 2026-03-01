@@ -105,8 +105,24 @@ const TOKEN_PRICING: Record<string, { input: number; output: number; provider: L
 };
 
 /**
- * Simple mutex implementation for async operations
- * Prevents race conditions in read-modify-write operations
+ * Custom async mutex for serializing token-counting updates per session.
+ *
+ * WHY this is needed:
+ * `logTokenUsage` performs a read-modify-write cycle (read session summary,
+ * update totals, persist to DB). Multiple concurrent LLM calls for the same
+ * session can interleave these steps, causing lost updates to running totals
+ * (e.g., two calls each read totalTokens=100, both write 100+N instead of
+ * 100+N+M). JavaScript's single-threaded execution does NOT prevent this
+ * because each step awaits async I/O (the DB persist), yielding the event
+ * loop between the read and write phases.
+ *
+ * Standard JS has no built-in async mutex primitive. Libraries like
+ * `async-mutex` exist but add a dependency for a ~30-line utility.
+ * This lightweight implementation uses a FIFO promise queue so waiters
+ * execute in arrival order, which is sufficient for our use case.
+ *
+ * Locks are per-session (via `sessionLocks` Map) so updates to different
+ * sessions proceed in parallel without contention.
  */
 class AsyncMutex {
   private locked = false;

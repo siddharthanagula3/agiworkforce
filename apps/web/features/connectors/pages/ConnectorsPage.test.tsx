@@ -1,0 +1,243 @@
+/**
+ * ConnectorsPage Component Tests
+ *
+ * Tests for the Connectors page: rendering, search filtering,
+ * category tab switching, and connector count badges.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
+
+// ─── Mocks ────────────────────────────────────────────────────────────────────
+
+vi.mock('@shared/lib/utils', () => ({
+  cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),
+}));
+
+vi.mock('@shared/ui/button', () => {
+  const Button = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
+    ({ children, onClick, disabled, ...props }, ref) => (
+      <button ref={ref} onClick={onClick as React.MouseEventHandler} disabled={disabled as boolean | undefined} {...props}>
+        {children as React.ReactNode}
+      </button>
+    ),
+  );
+  Button.displayName = 'Button';
+  return { Button };
+});
+
+vi.mock('@shared/ui/input', () => {
+  const Input = React.forwardRef<HTMLInputElement, Record<string, unknown>>(
+    ({ onChange, value, placeholder, ...props }, ref) => (
+      <input
+        ref={ref}
+        onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
+        value={value as string | undefined}
+        placeholder={placeholder as string | undefined}
+        {...props}
+      />
+    ),
+  );
+  Input.displayName = 'Input';
+  return { Input };
+});
+
+vi.mock('@shared/ui/badge', () => {
+  const Badge = ({ children, className, variant, ...props }: Record<string, unknown>) => (
+    <span
+      data-variant={variant as string | undefined}
+      className={className as string | undefined}
+      {...props}
+    >
+      {children as React.ReactNode}
+    </span>
+  );
+  return { Badge };
+});
+
+// Mock all lucide-react icons used in ConnectorsPage
+vi.mock('lucide-react', () => {
+  const Icon = ({ className, ...props }: Record<string, unknown>) => (
+    <span className={className as string | undefined} {...props} />
+  );
+  return {
+    Search: Icon,
+    Plus: Icon,
+    Check: Icon,
+    MoreHorizontal: Icon,
+    Zap: Icon,
+    Lock: Icon,
+    ExternalLink: Icon,
+  };
+});
+
+// ─── Import under test ────────────────────────────────────────────────────────
+
+import { ConnectorsPage } from './ConnectorsPage';
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+describe('ConnectorsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // 1. Renders without crashing
+  it('renders without crashing', () => {
+    const { container } = render(<ConnectorsPage />);
+    expect(container).toBeDefined();
+  });
+
+  // 2. Displays "Connectors" heading
+  it('displays the Connectors heading', () => {
+    render(<ConnectorsPage />);
+    expect(screen.getByText('Connectors')).toBeDefined();
+  });
+
+  // 3. Shows the page description
+  it('shows the page description', () => {
+    render(<ConnectorsPage />);
+    expect(
+      screen.getByText(
+        'Connect your tools and give your AI agents access to the apps you use every day.',
+      ),
+    ).toBeDefined();
+  });
+
+  // 4. Shows connector count badges (connected + total)
+  it('shows connected and total count badges', () => {
+    render(<ConnectorsPage />);
+    // Default: 3 connected (local-filesystem, terminal, screen-vision)
+    expect(screen.getByText('3 connected')).toBeDefined();
+    // Total count badge: CONNECTORS.length is 29
+    expect(screen.getByText(/\d+ total/)).toBeDefined();
+  });
+
+  // 5. Shows "Connected" section header with count when some are connected
+  it('shows the Connected section when connectors are connected', () => {
+    render(<ConnectorsPage />);
+    // The "Connected (3)" heading should be visible
+    expect(screen.getByText(/Connected \(\d+\)/)).toBeDefined();
+  });
+
+  // 6. Shows "Available" section header
+  it('shows the Available section', () => {
+    render(<ConnectorsPage />);
+    expect(screen.getByText(/Available/)).toBeDefined();
+  });
+
+  // 7. Shows search input placeholder
+  it('shows a search input with placeholder text', () => {
+    render(<ConnectorsPage />);
+    const input = screen.getByPlaceholderText('Search connectors...');
+    expect(input).toBeDefined();
+  });
+
+  // 8. Search input filters connectors by name
+  it('filters connectors by search query (name match)', () => {
+    render(<ConnectorsPage />);
+
+    const input = screen.getByPlaceholderText('Search connectors...');
+    fireEvent.change(input, { target: { value: 'Github' } });
+
+    // "GitHub" connector should still be visible
+    expect(screen.getByText('GitHub')).toBeDefined();
+
+    // "Gmail" should NOT appear because "Github" doesn't match "gmail"
+    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+  });
+
+  // 9. Search with no match shows empty state
+  it('shows empty state when no connectors match the search query', () => {
+    render(<ConnectorsPage />);
+
+    const input = screen.getByPlaceholderText('Search connectors...');
+    fireEvent.change(input, { target: { value: 'xyznonexistentconnector' } });
+
+    expect(screen.getByText('No connectors found')).toBeDefined();
+    expect(
+      screen.getByText('Try a different search term or category.'),
+    ).toBeDefined();
+  });
+
+  // 10. Category filter tabs are rendered
+  it('renders all category filter tabs', () => {
+    render(<ConnectorsPage />);
+
+    // These labels come from the CATEGORIES array in ConnectorsPage
+    const expectedLabels = [
+      'All',
+      'Productivity',
+      'Developer',
+      'CRM',
+      'Marketing',
+      'Finance',
+      'Social',
+      'AI',
+    ];
+
+    for (const label of expectedLabels) {
+      expect(screen.getByText(label)).toBeDefined();
+    }
+  });
+
+  // 11. Clicking a category tab filters to that category
+  it('filters connectors when a category tab is clicked', () => {
+    render(<ConnectorsPage />);
+
+    // Click the "Developer" category
+    fireEvent.click(screen.getByText('Developer'));
+
+    // GitHub is in the Developer category — should be visible
+    expect(screen.getByText('GitHub')).toBeDefined();
+
+    // Gmail is in Productivity — should NOT be visible
+    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+  });
+
+  // 12. Clicking "All" category tab shows all connectors
+  it('clicking All tab shows all connectors', () => {
+    render(<ConnectorsPage />);
+
+    // First switch to Developer
+    fireEvent.click(screen.getByText('Developer'));
+    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+
+    // Then switch back to All
+    fireEvent.click(screen.getByText('All'));
+    expect(screen.getByText('Gmail & Calendar')).toBeDefined();
+    expect(screen.getByText('GitHub')).toBeDefined();
+  });
+
+  // 13. Clicking Connect adds a connector to the connected section
+  it('connects a connector when Connect button is clicked', () => {
+    render(<ConnectorsPage />);
+
+    // Gmail starts as not connected — find its Connect button
+    // There may be multiple "Connect" buttons; find the one near Gmail text
+    const connectButtons = screen.getAllByText('Connect');
+    // Click the first one (Gmail is the first unconnected phase-1 connector)
+    fireEvent.click(connectButtons[0]);
+
+    // After connecting, the count badge should increase from 3 to 4
+    expect(screen.getByText('4 connected')).toBeDefined();
+  });
+
+  // 14. Roadmap callout is visible in "All" category view
+  it('shows the 105+ Connectors Planned callout in All view', () => {
+    render(<ConnectorsPage />);
+    expect(screen.getByText('105+ Connectors Planned')).toBeDefined();
+  });
+
+  // 15. Roadmap callout is hidden when Exclusive category is active
+  it('hides the roadmap callout when Exclusive category is selected', () => {
+    render(<ConnectorsPage />);
+
+    // Find and click the Exclusive tab — it has the star emoji prefix
+    const exclusiveTab = screen.getByText('⭐ AGI Exclusive');
+    fireEvent.click(exclusiveTab);
+
+    expect(screen.queryByText('105+ Connectors Planned')).toBeNull();
+  });
+});

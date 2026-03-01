@@ -96,6 +96,58 @@ export const ConversationListItem = memo(function ConversationListItem({
     [onDelete],
   );
 
+  const stopPropagation = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  const handlePinClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onPin?.();
+    },
+    [onPin],
+  );
+
+  const handleStarClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onStar?.();
+    },
+    [onStar],
+  );
+
+  const handleRenameClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onRename?.();
+    },
+    [onRename],
+  );
+
+  const handleDuplicateClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDuplicate?.();
+    },
+    [onDuplicate],
+  );
+
+  const handleShareClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onShare?.();
+    },
+    [onShare],
+  );
+
+  const handleArchiveClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onArchive?.();
+    },
+    [onArchive],
+  );
+
   return (
     <>
       <div
@@ -148,7 +200,7 @@ export const ConversationListItem = memo(function ConversationListItem({
                 'h-7 w-7 flex-shrink-0 text-gray-400 hover:text-teal-500 opacity-0 transition-opacity group-hover:opacity-100',
                 isActive && 'opacity-100',
               )}
-              onClick={(e) => e.stopPropagation()}
+              onClick={stopPropagation}
               aria-label="Conversation options"
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -157,12 +209,7 @@ export const ConversationListItem = memo(function ConversationListItem({
 
           <DropdownMenuContent align="end" className="w-44">
             {onPin && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPin();
-                }}
-              >
+              <DropdownMenuItem onClick={handlePinClick}>
                 <Pin
                   className={cn('mr-2 h-4 w-4', isPinned && 'fill-current text-yellow-500')}
                   aria-hidden="true"
@@ -172,12 +219,7 @@ export const ConversationListItem = memo(function ConversationListItem({
             )}
 
             {onStar && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStar();
-                }}
-              >
+              <DropdownMenuItem onClick={handleStarClick}>
                 <Star
                   className={cn('mr-2 h-4 w-4', isStarred && 'fill-current text-yellow-500')}
                   aria-hidden="true"
@@ -189,36 +231,21 @@ export const ConversationListItem = memo(function ConversationListItem({
             <DropdownMenuSeparator />
 
             {onRename && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename();
-                }}
-              >
+              <DropdownMenuItem onClick={handleRenameClick}>
                 <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
                 Rename
               </DropdownMenuItem>
             )}
 
             {onDuplicate && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDuplicate();
-                }}
-              >
+              <DropdownMenuItem onClick={handleDuplicateClick}>
                 <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
                 Duplicate
               </DropdownMenuItem>
             )}
 
             {onShare && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onShare();
-                }}
-              >
+              <DropdownMenuItem onClick={handleShareClick}>
                 <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Share
               </DropdownMenuItem>
@@ -227,12 +254,7 @@ export const ConversationListItem = memo(function ConversationListItem({
             <DropdownMenuSeparator />
 
             {onArchive && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onArchive();
-                }}
-              >
+              <DropdownMenuItem onClick={handleArchiveClick}>
                 <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
                 {isArchived ? 'Unarchive' : 'Archive'}
               </DropdownMenuItem>
@@ -253,7 +275,7 @@ export const ConversationListItem = memo(function ConversationListItem({
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogContent onClick={stopPropagation}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -261,7 +283,7 @@ export const ConversationListItem = memo(function ConversationListItem({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={stopPropagation}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

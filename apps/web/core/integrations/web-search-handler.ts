@@ -12,6 +12,9 @@ import { supabase } from '@shared/lib/supabase-client';
 // SECURITY: API keys removed - all calls go through authenticated proxies
 // Provider availability is determined by proxy configuration, not client-side keys
 
+/** Matches bracketed numeric citations like [1], [2], etc. in search responses */
+const BRACKETED_CITATION_PATTERN = /\[(\d+)\]/g;
+
 /**
  * Helper function to get the current Supabase session token
  * Required for authenticated API proxy calls
@@ -118,7 +121,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
     const answer = data.choices?.[0]?.message?.content || data.content || '';
 
     // Extract citations/sources from the response
-    const citationRegex = /\[(\d+)\]/g;
+    const citationRegex = BRACKETED_CITATION_PATTERN;
     const _citations = Array.from(answer.matchAll(citationRegex), (m: RegExpExecArray) =>
       parseInt(m[1]),
     );

@@ -234,10 +234,11 @@ export class MediaGenerationService {
       styleCounts[style] = (styleCounts[style] || 0) + 1;
     });
 
-    const mostUsedStyle = Object.keys(styleCounts).reduce(
-      (a, b) => (styleCounts[a] > styleCounts[b] ? a : b),
-      'unknown',
-    );
+    const styleKeys = Object.keys(styleCounts);
+    const mostUsedStyle =
+      styleKeys.length > 0
+        ? styleKeys.reduce((a, b) => (styleCounts[a] > styleCounts[b] ? a : b))
+        : 'unknown';
 
     return {
       totalGenerations,

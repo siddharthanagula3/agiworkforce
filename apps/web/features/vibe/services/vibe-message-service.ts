@@ -129,10 +129,14 @@ export class VibeMessageService {
   }
 
   /**
-   * Delete a message
+   * Delete a message (with ownership verification)
    */
-  static async deleteMessage(messageId: string): Promise<void> {
-    const { error } = await supabase.from('vibe_messages').delete().eq('id', messageId);
+  static async deleteMessage(messageId: string, userId?: string): Promise<void> {
+    let query = supabase.from('vibe_messages').delete().eq('id', messageId);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { error } = await query;
 
     if (error) {
       console.error('[VibeMessageService] Failed to delete message:', error);
@@ -355,10 +359,14 @@ export class VibeMessageService {
   }
 
   /**
-   * Clear all messages for a session
+   * Clear all messages for a session (with ownership verification)
    */
-  static async clearSessionMessages(sessionId: string): Promise<void> {
-    const { error } = await supabase.from('vibe_messages').delete().eq('session_id', sessionId);
+  static async clearSessionMessages(sessionId: string, userId?: string): Promise<void> {
+    let query = supabase.from('vibe_messages').delete().eq('session_id', sessionId);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { error } = await query;
 
     if (error) {
       console.error('[VibeMessageService] Failed to clear messages:', error);
