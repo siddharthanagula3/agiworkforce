@@ -128,6 +128,20 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'orchestrator_spawn_agent':
       throw new Error('Agent orchestration requires the desktop application');
 
+    // AGI goal commands
+    case 'agi_submit_goal':
+      return { goalId: `goal_mock_${Date.now()}` } as T;
+    case 'agi_submit_goal_parallel':
+      return { bestResult: { score: 0.85 } } as T;
+    case 'agi_list_goals':
+      return [] as T;
+    case 'agi_get_goal_status':
+      return { context: { currentIteration: 0, status: 'pending' } } as T;
+    case 'agi_cancel_goal':
+      return undefined as T;
+    case 'agi_get_reflection_insights':
+      return null as T;
+
     // Realtime presence commands
     case 'connect_websocket':
       return {
@@ -141,6 +155,13 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'set_user_online':
     case 'set_user_offline':
     case 'update_user_activity':
+      return undefined as T;
+
+    // MCP Connector/OAuth commands
+    case 'mcp_list_connected_providers':
+      return [] as T;
+    case 'mcp_oauth_start':
+    case 'mcp_oauth_revoke':
       return undefined as T;
 
     // MCP Extension commands
