@@ -332,6 +332,7 @@ export function Sidebar({
   onToggleArtifactPanel,
   onToggleMediaLab,
   onOpenMemory,
+  onOpenTasks,
   canAccessMediaLab = false,
   collapsed = false,
   onToggleCollapse,
@@ -916,6 +917,17 @@ export function Sidebar({
                 <Brain className="w-3.5 h-3.5" />
               </span>
               Memory
+            </button>
+
+            {/* Tasks button */}
+            <button
+              onClick={onOpenTasks}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-amber-400/20 text-amber-400">
+                <Zap className="w-3.5 h-3.5" />
+              </span>
+              Tasks
             </button>
 
             {/* Computer Use button */}
