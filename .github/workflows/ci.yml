@@ -41,8 +41,12 @@ jobs:
 
       - name: Setup test environment
         run: |
+          # Desktop app (Vite) uses VITE_ prefix
           echo "VITE_SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
           echo "VITE_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
+          # Web app (Next.js) uses NEXT_PUBLIC_ prefix
+          echo "NEXT_PUBLIC_SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
 
       - name: Dependency audit (JS)
         # H25: || exit 1 ensures CI fails hard on high-severity vulnerabilities

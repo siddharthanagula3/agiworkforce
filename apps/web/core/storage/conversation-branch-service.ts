@@ -387,10 +387,15 @@ class ConversationBranchService {
    * Note: This only deletes the branch relationship, not the child session
    *
    * @param branchId - The branch ID to delete
+   * @param userId - Optional user ID for ownership verification
    */
-  async deleteBranch(branchId: string): Promise<void> {
+  async deleteBranch(branchId: string, userId?: string): Promise<void> {
     try {
-      const { error } = await supabase.from('conversation_branches').delete().eq('id', branchId);
+      let query = supabase.from('conversation_branches').delete().eq('id', branchId);
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      const { error } = await query;
 
       if (error) {
         logger.error('Failed to delete branch:', error);

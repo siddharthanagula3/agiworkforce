@@ -542,7 +542,13 @@ export async function withRateLimit(
       'Rate limit exceeded',
     );
 
-    // Log to security audit table
+    // Log to security audit table.
+    // NOTE: x-user-id is used here only for audit enrichment, NOT for the rate-limit
+    // identifier (which is derived from the JWT `sub` claim or IP — see getRateLimitIdentifier).
+    // In production, this header should be set server-side by auth middleware after JWT
+    // verification. If the header originates from the client directly it could be spoofed,
+    // but that only affects audit metadata — rate limiting itself is not impacted.
+    // TODO: Derive userId from the verified session (e.g., parsed JWT) instead of a header.
     const userId = request.headers.get('x-user-id') || undefined;
     await logRateLimitExceeded(request, identifier || key, userId);
 

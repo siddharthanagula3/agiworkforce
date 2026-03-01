@@ -330,11 +330,9 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   // TODO: [H33] task ownership verification — requires storing task_id → user_id mapping at creation time
   // A proper fix: at creation time (generate/route.ts), store { task_id, user_id } in Redis/Supabase,
   // then here look up the mapping and reject if user.id !== storedUserId.
-  console.warn(
-    '[SECURITY] Video task status called without ownership verification for task_id:',
-    taskId,
-    'user_id:',
-    user?.id,
+  logger.warn(
+    { hasTaskId: !!taskId, hasUserId: !!user?.id },
+    'Video task status called without ownership verification',
   );
 
   logger.info(
