@@ -13,6 +13,7 @@ import {
   Download,
   FolderOpen,
   Layers,
+  Link2,
   MessageSquare,
   Pin,
   PinOff,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Wand2,
   X,
+  Monitor as MonitorIcon,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,6 +64,7 @@ import {
 } from '../ui/AlertDialog';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleModeToggle } from '../SimpleMode';
+import { ShareConversationDialog } from './ShareConversationDialog';
 
 interface SidebarProps {
   className?: string;
@@ -72,6 +75,7 @@ interface SidebarProps {
   onToggleArtifactPanel?: () => void;
   onToggleMediaLab?: () => void;
   onOpenMemory?: () => void;
+  onOpenTasks?: () => void;
   canAccessMediaLab?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -104,6 +108,7 @@ interface ConversationItemProps {
   onCancelEdit: () => void;
   onOpenCustomInstructions?: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onShare: (id: string, title: string) => void;
   onExport: (id: string, title: string) => void;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
@@ -126,6 +131,7 @@ const ConversationItem = memo<ConversationItemProps>(
     onCancelEdit,
     onOpenCustomInstructions,
     onTogglePin,
+    onShare,
     onExport,
     onArchive,
     onRestore,
@@ -203,6 +209,18 @@ const ConversationItem = memo<ConversationItemProps>(
                     title={conv.pinned ? 'Unpin' : 'Pin'}
                   >
                     {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShare(conv.id, conv.title || 'Untitled');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-teal-500"
+                    title="Share conversation"
+                  >
+                    <Link2 className="h-3 w-3" />
                   </Button>
                   <Button
                     onClick={(e) => {
@@ -393,6 +411,11 @@ export function Sidebar({
     conversationId: string;
     conversationTitle: string;
   }>({ open: false, conversationId: '', conversationTitle: '' });
+  const [shareDialog, setShareDialog] = useState<{
+    open: boolean;
+    conversationId: string;
+    conversationTitle: string;
+  }>({ open: false, conversationId: '', conversationTitle: '' });
 
   // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
@@ -573,6 +596,10 @@ export function Sidebar({
     setEditingTitle('');
   }, []);
 
+  const handleShare = useCallback((id: string, title: string) => {
+    setShareDialog({ open: true, conversationId: id, conversationTitle: title });
+  }, []);
+
   const handleArchive = useCallback(
     (id: string) => {
       archiveConversation(id);
@@ -657,6 +684,7 @@ export function Sidebar({
         onCancelEdit={handleCancelEdit}
         onOpenCustomInstructions={onOpenCustomInstructions}
         onTogglePin={togglePinnedConversation}
+        onShare={handleShare}
         onExport={handleExportConversation}
         onArchive={handleArchive}
         onRestore={handleRestore}
@@ -675,6 +703,7 @@ export function Sidebar({
       handleCancelEdit,
       onOpenCustomInstructions,
       togglePinnedConversation,
+      handleShare,
       handleExportConversation,
       handleArchive,
       handleRestore,
@@ -741,6 +770,14 @@ export function Sidebar({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Conversation Dialog */}
+      <ShareConversationDialog
+        conversationId={shareDialog.conversationId}
+        conversationTitle={shareDialog.conversationTitle}
+        isOpen={shareDialog.open}
+        onClose={() => setShareDialog((prev) => ({ ...prev, open: false }))}
+      />
 
       {}
       <AnimatePresence>
@@ -879,6 +916,22 @@ export function Sidebar({
                 <Brain className="w-3.5 h-3.5" />
               </span>
               Memory
+            </button>
+
+            {/* Computer Use button */}
+            <button
+              onClick={() => setActiveView('computer-use')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'computer-use'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-cyan-400/20 text-cyan-400">
+                <MonitorIcon className="w-3.5 h-3.5" />
+              </span>
+              Computer Use
             </button>
 
             {/* Project filter dropdown */}
