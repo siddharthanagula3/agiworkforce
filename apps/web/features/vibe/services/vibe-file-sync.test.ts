@@ -57,12 +57,32 @@ vi.mock('../stores/vibe-file-store', () => ({
   },
 }));
 
+interface FileSyncService {
+  initSession(sessionId: string): Promise<void>;
+  endSession(): Promise<void>;
+  scheduleFileSave(path: string, content: string): void;
+  saveFileImmediately(path: string, content: string): Promise<boolean>;
+  getSyncState(path: string): { status: string; error?: string } | undefined;
+  hasUnsavedChanges(): boolean;
+  getFilesWithErrors(): Array<{ path: string; error: string }>;
+  flushPendingOperations(): Promise<void>;
+  pendingOperations: Map<string, { content: string }>;
+  currentSessionId: string | null;
+  debounceTimers: Map<string, unknown>;
+  syncStates: Map<string, unknown>;
+  operationQueue: unknown[];
+  updateSyncState(path: string, state: { status: string; error?: string }): void;
+  inferMimeType(filename: string): string;
+  inferLanguage(filename: string): string;
+  extractPathFromMetadata(metadata: Record<string, unknown>, fallback: string): string;
+}
+
 // Now import the service class
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { VibeFileSyncService } = require('./vibe-file-sync') as { VibeFileSyncService: any };
+const { VibeFileSyncService } = require('./vibe-file-sync') as { VibeFileSyncService: new () => FileSyncService };
 
 describe('VibeFileSyncService', () => {
-  let service: any;
+  let service: FileSyncService;
 
   beforeEach(() => {
     vi.useFakeTimers();

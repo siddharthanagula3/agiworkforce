@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 /**
  * Image Generation API
@@ -398,6 +399,12 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
+  }
+
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
   }
 
   // Rate limiting - use image-generation config (10 req/min, fail-closed)

@@ -162,7 +162,7 @@ export class ChatPersistenceService {
     const hasMore = items.length > limit;
     const resultItems = hasMore ? items.slice(0, limit) : items;
 
-    const sessions = resultItems.map((session: any) => {
+    const sessions = resultItems.map((session: Record<string, unknown>) => {
       const chatMessages = session.web_messages as
         | { count: number }[]
         | { count: number }
@@ -226,7 +226,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only update their own sessions
    */
   async updateSessionTitle(sessionId: string, title: string, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         title,
         updated_at: new Date().toISOString(),
@@ -254,7 +254,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only delete their own sessions
    */
   async deleteSession(sessionId: string, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', sessionId);
 
@@ -282,7 +282,7 @@ export class ChatPersistenceService {
     role: 'user' | 'assistant' | 'system',
     content: string,
   ): Promise<ChatMessage> {
-    const { data, error } = await (supabase.from('web_messages') as any)
+    const { data, error } = await (supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>)
       .insert({
         conversation_id: sessionId,
         role,
@@ -295,7 +295,7 @@ export class ChatPersistenceService {
     if (!data) throw new Error('Failed to save message: No data returned');
 
     // Update session's last_message_at
-    await (supabase.from('web_conversations') as any)
+    await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -445,7 +445,7 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only update messages from their own sessions
    */
   async updateMessage(messageId: string, newContent: string): Promise<ChatMessage> {
-    const { data, error } = await (supabase.from('web_messages') as any)
+    const { data, error } = await (supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>)
       .update({
         content: newContent,
         // updated_at, edited, and edit_count are automatically handled by the database trigger
@@ -558,7 +558,7 @@ export class ChatPersistenceService {
     isStarred: boolean,
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         is_starred: isStarred,
         updated_at: new Date().toISOString(),
@@ -583,7 +583,7 @@ export class ChatPersistenceService {
    * Update session pinned state
    */
   async updateSessionPinned(sessionId: string, isPinned: boolean, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         is_pinned: isPinned,
         updated_at: new Date().toISOString(),
@@ -612,7 +612,7 @@ export class ChatPersistenceService {
     isArchived: boolean,
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         is_archived: isArchived,
         updated_at: new Date().toISOString(),
@@ -641,7 +641,7 @@ export class ChatPersistenceService {
     sharedLink: string | null,
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as any)
+    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
       .update({
         shared_link: sharedLink,
         updated_at: new Date().toISOString(),
@@ -702,7 +702,7 @@ export class ChatPersistenceService {
       }
 
       // Update target session's last_message_at
-      await (supabase.from('web_conversations') as any)
+      await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
         .update({
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

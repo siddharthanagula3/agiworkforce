@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import NextImage from 'next/image';
 import {
-  Image,
+  Image as ImageIcon,
   Video,
   Download,
   Sparkles,
@@ -161,9 +162,9 @@ function HistoryCard({ item }: { item: GenerationHistoryItem }) {
       {/* Thumbnail */}
       <div className="aspect-square bg-white/[0.02] flex items-center justify-center overflow-hidden">
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt={item.prompt} className="w-full h-full object-cover" />
+          <NextImage src={item.thumbnailUrl} alt={item.prompt} width={200} height={200} className="w-full h-full object-cover" />
         ) : item.type === 'image' ? (
-          <Image className="h-8 w-8 text-white/10" />
+          <ImageIcon className="h-8 w-8 text-white/10" />
         ) : (
           <Video className="h-8 w-8 text-white/10" />
         )}
@@ -504,7 +505,7 @@ export function MediaStudio() {
                 : 'text-white/40 border-transparent hover:text-white/60',
             )}
           >
-            <Image className="h-4 w-4" />
+            <ImageIcon className="h-4 w-4" />
             Image
           </button>
           <button
@@ -634,9 +635,11 @@ export function MediaStudio() {
                         key={idx}
                         className="group relative rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.02]"
                       >
-                        <img
+                        <NextImage
                           src={img.url}
                           alt={img.prompt}
+                          width={400}
+                          height={400}
                           className="w-full aspect-square object-cover"
                         />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

@@ -18,11 +18,9 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  // Skip type checking during build — type errors exist in desktop-ported
-  // component stubs (ToolCalling/*, UnifiedAgenticChat/*) that don't run
-  // in the web app. Type checking runs separately via `tsc --noEmit` in CI.
+  // Type checking during build — all TS errors resolved as of 2026-02-28.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   // Instrumentation is automatically enabled in Next.js 16+
   // See: apps/web/instrumentation.ts

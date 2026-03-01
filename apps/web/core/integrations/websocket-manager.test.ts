@@ -8,8 +8,6 @@ import {
   WebSocketManager,
   WebSocketState,
   MessageType,
-  type WebSocketMessage,
-  type ConnectionConfig,
   type WebSocketEvent,
 } from './websocket-manager';
 

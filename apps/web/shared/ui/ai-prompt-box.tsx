@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import {
   ArrowUp,
   Paperclip,
@@ -147,9 +148,10 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({ imageUrl, onClose }) 
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="relative overflow-hidden rounded-2xl bg-card shadow-2xl"
         >
-          <img
+          <Image
             src={imageUrl}
             alt="Full preview"
+            fill
             className="max-h-[80vh] w-full rounded-2xl object-contain"
           />
         </motion.div>
@@ -506,7 +508,7 @@ export const PromptInputBox = React.forwardRef(
                 <div key={index} className="group relative">
                   {file.type.startsWith('image/') && filePreviews[file.name] && (
                     <div
-                      className="h-16 w-16 cursor-pointer overflow-hidden rounded-xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      className="relative h-16 w-16 cursor-pointer overflow-hidden rounded-xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                       onClick={() => openImageModal(filePreviews[file.name])}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -518,10 +520,11 @@ export const PromptInputBox = React.forwardRef(
                       tabIndex={0}
                       aria-label={`Preview ${file.name}`}
                     >
-                      <img
+                      <Image
                         src={filePreviews[file.name]}
                         alt={file.name}
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
                       />
                       <button
                         onClick={(e) => {

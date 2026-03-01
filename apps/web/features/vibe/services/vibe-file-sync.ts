@@ -140,7 +140,7 @@ class VibeFileSyncService {
    */
   async loadFilesFromDatabase(sessionId: string): Promise<void> {
     try {
-      const { data, error } = await (supabase.from('vibe_files' as never) as any)
+      const { data, error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
         .select('*')
         .eq('session_id', sessionId)
         .order('uploaded_at', { ascending: true });
@@ -327,7 +327,7 @@ class VibeFileSyncService {
 
       // Upsert file record
 
-      const { error } = await (supabase.from('vibe_files' as never) as any).upsert(
+      const { error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>).upsert(
         {
           id: fileId,
           session_id: sessionId,
@@ -417,7 +417,7 @@ class VibeFileSyncService {
     try {
       // Find the file by path in metadata
 
-      const { data: files } = await (supabase.from('vibe_files' as never) as any)
+      const { data: files } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
         .select('id, metadata')
         .eq('session_id', this.currentSessionId);
 
@@ -430,7 +430,7 @@ class VibeFileSyncService {
       });
 
       if (fileToDelete) {
-        const { error } = await (supabase.from('vibe_files' as never) as any)
+        const { error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
           .delete()
           .eq('id', fileToDelete.id);
 

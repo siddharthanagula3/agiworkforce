@@ -7,7 +7,7 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 /**
  * Helper function to get the current Supabase session token
@@ -258,7 +258,6 @@ export class PerplexityProvider {
    * Reference implementation for Perplexity streaming is preserved in comments
    * at the bottom of this method for when proxy-based streaming is implemented.
    */
-  // eslint-disable-next-line require-yield -- Intentionally throws for security; no yield needed
   async *streamMessage(
     _messages: PerplexityMessage[],
     _sessionId?: string,

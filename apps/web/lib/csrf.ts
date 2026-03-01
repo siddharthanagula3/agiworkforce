@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation
 let cachedSecret: string | null = null;
@@ -87,42 +88,47 @@ export function verifyCsrfToken(
 }
 
 /**
- * Extract session ID from request cookies.
+ * Extract session ID from request.
  *
- * SECURITY NOTE: This function does NOT extract from JWT headers because
- * JWT verification must happen through proper auth middleware (Supabase Auth).
- * Callers with authenticated users should pass the verified user ID directly
- * to validateCsrfFromRequest() instead of relying on this fallback.
+ * M3 FIX: For authenticated users, uses the Supabase server client to get the
+ * verified user ID — this is more secure than parsing raw cookie bytes since
+ * the user ID is verified through Supabase Auth, not derived from untrusted
+ * cookie values.
  *
- * NOTE: For anonymous users this now reads the `anon-session-id` cookie before
+ * Falls back to cookie-based session binding for anonymous users.
+ *
+ * NOTE: For anonymous users this reads the `anon-session-id` cookie before
  * generating a new UUID. This ensures CSRF tokens generated on one request can
  * be verified on subsequent requests for the same anonymous session.
  * Use `getOrCreateAnonSession(request)` in route handlers that need to set the
  * cookie when one does not already exist.
  */
-export function getSessionIdFromRequest(request: Request): string {
-  // Option 1: Get from session cookie
-  const cookies = request.headers.get('cookie') || '';
+export async function getSessionIdFromRequest(_request: Request): Promise<string> {
+  // Option 1 (preferred): Use Supabase server client to get verified user ID
+  // This avoids parsing raw cookie bytes and ensures the session ID is
+  // cryptographically verified through Supabase Auth.
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id) {
+      return user.id;
+    }
+  } catch {
+    // Supabase client may fail in non-route-handler contexts; fall through
+  }
+
+  // Option 2: Cookie-based fallback for anonymous users
+  const cookies = _request.headers.get('cookie') || '';
+
+  // Check for explicit session cookie
   const sessionMatch = cookies.match(/session-id=([^;]+)/);
   if (sessionMatch) {
     return sessionMatch[1];
   }
 
-  // Option 2: Get Supabase auth cookie for session binding
-  // The sb-*-auth-token cookie is set by Supabase and contains verified session info
-  const supabaseAuthMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/);
-  if (supabaseAuthMatch) {
-    // Use a hash of the cookie value to avoid exposing the raw token
-    const tokenHash = createHmac('sha256', getCsrfSecret())
-      .update(supabaseAuthMatch[1])
-      .digest('hex')
-      .substring(0, 32);
-    return `session-${tokenHash}`;
-  }
-
-  // Option 2.5: Use an existing anonymous session ID cookie to preserve CSRF binding.
-  // This is the key fix for anonymous users: reuse the same session ID across requests
-  // instead of generating a new one per-request (which broke CSRF validation).
+  // Check for existing anonymous session ID cookie to preserve CSRF binding.
   const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
   if (anonMatch) {
     return anonMatch[1];
@@ -145,23 +151,28 @@ export function getSessionIdFromRequest(request: Request): string {
  * CSRF tokens for anonymous users — it ensures the session ID is stable across
  * the token-generation request and subsequent validation requests.
  */
-export function getOrCreateAnonSession(request: Request): { id: string; newCookie?: string } {
+export async function getOrCreateAnonSession(
+  request: Request,
+): Promise<{ id: string; newCookie?: string }> {
+  // Option 1 (preferred): Use Supabase server client for verified user ID
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id) {
+      return { id: user.id };
+    }
+  } catch {
+    // Fall through to cookie-based fallback
+  }
+
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 1: Prefer authenticated session cookies (no new cookie needed)
+  // Option 2: Prefer authenticated session cookies (no new cookie needed)
   const sessionMatch = cookies.match(/session-id=([^;]+)/);
   if (sessionMatch) {
     return { id: sessionMatch[1] };
-  }
-
-  // Option 2: Supabase auth cookie (no new cookie needed)
-  const supabaseAuthMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/);
-  if (supabaseAuthMatch) {
-    const tokenHash = createHmac('sha256', getCsrfSecret())
-      .update(supabaseAuthMatch[1])
-      .digest('hex')
-      .substring(0, 32);
-    return { id: `session-${tokenHash}` };
   }
 
   // Option 3: Existing anonymous session cookie
@@ -192,7 +203,7 @@ export async function validateCsrfFromRequest(
   }
 
   const token = request.headers.get(CSRF_HEADER);
-  const sid = sessionId || getSessionIdFromRequest(request);
+  const sid = sessionId || (await getSessionIdFromRequest(request));
 
   return verifyCsrfToken(token, sid);
 }
@@ -218,7 +229,7 @@ export async function requireCsrfToken(
   }
 
   const token = request.headers.get(CSRF_HEADER);
-  const sid = sessionId || getSessionIdFromRequest(request);
+  const sid = sessionId || (await getSessionIdFromRequest(request));
 
   if (!verifyCsrfToken(token, sid)) {
     return new Response(

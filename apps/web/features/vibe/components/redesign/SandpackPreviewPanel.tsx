@@ -19,7 +19,7 @@ import {
   SandpackConsole,
   useSandpack,
 } from '@codesandbox/sandpack-react';
-import type { SandpackFiles, SandpackPredefinedTemplate } from '@codesandbox/sandpack-react';
+import type { SandpackFiles, SandpackPredefinedTemplate, SandpackTheme } from '@codesandbox/sandpack-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import {
@@ -51,7 +51,7 @@ import {
 
 // Sandpack dark theme matching our UI
 
-const vibeDarkTheme: any = {
+const vibeDarkTheme: SandpackTheme = {
   colors: {
     surface1: '#1e1e1e',
     surface2: '#252526',

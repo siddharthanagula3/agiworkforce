@@ -566,7 +566,7 @@ export function useOrganizationSettings(
     queryFn: async (): Promise<OrganizationSettings | null> => {
       // Try to get organization from database
 
-      let query = (supabase.from('organizations' as never) as any).select('*');
+      let query = (supabase.from('organizations' as never) as unknown as ReturnType<typeof supabase.from>).select('*');
 
       if (organizationId) {
         query = query.eq('id', organizationId);
@@ -635,7 +635,7 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     { organizationId: string; updates: Partial<OrganizationSettings> }
   >({
     mutationFn: async ({ organizationId, updates }) => {
-      const { error } = await (supabase.from('organizations' as never) as any)
+      const { error } = await (supabase.from('organizations' as never) as unknown as ReturnType<typeof supabase.from>)
         .update({
           name: updates.name,
           description: updates.description,
@@ -698,7 +698,7 @@ export function useTeamMembers(
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organizationId) return [];
 
-      const { data, error } = await (supabase.from('organization_members' as never) as any)
+      const { data, error } = await (supabase.from('organization_members' as never) as unknown as ReturnType<typeof supabase.from>)
         .select(
           `
           id,
@@ -777,7 +777,7 @@ export function useInviteTeamMember(): UseMutationResult<
     { organizationId: string; email: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ organizationId, email, role }) => {
-      const { data, error } = await (supabase.from('organization_members' as never) as any)
+      const { data, error } = await (supabase.from('organization_members' as never) as unknown as ReturnType<typeof supabase.from>)
         .insert({
           organization_id: organizationId,
           email,
@@ -833,7 +833,7 @@ export function useRemoveTeamMember(): UseMutationResult<
 
   return useMutation<void, Error, { memberId: string; organizationId: string }>({
     mutationFn: async ({ memberId }) => {
-      const { error } = await (supabase.from('organization_members' as never) as any)
+      const { error } = await (supabase.from('organization_members' as never) as unknown as ReturnType<typeof supabase.from>)
         .delete()
         .eq('id', memberId);
 
@@ -870,7 +870,7 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
     { memberId: string; organizationId: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ memberId, role }) => {
-      const { error } = await (supabase.from('organization_members' as never) as any)
+      const { error } = await (supabase.from('organization_members' as never) as unknown as ReturnType<typeof supabase.from>)
         .update({ role })
         .eq('id', memberId);
 
@@ -934,7 +934,7 @@ export function useUserActivity(
 
       if (!targetUserId) return [];
 
-      const { data, error } = await (supabase.from('user_activity' as never) as any)
+      const { data, error } = await (supabase.from('user_activity' as never) as unknown as ReturnType<typeof supabase.from>)
         .select('*')
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
@@ -1034,7 +1034,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       },
     ],
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      let query = (supabase.from('audit_logs' as never) as any)
+      let query = (supabase.from('audit_logs' as never) as unknown as ReturnType<typeof supabase.from>)
         .select('*')
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -1097,7 +1097,7 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
   return useQuery<string[], Error>({
     queryKey: ['audit', 'actions'],
     queryFn: async (): Promise<string[]> => {
-      const { data, error } = await (supabase.from('audit_logs' as never) as any)
+      const { data, error } = await (supabase.from('audit_logs' as never) as unknown as ReturnType<typeof supabase.from>)
         .select('action')
         .limit(1000);
 

@@ -659,9 +659,11 @@ export function createAgentExecutor(options: AgentExecutorOptions): AgentExecuto
   return new AgentExecutor(options);
 }
 
-export default {
+const vibeAgentToolsModule = {
   ToolRegistry,
   AgentExecutor,
   builtInTools,
   createAgentExecutor,
 };
+
+export default vibeAgentToolsModule;

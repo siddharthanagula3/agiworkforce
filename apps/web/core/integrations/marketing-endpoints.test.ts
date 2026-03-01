@@ -19,7 +19,6 @@ import {
   getUserTickets,
   type ContactFormData,
   type NewsletterData,
-  type BlogPostsParams,
   type SupportTicket,
 } from './marketing-endpoints';
 

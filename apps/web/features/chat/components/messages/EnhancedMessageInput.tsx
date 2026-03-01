@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import NextImage from 'next/image';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/components/ui/button';
 import { Separator } from '@shared/components/ui/separator';
@@ -504,9 +505,11 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="group relative overflow-hidden rounded-lg border border-border bg-card"
             >
               {attachment.preview ? (
-                <img
+                <NextImage
                   src={attachment.preview}
                   alt={attachment.file.name}
+                  width={80}
+                  height={80}
                   className="h-20 w-20 object-cover"
                 />
               ) : attachment.isAudio ? (

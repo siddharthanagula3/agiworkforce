@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import NextImage from 'next/image';
 import { Dialog, DialogContent, DialogTitle } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
@@ -81,11 +82,12 @@ export function ImageAttachmentPreview({ attachments, className }: ImageAttachme
                 tabIndex={0}
                 aria-label={`View ${attachment.name} in lightbox`}
               >
-                <img
+                <NextImage
                   src={attachment.thumbnailUrl || attachment.url}
                   alt={attachment.name}
+                  width={400}
+                  height={192}
                   className="h-48 w-full object-cover transition-transform group-hover:scale-105"
-                  loading="lazy"
                 />
 
                 {/* Overlay on hover */}
@@ -144,9 +146,11 @@ export function ImageAttachmentPreview({ attachments, className }: ImageAttachme
             <div className="space-y-4">
               {/* Image */}
               <div className="relative overflow-hidden rounded-lg">
-                <img
+                <NextImage
                   src={selectedImage.url}
                   alt={selectedImage.name}
+                  width={1200}
+                  height={800}
                   className="max-h-[80vh] w-full object-contain"
                 />
               </div>

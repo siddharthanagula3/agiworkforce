@@ -17,7 +17,6 @@ import { cn } from '@shared/lib/utils';
 import {
   LogOut,
   Menu,
-  User as UserIcon,
   CreditCard,
   HelpCircle,
   Moon,
@@ -149,8 +148,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
                 onClick={() => router.push('/dashboard/settings')}
                 className="cursor-pointer gap-2"
               >
-                <UserIcon className="h-4 w-4" aria-hidden="true" />
-                Profile Settings
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                Settings
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => router.push('/dashboard/billing')}
@@ -158,13 +157,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
               >
                 <CreditCard className="h-4 w-4" aria-hidden="true" />
                 Billing & Usage
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => router.push('/dashboard/settings')}
-                className="cursor-pointer gap-2"
-              >
-                <Settings className="h-4 w-4" aria-hidden="true" />
-                Settings
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => router.push('/dashboard/support')}

@@ -35,7 +35,7 @@ export async function sendAIMessage(
       temperature: options?.temperature,
       maxTokens: options?.maxTokens,
       stream: options?.stream || false,
-    } as any);
+    } as Parameters<typeof unifiedLLMService.sendMessage>[0]);
 
     if (!response?.content) {
       throw new Error('Empty response from LLM service');
