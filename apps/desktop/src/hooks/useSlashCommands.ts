@@ -6,13 +6,13 @@
  */
 
 export interface ParsedSlashCommand {
-  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact';
+  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact' | 'pdf' | 'word' | 'excel';
   args: string;
   rawInput: string;
 }
 
 export function useSlashCommands() {
-  const VALID_COMMANDS = ['browser', 'terminal', 'code', 'database', 'undo', 'compact'];
+  const VALID_COMMANDS = ['browser', 'terminal', 'code', 'database', 'undo', 'compact', 'pdf', 'word', 'excel'];
 
   /**
    * Parse a string input to detect and extract slash command
