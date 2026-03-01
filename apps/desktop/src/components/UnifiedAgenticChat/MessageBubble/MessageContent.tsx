@@ -20,6 +20,39 @@ import { CodeBlock } from '../Visualizations/CodeBlock';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useCanvasStore } from '../../../stores/canvasStore';
 
+/**
+ * Strip raw tool-result JSON code blocks from assistant message content.
+ * The InlineSearchResults / InlineToolResults components already render these
+ * nicely — showing them again as raw code blocks is redundant and confusing.
+ *
+ * Targets blocks that contain:
+ *  - JSON with a "results" array (search_web output)
+ *  - JSON with a "query" key (search_web output)
+ *  - JSON with a "success" key and a "url" key (browser_navigate output)
+ */
+function stripToolResultJsonBlocks(content: string): string {
+  // Remove fenced code blocks (```...```) containing raw tool JSON
+  return content.replace(/```(?:json|JSON)?\s*\n?\{[\s\S]*?\}\s*```/g, (block) => {
+    try {
+      // Extract JSON body
+      const jsonBody = block.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\s*```$/, '');
+      const parsed = JSON.parse(jsonBody);
+      // Only strip if it looks like a tool result payload
+      if (
+        ('results' in parsed && Array.isArray(parsed.results)) ||
+        ('query' in parsed && 'results' in parsed) ||
+        ('success' in parsed && 'url' in parsed) ||
+        ('query' in parsed && 'provider' in parsed)
+      ) {
+        return ''; // Remove the block
+      }
+    } catch {
+      // Not valid JSON — leave it alone
+    }
+    return block;
+  });
+}
+
 // Determine the CanvasArtifact type from a code language string
 function inferArtifactType(lang: string): 'code' | 'html' | 'markdown' {
   const l = lang.toLowerCase();
@@ -67,6 +100,9 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex]}
+          // Strip raw tool-result JSON blocks before rendering — they are already
+          // displayed by the InlineToolResults renderers (e.g. InlineSearchResults).
+          children={isUser ? message.content : stripToolResultJsonBlocks(message.content)}
           components={{
             code(props) {
               const { inline, className, children, ...rest } =
@@ -175,9 +211,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               );
             },
           }}
-        >
-          {message.content}
-        </ReactMarkdown>
+        />
 
         {/* Streaming cursor */}
         {isStreaming && (
