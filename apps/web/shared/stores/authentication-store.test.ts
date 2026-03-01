@@ -497,6 +497,148 @@ describe('Authentication Store', () => {
     });
   });
 
+  describe('initialize', () => {
+    it('calls getCurrentUser on first call', async () => {
+      vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          name: 'Test',
+          role: 'user',
+          plan: 'free',
+        },
+        error: null,
+      });
+
+      await useAuthStore.getState().initialize();
+
+      expect(mockAuthService.getCurrentUser).toHaveBeenCalled();
+      const state = useAuthStore.getState();
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.user?.id).toBe('user-1');
+      expect(state.initialized).toBe(true);
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('short-circuits on second call (initialized guard)', async () => {
+      vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          name: 'Test',
+          role: 'user',
+          plan: 'free',
+        },
+        error: null,
+      });
+
+      await useAuthStore.getState().initialize();
+      vi.mocked(mockAuthService.getCurrentUser).mockClear();
+
+      await useAuthStore.getState().initialize();
+
+      expect(mockAuthService.getCurrentUser).not.toHaveBeenCalled();
+    });
+
+    it('concurrent calls do not double-init', async () => {
+      let resolveAuth: ((value: { user: AuthUser | null; error: string | null }) => void) | undefined;
+      vi.mocked(mockAuthService.getCurrentUser).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveAuth = resolve;
+          }),
+      );
+
+      const promise1 = useAuthStore.getState().initialize();
+      const promise2 = useAuthStore.getState().initialize();
+
+      // Resolve the auth call
+      resolveAuth!({
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          name: 'Test',
+          role: 'user',
+          plan: 'free',
+        },
+        error: null,
+      });
+
+      await Promise.all([promise1, promise2]);
+
+      // Should only have been called once
+      expect(mockAuthService.getCurrentUser).toHaveBeenCalledTimes(1);
+      expect(useAuthStore.getState().initialized).toBe(true);
+    });
+
+    it('sets initialized=true after success', async () => {
+      vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
+        user: null,
+        error: null,
+      });
+
+      expect(useAuthStore.getState().initialized).toBe(false);
+
+      await useAuthStore.getState().initialize();
+
+      expect(useAuthStore.getState().initialized).toBe(true);
+    });
+
+    it('handles auth error gracefully', async () => {
+      vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
+        user: null,
+        error: 'Session expired',
+      });
+
+      await useAuthStore.getState().initialize();
+
+      const state = useAuthStore.getState();
+      expect(state.initialized).toBe(true);
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('handles thrown exception gracefully', async () => {
+      vi.mocked(mockAuthService.getCurrentUser).mockRejectedValue(
+        new Error('Network failure'),
+      );
+
+      await useAuthStore.getState().initialize();
+
+      const state = useAuthStore.getState();
+      expect(state.initialized).toBe(true);
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('handles initialization timeout', async () => {
+      // Mock getCurrentUser to never resolve (simulating timeout)
+      vi.mocked(mockAuthService.getCurrentUser).mockImplementation(
+        () => new Promise(() => {}), // never resolves
+      );
+
+      // The initialize function has a 5s timeout via Promise.race
+      // We need to advance timers
+      vi.useFakeTimers();
+
+      const initPromise = useAuthStore.getState().initialize();
+
+      // Advance past the 5s timeout
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await initPromise;
+
+      vi.useRealTimers();
+
+      const state = useAuthStore.getState();
+      expect(state.initialized).toBe(true);
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.isLoading).toBe(false);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle null user in updateUser', () => {
       useAuthStore.getState().updateUser(null as unknown as AuthUser);

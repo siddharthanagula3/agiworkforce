@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
@@ -98,6 +99,9 @@ async function handleGetConversations(request: NextRequest) {
 }
 
 async function handleCreateConversation(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 

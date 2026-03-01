@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import NextImage from 'next/image';
 import { motion } from 'framer-motion';
 import {
   File,
@@ -114,9 +115,11 @@ function renderPreview(file: FilePreviewProps['file'], fileType: string, isExpan
     case 'image':
       return (
         <div className="flex items-center justify-center bg-muted/20 p-4">
-          <img
-            src={file.url}
+          <NextImage
+            src={file.url || ''}
             alt={file.name}
+            width={800}
+            height={600}
             className={cn('max-w-full object-contain', isExpanded ? 'max-h-full' : 'max-h-80')}
           />
         </div>

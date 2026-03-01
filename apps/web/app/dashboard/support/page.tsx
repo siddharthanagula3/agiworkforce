@@ -6,7 +6,6 @@ import {
   Mail,
   ExternalLink,
   BookOpen,
-  Github,
   CheckCircle,
   MessageSquare,
   Book,
@@ -19,6 +18,7 @@ import { Input } from '@shared/ui/input';
 import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@shared/ui/badge';
 import { Label } from '@shared/ui/label';
+import { toast } from 'sonner';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@shared/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 
@@ -88,10 +88,28 @@ export default function SupportPage() {
     message: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setForm({ name: '', email: '', subject: '', category: '', message: '' });
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!response.ok) throw new Error('Request failed');
+      toast.success('Support request submitted. We will respond within 24 hours.');
+      setSubmitted(true);
+      setForm({ name: '', email: '', subject: '', category: '', message: '' });
+    } catch {
+      toast.error(
+        'Could not submit your request. Please email us at support@agiworkforce.com or open a GitHub issue.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -116,7 +134,7 @@ export default function SupportPage() {
     {
       title: 'Status Page',
       description: 'Live system status and incidents',
-      href: 'https://status.example.com',
+      href: 'https://status.agiworkforce.com',
       icon: Globe,
       external: true,
     },
@@ -158,7 +176,7 @@ export default function SupportPage() {
         <CardContent>
           <Accordion type="single" collapsible className="w-full">
             {FAQ_ITEMS.map((item, index) => (
-              <AccordionItem key={index} value={`faq-${index}`} className="border-border/50">
+              <AccordionItem key={item.question} value={`faq-${index}`} className="border-border/50">
                 <AccordionTrigger className="text-left text-foreground hover:no-underline hover:text-primary">
                   {item.question}
                 </AccordionTrigger>
@@ -275,9 +293,9 @@ export default function SupportPage() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button type="submit" className="bg-primary hover:bg-primary/90">
+                <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
                   <Mail className="mr-2 h-4 w-4" />
-                  Submit
+                  {isSubmitting ? 'Sending...' : 'Submit'}
                 </Button>
               </div>
             </form>

@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import NextImage from 'next/image';
 import { ExternalLink, Search, Clock, Globe } from 'lucide-react';
 import { Card } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -120,12 +121,14 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, index }) =>
               {/* Favicon or Globe Icon */}
               <div className="mt-0.5 flex-shrink-0">
                 {favicon ? (
-                  <img
+                  <NextImage
                     src={favicon}
                     alt={`${source} favicon`}
+                    width={16}
+                    height={16}
                     className="h-4 w-4 rounded"
                     onError={(e) => {
-                      e.currentTarget.style.display = 'none';
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
                     }}
                   />
                 ) : (

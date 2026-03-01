@@ -101,7 +101,8 @@ export function MediaStudio() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Image className="w-4 h-4" />
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image className="w-4 h-4" aria-hidden="true" />
               Image
             </button>
             <button

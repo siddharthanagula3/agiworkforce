@@ -28,7 +28,6 @@ function ChatPageInner() {
     deleteSession,
     renameSession,
     addMessage,
-    setLoading,
     isLoading,
     loadSessionsFromDb,
   } = useChatStore();
@@ -47,14 +46,20 @@ function ChatPageInner() {
     }
   }, [user?.id, dbLoaded, loadSessionsFromDb]);
 
+  // Reset skillHandled when searchParams change (e.g., navigating to different skill)
+  const prevSkillParam = useRef<string | null>(null);
+
   // Handle ?skill= query parameter (from marketplace navigation)
   useEffect(() => {
-    if (!mounted || skillHandled.current) return;
+    if (!mounted) return;
 
     const skillParam = searchParams.get('skill');
     if (!skillParam) return;
 
+    // Skip if we already handled this exact skill param
+    if (skillHandled.current && prevSkillParam.current === skillParam) return;
     skillHandled.current = true;
+    prevSkillParam.current = skillParam;
 
     // Look up skill info for the system message
     const skills = ChatAIService.getAvailableSkillsSync();

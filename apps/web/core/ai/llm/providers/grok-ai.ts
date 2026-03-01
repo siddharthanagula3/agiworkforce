@@ -8,7 +8,7 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 /**
  * Helper function to get the current Supabase session token

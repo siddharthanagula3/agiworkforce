@@ -57,7 +57,7 @@ export interface ChatState {
 export class ChatPersistenceService {
   private static instance: ChatPersistenceService;
 
-  private supabase: any;
+  private supabase!: import('@supabase/supabase-js').SupabaseClient;
   private state: ChatState;
   // Updated: Jan 15th 2026 - Fixed NodeJS.Timeout type mismatch for browser compatibility
   private syncInterval: ReturnType<typeof setInterval> | null = null;
@@ -379,16 +379,16 @@ export class ChatPersistenceService {
         return;
       }
 
-      this.state.sessions = sessions.map((s: any) => ({
-        id: s.id,
-        userId: s.user_id,
-        employeeId: s.employee_id,
-        role: s.role,
-        provider: s.provider,
-        title: s.title,
+      this.state.sessions = sessions.map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        userId: s.user_id as string,
+        employeeId: s.employee_id as string,
+        role: s.role as string,
+        provider: s.provider as string,
+        title: s.title as string | undefined,
         createdAt: new Date(s.created_at as string),
         updatedAt: new Date(s.updated_at as string),
-        isActive: s.is_active,
+        isActive: s.is_active as boolean,
       }));
 
       // Load messages for each session
@@ -407,11 +407,11 @@ export class ChatPersistenceService {
         this.state.messages.set(
           session.id,
 
-          messages.map((m: any) => ({
-            id: m.id,
-            sessionId: m.session_id,
-            role: m.role,
-            content: m.content,
+          messages.map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            sessionId: m.session_id as string,
+            role: m.role as import('@shared/types').MessageRole,
+            content: m.content as string,
             timestamp: new Date(m.created_at as string),
             metadata: m.metadata,
           })),

@@ -19,6 +19,8 @@ const SECRET_PATTERNS: Array<{
     pattern: /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g,
     severity: 'critical',
   },
+  // NOTE: The above JWT pattern also matches the Supabase anon key, which is a
+  // public, non-secret key. Use isPublicSupabaseKey() below to filter false positives.
   { name: 'OpenAI API Key', pattern: /sk-[a-zA-Z0-9]{48,}/g, severity: 'critical' },
   { name: 'Anthropic API Key', pattern: /sk-ant-[a-zA-Z0-9-]{90,}/g, severity: 'critical' },
   { name: 'Google API Key', pattern: /AIza[0-9A-Za-z_-]{35}/g, severity: 'critical' },
@@ -85,6 +87,21 @@ const SECRET_PATTERNS: Array<{
   },
 ];
 
+/**
+ * Check if a JWT is a Supabase anon key (public, non-secret).
+ * Supabase anon keys have a payload containing "role":"anon" and are safe to expose.
+ */
+function isPublicSupabaseKey(jwt: string): boolean {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.role === 'anon';
+  } catch {
+    return false;
+  }
+}
+
 export interface SecretDetection {
   name: string;
   severity: 'critical' | 'high' | 'medium';
@@ -105,8 +122,14 @@ export function scanForSecrets(content: string): SecretDetection[] {
 
     let match;
     while ((match = pattern.exec(content)) !== null) {
-      // Create a masked preview (show first 4 and last 4 chars)
       const matchedText = match[0];
+
+      // Skip Supabase anon keys (public, non-secret JWTs)
+      if (name === 'Supabase Service Role' && isPublicSupabaseKey(matchedText)) {
+        continue;
+      }
+
+      // Create a masked preview (show first 4 and last 4 chars)
       const masked =
         matchedText.length > 12 ? `${matchedText.slice(0, 4)}****${matchedText.slice(-4)}` : '****';
 
@@ -132,9 +155,14 @@ export function scanForSecrets(content: string): SecretDetection[] {
  * Use this for quick boolean checks before logging.
  */
 export function containsSecrets(content: string): boolean {
-  for (const { pattern } of SECRET_PATTERNS) {
+  for (const { name, pattern } of SECRET_PATTERNS) {
     pattern.lastIndex = 0;
-    if (pattern.test(content)) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      // Skip Supabase anon keys (public, non-secret)
+      if (name === 'Supabase Service Role' && isPublicSupabaseKey(match[0])) {
+        continue;
+      }
       return true;
     }
   }
@@ -148,9 +176,16 @@ export function containsSecrets(content: string): boolean {
 export function redactSecrets(content: string): string {
   let redacted = content;
 
-  for (const { pattern } of SECRET_PATTERNS) {
+  for (const { name, pattern } of SECRET_PATTERNS) {
     pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, '[REDACTED]');
+    if (name === 'Supabase Service Role') {
+      // Preserve public anon keys, only redact service role keys
+      redacted = redacted.replace(pattern, (match) =>
+        isPublicSupabaseKey(match) ? match : '[REDACTED]',
+      );
+    } else {
+      redacted = redacted.replace(pattern, '[REDACTED]');
+    }
   }
 
   return redacted;

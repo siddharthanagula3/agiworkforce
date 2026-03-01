@@ -160,7 +160,7 @@ export const AdvancedMessageList = React.memo(function AdvancedMessageList({
   autoScroll = true,
   className,
 }: AdvancedMessageListProps) {
-  const listRef = useRef<any>(null);
+  const listRef = useRef<{ scrollToItem: (index: number, align: string) => void } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(500);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(autoScroll);

@@ -4,21 +4,12 @@
  * with Google AI Studio (Gemini) APIs
  */
 
-import {
-  googleImagenService,
-  type ImagenGenerationRequest as _GoogleImagenRequest,
-  type ImagenGenerationResponse,
-} from './google-imagen-service';
+import { googleImagenService } from './google-imagen-service';
 import {
   googleVeoService,
   type VeoGenerationRequest as GoogleVeoRequest,
-  type VeoGenerationResponse,
 } from './google-veo-service';
-import {
-  dallEImageService,
-  type DallEGenerationRequest,
-  type ImageGenerationResult as _DallEImageResult,
-} from './dalle-image-service';
+import { dallEImageService, type DallEGenerationRequest } from './dalle-image-service';
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -82,15 +73,8 @@ export interface MediaGenerationStats {
   videosGenerated: number;
   averageCostPerGeneration: number;
   mostUsedStyle: string;
-  averageGenerationTime: number;
+  averageGenerationTime: number | undefined;
 }
-
-/**
- * SECURITY: API keys are managed by Netlify proxy functions
- * All API calls route through authenticated proxies to keep keys secure.
- * Client-side code no longer has access to API keys.
- */
-const _IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export class MediaGenerationService {
   private static instance: MediaGenerationService;
@@ -118,12 +102,15 @@ export class MediaGenerationService {
         style:
           request.style === 'realistic' || request.style === 'photographic' ? 'natural' : 'vivid',
         n: 1, // DALL-E 3 only supports 1 image at a time
-        model: request.quality === 'hd' ? 'dall-e-3' : 'dall-e-3',
+        model: 'dall-e-3',
       };
 
       // Generate image with DALL-E
       const dallEResults = await dallEImageService.generateImage(dallERequest);
-      const dallEResult = dallEResults[0]; // DALL-E 3 returns array with 1 item
+      const dallEResult = dallEResults[0];
+      if (!dallEResult) {
+        throw new Error('Image generation returned no results');
+      }
 
       // Estimate cost
       const cost = dallEImageService.estimateCost(dallERequest);
@@ -169,10 +156,8 @@ export class MediaGenerationService {
   ): Promise<MediaGenerationResult> {
     if (!googleVeoService.isAvailable()) {
       throw new Error(
-        'Google Veo service not configured.\n\n' +
-          '✅ Get a FREE key at: https://aistudio.google.com/app/apikey\n' +
-          '📝 Add to .env file: VITE_GOOGLE_API_KEY=your_key_here\n' +
-          '💡 Or enable demo mode: VITE_DEMO_MODE=true',
+        'Google Veo service not configured. ' +
+          'Get a key at https://aistudio.google.com/app/apikey and set NEXT_PUBLIC_GOOGLE_API_KEY in .env.local',
       );
     }
 
@@ -261,7 +246,8 @@ export class MediaGenerationService {
       videosGenerated,
       averageCostPerGeneration: totalGenerations > 0 ? totalCost / totalGenerations : 0,
       mostUsedStyle,
-      averageGenerationTime: 0, // Would be calculated from actual generation times
+      // Not yet implemented — no start/end timestamps stored per generation
+      averageGenerationTime: undefined,
     };
   }
 

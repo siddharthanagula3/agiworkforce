@@ -15,7 +15,6 @@ import { AgentType } from '../orchestration/reasoning/task-breakdown';
 import {
   resolveToolName,
   type UserPermissionLevel,
-  type CanonicalToolName,
   PERMISSION_LEVELS,
 } from './types';
 

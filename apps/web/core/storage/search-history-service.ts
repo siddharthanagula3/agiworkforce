@@ -8,7 +8,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // RPC functions not yet in generated Database type
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { logger } from '@shared/lib/logger';
 
 // ============================================================================

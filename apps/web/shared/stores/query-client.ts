@@ -7,7 +7,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 // ReactQueryDevtools loaded lazily in dev only
 
-let ReactQueryDevtools: React.ComponentType<any> | null = null;
+let ReactQueryDevtools: React.ComponentType<Record<string, unknown>> | null = null;
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   import('@tanstack/react-query-devtools').then((mod) => {
     ReactQueryDevtools = mod.ReactQueryDevtools;

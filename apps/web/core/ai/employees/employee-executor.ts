@@ -219,7 +219,7 @@ export class AIEmployeeExecutor {
       task,
       employee: this.employee.name,
 
-      role: (this.employee as any).role,
+      role: (this.employee as unknown as Record<string, unknown>).role,
       timestamp: new Date().toISOString(),
     };
 
@@ -392,13 +392,13 @@ export class AIEmployeeExecutor {
 
       // Transform performance data to our expected PerformanceMetrics format
 
-      const pd = performanceData as Record<string, any> | null;
+      const pd = performanceData as Record<string, unknown> | null;
       const currentMetrics: PerformanceMetrics = {
-        tasksCompleted: pd?.tasks_completed ?? 0,
-        successRate: pd?.success_rate ?? 0,
-        averageExecutionTime: pd?.average_execution_time ?? 0,
-        errorRate: pd?.error_rate ?? 0,
-        lastUpdated: pd?.last_updated,
+        tasksCompleted: (pd?.tasks_completed as number) ?? 0,
+        successRate: (pd?.success_rate as number) ?? 0,
+        averageExecutionTime: (pd?.average_execution_time as number) ?? 0,
+        errorRate: (pd?.error_rate as number) ?? 0,
+        lastUpdated: pd?.last_updated as string | undefined,
       };
 
       const updatedMetrics = {

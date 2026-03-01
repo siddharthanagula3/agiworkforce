@@ -7,7 +7,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // Tables not yet in generated Database type — use untyped client for these
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import type { ExecutionPlan, Task } from '@core/ai/orchestration/reasoning/task-breakdown';
 import type { AnalysisResult } from '@core/ai/orchestration/reasoning/natural-language-processor';
 

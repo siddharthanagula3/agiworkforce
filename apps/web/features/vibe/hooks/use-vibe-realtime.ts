@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@shared/lib/supabase-client';
-import { useVibeViewStore, type FileMetadata } from '../stores/vibe-view-store';
+import { useVibeViewStore, type FileMetadata, type VibeViewStore } from '../stores/vibe-view-store';
 import { buildFileTree, mapFileRowToMetadata, type VibeFileRow } from '../utils/file-tree';
 
 type AgentActionStatus = 'in_progress' | 'completed' | 'failed';
@@ -145,29 +145,27 @@ const toTerminalStatus = (
 
 export function useVibeRealtime({ sessionId, onAction }: UseVibeRealtimeOptions) {
   const setFileMetadata = useVibeViewStore(
-    (state: Record<string, unknown>) => state.setFileMetadata,
-  ) as (metadata: FileMetadata[]) => void;
+    (state: VibeViewStore) => state.setFileMetadata,
+  );
   const upsertFileMetadata = useVibeViewStore(
-    (state: Record<string, unknown>) => state.upsertFileMetadata,
-  ) as (metadata: FileMetadata) => void;
+    (state: VibeViewStore) => state.upsertFileMetadata,
+  );
   const removeFileMetadata = useVibeViewStore(
-    (state: Record<string, unknown>) => state.removeFileMetadata,
-  ) as (path: string) => void;
-  const setFileTree = useVibeViewStore((state: Record<string, unknown>) => state.setFileTree) as (
-    tree: unknown[],
-  ) => void;
+    (state: VibeViewStore) => state.removeFileMetadata,
+  );
+  const setFileTree = useVibeViewStore((state: VibeViewStore) => state.setFileTree);
   const addTerminalCommand = useVibeViewStore(
-    (state: Record<string, unknown>) => state.addTerminalCommand,
-  ) as (cmd: Record<string, unknown>) => string;
+    (state: VibeViewStore) => state.addTerminalCommand,
+  );
   const updateTerminalCommand = useVibeViewStore(
-    (state: Record<string, unknown>) => state.updateTerminalCommand,
-  ) as (id: string, updates: Record<string, unknown>) => void;
+    (state: VibeViewStore) => state.updateTerminalCommand,
+  );
   const setAppViewerUrl = useVibeViewStore(
-    (state: Record<string, unknown>) => state.setAppViewerUrl,
-  ) as (url: string) => void;
+    (state: VibeViewStore) => state.setAppViewerUrl,
+  );
   const updateAppViewerState = useVibeViewStore(
-    (state: Record<string, unknown>) => state.updateAppViewerState,
-  ) as (updates: Record<string, unknown>) => void;
+    (state: VibeViewStore) => state.updateAppViewerState,
+  );
 
   const commandMap = useRef<Map<string, string>>(new Map());
 
