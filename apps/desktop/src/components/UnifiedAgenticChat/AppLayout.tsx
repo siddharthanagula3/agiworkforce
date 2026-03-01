@@ -15,6 +15,9 @@ import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
 import { MemoryPanel } from '../MemoryPanel';
 import { AgentTaskPanel } from '../AGI/AgentTaskPanel';
+import { CanvasContainer } from '../Canvas/CanvasContainer';
+import { McpAppGallery } from '../MCP/McpAppGallery';
+import { ResearchPanel } from '../Research/ResearchPanel';
 import { toast } from 'sonner';
 
 // Lazy load MediaLab for code splitting
@@ -39,6 +42,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
   const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
+  const [isCanvasPanelOpen, setIsCanvasPanelOpen] = useState(false);
+  const [isMcpAppsPanelOpen, setIsMcpAppsPanelOpen] = useState(false);
+  const [isResearchPanelOpen, setIsResearchPanelOpen] = useState(false);
   const openArtifactPanel = useArtifactStore((state) => state.openPanel);
   const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
@@ -236,6 +242,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         onToggleMediaLab={handleToggleMediaLab}
         onOpenMemory={() => setIsMemoryPanelOpen(true)}
         onOpenTasks={() => setIsTaskPanelOpen(true)}
+        onOpenCanvas={() => setIsCanvasPanelOpen(true)}
+        onOpenResearch={() => setIsResearchPanelOpen(true)}
+        onOpenMcpApps={() => setIsMcpAppsPanelOpen(true)}
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
@@ -359,6 +368,49 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
             </button>
           </div>
           <AgentTaskPanel />
+        </div>
+      )}
+
+      {/* Canvas / Code Execution Workspace */}
+      {isCanvasPanelOpen && (
+        <CanvasContainer
+          onClose={() => setIsCanvasPanelOpen(false)}
+        />
+      )}
+
+      {/* MCP Apps Panel */}
+      {isMcpAppsPanelOpen && (
+        <div className="fixed inset-y-0 right-0 z-30 w-[420px] border-l border-white/10 bg-zinc-950 shadow-2xl flex flex-col">
+          <McpAppGallery onClose={() => setIsMcpAppsPanelOpen(false)} />
+        </div>
+      )}
+
+      {/* Deep Research Panel */}
+      {isResearchPanelOpen && (
+        <div className="fixed inset-y-0 right-0 z-30 w-[480px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-500/20">
+                <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </span>
+              <h2 className="text-sm font-semibold text-white">Deep Research</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsResearchPanelOpen(false)}
+              className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close research panel"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ResearchPanel className="h-full" />
+          </div>
         </div>
       )}
 

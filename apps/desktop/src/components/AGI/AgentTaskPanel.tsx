@@ -1,15 +1,20 @@
-import { ListTodo, PlusCircle } from 'lucide-react';
+import { CalendarClock, ListTodo, PlusCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
+import { useScheduledTaskStore } from '../../stores/scheduledTaskStore';
+import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
 import { AgentTaskCreator } from './AgentTaskCreator';
 import { AgentTaskMonitor } from './AgentTaskMonitor';
 
-type Tab = 'create' | 'monitor';
+type Tab = 'create' | 'monitor' | 'scheduled';
 
 export function AgentTaskPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('create');
   const taskCount = useAgentTaskStore((s) => s.tasks.length);
+  const scheduledCount = useScheduledTaskStore((s) =>
+    s.tasks.filter((t) => t.status === 'active').length,
+  );
 
   const handleTaskCreated = useCallback(() => {
     setActiveTab('monitor');
@@ -22,7 +27,7 @@ export function AgentTaskPanel() {
           type="button"
           onClick={() => setActiveTab('create')}
           className={cn(
-            'flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition',
+            'flex flex-1 items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition',
             activeTab === 'create'
               ? 'border-b-2 border-teal-500 text-teal-400'
               : 'text-slate-400 hover:text-slate-200',
@@ -35,7 +40,7 @@ export function AgentTaskPanel() {
           type="button"
           onClick={() => setActiveTab('monitor')}
           className={cn(
-            'flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition',
+            'flex flex-1 items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition',
             activeTab === 'monitor'
               ? 'border-b-2 border-teal-500 text-teal-400'
               : 'text-slate-400 hover:text-slate-200',
@@ -44,13 +49,28 @@ export function AgentTaskPanel() {
           <ListTodo className="h-4 w-4" />
           Monitor{taskCount > 0 && ` (${taskCount})`}
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('scheduled')}
+          className={cn(
+            'flex flex-1 items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition',
+            activeTab === 'scheduled'
+              ? 'border-b-2 border-teal-500 text-teal-400'
+              : 'text-slate-400 hover:text-slate-200',
+          )}
+        >
+          <CalendarClock className="h-4 w-4" />
+          Scheduled{scheduledCount > 0 && ` (${scheduledCount})`}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'create' ? (
           <AgentTaskCreator onTaskCreated={handleTaskCreated} />
-        ) : (
+        ) : activeTab === 'monitor' ? (
           <AgentTaskMonitor />
+        ) : (
+          <ScheduledTasksPanel />
         )}
       </div>
     </div>

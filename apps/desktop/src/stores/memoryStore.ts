@@ -399,3 +399,43 @@ export const selectDecisions = (state: MemoryState) =>
 
 export const selectContextMemories = (state: MemoryState) =>
   state.memories.filter((m) => m.category === 'context');
+
+// ---------------------------------------------------------------------------
+// User-facing memory injection (ChatGPT-style "Memory" feature)
+// ---------------------------------------------------------------------------
+
+/** Rough token estimate: ~4 chars per token */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Build a formatted memory context string for system prompt injection.
+ * Only includes high-importance memories (importance >= 6) that fit within the token budget.
+ *
+ * @param memories - Full memory list from store
+ * @param maxTokens - Token budget for the injected context block
+ * @returns Formatted string ready to prepend to the system prompt, or '' if nothing to inject
+ */
+export function buildMemoryContext(memories: MemoryEntry[], maxTokens: number = 500): string {
+  const eligible = [...memories]
+    .filter((m) => m.importance >= 5)
+    .sort((a, b) => b.importance - a.importance);
+
+  if (eligible.length === 0) return '';
+
+  const header = '[User Memory — from previous conversations]';
+  const lines: string[] = [header];
+  let budget = maxTokens - estimateTokens(header + '\n');
+
+  for (const memory of eligible) {
+    const line = `- [${memory.category}] ${memory.topic}: ${memory.content}`;
+    const cost = estimateTokens(line + '\n');
+    if (budget - cost < 0) break;
+    lines.push(line);
+    budget -= cost;
+  }
+
+  if (lines.length <= 1) return '';
+  return lines.join('\n');
+}
