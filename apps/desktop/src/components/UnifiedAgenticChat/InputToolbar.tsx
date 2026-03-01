@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Globe, Paperclip } from 'lucide-react';
+import { Globe, Paperclip, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getModelMetadata } from '../../constants/llm';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -50,6 +50,10 @@ export interface InputToolbarProps {
   researchOpen?: boolean;
   /** Callback to toggle the research panel */
   onToggleResearch?: () => void;
+  /** Whether agent mode is enabled for the current message */
+  agentModeEnabled?: boolean;
+  /** Callback to toggle agent mode */
+  onToggleAgentMode?: () => void;
 }
 
 export const InputToolbar: React.FC<InputToolbarProps> = ({
@@ -71,6 +75,8 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   conversationId,
   researchOpen = false,
   onToggleResearch,
+  agentModeEnabled = false,
+  onToggleAgentMode,
 }) => {
   const modelMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
   const visionUnsupported = modelMetadata?.capabilities.vision === false;
@@ -134,6 +140,26 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
           aria-label={researchOpen ? 'Close research panel' : 'Open research panel'}
         >
           <Globe size={18} aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Agent Mode toggle */}
+      {onToggleAgentMode && (
+        <button
+          type="button"
+          onClick={onToggleAgentMode}
+          disabled={disabled}
+          className={cn(
+            'p-2 rounded-lg transition-colors',
+            agentModeEnabled
+              ? 'text-amber-500 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10'
+              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+          title={agentModeEnabled ? 'Agent mode enabled — AI executes multi-step tasks autonomously' : 'Enable agent mode'}
+          aria-label={agentModeEnabled ? 'Disable agent mode' : 'Enable agent mode'}
+        >
+          <Zap size={18} aria-hidden="true" />
         </button>
       )}
 
