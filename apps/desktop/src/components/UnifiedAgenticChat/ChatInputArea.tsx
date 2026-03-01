@@ -439,6 +439,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       selectedModel,
       selectedProvider,
       focusMode,
+      agentModeEnabled,
     ],
   );
 
@@ -581,7 +582,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     // Detect @mention
     const mentionMatch = value.match(/@([\w-]*)$/);
     if (mentionMatch && !isSlashInput) {
-      setMentionQuery(mentionMatch[1]);
+      setMentionQuery(mentionMatch[1] ?? null);
     } else {
       setMentionQuery(null);
     }

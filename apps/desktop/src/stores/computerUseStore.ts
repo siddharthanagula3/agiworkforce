@@ -233,6 +233,7 @@ export const selectComputerUseError = (state: ComputerUseState) => state.error;
 export const selectLastClickPosition = (state: ComputerUseState) => {
   for (let i = state.actionLog.length - 1; i >= 0; i--) {
     const action = state.actionLog[i];
+    if (!action) continue;
     if (
       (action.action_type === 'click' ||
         action.action_type === 'double_click' ||
