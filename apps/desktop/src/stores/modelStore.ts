@@ -121,6 +121,7 @@ interface ModelState {
   usageStats: UsageStats | null;
 
   thinkingModeEnabled: boolean;
+  thinkingBudget: number;
 
   // Ollama-specific state
   ollamaModels: OllamaModel[];
@@ -137,6 +138,7 @@ interface ModelState {
   selectModel: (modelId: string, provider: Provider) => Promise<void>;
   toggleFavorite: (modelId: string) => void;
   toggleThinkingMode: () => void;
+  setThinkingBudget: (budget: number) => void;
   addToRecent: (modelId: string) => void;
   checkProviderStatus: (provider: Provider) => Promise<ProviderStatus>;
   checkAllProviders: () => Promise<void>;
@@ -225,6 +227,7 @@ export const useModelStore = create<ModelState>()(
         availableModels: [],
         usageStats: null,
         thinkingModeEnabled: false,
+        thinkingBudget: 0,
 
         // Ollama-specific initial state
         ollamaModels: [],
@@ -308,6 +311,17 @@ export const useModelStore = create<ModelState>()(
             (state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }),
             undefined,
             'model/toggleThinkingMode',
+          );
+        },
+
+        setThinkingBudget: (budget: number) => {
+          set(
+            {
+              thinkingBudget: budget,
+              thinkingModeEnabled: budget > 0,
+            },
+            undefined,
+            'model/setThinkingBudget',
           );
         },
 
@@ -643,6 +657,7 @@ export const useModelStore = create<ModelState>()(
           favorites: state.favorites,
           recentModels: state.recentModels,
           thinkingModeEnabled: state.thinkingModeEnabled,
+          thinkingBudget: state.thinkingBudget,
         }),
         migrate: (persistedState: unknown, _version: number) => {
           // No schema changes yet — MODEL_STORE_VERSION started at 1.
@@ -812,7 +827,14 @@ export const resolveEffectiveModelForTier = (
  * - pro: 'auto-economy' or 'auto-balanced' allowed
  * - max/enterprise: All auto modes allowed
  */
+// [C1 fix] Re-entrancy guard: prevents concurrent plan-change events from corrupting tier state
+let _isEnforcingTier = false;
+
 export const enforceModelTierRestriction = (planTier: string | null): void => {
+  // [C1 fix] Skip if already enforcing to prevent race conditions on rapid plan changes
+  if (_isEnforcingTier) return;
+  _isEnforcingTier = true;
+
   const modelStore = useModelStore.getState();
   const { selectedModel, selectedProvider, selectModel } = modelStore;
 
@@ -859,8 +881,17 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
     })
     .catch((err) => {
       console.error('[ModelStore] enforceModelTierRestriction failed:', err);
+      // [C1 fix] Fail-safe: on error, fall back to the lowest tier model
+      void selectModel('auto-economy', 'managed_cloud');
+    })
+    .finally(() => {
+      // [C1 fix] Always release the lock so future plan changes are processed
+      _isEnforcingTier = false;
     });
 };
+
+// [C3 fix] Module-level unsubscribe reference prevents listener accumulation on HMR reload
+let _unsubscribePlanChanges: (() => void) | null = null;
 
 // Subscribe to auth store plan changes to enforce tier restrictions
 // This runs when the user's plan tier is loaded/changed
@@ -869,7 +900,9 @@ if (typeof window !== 'undefined') {
   import('./auth').then(({ useUnifiedAuthStore }) => {
     // Guard against undefined in test environments where auth store may not be properly initialized
     if (useUnifiedAuthStore?.subscribe) {
-      useUnifiedAuthStore.subscribe(
+      // [C3 fix] Clean up previous subscription before creating a new one (HMR safety)
+      _unsubscribePlanChanges?.();
+      _unsubscribePlanChanges = useUnifiedAuthStore.subscribe(
         (state) => state.plan,
         (plan) => {
           if (plan) {
