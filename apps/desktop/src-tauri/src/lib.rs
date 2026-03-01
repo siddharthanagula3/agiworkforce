@@ -1736,6 +1736,9 @@ pub fn run() {
             crate::sys::commands::voice::voice_download_piper_binary,
             crate::sys::commands::voice::voice_check_piper_binary,
             crate::sys::commands::voice::voice_list_local_models,
+            // Wispr Flow speech recording stubs
+            crate::sys::commands::voice::speech_start_recording,
+            crate::sys::commands::voice::speech_stop_and_transcribe,
 
             // Canvas (Visual Canvas / A2UI)
             crate::sys::commands::canvas::canvas_create,
