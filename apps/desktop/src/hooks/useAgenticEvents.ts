@@ -1,5 +1,6 @@
 import { invoke, listen, UnlistenFn } from '../lib/tauri-mock';
 import { EVENTS } from '../constants/event-names';
+import { toast } from 'sonner';
 import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
 import { isTauri } from '../lib/tauri-mock';
@@ -1348,19 +1349,32 @@ export function useAgenticEvents() {
       });
       push(unlistenBgAgentFailed);
 
-      // automation:permission_required — show permissions dialog
+      // automation:permission_required — show Sonner toast + auto-open System Settings
       const unlistenPermRequired = await listen<{
         reason: string;
         message: string;
+        graceful?: boolean;
       }>('automation:permission_required', (event) => {
         if (!isMountedRef.current) return;
-        // Emit a custom DOM event that the App can catch to show the modal
-        window.dispatchEvent(
-          new CustomEvent('agi:show-permissions-dialog', {
-            detail: event.payload,
-            bubbles: false,
-          }),
-        );
+        const { message, reason, graceful } = event.payload;
+        const openSettings = () => {
+          void invoke('request_automation_permission', { kind: reason ?? 'accessibility' });
+        };
+        if (graceful) {
+          // Soft toast — agent fell back to normal LLM, user can enable if they want
+          toast(message, {
+            duration: 8000,
+            action: { label: 'Open Settings', onClick: openSettings },
+          });
+        } else {
+          // Hard toast — user explicitly requested agent mode but it's unavailable
+          toast.error(message, {
+            duration: 12000,
+            action: { label: 'Open Settings', onClick: openSettings },
+          });
+          // Also open System Settings immediately so they can grant the permission
+          openSettings();
+        }
       });
       push(unlistenPermRequired);
 

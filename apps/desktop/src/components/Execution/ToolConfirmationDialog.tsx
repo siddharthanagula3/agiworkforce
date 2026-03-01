@@ -59,6 +59,38 @@ interface ToolConfirmationDialogProps {
 }
 
 // ============================================================================
+// Helper: render parameters summary as readable key/value pairs, not raw JSON
+// ============================================================================
+
+function ParametersSummary({ raw }: { raw: string }) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const entries = Object.entries(parsed).filter(
+        ([, v]) => v !== null && v !== undefined && v !== '',
+      );
+      if (entries.length > 0) {
+        return (
+          <dl className="mt-1 space-y-1">
+            {entries.map(([key, value]) => (
+              <div key={key} className="flex gap-2 text-sm">
+                <dt className="shrink-0 font-medium text-muted-foreground capitalize">
+                  {key.replace(/_/g, ' ')}:
+                </dt>
+                <dd className="break-words text-foreground">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        );
+      }
+    }
+  } catch {
+    // Not JSON — fall through to plain text
+  }
+  return <p className="mt-1 break-words text-sm text-foreground">{raw}</p>;
+}
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -240,13 +272,11 @@ export function ToolConfirmationDialog({ className }: ToolConfirmationDialogProp
             </div>
           </div>
 
-          {/* Parameters */}
+          {/* Parameters — render as readable key/value pairs if JSON, else plain text */}
           {pendingConfirmation.parameters_summary && (
             <div className="mt-3 border-t border-border/50 pt-3">
               <p className="text-xs font-medium text-muted-foreground">Parameters</p>
-              <p className="mt-1 break-words text-sm text-foreground">
-                {pendingConfirmation.parameters_summary}
-              </p>
+              <ParametersSummary raw={pendingConfirmation.parameters_summary} />
             </div>
           )}
 
