@@ -271,7 +271,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   let supabaseUserId =
     session.metadata?.['supabase_user_id'] ||
-    session.metadata?.['userId'] ||
+    session.metadata?.['userId'] || // Legacy key — kept for sessions created before cleanup
     session.client_reference_id;
 
   // If no user ID in metadata, try to find user by Stripe customer ID (BEST PRACTICE)

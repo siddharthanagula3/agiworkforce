@@ -6,12 +6,13 @@
 
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useWorkforceStore } from '@shared/stores/workforce-store';
+import { supabase } from '@shared/lib/supabase-client';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
 import { Progress } from '@shared/ui/progress';
 import {
   MessageSquare,
@@ -26,10 +27,6 @@ import {
   Zap,
   Clock,
   TrendingUp,
-  Bot,
-  Code,
-  FileText,
-  Palette,
 } from 'lucide-react';
 
 function getGreeting(): string {
@@ -39,54 +36,31 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-// --- Mock Data ---
+// Formats a relative time string from an ISO date string
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
 
-const MOCK_STATS = {
-  tokensUsed: { value: '12.4k', trend: '+18%', up: true },
-  creditsRemaining: { value: '$4.50', used: 55, total: 10 },
-  activeAgents: { value: '5', trend: '+2', up: true },
-  sessionsThisWeek: { value: '23', trend: '-3', up: false },
-};
+interface RecentConversation {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
 
-const MOCK_RECENT_CONVERSATIONS = [
-  {
-    id: '1',
-    title: 'Market research for Q2 strategy',
-    updatedAt: '2 hours ago',
-    status: 'completed' as const,
-  },
-  {
-    id: '2',
-    title: 'Code review: auth module refactor',
-    updatedAt: '1 day ago',
-    status: 'completed' as const,
-  },
-  {
-    id: '3',
-    title: 'Blog draft: AI trends in 2026',
-    updatedAt: '2 days ago',
-    status: 'completed' as const,
-  },
-  {
-    id: '4',
-    title: 'Email campaign copy for launch',
-    updatedAt: '3 days ago',
-    status: 'completed' as const,
-  },
-  {
-    id: '5',
-    title: 'React component architecture review',
-    updatedAt: '4 days ago',
-    status: 'completed' as const,
-  },
-];
-
-const MOCK_ACTIVITY = [
-  { id: '1', text: 'Generated 3 product images', time: '30 min ago', icon: Palette },
-  { id: '2', text: 'Completed code review session', time: '2 hours ago', icon: Code },
-  { id: '3', text: 'Created marketing brief document', time: '5 hours ago', icon: FileText },
-  { id: '4', text: 'Deployed agent for data analysis', time: '1 day ago', icon: Bot },
-];
+interface TokenCreditsRow {
+  credits_allocated_cents: number;
+  credits_used_cents: number;
+  credits_remaining_cents: number;
+}
 
 // --- Sub-components ---
 
@@ -260,19 +234,91 @@ const QuickActionCard: React.FC<QuickActionCardProps> = ({
   );
 };
 
-const statusColors: Record<string, string> = {
-  active: 'bg-emerald-400',
-  completed: 'bg-blue-400',
-  paused: 'bg-amber-400',
-};
-
 // --- Main Page ---
 
 export const DashboardHomePage: React.FC = () => {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { hiredEmployees, fetchHiredEmployees } = useWorkforceStore();
+
+  // Real: recent conversations from Supabase web_conversations table
+  const [recentConversations, setRecentConversations] = useState<RecentConversation[]>([]);
+  const [convoLoading, setConvoLoading] = useState(true);
+
+  // Real: credit balance from Supabase token_credits table
+  const [tokenCredits, setTokenCredits] = useState<TokenCreditsRow | null>(null);
+
+  // TODO: tokensUsed (aggregate of web_messages.input_tokens + output_tokens) and
+  //       sessionsThisWeek (count of web_conversations created in last 7 days) have no
+  //       dedicated summary table. Wire up when a usage-summary view or edge function is added.
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Fetch hired employees for "Active Skills" stat
+    fetchHiredEmployees();
+
+    // web_conversations and token_credits are not in the generated Supabase types yet,
+    // so we cast the client to `any` for these queries.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const untypedClient = supabase as any;
+
+    // Fetch 5 most recent non-deleted conversations
+    const fetchConversations = async () => {
+      setConvoLoading(true);
+      try {
+        const { data, error } = await untypedClient
+          .from('web_conversations')
+          .select('id, title, updated_at, last_message_at')
+          .eq('user_id', user.id)
+          .is('deleted_at', null)
+          .order('updated_at', { ascending: false })
+          .limit(5);
+
+        if (!error && data) {
+          setRecentConversations(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (data as any[]).map((row: any) => ({
+              id: row.id as string,
+              title: (row.title as string) || 'Untitled conversation',
+              updatedAt: (row.last_message_at || row.updated_at) as string,
+            })),
+          );
+        }
+      } finally {
+        setConvoLoading(false);
+      }
+    };
+
+    // Fetch current period token credits
+    const fetchCredits = async () => {
+      const { data } = await untypedClient
+        .from('token_credits')
+        .select('credits_allocated_cents, credits_used_cents, credits_remaining_cents')
+        .eq('user_id', user.id)
+        .order('period_end', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        setTokenCredits(data as TokenCreditsRow);
+      }
+    };
+
+    fetchConversations();
+    fetchCredits();
+  }, [user, fetchHiredEmployees]);
+
+  // Derive credit display values
+  const creditsRemainingDollars = tokenCredits
+    ? (tokenCredits.credits_remaining_cents / 100).toFixed(2)
+    : null;
+  const creditsUsedPercent =
+    tokenCredits && tokenCredits.credits_allocated_cents > 0
+      ? Math.round((tokenCredits.credits_used_cents / tokenCredits.credits_allocated_cents) * 100)
+      : null;
 
   return (
     <div className="animate-fade-in-up space-y-6 px-4 py-4 sm:space-y-8 sm:px-6 sm:py-6">
@@ -292,58 +338,46 @@ export const DashboardHomePage: React.FC = () => {
       {/* Stats Cards Grid */}
       <section aria-label="Usage statistics">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* TODO: Wire tokensUsed to aggregate of web_messages.input_tokens+output_tokens */}
           <StatCard
             icon={Zap}
             label="Tokens Used"
-            value={MOCK_STATS.tokensUsed.value}
-            trend={MOCK_STATS.tokensUsed.trend}
-            trendUp={MOCK_STATS.tokensUsed.up}
+            value="—"
             accentColor="bg-amber-500/10 text-amber-400"
             glowColor="bg-amber-500/20"
           />
           <CreditStatCard
             icon={CreditCard}
             label="Credits Remaining"
-            value={MOCK_STATS.creditsRemaining.value}
-            usedPercent={MOCK_STATS.creditsRemaining.used}
+            value={creditsRemainingDollars !== null ? `$${creditsRemainingDollars}` : '—'}
+            usedPercent={creditsUsedPercent ?? 0}
             accentColor="bg-emerald-500/10 text-emerald-400"
             glowColor="bg-emerald-500/20"
           />
           <StatCard
             icon={Activity}
             label="Active Skills"
-            value={MOCK_STATS.activeAgents.value}
-            trend={MOCK_STATS.activeAgents.trend}
-            trendUp={MOCK_STATS.activeAgents.up}
+            value={String(hiredEmployees.length)}
             accentColor="bg-blue-500/10 text-blue-400"
             glowColor="bg-blue-500/20"
           />
+          {/* TODO: Wire sessionsThisWeek to count of web_conversations in last 7 days */}
           <StatCard
             icon={TrendingUp}
             label="Sessions This Week"
-            value={MOCK_STATS.sessionsThisWeek.value}
-            trend={MOCK_STATS.sessionsThisWeek.trend}
-            trendUp={MOCK_STATS.sessionsThisWeek.up}
+            value="—"
             accentColor="bg-purple-500/10 text-purple-400"
             glowColor="bg-purple-500/20"
           />
         </div>
       </section>
 
-      {/* Two-column layout: Conversations + Activity */}
+      {/* Two-column layout: Conversations + Quick Actions */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Recent Conversations — 2/3 width */}
         <section className="lg:col-span-2" aria-label="Recent conversations">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">Recent Conversations</h2>
-              <Badge
-                variant="outline"
-                className="border-white/[0.08] text-[10px] text-muted-foreground/50"
-              >
-                Sample
-              </Badge>
-            </div>
+            <h2 className="text-lg font-semibold">Recent Conversations</h2>
             <Button
               variant="ghost"
               size="sm"
@@ -355,7 +389,11 @@ export const DashboardHomePage: React.FC = () => {
             </Button>
           </div>
           <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-            {MOCK_RECENT_CONVERSATIONS.length === 0 ? (
+            {convoLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              </div>
+            ) : recentConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <MessageSquare className="mb-3 h-10 w-10 text-muted-foreground/30" />
                 <p className="text-sm font-medium text-muted-foreground/60">No conversations yet</p>
@@ -371,26 +409,18 @@ export const DashboardHomePage: React.FC = () => {
               </div>
             ) : (
               <ul className="divide-y divide-white/[0.04]">
-                {MOCK_RECENT_CONVERSATIONS.map((convo) => (
+                {recentConversations.map((convo) => (
                   <li key={convo.id}>
                     <button
                       type="button"
                       className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
                       onClick={() => router.push(`/chat/${convo.id}`)}
                     >
-                      <div className="relative flex-shrink-0">
-                        <MessageSquare className="h-4 w-4 text-muted-foreground/50" />
-                        <div
-                          className={
-                            'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-background ' +
-                            (statusColors[convo.status] || 'bg-gray-400')
-                          }
-                        />
-                      </div>
+                      <MessageSquare className="h-4 w-4 flex-shrink-0 text-muted-foreground/50" />
                       <span className="flex-1 truncate text-sm">{convo.title}</span>
                       <div className="hidden items-center gap-1 text-muted-foreground/40 sm:flex">
                         <Clock className="h-3 w-3" />
-                        <span className="text-xs">{convo.updatedAt}</span>
+                        <span className="text-xs">{formatRelativeTime(convo.updatedAt)}</span>
                       </div>
                     </button>
                   </li>
@@ -400,29 +430,54 @@ export const DashboardHomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Activity Feed — 1/3 width */}
-        <section aria-label="Recent activity">
+        {/* Hired Skills summary — 1/3 width */}
+        <section aria-label="Hired skills">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Activity</h2>
+            <h2 className="text-lg font-semibold">Your Skills</h2>
             <Sparkles className="h-4 w-4 text-muted-foreground/30" />
           </div>
           <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-            <ul className="divide-y divide-white/[0.04]">
-              {MOCK_ACTIVITY.map((item) => {
-                const ActivityIcon = item.icon;
-                return (
-                  <li key={item.id} className="flex items-start gap-3 px-5 py-3.5">
-                    <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-white/[0.05]">
-                      <ActivityIcon className="h-3.5 w-3.5 text-muted-foreground/60" />
+            {hiredEmployees.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-5 text-center">
+                <Users className="mb-3 h-8 w-8 text-muted-foreground/30" />
+                <p className="text-sm font-medium text-muted-foreground/60">No skills hired yet</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => router.push('/dashboard/hire')}
+                >
+                  Browse skills
+                  <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <ul className="divide-y divide-white/[0.04]">
+                {hiredEmployees.slice(0, 5).map((emp) => (
+                  <li key={emp.id} className="flex items-center gap-3 px-5 py-3">
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-primary/10">
+                      <Users className="h-3.5 w-3.5 text-primary" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm leading-snug">{item.text}</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground/40">{item.time}</p>
-                    </div>
+                    <span className="flex-1 truncate text-sm">
+                      {emp.employee_name || emp.employee_id}
+                    </span>
                   </li>
-                );
-              })}
-            </ul>
+                ))}
+                {hiredEmployees.length > 5 && (
+                  <li className="px-5 py-2.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => router.push('/dashboard/agents')}
+                    >
+                      +{hiredEmployees.length - 5} more
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
         </section>
       </div>

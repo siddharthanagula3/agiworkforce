@@ -210,8 +210,9 @@ describe('Chat Conversations API', () => {
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
         });
-        await GET(request);
+        const response = await GET(request);
 
+        expect(response.status).toBe(200);
         expect(isNull).toHaveBeenCalledWith('deleted_at', null);
       });
 

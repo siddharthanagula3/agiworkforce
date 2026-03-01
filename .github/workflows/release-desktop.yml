@@ -507,112 +507,77 @@ jobs:
           PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
           GITHUB_REPO: ${{ github.repository }}
         run: |
-          # Install dependencies
-          npm install @supabase/supabase-js@2.93.3
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+          IS_PRERELEASE=$( [ "${PRERELEASE}" = "true" ] && echo "true" || echo "false" )
 
-          # Create update script
-          cat > update-releases.mjs << 'SCRIPT'
-          import { createClient } from '@supabase/supabase-js';
-          import { readFileSync, readdirSync, statSync } from 'fs';
-          import { join } from 'path';
-
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-
-          const version = process.env.VERSION;
-          const channel = process.env.CHANNEL || 'stable';
-          const isPrerelease = process.env.PRERELEASE === 'true';
-          const repo = process.env.GITHUB_REPO;
-          const baseUrl = `https://github.com/${repo}/releases/download/v${version}`;
-
-          // Platform mapping
-          const platforms = [
-            { dir: 'macos-universal-artifacts', platform: 'darwin-universal', ext: '.app.tar.gz' },
-            { dir: 'macos-aarch64-artifacts', platform: 'darwin-aarch64', ext: '.app.tar.gz' },
-            { dir: 'macos-x86_64-artifacts', platform: 'darwin-x86_64', ext: '.app.tar.gz' },
-            { dir: 'windows-x64-artifacts', platform: 'windows-x86_64', ext: '.nsis.zip' },
-            { dir: 'linux-x64-artifacts', platform: 'linux-x86_64', ext: '.AppImage.tar.gz' },
-          ];
-
-          async function updateReleases() {
-            const pubDate = new Date().toISOString();
-
-            for (const { dir, platform, ext } of platforms) {
-              try {
-                const artifactPath = join('artifacts', dir);
-
-                // Find files recursively
-                function findFiles(dirPath, extension) {
-                  let results = [];
-                  try {
-                    const items = readdirSync(dirPath);
-                    for (const item of items) {
-                      const fullPath = join(dirPath, item);
-                      const stat = statSync(fullPath);
-                      if (stat.isDirectory()) {
-                        results = results.concat(findFiles(fullPath, extension));
-                      } else if (item.endsWith(extension) && !item.endsWith('.sig')) {
-                        results.push({ path: fullPath, name: item });
-                      }
-                    }
-                  } catch (e) {
-                    // Directory does not exist or cannot be read
-                  }
-                  return results;
-                }
-
-                const files = findFiles(artifactPath, ext);
-                if (files.length === 0) {
-                  console.log(`No artifacts found for ${platform}`);
-                  continue;
-                }
-
-                const { path: filePath, name: fileName } = files[0];
-                const sigPath = `${filePath}.sig`;
-
-                let signature = '';
-                try {
-                  signature = readFileSync(sigPath, 'utf8').trim();
-                } catch (e) {
-                  console.warn(`Signature not found for ${platform}: ${sigPath}`);
-                  continue;
-                }
-
-                const fileSize = statSync(filePath).size;
-                const downloadUrl = `${baseUrl}/${fileName}`;
-
-                // Upsert release
-                const { data, error } = await supabase.rpc('upsert_release', {
-                  p_version: version,
-                  p_platform: platform,
-                  p_download_url: downloadUrl,
-                  p_signature: signature,
-                  p_notes: null, // Will be updated from GitHub release body
-                  p_pub_date: pubDate,
-                  p_file_size_bytes: fileSize,
-                  p_is_prerelease: isPrerelease,
-                  p_is_critical: false,
-                  p_channel: channel,
-                });
-
-                if (error) {
-                  console.error(`Failed to upsert release for ${platform}:`, error);
-                } else {
-                  console.log(`Updated release for ${platform}: ${version}`);
-                }
-              } catch (error) {
-                console.error(`Error processing ${platform}:`, error);
-              }
-            }
+          # Call Supabase RPC endpoint directly via curl (no npm install needed)
+          upsert_release() {
+            local platform="$1" download_url="$2" signature="$3" file_size="$4"
+            local response
+            response=$(curl -sf -X POST \
+              "${SUPABASE_URL}/rest/v1/rpc/upsert_release" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"p_version\": \"${VERSION}\",
+                \"p_platform\": \"${platform}\",
+                \"p_download_url\": \"${download_url}\",
+                \"p_signature\": \"${signature}\",
+                \"p_notes\": null,
+                \"p_pub_date\": \"${PUB_DATE}\",
+                \"p_file_size_bytes\": ${file_size},
+                \"p_is_prerelease\": ${IS_PRERELEASE},
+                \"p_is_critical\": false,
+                \"p_channel\": \"${CHANNEL}\"
+              }")
+            if [ $? -eq 0 ]; then
+              echo "Updated release for ${platform}: ${VERSION}"
+            else
+              echo "Failed to upsert release for ${platform}: ${response}" >&2
+            fi
           }
 
-          updateReleases().catch(console.error);
-          SCRIPT
+          # Platform mapping: artifact_dir platform extension
+          PLATFORMS="
+          macos-universal-artifacts darwin-universal .app.tar.gz
+          macos-aarch64-artifacts darwin-aarch64 .app.tar.gz
+          macos-x86_64-artifacts darwin-x86_64 .app.tar.gz
+          windows-x64-artifacts windows-x86_64 .nsis.zip
+          linux-x64-artifacts linux-x86_64 .AppImage.tar.gz
+          "
 
-          # Run update script
-          node update-releases.mjs
+          echo "$PLATFORMS" | while read -r dir platform ext; do
+            [ -z "$dir" ] && continue
+            artifact_path="artifacts/${dir}"
+
+            if [ ! -d "$artifact_path" ]; then
+              echo "No artifacts found for ${platform}"
+              continue
+            fi
+
+            # Find first matching file (excluding .sig files)
+            file_path=$(find "$artifact_path" -name "*${ext}" ! -name "*.sig" -type f | head -1)
+            if [ -z "$file_path" ]; then
+              echo "No artifacts found for ${platform}"
+              continue
+            fi
+
+            file_name=$(basename "$file_path")
+            sig_path="${file_path}.sig"
+
+            if [ ! -f "$sig_path" ]; then
+              echo "Signature not found for ${platform}: ${sig_path}" >&2
+              continue
+            fi
+
+            signature=$(cat "$sig_path" | tr -d '\n')
+            file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path")
+            download_url="${BASE_URL}/${file_name}"
+
+            upsert_release "$platform" "$download_url" "$signature" "$file_size"
+          done
 
   # ==========================================================================
   # Publish Release - Make the release public

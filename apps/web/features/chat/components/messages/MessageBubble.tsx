@@ -129,6 +129,20 @@ interface MessageBubbleProps {
   hasBranches?: boolean;
 }
 
+/** Format a message timestamp as a relative or absolute time string. */
+function formatMessageTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffSeconds < 60) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffHours < 24) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 // Code block with copy button
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
@@ -247,19 +261,6 @@ export const MessageBubble = React.memo(function MessageBubble({
   const employeeColor =
     message.employeeColor || employeeChatService.getEmployeeAvatar(message.employeeName || '');
 
-  const formatTime = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-
-    if (diffSeconds < 60) return 'Just now';
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
-
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
@@ -308,7 +309,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                   .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                   .join(' ') || 'AI'}
           </span>
-          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
+          <span className="text-xs text-muted-foreground">{formatMessageTime(message.timestamp)}</span>
           {message.metadata?.isPinned && (
             <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
           )}

@@ -94,18 +94,25 @@ export default function SupportPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/support', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!response.ok) throw new Error('Request failed');
-      toast.success('Support request submitted. We will respond within 24 hours.');
+      // Build a mailto link as the primary support channel
+      const subject = encodeURIComponent(
+        `[${form.category || 'general'}] ${form.subject}`,
+      );
+      const body = encodeURIComponent(
+        `Name: ${form.name}\nEmail: ${form.email}\n\n${form.message}`,
+      );
+      window.open(
+        `mailto:support@agiworkforce.com?subject=${subject}&body=${body}`,
+        '_blank',
+      );
+      toast.success(
+        'Your default email client should open with the support request. If not, email support@agiworkforce.com directly.',
+      );
       setSubmitted(true);
       setForm({ name: '', email: '', subject: '', category: '', message: '' });
     } catch {
       toast.error(
-        'Could not submit your request. Please email us at support@agiworkforce.com or open a GitHub issue.',
+        'Could not open email client. Please email us at support@agiworkforce.com or open a GitHub issue.',
       );
     } finally {
       setIsSubmitting(false);

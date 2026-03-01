@@ -178,7 +178,6 @@ const VibeDashboard: React.FC = () => {
     session: orchestratorSession,
     initSession,
     processEvent,
-    reset: _resetOrchestrator,
   } = useVibeOrchestrator();
 
   const [activeAgent, setActiveAgent] = useState<AgentStatus>({
