@@ -399,7 +399,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           modelOverride: selectedModel || undefined,
           providerOverride: computedProviderOverride,
           focusMode,
-          enableAgentMode: agentModeEnabled || undefined,
+          enableAgentMode: agentModeEnabled,
         });
 
         // Clear local pending state first so UI is never stale
@@ -820,7 +820,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         focusMode: focusMode,
         modelOverride: selectedModel ? selectedModel : undefined,
         providerOverride: computedProviderOverride,
-        enableAgentMode: agentModeEnabled || undefined,
+        enableAgentMode: agentModeEnabled,
       });
 
       if (!currentAbortSignal.aborted) {
