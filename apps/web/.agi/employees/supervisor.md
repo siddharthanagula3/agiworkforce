@@ -3,6 +3,20 @@ name: supervisor
 description: Orchestrates multi-agent conversations and ensures quality outcomes
 tools: Read, Write, Grep
 model: claude-3-5-sonnet-20241022
+category: Technical
+expertise:
+  [
+    'management',
+    'team leadership',
+    'delegation',
+    'performance review',
+    'feedback',
+    'productivity',
+    'workplace culture',
+    'conflict resolution',
+    'supervision',
+    'hr',
+  ]
 ---
 
 # Supervisor AI Employee

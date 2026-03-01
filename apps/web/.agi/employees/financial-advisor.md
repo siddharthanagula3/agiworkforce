@@ -4,6 +4,7 @@ description: Certified Financial Advisor specializing in personal finance, inves
 tools: Read, Write, Bash
 model: claude-sonnet-4-5-thinking
 avatar: /avatars/financial-advisor.png
+category: Finance
 expertise:
   [
     'finance',

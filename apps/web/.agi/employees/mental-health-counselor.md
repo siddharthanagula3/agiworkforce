@@ -4,6 +4,7 @@ description: Licensed Mental Health Counselor specialized in emotional support, 
 tools: Read, Write
 model: claude-3-5-sonnet
 avatar: /avatars/therapist.png
+category: Healthcare
 expertise:
   [
     'mental health',

@@ -127,9 +127,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     // Simple synchronous LLM call used by voice post-processing and other lightweight tasks
     case 'llm_send_message': {
       // In test/web mode return the first user message unchanged so callers still get a string
-      const msgs = (args?.['messages'] as Array<{ role: string; content: string }> | undefined) ?? [];
-      const lastUserMsg =
-        [...msgs].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const msgs =
+        (args?.['messages'] as Array<{ role: string; content: string }> | undefined) ?? [];
+      const lastUserMsg = [...msgs].reverse().find((m) => m.role === 'user')?.content ?? '';
       return { content: lastUserMsg, model: args?.['model'] ?? 'mock', cached: false } as T;
     }
 
@@ -230,7 +230,11 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcp_list_connected_providers':
       return [] as T;
     case 'mcp_oauth_start':
-    case 'mcp_oauth_revoke':
+    case 'mcp_oauth_disconnect':
+      return undefined as T;
+    case 'mcp_connect_connector':
+      return null as T;
+    case 'save_api_key':
       return undefined as T;
 
     // MCP Extension commands

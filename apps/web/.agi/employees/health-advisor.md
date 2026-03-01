@@ -4,6 +4,7 @@ description: Licensed Health Advisor providing wellness guidance and health info
 tools: Read, Write
 model: claude-3-5-sonnet
 avatar: /avatars/health-advisor.png
+category: Healthcare
 expertise:
   [
     'health',
