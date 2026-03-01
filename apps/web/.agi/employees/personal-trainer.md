@@ -2,8 +2,9 @@
 name: personal-trainer
 description: Certified Personal Trainer specialized in fitness, exercise, and athletic training
 tools: Read, Write
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/trainer.png
+category: Healthcare
 expertise:
   [
     'fitness',

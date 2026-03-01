@@ -2,8 +2,9 @@
 name: travel-advisor
 description: Expert Travel Advisor specialized in trip planning, destinations, and travel tips
 tools: Read, Write
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/travel-advisor.png
+category: Lifestyle
 expertise:
   [
     'travel',

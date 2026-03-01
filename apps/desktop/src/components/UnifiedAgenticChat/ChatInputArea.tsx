@@ -6,7 +6,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { FolderOpen, Globe, Loader2, Zap } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
@@ -38,20 +38,24 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 
 // Sub-components
+import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
 import { AttachmentPreview } from './AttachmentPreview';
-import { BrowserActivityBadge } from './BrowserActivityBadge';
 import { ContextDisplay } from './ContextDisplay';
 import { DragOverlay } from './DragOverlay';
 import { FocusModeButtons, getFocusModePlaceholder } from './FocusModeButtons';
 import { InputFooter } from './InputFooter';
-import { InputToolbar } from './InputToolbar';
 import { InlineSuggestion } from './InlineSuggestion';
 import { ModelSelectorButton } from './ModelSelectorButton';
-import { PendingMessagesIndicator } from './PendingMessagesIndicator';
+import { PlusMenu } from './PlusMenu';
 import { SendButton } from './SendButton';
 import { SkillMentionPicker, MentionSkill } from './SkillMentionPicker';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceRecordingStatus } from './VoiceRecordingStatus';
+
+import { classifyIntentLocally } from '../../lib/intentClassifier';
+import { open as openFolderDialog } from '@tauri-apps/plugin-dialog';
+import { useProjectStore, selectCurrentFolder } from '../../stores/projectStore';
 
 // Hooks
 import {
@@ -75,6 +79,8 @@ export interface SendOptions {
   providerOverride?: string;
   focusMode?: FocusMode;
   enableAgentMode?: boolean;
+  webSearchEnabled?: boolean;
+  autoDetectedIntents?: string[];
 }
 
 export interface ChatInputAreaProps {
@@ -94,7 +100,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
   disabled = false,
-  placeholder: defaultPlaceholder = 'Ask me anything...',
+  placeholder: defaultPlaceholder = 'Ask anything...',
   maxLength = DEFAULT_CHAT_MAX_LENGTH,
   enableAttachments = true,
   className = '',
@@ -116,11 +122,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Inline suggestion state
   const [inlineSuggestion, setInlineSuggestion] = useState<string>('');
 
-  // Research panel state
-  const [researchOpen, setResearchOpen] = useState(false);
-
   // Agent mode toggle (per-message override)
   const [agentModeEnabled, setAgentModeEnabled] = useState(false);
+
+  // Intent detection & web search state
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [autoIntentTags, setAutoIntentTags] = useState<ModeTag[]>([]);
+  const [userDismissedIntents, setUserDismissedIntents] = useState<Set<string>>(new Set());
 
   // @mention skill picker state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -177,6 +185,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const availableModels = useModelStore((state) => state.availableModels);
 
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
+  const currentFolder = useProjectStore(selectCurrentFolder);
 
   // Attachment management
   const {
@@ -266,6 +275,74 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [voiceTranscript, clearVoiceTranscript, setDraftContent]);
 
+  // Debounced intent detection from user input
+  const debouncedClassify = useMemo(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const fn = (text: string) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!text.trim() || text.length < 10) {
+          setAutoIntentTags([]);
+          return;
+        }
+        const result = classifyIntentLocally(text, {
+          tier: 'hobby',
+          hasAttachments: attachments.length > 0,
+          attachmentTypes: attachments.map((a) => {
+            if (a.type === 'image' || a.type === 'screenshot') return 'image' as const;
+            if (a.type === 'audio') return 'audio' as const;
+            return 'document' as const;
+          }),
+        });
+        if (result && result.primary !== 'chat' && result.confidence >= 0.7) {
+          const tag = intentToModeTag(result.primary, true);
+          if (tag && !userDismissedIntents.has(tag.key)) {
+            setAutoIntentTags([tag]);
+          }
+        } else {
+          setAutoIntentTags([]);
+        }
+      }, 500);
+    };
+    fn.cancel = () => {
+      if (timer) clearTimeout(timer);
+    };
+    return fn;
+  }, [attachments, userDismissedIntents]);
+
+  useEffect(() => {
+    debouncedClassify(content);
+    return () => debouncedClassify.cancel();
+  }, [content, debouncedClassify]);
+
+  // Reset dismissed intents when user clears the input
+  useEffect(() => {
+    if (!content.trim()) {
+      setUserDismissedIntents(new Set());
+      setAutoIntentTags([]);
+    }
+  }, [content]);
+
+  // Combined mode tags (manual toggles + auto-detected intents)
+  const combinedTags = useMemo(() => {
+    const manual: ModeTag[] = [];
+    if (webSearchEnabled) {
+      const t = intentToModeTag('search', false);
+      if (t) manual.push(t);
+    }
+    if (agentModeEnabled) {
+      const t = intentToModeTag('agentic', false);
+      if (t) manual.push(t);
+    }
+    if (focusMode === 'deep-research') {
+      const t = intentToModeTag('deep-research', false);
+      if (t) manual.push(t);
+    }
+    const manualKeys = new Set(manual.map((t) => t.key));
+    const filtered = autoIntentTags.filter((t) => !manualKeys.has(t.key));
+    return [...manual, ...filtered];
+  }, [webSearchEnabled, agentModeEnabled, focusMode, autoIntentTags]);
+
   // Get autocomplete suggestions
   const autocompleteResult = getAutocomplete(content, slashAutocompleteIndex);
 
@@ -275,7 +352,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isEmptyState = messages.length === 0;
   const showFocusModeButtons = !isSimpleMode && isEmptyState;
   const showStopButton = (isStreaming || isLoading) && onStopGeneration;
-  const pendingCount = pendingMessages.length;
   const placeholder = getFocusModePlaceholder(focusMode, defaultPlaceholder);
   const sidebarOffset = sidebarCollapsed ? 64 : sidebarWidth;
 
@@ -821,6 +897,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         modelOverride: selectedModel ? selectedModel : undefined,
         providerOverride: computedProviderOverride,
         enableAgentMode: agentModeEnabled,
+        webSearchEnabled,
+        autoDetectedIntents: combinedTags.filter((t) => t.autoDetected).map((t) => t.key),
       });
 
       if (!currentAbortSignal.aborted) {
@@ -1094,52 +1172,93 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             )}
           </div>
 
-          {/* Toolbar row - below textarea */}
+          {/* Auto-detected intent tags (shown above toolbar for auto-detected only) */}
+          {combinedTags.filter((t) => t.autoDetected).length > 0 && (
+            <ActiveModeTags
+              tags={combinedTags.filter((t) => t.autoDetected)}
+              onDismiss={(key) => {
+                setAutoIntentTags((prev) => prev.filter((t) => t.key !== key));
+                setUserDismissedIntents((prev) => new Set(prev).add(key));
+              }}
+            />
+          )}
+
+          {/* Toolbar row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
-            {/* Left toolbar + browser activity badge */}
-            <div className="flex items-center gap-2">
-              <InputToolbar
-                // Keep tool affordances available while generation is in-flight.
+            <div className="flex items-center gap-1">
+              <PlusMenu
                 disabled={disabled}
-                enableAttachments={enableAttachments}
-                selectedModel={selectedModel}
-                isSimpleMode={isSimpleMode}
-                isVoiceSupported={isVoiceSupported}
-                isRecording={isListening}
-                isTranscribing={isTranscribing}
-                preferWhisperCloud={preferWhisperCloud}
-                availableLocalWhisper={availableLocalWhisper}
-                showTranscriptionModeSelector={showTranscriptionModeSelector}
                 onAttachClick={() => fileInputRef.current?.click()}
-                onToggleRecording={toggleListening}
-                onModeSelectorChange={setShowTranscriptionModeSelector}
-                onPreferWhisperCloudChange={setPreferWhisperCloud}
                 onScreenCapture={handleScreenCapture}
                 conversationId={(() => {
                   const activeId = useUnifiedChatStore.getState().activeConversationId;
                   return activeId ? uuidToDbId(activeId) : undefined;
                 })()}
-                researchOpen={researchOpen}
-                onToggleResearch={() => setResearchOpen((prev) => !prev)}
-                agentModeEnabled={agentModeEnabled}
-                onToggleAgentMode={() => setAgentModeEnabled((prev) => !prev)}
+                webSearchEnabled={webSearchEnabled}
+                onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
               />
-              <BrowserActivityBadge />
+
+              {/* Compact active mode icons — shown inline next to + button */}
+              {webSearchEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setWebSearchEnabled(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="Web Search enabled (click to disable)"
+                  aria-label="Disable web search"
+                >
+                  <Globe size={16} />
+                </button>
+              )}
+              {currentFolder && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const selected = await openFolderDialog({
+                        directory: true,
+                        multiple: false,
+                        title: 'Select Project Folder',
+                      });
+                      if (selected && typeof selected === 'string') {
+                        useProjectStore.getState().setCurrentFolder(selected);
+                      }
+                    } catch {
+                      // User cancelled
+                    }
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title={`Folder: ${currentFolder} (click to change)`}
+                  aria-label={`Project folder: ${currentFolder}. Click to change.`}
+                >
+                  <FolderOpen size={16} />
+                </button>
+              )}
+              {agentModeEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setAgentModeEnabled(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="Agent mode enabled (click to disable)"
+                  aria-label="Disable agent mode"
+                >
+                  <Zap size={16} />
+                </button>
+              )}
             </div>
-
-            {/* Right side controls */}
             <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'text-xs font-medium',
-                  content.length > maxLength * 0.9
-                    ? 'text-orange-500 dark:text-orange-400'
-                    : 'text-gray-400 dark:text-gray-500',
-                )}
-              >
-                {content.length} / {maxLength}
-              </div>
-
+              {content.length > maxLength * 0.8 && (
+                <div
+                  className={cn(
+                    'text-xs font-medium',
+                    content.length > maxLength * 0.9
+                      ? 'text-orange-500 dark:text-orange-400'
+                      : 'text-gray-400 dark:text-gray-500',
+                  )}
+                >
+                  {content.length} / {maxLength}
+                </div>
+              )}
               <ModelSelectorButton
                 modelDisplayName={modelDisplayName}
                 thinkingModeEnabled={thinkingModeEnabled}
@@ -1148,9 +1267,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 isSimpleMode={isSimpleMode}
                 containerRef={modelSelectorRef}
               />
-
-              <PendingMessagesIndicator count={pendingCount} isSimpleMode={isSimpleMode} />
-
+              <VoiceInputButton
+                disabled={disabled}
+                isSupported={isVoiceSupported}
+                isRecording={isListening}
+                isTranscribing={isTranscribing}
+                isSimpleMode={isSimpleMode}
+                preferWhisperCloud={preferWhisperCloud}
+                availableLocalWhisper={availableLocalWhisper}
+                showModeSelector={showTranscriptionModeSelector}
+                onModeSelectorChange={setShowTranscriptionModeSelector}
+                onPreferWhisperCloudChange={setPreferWhisperCloud}
+                onToggleRecording={toggleListening}
+              />
               <SendButton
                 showStopButton={!!showStopButton}
                 isSending={isSending}

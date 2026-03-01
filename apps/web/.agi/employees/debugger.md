@@ -2,7 +2,25 @@
 name: debugger
 description: Specialist in finding and fixing bugs, analyzing errors, and troubleshooting issues
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: claude-sonnet-4-6
+category: Technical
+expertise:
+  [
+    'debug',
+    'debugging',
+    'bug',
+    'error',
+    'stack trace',
+    'breakpoint',
+    'console',
+    'exception',
+    'crash',
+    'fix',
+    'troubleshoot',
+    'runtime error',
+    'null pointer',
+    'memory leak',
+  ]
 ---
 
 # Debugger AI Employee

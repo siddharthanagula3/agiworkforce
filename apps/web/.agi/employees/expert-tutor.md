@@ -2,8 +2,9 @@
 name: expert-tutor
 description: Expert Tutor specialized in education across mathematics, science, languages, and test preparation
 tools: Read, Write, Bash
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/tutor.png
+category: Education
 expertise:
   [
     'education',

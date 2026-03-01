@@ -5,6 +5,7 @@ tools: Read, Bash, Grep, Glob
 model: claude-3-5-sonnet
 avatar: /avatars/qa-engineer.png
 expertise: ['testing', 'quality assurance', 'test automation', 'qa', 'bug tracking']
+category: Technical
 ---
 
 # Senior QA Engineer
