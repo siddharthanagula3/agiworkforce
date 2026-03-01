@@ -2,7 +2,23 @@
 name: code-reviewer
 description: Expert code reviewer specializing in quality, best practices, and security
 tools: Read, Grep, Glob
-model: inherit
+model: claude-sonnet-4-6
+category: Technical
+expertise:
+  [
+    'code review',
+    'pull request',
+    'best practices',
+    'refactoring',
+    'clean code',
+    'security review',
+    'performance',
+    'testing',
+    'linting',
+    'code quality',
+    'bugs',
+    'architecture',
+  ]
 ---
 
 # Code Reviewer AI Employee

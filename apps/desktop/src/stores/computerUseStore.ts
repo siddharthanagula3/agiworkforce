@@ -224,10 +224,8 @@ export function subscribeToComputerUseEvents(): () => void {
 export const selectIsActive = (state: ComputerUseState) => state.isActive;
 export const selectSessionId = (state: ComputerUseState) => state.sessionId;
 export const selectCurrentScreenshot = (state: ComputerUseState) => state.currentScreenshot;
-export const selectScreenDimensions = (state: ComputerUseState) => ({
-  width: state.screenWidth,
-  height: state.screenHeight,
-});
+export const selectScreenWidth = (state: ComputerUseState) => state.screenWidth;
+export const selectScreenHeight = (state: ComputerUseState) => state.screenHeight;
 export const selectActionLog = (state: ComputerUseState) => state.actionLog;
 export const selectComputerUseError = (state: ComputerUseState) => state.error;
 export const selectLastClickPosition = (state: ComputerUseState) => {

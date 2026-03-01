@@ -19,23 +19,27 @@ import { CanvasContainer } from '../Canvas/CanvasContainer';
 import { McpAppGallery } from '../MCP/McpAppGallery';
 import { ResearchPanel } from '../Research/ResearchPanel';
 import { toast } from 'sonner';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  onOpenSettings?: () => void;
 }
 
 const ARTIFACT_PANEL_DEFAULT_WIDTH = 400;
 const ARTIFACT_PANEL_MIN_WIDTH = 280;
 const ARTIFACT_PANEL_MAX_WIDTH = 900;
 
-export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const shortcutsDialogOpen = useSettingsDialogStore((s) => s.shortcutsOpen);
+  const setShortcutsDialogOpen = useCallback((open: boolean) => {
+    if (open) useSettingsDialogStore.getState().openShortcuts();
+    else useSettingsDialogStore.getState().closeShortcuts();
+  }, []);
   const [customInstructionsOpen, setCustomInstructionsOpen] = useState(false);
   const [customInstructionsConversationId, setCustomInstructionsConversationId] = useState<
     string | undefined
@@ -45,12 +49,11 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     ARTIFACT_PANEL_DEFAULT_WIDTH,
   );
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
-  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
-  const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
-  const [isCanvasPanelOpen, setIsCanvasPanelOpen] = useState(false);
-  const [isMcpAppsPanelOpen, setIsMcpAppsPanelOpen] = useState(false);
-  const [isResearchPanelOpen, setIsResearchPanelOpen] = useState(false);
-  const openArtifactPanel = useArtifactStore((state) => state.openPanel);
+  // Unified right panel: only one can be open at a time (besides artifacts)
+  type RightPanel = 'memory' | 'tasks' | 'canvas' | 'mcp-apps' | 'research' | null;
+  const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
+  const RIGHT_PANEL_WIDTH = 420;
+
   const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
   const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
@@ -75,6 +78,16 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const setSidebarCollapsed = useUnifiedChatStore((state) => state.setSidebarCollapsed);
   const sidecarOpen = sidecarState.isOpen;
 
+  const openRightPanel = useCallback(
+    (panel: NonNullable<RightPanel>) => {
+      setActiveRightPanel(panel);
+      setIsArtifactPanelOpen(false);
+      closeArtifactPanel();
+      closeSidecar();
+    },
+    [closeArtifactPanel, closeSidecar],
+  );
+
   const [isResizing, setIsResizing] = useState(false);
 
   const messages = useUnifiedChatStore((state) => state.messages);
@@ -96,20 +109,6 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     await resetInFlightChatState();
     createConversation('New chat');
   }, [closeArtifactPanel, createConversation]);
-
-  const handleToggleArtifactPanel = useCallback(() => {
-    setIsArtifactPanelOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        setIsMediaLabOpen(false);
-        closeSidecar();
-        openArtifactPanel();
-      } else {
-        closeArtifactPanel();
-      }
-      return next;
-    });
-  }, [closeArtifactPanel, closeSidecar, openArtifactPanel]);
 
   const handleToggleMediaLab = useCallback(() => {
     if (!canAccessMediaLab) {
@@ -134,7 +133,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   }, [canAccessMediaLab, isMediaLabOpen]);
 
   useEffect(() => {
-    const isRightPanelVisible = sidecarOpen || isArtifactPanelOpen;
+    const isRightPanelVisible = sidecarOpen || isArtifactPanelOpen || activeRightPanel !== null;
     const justOpenedRightPanel = isRightPanelVisible && !wasRightPanelVisibleRef.current;
 
     if (justOpenedRightPanel && !sidebarCollapsed) {
@@ -142,12 +141,14 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     }
 
     wasRightPanelVisibleRef.current = isRightPanelVisible;
-  }, [isArtifactPanelOpen, setSidebarCollapsed, sidebarCollapsed, sidecarOpen]);
+  }, [activeRightPanel, isArtifactPanelOpen, setSidebarCollapsed, sidebarCollapsed, sidecarOpen]);
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const lastContentLengthRef = useRef(0);
   const artifactPanelWidth = isArtifactPanelOpen ? artifactPanelWidthState : 0;
-  const rightPanelOffset = (sidecarOpen ? sidecarWidth : 0) + artifactPanelWidth;
+  const unifiedRightPanelWidth = activeRightPanel ? RIGHT_PANEL_WIDTH : 0;
+  const rightPanelOffset =
+    (sidecarOpen ? sidecarWidth : 0) + artifactPanelWidth + unifiedRightPanelWidth;
 
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.content || '';
@@ -210,7 +211,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
 
       if (isMeta && e.key === '/') {
         e.preventDefault();
-        setShortcutsDialogOpen((prev) => !prev);
+        setShortcutsDialogOpen(!shortcutsDialogOpen);
       }
 
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 't') {
@@ -240,16 +241,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onNewChat={handleNewChat}
-        onOpenSettings={onOpenSettings}
-        onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenCustomInstructions={handleOpenCustomInstructions}
-        onToggleArtifactPanel={handleToggleArtifactPanel}
         onToggleMediaLab={handleToggleMediaLab}
-        onOpenMemory={() => setIsMemoryPanelOpen(true)}
-        onOpenTasks={() => setIsTaskPanelOpen(true)}
-        onOpenCanvas={() => setIsCanvasPanelOpen(true)}
-        onOpenResearch={() => setIsResearchPanelOpen(true)}
-        onOpenMcpApps={() => setIsMcpAppsPanelOpen(true)}
+        onOpenResearch={() => openRightPanel('research')}
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
@@ -316,9 +310,6 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         conversationId={customInstructionsConversationId}
       />
 
-      {/* Memory Panel */}
-      <MemoryPanel isOpen={isMemoryPanelOpen} onClose={() => setIsMemoryPanelOpen(false)} />
-
       {/* Artifact Panel */}
       {isArtifactPanelOpen && (
         <div
@@ -360,70 +351,34 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         </div>
       )}
 
-      {/* Memory Panel */}
-      <MemoryPanel isOpen={isMemoryPanelOpen} onClose={() => setIsMemoryPanelOpen(false)} />
-
-      {/* Agent Task Panel */}
-      {isTaskPanelOpen && (
-        <div className="fixed inset-y-0 right-0 z-30 w-[400px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold text-white">Agent Tasks</h2>
-            <button
-              type="button"
-              onClick={() => setIsTaskPanelOpen(false)}
-              className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-          <AgentTaskPanel />
-        </div>
-      )}
-
-      {/* Canvas / Code Execution Workspace */}
-      {isCanvasPanelOpen && <CanvasContainer onClose={() => setIsCanvasPanelOpen(false)} />}
-
-      {/* MCP Apps Panel */}
-      {isMcpAppsPanelOpen && (
-        <div className="fixed inset-y-0 right-0 z-30 w-[420px] border-l border-white/10 bg-zinc-950 shadow-2xl flex flex-col">
-          <McpAppGallery onClose={() => setIsMcpAppsPanelOpen(false)} />
-        </div>
-      )}
-
-      {/* Deep Research Panel */}
-      {isResearchPanelOpen && (
-        <div className="fixed inset-y-0 right-0 z-30 w-[480px] border-l border-white/10 bg-[#0b0c14] shadow-2xl flex flex-col">
+      {/* Unified Right Panel (Memory, Tasks, Canvas, MCP Apps, Research) */}
+      {activeRightPanel && (
+        <div
+          className={cn(
+            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            !isResizing && 'transition-[width] duration-300',
+          )}
+          style={{
+            width: RIGHT_PANEL_WIDTH,
+            position: 'absolute',
+            top: 0,
+            right: sidecarOpen ? sidecarWidth : 0,
+            bottom: 0,
+          }}
+        >
+          {/* Panel header */}
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-500/20">
-                <svg
-                  className="h-3.5 w-3.5 text-indigo-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                  />
-                </svg>
-              </span>
-              <h2 className="text-sm font-semibold text-white">Deep Research</h2>
-            </div>
+            <h2 className="text-sm font-semibold text-white capitalize">
+              {activeRightPanel === 'mcp-apps'
+                ? 'MCP Apps'
+                : activeRightPanel === 'research'
+                  ? 'Deep Research'
+                  : activeRightPanel}
+            </h2>
             <button
               type="button"
-              onClick={() => setIsResearchPanelOpen(false)}
+              onClick={() => setActiveRightPanel(null)}
               className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
-              aria-label="Close research panel"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -435,8 +390,20 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
               </svg>
             </button>
           </div>
+
+          {/* Panel content */}
           <div className="flex-1 overflow-hidden">
-            <ResearchPanel className="h-full" />
+            {activeRightPanel === 'memory' && (
+              <MemoryPanel isOpen onClose={() => setActiveRightPanel(null)} embedded />
+            )}
+            {activeRightPanel === 'tasks' && <AgentTaskPanel />}
+            {activeRightPanel === 'canvas' && (
+              <CanvasContainer onClose={() => setActiveRightPanel(null)} />
+            )}
+            {activeRightPanel === 'mcp-apps' && (
+              <McpAppGallery onClose={() => setActiveRightPanel(null)} />
+            )}
+            {activeRightPanel === 'research' && <ResearchPanel className="h-full" />}
           </div>
         </div>
       )}
