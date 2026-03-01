@@ -4658,6 +4658,20 @@ impl ToolExecutor {
         })
     }
 
+    /// Normalize LLM-generated provider names to the canonical IDs expected
+    /// by the web API (e.g. "dalle3" -> "openai", "imagen" -> "google").
+    fn normalize_media_provider(provider: &str) -> String {
+        match provider.to_lowercase().trim() {
+            "dalle" | "dalle3" | "dall-e-3" | "dall-e" | "gpt-image" | "gpt-image-1"
+            | "gpt-image-1.5" => "openai".to_string(),
+            "imagen" | "imagen3" | "imagen4" | "google_imagen" | "imagen-4.0-generate-001" => {
+                "google".to_string()
+            }
+            "sdxl" | "stable-diffusion" | "stability" => "stability".to_string(),
+            other => other.to_string(),
+        }
+    }
+
     async fn execute_image_generate_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -4670,7 +4684,7 @@ impl ToolExecutor {
         let provider = args
             .get("provider")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(Self::normalize_media_provider);
         let size = args
             .get("size")
             .and_then(|v| v.as_str())
