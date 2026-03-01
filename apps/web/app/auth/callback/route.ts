@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
 
     // Handle OAuth errors (e.g., user denied access)
     if (errorParam) {
-      console.error('Auth callback received error:', errorParam, errorDescription);
+      logger.error({ errorParam, errorDescription }, 'Auth callback received OAuth error');
       const errorUrl = new URL('/auth/error', requestUrl.origin);
       errorUrl.searchParams.set('error', errorParam);
       if (errorDescription) {
@@ -29,10 +30,11 @@ export async function GET(request: Request) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (error) {
-        console.error('Auth code exchange error:', error);
+        // [H6 fix] Log full error server-side; only expose generic message to client
+        logger.error({ error }, 'Auth code exchange failed');
         const errorUrl = new URL('/auth/error', requestUrl.origin);
         errorUrl.searchParams.set('error', 'invalid_token');
-        errorUrl.searchParams.set('error_description', error.message);
+        errorUrl.searchParams.set('error_description', 'Authentication failed. Please try again.');
         return NextResponse.redirect(errorUrl);
       }
     }
@@ -40,12 +42,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(safeRedirectPath, requestUrl.origin));
   } catch (error) {
     const requestUrl = new URL(request.url);
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-    console.error('Auth callback error:', error);
+    // [H6 fix] Log full error server-side only; never expose internal messages in redirect URLs
+    logger.error({ error }, 'Auth callback unexpected error');
 
     const errorUrl = new URL('/auth/error', requestUrl.origin);
     errorUrl.searchParams.set('error', 'server_error');
-    errorUrl.searchParams.set('error_description', errorMessage);
+    errorUrl.searchParams.set('error_description', 'An unexpected error occurred. Please try again.');
     return NextResponse.redirect(errorUrl);
   }
 }
