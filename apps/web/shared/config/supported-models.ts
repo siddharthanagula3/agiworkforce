@@ -13,7 +13,10 @@
 // =============================================================================
 
 export const SUPPORTED_ANTHROPIC_MODELS = [
-  // Claude 4.5 models (latest - Jan 2026)
+  // Claude 4.6 models (latest - Feb 2026)
+  'claude-sonnet-4-6',
+  'claude-opus-4-6',
+  // Claude 4.5 models
   'claude-opus-4-5-20251101',
   'claude-sonnet-4-5-20250929',
   'claude-haiku-4-5-20251001',
@@ -39,7 +42,9 @@ export const DEFAULT_ANTHROPIC_MODEL: AnthropicModel = 'claude-sonnet-4-5-202509
 
 export const SUPPORTED_OPENAI_MODELS = [
   // GPT-5.x models (latest - Jan 2026)
+  'gpt-5.2-pro',
   'gpt-5.2',
+  'gpt-5-nano',
   'gpt-5.1',
   // GPT-4.x models
   'gpt-4.1',
