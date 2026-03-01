@@ -48,6 +48,7 @@ import { InlineSuggestion } from './InlineSuggestion';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { PendingMessagesIndicator } from './PendingMessagesIndicator';
 import { SendButton } from './SendButton';
+import { SkillMentionPicker, MentionSkill } from './SkillMentionPicker';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { VoiceRecordingStatus } from './VoiceRecordingStatus';
 
@@ -115,6 +116,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Research panel state
   const [researchOpen, setResearchOpen] = useState(false);
+
+  // @mention skill picker state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
   // Voice transcription state
   // AUDIT-VOICE-043 fix: Renamed to preferWhisperCloud for clarity (true = Whisper Cloud, false = Web Speech)
@@ -552,6 +556,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       setInlineSuggestion('');
       promptCompletion.clear();
     }
+
+    // Detect @mention
+    const mentionMatch = value.match(/@([\w-]*)$/);
+    if (mentionMatch && !isSlashInput) {
+      setMentionQuery(mentionMatch[1]);
+    } else {
+      setMentionQuery(null);
+    }
   };
 
   // Screen capture handler - converts captured image to attachment
@@ -884,6 +896,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     [content, setDraftContent],
   );
 
+  // @mention skill selection handler
+  const handleSkillMentionSelect = useCallback(
+    (skill: MentionSkill) => {
+      const newContent = content.replace(/@[\w-]*$/, `@${skill.id} `);
+      setContent(newContent);
+      setDraftContent(newContent);
+      setMentionQuery(null);
+      textareaRef.current?.focus();
+    },
+    [content, setDraftContent],
+  );
+
   return (
     <>
       {/* Drag overlay */}
@@ -1027,6 +1051,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onSelect={handleSlashCommandSelect}
               onHover={setSlashAutocompleteIndex}
             />
+
+            {/* @mention skill picker */}
+            {mentionQuery !== null && !showSlashAutocomplete && (
+              <SkillMentionPicker
+                query={mentionQuery}
+                onSelect={handleSkillMentionSelect}
+                onClose={() => setMentionQuery(null)}
+              />
+            )}
 
             {/* Inline suggestion */}
             {!showSlashAutocomplete && (
