@@ -190,6 +190,9 @@ export const MessageBubble = memo(function MessageBubble({
     <Animated.View
       entering={FadeInDown.duration(200).springify()}
       className={`px-4 py-3 ${isAssistant ? 'bg-white/[0.02]' : ''}`}
+      accessible={true}
+      accessibilityLabel={`${isUser ? 'Your' : message.model ?? 'Assistant'} message: ${message.content?.slice(0, 100) || 'empty'}`}
+      accessibilityRole="text"
     >
       <View className="flex-row gap-3">
         {/* Avatar */}
