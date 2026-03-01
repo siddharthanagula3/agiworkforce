@@ -8,7 +8,7 @@
 import { grokProvider, GrokProvider } from '@core/ai/llm/providers/grok-ai';
 import { supabase } from '@shared/lib/supabase-client';
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 export interface SocialMediaQuery {
   topic: string;

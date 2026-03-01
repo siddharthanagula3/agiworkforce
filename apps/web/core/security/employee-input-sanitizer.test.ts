@@ -14,9 +14,7 @@ import {
   defaultEmployeeInputConfig,
   EMPLOYEE_SPECIFIC_PATTERNS,
   OUTPUT_LEAKAGE_PATTERNS,
-  type SanitizationResult,
   type EmployeeInputConfig,
-  type OutputValidationResult,
 } from './employee-input-sanitizer';
 
 // Mock Supabase client

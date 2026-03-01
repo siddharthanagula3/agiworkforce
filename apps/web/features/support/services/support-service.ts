@@ -89,7 +89,7 @@ class SupportService {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const { data, error } = await (supabase.from('support_tickets') as any)
+      const { data, error } = await (supabase.from('support_tickets') as ReturnType<typeof supabase.from>)
         .insert({
           user_id: user?.id,
           name: ticket.name,
@@ -229,7 +229,7 @@ class SupportService {
         return { data: null, error: 'User not authenticated' };
       }
 
-      const { data, error } = await (supabase.from('support_ticket_replies') as any)
+      const { data, error } = await (supabase.from('support_ticket_replies') as ReturnType<typeof supabase.from>)
         .insert({
           ticket_id: ticketId,
           user_id: user.id,
@@ -247,7 +247,7 @@ class SupportService {
 
       // Update ticket's updated_at timestamp
 
-      await (supabase.from('support_tickets') as any)
+      await (supabase.from('support_tickets') as ReturnType<typeof supabase.from>)
         .update({ updated_at: new Date().toISOString() })
         .eq('id', ticketId);
 

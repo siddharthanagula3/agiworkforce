@@ -13,7 +13,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { useModelStore } from '@shared/stores/model-store';
 import { useVibeChatStore } from '../stores/vibe-chat-store';
 import { VibeLayout } from '../layouts/VibeLayout';
 import { SimpleChatPanel } from '../components/redesign/SimpleChatPanel';
@@ -28,7 +27,6 @@ import type { AgentMessage } from '../components/agent-panel/AgentMessageList';
 import { supabase } from '@shared/lib/supabase-client';
 import { useVibeRealtime, type VibeAgentActionRow } from '../hooks/use-vibe-realtime';
 import { VibeMessageService } from '../services/vibe-message-service';
-import { vibeMessageHandler } from '../services/vibe-message-handler';
 import { toast } from 'sonner';
 import { PhaseTimeline } from '../components/redesign/PhaseTimeline';
 import { useVibeOrchestrator } from '../services/vibe-phase-orchestrator';
@@ -38,6 +36,8 @@ import { VibeKeyboardShortcutsDialog } from '../components/VibeKeyboardShortcuts
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { Button } from '@shared/ui/button';
 import { AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { useSSEStreaming } from '../hooks/useSSEStreaming';
+import { useVibeSend } from '../hooks/useVibeSend';
 
 // Error fallback component for Vibe page
 const VibeErrorFallback = () => (
@@ -194,7 +194,6 @@ const VibeDashboard: React.FC = () => {
   const [vibeMode, setVibeMode] = useState<VibeMode>('build');
 
   const messageIdsRef = useRef<Set<string>>(new Set());
-  const messagesRef = useRef<AgentMessage[]>([]);
   const workingStepsMapRef = useRef<Map<string, WorkingStep>>(new Map());
 
   // Keyboard shortcuts
@@ -261,15 +260,18 @@ const VibeDashboard: React.FC = () => {
     }
   }, []);
 
-  const ensureSession = useCallback(async () => {
+  const ensureSession = useCallback(async (): Promise<string | null> => {
     if (currentSessionId) {
       return currentSessionId;
     }
     if (!user) return null;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_sessions not in generated types
-      const { data, error } = await (supabase as any)
+      // vibe_sessions not in generated Supabase types — use untyped client
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const untypedSupabase = supabase as any;
+
+      const { data, error } = await untypedSupabase
         .from('vibe_sessions')
         .select('id')
         .eq('user_id', user.id)
@@ -279,18 +281,21 @@ const VibeDashboard: React.FC = () => {
 
       if (error) throw error;
 
-      let sessionId = data?.id;
+      let sessionId: string | null = (data as { id: string } | null)?.id ?? null;
 
       if (!sessionId) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_sessions not in generated types
-        const { data: inserted, error: insertError } = await (supabase as any)
+        const { data: inserted, error: insertError } = await untypedSupabase
           .from('vibe_sessions')
           .insert({ user_id: user.id, title: 'VIBE Session' })
           .select('id')
           .single();
 
         if (insertError) throw insertError;
-        sessionId = inserted.id;
+        sessionId = (inserted as { id: string } | null)?.id ?? null;
+      }
+
+      if (!sessionId) {
+        throw new Error('Failed to create or retrieve session ID');
       }
 
       setCurrentSession(sessionId);
@@ -303,133 +308,8 @@ const VibeDashboard: React.FC = () => {
     }
   }, [currentSessionId, loadMessages, setCurrentSession, user]);
 
-  /**
-   * Stream a response from /api/llm/completion using SSE.
-   * Appends content chunks to the message in real-time.
-   * Returns the full response text.
-   */
-  const streamSSEResponse = useCallback(
-    async (
-      messageId: string,
-      conversationHistory: Array<{ role: string; content: string }>,
-    ): Promise<string> => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const selectedModelId = useModelStore.getState().selectedModelId;
-
-      const response = await fetch('/api/llm/completion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          model: selectedModelId,
-          messages: conversationHistory,
-          stream: true,
-          max_tokens: 4096,
-          temperature: 0.7,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => ({ error: 'Request failed' }))) as {
-          error?: string;
-        };
-        throw new Error(errorData.error || `API request failed with status ${response.status}`);
-      }
-
-      // Non-streaming fallback
-      if (!response.body) {
-        const data = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        const text = data.choices?.[0]?.message?.content || '';
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId ? { ...msg, content: text, isStreaming: false } : msg,
-          ),
-        );
-        return text;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = '';
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const jsonStr = trimmed.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-              delta?: { text?: string };
-            };
-            const content =
-              parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
-            if (content) {
-              fullResponse += content;
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === messageId
-                    ? { ...msg, content: fullResponse }
-                    : msg,
-                ),
-              );
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-        const jsonStr = buffer.trim().slice(6).trim();
-        if (jsonStr !== '[DONE]') {
-          try {
-            const parsed = JSON.parse(jsonStr) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-              delta?: { text?: string };
-            };
-            const content =
-              parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
-            if (content) {
-              fullResponse += content;
-            }
-          } catch {
-            // Skip
-          }
-        }
-      }
-
-      // Mark streaming complete
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId
-            ? { ...msg, content: fullResponse, isStreaming: false }
-            : msg,
-        ),
-      );
-
-      return fullResponse;
-    },
-    [],
-  );
+  // SSE streaming hook (extracted from inline function)
+  const { streamSSEResponse } = useSSEStreaming({ setMessages });
 
   const handleAgentAction = useCallback((action: VibeAgentActionRow) => {
     const status: WorkingStep['status'] =
@@ -475,9 +355,25 @@ const VibeDashboard: React.FC = () => {
     onAction: handleAgentAction,
   });
 
+  // Send message hook (extracted from inline function)
+  const { handleSendMessage, syncMessages } = useVibeSend({
+    user,
+    currentSessionId,
+    ensureSession,
+    streamSSEResponse,
+    upsertMessage,
+    setIsLoading,
+    setWorkingSteps,
+    activeAgent,
+    setActiveAgent,
+    orchestratorSession,
+    initSession,
+    processEvent,
+  });
+
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+    syncMessages(messages);
+  }, [messages, syncMessages]);
 
   useEffect(() => {
     if (!user) {
@@ -520,178 +416,6 @@ const VibeDashboard: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, [currentSessionId, mapRowToMessage, upsertMessage]);
-
-  const handleSendMessage = useCallback(
-    async (content: string, files?: File[]) => {
-      if (!content.trim()) return;
-      if (!user) {
-        toast.error('You must be logged in to send messages.');
-        return;
-      }
-
-      // Defensive: Ensure we have a valid sessionId
-      const sessionId = currentSessionId || (await ensureSession());
-      if (!sessionId || typeof sessionId !== 'string') {
-        toast.error('Unable to send message: Invalid session.');
-        return;
-      }
-
-      setIsLoading(true);
-      workingStepsMapRef.current.clear();
-      setWorkingSteps([
-        {
-          id: 'analyze',
-          description: 'Analyzing request…',
-          status: 'in_progress',
-          timestamp: new Date(),
-        },
-        {
-          id: 'plan',
-          description: 'Planning multi-agent workflow',
-          status: 'pending',
-        },
-        {
-          id: 'execute',
-          description: 'Executing plan',
-          status: 'pending',
-        },
-      ]);
-
-      // Initialize phase orchestrator (VibeSDK pattern)
-      if (!orchestratorSession) {
-        initSession('phasic');
-      }
-      processEvent({ type: 'connection_established', sessionId });
-      processEvent({ type: 'blueprint_generating' });
-
-      try {
-        // Create user message locally first
-        const userMessage: AgentMessage = {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content,
-          timestamp: new Date(),
-        };
-        upsertMessage(userMessage);
-
-        // Create user message in database
-        await VibeMessageService.createMessage({
-          sessionId,
-          userId: user.id,
-          role: 'user',
-          content,
-          metadata: {
-            files: files?.map((file) => file.name) || [],
-          },
-        });
-
-        setWorkingSteps((prev) =>
-          prev.map((step, index) => (index <= 1 ? { ...step, status: 'completed' } : step)),
-        );
-
-        // Update phase orchestrator - blueprint complete, start implementation
-        processEvent({ type: 'generation_started' });
-
-        // Create streaming assistant message
-        const assistantMessageId = crypto.randomUUID();
-        const assistantMessage: AgentMessage = {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          agentName: activeAgent.name,
-          agentRole: activeAgent.role,
-          isStreaming: true,
-        };
-
-        upsertMessage(assistantMessage);
-
-        // Build conversation history for the API
-        const conversationHistory = [...messagesRef.current, userMessage].map((msg) => ({
-          role: msg.role as 'user' | 'assistant' | 'system',
-          content: msg.content,
-        }));
-
-        // Stream response from /api/llm/completion via SSE
-        const fullResponse = await streamSSEResponse(assistantMessageId, conversationHistory);
-
-        if (!fullResponse) {
-          throw new Error('No response received from AI');
-        }
-
-        // Process AI response for code files
-        try {
-          const parseResult = await vibeMessageHandler.handleAIResponse(
-            fullResponse,
-            sessionId,
-          );
-
-          if (parseResult.filesCreated > 0) {
-            // Emit file generation events to phase orchestrator
-            for (const file of parseResult.files) {
-              processEvent({
-                type: 'file_generated',
-                filePath: file.path,
-                content: file.content,
-              });
-            }
-
-            // If project structure detected, show info
-            if (parseResult.projectInfo.type !== 'unknown') {
-              toast.success(
-                `Detected ${parseResult.projectInfo.type} project with ${parseResult.filesCreated} files`,
-              );
-            }
-          }
-
-          // Mark generation complete
-          processEvent({ type: 'generation_complete' });
-        } catch (parseError) {
-          console.error('[VIBE] Failed to parse code from response:', parseError);
-          // Don't fail the whole message if parsing fails
-        }
-
-        // Save final assistant message to database
-        await VibeMessageService.createMessage({
-          sessionId,
-          userId: user.id,
-          role: 'assistant',
-          content: fullResponse,
-          employeeName: assistantMessage.agentName,
-          employeeRole: assistantMessage.agentRole,
-          isStreaming: false,
-        });
-
-        setWorkingSteps((prev) =>
-          prev.map((step) =>
-            step.id === 'execute' ? { ...step, status: 'completed', timestamp: new Date() } : step,
-          ),
-        );
-      } catch (error) {
-        console.error('[VIBE] Failed to send message', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to send message');
-        setWorkingSteps((prev) =>
-          prev.map((step) =>
-            step.status === 'in_progress' ? { ...step, status: 'failed' } : step,
-          ),
-        );
-        setActiveAgent({ ...activeAgent, status: 'error' });
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [
-      activeAgent,
-      currentSessionId,
-      ensureSession,
-      initSession,
-      orchestratorSession,
-      processEvent,
-      streamSSEResponse,
-      upsertMessage,
-      user,
-    ],
-  );
 
   if (!user) {
     return (

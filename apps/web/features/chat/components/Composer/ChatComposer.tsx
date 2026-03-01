@@ -487,8 +487,8 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
                             'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                             isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted',
                           )}
-                          role="menuitem"
-                          aria-pressed={isSelected}
+                          role="menuitemcheckbox"
+                          aria-checked={isSelected}
                         >
                           <Icon className={cn('h-4 w-4', tool.color)} aria-hidden="true" />
                           <span className="flex-1 text-left">{tool.label}</span>

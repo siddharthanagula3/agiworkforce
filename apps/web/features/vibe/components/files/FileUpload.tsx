@@ -6,7 +6,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, File, Image, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, File, Image as ImageIcon, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Card } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Progress } from '@shared/ui/progress';
@@ -322,7 +322,7 @@ const FileIconDisplay: React.FC<{ filename: string }> = ({ filename }) => {
   const ext = filename.split('.').pop()?.toLowerCase();
 
   if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext || '')) {
-    return <Image className="h-5 w-5 text-muted-foreground" />;
+    return <ImageIcon className="h-5 w-5 text-muted-foreground" />;
   }
 
   if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext || '')) {

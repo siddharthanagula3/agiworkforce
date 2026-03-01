@@ -280,18 +280,14 @@ describe('UnifiedLLMService', () => {
     });
 
     it('should route to correct provider', async () => {
-      const providers: Array<{
-        name: LLMProvider;
-
-        mock: any;
-      }> = [
-        { name: 'openai', mock: openaiProvider },
-        { name: 'anthropic', mock: anthropicProvider },
-        { name: 'google', mock: googleProvider },
-        { name: 'perplexity', mock: perplexityProvider },
-        { name: 'grok', mock: grokProvider },
-        { name: 'deepseek', mock: deepseekProvider },
-        { name: 'qwen', mock: qwenProvider },
+      const providers = [
+        { name: 'openai' as LLMProvider, mock: openaiProvider },
+        { name: 'anthropic' as LLMProvider, mock: anthropicProvider },
+        { name: 'google' as LLMProvider, mock: googleProvider },
+        { name: 'perplexity' as LLMProvider, mock: perplexityProvider },
+        { name: 'grok' as LLMProvider, mock: grokProvider },
+        { name: 'deepseek' as LLMProvider, mock: deepseekProvider },
+        { name: 'qwen' as LLMProvider, mock: qwenProvider },
       ];
 
       for (const { name, mock } of providers) {

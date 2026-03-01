@@ -12,7 +12,6 @@ import { supabase } from '@shared/lib/supabase-client';
 import {
   accountLockoutService,
   type LockoutCheckResult,
-  type FailedLoginResult,
 } from './account-lockout-service';
 import { logger } from '@shared/lib/logger';
 

@@ -16,7 +16,7 @@ import { logger } from '@shared/lib/logger';
 
 // RPC/tables not yet in generated Database type
 
-const db = supabase as any;
+const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { captureError } from '@shared/lib/sentry';
 
 export interface TokenCheckResult {
@@ -322,7 +322,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
       };
     }
 
-    const used = Math.abs(transactions?.reduce((sum: any, tx: any) => sum + tx.tokens, 0) || 0);
+    const used = Math.abs(transactions?.reduce((sum: number, tx: Record<string, unknown>) => sum + (tx.tokens as number), 0) || 0);
     const limit = 1000000; // 1M tokens/month for free tier (matches billing dashboard)
 
     return {

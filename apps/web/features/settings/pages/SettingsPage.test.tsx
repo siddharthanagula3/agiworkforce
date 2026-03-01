@@ -23,16 +23,16 @@ vi.mock('sonner', () => ({
 // ---------------------------------------------------------------------------
 // Mock Radix UI primitives that the shared/ui components depend on
 vi.mock('@radix-ui/react-radio-group', () => {
-  const Root = React.forwardRef<HTMLDivElement, any>(({ children, ...props }, ref) => (
+  const Root = React.forwardRef<HTMLDivElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <div ref={ref} role="radiogroup" {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   ));
   Root.displayName = 'RadioGroupRoot';
 
-  const Item = React.forwardRef<HTMLButtonElement, any>(({ children, ...props }, ref) => (
-    <button ref={ref} role="radio" {...props}>
-      {children}
+  const Item = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(({ children, ...props }, ref) => (
+    <button ref={ref} role="radio" aria-checked={false} {...props}>
+      {children as React.ReactNode}
     </button>
   ));
   Item.displayName = 'RadioGroupItem';
@@ -45,42 +45,42 @@ vi.mock('@radix-ui/react-radio-group', () => {
 // We still need simple mocks so tests are fast and don't rely on DOM layout.
 // ---------------------------------------------------------------------------
 vi.mock('@shared/ui/tabs', () => {
-  const Tabs = ({ children, ...props }: any) => (
+  const Tabs = ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="tabs" {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   );
-  const TabsList = ({ children, ...props }: any) => (
+  const TabsList = ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="tabs-list" role="tablist" {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   );
-  const TabsTrigger = ({ children, value, ...props }: any) => (
-    <button data-testid={`tab-${value}`} role="tab" {...props}>
-      {children}
+  const TabsTrigger = ({ children, value, ...props }: Record<string, unknown>) => (
+    <button data-testid={`tab-${value as string}`} role="tab" {...props}>
+      {children as React.ReactNode}
     </button>
   );
-  const TabsContent = ({ children, value, ...props }: any) => (
-    <div data-testid={`tab-content-${value}`} role="tabpanel" {...props}>
-      {children}
+  const TabsContent = ({ children, value, ...props }: Record<string, unknown>) => (
+    <div data-testid={`tab-content-${value as string}`} role="tabpanel" {...props}>
+      {children as React.ReactNode}
     </div>
   );
   return { Tabs, TabsList, TabsTrigger, TabsContent };
 });
 
 vi.mock('@shared/ui/card', () => {
-  const Card = ({ children, ...props }: any) => <div {...props}>{children}</div>;
-  const CardHeader = ({ children, ...props }: any) => <div {...props}>{children}</div>;
-  const CardTitle = ({ children, ...props }: any) => <h3 {...props}>{children}</h3>;
-  const CardDescription = ({ children, ...props }: any) => <p {...props}>{children}</p>;
-  const CardContent = ({ children, ...props }: any) => <div {...props}>{children}</div>;
+  const Card = ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>;
+  const CardHeader = ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>;
+  const CardTitle = ({ children, ...props }: Record<string, unknown>) => <h3 {...props}>{children as React.ReactNode}</h3>;
+  const CardDescription = ({ children, ...props }: Record<string, unknown>) => <p {...props}>{children as React.ReactNode}</p>;
+  const CardContent = ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>;
   return { Card, CardHeader, CardTitle, CardDescription, CardContent };
 });
 
 vi.mock('@shared/ui/button', () => {
-  const Button = React.forwardRef(({ children, ...props }: any, ref: any) => (
+  const Button = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <button ref={ref} {...props}>
-      {children}
+      {children as React.ReactNode}
     </button>
   ));
   Button.displayName = 'Button';
@@ -88,15 +88,15 @@ vi.mock('@shared/ui/button', () => {
 });
 
 vi.mock('@shared/ui/input', () => {
-  const Input = React.forwardRef((props: any, ref: any) => <input ref={ref} {...props} />);
+  const Input = React.forwardRef<HTMLInputElement, Record<string, unknown>>((props, ref) => <input ref={ref} {...props} />);
   Input.displayName = 'Input';
   return { Input };
 });
 
 vi.mock('@shared/ui/label', () => {
-  const Label = React.forwardRef(({ children, ...props }: any, ref: any) => (
+  const Label = React.forwardRef<HTMLLabelElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <label ref={ref} {...props}>
-      {children}
+      {children as React.ReactNode}
     </label>
   ));
   Label.displayName = 'Label';
@@ -104,55 +104,56 @@ vi.mock('@shared/ui/label', () => {
 });
 
 vi.mock('@shared/ui/switch', () => {
-  const Switch = React.forwardRef((props: any, ref: any) => (
-    <button ref={ref} role="switch" {...props} />
+  const Switch = React.forwardRef<HTMLButtonElement, Record<string, unknown>>((props, ref) => (
+    <button ref={ref} role="switch" aria-checked={false} {...props} />
   ));
   Switch.displayName = 'Switch';
   return { Switch };
 });
 
 vi.mock('@shared/ui/textarea', () => {
-  const Textarea = React.forwardRef((props: any, ref: any) => <textarea ref={ref} {...props} />);
+  const Textarea = React.forwardRef<HTMLTextAreaElement, Record<string, unknown>>((props, ref) => <textarea ref={ref} {...props} />);
   Textarea.displayName = 'Textarea';
   return { Textarea };
 });
 
 vi.mock('@shared/ui/slider', () => {
-  const Slider = React.forwardRef((props: any, ref: any) => (
-    <div ref={ref} role="slider" {...props} />
+  const Slider = React.forwardRef<HTMLDivElement, Record<string, unknown>>((props, ref) => (
+    <div ref={ref} role="slider" aria-valuenow={0} {...props} />
   ));
   Slider.displayName = 'Slider';
   return { Slider };
 });
 
 vi.mock('@shared/ui/avatar', () => {
-  const Avatar = ({ children, ...props }: any) => <div {...props}>{children}</div>;
-  const AvatarImage = (props: any) => <img {...props} />;
-  const AvatarFallback = ({ children, ...props }: any) => <span {...props}>{children}</span>;
+  const Avatar = ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>;
+  // eslint-disable-next-line @next/next/no-img-element
+  const AvatarImage = ({ alt, ...props }: Record<string, unknown>) => <img alt={alt as string | undefined} {...props} />;
+  const AvatarFallback = ({ children, ...props }: Record<string, unknown>) => <span {...props}>{children as React.ReactNode}</span>;
   return { Avatar, AvatarImage, AvatarFallback };
 });
 
 vi.mock('@shared/ui/select', () => {
-  const Select = ({ children, ...props }: any) => <div {...props}>{children}</div>;
-  const SelectContent = React.forwardRef(({ children, ...props }: any, ref: any) => (
+  const Select = ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>;
+  const SelectContent = React.forwardRef<HTMLDivElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <div ref={ref} {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   ));
   SelectContent.displayName = 'SelectContent';
-  const SelectItem = React.forwardRef(({ children, ...props }: any, ref: any) => (
+  const SelectItem = React.forwardRef<HTMLDivElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <div ref={ref} {...props}>
-      {children}
+      {children as React.ReactNode}
     </div>
   ));
   SelectItem.displayName = 'SelectItem';
-  const SelectTrigger = React.forwardRef(({ children, ...props }: any, ref: any) => (
+  const SelectTrigger = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(({ children, ...props }, ref) => (
     <button ref={ref} {...props}>
-      {children}
+      {children as React.ReactNode}
     </button>
   ));
   SelectTrigger.displayName = 'SelectTrigger';
-  const SelectValue = (props: any) => <span {...props} />;
+  const SelectValue = (props: Record<string, unknown>) => <span {...props} />;
   return { Select, SelectContent, SelectItem, SelectTrigger, SelectValue };
 });
 
@@ -162,8 +163,8 @@ vi.mock('@shared/lib/utils', () => ({
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => {
-  const Icon = React.forwardRef(({ className, ...props }: any, ref: any) => (
-    <span ref={ref} className={className} {...props} />
+  const Icon = React.forwardRef<HTMLSpanElement, Record<string, unknown>>(({ className, ...props }, ref) => (
+    <span ref={ref} className={className as string | undefined} {...props} />
   ));
   Icon.displayName = 'Icon';
   return {

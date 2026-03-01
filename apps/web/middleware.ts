@@ -5,17 +5,22 @@ import { updateSession } from '@/utils/supabase/middleware';
  * Build a per-request Content-Security-Policy string with a nonce.
  *
  * The nonce replaces 'unsafe-inline' in script-src, preventing arbitrary
- * inline script injection. 'unsafe-eval' is retained because Stripe.js
- * requires it for device fingerprinting / fraud detection.
+ * inline script injection.
+ *
+ * NOTE on style-src 'unsafe-inline': Removing it would require adding nonce
+ * attributes to every <style> tag and CSS-in-JS injection point. Tailwind CSS,
+ * Radix UI, and ~28 components use inline `style=` attributes which would all
+ * break without 'unsafe-inline'. Migrating to nonce-based styles is tracked
+ * but non-trivial — leave as-is until a framework-level solution exists.
  */
 function buildCspWithNonce(nonce: string): string {
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://js.stripe.com https://challenges.cloudflare.com;
+    script-src 'self' 'nonce-${nonce}' https://js.stripe.com https://challenges.cloudflare.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
-    img-src 'self' data: blob: https:;
+    img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;
     frame-ancestors 'none';
     form-action 'self';
