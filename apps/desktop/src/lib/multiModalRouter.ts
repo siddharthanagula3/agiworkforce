@@ -120,7 +120,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: 'imagen-4',
+    id: 'imagen-4.0-generate-001',
     name: 'Imagen 4',
     provider: 'google',
     tier: 'pro',
@@ -173,7 +173,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: 'imagen-4-ultra',
+    id: 'imagen-4.0-ultra-generate-001',
     name: 'Imagen 4 Ultra',
     provider: 'google',
     tier: 'max',
@@ -228,7 +228,7 @@ export const VIDEO_MODELS: ModalityModel[] = [
   },
   // === MAX/ENTERPRISE TIER ===
   {
-    id: 'veo-3.1',
+    id: 'veo-3.1-generate-preview',
     name: 'Veo 3.1',
     provider: 'google',
     tier: 'max',
