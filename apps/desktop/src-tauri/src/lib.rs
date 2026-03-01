@@ -952,6 +952,7 @@ pub fn run() {
             crate::sys::commands::chat::clear_local_database,
             crate::sys::commands::search_chat_history,
             crate::sys::commands::search_chat_history_semantic,
+            crate::sys::commands::conversation_share,
 
 
             crate::sys::commands::checkpoint_create,
