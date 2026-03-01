@@ -108,7 +108,8 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
       } else if (e.key === 'Enter' && filtered.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        onSelect(filtered[selectedIndex]);
+        const skill = filtered[selectedIndex];
+        if (skill) onSelect(skill);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
