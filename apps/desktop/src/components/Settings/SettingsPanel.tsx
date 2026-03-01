@@ -10,6 +10,7 @@ import {
   Download,
   Github,
   Loader2,
+  Mic,
   Monitor,
   Plug,
   Puzzle,
@@ -52,6 +53,7 @@ import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
+import { VoiceSettings } from './VoiceSettings';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -309,7 +311,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </div>
           ) : (
             <Tabs defaultValue="llm-config" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-10">
+              <TabsList className="grid w-full grid-cols-11">
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
@@ -349,6 +351,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <TabsTrigger value="system" className="flex items-center gap-2">
                   <Activity className="h-4 w-4" />
                   System
+                </TabsTrigger>
+                <TabsTrigger value="voice" className="flex items-center gap-2">
+                  <Mic className="h-4 w-4" />
+                  Voice
                 </TabsTrigger>
               </TabsList>
 
@@ -734,6 +740,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <div className="pt-6 border-t border-border">
                   <DataPrivacyTab />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="voice" className="space-y-6 pt-6">
+                <VoiceSettings />
               </TabsContent>
 
               <TabsContent value="system" className="space-y-6 pt-6">
