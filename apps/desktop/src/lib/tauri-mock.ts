@@ -82,6 +82,11 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'file_open_with_default_app':
       return undefined as T;
 
+    case 'document_create_pdf_simple':
+    case 'document_create_word_simple':
+    case 'document_create_excel_simple':
+      return (args?.['outputPath'] ?? '/tmp/mock-document') as T;
+
     case 'project_get_settings':
       return {} as T;
 
