@@ -2149,11 +2149,27 @@ impl ProviderAdapter for OllamaAdapter {
 /// DeepSeek adapter (handles reasoning_content)
 struct DeepSeekAdapter;
 
+impl DeepSeekAdapter {
+    /// Canonicalize DeepSeek model IDs to the API-expected identifiers.
+    fn canonicalize_model(model: &str) -> String {
+        match model {
+            // The DeepSeek API expects "deepseek-reasoner" for all R1 variants.
+            // Users and frontends commonly send "deepseek-r1" or "deepseek-r1-zero".
+            "deepseek-r1" | "deepseek-r1-zero" => "deepseek-reasoner".to_string(),
+            _ => model.to_string(),
+        }
+    }
+}
+
 impl ProviderAdapter for DeepSeekAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // DeepSeek uses OpenAI-compatible format with nested tools
+        // Canonicalize the model ID before delegating to OpenAI adapter
+        let canonical_model = Self::canonicalize_model(&request.model);
+        let mut canonicalized_request = request.clone();
+        canonicalized_request.model = canonical_model;
+
         let adapter = OpenAIAdapter;
-        adapter.adapt_request(request)
+        adapter.adapt_request(&canonicalized_request)
     }
 
     fn adapt_response(
