@@ -141,8 +141,17 @@ impl McpState {
                         Ok(true)
                     }
                     Err(e) => {
-                        tracing::error!("[MCP] Failed to restart filesystem server: {}", e);
-                        Err(format!("Failed to restart filesystem server: {}", e))
+                        // Log as a warning — the config has been updated in memory so the
+                        // next explicit connect attempt will use the new roots.  A spawn
+                        // failure (e.g. `npx` not found on this machine) is non-fatal; the
+                        // rest of the app continues to work without MCP filesystem tools.
+                        tracing::warn!(
+                            "[MCP] Filesystem server could not be restarted (non-fatal): {}. \
+                             The directory configuration has been saved and will take effect \
+                             when the server is next connected.",
+                            e
+                        );
+                        Ok(true)
                     }
                 }
             } else {
@@ -152,7 +161,9 @@ impl McpState {
                 Ok(true)
             }
         } else {
-            Err("Could not get filesystem server config".to_string())
+            // Config entry missing — treat as a warning, not a hard failure.
+            tracing::warn!("[MCP] Filesystem server entry not found in config; skipping restart.");
+            Ok(false)
         }
     }
 }
