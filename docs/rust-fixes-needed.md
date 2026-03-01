@@ -153,3 +153,74 @@ let executor = FileExecutor::default();
 ```bash
 cargo test --package agi-desktop -p agi-desktop -- core::agi::executors::tests::file_executor_tests::test_file_executor_default
 ```
+
+---
+
+## Wispr Flow Voice Dictation — Tauri Command Stubs
+
+**Workstream H (voice-agent)** — User has authorized direct Rust edits but the
+pre-commit hook prevents edits to `.rs` files. Add these two stubs manually.
+
+### What to add
+
+**File:** `apps/desktop/src-tauri/src/sys/commands/voice.rs` — append after the
+`voice_tts_is_playing` function at line 1727.
+
+```rust
+// =============================================================================
+// Wispr Flow Voice Dictation Commands
+// =============================================================================
+
+/// Result returned by speech_stop_and_transcribe
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SpeechTranscriptResult {
+    pub text: String,
+    pub confidence: f32,
+}
+
+/// Start recording audio from the microphone for Wispr Flow dictation.
+///
+/// Stub: returns Ok(()) immediately. Wire to a `cpal` audio capture stream in
+/// a future iteration once the audio pipeline is fully plumbed end-to-end.
+#[tauri::command]
+pub async fn speech_start_recording(provider: String) -> Result<(), String> {
+    tracing::info!("[speech] start_recording provider={}", provider);
+    Ok(())
+}
+
+/// Stop recording and transcribe the captured audio.
+///
+/// Stub: returns an empty transcript. Wire to `WhisperLocal` or the Deepgram
+/// client in a follow-up once `cpal` audio capture is plumbed end-to-end.
+#[tauri::command]
+pub async fn speech_stop_and_transcribe(
+    provider: String,
+    language: String,
+) -> Result<SpeechTranscriptResult, String> {
+    tracing::info!(
+        "[speech] stop_and_transcribe provider={} language={}",
+        provider,
+        language
+    );
+    Ok(SpeechTranscriptResult {
+        text: String::new(),
+        confidence: 0.0,
+    })
+}
+```
+
+**File:** `apps/desktop/src-tauri/src/lib.rs` — inside the `generate_handler![...]`
+macro, add two new lines alongside the other voice commands (near line 1727):
+
+```rust
+crate::sys::commands::voice::speech_start_recording,
+crate::sys::commands::voice::speech_stop_and_transcribe,
+```
+
+### Validation
+
+```bash
+cargo check --package agi-desktop
+```
+
+Expected: no errors. The two new commands compile cleanly as simple async stubs.
