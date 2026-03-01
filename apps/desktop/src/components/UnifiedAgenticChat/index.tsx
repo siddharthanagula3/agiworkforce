@@ -28,6 +28,8 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useBillingStore } from '../../stores/auth';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
+import { useMemoryStore, buildMemoryContext } from '../../stores/memoryStore';
+import { readMemoryPanelSettings } from '../Memory/MemoryPanel';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
@@ -2364,9 +2366,23 @@ export const UnifiedAgenticChat: React.FC<{
         const conversationInstructions = useUnifiedChatStore
           .getState()
           .getConversationCustomInstructions(activeConversationId ?? undefined);
-        const mergedCustomInstructions = useCustomInstructionsStore
+        let mergedCustomInstructions = useCustomInstructionsStore
           .getState()
           .getMergedInstructions(conversationInstructions);
+
+        // Prepend persistent memory context if memory is enabled and autoInject is on
+        const memoryPanelSettings = readMemoryPanelSettings();
+        if (memoryPanelSettings.isEnabled && memoryPanelSettings.autoInject) {
+          const memoryContext = buildMemoryContext(
+            useMemoryStore.getState().memories,
+            memoryPanelSettings.maxTokens,
+          );
+          if (memoryContext) {
+            mergedCustomInstructions = mergedCustomInstructions
+              ? `${memoryContext}\n\n${mergedCustomInstructions}`
+              : memoryContext;
+          }
+        }
 
         // Check if always use agent mode is enabled in settings
         const alwaysUseAgentMode =
