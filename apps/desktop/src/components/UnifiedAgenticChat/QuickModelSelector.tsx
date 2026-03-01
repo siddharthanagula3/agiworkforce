@@ -58,7 +58,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     availableModels,
     selectModel,
     thinkingModeEnabled,
-    toggleThinkingMode,
+    thinkingBudget,
+    setThinkingBudget,
     getAvailableModels,
   } = useModelStore(
     useShallow((state) => ({
@@ -66,7 +67,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       availableModels: state.availableModels,
       selectModel: state.selectModel,
       thinkingModeEnabled: state.thinkingModeEnabled,
-      toggleThinkingMode: state.toggleThinkingMode,
+      thinkingBudget: state.thinkingBudget,
+      setThinkingBudget: state.setThinkingBudget,
       getAvailableModels: state.getAvailableModels,
     })),
   );
@@ -490,62 +492,68 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
           const supportsThinking = currentMetadata?.capabilities.thinking ?? false;
           const smartVariantId = selectedModel ? THINKING_MODEL_VARIANTS[selectedModel] : undefined;
-          const smartVariantName = smartVariantId ? getModelMetadata(smartVariantId)?.name : null;
 
           const isDisabled = !supportsThinking && !smartVariantId;
-          const tooltip = isDisabled
-            ? 'This model does not support Thinking Mode'
-            : !supportsThinking && smartVariantName
-              ? `Switch to ${smartVariantName} to enable Thinking Mode`
-              : 'Enable Thinking Mode';
+
+          const budgetOptions = [
+            { label: 'Off', value: 0 },
+            { label: '1K', value: 1024 },
+            { label: '4K', value: 4096 },
+            { label: '8K', value: 8192 },
+            { label: '16K', value: 16384 },
+            { label: '32K', value: 32768 },
+          ];
+
+          const handleBudgetSelect = (budget: number) => {
+            if (isDisabled) return;
+
+            // If model doesn't natively support thinking, switch to variant first
+            if (!supportsThinking && smartVariantId && budget > 0) {
+              const variantMetadata = getModelMetadata(smartVariantId);
+              if (variantMetadata) {
+                void selectModel(smartVariantId, variantMetadata.provider);
+              }
+            }
+
+            setThinkingBudget(budget);
+          };
 
           return (
-            <button
-              onClick={() => {
-                if (isDisabled) return;
-
-                if (!supportsThinking && smartVariantId) {
-                  // Smart Switch
-                  const variantMetadata = getModelMetadata(smartVariantId);
-                  if (variantMetadata) {
-                    void selectModel(smartVariantId, variantMetadata.provider);
-                    if (!thinkingModeEnabled) {
-                      toggleThinkingMode();
-                    }
-                  }
-                } else {
-                  // Standard Toggle
-                  toggleThinkingMode();
-                }
-              }}
-              disabled={isDisabled}
-              title={tooltip}
+            <div
               className={cn(
-                'flex w-full items-center justify-between rounded-lg px-2 py-1 text-[10px] transition-colors',
-                thinkingModeEnabled
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-charcoal-800',
-                isDisabled && 'opacity-50 cursor-not-allowed',
+                'rounded-lg px-2 py-1.5',
+                isDisabled && 'opacity-50',
               )}
+              title={isDisabled ? 'This model does not support Thinking Mode' : 'Set thinking budget'}
             >
-              <div className="flex items-center gap-2 font-medium">
-                <Brain size={12} />
-                <span>Thinking Mode</span>
+              <div className="flex items-center gap-2 mb-1.5">
+                <Brain size={12} className={thinkingModeEnabled ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'} />
+                <span className={cn(
+                  'text-[10px] font-medium',
+                  thinkingModeEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400',
+                )}>
+                  Think
+                </span>
               </div>
-              <div
-                className={cn(
-                  'h-3.5 w-6 rounded-full p-0.5 transition-colors',
-                  thinkingModeEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600',
-                )}
-              >
-                <div
-                  className={cn(
-                    'h-2.5 w-2.5 rounded-full bg-white shadow-xs transition-transform',
-                    thinkingModeEnabled ? 'translate-x-2.5' : 'translate-x-0',
-                  )}
-                />
+              <div className="flex items-center gap-1">
+                {budgetOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleBudgetSelect(opt.value)}
+                    disabled={isDisabled}
+                    className={cn(
+                      'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                      thinkingBudget === opt.value
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/40'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-800',
+                      isDisabled && 'cursor-not-allowed',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-            </button>
+            </div>
           );
         })()}
       </div>
