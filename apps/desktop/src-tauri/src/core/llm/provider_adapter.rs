@@ -1783,6 +1783,51 @@ impl ProviderAdapter for GoogleAdapter {
             });
         }
 
+
+        // ── Thinking config (Gemini Pro models only) ─────────────────
+        // gemini-3-pro-preview and gemini-2.5-pro support thinking_config
+        // in generationConfig. Flash models do not support thinking.
+        if request.model.contains("gemini-3-pro") || request.model.contains("gemini-2.5-pro") {
+            if let Some(thinking) = &request.thinking {
+                use super::ThinkingParameter;
+                let budget = match thinking {
+                    ThinkingParameter::Budget { budget_tokens, .. } => *budget_tokens,
+                    ThinkingParameter::Level { level, .. } => match level.as_str() {
+                        "low" => 2048,
+                        "medium" => 8192,
+                        "high" => 16384,
+                        "extreme" => 32768,
+                        _ => 8192,
+                    },
+                    ThinkingParameter::Enabled(true) | ThinkingParameter::Adaptive { .. } => 8192,
+                    ThinkingParameter::Enabled(false) => 0,
+                };
+                if budget > 0 {
+                    if let Some(gen_config) = google_request.get_mut("generationConfig") {
+                        gen_config["thinking_config"] = serde_json::json!({
+                            "thinking_budget": budget
+                        });
+                    }
+                }
+            } else if let Some(level) = request.thinking_level {
+                // Map 0-4 scale to token budget
+                let budget = match level {
+                    0 => 0,
+                    1 => 2048,
+                    2 => 8192,
+                    3 => 16384,
+                    _ => 32768,
+                };
+                if budget > 0 {
+                    if let Some(gen_config) = google_request.get_mut("generationConfig") {
+                        gen_config["thinking_config"] = serde_json::json!({
+                            "thinking_budget": budget
+                        });
+                    }
+                }
+            }
+        }
+
         Ok(google_request)
     }
 
