@@ -104,6 +104,27 @@ fn build_augmented_path() -> String {
         }
     }
 
+    // Include versioned Homebrew node installations (e.g. node@22, node@20).
+    // Tauri apps launched from Finder/Dock do NOT get the user's shell PATH, so
+    // `/opt/homebrew/opt/node@22/bin` is missing even though `brew link` may not
+    // have symlinked it into `/opt/homebrew/bin`.
+    for brew_root in &["/opt/homebrew/opt", "/usr/local/opt"] {
+        if let Ok(entries) = std::fs::read_dir(brew_root) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with("node") {
+                    let bin = format!("{}/bin", entry.path().display());
+                    if std::path::Path::new(&bin).is_dir()
+                        && !dirs.iter().any(|d| d == &bin)
+                    {
+                        dirs.push(bin);
+                    }
+                }
+            }
+        }
+    }
+
     // Include nvm directories dynamically.
     let home = std::env::var("HOME").unwrap_or_default();
     let nvm_dir = format!("{}/.nvm/versions/node", home);
