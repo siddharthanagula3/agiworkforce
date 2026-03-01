@@ -556,11 +556,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       vision: true, // Native vision in GPT-5 series
       json: true, // Structured outputs
       thinking: true, // Native reasoning mode (like o1)
-      computerUse: true, // OpenAI computer use (sandbox)
+      computerUse: false, // No computer use
       agentic: true, // Optimized for multi-step autonomous tasks
       imageGen: false, // Separate DALL-E model
       videoGen: false, // Separate Sora model
-      search: true, // Web browsing capability
+      search: false, // No native web search
       research: true, // Deep research mode
       codeExecution: true, // Code Interpreter sandbox
     },
@@ -750,11 +750,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       vision: true, // Native vision in GPT-5 series
       json: true, // Structured outputs
       thinking: true, // Advanced reasoning mode
-      computerUse: true, // Full computer use support
+      computerUse: false, // No computer use
       agentic: true, // Optimized for multi-step autonomous tasks
       imageGen: false, // Separate DALL-E model
       videoGen: false, // Separate Sora model
-      search: true, // Web browsing capability
+      search: false, // No native web search
       research: true, // Deep research mode
       codeExecution: true, // Code Interpreter sandbox
     },
@@ -833,7 +833,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       imageGen: false, // No image generation
       videoGen: false, // No video generation
       search: false, // No native web search (use tools)
-      research: false, // No built-in research (use tools)
+      research: true, // Deep research via multi-step tool chaining
       codeExecution: false, // No sandbox execution (use MCP tools)
     },
     benchmarks: {
@@ -869,7 +869,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       imageGen: false,
       videoGen: false,
       search: false,
-      research: false,
+      research: true, // Deep research via multi-step tool chaining
       codeExecution: false,
     },
     benchmarks: {
@@ -887,7 +887,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'claude-sonnet-4.5': {
     id: 'claude-sonnet-4.5',
-    apiModelId: 'claude-sonnet-4-5',
+    apiModelId: 'claude-sonnet-4-5-20250929',
     name: 'Claude 4.5 Sonnet',
     provider: 'anthropic',
     modelType: 'code',
@@ -905,7 +905,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       imageGen: false,
       videoGen: false,
       search: false, // No native web search
-      research: false, // No built-in research
+      research: true, // Deep research via multi-step tool chaining
       codeExecution: false, // No sandbox (use external tools)
     },
     benchmarks: {
@@ -923,7 +923,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'claude-haiku-4.5': {
     id: 'claude-haiku-4.5',
-    apiModelId: 'claude-haiku-4-5',
+    apiModelId: 'claude-haiku-4-5-20251001',
     name: 'Claude 4.5 Haiku',
     provider: 'anthropic',
     modelType: 'chat',
