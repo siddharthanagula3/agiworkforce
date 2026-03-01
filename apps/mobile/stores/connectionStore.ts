@@ -45,8 +45,17 @@ let signalingClient: SignalingClient | null = null;
 /** WebRTC peer connection for low-latency data channel */
 let peerConnection: RTCPeerConnection | null = null;
 
+/** RTCDataChannel type extracted from createDataChannel return type */
+type RTCDataChannelType = ReturnType<RTCPeerConnection['createDataChannel']>;
+
+/** SDP init dict for RTCSessionDescription constructor */
+interface RTCSessionDescriptionInit {
+  sdp: string;
+  type: string | null;
+}
+
 /** WebRTC data channel for control messages */
-let dataChannel: RTCDataChannel | null = null;
+let dataChannel: RTCDataChannelType | null = null;
 
 /**
  * Parse the pairing code from a QR string.
@@ -111,21 +120,22 @@ function setupPeerConnection(): void {
     ],
   };
 
-  peerConnection = new RTCPeerConnection(config) as any;
-  const pc = peerConnection as any;
+  const pc = new RTCPeerConnection(config);
+  peerConnection = pc;
 
   // Handle ICE candidates — send to peer via signaling
-  pc.addEventListener('icecandidate', (event: any) => {
+  pc.addEventListener('icecandidate', (event) => {
     if (event.candidate && signalingClient) {
       signalingClient.sendSignal('ice', {
-        candidate: event.candidate.toJSON(),
+        candidate: (event.candidate as RTCIceCandidate).toJSON(),
       });
     }
   });
 
   // Handle incoming data channels from the desktop
-  pc.addEventListener('datachannel', (event: any) => {
-    dataChannel = event.channel;
+  pc.addEventListener('datachannel', (event) => {
+    const channel = (event as unknown as { channel: RTCDataChannelType }).channel;
+    dataChannel = channel;
     if (dataChannel) {
       setupDataChannel(dataChannel);
     }
@@ -144,24 +154,24 @@ function setupPeerConnection(): void {
  * Configure data channel event handlers.
  */
 
-function setupDataChannel(channel: any): void {
-  channel.onopen = () => {
+function setupDataChannel(channel: RTCDataChannelType): void {
+  channel.addEventListener('open', () => {
     console.log('[companion] DataChannel open — low-latency control active');
-  };
+  });
 
-  channel.onmessage = (event: any) => {
+  channel.addEventListener('message', (event) => {
     try {
       const parsed = JSON.parse(String(event.data));
       handleControlMessage(parsed);
     } catch {
       console.warn('[companion] Failed to parse DataChannel message');
     }
-  };
+  });
 
-  channel.onclose = () => {
+  channel.addEventListener('close', () => {
     console.log('[companion] DataChannel closed');
     dataChannel = null;
-  };
+  });
 }
 
 /**
@@ -174,21 +184,21 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
   try {
     switch (kind) {
       case 'offer': {
-        const sdp = data['sdp'] as { type: string; sdp: string };
+        const sdp = data['sdp'] as RTCSessionDescriptionInit;
         if (sdp) {
-          await (peerConnection as any).setRemoteDescription(new RTCSessionDescription(sdp as any));
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
 
-          const answer = await (peerConnection as any).createAnswer();
+          const answer = await peerConnection.createAnswer();
 
-          await (peerConnection as any).setLocalDescription(answer);
+          await peerConnection.setLocalDescription(answer);
           signalingClient?.sendSignal('answer', { sdp: answer });
         }
         break;
       }
       case 'answer': {
-        const sdp = data['sdp'] as { type: string; sdp: string };
+        const sdp = data['sdp'] as RTCSessionDescriptionInit;
         if (sdp) {
-          await (peerConnection as any).setRemoteDescription(new RTCSessionDescription(sdp as any));
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
         }
         break;
       }

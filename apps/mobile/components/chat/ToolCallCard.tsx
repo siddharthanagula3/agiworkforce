@@ -120,6 +120,10 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         <Pressable
           onPress={toggleExpanded}
           className="flex-row items-center justify-between px-3 py-2.5"
+          accessible={true}
+          accessibilityLabel={`Tool call: ${toolCall.name}, status: ${badgeConfig.label}`}
+          accessibilityRole="button"
+          accessibilityHint={hasIO ? 'Double tap to expand details' : undefined}
         >
           <View className="flex-row items-center gap-2 flex-1 mr-2">
             <StatusIcon status={toolCall.status} />
