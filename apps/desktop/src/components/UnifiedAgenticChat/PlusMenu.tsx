@@ -1,0 +1,159 @@
+import { useCallback, useState } from 'react';
+import { Folder, FolderOpen, Plus, Paperclip, Link, Brain, Globe, Check } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
+import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
+import type { CaptureResult } from '../../types/capture';
+import { cn } from '../../lib/utils';
+import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../../stores/projectStore';
+
+interface PlusMenuProps {
+  disabled?: boolean;
+  onAttachClick: () => void;
+  onScreenCapture?: (result: CaptureResult) => void;
+  conversationId?: number;
+  webSearchEnabled: boolean;
+  onToggleWebSearch: () => void;
+}
+
+export function PlusMenu({
+  disabled,
+  onAttachClick,
+  onScreenCapture,
+  conversationId,
+  webSearchEnabled,
+  onToggleWebSearch,
+}: PlusMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Folder selection
+  const currentFolder = useProjectStore(selectCurrentFolder);
+  const setCurrentFolder = useProjectStore((s) => s.setCurrentFolder);
+  const folderDisplayName = currentFolder ? formatFolderPath(currentFolder) : null;
+
+  const handleSelectFolder = useCallback(async () => {
+    setIsOpen(false);
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Project Folder',
+      });
+      if (selected && typeof selected === 'string') {
+        setCurrentFolder(selected);
+      }
+    } catch {
+      // User cancelled — non-fatal
+    }
+  }, [setCurrentFolder]);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-full',
+            'bg-charcoal-800 text-white/70 hover:text-white hover:bg-charcoal-700',
+            'transition-colors duration-150',
+            'disabled:opacity-40 disabled:cursor-not-allowed',
+            'dark:bg-charcoal-800 dark:hover:bg-charcoal-700',
+          )}
+          aria-label="Attach or toggle modes"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className={cn(
+          'w-56 rounded-xl border border-white/10 p-1.5',
+          'bg-charcoal-800 shadow-xl',
+          'dark:bg-charcoal-800',
+        )}
+      >
+        {/* Attach files */}
+        <button
+          type="button"
+          onClick={() => {
+            onAttachClick();
+            setIsOpen(false);
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+        >
+          <Paperclip className="h-4 w-4 shrink-0" />
+          <span>Add files or photos</span>
+        </button>
+
+        {/* Paste screenshot */}
+        <ScreenCaptureButton
+          conversationId={conversationId}
+          onCaptureComplete={(result) => {
+            onScreenCapture?.(result);
+            setIsOpen(false);
+          }}
+          variant="ghost"
+          size="default"
+          mode="quick"
+          suppressToasts
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors justify-start h-auto font-normal"
+        />
+
+        {/* Select folder */}
+        <button
+          type="button"
+          onClick={handleSelectFolder}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+        >
+          {currentFolder ? (
+            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+          ) : (
+            <Folder className="h-4 w-4 shrink-0" />
+          )}
+          <span className="flex-1 text-left truncate">{folderDisplayName ?? 'Select folder'}</span>
+        </button>
+
+        {/* Separator */}
+        <div className="my-1.5 h-px bg-white/10" />
+
+        {/* Connectors */}
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+        >
+          <Link className="h-4 w-4 shrink-0" />
+          <span>Connectors</span>
+        </button>
+
+        {/* Skills */}
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+        >
+          <Brain className="h-4 w-4 shrink-0" />
+          <span>Skills</span>
+        </button>
+
+        {/* Separator */}
+        <div className="my-1.5 h-px bg-white/10" />
+
+        {/* Web search toggle */}
+        <button
+          type="button"
+          onClick={() => {
+            onToggleWebSearch();
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+        >
+          <Globe className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">Web search</span>
+          {webSearchEnabled && <Check className="h-4 w-4 shrink-0 text-teal-400" />}
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}

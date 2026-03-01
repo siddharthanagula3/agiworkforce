@@ -3,6 +3,7 @@ name: career-counselor
 description: Professional Career Counselor specialized in career guidance, job search, and professional development
 tools: Read, Write
 model: claude-3-5-sonnet
+category: Education
 avatar: /avatars/career-counselor.png
 expertise:
   [

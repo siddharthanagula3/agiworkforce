@@ -9,6 +9,8 @@
 //! - Tokens are stored in the settings_v2 database table
 //! - State parameter is used to prevent CSRF attacks
 
+use crate::core::mcp::{McpServerConfig, McpServersConfig};
+use crate::sys::commands::mcp::McpState;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use aes_gcm::{
     aead::{Aead, OsRng},
@@ -21,7 +23,153 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{Emitter, Manager};
 use tokio::sync::RwLock;
+
+// ============================================================================
+// Connector → MCP Server Registry
+// ============================================================================
+
+/// How a connector authenticates for its MCP server
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+enum ConnectorCredentialSource {
+    /// Uses OAuth token stored via mcp_oauth_tokens_{provider}
+    OAuth { provider: &'static str },
+    /// Uses API key stored via api_key_{connector_id}
+    ApiKey,
+    /// No credentials needed
+    None,
+}
+
+/// Maps a connector ID to its MCP server configuration
+#[derive(Debug, Clone)]
+struct ConnectorMcpMapping {
+    /// MCP server name (e.g., "connector-github")
+    server_name: &'static str,
+    /// Command to run (e.g., "npx")
+    command: &'static str,
+    /// Command arguments
+    args: &'static [&'static str],
+    /// Environment variable name(s) for credentials
+    env_keys: &'static [(&'static str, &'static str)], // (env_var_name, description)
+    /// How to get the credentials
+    credential_source: ConnectorCredentialSource,
+}
+
+/// Get the MCP mapping for a connector, if one exists
+fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> {
+    match connector_id {
+        "github" => Some(ConnectorMcpMapping {
+            server_name: "connector-github",
+            command: "npx",
+            args: &["-y", "@modelcontextprotocol/server-github"],
+            env_keys: &[("GITHUB_PERSONAL_ACCESS_TOKEN", "GitHub token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "github" },
+        }),
+        "slack" => Some(ConnectorMcpMapping {
+            server_name: "connector-slack",
+            command: "npx",
+            args: &["-y", "@modelcontextprotocol/server-slack"],
+            env_keys: &[("SLACK_BOT_TOKEN", "Slack bot token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "slack" },
+        }),
+        "google_drive" => Some(ConnectorMcpMapping {
+            server_name: "connector-google-drive",
+            command: "npx",
+            args: &["-y", "@modelcontextprotocol/server-gdrive"],
+            env_keys: &[("GDRIVE_OAUTH_TOKEN", "Google Drive OAuth token")],
+            credential_source: ConnectorCredentialSource::OAuth {
+                provider: "google",
+            },
+        }),
+        "figma" => Some(ConnectorMcpMapping {
+            server_name: "connector-figma",
+            command: "npx",
+            args: &["-y", "@figma/mcp-server-figma"],
+            env_keys: &[("FIGMA_ACCESS_TOKEN", "Figma access token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "figma" },
+        }),
+        "stripe" => Some(ConnectorMcpMapping {
+            server_name: "connector-stripe",
+            command: "npx",
+            args: &["-y", "@stripe/mcp", "--tools=all"],
+            env_keys: &[("STRIPE_SECRET_KEY", "Stripe secret key")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "vercel" => Some(ConnectorMcpMapping {
+            server_name: "connector-vercel",
+            command: "npx",
+            args: &["-y", "@vercel/mcp"],
+            env_keys: &[("VERCEL_TOKEN", "Vercel token")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "supabase" => Some(ConnectorMcpMapping {
+            server_name: "connector-supabase",
+            command: "npx",
+            args: &["-y", "supabase-mcp-server"],
+            env_keys: &[("SUPABASE_ACCESS_TOKEN", "Supabase access token")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "sentry" => Some(ConnectorMcpMapping {
+            server_name: "connector-sentry",
+            command: "npx",
+            args: &["-y", "@sentry/mcp-server"],
+            env_keys: &[("SENTRY_AUTH_TOKEN", "Sentry auth token")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "linear" => Some(ConnectorMcpMapping {
+            server_name: "connector-linear",
+            command: "npx",
+            args: &["-y", "mcp-linear"],
+            env_keys: &[("LINEAR_API_KEY", "Linear API key")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "notion" => Some(ConnectorMcpMapping {
+            server_name: "connector-notion",
+            command: "npx",
+            args: &["-y", "@notionhq/notion-mcp-server"],
+            env_keys: &[("OPENAPI_MCP_HEADERS", "Notion auth headers")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "notion" },
+        }),
+        "cloudflare" => Some(ConnectorMcpMapping {
+            server_name: "connector-cloudflare",
+            command: "npx",
+            args: &["-y", "@cloudflare/mcp-server-cloudflare"],
+            env_keys: &[("CLOUDFLARE_API_TOKEN", "Cloudflare API token")],
+            credential_source: ConnectorCredentialSource::ApiKey,
+        }),
+        "gmail" => Some(ConnectorMcpMapping {
+            server_name: "connector-gmail",
+            command: "npx",
+            args: &["-y", "@anthropic/mcp-server-gmail"],
+            env_keys: &[("GMAIL_OAUTH_TOKEN", "Gmail OAuth token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
+        }),
+        "google_calendar" => Some(ConnectorMcpMapping {
+            server_name: "connector-google-calendar",
+            command: "npx",
+            args: &["-y", "@anthropic/mcp-server-google-calendar"],
+            env_keys: &[("GOOGLE_CALENDAR_OAUTH_TOKEN", "Google Calendar OAuth token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
+        }),
+        "outlook" => Some(ConnectorMcpMapping {
+            server_name: "connector-outlook",
+            command: "npx",
+            args: &["-y", "@anthropic/mcp-server-outlook"],
+            env_keys: &[("OUTLOOK_OAUTH_TOKEN", "Outlook OAuth token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "microsoft" },
+        }),
+        "jira" => Some(ConnectorMcpMapping {
+            server_name: "connector-jira",
+            command: "npx",
+            args: &["-y", "@anthropic/mcp-server-jira"],
+            env_keys: &[("JIRA_OAUTH_TOKEN", "Jira OAuth token")],
+            credential_source: ConnectorCredentialSource::OAuth { provider: "atlassian" },
+        }),
+        _ => None,
+    }
+}
 
 // ============================================================================
 // Types
@@ -32,24 +180,40 @@ use tokio::sync::RwLock;
 #[serde(rename_all = "lowercase")]
 pub enum McpOAuthProvider {
     GitHub,
-    GoogleDrive,
+    Google,
     Slack,
+    Notion,
+    Figma,
+    Microsoft,
+    Atlassian,
 }
 
 impl McpOAuthProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "github",
-            McpOAuthProvider::GoogleDrive => "google_drive",
+            McpOAuthProvider::Google => "google",
             McpOAuthProvider::Slack => "slack",
+            McpOAuthProvider::Notion => "notion",
+            McpOAuthProvider::Figma => "figma",
+            McpOAuthProvider::Microsoft => "microsoft",
+            McpOAuthProvider::Atlassian => "atlassian",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "github" => Some(McpOAuthProvider::GitHub),
-            "google_drive" | "googledrive" | "google-drive" => Some(McpOAuthProvider::GoogleDrive),
+            "google" | "google_drive" | "googledrive" | "google-drive"
+            | "gmail" | "google_calendar" | "google_sheets" | "google_docs"
+            | "bigquery" | "google_analytics" => Some(McpOAuthProvider::Google),
             "slack" => Some(McpOAuthProvider::Slack),
+            "notion" => Some(McpOAuthProvider::Notion),
+            "figma" => Some(McpOAuthProvider::Figma),
+            "outlook" | "onedrive" | "microsoft_teams" | "microsoft"
+            | "sharepoint" | "dynamics_365" => Some(McpOAuthProvider::Microsoft),
+            "jira" | "confluence" | "atlassian" | "bitbucket"
+            | "trello" => Some(McpOAuthProvider::Atlassian),
             _ => None,
         }
     }
@@ -58,8 +222,12 @@ impl McpOAuthProvider {
     pub fn auth_url(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "https://github.com/login/oauth/authorize",
-            McpOAuthProvider::GoogleDrive => "https://accounts.google.com/o/oauth2/v2/auth",
+            McpOAuthProvider::Google => "https://accounts.google.com/o/oauth2/v2/auth",
             McpOAuthProvider::Slack => "https://slack.com/oauth/v2/authorize",
+            McpOAuthProvider::Notion => "https://api.notion.com/v1/oauth/authorize",
+            McpOAuthProvider::Figma => "https://www.figma.com/oauth",
+            McpOAuthProvider::Microsoft => "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+            McpOAuthProvider::Atlassian => "https://auth.atlassian.com/authorize",
         }
     }
 
@@ -67,8 +235,12 @@ impl McpOAuthProvider {
     pub fn token_url(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "https://github.com/login/oauth/access_token",
-            McpOAuthProvider::GoogleDrive => "https://oauth2.googleapis.com/token",
+            McpOAuthProvider::Google => "https://oauth2.googleapis.com/token",
             McpOAuthProvider::Slack => "https://slack.com/api/oauth.v2.access",
+            McpOAuthProvider::Notion => "https://api.notion.com/v1/oauth/token",
+            McpOAuthProvider::Figma => "https://api.figma.com/v1/oauth/token",
+            McpOAuthProvider::Microsoft => "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            McpOAuthProvider::Atlassian => "https://auth.atlassian.com/oauth/token",
         }
     }
 
@@ -76,13 +248,32 @@ impl McpOAuthProvider {
     pub fn default_scopes(&self) -> Vec<&'static str> {
         match self {
             McpOAuthProvider::GitHub => vec!["repo", "read:user", "read:org"],
-            McpOAuthProvider::GoogleDrive => vec![
+            McpOAuthProvider::Google => vec![
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/calendar.readonly",
+                "https://www.googleapis.com/auth/calendar.events",
                 "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/drive.file",
+                "https://www.googleapis.com/auth/spreadsheets",
+                "openid", "email", "profile",
             ],
             McpOAuthProvider::Slack => {
                 vec!["channels:read", "chat:write", "users:read", "files:read"]
             }
+            McpOAuthProvider::Notion => vec![],
+            McpOAuthProvider::Figma => vec!["files:read"],
+            McpOAuthProvider::Microsoft => vec![
+                "openid", "profile", "email", "offline_access",
+                "Mail.Read", "Mail.Send",
+                "Calendars.Read", "Calendars.ReadWrite",
+                "Files.Read.All",
+            ],
+            McpOAuthProvider::Atlassian => vec![
+                "read:jira-work", "write:jira-work",
+                "read:confluence-content.all",
+                "offline_access",
+            ],
         }
     }
 
@@ -90,8 +281,12 @@ impl McpOAuthProvider {
     pub fn user_info_url(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "https://api.github.com/user",
-            McpOAuthProvider::GoogleDrive => "https://www.googleapis.com/oauth2/v3/userinfo",
+            McpOAuthProvider::Google => "https://www.googleapis.com/oauth2/v3/userinfo",
             McpOAuthProvider::Slack => "https://slack.com/api/users.identity",
+            McpOAuthProvider::Notion => "https://api.notion.com/v1/users/me",
+            McpOAuthProvider::Figma => "https://api.figma.com/v1/me",
+            McpOAuthProvider::Microsoft => "https://graph.microsoft.com/v1.0/me",
+            McpOAuthProvider::Atlassian => "https://api.atlassian.com/me",
         }
     }
 
@@ -99,8 +294,12 @@ impl McpOAuthProvider {
     pub fn client_id_env(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "GITHUB_CLIENT_ID",
-            McpOAuthProvider::GoogleDrive => "GOOGLE_CLIENT_ID",
+            McpOAuthProvider::Google => "GOOGLE_CLIENT_ID",
             McpOAuthProvider::Slack => "SLACK_CLIENT_ID",
+            McpOAuthProvider::Notion => "NOTION_CLIENT_ID",
+            McpOAuthProvider::Figma => "FIGMA_CLIENT_ID",
+            McpOAuthProvider::Microsoft => "MICROSOFT_CLIENT_ID",
+            McpOAuthProvider::Atlassian => "ATLASSIAN_CLIENT_ID",
         }
     }
 
@@ -108,8 +307,12 @@ impl McpOAuthProvider {
     pub fn client_secret_env(&self) -> &'static str {
         match self {
             McpOAuthProvider::GitHub => "GITHUB_CLIENT_SECRET",
-            McpOAuthProvider::GoogleDrive => "GOOGLE_CLIENT_SECRET",
+            McpOAuthProvider::Google => "GOOGLE_CLIENT_SECRET",
             McpOAuthProvider::Slack => "SLACK_CLIENT_SECRET",
+            McpOAuthProvider::Notion => "NOTION_CLIENT_SECRET",
+            McpOAuthProvider::Figma => "FIGMA_CLIENT_SECRET",
+            McpOAuthProvider::Microsoft => "MICROSOFT_CLIENT_SECRET",
+            McpOAuthProvider::Atlassian => "ATLASSIAN_CLIENT_SECRET",
         }
     }
 
@@ -393,7 +596,25 @@ fn retrieve_tokens(provider: McpOAuthProvider) -> Result<Option<StoredTokens>, S
             let tokens = decrypt_tokens(&encrypted)?;
             Ok(Some(tokens))
         }
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            // Legacy key fallback: google_drive -> google migration
+            if provider == McpOAuthProvider::Google {
+                let legacy_key = "mcp_oauth_tokens_google_drive";
+                let legacy_result: Result<String, rusqlite::Error> = conn.query_row(
+                    "SELECT value FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+                    rusqlite::params![legacy_key],
+                    |row| row.get(0),
+                );
+                match legacy_result {
+                    Ok(encrypted) => {
+                        let tokens = decrypt_tokens(&encrypted)?;
+                        return Ok(Some(tokens));
+                    }
+                    Err(_) => return Ok(None),
+                }
+            }
+            Ok(None)
+        }
         Err(e) => Err(format!("Failed to retrieve tokens: {}", e)),
     }
 }
@@ -536,7 +757,7 @@ pub async fn mcp_oauth_start(
 
     // Add provider-specific parameters
     match oauth_provider {
-        McpOAuthProvider::GoogleDrive => {
+        McpOAuthProvider::Google => {
             auth_url.push_str("&access_type=offline&prompt=consent");
         }
         McpOAuthProvider::Slack => {
@@ -750,18 +971,56 @@ pub async fn mcp_oauth_status(provider: String) -> Result<OAuthConnectionStatus,
     }
 }
 
-/// Disconnect a provider by removing stored tokens
+/// Disconnect a provider by removing stored tokens and MCP server
 #[tauri::command]
-pub async fn mcp_oauth_disconnect(provider: String) -> Result<(), String> {
-    let oauth_provider = McpOAuthProvider::from_str(&provider)
-        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+pub async fn mcp_oauth_disconnect(
+    provider: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    tracing::info!("Disconnecting connector: {}", provider);
 
-    delete_tokens(oauth_provider)?;
+    // Remove OAuth tokens if this is an OAuth provider
+    if let Some(oauth_provider) = McpOAuthProvider::from_str(&provider) {
+        delete_tokens(oauth_provider)?;
+    }
 
-    tracing::info!(
-        "OAuth disconnected for provider: {}",
-        oauth_provider.as_str()
-    );
+    // Also delete any stored API key
+    if let Ok(db_path) = get_db_path() {
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            let api_key_key = format!("api_key_{}", provider);
+            let _ = conn.execute(
+                "DELETE FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![api_key_key],
+            );
+        }
+    }
+
+    // Disconnect and remove MCP server if one exists
+    if let Some(mapping) = get_connector_mcp_mapping(&provider) {
+        let server_name = mapping.server_name.to_string();
+        if let Some(mcp_state) = app_handle.try_state::<McpState>() {
+            // Disconnect the running server (ignore errors if not connected)
+            let _ = mcp_state.client.disconnect_server(&server_name).await;
+
+            // Remove from persistent config
+            {
+                let mut config = mcp_state.config.lock();
+                config.mcp_servers.remove(&server_name);
+                if let Ok(config_path) = McpServersConfig::default_config_path() {
+                    let config_clone = config.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = config_clone.save_to_file(&config_path).await {
+                            tracing::warn!("Failed to save MCP config after disconnect: {}", e);
+                        }
+                    });
+                }
+            }
+
+            let _ = app_handle.emit("mcp:tools_updated", ());
+        }
+    }
+
+    tracing::info!("Disconnected connector: {}", provider);
     Ok(())
 }
 
@@ -1005,7 +1264,7 @@ async fn fetch_user_info(
             email: data["email"].as_str().map(|s| s.to_string()),
             avatar_url: data["avatar_url"].as_str().map(|s| s.to_string()),
         }),
-        McpOAuthProvider::GoogleDrive => Ok(UserInfo {
+        McpOAuthProvider::Google | McpOAuthProvider::Microsoft => Ok(UserInfo {
             id: data["sub"].as_str().unwrap_or_default().to_string(),
             name: data["name"].as_str().map(|s| s.to_string()),
             email: data["email"].as_str().map(|s| s.to_string()),
@@ -1020,7 +1279,347 @@ async fn fetch_user_info(
                 avatar_url: user["image_72"].as_str().map(|s| s.to_string()),
             })
         }
+        _ => Ok(UserInfo {
+            id: data["id"].as_str()
+                .or(data["account_id"].as_str())
+                .unwrap_or_default().to_string(),
+            name: data["name"].as_str()
+                .or(data["display_name"].as_str())
+                .map(|s| s.to_string()),
+            email: data["email"].as_str().map(|s| s.to_string()),
+            avatar_url: data["avatar_url"].as_str()
+                .or(data["img"].as_str())
+                .or(data["picture"].as_str())
+                .map(|s| s.to_string()),
+        }),
     }
+}
+
+/// Lists all connector provider IDs that have stored OAuth tokens or API keys
+#[tauri::command]
+pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
+    let db_path = get_db_path()?;
+
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let mut providers = Vec::new();
+
+    let known_providers = [
+        "gmail",
+        "google_calendar",
+        "google_drive",
+        "google_sheets",
+        "notion",
+        "figma",
+        "slack",
+        "canva",
+        "atlassian",
+        "hubspot",
+        "linear",
+        "github",
+        "vercel",
+        "stripe",
+        "supabase",
+        "context7",
+        "outlook",
+        "intercom",
+        "teams",
+        "discord",
+        "asana",
+        "monday",
+        "clickup",
+        "jira",
+        "airtable",
+        "sentry",
+        "cloudflare",
+        "netlify",
+        "onedrive",
+        "dropbox",
+        "box",
+        "confluence",
+        "trello",
+        "salesforce",
+        "zendesk",
+        "twilio",
+        "sendgrid",
+        "mailchimp",
+        "openai",
+        "anthropic",
+        "youtube",
+        "twitter",
+        "linkedin",
+        "facebook",
+        "instagram",
+        "pinterest",
+        "reddit",
+        "spotify",
+        "zoom",
+        "webex",
+    ];
+
+    for provider in &known_providers {
+        // Check OAuth token
+        let token_key = format!("mcp_oauth_tokens_{}", provider);
+        let has_token: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![token_key],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        if has_token {
+            providers.push(provider.to_string());
+            continue;
+        }
+
+        // Check API key
+        let api_key = format!("api_key_{}", provider);
+        let has_api_key: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![api_key],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        if has_api_key {
+            providers.push(provider.to_string());
+        }
+    }
+
+    Ok(providers)
+}
+
+/// Connects a connector by spawning its MCP server with stored credentials
+#[tauri::command]
+pub async fn mcp_connect_connector(
+    connector_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    tracing::info!("Connecting connector MCP server: {}", connector_id);
+
+    let mapping = match get_connector_mcp_mapping(&connector_id) {
+        Some(m) => m,
+        None => {
+            // No MCP mapping for this connector — mark connected without MCP
+            tracing::info!(
+                "No MCP server mapping for connector '{}', skipping MCP setup",
+                connector_id
+            );
+            let _ = app_handle.emit("connector:connected", &connector_id);
+            return Ok(());
+        }
+    };
+
+    // Resolve credentials
+    let mut env = HashMap::new();
+    match &mapping.credential_source {
+        ConnectorCredentialSource::OAuth { provider } => {
+            // Try to get OAuth token from stored tokens
+            let oauth_provider_str = *provider;
+            match retrieve_tokens_by_id(oauth_provider_str) {
+                Ok(Some(tokens)) => {
+                    // For Notion, the MCP server expects headers in JSON format
+                    if connector_id == "notion" {
+                        let headers = format!(
+                            r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
+                            tokens.access_token
+                        );
+                        env.insert(mapping.env_keys[0].0.to_string(), headers);
+                    } else {
+                        env.insert(
+                            mapping.env_keys[0].0.to_string(),
+                            tokens.access_token,
+                        );
+                    }
+                }
+                Ok(None) => {
+                    return Err(format!(
+                        "No OAuth tokens found for '{}'. Please authenticate first.",
+                        oauth_provider_str
+                    ));
+                }
+                Err(e) => {
+                    return Err(format!(
+                        "Failed to retrieve OAuth tokens for '{}': {}",
+                        oauth_provider_str, e
+                    ));
+                }
+            }
+        }
+        ConnectorCredentialSource::ApiKey => {
+            // Retrieve API key from settings_v2
+            let api_key = retrieve_api_key(&connector_id)?;
+            for (env_var, _desc) in mapping.env_keys {
+                env.insert(env_var.to_string(), api_key.clone());
+            }
+        }
+        ConnectorCredentialSource::None => {
+            // No credentials needed
+        }
+    }
+
+    // Build the MCP server config
+    let server_config = McpServerConfig {
+        command: mapping.command.to_string(),
+        args: mapping.args.iter().map(|s| s.to_string()).collect(),
+        env,
+        enabled: true,
+        transport: None,
+    };
+
+    // Get MCP state and connect
+    let mcp_state = app_handle
+        .try_state::<McpState>()
+        .ok_or_else(|| "MCP state not initialized".to_string())?;
+
+    let server_name = mapping.server_name.to_string();
+
+    // Add to persistent config so it auto-reconnects on restart
+    {
+        let mut config = mcp_state.config.lock();
+        config
+            .mcp_servers
+            .insert(server_name.clone(), server_config.clone());
+        // Save config to disk (best effort)
+        if let Ok(config_path) = McpServersConfig::default_config_path() {
+            let config_clone = config.clone();
+            tokio::spawn(async move {
+                if let Err(e) = config_clone.save_to_file(&config_path).await {
+                    tracing::warn!("Failed to save MCP config: {}", e);
+                }
+            });
+        }
+    }
+
+    // Connect the MCP server
+    mcp_state
+        .client
+        .connect_server(server_name.clone(), server_config)
+        .await
+        .map_err(|e| format!("Failed to connect MCP server '{}': {}", server_name, e))?;
+
+    tracing::info!(
+        "Successfully connected connector '{}' as MCP server '{}'",
+        connector_id,
+        server_name
+    );
+
+    // Emit events
+    let _ = app_handle.emit("connector:connected", &connector_id);
+    let _ = app_handle.emit("mcp:tools_updated", ());
+
+    Ok(())
+}
+
+/// Save an API key for a provider (encrypted)
+#[tauri::command]
+pub async fn save_api_key(provider: String, key: String) -> Result<(), String> {
+    let db_path = get_db_path()?;
+
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Encrypt the API key before storing
+    let encrypted = encrypt_credential(&key)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let setting_key = format!("api_key_{}", provider);
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, 'security', 1, ?3, ?3)",
+        rusqlite::params![setting_key, encrypted, now],
+    )
+    .map_err(|e| format!("Failed to store API key: {}", e))?;
+
+    tracing::info!("API key stored for provider: {}", provider);
+    Ok(())
+}
+
+// ============================================================================
+// Connector Credential Helpers
+// ============================================================================
+
+/// Retrieve stored tokens by connector/provider ID string
+/// This wraps retrieve_tokens for connectors that don't map to McpOAuthProvider enum
+fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, String> {
+    // Try the enum-based path first
+    if let Some(oauth_provider) = McpOAuthProvider::from_str(provider_id) {
+        return retrieve_tokens(oauth_provider);
+    }
+
+    // Fallback: try direct DB lookup for providers not in the enum
+    let db_path = get_db_path()?;
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let key = format!("mcp_oauth_tokens_{}", provider_id);
+    let result: Result<String, rusqlite::Error> = conn.query_row(
+        "SELECT value FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+        rusqlite::params![key],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(encrypted) => {
+            let tokens = decrypt_tokens(&encrypted)?;
+            Ok(Some(tokens))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("Failed to retrieve tokens: {}", e)),
+    }
+}
+
+/// Retrieve an API key for a connector from the database
+fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
+    let db_path = get_db_path()?;
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let setting_key = format!("api_key_{}", connector_id);
+    let encrypted: String = conn
+        .query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![setting_key],
+            |row| row.get(0),
+        )
+        .map_err(|_| {
+            format!(
+                "No API key found for connector '{}'. Please provide an API key first.",
+                connector_id
+            )
+        })?;
+
+    // Decrypt using the same mechanism
+    decrypt_credential_value(&encrypted)
+}
+
+/// Decrypt a credential value stored in settings_v2
+fn decrypt_credential_value(encrypted: &str) -> Result<String, String> {
+    let key = derive_key(KeyPurpose::McpCredentials);
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    let combined = general_purpose::STANDARD
+        .decode(encrypted)
+        .map_err(|e| format!("Failed to decode: {}", e))?;
+
+    if combined.len() < 12 {
+        return Err("Invalid encrypted data".to_string());
+    }
+
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+
+    String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {}", e))
 }
 
 #[cfg(test)]
@@ -1035,11 +1634,15 @@ mod tests {
         );
         assert_eq!(
             McpOAuthProvider::from_str("google_drive"),
-            Some(McpOAuthProvider::GoogleDrive)
+            Some(McpOAuthProvider::Google)
         );
         assert_eq!(
             McpOAuthProvider::from_str("googledrive"),
-            Some(McpOAuthProvider::GoogleDrive)
+            Some(McpOAuthProvider::Google)
+        );
+        assert_eq!(
+            McpOAuthProvider::from_str("gmail"),
+            Some(McpOAuthProvider::Google)
         );
         assert_eq!(
             McpOAuthProvider::from_str("slack"),
@@ -1055,7 +1658,7 @@ mod tests {
             "https://github.com/login/oauth/authorize"
         );
         assert_eq!(
-            McpOAuthProvider::GoogleDrive.auth_url(),
+            McpOAuthProvider::Google.auth_url(),
             "https://accounts.google.com/o/oauth2/v2/auth"
         );
         assert_eq!(
@@ -1067,10 +1670,10 @@ mod tests {
     #[test]
     fn test_provider_scopes() {
         assert!(McpOAuthProvider::GitHub.default_scopes().contains(&"repo"));
-        assert!(McpOAuthProvider::GoogleDrive
+        assert!(McpOAuthProvider::Google
             .default_scopes()
             .iter()
-            .any(|s| s.contains("drive")));
+            .any(|s| s.contains("google")));
         assert!(McpOAuthProvider::Slack
             .default_scopes()
             .contains(&"chat:write"));
@@ -1103,8 +1706,8 @@ mod tests {
             "agiworkforce://oauth/mcp/github"
         );
         assert_eq!(
-            McpOAuthProvider::GoogleDrive.redirect_uri(),
-            "agiworkforce://oauth/mcp/google_drive"
+            McpOAuthProvider::Google.redirect_uri(),
+            "agiworkforce://oauth/mcp/google"
         );
         assert_eq!(
             McpOAuthProvider::Slack.redirect_uri(),

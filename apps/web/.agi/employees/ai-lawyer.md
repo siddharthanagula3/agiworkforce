@@ -19,6 +19,7 @@ expertise:
     'patent',
     'trademark',
   ]
+category: Legal
 ---
 
 # AI Legal Advisor

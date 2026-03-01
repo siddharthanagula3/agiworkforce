@@ -2,7 +2,27 @@
 name: frontend-engineer
 description: Frontend specialist building modern, responsive UI components with React, TypeScript, and Tailwind
 tools: Read, Grep, Glob, Edit, Write
-model: inherit
+model: claude-sonnet-4-6
+category: Technical
+expertise:
+  [
+    'frontend',
+    'react',
+    'javascript',
+    'typescript',
+    'css',
+    'html',
+    'ui',
+    'component',
+    'nextjs',
+    'vite',
+    'tailwind',
+    'responsive',
+    'web development',
+    'spa',
+    'redux',
+    'hooks',
+  ]
 ---
 
 # Frontend Engineer AI Employee

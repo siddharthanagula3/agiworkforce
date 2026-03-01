@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Monitor, Square, Play } from 'lucide-react';
 import {
   useComputerUseStore,
@@ -15,8 +15,12 @@ export function ComputerUseMonitor() {
   const isActive = useComputerUseStore(selectIsActive);
   const sessionId = useComputerUseStore(selectSessionId);
   const error = useComputerUseStore(selectComputerUseError);
-  const startSession = useComputerUseStore((s) => s.startSession);
-  const stopSession = useComputerUseStore((s) => s.stopSession);
+  const startSession = useCallback(() => {
+    useComputerUseStore.getState().startSession();
+  }, []);
+  const stopSession = useCallback(() => {
+    useComputerUseStore.getState().stopSession();
+  }, []);
 
   // Subscribe to Tauri events
   useEffect(() => {
