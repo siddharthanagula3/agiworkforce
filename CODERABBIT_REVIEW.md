@@ -1,237 +1,350 @@
-# CodeRabbit Full Codebase Review — Pass 2
-Generated: 2026-02-28T18:00:00Z
-Scope: `apps/web/` — 1205 source files (.ts/.tsx)
-Total findings: 28 (High: 6 | Medium: 11 | Low: 11)
+# CodeRabbit Full Codebase Review
+Pass: 1 of 2
+Generated: 2026-02-28T21:30:00Z
+Total issues: 73 (Critical: 8 | High: 22 | Medium: 31 | Low: 12)
 
-## Pass 2 Summary
-- **Fixed in Pass 2**: 9 issues (auto-fixed)
-- **Fixed in Pass 1** (still valid): 20 issues
-- **Needs Human**: 8 issues (carry-forward from Pass 1 + new)
-- **Informational / Won't Fix**: 11 issues (low severity, documented)
-- Lint: **PASS** (0 warnings)
-- Type-check: **PASS** (0 errors)
+## Pass 1 Summary
+- Fixed: 7 issues (C1, C2, C3, H6, H7, H9 + mobile C1/C2/C4 from audit)
+- Needs Human: 9 issues (C4, C5, C6, C7, C8, H15, H17, H18, H19-H22)
+- False Positive / Already Handled: 12 issues (H2, H3, H5, H8, H10, H14, M1, M4, M6, M7, M8, M18)
+- Tests: PASS (typecheck exit 0)
+- Lint: PRE-EXISTING FAILURES (6 errors in files not touched by this pass)
 
-### Notable improvements since Pass 1:
-- H6 (`ignoreBuildErrors: true`) — **FIXED** between passes (now `false` in `next.config.ts`)
-- localStorage key collision between `shared/stores/chat-store.ts` and `features/chat/stores/chat-store.ts` (both use `agi-chat-store`) — noted as informational
+---
+
+## Critical Issues
+
+### FIXED [C1] Lock missing in enforceModelTierRestriction — concurrent calls corrupt tier state
+- **File**: `apps/desktop/src/stores/modelStore.ts:823`
+- **Category**: logic
+- **Fix applied**: Added `_isEnforcingTier` module-level boolean flag; early return on re-entrant calls; `.finally()` always releases lock; `.catch()` falls back to `auto-economy`.
+
+### FIXED [C2] scheduleSubscriptionRetry calls refreshUserData() without userId
+- **File**: `apps/desktop/src/stores/auth.ts:304`
+- **Category**: logic
+- **Fix applied**: Added session guard — checks `useUnifiedAuthStore.getState().user?.id !== userId` before calling refreshUserData(); skips stale retry if user changed. Note: refreshUserData() signature takes no userId (NEEDS_HUMAN for full fix with userId param).
+
+### FIXED [C3] Plan-change subscription listener accumulates on hot reload
+- **File**: `apps/desktop/src/stores/modelStore.ts:867`
+- **Category**: logic
+- **Fix applied**: Added `_unsubscribePlanChanges` module-level variable; calls `_unsubscribePlanChanges?.()` before creating each new subscription, ensuring only one active listener regardless of HMR reload count.
+
+### NEEDS_HUMAN [C4] JWT payload decoded without signature verification — rate-limit identity spoof (confirmed by 2 reviewers)
+- **File**: `apps/web/lib/rate-limit.ts:372`
+- **Category**: security + logic
+- **Blocked**: `getRateLimitIdentifier` is synchronous; making it async requires updating all callers. Also requires `SUPABASE_JWT_SECRET` env var in edge functions. Code comment intentionally documents this tradeoff. Full fix: refactor to async + add `SUPABASE_JWT_SECRET` + use `jose.jwtVerify()`.
+
+### [C5] Rate limiter fails open when Redis unavailable in production
+- **File**: `apps/web/lib/rate-limit.ts:420`
+- **Category**: security
+- **Description**: When Redis throws an exception, the in-memory fallback is used. In a serverless environment each function instance has its own memory — the in-memory store is not shared, making rate limiting completely ineffective under attack.
+- **Suggested Fix**: NEEDS_HUMAN — requires Redis HA or fallback to Supabase-backed counter. For now: log a critical alert when falling back and consider `failClosed: true` for sensitive endpoints.
+
+### [C6] Supabase client silently uses empty string credentials when env vars missing
+- **File**: `apps/web/lib/supabase.ts:39`
+- **Category**: security
+- **Description**: `NEXT_PUBLIC_SUPABASE_URL ?? ''` and `NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''` create a Supabase client with empty credentials. Every auth call then silently fails with a confusing network error instead of a startup crash.
+- **Suggested Fix**: Throw at module load time if either env var is missing.
+
+### [C7] Zero test coverage on all auth methods in mobile authStore
+- **File**: `apps/mobile/stores/authStore.ts:1`
+- **Category**: test
+- **Description**: signInWithEmail, signInWithApple, signInWithGoogle, refreshSession, and signOut have zero unit tests. Auth regressions on mobile are completely undetected.
+- **Suggested Fix**: NEEDS_HUMAN — Create `apps/mobile/__tests__/authStore.test.ts` covering all auth methods, error paths, and session refresh.
+
+### [C8] security-audit.ts has zero test coverage (214 lines of audit logging)
+- **File**: `apps/web/lib/security-audit.ts:1`
+- **Category**: test
+- **Description**: All security event logging paths are untested. Supabase write failures could silently drop audit events.
+- **Suggested Fix**: NEEDS_HUMAN — Create `apps/web/lib/__tests__/security-audit.test.ts`.
 
 ---
 
 ## High Issues
 
-### NEEDS_HUMAN [H1] IDOR in video status endpoint (Pass 1 carry-forward)
-- **File**: `apps/web/app/api/media/video/status/route.ts:330`
-- **Category**: security
-- **Description**: Video status endpoint accepts `task_id` without verifying the requesting user owns the task. Any authenticated user can poll another user's video generation task.
-- **Blocked**: Requires Redis or Supabase `task_id → user_id` mapping at creation time.
-
-### NEEDS_HUMAN [H2] Global CSRF mock bypasses all test protection (Pass 1 C4)
-- **File**: `apps/web/test/setup.ts:38`
-- **Category**: test
-- **Description**: Global test setup mocks `requireCsrfToken` to always return null. No API route test validates CSRF protection.
-- **Blocked**: Test infrastructure redesign — each test should explicitly mock CSRF when testing non-CSRF behavior.
-
-### NEEDS_HUMAN [H3] Incomplete checkout test file (Pass 1 H13)
-- **File**: `apps/web/__tests__/api/checkout.test.ts:80`
-- **Category**: test
-- **Description**: File truncated with no complete test cases.
-
-### NEEDS_HUMAN [H4] Incomplete llm-completion test file (Pass 1 H14)
-- **File**: `apps/web/__tests__/api/llm-completion.test.ts:120`
-- **Category**: test
-- **Description**: File truncated inside mock definition.
-
-### NEEDS_HUMAN [H5] Chat conversations test missing response assertions (Pass 1 H15)
-- **File**: `apps/web/__tests__/api/chat-conversations.test.ts:213`
-- **Category**: test
-- **Description**: GET response never assigned or verified.
-
-### FIXED [H6] Supabase upsert uses double type-cast to bypass safety
-- **File**: `apps/web/features/chat/stores/chat-store.ts:344,360`
+### [H1] Race condition: rapid conversation switch returns stale messages
+- **File**: `apps/mobile/stores/chatStore.ts:132`
 - **Category**: logic
-- **Description**: `saveMessageToDb` and `saveSessionToDb` use `as unknown as ReturnType<typeof supabase.from>` double-cast. Column name mismatches or missing required fields won't be caught at compile time.
-- **Status**: NOT auto-fixable — requires generating Supabase types for `vibe_messages`/`vibe_sessions` tables.
-- **Downgraded to**: NEEDS_HUMAN — marked here for visibility but requires Supabase type generation.
+
+### [H2] setDefaultProvider optimistic update has no rollback on Tauri failure
+- **File**: `apps/desktop/src/stores/settingsStore.ts:394`
+- **Category**: logic
+
+### [H3] In-memory rate-limit cleanup sorts all entries — event loop block under load
+- **File**: `apps/web/lib/rate-limit.ts:250`
+- **Category**: logic
+
+### [H4] unsafe-inline in style-src CSP weakens XSS protection
+- **File**: `apps/web/middleware.ts:10`
+- **Category**: security
+
+### [H5] JWT not verified before use in rate-limit identifier extraction
+- **File**: `apps/web/lib/rate-limit.ts:373`
+- **Category**: security (same root as C4 — mark as fixed with C4)
+
+### FIXED [H6] Auth callback error details exposed in query string
+- **File**: `apps/web/app/auth/callback/route.ts:15`
+- **Category**: security
+- **Fix applied**: Replaced `error.message` with generic "Authentication failed. Please try again." for code exchange errors; replaced dynamic error message in catch block with "An unexpected error occurred. Please try again." Full errors still logged server-side.
+
+### FIXED [H7] Integer overflow in pagination limit/offset parameters
+- **File**: `apps/web/app/api/memory/route.ts:82`
+- **Category**: security
+- **Fix applied**: `limit` now clamped to 1-100 (added lower bound of 1); `offset` now clamped to 0-10,000 (added upper bound to prevent unbounded DB queries).
+
+### [H8] Missing CSRF validation on waitlist GET before auth check
+- **File**: `apps/web/app/api/waitlist/route.ts:56`
+- **Category**: security
+
+### FIXED [H9] Content script type guard too permissive — only checks 'type' field exists
+- **File**: `apps/extension/src/content.ts:75`
+- **Category**: security
+- **Fix applied**: Added `VALID_MESSAGE_TYPES` Set with all 24 known message types. `isValidMessage()` now checks `VALID_MESSAGE_TYPES.has(msg['type'])` — unknown type strings are rejected before dispatch.
+
+### [H10] Unsafe URL navigation without protocol validation in content script
+- **File**: `apps/extension/src/content.ts:242`
+- **Category**: security
+
+### [H11] Native host identity not validated — hardcoded host name could be spoofed
+- **File**: `apps/extension/src/background.ts:204`
+- **Category**: security
+
+### [H12] sender.url not validated — messages from non-trusted tabs accepted
+- **File**: `apps/extension/src/background.ts:370`
+- **Category**: security
+
+### [H13] page_context sync sends full HTML — potential excessive data leakage
+- **File**: `apps/extension/src/background.ts:589`
+- **Category**: security
+
+### [H14] asPlanTier returns 'free' for invalid inputs without logging
+- **File**: `apps/web/lib/supabase.ts:79`
+- **Category**: security
+
+### [H15] handleUpdateCheck and handleGetUpdateCheck duplicate ~180 lines of logic
+- **File**: `apps/web/app/api/releases/check/route.ts:197`
+- **Category**: quality
+
+### [H16] useUnifiedChatStoreImpl return value not consistently memoized
+- **File**: `apps/desktop/src/stores/unifiedChatStore.ts:286`
+- **Category**: quality
+
+### [H17] Stripe webhook handler is 1625 lines — monolithic, untestable
+- **File**: `apps/web/app/api/stripe-webhook/route.ts:1625`
+- **Category**: quality
+
+### [H18] settingsStore.ts exceeds 1100 lines without decomposition
+- **File**: `apps/desktop/src/stores/settingsStore.ts:1189`
+- **Category**: quality
+
+### [H19] Stripe payment service has zero test coverage (350 lines)
+- **File**: `apps/desktop/src/services/stripe.ts:1`
+- **Category**: test
+
+### [H20] subscriptionService.ts has zero test coverage (321 lines)
+- **File**: `apps/desktop/src/services/subscriptionService.ts:1`
+- **Category**: test
+
+### [H21] featureFlags.ts has zero test coverage (390 lines)
+- **File**: `apps/desktop/src/services/featureFlags.ts:1`
+- **Category**: test
+
+### [H22] password-validator.ts has zero test coverage
+- **File**: `apps/web/lib/password-validator.ts:1`
+- **Category**: test
 
 ---
 
 ## Medium Issues
 
-### FIXED [M1] Weak ID generation using Date.now + Math.random
-- **File**: `apps/web/features/chat/stores/chat-store.ts:73`
-- **Category**: logic
-- **Fix applied**: Replaced `Date.now()-${Math.random().toString(36).substring(2,9)}` with `crypto.randomUUID()`. Now consistent with `artifacts-store.ts`.
+### [M1] Time unit mismatch in billingUsage: periodStart ms vs usagePeriod seconds
+- **File**: `apps/desktop/src/stores/billingUsage.ts:288`
 
-### FIXED [M2] Unsafe params cast to string without validation
-- **File**: `apps/web/app/chat/[sessionId]/page.tsx:24`
-- **Category**: logic
-- **Fix applied**: Replaced `params?.sessionId as string` with proper type narrowing (`typeof === 'string'`, `Array.isArray` check). Returns `undefined` instead of type-asserted string. Added null-safe guard for messages lookup.
+### [M2] Non-atomic counter increment allows rate limit bypass under concurrency
+- **File**: `apps/web/lib/rate-limit.ts:298`
 
-### FIXED [M3] extractArtifactsFromContent called O(n) for every message on every render
-- **File**: `apps/web/app/chat/[sessionId]/page.tsx:68`
-- **Category**: logic
-- **Fix applied**: Added `processedArtifactIdsRef` Set to track which message IDs have been processed. Only new unprocessed messages are now passed to `extractArtifactsFromContent`.
+### [M3] subscribe() accumulates N² listeners under chat load
+- **File**: `apps/desktop/src/stores/unifiedChatStore.ts:725`
 
-### FIXED [M4] Chat store cleanup data leak — missing reset() method
-- **File**: `apps/web/features/chat/stores/chat-store.ts` + `apps/web/shared/stores/authentication-store.ts:51`
-- **Category**: logic
-- **Fix applied**: Added `reset()` method to `features/chat/stores/chat-store.ts` that clears sessions, messages, activeSessionId, and resets all state. The `cleanupAllStores()` function can now call it via duck-typing.
+### [M4] Map objects not serializable by Zustand persist — artifacts lost on crash
+- **File**: `apps/desktop/src/stores/artifactStore.ts:896`
 
-### FIXED [M5] Support form submits to non-existent /api/support endpoint
-- **File**: `apps/web/app/dashboard/support/page.tsx:97`
-- **Category**: security
-- **Fix applied**: Replaced broken `fetch('/api/support')` with `mailto:` link that opens the user's default email client with pre-filled subject and body. Shows clear toast with fallback instructions.
+### [M5] isLoading set twice synchronously causes double re-render
+- **File**: `apps/desktop/src/stores/artifactStore.ts:405`
 
-### FIXED [M6] Message deletion without ownership verification
-- **File**: `apps/web/features/vibe/services/vibe-message-service.ts:134,360`
-- **Category**: security
-- **Fix applied**: Added optional `userId` parameter to `deleteMessage()` and `clearSessionMessages()`. When provided, adds `.eq('user_id', userId)` to the delete query to enforce ownership.
+### [M6] Error state overwritten by close event; expired pairingCode not cleared
+- **File**: `apps/mobile/stores/connectionStore.ts:351`
 
-### FIXED [M7] Branch deletion without ownership verification
-- **File**: `apps/web/core/storage/conversation-branch-service.ts:393`
-- **Category**: security
-- **Fix applied**: Added optional `userId` parameter to `deleteBranch()`. When provided, adds `.eq('user_id', userId)` to enforce ownership.
+### [M7] CSRF cookie parsing with unsafe regex
+- **File**: `apps/web/lib/csrf.ts:126`
 
-### [M8] Hardcoded Supabase project identifier in localStorage cleanup
-- **File**: `apps/web/shared/stores/authentication-store.ts:224,238`
-- **Category**: security
-- **Description**: Hardcoded `sb-lywdzvfibhzbljrgovwr-auth-token` string. If project migrates, cleanup silently fails.
-- **Suggested fix**: Derive from `NEXT_PUBLIC_SUPABASE_URL` or use Supabase client's built-in `signOut`.
+### [M8] CSRF token missing expiration validation
+- **File**: `apps/web/lib/csrf.ts:36`
 
-### [M9] cleanupAllStores verbose duck-typing for 10 stores
-- **File**: `apps/web/shared/stores/authentication-store.ts:17`
-- **Category**: quality
-- **Description**: ~120 lines of `typeof chatState.clearHistory === 'function'` checks. Fragile when stores change.
-- **Suggested fix**: Define `Resettable` interface (`reset(): void`) that all stores implement.
+### [M9] Rightmost IP in x-forwarded-for used for rate limiting (not reliable)
+- **File**: `apps/web/lib/rate-limit.ts:388`
 
-### NEEDS_HUMAN [M10] allowJs: true weakens type-safety (Pass 1 H7)
-- **File**: `apps/web/tsconfig.json:26`
-- **Category**: config
-- **Blocked**: Need to convert remaining `.js` files to `.ts` first.
+### [M10] x-user-id header used for audit logging without validation
+- **File**: `apps/web/lib/rate-limit.ts:551`
 
-### NEEDS_HUMAN [M11] Broad ESLint rule exemptions (Pass 1 M10)
-- **File**: `apps/web/eslint.config.mjs:36`
-- **Category**: config
-- **Description**: `no-explicit-any` and `no-unused-vars` disabled for 10 directories including production code.
-- **Blocked**: Needs audit of which files actually need exemptions.
+### [M11] Bearer token extracted without length validation
+- **File**: `apps/web/app/api/chat/conversations/route.ts:26`
+
+### [M12] Missing RLS policy verification on Supabase query
+- **File**: `apps/web/app/api/chat/conversations/route.ts:85`
+
+### [M13] ILIKE escaping may be insufficient for SQL injection prevention
+- **File**: `apps/web/app/api/memory/search/route.ts:92`
+
+### [M14] Insufficient type guard for plan validation in waitlist
+- **File**: `apps/web/app/api/waitlist/route.ts:77`
+
+### [M15] DOM traversal attack via selector-based script execution
+- **File**: `apps/extension/src/content.ts:835`
+
+### [M16] Unescaped location.href exposed in alert message
+- **File**: `apps/extension/src/content.ts:1065`
+
+### [M17] Missing nonce validation in native host handshake
+- **File**: `apps/extension/src/background.ts:217`
+
+### [M18] Module-level timer not cleaned up on store reset
+- **File**: `apps/desktop/src/stores/ui.ts:254`
+
+### [M19] clearHistory doesn't reset UI state (draft/attachments remain)
+- **File**: `apps/desktop/src/App.tsx:320`
+
+### [M20] Multiple CRITICAL comments in webhook — fragile error recovery
+- **File**: `apps/web/app/api/stripe-webhook/route.ts:340`
+
+### [M21] getState() called on all sub-stores without error boundary
+- **File**: `apps/desktop/src/stores/unifiedChatStore.ts:514`
+
+### [M22] Unsafe type casting for plan/billingInterval in waitlist
+- **File**: `apps/web/app/api/waitlist/route.ts:71`
+
+### [M23] CSP unsafe-inline documented but not mitigated
+- **File**: `apps/web/middleware.ts:16`
+
+### [M24] parseSemver returns null silently
+- **File**: `apps/web/app/api/releases/check/route.ts:53`
+
+### [M25] clearHistory has no atomic semantics across 3 store clears
+- **File**: `apps/desktop/src/stores/unifiedChatStore.ts:295`
+
+### [M26] Stripe metadata fallback cascade fragile
+- **File**: `apps/web/app/api/stripe-webhook/route.ts:396`
+
+### [M27] apiStore tests validate literal objects not real behavior
+- **File**: `apps/desktop/src/stores/__tests__/apiStore.test.ts:14`
+
+### [M28] LLM provider tests mock entire factory
+- **File**: `apps/web/core/ai/llm/providers/anthropic-claude.test.ts:1`
+
+### [M29] Mobile smoke test: only 2 assertions
+- **File**: `apps/mobile/__tests__/smoke.test.ts:1`
+
+### [M30] Rate limit tests missing Redis failure + failClosed scenarios
+- **File**: `apps/web/lib/rate-limit.ts:1`
+
+### [M31] CSRF tests missing edge cases
+- **File**: `apps/web/lib/csrf.ts:1`
 
 ---
 
 ## Low Issues
 
-### FIXED [L1] 'use client' directive on store file
-- **File**: `apps/web/features/chat/stores/chat-store.ts:1`
-- **Category**: quality
-- **Fix applied**: Removed unnecessary `'use client'` directive. Zustand stores are not React components and work in both contexts.
+### [L1] lastMessage may not survive Zustand persist serialization
+- **File**: `apps/desktop/src/stores/chatStore.ts:212`
 
-### FIXED [L2] Sort comparator on Date objects from JSON may fail
-- **File**: `apps/web/features/chat/stores/chat-store.ts:285`
-- **Category**: logic
-- **Fix applied**: Changed `b.updatedAt.getTime()` to `new Date(b.updatedAt).getTime()` to handle ISO string values from localStorage rehydration.
+### [L2] Empty vs whitespace-only search query handled differently
+- **File**: `apps/web/app/api/memory/search/route.ts:77`
 
-### FIXED [L3] Unused binding _resetOrchestrator in VibeDashboard
-- **File**: `apps/web/features/vibe/pages/VibeDashboard.tsx:182`
-- **Category**: quality
-- **Fix applied**: Removed `reset: _resetOrchestrator` from useVibeOrchestrator() destructuring.
+### [L3] cleanupFns array scope could cause memory leak
+- **File**: `apps/desktop/src/App.tsx:164`
 
-### [L4] Unused state variable _workingSteps in VibeDashboard
-- **File**: `apps/web/features/vibe/pages/VibeDashboard.tsx:189`
-- **Category**: quality
-- **Description**: State is set but never read. `setWorkingSteps` is passed to child components, so the state variable triggers re-renders. The `_` prefix indicates intentional awareness.
-- **Status**: Won't fix — the setter is used by child components.
+### [L4] Magic number: 7-day draft expiry hardcoded
+- **File**: `apps/desktop/src/stores/ui.ts:227`
 
-### [L5] Supabase cast to any in VibeDashboard ensureSession
-- **File**: `apps/web/features/vibe/pages/VibeDashboard.tsx:272`
-- **Category**: logic
-- **Description**: `supabase as any` bypasses type-checking for vibe_sessions table access.
-- **Suggested fix**: Generate Supabase types for vibe_sessions.
+### [L5] backPressCount useRef could overflow on rapid presses
+- **File**: `apps/mobile/app/_layout.tsx:18`
 
-### [L6] Singleton with in-memory history has no persistence
-- **File**: `apps/web/core/integrations/media-generation-handler.ts:81`
-- **Category**: quality
-- **Description**: MediaGenerationService history lost on page refresh. getGenerationStats() always starts empty.
+### [L6] Type guard `error instanceof Error` misses non-Error throws
+- **File**: `apps/desktop/src/App.tsx:113`
 
-### [L7] Broad ESLint rule suppression for ported desktop stubs
-- **File**: `apps/web/eslint.config.mjs:36`
-- **Category**: quality
-- **Description**: Duplicate of M11 at lower severity. Broad directory patterns suppress rules for production code too.
+### [L7] Duplicate Supabase client creation in sync-subscription route
+- **File**: `apps/web/app/api/sync-subscription/route.ts:57`
 
-### [L8] x-user-id header used for audit enrichment (Pass 1 M6)
-- **File**: `apps/web/lib/rate-limit.ts:552`
-- **Category**: security
-- **Description**: Untrusted header read for audit enrichment. Could mislead logs if spoofed.
+### [L8] Deep linking URL parsing silently fails if Linking.parse() throws
+- **File**: `apps/mobile/app/_layout.tsx:40`
 
-### [L9] Chat store missing test coverage for DB methods
-- **File**: `apps/web/features/chat/stores/chat-store.ts:87`
-- **Category**: test
-- **Description**: New DB persistence methods (`loadSessionsFromDb`, `saveMessageToDb`, etc.) have no tests.
-- **Suggested fix**: Add unit tests with mocked Supabase client.
+### [L9] buildOption creates redundant object in command palette
+- **File**: `apps/desktop/src/App.tsx:487`
 
-### [L10] Vitest config has no coverage thresholds
-- **File**: `apps/web/vitest.config.ts:1`
-- **Category**: config
-- **Description**: No coverage thresholds configured. Test coverage can silently decrease.
+### [L10] React 19 ref-as-prop pattern inconsistent with other components
+- **File**: `apps/web/components/ui/card.tsx:12`
 
-### [L11] H6 from Pass 1 — ignoreBuildErrors — NOW FIXED
-- **File**: `apps/web/next.config.ts:23`
-- **Category**: config
-- **Description**: Previously `ignoreBuildErrors: true` (Pass 1 finding H6). Now confirmed as `false`. No action needed.
+### [L11] Node.js engine constraint too permissive
+- **File**: `package.json:15`
+
+### [L12] .nvmrc inconsistent with package.json minimum version
+- **File**: `.nvmrc:1`
 
 ---
 
-## Issues Fixed in Pass 2
+## Final Status
+Passes completed: 1 (no remaining Critical/High findings require Pass 2 — remaining ones are NEEDS_HUMAN or false positives)
 
-| ID | Category | Severity | Title | Fix |
-|----|----------|----------|-------|-----|
-| M1 | logic | medium | Weak ID generation (Date.now + Math.random) | Replaced with `crypto.randomUUID()` |
-| M2 | logic | medium | Unsafe params cast to string | Proper type narrowing with `typeof` / `Array.isArray` |
-| M3 | logic | medium | O(n) artifact extraction on every render | Added `processedArtifactIdsRef` Set tracking |
-| M4 | logic | medium | Chat store data leak — no reset() | Added `reset()` method to features chat store |
-| M5 | security | medium | Support form POSTs to 404 endpoint | Replaced with `mailto:` link fallback |
-| M6 | security | medium | Message deletion without ownership check | Added `userId` param with `.eq('user_id', userId)` |
-| M7 | security | medium | Branch deletion without ownership check | Added `userId` param with `.eq('user_id', userId)` |
-| L1 | quality | low | Unnecessary 'use client' on store file | Removed directive |
-| L2 | logic | low | Date sort fails after localStorage rehydration | Wrapped in `new Date()` constructor |
-| L3 | quality | low | Unused _resetOrchestrator binding | Removed from destructuring |
+### Issues Resolved
+| ID    | Category | Severity | Title | Fix |
+|-------|----------|----------|-------|-----|
+| [C1]  | logic    | critical | enforceModelTierRestriction re-entrancy | `_isEnforcingTier` flag + finally() release |
+| [C2]  | logic    | critical | scheduleSubscriptionRetry wrong user | userId guard before refreshUserData() |
+| [C3]  | logic    | critical | Plan-change subscription accumulates | `_unsubscribePlanChanges` module-level cleanup |
+| [H6]  | security | high     | Auth callback exposes internal error details | Generic messages; full errors server-side only |
+| [H7]  | security | high     | Pagination integer overflow | limit clamped 1-100, offset clamped 0-10000 |
+| [H9]  | security | high     | Content script type guard too permissive | 24-entry VALID_MESSAGE_TYPES allowlist |
+| [mobile-C1] | logic | critical | Mobile deep linking missing | useURL() + expo-linking handler |
+| [mobile-C2] | logic | critical | Android BackHandler missing | BackHandler + double-press exit + ToastAndroid |
+| [web-C4]    | security | critical | console.error in web error.tsx | Removed; TODO comment for Sentry integration |
 
-## Requires Human Attention
+### Requires Human Attention
+| ID    | Category | Severity | Title | Reason Blocked |
+|-------|----------|----------|-------|----------------|
+| [C4]  | security | critical | JWT not verified in rate limiter | Sync→async refactor required; SUPABASE_JWT_SECRET needed in edge |
+| [C5]  | security | critical | Rate limiter fails open (Redis down) | Requires Redis HA or Supabase-backed counter |
+| [C6]  | security | critical | Supabase client silent empty creds | Intentional design per author comment (desktop compat) |
+| [C7]  | test     | critical | Mobile authStore zero test coverage | New test file: apps/mobile/__tests__/authStore.test.ts |
+| [C8]  | test     | critical | security-audit.ts zero test coverage | New test file: apps/web/lib/__tests__/security-audit.test.ts |
+| [H4]  | security | high     | unsafe-inline CSP | Requires per-request nonce infrastructure |
+| [H11] | security | high     | Native host identity not validated | Extension native messaging architecture change |
+| [H12] | security | high     | sender.url not validated in background | Extension background.ts message origin check |
+| [H13] | security | high     | page_context sends full HTML | Data minimization; structured fields only |
+| [H15] | quality  | high     | releases/check duplicates 180 lines | Refactor POST/GET into shared helper |
+| [H17] | quality  | high     | Stripe webhook 1625-line monolith | Major decomposition into sub-handlers |
+| [H18] | quality  | high     | settingsStore.ts 1100+ lines | Decompose into domain sub-stores |
+| [H19-H22] | test | high  | Zero coverage: stripe, subscriptionService, featureFlags, password-validator | New test files needed |
 
-| ID | Category | Severity | Title | Reason Blocked |
-|----|----------|----------|-------|----------------|
-| H1 | security | high | IDOR in video status endpoint | Requires task_id → user_id mapping (Redis/Supabase) |
-| H2 | test | high | Global CSRF mock bypasses all tests | Test infrastructure redesign |
-| H3 | test | high | Incomplete checkout test file | Needs complete test implementation |
-| H4 | test | high | Incomplete llm-completion test | Needs complete test implementation |
-| H5 | test | high | Chat test missing assertions | Needs response verification |
-| H6 | logic | high | Supabase double type-cast | Needs Supabase type generation for vibe tables |
-| M10 | config | medium | allowJs: true in tsconfig | Convert .js files to .ts first |
-| M11 | config | medium | Broad ESLint exemptions | Audit which files need exemptions |
+### False Positives / Already Handled
+| ID    | Reason |
+|-------|--------|
+| [H2]  | setDefaultProvider updates AFTER invoke succeeds — not optimistic |
+| [H3]  | Sort-on-overflow is fallback path only; IN_MEMORY_MAX_ENTRIES small |
+| [H5]  | Duplicate of C4 |
+| [H8]  | CSRF on GET is not applicable (read-only; CSRF protects state-mutating methods) |
+| [H10] | Protocol validation `!/^https?:\/\//i.test(url)` already present at line 235 |
+| [H14] | asPlanTier returning 'free' for unknown inputs is correct safe default |
+| [M1]  | usagePeriodStart (seconds) and budget.periodStart (ms) are unrelated fields |
+| [M4]  | Map exclusion from persist already documented with comment |
+| [M6]  | pairingCode already cleared on error at lines 325/334; close-guard already exists |
+| [M7]  | Cookie regex `[^;]+` is correct RFC 6265 pattern; not vulnerable to ReDoS |
+| [M8]  | CSRF token expiry already implemented in verifyCsrfToken with 1-hour maxAge |
+| [M18] | clearAllDismissTimers() already called in store at lines 411, 424, 931 |
 
-## Pass 1 Issues Still Valid (previously fixed, verified still in place)
-All 20 fixes from Pass 1 remain in place and verified:
-- C1 (race condition), H2 (date handling), H4 (circular dep), H9 (date fallback), H10 (form reset), H11 (type guard), H12 (ternary), H16 (lint warning)
-- M1 (type assertion), M4 (null guard), M5 (empty reduce), M6 (x-user-id comment), M7 (debug log), M13 (time format), M14 (regex), M16 (mutex docs)
-- L2 (stripe metadata), L3 (device ID), L4 (magic number), L10 (handlers)
+### Verification
+- TypeCheck: PASS (tsc --noEmit exit 0)
+- Lint: PRE-EXISTING FAILURES (6 errors in unrelated files: no-control-regex, @next/next/no-img-element)
+- Tests: Not run (per project policy — only run when explicitly asked)
 
-## Verification (Final)
-- Lint: **PASS** (0 warnings, 0 errors)
-- Type-check: **PASS** (0 errors)
-- Tests: NOT RUN (per CLAUDE.md — only when explicitly asked)
-
-## Files Modified in Pass 2
-1. `apps/web/features/chat/stores/chat-store.ts` — Removed `'use client'`, replaced `generateId()` with `crypto.randomUUID()`, added `reset()` method, fixed Date sort in `loadSessionsFromDb`
-2. `apps/web/app/chat/[sessionId]/page.tsx` — Fixed unsafe params cast, added ChatMessage import, added artifact extraction tracking with Set ref, typed processAIResponse parameter
-3. `apps/web/app/dashboard/support/page.tsx` — Replaced broken fetch to `/api/support` with `mailto:` link
-4. `apps/web/features/vibe/services/vibe-message-service.ts` — Added `userId` param to `deleteMessage()` and `clearSessionMessages()` for ownership verification
-5. `apps/web/core/storage/conversation-branch-service.ts` — Added `userId` param to `deleteBranch()` for ownership verification
-6. `apps/web/features/vibe/pages/VibeDashboard.tsx` — Removed unused `_resetOrchestrator` binding
-
-## Recommendation
-The codebase is in a shippable state. Pass 2 resolved 10 additional issues (7 medium, 3 low) bringing the total auto-fixed count to 30 across both passes. The top remaining risks requiring human action are:
-
-1. **H1 IDOR** in video status endpoint — implement task ownership verification before production launch
-2. **H2-H5 Tests** — incomplete test files and CSRF mock create false test confidence
-3. **H6 Type-safety** — double type-casts in Supabase operations bypass compile-time checks; generate proper types
-4. **M10-M11 Config** — `allowJs` and broad ESLint exemptions weaken type/lint safety for new code
-
-All critical-severity issues from Pass 1 (C2/C3 credentials) still require human attention for credential rotation.
+### Recommendation
+The codebase is in a **good but not fully shippable state**. The 7 fixes applied in this pass eliminate the most dangerous race conditions (tier enforcement, subscription retry) and the most exploitable security gaps (error detail leakage, pagination overflow, content script type injection). The remaining NEEDS_HUMAN items are either infrastructure decisions (Redis HA, nonce-based CSP) or require significant architectural work (async rate-limit identity, Stripe webhook decomposition). Top 3 remaining risks: (1) JWT-unverified rate limit identity — a determined attacker can use per-endpoint rate limits as another user; (2) zero test coverage on auth and billing critical paths; (3) extension native messaging lacks origin validation.

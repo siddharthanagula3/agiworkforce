@@ -674,7 +674,7 @@ export class AnthropicProvider {
    * Get models with computer use capability
    */
   static getComputerUseModels(): string[] {
-    return ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20251101'];
+    return ['claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20251101'];
   }
 
   /**
@@ -682,6 +682,10 @@ export class AnthropicProvider {
    */
   static getModelAliases(): Record<string, string> {
     return {
+      // Claude 4.6 (latest)
+      'claude-sonnet-4-6': 'claude-sonnet-4-6',
+      'claude-opus-4-6': 'claude-opus-4-6',
+      // Claude 4.5
       'claude-opus-4-5': 'claude-opus-4-5-20251101',
       'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929',
       'claude-haiku-4-5': 'claude-haiku-4-5-20251001',
