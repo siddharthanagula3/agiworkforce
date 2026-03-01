@@ -2,7 +2,21 @@
 name: architect
 description: Software architect designing system structure, data flow, and technical decisions
 tools: Read, Grep, Glob
-model: inherit
+model: claude-sonnet-4-6
+category: Technical
+expertise:
+  [
+    'software architecture',
+    'system design',
+    'microservices',
+    'scalability',
+    'cloud',
+    'distributed systems',
+    'design patterns',
+    'api design',
+    'infrastructure',
+    'solution architecture',
+  ]
 ---
 
 # Software Architect AI Employee

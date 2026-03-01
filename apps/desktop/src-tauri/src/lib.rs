@@ -1598,6 +1598,9 @@ pub fn run() {
             crate::sys::commands::mcp_oauth_disconnect,
             crate::sys::commands::mcp_oauth_refresh,
             crate::sys::commands::mcp_oauth_set_credentials,
+            crate::sys::commands::mcp_list_connected_providers,
+            crate::sys::commands::mcp_connect_connector,
+            crate::sys::commands::save_api_key,
 
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,

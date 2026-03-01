@@ -15,19 +15,11 @@ import { UserProfile } from './UserProfile';
 
 interface SidebarProps {
   className?: string;
-  onOpenSettings?: () => void;
-  onOpenBilling?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
-export function Sidebar({
-  className,
-  onOpenSettings,
-  onOpenBilling,
-  collapsed = false,
-  onToggleCollapse,
-}: SidebarProps) {
+export function Sidebar({ className, collapsed = false, onToggleCollapse }: SidebarProps) {
   // Use exported selectors from useChatStore for optimal re-render performance
   // Migration: Changed from useUnifiedChatStore to useChatStore (modular store)
   const conversations = useChatStore(selectConversations);
@@ -183,11 +175,7 @@ export function Sidebar({
       </ScrollArea>
 
       <div className="border-t border-white/10 px-3 py-3">
-        <UserProfile
-          onSettingsClick={onOpenSettings}
-          onBillingClick={onOpenBilling}
-          collapsed={collapsed}
-        />
+        <UserProfile collapsed={collapsed} />
       </div>
     </aside>
   );

@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Monitor } from 'lucide-react';
 import {
   useComputerUseStore,
   selectCurrentScreenshot,
   selectIsActive,
-  selectScreenDimensions,
+  selectScreenWidth,
+  selectScreenHeight,
   selectLastClickPosition,
 } from '../../stores/computerUseStore';
 import { cn } from '../../lib/utils';
@@ -12,11 +13,15 @@ import { cn } from '../../lib/utils';
 export function ScreenPreview() {
   const screenshot = useComputerUseStore(selectCurrentScreenshot);
   const isActive = useComputerUseStore(selectIsActive);
-  const dimensions = useComputerUseStore(selectScreenDimensions);
+  const screenWidth = useComputerUseStore(selectScreenWidth);
+  const screenHeight = useComputerUseStore(selectScreenHeight);
   const lastClick = useComputerUseStore(selectLastClickPosition);
-  const captureScreen = useComputerUseStore((s) => s.captureScreen);
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const captureScreen = useCallback(() => {
+    useComputerUseStore.getState().captureScreen();
+  }, []);
 
   // Auto-refresh every 2s when session is active
   useEffect(() => {
@@ -46,7 +51,10 @@ export function ScreenPreview() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden rounded-lg border border-zinc-800 bg-black">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full overflow-hidden rounded-lg border border-zinc-800 bg-black"
+    >
       <img
         src={`data:image/png;base64,${screenshot}`}
         alt="Screen capture"
@@ -55,12 +63,12 @@ export function ScreenPreview() {
       />
 
       {/* Last click position overlay */}
-      {lastClick && dimensions.width && dimensions.height && containerRef.current && (
+      {lastClick && screenWidth && screenHeight && containerRef.current && (
         <ClickIndicator
           x={lastClick[0]}
           y={lastClick[1]}
-          screenWidth={dimensions.width}
-          screenHeight={dimensions.height}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
           containerWidth={containerRef.current.clientWidth}
           containerHeight={containerRef.current.clientHeight}
         />
@@ -68,9 +76,9 @@ export function ScreenPreview() {
 
       {/* Resolution + status badge */}
       <div className="absolute bottom-2 right-2 flex items-center gap-2">
-        {dimensions.width && dimensions.height && (
+        {screenWidth && screenHeight && (
           <span className="px-2 py-0.5 bg-black/70 text-zinc-400 text-xs rounded-md backdrop-blur-sm">
-            {dimensions.width} x {dimensions.height}
+            {screenWidth} x {screenHeight}
           </span>
         )}
         {isActive && (

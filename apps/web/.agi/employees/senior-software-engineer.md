@@ -4,6 +4,7 @@ description: Senior Software Engineer with 10+ years experience in full-stack de
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: claude-sonnet-4-5-thinking
 avatar: /avatars/software-engineer.png
+category: Technical
 expertise:
   ['software engineering', 'architecture', 'code review', 'debugging', 'performance optimization']
 ---

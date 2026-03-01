@@ -2,7 +2,8 @@
 name: home-advisor
 description: Expert Home Advisor specialized in home improvement, DIY projects, repairs, and home maintenance
 tools: Read, Write
-model: gpt-4o
+model: claude-sonnet-4-6
+category: Lifestyle
 avatar: /avatars/home-advisor.png
 expertise:
   [

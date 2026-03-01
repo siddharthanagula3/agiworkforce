@@ -2,8 +2,9 @@
 name: tech-support-specialist
 description: Expert Tech Support Specialist for computer problems, software issues, and technology troubleshooting
 tools: Read, Write, Bash
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/tech-support.png
+category: Technical
 expertise:
   [
     'tech support',

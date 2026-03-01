@@ -432,14 +432,7 @@ export const UnifiedAgenticChat: React.FC<{
   layout?: 'default' | 'compact' | 'immersive';
   defaultSidecarOpen?: boolean;
   onSendMessage?: (content: string, options: SendOptions) => Promise<void>;
-  onOpenSettings?: () => void;
-}> = ({
-  className = '',
-  layout = 'default',
-  defaultSidecarOpen = true,
-  onSendMessage,
-  onOpenSettings,
-}) => {
+}> = ({ className = '', layout = 'default', defaultSidecarOpen = true, onSendMessage }) => {
   // CHT-008 fix: Consolidated selectors to reduce subscription overhead
   // Using useShallow for object selections prevents unnecessary re-renders
   const {
@@ -2695,7 +2688,7 @@ export const UnifiedAgenticChat: React.FC<{
       <div
         className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
       >
-        <AppLayout onOpenSettings={onOpenSettings}>
+        <AppLayout>
           {activeView === 'chat' ? (
             <>
               {/* Header bar with background task indicator */}

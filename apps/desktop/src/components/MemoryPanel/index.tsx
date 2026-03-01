@@ -505,9 +505,10 @@ function DeleteConfirmDialog({ entry, onConfirm, onCancel }: DeleteConfirmDialog
 export interface MemoryPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  embedded?: boolean;
 }
 
-export function MemoryPanel({ isOpen, onClose }: MemoryPanelProps) {
+export function MemoryPanel({ isOpen, onClose, embedded }: MemoryPanelProps) {
   const memories = useMemoryStore(selectMemories);
   const isLoading = useMemoryStore(selectMemoryLoading);
   const loadAll = useMemoryStore((state) => state.loadAll);
@@ -602,6 +603,85 @@ export function MemoryPanel({ isOpen, onClose }: MemoryPanelProps) {
 
   // Show loading skeletons
   const showSkeletons = isLoading && memories.length === 0;
+
+  // Embedded mode: render content directly without overlay/backdrop
+  if (embedded && isOpen) {
+    return <div className="flex flex-col h-full bg-zinc-950">{renderMemoryContent()}</div>;
+  }
+
+  function renderMemoryContent() {
+    return (
+      <>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-teal-500/15 flex items-center justify-center">
+              <Brain className="h-4.5 w-4.5 text-teal-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-zinc-100">Memory</h2>
+              <p className="text-[11px] text-zinc-500">
+                {memories.length} {memories.length === 1 ? 'memory' : 'memories'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setAddDialogOpen(true)}
+              size="sm"
+              className="bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1.5 h-8 px-3 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </Button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 py-3 border-b border-zinc-800/60 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search memories..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+            />
+          </div>
+        </div>
+
+        {/* Memory list */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {showSkeletons ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 bg-zinc-800/50 rounded-lg animate-pulse" />
+            ))
+          ) : displayedMemories.length === 0 ? (
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              {searchQuery ? 'No matches found' : 'No memories yet'}
+            </div>
+          ) : (
+            displayedMemories.map((entry) => (
+              <MemoryCard
+                key={`${entry.category}-${entry.topic}`}
+                entry={entry}
+                onDelete={setDeleteTarget}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Dialogs */}
+        <AddMemoryDialog
+          isOpen={addDialogOpen}
+          onClose={() => setAddDialogOpen(false)}
+          onSave={handleSave}
+          isSaving={isSaving}
+        />
+      </>
+    );
+  }
 
   return (
     <AnimatePresence>
