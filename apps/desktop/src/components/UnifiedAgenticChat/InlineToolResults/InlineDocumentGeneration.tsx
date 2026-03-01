@@ -1,4 +1,4 @@
-import { Copy, Download, FileText, FolderOpen, Loader2 } from 'lucide-react';
+import { Copy, Download, File, FileSpreadsheet, FileText, FolderOpen, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../../../lib/tauri-mock';
@@ -41,6 +41,26 @@ function inferFilename(path?: string, extension = 'txt'): string {
   const name = normalized.split('/').pop();
   if (!name || !name.trim()) return `generated-document.${extension}`;
   return name;
+}
+
+function getDocTypeInfo(ext: string): { icon: React.ReactNode; color: string; label: string } {
+  switch (ext) {
+    case 'pdf':
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-red-400', label: 'PDF' };
+    case 'docx':
+    case 'doc':
+      return { icon: <File className="h-4 w-4" />, color: 'text-blue-400', label: 'Word' };
+    case 'xlsx':
+    case 'xls':
+    case 'csv':
+      return {
+        icon: <FileSpreadsheet className="h-4 w-4" />,
+        color: 'text-green-400',
+        label: 'Excel',
+      };
+    default:
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-cyan-400', label: 'Document' };
+  }
 }
 
 export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, status }) => {
@@ -137,12 +157,16 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   };
 
+  const docType = getDocTypeInfo(extension);
+
   return (
     <div className="mt-3 rounded-lg bg-surface-elevated border border-border/50 overflow-hidden">
       <div className="px-3 py-2 bg-surface-overlay/30 border-b border-border/30">
         <div className="flex items-center gap-2 mb-1">
-          <FileText className="h-4 w-4 text-cyan-400" />
-          <span className="text-xs font-medium text-muted-foreground">Generated Document</span>
+          <span className={docType.color}>{docType.icon}</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Generated {docType.label}
+          </span>
         </div>
         <p className="text-xs text-muted-foreground truncate">{fileName}</p>
       </div>
