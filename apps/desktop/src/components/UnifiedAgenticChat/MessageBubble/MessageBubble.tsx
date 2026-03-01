@@ -7,8 +7,10 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
-import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
+import { invoke } from '../../../lib/tauri-mock';
+import { useUnifiedChatStore, uuidToDbId } from '../../../stores/unifiedChatStore';
 import { useExecutionStore } from '../../../stores/executionStore';
 import { useToolStore } from '../../../stores/chat/toolStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
@@ -283,6 +285,23 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const handleSpeak = useCallback(() => {
     ttsSpeak(message.content);
   }, [ttsSpeak, message.content]);
+
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
+
+  const handleFork = useCallback(async () => {
+    try {
+      const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
+      await invoke('checkpoint_create', {
+        conversationId: conversationDbId,
+        messageId: message.id,
+        branchName: `fork-${Date.now()}`,
+        label: `Fork from message ${message.id.slice(0, 8)}`,
+      });
+      toast.success('Conversation forked — new branch created');
+    } catch {
+      toast.error('Failed to fork conversation');
+    }
+  }, [message.id, activeConversationId]);
 
   // Memoized values
   const formattedTime = useMemo(() => formatTimestamp(message.timestamp), [message.timestamp]);
@@ -819,6 +838,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               onStartEdit={handleStartEdit}
               onDelete={onDelete}
               onSpeak={isAssistant ? handleSpeak : undefined}
+              onFork={handleFork}
               canEdit={!!(onEdit || onEditSave)}
               canRegenerate={!!onRegenerate}
               isSpeaking={isSpeaking}

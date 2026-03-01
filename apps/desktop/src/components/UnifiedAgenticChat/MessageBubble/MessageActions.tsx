@@ -12,6 +12,7 @@ import {
   Check,
   Copy,
   Edit2,
+  GitFork,
   RotateCw,
   SmilePlus,
   Square,
@@ -47,6 +48,7 @@ export interface MessageActionsProps {
   onStartEdit?: () => void;
   onDelete?: () => void;
   onSpeak?: () => void;
+  onFork?: () => void;
 
   // Conditional rendering
   canEdit: boolean;
@@ -75,6 +77,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
   onStartEdit,
   onDelete,
   onSpeak,
+  onFork,
   canEdit,
   canRegenerate,
   isSpeaking,
@@ -135,6 +138,17 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           <Bookmark size={14} className="text-zinc-600 dark:text-zinc-400" />
         )}
       </button>
+
+      {/* Fork conversation button */}
+      {onFork && (
+        <button
+          onClick={onFork}
+          className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          title="Fork conversation from here"
+        >
+          <GitFork size={14} className="text-zinc-600 dark:text-zinc-400" />
+        </button>
+      )}
 
       {/* Reaction picker */}
       <div className="relative">
