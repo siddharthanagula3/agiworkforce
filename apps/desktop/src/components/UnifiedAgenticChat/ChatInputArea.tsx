@@ -17,6 +17,7 @@ import type { CaptureResult } from '../../types/capture';
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
+import { useVoiceInputStore } from '../../stores/voiceInputStore';
 import { cn } from '../../lib/utils';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useAccountStore } from '../../stores/accountStore';
@@ -249,6 +250,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       console.error('[ChatInputArea] Failed to toggle recording:', err);
     });
   }, [toggleRecording]);
+
+  // Wispr Flow voice input — watch global voiceInputStore transcript and append to composer
+  const voiceTranscript = useVoiceInputStore((s) => s.transcript);
+  const clearVoiceTranscript = useVoiceInputStore((s) => s.clearTranscript);
+  useEffect(() => {
+    if (voiceTranscript) {
+      setContent((prev) => {
+        const next = prev + (prev ? ' ' : '') + voiceTranscript;
+        setDraftContent(next);
+        return next;
+      });
+      clearVoiceTranscript();
+      textareaRef.current?.focus();
+    }
+  }, [voiceTranscript, clearVoiceTranscript, setDraftContent]);
 
   // Get autocomplete suggestions
   const autocompleteResult = getAutocomplete(content, slashAutocompleteIndex);
