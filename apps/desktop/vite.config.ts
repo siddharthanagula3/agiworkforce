@@ -65,6 +65,28 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         // Ignore Rust source files and build artifacts
         ignored: ['**/src-tauri/**', '**/target/**'],
       },
+      // CSP headers for Tauri dev mode.
+      // In dev mode Tauri injects the CSP from tauri.conf.json as a <meta> tag after the
+      // fact, which means WKWebView may block Vite-injected styles before the tag is parsed.
+      // Sending the matching CSP as an HTTP response header from the Vite server ensures it
+      // is applied immediately, eliminating the "Refused to apply a stylesheet" startup errors.
+      headers: {
+        'Content-Security-Policy': [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+          "style-src 'self' 'unsafe-inline' 'unsafe-hashes' https://fonts.googleapis.com",
+          'img-src * data: blob:',
+          "font-src 'self' https://fonts.gstatic.com data:",
+          "connect-src 'self' ws://127.0.0.1:5173 ws://localhost:5173 ipc: https://api.agiworkforce.com https://agiworkforce.com https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev http://localhost:11434 http://127.0.0.1:11434",
+          "frame-src 'self' https://js.stripe.com",
+          "frame-ancestors 'none'",
+          "media-src 'self' blob:",
+          "worker-src 'self' blob:",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join('; '),
+      },
     },
 
     // ===================
