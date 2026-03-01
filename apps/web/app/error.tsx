@@ -12,8 +12,9 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service
-    console.error('Application error:', error);
+    // TODO: Replace with Sentry or similar error reporting service
+    // e.g. Sentry.captureException(error);
+    // Do NOT log errors to console in production — stack traces leak internal details
   }, [error]);
 
   return (
