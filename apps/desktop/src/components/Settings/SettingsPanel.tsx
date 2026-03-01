@@ -11,6 +11,7 @@ import {
   Github,
   Loader2,
   Monitor,
+  Plug,
   Puzzle,
   Server,
   Settings2,
@@ -50,6 +51,7 @@ import { CustomModelsSettings } from './CustomModelsSettings';
 import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
+import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -307,7 +309,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </div>
           ) : (
             <Tabs defaultValue="llm-config" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-8">
+              <TabsList className="grid w-full grid-cols-10">
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
@@ -327,6 +329,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <TabsTrigger value="integrations" className="flex items-center gap-2">
                   <Github className="h-4 w-4" />
                   Integrations
+                </TabsTrigger>
+                <TabsTrigger value="connectors" className="flex items-center gap-2">
+                  <Plug className="h-4 w-4" />
+                  Connectors
                 </TabsTrigger>
                 <TabsTrigger value="skills-plugins" className="flex items-center gap-2">
                   <Puzzle className="h-4 w-4" />
@@ -621,6 +627,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="integrations" className="space-y-6 pt-6">
                 <ExtensionsSettings />
+              </TabsContent>
+
+              <TabsContent value="connectors" className="space-y-6 pt-6">
+                <ConnectorsGallery />
               </TabsContent>
 
               <TabsContent value="skills-plugins" className="space-y-6 pt-6">
