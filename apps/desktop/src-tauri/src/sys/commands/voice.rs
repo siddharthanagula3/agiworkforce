@@ -1725,3 +1725,47 @@ pub async fn voice_tts_is_playing(
         .map(|p| p.is_playing())
         .unwrap_or(false))
 }
+
+// =============================================================================
+// Wispr Flow Speech Recording / Transcription Stubs
+// =============================================================================
+
+/// Result of a speech-to-text transcription via Wispr Flow dictation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeechTranscriptResult {
+    pub text: String,
+    pub confidence: f32,
+    pub language: String,
+}
+
+/// Start audio recording for Wispr Flow dictation.
+/// Called when the user holds the voice hotkey.
+/// Emits `voice:recording:started` event so the frontend overlay appears.
+#[tauri::command]
+pub async fn speech_start_recording(
+    _provider: String,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    let _ = app_handle.emit("voice:recording:started", &_provider);
+    // TODO: In future sprint, wire to features/speech/ptt or features/speech/vad
+    Ok(())
+}
+
+/// Stop recording and return transcription.
+/// Called when the user releases the voice hotkey.
+/// Emits `voice:recording:stopped` event so the frontend shows "Transcribing..."
+#[tauri::command]
+pub async fn speech_stop_and_transcribe(
+    _provider: String,
+    language: String,
+    app_handle: AppHandle,
+) -> Result<SpeechTranscriptResult, String> {
+    let _ = app_handle.emit("voice:recording:stopped", ());
+    // TODO: In future sprint, call features/speech/local_stt for local_whisper
+    // or features/speech/deepgram for cloud transcription
+    Ok(SpeechTranscriptResult {
+        text: String::new(),
+        confidence: 1.0,
+        language,
+    })
+}
