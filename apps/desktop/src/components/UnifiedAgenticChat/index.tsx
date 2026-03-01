@@ -2437,9 +2437,8 @@ export const UnifiedAgenticChat: React.FC<{
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
             // Pass research task ID for deep research mode
             researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
-            // Respect an explicit model pick over the global agent-mode preference.
-            // Auto modes still opt into forced agent execution when that preference is enabled.
-            enableAgentMode: shouldForceAgentMode ? true : undefined,
+            // Enable agent mode if: (1) toolbar toggle is on, or (2) global setting forces it.
+            enableAgentMode: options.enableAgentMode || shouldForceAgentMode ? true : undefined,
             // Project folder for scoped file operations (like Claude Code)
             projectFolder: currentProjectFolder || undefined,
             // Model capabilities for tool filtering (Phase 6)

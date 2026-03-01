@@ -73,6 +73,7 @@ export interface SendOptions {
   modelOverride?: string;
   providerOverride?: string;
   focusMode?: FocusMode;
+  enableAgentMode?: boolean;
 }
 
 export interface ChatInputAreaProps {
@@ -116,6 +117,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Research panel state
   const [researchOpen, setResearchOpen] = useState(false);
+
+  // Agent mode toggle (per-message override)
+  const [agentModeEnabled, setAgentModeEnabled] = useState(false);
 
   // @mention skill picker state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -379,6 +383,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           modelOverride: selectedModel || undefined,
           providerOverride: computedProviderOverride,
           focusMode,
+          enableAgentMode: agentModeEnabled || undefined,
         });
 
         // Clear local pending state first so UI is never stale
@@ -798,6 +803,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         focusMode: focusMode,
         modelOverride: selectedModel ? selectedModel : undefined,
         providerOverride: computedProviderOverride,
+        enableAgentMode: agentModeEnabled || undefined,
       });
 
       if (!currentAbortSignal.aborted) {
@@ -1098,6 +1104,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 })()}
                 researchOpen={researchOpen}
                 onToggleResearch={() => setResearchOpen((prev) => !prev)}
+                agentModeEnabled={agentModeEnabled}
+                onToggleAgentMode={() => setAgentModeEnabled((prev) => !prev)}
               />
               <BrowserActivityBadge />
             </div>
