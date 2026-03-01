@@ -33,6 +33,7 @@ import type { ToolResultUI } from '../../../types/toolCalling';
 import { McpAppCard } from '../../MCP/McpAppCard';
 import { useMcpAppStore } from '../../../stores/mcpAppStore';
 import type { McpAppContent } from '../../../stores/mcpAppStore';
+import { hasInlineRenderer } from '../InlineToolResults';
 import { ThinkingMessageBlock } from './ThinkingMessageBlock';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
@@ -470,6 +471,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       const collapsedBodyLines = collapsedBodySource ? collapsedBodySource.split('\n') : [];
       const collapsedBodyPreview = collapsedBodyLines.slice(0, 3).join('\n').trim();
       const hiddenLineCount = Math.max(collapsedBodyLines.length - 3, 0);
+      // If a rich inline renderer handles this tool (e.g. InlineSearchResults for search_web),
+      // suppress the raw JSON body — the formatted cards are shown separately.
+      const toolHasRichRenderer = toolName ? hasInlineRenderer(toolName as string) : false;
 
       return (
         <div className={cn('px-4 py-2', embedded && 'pl-14')}>
@@ -513,7 +517,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </div>
             </div>
 
-            {(isCompleted || isFailed) && (
+            {(isCompleted || isFailed) && !toolHasRichRenderer && (
               <div className="px-3 py-2 bg-black/50 font-mono text-xs text-zinc-200">
                 {!compactToolExpanded ? (
                   <>
@@ -687,17 +691,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
                 // Avoid duplicate registrations for the same tool call
                 const existingEntry = Object.values(existingApps).find(
-                  (a) =>
-                    a.toolName === String(toolName || '') &&
-                    a.mcpServer === mcpServerName,
+                  (a) => a.toolName === String(toolName || '') && a.mcpServer === mcpServerName,
                 );
                 const appId = existingEntry
                   ? existingEntry.id
-                  : registerApp(
-                      String(toolName || 'mcp_tool'),
-                      mcpServerName,
-                      mcpAppPayload,
-                    );
+                  : registerApp(String(toolName || 'mcp_tool'), mcpServerName, mcpAppPayload);
 
                 const app = useMcpAppStore.getState().apps[appId];
                 if (app) {
