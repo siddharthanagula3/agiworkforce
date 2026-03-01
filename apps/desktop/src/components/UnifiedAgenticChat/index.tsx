@@ -674,7 +674,7 @@ export const UnifiedAgenticChat: React.FC<{
           return state.currentStreamingMessageId;
         }
 
-        // Fallback: find an assistant message still marked streaming in this conversation.
+        // Priority 4: find an assistant message still marked streaming in this conversation.
         if (conversationMessages.length > 0) {
           const streamingAssistant = conversationMessages.find(
             (m) => m.role === 'assistant' && m.metadata?.streaming,
@@ -682,6 +682,18 @@ export const UnifiedAgenticChat: React.FC<{
           if (streamingAssistant) {
             return streamingAssistant.id;
           }
+        }
+
+        // Priority 5 (global fallback): conversation ID mapping may not exist yet (race
+        // between stream events and the linkConversationId call that follows ipcInvoke).
+        // The Rust backend always uses the frontend-assigned UUID as message_id, so a
+        // global store search by that ID is always safe and never causes cross-conversation
+        // confusion (UUIDs are unique).
+        if (sessionMessageId && findMessageById(sessionMessageId)) {
+          return sessionMessageId;
+        }
+        if (normalizedPayloadId && findMessageById(normalizedPayloadId)) {
+          return normalizedPayloadId;
         }
 
         return null;
