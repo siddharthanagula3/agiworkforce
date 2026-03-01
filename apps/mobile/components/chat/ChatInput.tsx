@@ -73,6 +73,9 @@ export function ChatInput({ onSend, isStreaming, onStop, onOpenModelPicker, onOp
           selectionColor={colors.teal}
           returnKeyType="default"
           blurOnSubmit={false}
+          accessible={true}
+          accessibilityLabel="Message input"
+          accessibilityHint="Type your message to the AI assistant"
         />
 
         {/* Voice input button */}
@@ -89,6 +92,9 @@ export function ChatInput({ onSend, isStreaming, onStop, onOpenModelPicker, onOp
           <Pressable
             onPress={onStop}
             className="p-2 rounded-xl bg-red-500"
+            accessible={true}
+            accessibilityLabel="Stop generating"
+            accessibilityRole="button"
           >
             <Square size={16} color="#fff" fill="#fff" />
           </Pressable>
@@ -97,6 +103,10 @@ export function ChatInput({ onSend, isStreaming, onStop, onOpenModelPicker, onOp
             onPress={handleSend}
             className={`p-2 rounded-xl ${hasContent ? 'bg-terra-cotta-500' : 'bg-white/10'}`}
             disabled={!hasContent}
+            accessible={true}
+            accessibilityLabel="Send message"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !hasContent }}
           >
             <Send size={16} color={hasContent ? '#fff' : colors.textMuted} />
           </Pressable>
