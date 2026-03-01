@@ -132,6 +132,10 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   conversationMode?: 'auto' | 'manual';
   /** Custom instructions to include in the system prompt */
   customInstructions?: string;
+  /** Enable extended thinking/reasoning mode for supported models */
+  enable_thinking?: boolean;
+  /** Whether the user explicitly selected a specific model (not an auto mode) */
+  is_explicit_model_selection?: boolean;
 }
 
 export interface CreditsInfo {
