@@ -87,6 +87,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'document_create_excel_simple':
       return (args?.['outputPath'] ?? '/tmp/mock-document') as T;
 
+    // Canvas code execution commands
+    case 'execute_code':
+      return { stdout: '(mock output)', stderr: '', exit_code: 0 } as T;
+    case 'terminal_execute':
+      return { stdout: '(mock terminal output)', stderr: '', exit_code: 0 } as T;
+
     case 'project_get_settings':
       return {} as T;
 
@@ -118,6 +124,22 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_send_message':
       throw new Error('Chat functionality requires the desktop application');
 
+    // Simple synchronous LLM call used by voice post-processing and other lightweight tasks
+    case 'llm_send_message': {
+      // In test/web mode return the first user message unchanged so callers still get a string
+      const msgs = (args?.['messages'] as Array<{ role: string; content: string }> | undefined) ?? [];
+      const lastUserMsg =
+        [...msgs].reverse().find((m) => m.role === 'user')?.content ?? '';
+      return { content: lastUserMsg, model: args?.['model'] ?? 'mock', cached: false } as T;
+    }
+
+    // Voice dictation commands (Whisper / Deepgram — requires Rust backend)
+    case 'speech_start_recording':
+      return undefined as T;
+    case 'speech_stop_and_transcribe':
+      // Return a mock transcript so the post-processing path can be exercised in tests
+      return { text: '(mock transcript)', confidence: 0.95 } as T;
+
     case 'router_suggestions':
       throw new Error('Router suggestions require the desktop application');
 
@@ -127,6 +149,53 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'orchestrator_spawn_agent':
       throw new Error('Agent orchestration requires the desktop application');
+
+    // Research commands
+    case 'research_start':
+      return `session_mock_${Date.now()}` as T;
+    case 'research_cancel':
+      return undefined as T;
+    case 'research_get_status':
+      return {
+        id: (args?.['sessionId'] as string) ?? '',
+        query: '',
+        depth: 'standard',
+        status: 'complete',
+        sources: [],
+        report: null,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        currentStep: 0,
+        totalSteps: 6,
+        currentMessage: 'Complete',
+      } as T;
+    case 'research_get_config':
+      return {
+        default_mode: 'standard',
+        enable_web_search: true,
+        enable_document_search: true,
+        enable_email_search: true,
+        enable_calendar_search: true,
+        enable_memory_search: true,
+        min_confidence_threshold: 0.3,
+        max_concurrent_agents: 5,
+        show_confidence_indicators: true,
+        generate_inline_citations: true,
+      } as T;
+    case 'research_set_config':
+      return undefined as T;
+    case 'research_check_availability':
+      return {
+        available: false,
+        sources: {
+          web_search: { enabled: false, status: 'unavailable' },
+          document_search: { enabled: false, status: 'unavailable' },
+          email_search: { enabled: false, status: 'unavailable' },
+          calendar_search: { enabled: false, status: 'unavailable' },
+          memory_search: { enabled: false, status: 'unavailable' },
+        },
+        default_mode: 'standard',
+      } as T;
 
     // AGI goal commands
     case 'agi_submit_goal':
@@ -179,6 +248,19 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'extension_enable':
     case 'extension_disable':
       throw new Error('Extension management requires the desktop application');
+
+    // Scheduler commands
+    case 'scheduler_list_tasks':
+      return [] as T;
+
+    case 'scheduler_create_task':
+      return `sched_mock_${Date.now()}` as T;
+
+    case 'scheduler_update_task':
+    case 'scheduler_delete_task':
+    case 'scheduler_toggle_task':
+    case 'scheduler_run_now':
+      return undefined as T;
 
     // Background task commands
     case 'background_task_list':
