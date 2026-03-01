@@ -81,8 +81,9 @@ async function handleGetMemories(request: NextRequest) {
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
-  const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100);
-  const offset = Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0);
+  // [H7 fix] Clamp both bounds: limit must be 1-100, offset must be 0-10000
+  const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
+  const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
   const { data, error } = await supabase
     .from('user_memories')

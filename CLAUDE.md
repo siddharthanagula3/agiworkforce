@@ -152,7 +152,7 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 ## Development Rules
 
 - Do NOT run tests unless explicitly asked
-- Do NOT modify Rust/Tauri files directly — write changes to `docs/rust-fixes-needed.md` for manual review
+- Rust/Tauri files: **CAN be modified directly** — user has authorized full Rust edits (overriding previous restriction). Write directly to `src-tauri/` files. If a spec exists in `docs/rust-fixes-needed.md`, implement it directly.
 - Research the market (web search) before implementing any user-facing feature
 - Conventional commits enforced: `type(scope): lowercase subject`, max 100 chars
 - All secrets through SecretManager — never in plaintext, never in committed `.env`
