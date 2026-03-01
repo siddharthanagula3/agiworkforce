@@ -197,6 +197,7 @@ const BALANCED_ADDITIONS: readonly string[] = [
 const PREMIUM_ADDITIONS: readonly string[] = [
   // === FLAGSHIP BENCHMARK (Best of the best) ===
   'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
+  'gpt-5.2-pro', // Latest GPT-5.2 flagship - PREMIUM REASONING
   'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
   'o3', // 65% SWE-bench - REASONING SPECIALIST
 
