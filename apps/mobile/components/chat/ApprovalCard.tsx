@@ -252,6 +252,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                   <Pressable
                     onPress={handleRejectPress}
                     className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-500/90 active:bg-red-600"
+                    accessible={true}
+                    accessibilityLabel="Confirm rejection"
+                    accessibilityRole="button"
                   >
                     <X size={14} color="#fff" />
                     <Text className="text-[13px] font-semibold text-white">
@@ -261,6 +264,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                   <Pressable
                     onPress={handleCancelReject}
                     className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg bg-white/10 active:bg-white/15"
+                    accessible={true}
+                    accessibilityLabel="Cancel rejection"
+                    accessibilityRole="button"
                   >
                     <Text className="text-[13px] font-medium text-white/70">Cancel</Text>
                   </Pressable>
@@ -272,6 +278,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                   onPress={handleApprove}
                   className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl active:opacity-80"
                   style={{ backgroundColor: colors.teal }}
+                  accessible={true}
+                  accessibilityLabel={`Approve ${approval.toolName} action`}
+                  accessibilityRole="button"
                 >
                   <Check size={16} color="#fff" />
                   <Text className="text-[13px] font-semibold text-white">Approve</Text>
@@ -280,6 +289,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                   onPress={handleRejectPress}
                   className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border active:opacity-80"
                   style={{ borderColor: colors.agentError }}
+                  accessible={true}
+                  accessibilityLabel={`Reject ${approval.toolName} action`}
+                  accessibilityRole="button"
                 >
                   <X size={16} color={colors.agentError} />
                   <Text className="text-[13px] font-semibold" style={{ color: colors.agentError }}>

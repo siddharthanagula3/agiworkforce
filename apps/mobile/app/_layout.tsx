@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
+import { useURL } from 'expo-linking';
+import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
 import '../global.css';
@@ -12,11 +14,14 @@ export default function RootLayout() {
   const { session, isLoading, isInitialized, initialize } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const url = useURL();
+  const backPressCount = useRef(0);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
+  // Auth guard
   useEffect(() => {
     if (!isInitialized) return;
 
@@ -28,6 +33,50 @@ export default function RootLayout() {
       router.replace('/(app)');
     }
   }, [session, isInitialized, segments, router]);
+
+  // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
+  // Required for QR desktop pairing when app is backgrounded or closed
+  useEffect(() => {
+    if (!url || !session || !isInitialized) return;
+
+    const parsed = Linking.parse(url);
+    const isPairRoute =
+      parsed.hostname === 'pair' ||
+      parsed.path?.startsWith('pair');
+
+    if (isPairRoute) {
+      const code =
+        (parsed.queryParams?.code as string | undefined) ??
+        parsed.path?.split('/').filter(Boolean).pop();
+
+      if (code) {
+        router.push(`/(app)/companion?pairingCode=${encodeURIComponent(code)}`);
+      }
+    }
+  }, [url, session, isInitialized, router]);
+
+  // C2: Android hardware back button — navigate back or double-press to exit
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      if (backPressCount.current === 0) {
+        backPressCount.current = 1;
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+        setTimeout(() => {
+          backPressCount.current = 0;
+        }, 2000);
+        return true;
+      }
+      return false; // second press exits
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   if (!isInitialized || isLoading) {
     return (

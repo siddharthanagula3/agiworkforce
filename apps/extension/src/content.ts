@@ -1149,13 +1149,24 @@ function injectFloatingOverlay(): void {
 /**
  * Validate message structure
  */
+// [H9 fix] Allowlist of known message types — prevents unknown type strings from being processed
+const VALID_MESSAGE_TYPES = new Set([
+  'CAPTURE_SCREENSHOT', 'CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'TYPE',
+  'GET_TEXT', 'GET_ATTRIBUTE', 'SET_ATTRIBUTE', 'WAIT_FOR_SELECTOR',
+  'EXECUTE_SCRIPT', 'GET_PAGE_INFO', 'GET_FORMS', 'FILL_FORM', 'SUBMIT_FORM',
+  'CAPTURE_ELEMENT', 'GET_ELEMENT_INFO', 'RUN_PAGE_ACTIONS', 'AUTO_FILL_JOB_APPLICATION',
+  'GET_CONNECTION_STATUS', 'CONNECTION_STATUS_CHANGED', 'TAB_READY', 'SYNC_PAGE_CONTEXT',
+  'queue_message', 'open_side_panel',
+]);
+
 function isValidMessage(message: unknown): message is ExtensionMessage {
   if (typeof message !== 'object' || message === null) {
     return false;
   }
 
   const msg = message as Record<string, unknown>;
-  return typeof msg['type'] === 'string';
+  // [H9 fix] Validate type is a non-empty string in the known message type allowlist
+  return typeof msg['type'] === 'string' && VALID_MESSAGE_TYPES.has(msg['type']);
 }
 
 // Initialize on script load
