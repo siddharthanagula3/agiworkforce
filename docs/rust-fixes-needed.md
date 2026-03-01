@@ -158,69 +158,111 @@ cargo test --package agi-desktop -p agi-desktop -- core::agi::executors::tests::
 
 ## Wispr Flow Voice Dictation — Tauri Command Stubs
 
-**Workstream H (voice-agent)** — User has authorized direct Rust edits but the
-pre-commit hook prevents edits to `.rs` files. Add these two stubs manually.
+**Workstream H (voice-agent)** — Stubs for Wispr Flow voice input feature.
+The pre-commit hook prevents direct `.rs` edits. Add these two stubs manually.
 
 ### What to add
 
 **File:** `apps/desktop/src-tauri/src/sys/commands/voice.rs` — append after the
-`voice_tts_is_playing` function at line 1727.
+`voice_tts_is_playing` function (currently at line 1727).
+
+Note: The existing file already imports `tauri::{AppHandle, Emitter, ...}` at
+line 19, so no new imports are needed.
 
 ```rust
 // =============================================================================
-// Wispr Flow Voice Dictation Commands
+// Wispr Flow Speech Recording / Transcription Stubs
 // =============================================================================
 
-/// Result returned by speech_stop_and_transcribe
-#[derive(Debug, Serialize, Deserialize)]
+/// Result of a speech-to-text transcription via Wispr Flow dictation
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeechTranscriptResult {
     pub text: String,
     pub confidence: f32,
+    pub language: String,
 }
 
-/// Start recording audio from the microphone for Wispr Flow dictation.
-///
-/// Stub: returns Ok(()) immediately. Wire to a `cpal` audio capture stream in
-/// a future iteration once the audio pipeline is fully plumbed end-to-end.
+/// Start audio recording for Wispr Flow dictation.
+/// Called when the user holds the voice hotkey.
+/// Emits `voice:recording:started` event so the frontend overlay appears.
 #[tauri::command]
-pub async fn speech_start_recording(provider: String) -> Result<(), String> {
-    tracing::info!("[speech] start_recording provider={}", provider);
+pub async fn speech_start_recording(
+    provider: String,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    // Emit event so frontend overlay appears
+    let _ = app_handle.emit("voice:recording:started", &provider);
+    // TODO: In future sprint, wire to features/speech/ptt or features/speech/vad
     Ok(())
 }
 
-/// Stop recording and transcribe the captured audio.
-///
-/// Stub: returns an empty transcript. Wire to `WhisperLocal` or the Deepgram
-/// client in a follow-up once `cpal` audio capture is plumbed end-to-end.
+/// Stop recording and return transcription.
+/// Called when the user releases the voice hotkey.
+/// Emits `voice:recording:stopped` event so the frontend shows "Transcribing..."
 #[tauri::command]
 pub async fn speech_stop_and_transcribe(
     provider: String,
     language: String,
+    app_handle: AppHandle,
 ) -> Result<SpeechTranscriptResult, String> {
-    tracing::info!(
-        "[speech] stop_and_transcribe provider={} language={}",
-        provider,
-        language
-    );
+    // Emit event so frontend overlay shows "Transcribing..."
+    let _ = app_handle.emit("voice:recording:stopped", ());
+    // TODO: In future sprint, call features/speech/local_stt for local_whisper
+    // or features/speech/deepgram for cloud transcription
     Ok(SpeechTranscriptResult {
         text: String::new(),
-        confidence: 0.0,
+        confidence: 1.0,
+        language,
     })
 }
 ```
 
 **File:** `apps/desktop/src-tauri/src/lib.rs` — inside the `generate_handler![...]`
-macro, add two new lines alongside the other voice commands (near line 1727):
+macro, add two new lines after `voice_list_local_models` (near line 1738):
 
 ```rust
-crate::sys::commands::voice::speech_start_recording,
-crate::sys::commands::voice::speech_stop_and_transcribe,
+            // Wispr Flow speech recording stubs
+            crate::sys::commands::voice::speech_start_recording,
+            crate::sys::commands::voice::speech_stop_and_transcribe,
+```
+
+### Why AppHandle is used
+
+The commands accept `AppHandle` (not just plain args) so they can emit Tauri
+events to the frontend:
+- `voice:recording:started` — triggers the recording overlay UI
+- `voice:recording:stopped` — triggers the "Transcribing..." state
+
+This follows the same pattern used by other voice commands in the file (e.g.,
+`voice_tts_stop` at line 1706 uses `app_handle.emit("voice:tts_interrupted", ...)`).
+
+### Frontend types needed
+
+The frontend will need a corresponding TypeScript type:
+
+```typescript
+interface SpeechTranscriptResult {
+  text: string;
+  confidence: number;
+  language: string;
+}
+```
+
+And invoke calls:
+```typescript
+await invoke('speech_start_recording', { provider: 'deepgram' });
+const result = await invoke<SpeechTranscriptResult>('speech_stop_and_transcribe', {
+  provider: 'deepgram',
+  language: 'en',
+});
 ```
 
 ### Validation
 
 ```bash
-cargo check --package agi-desktop
+cd apps/desktop/src-tauri && cargo check
 ```
 
-Expected: no errors. The two new commands compile cleanly as simple async stubs.
+Expected: no errors. The two new commands compile cleanly as async stubs.
+`AppHandle` is automatically injected by Tauri's command system and does not
+need to be passed from the frontend.
