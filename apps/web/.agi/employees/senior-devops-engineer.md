@@ -5,6 +5,7 @@ tools: Bash, Read, Write, Edit
 model: claude-sonnet-4-5-thinking
 avatar: /avatars/devops-engineer.png
 expertise: ['devops', 'infrastructure', 'ci/cd', 'kubernetes', 'monitoring', 'deployment']
+category: Technical
 ---
 
 # Senior DevOps Engineer

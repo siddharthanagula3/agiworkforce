@@ -1,4 +1,5 @@
-import { Loader2 } from 'lucide-react';
+import { Check, Loader2, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import type { ConnectorDef } from './connectorDefinitions';
 
 interface ConnectorCardProps {
@@ -10,14 +11,6 @@ interface ConnectorCardProps {
   onDisconnect: () => void;
 }
 
-const COLOR_MAP: Record<string, string> = {
-  red: 'border-red-500/30 hover:border-red-500/60',
-  blue: 'border-blue-500/30 hover:border-blue-500/60',
-  green: 'border-green-500/30 hover:border-green-500/60',
-  purple: 'border-purple-500/30 hover:border-purple-500/60',
-  gray: 'border-zinc-500/30 hover:border-zinc-500/60',
-};
-
 export function ConnectorCard({
   connector,
   connected,
@@ -28,75 +21,84 @@ export function ConnectorCard({
 }: ConnectorCardProps) {
   return (
     <div
-      className={`
-        rounded-xl border bg-card p-4
-        transition-all duration-200
-        hover:scale-[1.02] hover:shadow-lg
-        ${COLOR_MAP[connector.color] ?? COLOR_MAP['gray']}
-      `}
+      className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3
+        transition-colors hover:bg-muted/50"
     >
-      <div className="flex items-start gap-3">
-        <span className="text-2xl leading-none" role="img" aria-label={connector.name}>
-          {connector.icon}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="font-medium text-sm truncate">{connector.name}</h4>
-            {connected ? (
-              <span className="flex items-center gap-1 text-xs text-green-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                Connected
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-                Not connected
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{connector.description}</p>
-        </div>
+      {/* Icon */}
+      {connector.iconUrl ? (
+        <img
+          src={connector.iconUrl}
+          alt={connector.name}
+          className="h-6 w-6 shrink-0 rounded"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            const sibling = e.currentTarget.nextElementSibling;
+            if (sibling) sibling.classList.remove('hidden');
+          }}
+        />
+      ) : null}
+      <span
+        className={`text-2xl leading-none shrink-0${connector.iconUrl ? ' hidden' : ''}`}
+        role="img"
+        aria-label={connector.name}
+      >
+        {connector.icon}
+      </span>
+
+      {/* Name + description */}
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-medium truncate">{connector.name}</h4>
+        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{connector.description}</p>
+        {error && <p className="text-xs text-destructive mt-1 truncate">{error}</p>}
       </div>
 
-      {error && (
-        <p className="text-xs text-destructive mt-2 bg-destructive/10 rounded px-2 py-1">{error}</p>
-      )}
+      {/* Action area */}
+      <div className="shrink-0 flex items-center gap-1.5">
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : connected ? (
+          <>
+            <span className="flex items-center gap-1 text-xs text-green-500 whitespace-nowrap">
+              <Check className="h-3 w-3" />
+              Connected
+            </span>
 
-      <div className="mt-3">
-        {connected ? (
-          <button
-            onClick={onDisconnect}
-            disabled={loading}
-            className="w-full py-1.5 px-3 text-xs font-medium rounded-lg
-              text-red-400 hover:text-red-300 hover:bg-red-500/10
-              border border-red-500/20 hover:border-red-500/40
-              transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Disconnecting...
-              </span>
-            ) : (
-              'Disconnect'
-            )}
-          </button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Connector options"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-40 p-1">
+                <button
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                  onClick={() => {
+                    // Configure action placeholder — same as reconnect for now
+                  }}
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  Configure
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                  onClick={onDisconnect}
+                >
+                  Disconnect
+                </button>
+              </PopoverContent>
+            </Popover>
+          </>
         ) : (
           <button
             onClick={onConnect}
-            disabled={loading}
-            className="w-full py-1.5 px-3 text-xs font-medium rounded-lg
-              text-white bg-teal-600 hover:bg-teal-500
-              transition-colors disabled:opacity-50"
+            className="flex items-center justify-center h-7 w-7 rounded-full border border-border
+              hover:bg-muted hover:border-foreground/20 transition-colors text-muted-foreground hover:text-foreground"
+            aria-label={`Connect ${connector.name}`}
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Connecting...
-              </span>
-            ) : (
-              'Connect'
-            )}
+            <Plus className="h-3.5 w-3.5" />
           </button>
         )}
       </div>

@@ -2,8 +2,9 @@
 name: life-coach
 description: Professional Life Coach specialized in personal development, goal-setting, motivation, and life transformation
 tools: Read, Write
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/life-coach.png
+category: Lifestyle
 expertise:
   [
     'life coach',

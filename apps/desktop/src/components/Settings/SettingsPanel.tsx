@@ -3,16 +3,12 @@ import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
-  Activity,
-  Bot,
-  Brain,
+  Bell,
   Check,
+  CreditCard,
   Database,
   Download,
-  Github,
   Loader2,
-  Mic,
-  Monitor,
   Plug,
   Puzzle,
   Server,
@@ -21,7 +17,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import {
@@ -31,6 +27,10 @@ import {
   type Language,
   type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
+import type { SettingsTab } from '../../stores/settingsDialogStore';
+import { useAccountStore } from '../../stores/accountStore';
+import { useAuthStore } from '../../stores/auth';
+import { openPricingPage } from '../../utils/navigation';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
 import { errorTracking } from '../../services/errorTracking';
@@ -39,7 +39,6 @@ import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
@@ -60,11 +59,21 @@ import { MemoryPanel } from '../Memory/MemoryPanel';
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTab?: SettingsTab;
 }
 
-export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
-  // Use individual selectors to prevent re-renders on unrelated state changes
-  // Use useShallow for object selectors to prevent re-renders from reference changes
+const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }[] = [
+  { key: 'general', label: 'General', icon: Settings2 },
+  { key: 'account', label: 'Account & Billing', icon: CreditCard },
+  { key: 'personalization', label: 'Personalization', icon: Sparkles },
+  { key: 'privacy', label: 'Privacy & Data', icon: Shield },
+  { key: 'connectors', label: 'Connectors', icon: Plug },
+  { key: 'api-keys', label: 'API Keys', icon: Server },
+  { key: 'extensions', label: 'Extensions', icon: Puzzle },
+  { key: 'notifications', label: 'Notifications', icon: Bell },
+];
+
+export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
@@ -87,7 +96,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const loading = useSettingsStore((state) => state.loading);
   const error = useSettingsStore((state) => state.error);
 
-  // Ollama status from model store
   const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
   const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -103,27 +111,21 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   const ollamaStatus = providerStatuses.ollama;
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
-
-  // SET-001 fix: Derive ollamaEnabled from persisted settings, not local state
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
 
-  // SET-001 fix: Handler that persists Ollama enabled state
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
       if (enabled) {
-        // When enabling, set the selected model (or first available model)
         const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
         setDefaultModel('ollama', modelToSet);
         setSelectedOllamaModel(modelToSet);
       } else {
-        // When disabling, clear the Ollama model
         setDefaultModel('ollama', '');
       }
     },
     [selectedOllamaModel, ollamaModels, setDefaultModel],
   );
 
-  // SET-001 fix: Handler that persists selected Ollama model
   const handleOllamaModelChange = useCallback(
     (model: string) => {
       setSelectedOllamaModel(model);
@@ -139,15 +141,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
       loadSettings().catch((err) => {
         console.error('Failed to load settings:', err);
       });
-      // Check Ollama status when panel opens
       setCheckingOllama(true);
       checkProviderStatus('ollama')
         .then(() => {
-          // Try to get available Ollama models
           invoke<string[]>('llm_get_ollama_models')
             .then((models) => {
               setOllamaModels(models || []);
-              // SET-001 fix: Initialize from persisted settings first, then fallback to first available
               const persistedModel = resolvedLLMConfig.defaultModels?.ollama;
               if (persistedModel && models?.includes(persistedModel)) {
                 setSelectedOllamaModel(persistedModel);
@@ -169,10 +168,16 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     resolvedLLMConfig.defaultModels?.ollama,
   ]);
 
-  // Track if settings have been modified (for warning on cancel)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const accountData = useAccountStore((state) => state.account);
 
-  // SET-004: Wrapped handlers that track unsaved changes
+  useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab);
+    }
+  }, [open, initialTab]);
+
   const handleThemeChange = useCallback(
     (value: 'light' | 'dark' | 'system') => {
       setTheme(value);
@@ -259,7 +264,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     [setGlobalHotkeyCombo],
   );
 
-  // Reset hasUnsavedChanges when panel opens (fresh state)
   useEffect(() => {
     if (open) {
       setHasUnsavedChanges(false);
@@ -276,10 +280,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     }
   };
 
-  // SET-004: Handler for canceling - reload settings from backend to discard changes
   const handleCancel = async () => {
     if (hasUnsavedChanges) {
-      // Reload settings from backend to discard local changes
       try {
         await loadSettings();
       } catch (error) {
@@ -292,502 +294,599 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] w-full p-0 overflow-hidden">
-        <div className="h-[90vh] overflow-y-auto">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle className="text-2xl font-bold">Settings</DialogTitle>
-            <DialogDescription>
-              Configure LLM preferences, integrations, and application settings
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden">
+        <div className="flex h-[85vh]">
+          {/* Vertical sidebar navigation */}
+          <div className="w-52 border-r border-border bg-muted/30 py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
+            <DialogHeader className="px-3 pb-4">
+              <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
+              <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
+            </DialogHeader>
 
-          {error && (
-            <div className="mx-6 mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
+            {SETTINGS_NAV.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveTab(item.key)}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTab === item.key
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>
 
-          {loading && !llmConfig ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Tabs defaultValue="llm-config" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-12">
-                <TabsTrigger value="llm-config" className="flex items-center gap-2">
-                  <Settings2 className="h-4 w-4" />
-                  Models
-                </TabsTrigger>
-                <TabsTrigger value="instructions" className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Instructions
-                </TabsTrigger>
-                <TabsTrigger value="agents" className="flex items-center gap-2">
-                  <Bot className="h-4 w-4" />
-                  Agents
-                </TabsTrigger>
-                <TabsTrigger value="filesystem" className="flex items-center gap-2">
-                  <Database className="h-4 w-4" />
-                  Filesystem
-                </TabsTrigger>
-                <TabsTrigger value="integrations" className="flex items-center gap-2">
-                  <Github className="h-4 w-4" />
-                  Integrations
-                </TabsTrigger>
-                <TabsTrigger value="connectors" className="flex items-center gap-2">
-                  <Plug className="h-4 w-4" />
-                  Connectors
-                </TabsTrigger>
-                <TabsTrigger value="skills-plugins" className="flex items-center gap-2">
-                  <Puzzle className="h-4 w-4" />
-                  Skills
-                </TabsTrigger>
-                <TabsTrigger value="window" className="flex items-center gap-2">
-                  <Monitor className="h-4 w-4" />
-                  Window
-                </TabsTrigger>
-                <TabsTrigger value="data-privacy" className="flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Privacy
-                </TabsTrigger>
-                <TabsTrigger value="system" className="flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
-                  System
-                </TabsTrigger>
-                <TabsTrigger value="voice" className="flex items-center gap-2">
-                  <Mic className="h-4 w-4" />
-                  Voice
-                </TabsTrigger>
-                <TabsTrigger value="memory" className="flex items-center gap-2">
-                  <Brain className="h-4 w-4" />
-                  Memory
-                </TabsTrigger>
-              </TabsList>
+          {/* Content area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {error && (
+                <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
 
-              <TabsContent value="llm-config" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">AI Provider</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Your AI requests are handled through your subscription plan
-                  </p>
-
-                  <div className="space-y-6">
-                    {/* Ollama Local Option */}
-                    <div className="rounded-lg border border-border bg-card p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4">
-                          <div className="rounded-md bg-muted p-3">
-                            <Server className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-semibold mb-2">Local Ollama (Offline Mode)</h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              Use Ollama for offline AI processing. Models run locally on your
-                              machine for complete privacy and no internet required.
-                            </p>
-                            {checkingOllama ? (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                <span>Checking Ollama status...</span>
+              {loading && !llmConfig ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* General Tab */}
+                  {activeTab === 'general' && (
+                    <>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                          Customize window behavior and appearance
+                        </p>
+                        <div className="space-y-6">
+                          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+                            <h4 className="font-semibold">Global Hotkey</h4>
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  Open AGI Workforce from anywhere with a keyboard shortcut.
+                                </p>
                               </div>
-                            ) : isOllamaAvailable ? (
-                              <div className="space-y-3">
-                                <div className="flex items-center gap-2 text-xs text-green-600">
-                                  <Check className="h-3 w-3" />
-                                  <span>Ollama is running and available</span>
-                                </div>
-                                {ollamaEnabled && ollamaModels.length > 0 && (
-                                  <div className="space-y-2">
-                                    <Label htmlFor="ollamaModel" className="text-xs">
-                                      Select Model
-                                    </Label>
-                                    <Select
-                                      value={selectedOllamaModel}
-                                      onValueChange={handleOllamaModelChange}
-                                    >
-                                      <SelectTrigger id="ollamaModel" className="h-8 text-xs">
-                                        <SelectValue placeholder="Select an Ollama model" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {ollamaModels.map((model) => (
-                                          <SelectItem key={model} value={model} className="text-xs">
-                                            {model}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <X className="h-3 w-3 text-orange-500" />
-                                <span>
-                                  Ollama not detected. Install from ollama.ai to use local models.
-                                </span>
+                              <Switch
+                                id="globalHotkeyEnabled"
+                                checked={resolvedGlobalHotkeyPreferences.enabled}
+                                onCheckedChange={handleGlobalHotkeyEnabledChange}
+                              />
+                            </div>
+                            {resolvedGlobalHotkeyPreferences.enabled && (
+                              <div className="space-y-2">
+                                <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
+                                <input
+                                  id="globalHotkeyCombo"
+                                  type="text"
+                                  value={resolvedGlobalHotkeyPreferences.combo}
+                                  onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
+                                  placeholder="CommandOrControl+Shift+Space"
+                                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Use Tauri accelerator format, e.g.{' '}
+                                  <code className="rounded bg-muted px-1 py-0.5">
+                                    CommandOrControl+Shift+Space
+                                  </code>
+                                </p>
                               </div>
                             )}
                           </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="theme">Theme</Label>
+                            <Select
+                              value={resolvedWindowPreferences.theme}
+                              onValueChange={(value) =>
+                                handleThemeChange(value as 'light' | 'dark' | 'system')
+                              }
+                            >
+                              <SelectTrigger id="theme">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="light">Light</SelectItem>
+                                <SelectItem value="dark">Dark</SelectItem>
+                                <SelectItem value="system">System</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="language">Language</Label>
+                            <Select
+                              value={resolvedWindowPreferences.language}
+                              onValueChange={(value) => handleLanguageChange(value as Language)}
+                            >
+                              <SelectTrigger id="language">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {SUPPORTED_LANGUAGES.map((lang) => (
+                                  <SelectItem key={lang.code} value={lang.code}>
+                                    {lang.nativeName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                        <div className="shrink-0">
-                          <Switch
-                            checked={ollamaEnabled}
-                            onCheckedChange={handleOllamaEnabledChange}
-                            disabled={!isOllamaAvailable}
-                          />
+                      </div>
+
+                      <div className="pt-6 border-t border-border">
+                        <VoiceSettings />
+                      </div>
+
+                      <div className="pt-6 border-t border-border">
+                        <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+                        <ResourceMonitor showTools={true} />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          macOS system permissions required for agent mode automation.
+                        </p>
+                        <AutomationPermissionsSettings />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <UpdateSettings />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Account & Billing Tab */}
+                  {activeTab === 'account' && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Account</h3>
+                      <div className="rounded-lg border border-border bg-card p-6">
+                        <div className="flex items-center gap-4 mb-6">
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-purple-500 text-xl font-semibold text-white">
+                            {accountData.avatar ? (
+                              <img
+                                src={accountData.avatar}
+                                alt={accountData.displayName || ''}
+                                className="h-full w-full rounded-full object-cover"
+                              />
+                            ) : (
+                              <span>
+                                {(accountData.displayName || accountData.email || 'U')
+                                  .split(/[\s._-]+/)
+                                  .filter(Boolean)
+                                  .map((n: string) => n[0])
+                                  .join('')
+                                  .toUpperCase()
+                                  .slice(0, 2)}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-lg font-semibold">
+                              {accountData.displayName ||
+                                accountData.email?.split('@')[0] ||
+                                'User'}
+                            </div>
+                            <div className="text-sm text-muted-foreground">{accountData.email}</div>
+                            <div className="mt-1 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">
+                              {accountData.planDisplayName || 'Free'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {accountData.credits && (
+                          <div className="space-y-3 mb-6">
+                            {accountData.credits.daily_limit_cents !== undefined &&
+                              accountData.credits.daily_limit_cents > 0 && (
+                                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">Daily Credits</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {accountData.credits.daily_remaining_cents ?? 0} remaining
+                                    </span>
+                                  </div>
+                                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all"
+                                      style={{
+                                        width: `${Math.min(
+                                          ((accountData.credits.daily_used_cents || 0) /
+                                            (accountData.credits.daily_limit_cents || 1)) *
+                                            100,
+                                          100,
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            {accountData.credits.allocated_cents &&
+                              accountData.credits.allocated_cents > 0 && (
+                                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">Monthly Credits</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {accountData.credits.remaining_cents ?? 0} remaining
+                                    </span>
+                                  </div>
+                                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all"
+                                      style={{
+                                        width: `${Math.min(
+                                          ((accountData.credits.used_cents || 0) /
+                                            (accountData.credits.allocated_cents || 1)) *
+                                            100,
+                                          100,
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void openPricingPage()}
+                          >
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Manage Subscription
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => void useAuthStore.getState().signOut()}
+                          >
+                            Sign Out
+                          </Button>
                         </div>
                       </div>
                     </div>
+                  )}
 
-                    {/* Agent Mode Settings */}
-                    <div className="rounded-lg border border-border bg-card p-6">
-                      <h4 className="font-semibold mb-4">Agent Mode</h4>
+                  {/* Personalization Tab */}
+                  {activeTab === 'personalization' && (
+                    <>
+                      <MemoryPanel />
+                      <div className="pt-6 border-t border-border">
+                        <CustomInstructionsSettings />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <InstructionFilesSettings />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <AgentsSettings />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Privacy & Data Tab */}
+                  {activeTab === 'privacy' && (
+                    <>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-1">Master Password</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Encrypt stored API keys and secrets with an Argon2id-derived master
+                          password.
+                        </p>
+                        <MasterPasswordSettings />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <DataPrivacyTab />
+                      </div>
+                      <div className="pt-6 border-t border-border">
+                        <AllowedDirectoriesSettings />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Connectors Tab */}
+                  {activeTab === 'connectors' && <ConnectorsGallery />}
+
+                  {/* API Keys Tab */}
+                  {activeTab === 'api-keys' && (
+                    <>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">AI Provider</h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                          Your AI requests are handled through your subscription plan
+                        </p>
+                        <div className="space-y-6">
+                          <div className="rounded-lg border border-border bg-card p-6">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex items-start gap-4">
+                                <div className="rounded-md bg-muted p-3">
+                                  <Server className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-semibold mb-2">
+                                    Local Ollama (Offline Mode)
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground mb-3">
+                                    Use Ollama for offline AI processing. Models run locally on your
+                                    machine for complete privacy and no internet required.
+                                  </p>
+                                  {checkingOllama ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      <span>Checking Ollama status...</span>
+                                    </div>
+                                  ) : isOllamaAvailable ? (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2 text-xs text-green-600">
+                                        <Check className="h-3 w-3" />
+                                        <span>Ollama is running and available</span>
+                                      </div>
+                                      {ollamaEnabled && ollamaModels.length > 0 && (
+                                        <Select
+                                          value={selectedOllamaModel}
+                                          onValueChange={handleOllamaModelChange}
+                                        >
+                                          <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select model" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {ollamaModels.map((model) => (
+                                              <SelectItem key={model} value={model}>
+                                                {model}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-yellow-600">
+                                      Ollama not detected. Install from{' '}
+                                      <a
+                                        href="https://ollama.ai"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="underline"
+                                      >
+                                        ollama.ai
+                                      </a>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <Switch
+                                checked={ollamaEnabled}
+                                onCheckedChange={handleOllamaEnabledChange}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h4 className="text-base font-semibold">Model Configuration</h4>
+                            <div className="space-y-3">
+                              <div className="space-y-2">
+                                <Label htmlFor="temperature">
+                                  Temperature ({resolvedLLMConfig.temperature?.toFixed(1) ?? '0.7'})
+                                </Label>
+                                <input
+                                  id="temperature"
+                                  type="range"
+                                  min="0"
+                                  max="2"
+                                  step="0.1"
+                                  value={resolvedLLMConfig.temperature ?? 0.7}
+                                  onChange={(e) => handleTemperatureChange(e.target.value)}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>Precise</span>
+                                  <span>Creative</span>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="maxTokens">Max Tokens</Label>
+                                <input
+                                  id="maxTokens"
+                                  type="number"
+                                  value={resolvedLLMConfig.maxTokens ?? 4096}
+                                  onChange={(e) => handleMaxTokensChange(e.target.value)}
+                                  min={1}
+                                  max={200000}
+                                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <FavoriteModelsSelector />
+                          <CustomModelsSettings />
+                          <TaskRoutingSettings />
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-border">
+                        <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Export or import your settings configuration
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const settings = useSettingsStore.getState();
+                              const exportData = JSON.stringify(
+                                {
+                                  llmConfig: settings.llmConfig,
+                                  windowPreferences: settings.windowPreferences,
+                                  chatPreferences: settings.chatPreferences,
+                                  executionPreferences: settings.executionPreferences,
+                                  globalHotkeyPreferences: settings.globalHotkeyPreferences,
+                                  customModels: settings.customModels,
+                                },
+                                null,
+                                2,
+                              );
+                              const savePath = await save({
+                                defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
+                                filters: [{ name: 'JSON', extensions: ['json'] }],
+                              });
+                              if (savePath) {
+                                await writeTextFile(savePath, exportData);
+                              }
+                            } catch (error) {
+                              console.error('Failed to export settings:', error);
+                            }
+                          }}
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Export Settings
+                        </Button>
+                      </div>
+
+                      <div className="pt-6 border-t border-border">
+                        <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="agentMode">Always Use Agent Mode</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Agent mode enables tool use, web browsing, and code execution
+                              </p>
+                            </div>
+                            <Switch
+                              id="agentMode"
+                              checked={chatPreferences?.alwaysUseAgentMode ?? false}
+                              onCheckedChange={handleAgentModeChange}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Automatically approve safe tool executions without confirmation
+                              </p>
+                            </div>
+                            <Switch
+                              id="autoApprove"
+                              checked={chatPreferences?.autoApproveTools ?? false}
+                              onCheckedChange={handleAutoApproveToolsChange}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="compactMode">Compact Mode</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Reduce spacing between messages for a denser view
+                              </p>
+                            </div>
+                            <Switch
+                              id="compactMode"
+                              checked={chatPreferences?.compactMode ?? false}
+                              onCheckedChange={handleCompactModeChange}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="promptCompletion">Prompt Completion</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Show AI-powered suggestions as you type
+                              </p>
+                            </div>
+                            <Switch
+                              id="promptCompletion"
+                              checked={chatPreferences?.promptCompletionEnabled ?? true}
+                              onCheckedChange={handlePromptCompletionChange}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 text-xs text-muted-foreground">
+                        <h4 className="font-medium mb-2">Supported Providers</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>OpenAI (GPT-4o, GPT-4.5, o1, o3-mini)</li>
+                          <li>Anthropic (Claude 4, Sonnet, Haiku)</li>
+                          <li>Google (Gemini 2.0 Flash, Pro)</li>
+                          <li>xAI (Grok-3, Grok-3 Mini)</li>
+                          <li>DeepSeek (R1, V3)</li>
+                          <li>Mistral (Large, Codestral)</li>
+                          <li>Meta Llama (via Ollama)</li>
+                          <li>Perplexity (Sonar Pro, Sonar)</li>
+                          <li>OpenRouter (any model)</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Extensions Tab */}
+                  {activeTab === 'extensions' && (
+                    <>
+                      <ExtensionsSettings />
+                      <div className="pt-6 border-t border-border">
+                        <SkillsPluginsSettings />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Notifications Tab */}
+                  {activeTab === 'notifications' && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Notifications</h3>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Configure how you receive notifications
+                      </p>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <Label htmlFor="alwaysAgentMode">Always Use Agent Mode</Label>
+                            <Label>Desktop Notifications</Label>
                             <p className="text-xs text-muted-foreground">
-                              When enabled, all messages will use AGI Workforce's automation
-                              capabilities (file operations, web search, terminal, etc.). Otherwise,
-                              tools are only used when an action is detected.
+                              Show system notifications for agent completions and alerts
                             </p>
                           </div>
                           <Switch
-                            id="alwaysAgentMode"
-                            checked={chatPreferences.alwaysUseAgentMode}
-                            onCheckedChange={handleAgentModeChange}
+                            checked={localStorage.getItem('notifications_desktop') !== 'false'}
+                            onCheckedChange={(v) =>
+                              localStorage.setItem('notifications_desktop', String(v))
+                            }
                           />
                         </div>
-
-                        <div className="border-t border-border pt-4 flex items-center justify-between">
+                        <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <Label htmlFor="compactMode">Compact Mode</Label>
+                            <Label>Sound Effects</Label>
                             <p className="text-xs text-muted-foreground">
-                              Show simple one-line status messages instead of detailed tool output
-                              blocks.
+                              Play sounds for message received and task completion
                             </p>
                           </div>
                           <Switch
-                            id="compactMode"
-                            checked={chatPreferences.compactMode}
-                            onCheckedChange={handleCompactModeChange}
-                          />
-                        </div>
-
-                        <div className="border-t border-border pt-4 flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label htmlFor="promptCompletion">Prompt Completion</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Show AI-powered ghost-text suggestions as you type.
-                            </p>
-                          </div>
-                          <Switch
-                            id="promptCompletion"
-                            checked={chatPreferences.promptCompletionEnabled}
-                            onCheckedChange={handlePromptCompletionChange}
-                          />
-                        </div>
-
-                        <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
-                          <div className="space-y-0.5">
-                            <Label htmlFor="autoApproveTools" className="flex items-center gap-2">
-                              Auto-Approve All Tools
-                              {chatPreferences.autoApproveTools && (
-                                <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
-                                  ACTIVE
-                                </span>
-                              )}
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              Skip all &quot;Allow this action?&quot; confirmation dialogs. Every
-                              tool call (file writes, terminal commands, web access, etc.) is
-                              automatically approved without asking.{' '}
-                              <strong className="text-orange-600 dark:text-orange-400">
-                                Use with caution.
-                              </strong>
-                            </p>
-                          </div>
-                          <Switch
-                            id="autoApproveTools"
-                            checked={chatPreferences.autoApproveTools}
-                            onCheckedChange={handleAutoApproveToolsChange}
+                            checked={localStorage.getItem('notifications_sound') !== 'false'}
+                            onCheckedChange={(v) =>
+                              localStorage.setItem('notifications_sound', String(v))
+                            }
                           />
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
+              )}
+            </div>
 
-                {/* Generation Parameters */}
-                <div className="border-t border-border pt-6">
-                  <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-                    <h4 className="font-semibold">Generation Parameters</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="temperature">
-                          Temperature{' '}
-                          <span className="text-xs text-muted-foreground">
-                            ({resolvedLLMConfig.temperature.toFixed(1)})
-                          </span>
-                        </Label>
-                        <input
-                          id="temperature"
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={resolvedLLMConfig.temperature}
-                          onChange={(e) => handleTemperatureChange(e.target.value)}
-                          className="w-full accent-primary"
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Precise (0)</span>
-                          <span>Creative (2)</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="maxTokens">Max Tokens</Label>
-                        <input
-                          id="maxTokens"
-                          type="number"
-                          min="256"
-                          max="200000"
-                          step="256"
-                          value={resolvedLLMConfig.maxTokens}
-                          onChange={(e) => handleMaxTokensChange(e.target.value)}
-                          className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Maximum tokens per response (256–200000)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Favorite Models */}
-                <div className="border-t border-border pt-6">
-                  <FavoriteModelsSelector />
-                </div>
-
-                {/* Custom Model Endpoints */}
-                <div className="border-t border-border pt-6">
-                  <CustomModelsSettings />
-                </div>
-
-                {/* Task Routing */}
-                <div className="border-t border-border pt-6">
-                  <TaskRoutingSettings />
-                </div>
-
-                {/* Intelligent Routing Info */}
-                <div className="border-t border-border pt-6">
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
-                    <h3 className="text-lg font-semibold mb-3">Intelligent Model Routing</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      We automatically route your requests to the optimal model based on multiple
-                      factors:
-                    </p>
-                    <ul className="space-y-2 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-primary shrink-0" />
-                        <span>
-                          <strong>Performance Benchmarks</strong> - Models are selected based on
-                          proven performance metrics for each task type
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-primary shrink-0" />
-                        <span>
-                          <strong>Industry Standards</strong> - Following best practices for model
-                          selection and task optimization
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-primary shrink-0" />
-                        <span>
-                          <strong>Subscription Tier</strong> - Access to models is determined by
-                          your current plan
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-primary shrink-0" />
-                        <span>
-                          <strong>Cost Efficiency</strong> - Balancing quality with cost to maximize
-                          your credit usage
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="instructions" className="space-y-6 pt-6">
-                <CustomInstructionsSettings />
-                <div className="border-t border-border pt-6">
-                  <InstructionFilesSettings />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="agents" className="space-y-6 pt-6">
-                <AgentsSettings />
-              </TabsContent>
-
-              <TabsContent value="filesystem" className="space-y-6 pt-6">
-                <AllowedDirectoriesSettings />
-              </TabsContent>
-
-              <TabsContent value="integrations" className="space-y-6 pt-6">
-                <ExtensionsSettings />
-              </TabsContent>
-
-              <TabsContent value="connectors" className="space-y-6 pt-6">
-                <ConnectorsGallery />
-              </TabsContent>
-
-              <TabsContent value="skills-plugins" className="space-y-6 pt-6">
-                <SkillsPluginsSettings />
-              </TabsContent>
-
-              <TabsContent value="window" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Customize window behavior and appearance
-                  </p>
-
-                  <div className="space-y-6">
-                    {/* Global Hotkey */}
-                    <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-                      <h4 className="font-semibold">Global Hotkey</h4>
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Open AGI Workforce from anywhere with a keyboard shortcut.
-                          </p>
-                        </div>
-                        <Switch
-                          id="globalHotkeyEnabled"
-                          checked={resolvedGlobalHotkeyPreferences.enabled}
-                          onCheckedChange={handleGlobalHotkeyEnabledChange}
-                        />
-                      </div>
-                      {resolvedGlobalHotkeyPreferences.enabled && (
-                        <div className="space-y-2">
-                          <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
-                          <input
-                            id="globalHotkeyCombo"
-                            type="text"
-                            value={resolvedGlobalHotkeyPreferences.combo}
-                            onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
-                            placeholder="CommandOrControl+Shift+Space"
-                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Use Tauri accelerator format, e.g.{' '}
-                            <code className="rounded bg-muted px-1 py-0.5">
-                              CommandOrControl+Shift+Space
-                            </code>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="theme">Theme</Label>
-                      <Select
-                        value={resolvedWindowPreferences.theme}
-                        onValueChange={(value) =>
-                          handleThemeChange(value as 'light' | 'dark' | 'system')
-                        }
-                      >
-                        <SelectTrigger id="theme">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="light">Light</SelectItem>
-                          <SelectItem value="dark">Dark</SelectItem>
-                          <SelectItem value="system">System</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="language">Language</Label>
-                      <Select
-                        value={resolvedWindowPreferences.language}
-                        onValueChange={(value) => handleLanguageChange(value as Language)}
-                      >
-                        <SelectTrigger id="language">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SUPPORTED_LANGUAGES.map((lang) => (
-                            <SelectItem key={lang.code} value={lang.code}>
-                              {lang.nativeName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="data-privacy" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Master Password</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Encrypt stored API keys and secrets with an Argon2id-derived master password.
-                  </p>
-                  <MasterPasswordSettings />
-                </div>
-                <div className="pt-6 border-t border-border">
-                  <DataPrivacyTab />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="voice" className="space-y-6 pt-6">
-                <VoiceSettings />
-              </TabsContent>
-
-              <TabsContent value="system" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">System Resources</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Monitor your system performance and resource usage
-                  </p>
-                  <ResourceMonitor showTools={true} />
-                </div>
-                <div className="pt-6 border-t border-border">
-                  <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    macOS system permissions required for agent mode automation.
-                  </p>
-                  <AutomationPermissionsSettings />
-                </div>
-                <div className="pt-6 border-t border-border">
-                  <UpdateSettings />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="memory" className="space-y-6 pt-6">
-                <MemoryPanel />
-              </TabsContent>
-            </Tabs>
-          )}
-
-          {/* TODO(release): Add Privacy Policy link -> https://agiworkforce.com/privacy */}
-          {/* TODO(release): Add Terms of Service link -> https://agiworkforce.com/terms */}
-          {/* TODO(release): Add Support link -> https://agiworkforce.com/support */}
-          <div className="flex justify-end gap-3 mt-6 pt-6 border-t px-6 pb-6">
-            <Button variant="outline" onClick={() => void handleCancel()}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleSaveSettings()} disabled={loading}>
-              {loading ? 'Saving...' : 'Save Changes'}
-            </Button>
+            {/* Footer buttons */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+              <Button variant="outline" onClick={() => void handleCancel()}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleSaveSettings()} disabled={loading}>
+                {loading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -799,7 +898,6 @@ function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  // SET-007: Initialize from errorTracking service to ensure consistency
   const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
     return errorTracking.getConfig().enabled;
   });
@@ -810,20 +908,17 @@ function DataPrivacyTab() {
 
     const loadPreference = async () => {
       try {
-        // Try to load from Tauri backend (source of truth)
         const result = await invoke<{ value: string } | null>('get_user_preference', {
           key: 'crash_reporting_enabled',
         });
         if (result && mounted) {
           const enabled = result.value === 'true';
           setCrashReportingEnabled(enabled);
-          // SET-007: Sync with errorTracking service
           errorTracking.updateConfig({ enabled });
         }
       } catch (error) {
         if (mounted) {
           console.error('Failed to load crash reporting preference:', error);
-          // Fall back to errorTracking service state
           setCrashReportingEnabled(errorTracking.getConfig().enabled);
         }
       }
@@ -838,7 +933,6 @@ function DataPrivacyTab() {
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
     setSavingCrashReporting(true);
     try {
-      // SET-007: Update both Tauri backend and errorTracking service
       await invoke('set_user_preference', {
         key: 'crash_reporting_enabled',
         value: enabled.toString(),
@@ -846,7 +940,6 @@ function DataPrivacyTab() {
         dataType: 'boolean',
         description: 'Enable automatic crash reporting via Sentry',
       });
-      // Sync with errorTracking service
       errorTracking.updateConfig({ enabled });
       setCrashReportingEnabled(enabled);
     } catch (error) {
@@ -1044,10 +1137,10 @@ function DataPrivacyTab() {
                 your conversations, API keys, or personal data.
               </p>
               <ul className="space-y-1 text-xs text-muted-foreground mb-3">
-                <li>• Error messages and stack traces</li>
-                <li>• Operating system and app version</li>
-                <li>• Memory and performance metrics</li>
-                <li>• NO personal data, API keys, or conversation content</li>
+                <li>Error messages and stack traces</li>
+                <li>Operating system and app version</li>
+                <li>Memory and performance metrics</li>
+                <li>NO personal data, API keys, or conversation content</li>
               </ul>
             </div>
             <div className="ml-4">

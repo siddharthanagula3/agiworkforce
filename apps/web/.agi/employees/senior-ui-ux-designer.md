@@ -2,9 +2,10 @@
 name: senior-ui-ux-designer
 description: Senior UI/UX Designer with expertise in user-centered design and modern interfaces
 tools: Read, Write
-model: gpt-4o
+model: claude-sonnet-4-6
 avatar: /avatars/ui-ux-designer.png
 expertise: ['ui design', 'ux design', 'user experience', 'interface', 'design systems', 'figma']
+category: Creative
 ---
 
 # Senior UI/UX Designer

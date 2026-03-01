@@ -4,7 +4,6 @@ import {
   ArchiveRestore,
   BarChart3,
   BookOpen,
-  Brain,
   Calendar,
   ChevronDown,
   ChevronLeft,
@@ -16,6 +15,7 @@ import {
   Layers,
   Link2,
   MessageSquare,
+  Monitor as MonitorIcon,
   Pin,
   PinOff,
   Plus,
@@ -24,11 +24,7 @@ import {
   Trash2,
   Wand2,
   X,
-  Monitor as MonitorIcon,
-  Smartphone,
   Zap,
-  Code2,
-  LayoutGrid,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState, memo } from 'react';
@@ -72,24 +68,17 @@ import { ShareConversationDialog } from './ShareConversationDialog';
 
 interface SidebarProps {
   className?: string;
-  onOpenSettings?: () => void;
-  onOpenFeedback?: () => void;
   onOpenCustomInstructions?: (conversationId: string) => void;
   onNewChat?: () => void | Promise<void>;
-  onToggleArtifactPanel?: () => void;
-  onToggleMediaLab?: () => void;
-  onOpenMemory?: () => void;
-  onOpenTasks?: () => void;
-  onOpenResearch?: () => void;
-  onOpenMcpApps?: () => void;
-  onOpenCanvas?: () => void;
-  canAccessMediaLab?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isMobile?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   width?: number;
   onResize?: (width: number) => void;
+  onOpenResearch?: () => void;
+  onToggleMediaLab?: () => void;
+  canAccessMediaLab?: boolean;
 }
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
@@ -332,24 +321,17 @@ function getTemporalGroup(date: Date): TemporalGroup {
 
 export function Sidebar({
   className,
-  onOpenSettings,
-  onOpenFeedback,
   onOpenCustomInstructions,
   onNewChat,
-  onToggleArtifactPanel,
-  onToggleMediaLab,
-  onOpenMemory,
-  onOpenTasks,
-  onOpenResearch,
-  onOpenMcpApps,
-  onOpenCanvas,
-  canAccessMediaLab = false,
   collapsed = false,
   onToggleCollapse,
   isMobile = false,
   onCollapsedChange = () => {},
   width = 260,
   onResize,
+  onOpenResearch,
+  onToggleMediaLab,
+  canAccessMediaLab,
 }: SidebarProps) {
   // Migration: All store hooks now use useChatStore (modular store) instead of useUnifiedChatStore
   // Using exported selectors for optimal re-render performance
@@ -902,7 +884,47 @@ export function Sidebar({
 
         {/* Navigation - hide projects section in simple mode */}
         {!collapsed && !isSimpleMode && (
-          <div className="px-3 py-2 space-y-1">
+          <div className="px-3 py-2 space-y-1 overflow-y-auto max-h-[40vh] scrollbar-thin scrollbar-thumb-zinc-700">
+            <button
+              onClick={() => onOpenResearch?.()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-400/20 text-blue-400">
+                <BookOpen className="w-3.5 h-3.5" />
+              </span>
+              Deep Research
+            </button>
+
+            <button
+              onClick={() => {
+                const { setActiveView: setView } = useChatStore.getState();
+                setView('computer-use');
+              }}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'computer-use'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-400/20 text-purple-400">
+                <MonitorIcon className="w-3.5 h-3.5" />
+              </span>
+              Computer Use
+            </button>
+
+            {canAccessMediaLab && (
+              <button
+                onClick={() => onToggleMediaLab?.()}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+              >
+                <span className="w-5 h-5 flex items-center justify-center rounded bg-amber-400/20 text-amber-400">
+                  <Wand2 className="w-3.5 h-3.5" />
+                </span>
+                Media Lab Pro+
+              </button>
+            )}
+
             <button
               onClick={() => setActiveView('projects')}
               className={cn(
@@ -916,93 +938,6 @@ export function Sidebar({
                 <Layers className="w-3.5 h-3.5" />
               </span>
               Projects
-            </button>
-
-            {/* Memory button */}
-            <button
-              onClick={onOpenMemory}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
-                <Brain className="w-3.5 h-3.5" />
-              </span>
-              Memory
-            </button>
-
-            {/* Tasks button */}
-            <button
-              onClick={onOpenTasks}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-amber-400/20 text-amber-400">
-                <Zap className="w-3.5 h-3.5" />
-              </span>
-              Tasks
-            </button>
-
-            {/* Canvas button */}
-            <button
-              onClick={onOpenCanvas}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
-                <Code2 className="w-3.5 h-3.5" />
-              </span>
-              Canvas
-            </button>
-
-            {/* Research button */}
-            <button
-              onClick={onOpenResearch}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-indigo-400/20 text-indigo-400">
-                <BookOpen className="w-3.5 h-3.5" />
-              </span>
-              Deep Research
-            </button>
-
-            {/* MCP Apps button */}
-            <button
-              onClick={onOpenMcpApps}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </span>
-              MCP Apps
-            </button>
-
-            {/* Computer Use button */}
-            <button
-              onClick={() => setActiveView('computer-use')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'computer-use'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-cyan-400/20 text-cyan-400">
-                <MonitorIcon className="w-3.5 h-3.5" />
-              </span>
-              Computer Use
-            </button>
-
-            {/* Mobile Companion button */}
-            <button
-              onClick={() => setActiveView('mobile-companion')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'mobile-companion'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
-                <Smartphone className="w-3.5 h-3.5" />
-              </span>
-              Mobile Companion
             </button>
 
             {/* Project filter dropdown */}
@@ -1209,59 +1144,6 @@ export function Sidebar({
           </div>
         )}
 
-        {/* Artifact Panel Toggle */}
-        {!collapsed && (
-          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
-            <button
-              onClick={onToggleArtifactPanel}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                <span>Artifacts</span>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Memory Panel */}
-        {!collapsed && onOpenMemory && (
-          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
-            <button
-              onClick={onOpenMemory}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              <Brain className="h-4 w-4" />
-              <span>Memory</span>
-            </button>
-          </div>
-        )}
-
-        {/* MediaLab Toggle */}
-        {!collapsed && (
-          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
-            <button
-              onClick={onToggleMediaLab}
-              className={cn(
-                'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
-                canAccessMediaLab
-                  ? 'text-zinc-300 hover:bg-white/5 hover:text-white'
-                  : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <Wand2 className="h-4 w-4" />
-                <span>Media Lab</span>
-              </div>
-              {!canAccessMediaLab && (
-                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300">
-                  Pro+
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-
         {/* Simple Mode Toggle - shown at the bottom */}
         {!collapsed && (
           <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
@@ -1271,11 +1153,7 @@ export function Sidebar({
 
         {}
         <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
-          <UserProfile
-            onSettingsClick={onOpenSettings}
-            onFeedbackClick={onOpenFeedback}
-            collapsed={collapsed}
-          />
+          <UserProfile collapsed={collapsed} />
         </div>
       </div>
     </>

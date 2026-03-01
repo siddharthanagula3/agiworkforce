@@ -28,13 +28,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { cn } from '@/lib/utils';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
-import {
-  useMemoryStore,
-  selectPreferences,
-  selectFacts,
-  selectDecisions,
-  selectContextMemories,
-} from '@/stores/memoryStore';
+import { useMemoryStore } from '@/stores/memoryStore';
 
 import { MemoryCard } from './MemoryCard';
 import { MemorySearch } from './MemorySearch';
@@ -119,12 +113,6 @@ export const MemoryManager = memo(function MemoryManager({
 
   const { memories, isLoading, error, loadAll } = useMemoryStore();
 
-  // Category selectors for counts
-  const preferences = useMemoryStore(selectPreferences);
-  const facts = useMemoryStore(selectFacts);
-  const decisions = useMemoryStore(selectDecisions);
-  const contextMemories = useMemoryStore(selectContextMemories);
-
   // Process and display memories
   const displayedMemories = useMemo(() => {
     const baseMemories = searchQuery.trim() ? searchResults : memories;
@@ -132,17 +120,20 @@ export const MemoryManager = memo(function MemoryManager({
     return sortMemories(filtered, sortBy);
   }, [memories, searchResults, searchQuery, activeTab, sortBy]);
 
-  // Category counts
-  const categoryCounts = useMemo(
-    () => ({
-      all: memories.length,
-      preference: preferences.length,
-      fact: facts.length,
-      decision: decisions.length,
-      context: contextMemories.length,
-    }),
-    [memories.length, preferences.length, facts.length, decisions.length, contextMemories.length],
-  );
+  // Category counts — derived from memories array to avoid new-array-per-render selectors
+  const categoryCounts = useMemo(() => {
+    let preference = 0,
+      fact = 0,
+      decision = 0,
+      context = 0;
+    for (const m of memories) {
+      if (m.category === 'preference') preference++;
+      else if (m.category === 'fact') fact++;
+      else if (m.category === 'decision') decision++;
+      else if (m.category === 'context') context++;
+    }
+    return { all: memories.length, preference, fact, decision, context };
+  }, [memories]);
 
   const handleRefresh = useCallback(async () => {
     await loadAll();

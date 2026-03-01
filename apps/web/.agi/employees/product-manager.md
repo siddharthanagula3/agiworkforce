@@ -6,6 +6,7 @@ model: claude-sonnet-4-5-thinking
 avatar: /avatars/product-manager.png
 role: product_manager
 expertise: ['product management', 'requirements', 'user stories', 'prd', 'product strategy']
+category: Technical
 ---
 
 # Senior Product Manager

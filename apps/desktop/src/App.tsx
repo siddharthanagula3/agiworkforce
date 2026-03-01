@@ -34,6 +34,7 @@ import { useAuthStore } from './stores/auth';
 import { useAccountStore } from './stores/accountStore';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore from './stores/errorStore';
+import { useSettingsDialogStore } from './stores/settingsDialogStore';
 
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -75,7 +76,10 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   useVoiceHotkey();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const settingsPanelOpen = useSettingsDialogStore((s) => s.settingsOpen);
+  const settingsInitialTab = useSettingsDialogStore((s) => s.settingsInitialTab);
+  const openSettingsDialog = useSettingsDialogStore((s) => s.openSettings);
+  const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
@@ -439,7 +443,7 @@ const DesktopShell = () => {
     };
   }, [startNewChat]);
 
-  const openSettings = useCallback(() => setSettingsPanelOpen(true), []);
+  const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
   const handleDismissTimeoutWarning = useCallback(() => {
     setIsTimeoutWarningOpen(false);
@@ -590,7 +594,6 @@ const DesktopShell = () => {
                   className="h-full w-full"
                   layout="default"
                   defaultSidecarOpen={false}
-                  onOpenSettings={() => setSettingsPanelOpen(true)}
                 />
               </Suspense>
             </ErrorBoundary>
@@ -602,7 +605,11 @@ const DesktopShell = () => {
           options={commandOptions}
         />
         <Suspense fallback={null}>
-          <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+          <SettingsPanel
+            open={settingsPanelOpen}
+            onOpenChange={(v) => (v ? openSettingsDialog() : closeSettingsDialog())}
+            initialTab={settingsInitialTab}
+          />
         </Suspense>
         <UpdateChecker onUpdateNow={openSettings} />
         <AutomationPermissionsModal />

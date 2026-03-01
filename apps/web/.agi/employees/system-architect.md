@@ -6,6 +6,7 @@ model: claude-sonnet-4-5-thinking
 avatar: /avatars/architect.png
 role: architect
 expertise: ['architecture', 'system design', 'scalability', 'microservices', 'design patterns']
+category: Technical
 ---
 
 # Senior System Architect
