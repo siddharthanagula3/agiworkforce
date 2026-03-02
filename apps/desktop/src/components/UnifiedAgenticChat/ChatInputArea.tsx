@@ -272,15 +272,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       setContent(voiceTranscript);
       setDraftContent(voiceTranscript);
     } else {
-      setContent((prev) => {
-        const next = prev ? `${prev} ${voiceTranscript}` : voiceTranscript;
-        setDraftContent(next);
-        return next;
-      });
+      const next = content ? `${content} ${voiceTranscript}` : voiceTranscript;
+      setContent(next);
+      setDraftContent(next);
     }
     clearVoiceTranscript();
+    prevTranscriptRef.current = '';
     textareaRef.current?.focus();
-  }, [voiceTranscript, lastTranscriptIsCommand, clearVoiceTranscript, setDraftContent]);
+  }, [voiceTranscript, lastTranscriptIsCommand, clearVoiceTranscript, setDraftContent, content]);
 
   // Debounced intent detection from user input
   const debouncedClassify = useMemo(() => {
