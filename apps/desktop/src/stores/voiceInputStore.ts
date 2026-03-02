@@ -97,6 +97,7 @@ interface VoiceInputState {
   _mediaStream: MediaStream | null;
   _recorder: MediaRecorder | null;
   _audioChunks: Blob[];
+  _startAborted: boolean;
 
   // Actions
   startListening: () => Promise<void>;
@@ -132,11 +133,26 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         _mediaStream: null,
         _recorder: null,
         _audioChunks: [],
+        _startAborted: false,
 
         startListening: async () => {
-          set({ mode: 'listening', transcript: '', error: null, lastTranscriptIsCommand: false });
+          set({
+            mode: 'listening',
+            transcript: '',
+            error: null,
+            lastTranscriptIsCommand: false,
+            _startAborted: false,
+          });
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Check if stopListening was called while we were awaiting
+            if (get()._startAborted) {
+              stream.getTracks().forEach((t) => t.stop());
+              set({ mode: 'idle', _startAborted: false });
+              return;
+            }
+
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
               ? 'audio/webm;codecs=opus'
               : MediaRecorder.isTypeSupported('audio/webm')
@@ -162,9 +178,13 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         },
 
         stopListening: async () => {
-          const { mode, _recorder, _mediaStream, _audioChunks } = get();
-          if (mode !== 'listening' || !_recorder) {
-            console.warn('[Voice] stopListening called in wrong state:', mode);
+          const { mode, _recorder, _mediaStream } = get();
+          if (mode !== 'listening') {
+            return;
+          }
+          if (!_recorder) {
+            // getUserMedia still pending — signal abort
+            set({ _startAborted: true, mode: 'idle' });
             return;
           }
           set({ mode: 'transcribing' });
@@ -175,10 +195,25 @@ export const useVoiceInputStore = create<VoiceInputState>()(
           });
           _mediaStream?.getTracks().forEach((t) => t.stop());
 
+          // Read chunks AFTER onstop fires (all ondataavailable events have flushed)
+          const { _audioChunks } = get();
+
           try {
             const blob = new Blob(_audioChunks, {
               type: _audioChunks[0]?.type ?? 'audio/webm',
             });
+
+            if (blob.size === 0) {
+              set({
+                mode: 'idle',
+                _recorder: null,
+                _mediaStream: null,
+                _audioChunks: [],
+                _startAborted: false,
+              });
+              return;
+            }
+
             const arrayBuffer = await blob.arrayBuffer();
             const audioData = Array.from(new Uint8Array(arrayBuffer));
             const format = (blob.type.includes('mp4') ? 'mp4' : 'webm') as string;
@@ -193,10 +228,19 @@ export const useVoiceInputStore = create<VoiceInputState>()(
 
             const rawText = result?.text?.trim() ?? '';
             if (!rawText) {
-              set({ mode: 'idle', _recorder: null, _mediaStream: null, _audioChunks: [] });
+              set({
+                mode: 'idle',
+                _recorder: null,
+                _mediaStream: null,
+                _audioChunks: [],
+                _startAborted: false,
+              });
               return;
             }
 
+            if (get().postProcessingMode === 'ai') {
+              set({ mode: 'processing' });
+            }
             const { processTranscript } = get();
             const { text: cleanText, isCommand } = await processTranscript(rawText);
 
@@ -207,6 +251,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _recorder: null,
               _mediaStream: null,
               _audioChunks: [],
+              _startAborted: false,
             });
           } catch (e) {
             set({
@@ -215,6 +260,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _recorder: null,
               _mediaStream: null,
               _audioChunks: [],
+              _startAborted: false,
             });
           }
         },
@@ -241,8 +287,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
           }
 
           // 'ai' mode: run transcript through the current LLM
-          set({ mode: 'processing' });
-
           try {
             // Dynamically import to avoid circular dep at module init time
             const { useModelStore } = await import('./modelStore');
