@@ -205,24 +205,54 @@ pub async fn voice_transcribe_file(
 pub async fn voice_transcribe_blob(
     audio_data: Vec<u8>,
     format: String,
+    provider: Option<String>,
+    language: Option<String>,
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<VoiceTranscription, String> {
     tracing::info!(
-        "Transcribing audio blob ({} bytes, format: {})",
+        "Transcribing audio blob ({} bytes, format: {}, provider: {:?})",
         audio_data.len(),
-        format
+        format,
+        provider
     );
 
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join(format!("voice_{}.{}", uuid::Uuid::new_v4(), format));
 
-    std::fs::write(&temp_file, audio_data)
+    std::fs::write(&temp_file, &audio_data)
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
 
-    let result = voice_transcribe_file(temp_file.clone(), state).await;
+    let result = {
+        let voice_state = state.lock().await;
+        let settings = voice_state.settings.lock().await;
 
-    let _ = std::fs::remove_file(temp_file);
+        let effective_provider = match provider.as_deref() {
+            Some("local_whisper") | Some("local") => VoiceProvider::Local,
+            Some(_) | None => settings.provider.clone(),
+        };
+        let effective_language = language.or_else(|| settings.language.clone());
+        let overridden = VoiceSettings {
+            provider: effective_provider,
+            model: settings.model.clone(),
+            language: effective_language,
+        };
+        drop(settings);
 
+        match overridden.provider {
+            VoiceProvider::Cloud => {
+                transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
+            }
+            VoiceProvider::WebSpeech => {
+                Err("Web Speech API transcription must be done from frontend".to_string())
+            }
+            VoiceProvider::Local => {
+                let local_whisper = voice_state.local_whisper.read().await;
+                transcribe_with_local_whisper(&temp_file, &local_whisper, overridden.language).await
+            }
+        }
+    };
+
+    let _ = std::fs::remove_file(&temp_file);
     result
 }
 
