@@ -249,7 +249,11 @@ pub async fn voice_transcribe_blob(
                     .service
                     .lock()
                     .map_err(|e| format!("Failed to lock settings service: {}", e))?;
-                svc.get_api_key("openai").unwrap_or_default()
+                svc.get_api_key("openai")
+                    .unwrap_or_else(|e| {
+                        tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
+                        String::new()
+                    })
             };
 
             if api_key.is_empty() {
