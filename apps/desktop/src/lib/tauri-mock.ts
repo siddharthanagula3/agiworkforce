@@ -139,6 +139,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'speech_stop_and_transcribe':
       // Return a mock transcript so the post-processing path can be exercised in tests
       return { text: '(mock transcript)', confidence: 0.95 } as T;
+    case 'voice_transcribe_blob':
+      return { text: '(mock transcript)', language: 'en', duration: 1.0, confidence: 0.95 } as T;
 
     case 'router_suggestions':
       throw new Error('Router suggestions require the desktop application');

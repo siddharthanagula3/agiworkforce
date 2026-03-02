@@ -232,6 +232,13 @@ pub async fn voice_transcribe_blob(
 
         let effective_provider = match provider.as_deref() {
             Some("local_whisper") | Some("local") => VoiceProvider::Local,
+            Some("deepgram") => {
+                tracing::warn!(
+                    "[voice] Deepgram uses real-time streaming, not blob transcription. \
+                     Falling back to managed cloud for this request."
+                );
+                settings.provider.clone()
+            }
             Some(_) | None => settings.provider.clone(),
         };
         let effective_language = language.or_else(|| settings.language.clone());
