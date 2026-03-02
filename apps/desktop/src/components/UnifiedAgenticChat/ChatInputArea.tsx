@@ -260,20 +260,27 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     });
   }, [toggleRecording]);
 
-  // Wispr Flow voice input — watch global voiceInputStore transcript and append to composer
+  // Wispr Flow voice input — watch global voiceInputStore transcript and append/replace in composer
   const voiceTranscript = useVoiceInputStore((s) => s.transcript);
+  const lastTranscriptIsCommand = useVoiceInputStore((s) => s.lastTranscriptIsCommand);
   const clearVoiceTranscript = useVoiceInputStore((s) => s.clearTranscript);
+  const prevTranscriptRef = useRef('');
   useEffect(() => {
-    if (voiceTranscript) {
+    if (!voiceTranscript || voiceTranscript === prevTranscriptRef.current) return;
+    prevTranscriptRef.current = voiceTranscript;
+    if (lastTranscriptIsCommand) {
+      setContent(voiceTranscript);
+      setDraftContent(voiceTranscript);
+    } else {
       setContent((prev) => {
-        const next = prev + (prev ? ' ' : '') + voiceTranscript;
+        const next = prev ? `${prev} ${voiceTranscript}` : voiceTranscript;
         setDraftContent(next);
         return next;
       });
-      clearVoiceTranscript();
-      textareaRef.current?.focus();
     }
-  }, [voiceTranscript, clearVoiceTranscript, setDraftContent]);
+    clearVoiceTranscript();
+    textareaRef.current?.focus();
+  }, [voiceTranscript, lastTranscriptIsCommand, clearVoiceTranscript, setDraftContent]);
 
   // Debounced intent detection from user input
   const debouncedClassify = useMemo(() => {
