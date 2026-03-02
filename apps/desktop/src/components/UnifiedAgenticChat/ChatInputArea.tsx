@@ -240,13 +240,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     language: 'en',
     onResult: useCallback(
       (transcript: string) => {
-        setContent((prev) => {
-          const next = prev + (prev ? ' ' : '') + transcript;
-          setDraftContent(next);
-          return next;
-        });
+        const next = content + (content ? ' ' : '') + transcript;
+        setContent(next);
+        setDraftContent(next);
       },
-      [setDraftContent],
+      [content, setDraftContent],
     ),
     onError: useCallback((error: string) => {
       console.error('[ChatInputArea] Voice transcription error:', error);
