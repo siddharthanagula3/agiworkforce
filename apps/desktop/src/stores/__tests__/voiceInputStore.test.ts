@@ -315,35 +315,43 @@ describe('voiceInputStore', () => {
       expect(state.error).toContain('Something went wrong');
     });
 
-    it('aborts and cleans up stream when _startAborted is set during getUserMedia await', async () => {
-      const mockStream = createMockStream();
-      // Delay getUserMedia so we can set _startAborted before it resolves
-      const getUserMedia = vi.fn().mockImplementation(
-        () =>
-          new Promise<MediaStream>((resolve) => {
-            // Resolve after a tick — gives us time to set _startAborted
-            setTimeout(() => resolve(mockStream), 10);
-          }),
-      );
+    it('aborts and cleans up stream when stopListening called before getUserMedia resolves', async () => {
+      // Manually-controlled getUserMedia promise so we can resolve AFTER stopListening
+      const mockTrack = { stop: vi.fn(), kind: 'audio', enabled: true };
+      const mockStream = { getTracks: () => [mockTrack] } as unknown as MediaStream;
+      let resolveGetUserMedia!: (stream: MediaStream) => void;
+      const pendingGetUserMedia = new Promise<MediaStream>((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
       Object.defineProperty(navigator, 'mediaDevices', {
-        value: { getUserMedia },
+        value: { getUserMedia: vi.fn().mockReturnValue(pendingGetUserMedia) },
         configurable: true,
         writable: true,
       });
-      installMediaMocks(); // install MediaRecorder constructor
 
-      const { startListening } = useVoiceInputStore.getState();
-      const promise = startListening();
+      // Install only the MediaRecorder constructor (not getUserMedia — we already set it above)
+      const recorderInstance = createMockMediaRecorder();
+      const MockRecorderCtor = vi.fn().mockImplementation(() => recorderInstance);
+      (
+        MockRecorderCtor as unknown as { isTypeSupported: ReturnType<typeof vi.fn> }
+      ).isTypeSupported = vi.fn().mockReturnValue(true);
+      vi.stubGlobal('MediaRecorder', MockRecorderCtor);
 
-      // Immediately signal abort (simulates quick stopListening while getUserMedia pending)
-      useVoiceInputStore.setState({ _startAborted: true });
+      // Start recording — getUserMedia is now pending, won't resolve until we say so
+      const startPromise = useVoiceInputStore.getState().startListening();
 
-      await promise;
+      // While getUserMedia is still pending, call stopListening (the race condition)
+      await useVoiceInputStore.getState().stopListening();
 
+      // Now let getUserMedia resolve — startListening should detect _startAborted and bail
+      resolveGetUserMedia(mockStream);
+      await startPromise;
+
+      // Store should be idle, recorder should NOT have been created, and stream tracks stopped
       const state = useVoiceInputStore.getState();
       expect(state.mode).toBe('idle');
-      // Stream tracks should have been stopped
-      expect(mockStream.getTracks()[0]!.stop).toHaveBeenCalled();
+      expect(state._recorder).toBeNull();
+      expect(mockTrack.stop).toHaveBeenCalled();
     });
   });
 
