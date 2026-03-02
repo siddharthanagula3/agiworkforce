@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Loader2, Mic, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { useVoiceInputStore } from '../../stores/voiceInputStore';
 import { cn } from '../../lib/utils';
 
@@ -16,6 +18,14 @@ export function VoiceInputOverlay() {
   const mode = useVoiceInputStore((s) => s.mode);
   const error = useVoiceInputStore((s) => s.error);
   const postProcessingMode = useVoiceInputStore((s) => s.postProcessingMode);
+
+  // Show error as toast — the overlay itself is hidden when mode:'idle',
+  // so the inline error div was never visible on permission-denied etc.
+  useEffect(() => {
+    if (error) {
+      toast.error(error, { duration: 5000 });
+    }
+  }, [error]);
 
   if (mode === 'idle') return null;
 
@@ -44,9 +54,7 @@ export function VoiceInputOverlay() {
       >
         {isListening && <Mic size={24} className="text-white" />}
         {isTranscribing && <Loader2 size={24} className="text-white animate-spin" />}
-        {isProcessing && (
-          <Sparkles size={24} className="text-violet-300 animate-pulse" />
-        )}
+        {isProcessing && <Sparkles size={24} className="text-violet-300 animate-pulse" />}
       </div>
 
       {/* Status badge */}
@@ -58,12 +66,6 @@ export function VoiceInputOverlay() {
       {isProcessing && postProcessingMode === 'ai' && (
         <div className="bg-violet-900/60 border border-violet-700/50 rounded-full px-3 py-1 text-xs text-violet-300 shadow-lg select-none">
           AI is removing filler words
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-900/80 border border-red-700 rounded-lg px-3 py-1 text-xs text-red-300 shadow-lg">
-          {error}
         </div>
       )}
     </div>
