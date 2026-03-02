@@ -93,6 +93,11 @@ interface VoiceInputState {
   /** 'ai' = LLM cleanup (default), 'basic' = regex only, 'none' = raw transcript */
   postProcessingMode: PostProcessingMode;
 
+  // MediaRecorder runtime state (not persisted)
+  _mediaStream: MediaStream | null;
+  _recorder: MediaRecorder | null;
+  _audioChunks: Blob[];
+
   // Actions
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
@@ -124,38 +129,93 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         provider: 'local_whisper',
         language: 'en',
         postProcessingMode: 'ai',
+        _mediaStream: null,
+        _recorder: null,
+        _audioChunks: [],
 
         startListening: async () => {
           set({ mode: 'listening', transcript: '', error: null, lastTranscriptIsCommand: false });
           try {
-            await invoke('speech_start_recording', { provider: get().provider });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+              ? 'audio/webm;codecs=opus'
+              : MediaRecorder.isTypeSupported('audio/webm')
+                ? 'audio/webm'
+                : 'audio/mp4';
+            const recorder = new MediaRecorder(stream, { mimeType });
+            const chunks: Blob[] = [];
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) chunks.push(e.data);
+            };
+            recorder.start(100);
+            set({ _mediaStream: stream, _recorder: recorder, _audioChunks: chunks });
           } catch (e) {
-            set({ mode: 'idle', error: String(e) });
+            const err = e as Error;
+            const msg =
+              err.name === 'NotAllowedError'
+                ? 'Microphone access denied. Allow mic access in System Preferences → Privacy → Microphone.'
+                : err.name === 'NotFoundError'
+                  ? 'No microphone found. Connect a mic and try again.'
+                  : String(e);
+            set({ mode: 'idle', error: msg });
           }
         },
 
         stopListening: async () => {
+          const { mode, _recorder, _mediaStream, _audioChunks } = get();
+          if (mode !== 'listening' || !_recorder) {
+            console.warn('[Voice] stopListening called in wrong state:', mode);
+            return;
+          }
           set({ mode: 'transcribing' });
-          try {
-            const result = await invoke<{ text: string; confidence: number }>(
-              'speech_stop_and_transcribe',
-              {
-                provider: get().provider,
-                language: get().language,
-              },
-            );
 
-            // Run post-processing while showing the 'processing' spinner
+          await new Promise<void>((resolve) => {
+            _recorder.onstop = () => resolve();
+            _recorder.stop();
+          });
+          _mediaStream?.getTracks().forEach((t) => t.stop());
+
+          try {
+            const blob = new Blob(_audioChunks, {
+              type: _audioChunks[0]?.type ?? 'audio/webm',
+            });
+            const arrayBuffer = await blob.arrayBuffer();
+            const audioData = Array.from(new Uint8Array(arrayBuffer));
+            const format = (blob.type.includes('mp4') ? 'mp4' : 'webm') as string;
+            const { provider, language } = get();
+
+            const result = await invoke<{
+              text: string;
+              language?: string;
+              duration?: number;
+              confidence?: number;
+            }>('voice_transcribe_blob', { audioData, format, provider, language });
+
+            const rawText = result?.text?.trim() ?? '';
+            if (!rawText) {
+              set({ mode: 'idle', _recorder: null, _mediaStream: null, _audioChunks: [] });
+              return;
+            }
+
             const { processTranscript } = get();
-            const { text: cleanText, isCommand } = await processTranscript(result.text);
+            const { text: cleanText, isCommand } = await processTranscript(rawText);
 
             set({
               mode: 'idle',
               transcript: cleanText,
               lastTranscriptIsCommand: isCommand,
+              _recorder: null,
+              _mediaStream: null,
+              _audioChunks: [],
             });
           } catch (e) {
-            set({ mode: 'idle', error: String(e) });
+            set({
+              mode: 'idle',
+              error: String(e),
+              _recorder: null,
+              _mediaStream: null,
+              _audioChunks: [],
+            });
           }
         },
 
