@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { isTauri, listen } from '../lib/tauri-mock';
 import { useVoiceInputStore } from '../stores/voiceInputStore';
 
 function hotkeyToAccelerator(hotkey: string): string {
@@ -16,8 +15,7 @@ function hotkeyToAccelerator(hotkey: string): string {
 }
 
 /**
- * Registers the voice dictation hotkey using Tauri global shortcuts (when in
- * Tauri context) or falls back to keydown/keyup events on document.
+ * Registers the voice dictation hotkey using keydown/keyup events on document.
  *
  * Pressing the configured hotkey calls startListening(); releasing calls
  * stopListening(). The overlay VoiceInputOverlay renders automatically based
@@ -28,45 +26,11 @@ export function useVoiceHotkey() {
   const stopListening = useVoiceInputStore((s) => s.stopListening);
   const hotkey = useVoiceInputStore((s) => s.hotkey);
 
-  // Track whether we started listening via the keyboard fallback so we only
+  // Track whether we started listening via the keyboard so we only
   // call stopListening once.
   const isListeningViaKeyboard = useRef(false);
 
   useEffect(() => {
-    if (isTauri) {
-      // --- Tauri path: listen for events emitted by the Rust shortcut handler ---
-      let unlistenPressed: (() => void) | null = null;
-      let unlistenReleased: (() => void) | null = null;
-      let mounted = true;
-
-      void (async () => {
-        try {
-          const unP = await listen<void>('voice:hotkey:pressed', () => {
-            if (mounted) void startListening();
-          });
-          const unR = await listen<void>('voice:hotkey:released', () => {
-            if (mounted) void stopListening();
-          });
-          if (mounted) {
-            unlistenPressed = unP;
-            unlistenReleased = unR;
-          } else {
-            unP();
-            unR();
-          }
-        } catch (err) {
-          console.warn('[useVoiceHotkey] Failed to register Tauri event listeners:', err);
-        }
-      })();
-
-      return () => {
-        mounted = false;
-        unlistenPressed?.();
-        unlistenReleased?.();
-      };
-    }
-
-    // --- Browser / web-dev fallback: keydown / keyup on document ---
     const accelerator = hotkeyToAccelerator(hotkey);
     const isOptionHotkey = accelerator === 'Alt';
     const isCtrlSpace = accelerator === 'CommandOrControl+Space';
