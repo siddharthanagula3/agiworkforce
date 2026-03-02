@@ -1,19 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useVoiceInputStore } from '../stores/voiceInputStore';
 
-function hotkeyToAccelerator(hotkey: string): string {
-  switch (hotkey) {
-    case 'option':
-      return 'Alt';
-    case 'ctrl+space':
-      return 'CommandOrControl+Space';
-    case 'ctrl+shift+v':
-      return 'CommandOrControl+Shift+V';
-    default:
-      return 'Alt';
-  }
-}
-
 /**
  * Registers the voice dictation hotkey using keydown/keyup events on document.
  *
@@ -31,10 +18,9 @@ export function useVoiceHotkey() {
   const isListeningViaKeyboard = useRef(false);
 
   useEffect(() => {
-    const accelerator = hotkeyToAccelerator(hotkey);
-    const isOptionHotkey = accelerator === 'Alt';
-    const isCtrlSpace = accelerator === 'CommandOrControl+Space';
-    const isCtrlShiftV = accelerator === 'CommandOrControl+Shift+V';
+    const isOptionHotkey = hotkey === 'option';
+    const isCtrlSpace = hotkey === 'ctrl+space';
+    const isCtrlShiftV = hotkey === 'ctrl+shift+v';
 
     const matchesHotkey = (e: KeyboardEvent): boolean => {
       if (isOptionHotkey) return e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
