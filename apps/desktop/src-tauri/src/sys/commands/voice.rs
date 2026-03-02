@@ -12,6 +12,7 @@ use crate::features::speech::{
 #[cfg(feature = "vad")]
 use crate::features::speech::{BargeInDetector, SharedVad};
 use crate::sys::account::{get_access_token, get_api_base_url};
+use crate::sys::commands::settings_v2::SettingsServiceState;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -208,6 +209,7 @@ pub async fn voice_transcribe_blob(
     provider: Option<String>,
     language: Option<String>,
     state: State<'_, Arc<Mutex<VoiceState>>>,
+    settings_state: State<'_, SettingsServiceState>,
 ) -> Result<VoiceTranscription, String> {
     tracing::info!(
         "Transcribing audio blob ({} bytes, format: {}, provider: {:?})",
@@ -226,6 +228,8 @@ pub async fn voice_transcribe_blob(
         let voice_state = state.lock().await;
         let settings = voice_state.settings.lock().await;
 
+        let use_openai_direct = provider.as_deref() == Some("openai_whisper");
+
         let effective_provider = match provider.as_deref() {
             Some("local_whisper") | Some("local") => VoiceProvider::Local,
             Some(_) | None => settings.provider.clone(),
@@ -238,16 +242,47 @@ pub async fn voice_transcribe_blob(
         };
         drop(settings);
 
-        match overridden.provider {
-            VoiceProvider::Cloud => {
+        if use_openai_direct {
+            // Retrieve the user's OpenAI API key from SettingsService
+            let api_key = {
+                let svc = settings_state
+                    .service
+                    .lock()
+                    .map_err(|e| format!("Failed to lock settings service: {}", e))?;
+                svc.get_api_key("openai").unwrap_or_default()
+            };
+
+            if api_key.is_empty() {
+                tracing::debug!(
+                    "[voice] No OpenAI key in settings, falling back to managed cloud"
+                );
                 transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
+            } else {
+                transcribe_with_openai_direct(
+                    &temp_file,
+                    &overridden,
+                    &voice_state.client,
+                    &api_key,
+                )
+                .await
             }
-            VoiceProvider::WebSpeech => {
-                Err("Web Speech API transcription must be done from frontend".to_string())
-            }
-            VoiceProvider::Local => {
-                let local_whisper = voice_state.local_whisper.read().await;
-                transcribe_with_local_whisper(&temp_file, &local_whisper, overridden.language).await
+        } else {
+            match overridden.provider {
+                VoiceProvider::Cloud => {
+                    transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
+                }
+                VoiceProvider::WebSpeech => {
+                    Err("Web Speech API transcription must be done from frontend".to_string())
+                }
+                VoiceProvider::Local => {
+                    let local_whisper = voice_state.local_whisper.read().await;
+                    transcribe_with_local_whisper(
+                        &temp_file,
+                        &local_whisper,
+                        overridden.language,
+                    )
+                    .await
+                }
             }
         }
     };
@@ -406,6 +441,62 @@ struct WhisperResponse {
     language: Option<String>,
     #[serde(default)]
     duration: Option<f32>,
+}
+
+/// Transcribe using the user's own OpenAI API key from SettingsService.
+/// Falls back to managed cloud if no key is stored.
+async fn transcribe_with_openai_direct(
+    audio_path: &PathBuf,
+    settings: &VoiceSettings,
+    client: &Client,
+    api_key: &str,
+) -> Result<VoiceTranscription, String> {
+    let audio_data =
+        std::fs::read(audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
+
+    let extension = audio_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("webm");
+
+    let file_part = reqwest::multipart::Part::bytes(audio_data)
+        .file_name(format!("audio.{}", extension))
+        .mime_str(&format!("audio/{}", extension))
+        .map_err(|e| format!("Failed to create file part: {}", e))?;
+
+    let mut form = reqwest::multipart::Form::new()
+        .part("file", file_part)
+        .text("model", "whisper-1");
+
+    if let Some(ref lang) = settings.language {
+        form = form.text("language", lang.clone());
+    }
+
+    let response = client
+        .post("https://api.openai.com/v1/audio/transcriptions")
+        .bearer_auth(api_key)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("OpenAI Whisper request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("OpenAI Whisper error {}: {}", status, body));
+    }
+
+    let whisper_response: WhisperResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Whisper response: {}", e))?;
+
+    Ok(VoiceTranscription {
+        text: whisper_response.text,
+        language: whisper_response.language,
+        duration: whisper_response.duration,
+        confidence: None,
+    })
 }
 
 /// Transcribe using local Whisper model
