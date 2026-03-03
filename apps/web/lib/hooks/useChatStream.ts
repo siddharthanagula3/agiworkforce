@@ -155,7 +155,7 @@ export function useChatStream(): UseChatStreamReturn {
         // If there are image attachments, format the last user message for the API
         if (options.attachments?.some((a) => a.type === 'image')) {
           const lastUserMsgIndex = apiMessages.length - 1;
-          if (lastUserMsgIndex >= 0 && apiMessages[lastUserMsgIndex].role === 'user') {
+          if (lastUserMsgIndex >= 0 && apiMessages[lastUserMsgIndex]?.role === 'user') {
             const formattedContent: MessageContent = [
               { type: 'text', text: content.trim() },
               ...options.attachments
@@ -165,7 +165,7 @@ export function useChatStream(): UseChatStreamReturn {
                   image_url: { url: a.content! },
                 })),
             ];
-            apiMessages[lastUserMsgIndex].content = formattedContent;
+            apiMessages[lastUserMsgIndex]!.content = formattedContent;
           }
         }
 

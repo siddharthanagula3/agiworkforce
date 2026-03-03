@@ -279,15 +279,15 @@ export function groupConversationsByDate(
     const updatedAt = new Date(conversation.updatedAt);
 
     if (updatedAt >= today) {
-      groups['Today'].push(conversation);
+      groups['Today']!.push(conversation);
     } else if (updatedAt >= yesterday) {
-      groups['Yesterday'].push(conversation);
+      groups['Yesterday']!.push(conversation);
     } else if (updatedAt >= sevenDaysAgo) {
-      groups['Previous 7 Days'].push(conversation);
+      groups['Previous 7 Days']!.push(conversation);
     } else if (updatedAt >= thirtyDaysAgo) {
-      groups['Previous 30 Days'].push(conversation);
+      groups['Previous 30 Days']!.push(conversation);
     } else {
-      groups['Older'].push(conversation);
+      groups['Older']!.push(conversation);
     }
   }
 

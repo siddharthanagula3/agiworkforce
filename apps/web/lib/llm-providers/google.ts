@@ -50,8 +50,8 @@ function normalizeGoogleToolSchema(schema: unknown, isRoot = true): unknown {
   }
 
   // Some MCP / JSON Schema tool adapters wrap the actual schema in a top-level `schema` field.
-  if (isRoot && hasSchemaShape(schema.schema)) {
-    return normalizeGoogleToolSchema(schema.schema, true);
+  if (isRoot && hasSchemaShape(schema['schema'])) {
+    return normalizeGoogleToolSchema(schema['schema'], true);
   }
 
   const normalized: JsonObject = {};
@@ -62,12 +62,12 @@ function normalizeGoogleToolSchema(schema: unknown, isRoot = true): unknown {
     normalized[key] = normalizeGoogleToolSchema(value, false);
   }
 
-  if (normalized.type === 'array' && !('items' in normalized)) {
-    normalized.items = {};
+  if (normalized['type'] === 'array' && !('items' in normalized)) {
+    normalized['items'] = {};
   }
 
   if (!('type' in normalized) && 'properties' in normalized) {
-    normalized.type = 'object';
+    normalized['type'] = 'object';
   }
 
   return normalized;
@@ -155,16 +155,32 @@ function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations:
  * - Tool role messages become user messages with functionResponse parts
  * - Consecutive same-role messages are merged (Gemini requires alternating roles)
  */
+/** A single part in a Google Gemini content message */
+interface GeminiPart {
+  text?: string;
+  functionCall?: { name: string; args?: Record<string, unknown> };
+  functionResponse?: { name: string; response: unknown };
+}
+
+interface GeminiContent {
+  role: string;
+  parts: GeminiPart[];
+}
+
+interface GeminiSystemInstruction {
+  parts: { text: string }[];
+}
+
 function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
-  contents: any[];
-  systemInstruction?: any;
+  contents: GeminiContent[];
+  systemInstruction?: GeminiSystemInstruction;
 } {
   const systemMessage = messages.find((msg) => msg.role === 'system');
   const systemInstruction = systemMessage
     ? { parts: [{ text: systemMessage.content }] }
     : undefined;
 
-  const contents: any[] = [];
+  const contents: GeminiContent[] = [];
 
   // Build a map of tool_call_id → function name from assistant tool_calls
   const toolCallIdToName = new Map<string, string>();
@@ -188,7 +204,7 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
     if (msg.role === 'tool') {
       // Tool result → Google's functionResponse part
       // Parse the content as JSON if possible, otherwise wrap as text
-      let responseContent: any;
+      let responseContent: unknown;
       try {
         responseContent = JSON.parse(msg.content);
       } catch {
@@ -231,7 +247,7 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
 
     if (msg.role === 'assistant' && msg.tool_calls && Array.isArray(msg.tool_calls)) {
       // Assistant with tool_calls → model message with functionCall parts
-      const parts: any[] = [];
+      const parts: GeminiPart[] = [];
       if (msg.content && msg.content.trim()) {
         parts.push({ text: msg.content });
       }
@@ -281,7 +297,7 @@ export class GoogleProvider extends BaseLLMProvider {
     return 'https://generativelanguage.googleapis.com/v1beta';
   }
 
-  protected getHeaders(): Record<string, string> {
+  protected override getHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       'x-goog-api-key': this.apiKey,
@@ -317,7 +333,7 @@ export class GoogleProvider extends BaseLLMProvider {
 
     // Add tool declarations if provided
     if (request.tools && request.tools.length > 0) {
-      body.tools = [transformToolsToGoogleFormat(request.tools)];
+      body['tools'] = [transformToolsToGoogleFormat(request.tools)];
     }
 
     try {
@@ -411,14 +427,17 @@ export class GoogleProvider extends BaseLLMProvider {
       }
 
       // Extract text and functionCall parts
-      const parts = candidate.content?.parts || [];
-      const allTextParts = parts.filter((part: any) => part.text).map((part: any) => part.text);
+      const parts: GeminiPart[] = candidate.content?.parts || [];
+      const allTextParts = parts.filter((part) => part.text).map((part) => part.text);
       const content = allTextParts.join('');
 
       // Extract function calls (tool execution)
       const toolCalls = parts
-        .filter((part: any) => part.functionCall)
-        .map((part: any, idx: number) => ({
+        .filter(
+          (part): part is GeminiPart & { functionCall: NonNullable<GeminiPart['functionCall']> } =>
+            !!part.functionCall,
+        )
+        .map((part, idx: number) => ({
           id: `call_${randomUUID().replace(/-/g, '')}`,
           type: 'function' as const,
           function: {
@@ -497,7 +516,7 @@ export class GoogleProvider extends BaseLLMProvider {
 
     // Add tool declarations if provided
     if (request.tools && request.tools.length > 0) {
-      body.tools = [transformToolsToGoogleFormat(request.tools)];
+      body['tools'] = [transformToolsToGoogleFormat(request.tools)];
     }
 
     const response = await fetch(url, {
@@ -574,10 +593,8 @@ export class GoogleProvider extends BaseLLMProvider {
             }
 
             // Extract text from ALL parts, not just the first one (fixes multi-part text loss)
-            const parts = candidate.content?.parts || [];
-            const allTextParts = parts
-              .filter((part: any) => part.text)
-              .map((part: any) => part.text);
+            const parts: GeminiPart[] = candidate.content?.parts || [];
+            const allTextParts = parts.filter((part) => part.text).map((part) => part.text);
             const textContent = allTextParts.join('');
 
             if (textContent) {
@@ -598,10 +615,15 @@ export class GoogleProvider extends BaseLLMProvider {
             }
 
             // Extract function calls and emit as OpenAI-format tool_calls
-            const functionCallParts = parts.filter((part: any) => part.functionCall);
+            const functionCallParts = parts.filter(
+              (
+                part,
+              ): part is GeminiPart & { functionCall: NonNullable<GeminiPart['functionCall']> } =>
+                !!part.functionCall,
+            );
             if (functionCallParts.length > 0) {
               hasTextContent = true; // Tool calls count as content
-              const toolCalls = functionCallParts.map((part: any, idx: number) => ({
+              const toolCalls = functionCallParts.map((part, idx: number) => ({
                 index: idx,
                 id: `call_${randomUUID().replace(/-/g, '')}`,
                 type: 'function',

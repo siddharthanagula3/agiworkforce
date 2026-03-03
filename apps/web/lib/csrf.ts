@@ -8,7 +8,7 @@ function getCsrfSecret(): string {
   if (cachedSecret) {
     return cachedSecret;
   }
-  const secret = process.env.CSRF_SECRET;
+  const secret = process.env['CSRF_SECRET'];
   if (!secret) {
     throw new Error('CSRF_SECRET environment variable is required');
   }
@@ -124,13 +124,13 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
 
   // Check for explicit session cookie
   const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch) {
+  if (sessionMatch?.[1]) {
     return sessionMatch[1];
   }
 
   // Check for existing anonymous session ID cookie to preserve CSRF binding.
   const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch) {
+  if (anonMatch?.[1]) {
     return anonMatch[1];
   }
 
@@ -171,13 +171,13 @@ export async function getOrCreateAnonSession(
 
   // Option 2: Prefer authenticated session cookies (no new cookie needed)
   const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch) {
+  if (sessionMatch?.[1]) {
     return { id: sessionMatch[1] };
   }
 
   // Option 3: Existing anonymous session cookie
   const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch) {
+  if (anonMatch?.[1]) {
     return { id: anonMatch[1] };
   }
 

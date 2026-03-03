@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- LLM tool schemas have dynamic structure */
 import 'server-only';
 
 import {
@@ -56,38 +57,38 @@ export class OpenAIProvider extends BaseLLMProvider {
           content: msg.content,
         };
         if (msg.tool_calls) {
-          messageObj.tool_calls = msg.tool_calls;
+          messageObj['tool_calls'] = msg.tool_calls;
         }
         if (msg.tool_call_id) {
-          messageObj.tool_call_id = msg.tool_call_id;
+          messageObj['tool_call_id'] = msg.tool_call_id;
         }
 
         // Add cache_control to last message if prompt caching is enabled
         if (request.usePromptCache && index === array.length - 1 && msg.role === 'user') {
-          messageObj.cache_control = { type: 'ephemeral' };
+          messageObj['cache_control'] = { type: 'ephemeral' };
         }
 
         return messageObj;
       }),
     };
     if (request.temperature !== undefined) {
-      body.temperature = request.temperature;
+      body['temperature'] = request.temperature;
     }
     if (request.max_tokens !== undefined) {
       // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
       // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
       if (requiresMaxCompletionTokens(request.model)) {
-        body.max_completion_tokens = request.max_tokens;
+        body['max_completion_tokens'] = request.max_tokens;
       } else {
-        body.max_tokens = request.max_tokens;
+        body['max_tokens'] = request.max_tokens;
       }
     }
     if (request.stream !== undefined) {
-      body.stream = request.stream;
+      body['stream'] = request.stream;
     }
     if (request.tools) {
       // Transform tools to OpenAI format and ensure 'type' field
-      body.tools = request.tools.map((tool: any) => {
+      body['tools'] = request.tools.map((tool: any) => {
         // If tool already has function field, it's in OpenAI format
         if (tool.function) {
           return {
@@ -114,7 +115,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       });
     }
     if (request.tool_choice) {
-      body.tool_choice = request.tool_choice;
+      body['tool_choice'] = request.tool_choice;
     }
 
     try {
@@ -226,19 +227,19 @@ export class OpenAIProvider extends BaseLLMProvider {
       stream: true,
     };
 
-    if (request.temperature !== undefined) body.temperature = request.temperature;
+    if (request.temperature !== undefined) body['temperature'] = request.temperature;
     if (request.max_tokens !== undefined) {
       // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
       // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
       if (requiresMaxCompletionTokens(request.model)) {
-        body.max_completion_tokens = request.max_tokens;
+        body['max_completion_tokens'] = request.max_tokens;
       } else {
-        body.max_tokens = request.max_tokens;
+        body['max_tokens'] = request.max_tokens;
       }
     }
     if (request.tools) {
       // Transform tools to OpenAI format and ensure 'type' field
-      body.tools = request.tools.map((tool: any) => {
+      body['tools'] = request.tools.map((tool: any) => {
         // If tool already has function field, it's in OpenAI format
         if (tool.function) {
           return {
@@ -264,7 +265,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         };
       });
     }
-    if (request.tool_choice) body.tool_choice = request.tool_choice;
+    if (request.tool_choice) body['tool_choice'] = request.tool_choice;
 
     const response = await fetch(url, {
       method: 'POST',

@@ -13,10 +13,10 @@ function mapMessages(messages: LLMProviderRequest['messages']) {
       content: msg.content,
     };
     if (msg.tool_calls && msg.tool_calls.length > 0) {
-      mapped.tool_calls = msg.tool_calls;
+      mapped['tool_calls'] = msg.tool_calls;
     }
     if (msg.tool_call_id) {
-      mapped.tool_call_id = msg.tool_call_id;
+      mapped['tool_call_id'] = msg.tool_call_id;
     }
     return mapped;
   });
@@ -27,7 +27,7 @@ export class DeepSeekProvider extends BaseLLMProvider {
     return 'https://api.deepseek.com';
   }
 
-  protected getHeaders(): Record<string, string> {
+  protected override getHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -50,9 +50,9 @@ export class DeepSeekProvider extends BaseLLMProvider {
 
     // Include tool definitions if provided
     if (request.tools && request.tools.length > 0) {
-      body.tools = request.tools;
+      body['tools'] = request.tools;
       if (request.tool_choice !== undefined) {
-        body.tool_choice = request.tool_choice;
+        body['tool_choice'] = request.tool_choice;
       }
     }
 
@@ -127,14 +127,14 @@ export class DeepSeekProvider extends BaseLLMProvider {
       thinking: { type: 'disabled' },
     };
 
-    if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+    if (request.temperature !== undefined) body['temperature'] = request.temperature;
+    if (request.max_tokens !== undefined) body['max_tokens'] = request.max_tokens;
 
     // Include tool definitions if provided
     if (request.tools && request.tools.length > 0) {
-      body.tools = request.tools;
+      body['tools'] = request.tools;
       if (request.tool_choice !== undefined) {
-        body.tool_choice = request.tool_choice;
+        body['tool_choice'] = request.tool_choice;
       }
     }
 

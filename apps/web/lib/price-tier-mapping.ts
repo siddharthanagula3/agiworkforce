@@ -17,26 +17,26 @@ function buildPriceIdMapping(): Record<string, string> {
   const mapping: Record<string, string> = {};
 
   // Hobby tier
-  const hobbyMonthly = process.env.STRIPE_PRICE_HOBBY_MONTHLY;
-  const hobbyYearly = process.env.STRIPE_PRICE_HOBBY_YEARLY;
+  const hobbyMonthly = process.env['STRIPE_PRICE_HOBBY_MONTHLY'];
+  const hobbyYearly = process.env['STRIPE_PRICE_HOBBY_YEARLY'];
   if (hobbyMonthly) mapping[hobbyMonthly.toLowerCase()] = 'hobby';
   if (hobbyYearly) mapping[hobbyYearly.toLowerCase()] = 'hobby';
 
   // Pro tier
-  const proMonthly = process.env.STRIPE_PRICE_PRO_MONTHLY;
-  const proYearly = process.env.STRIPE_PRICE_PRO_YEARLY;
+  const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
+  const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
   if (proMonthly) mapping[proMonthly.toLowerCase()] = 'pro';
   if (proYearly) mapping[proYearly.toLowerCase()] = 'pro';
 
   // Max tier
-  const maxMonthly = process.env.STRIPE_PRICE_MAX_MONTHLY;
-  const maxYearly = process.env.STRIPE_PRICE_MAX_YEARLY;
+  const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
+  const maxYearly = process.env['STRIPE_PRICE_MAX_YEARLY'];
   if (maxMonthly) mapping[maxMonthly.toLowerCase()] = 'max';
   if (maxYearly) mapping[maxYearly.toLowerCase()] = 'max';
 
   // Enterprise tier (if configured)
-  const enterpriseMonthly = process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY;
-  const enterpriseYearly = process.env.STRIPE_PRICE_ENTERPRISE_YEARLY;
+  const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
+  const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
   if (enterpriseMonthly) mapping[enterpriseMonthly.toLowerCase()] = 'enterprise';
   if (enterpriseYearly) mapping[enterpriseYearly.toLowerCase()] = 'enterprise';
 
@@ -58,7 +58,7 @@ function getPriceIdMapping(): Record<string, string> {
 function loadOverrides(): Record<string, string> {
   const baseMapping = getPriceIdMapping();
   const overrides: Record<string, string> = { ...baseMapping };
-  const envOverrides = process.env.PRICE_ID_OVERRIDES;
+  const envOverrides = process.env['PRICE_ID_OVERRIDES'];
 
   if (envOverrides) {
     const pairs = envOverrides.split(':');
@@ -118,8 +118,8 @@ export function resolvePlanTier(
   priceId: string | null | undefined,
 ): string | null {
   // First check metadata (most reliable)
-  if (metadata?.plan_tier) {
-    return metadata.plan_tier.toLowerCase();
+  if (metadata?.['plan_tier']) {
+    return metadata['plan_tier'].toLowerCase();
   }
 
   // Then try strict price ID mapping
