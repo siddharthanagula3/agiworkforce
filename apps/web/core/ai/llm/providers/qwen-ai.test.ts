@@ -124,10 +124,10 @@ describe('QwenProvider', () => {
     it('should return models by capability', () => {
       const capabilities = QwenProvider.getModelsByCapability();
 
-      expect(capabilities.chat).toContain('qwen3-max');
-      expect(capabilities.coding).toContain('qwen3-coder-plus');
-      expect(capabilities.vision).toContain('qwen3-vl-plus');
-      expect(capabilities.reasoning).toContain('qwq-plus');
+      expect(capabilities['chat']).toContain('qwen3-max');
+      expect(capabilities['coding']).toContain('qwen3-coder-plus');
+      expect(capabilities['vision']).toContain('qwen3-vl-plus');
+      expect(capabilities['reasoning']).toContain('qwq-plus');
     });
 
     it('should return image models', () => {
@@ -320,7 +320,7 @@ describe('QwenProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('qwen-plus');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -349,7 +349,7 @@ describe('QwenProvider', () => {
 
       await provider.sendMessage(messagesWithMetadata);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.messages[0]).toEqual({
         role: 'user',
         content: 'Test',
@@ -376,11 +376,11 @@ describe('QwenProvider', () => {
       }
 
       expect(chunks.length).toBe(2);
-      expect(chunks[0].content).toBe('Streamed response');
-      expect(chunks[0].done).toBe(false);
-      expect(chunks[1].content).toBe('');
-      expect(chunks[1].done).toBe(true);
-      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
+      expect(chunks![0]!.content!).toBe('Streamed response');
+      expect(chunks![0]!.done!).toBe(false);
+      expect(chunks![1]!.content!).toBe('');
+      expect(chunks![1]!.done!).toBe(true);
+      expect((chunks[1] as Record<string, unknown>)['usage']).toBeDefined();
     });
 
     it('should throw error when not logged in', async () => {

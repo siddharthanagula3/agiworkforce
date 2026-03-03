@@ -278,13 +278,13 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
           if (data && data.length > 0) {
             const dbSessions: ChatSession[] = data.map((row: Record<string, unknown>) => ({
-              id: row.id as string,
-              title: (row.title as string) || 'Untitled',
-              createdAt: new Date(row.created_at as string),
-              updatedAt: new Date(row.updated_at as string),
-              preview: (row.preview as string) || '',
-              messageCount: (row.message_count as number) || 0,
-              userId: row.user_id as string,
+              id: row['id'] as string,
+              title: (row['title'] as string) || 'Untitled',
+              createdAt: new Date(row['created_at'] as string),
+              updatedAt: new Date(row['updated_at'] as string),
+              preview: (row['preview'] as string) || '',
+              messageCount: (row['message_count'] as number) || 0,
+              userId: row['user_id'] as string,
             }));
 
             set((state) => {
@@ -292,8 +292,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
               const dbIds = new Set(dbSessions.map((s) => s.id));
               const localOnly = state.sessions.filter((s) => !dbIds.has(s.id));
               state.sessions = [...dbSessions, ...localOnly].sort(
-                (a, b) =>
-                  new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+                (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
               );
               state.dbLoaded = true;
             });
@@ -325,19 +324,19 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
           if (data && data.length > 0) {
             const dbMessages: ChatMessage[] = data.map((row: Record<string, unknown>) => ({
-              id: row.id as string,
-              sessionId: row.session_id as string,
-              role: row.role as 'user' | 'assistant',
-              content: (row.content as string) || '',
-              createdAt: row.timestamp
-                ? new Date(row.timestamp as string)
-                : row.created_at
-                  ? new Date(row.created_at as string)
+              id: row['id'] as string,
+              sessionId: row['session_id'] as string,
+              role: row['role'] as 'user' | 'assistant',
+              content: (row['content'] as string) || '',
+              createdAt: row['timestamp']
+                ? new Date(row['timestamp'] as string)
+                : row['created_at']
+                  ? new Date(row['created_at'] as string)
                   : new Date(),
               isStreaming: false,
               metadata:
-                typeof row.metadata === 'object' && row.metadata !== null
-                  ? (row.metadata as ChatMessage['metadata'])
+                typeof row['metadata'] === 'object' && row['metadata'] !== null
+                  ? (row['metadata'] as ChatMessage['metadata'])
                   : undefined,
             }));
 
@@ -352,7 +351,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       saveMessageToDb: async (message: ChatMessage, userId: string) => {
         try {
-          await (supabase.from('vibe_messages') as unknown as ReturnType<typeof supabase.from>).upsert({
+          await (
+            supabase.from('vibe_messages') as unknown as ReturnType<typeof supabase.from>
+          ).upsert({
             id: message.id,
             session_id: message.sessionId,
             user_id: userId,
@@ -368,7 +369,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       saveSessionToDb: async (session: ChatSession, userId: string) => {
         try {
-          await (supabase.from('vibe_sessions') as unknown as ReturnType<typeof supabase.from>).upsert({
+          await (
+            supabase.from('vibe_sessions') as unknown as ReturnType<typeof supabase.from>
+          ).upsert({
             id: session.id,
             user_id: userId,
             title: session.title,

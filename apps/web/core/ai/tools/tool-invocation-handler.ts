@@ -279,7 +279,7 @@ class ToolInvocationService {
       },
       body: JSON.stringify({
         model: model || 'gpt-4',
-        messages: parameters.messages || [],
+        messages: parameters['messages'] || [],
         temperature: temperature || 0.7,
         max_tokens: maxTokens || 1000,
         ...parameters,
@@ -512,21 +512,21 @@ class ToolInvocationService {
       'api_usage',
     ];
 
-    const isUserScopedTable = userScopedTables.includes(table);
+    const isUserScopedTable = userScopedTables.includes(table!);
 
     let result;
     switch (operation) {
       case 'select': {
-        let queryBuilder = db.from(table).select(parameters.select || '*');
+        let queryBuilder = db.from(table!).select(parameters['select'] || '*');
 
         // Automatically add user_id filter for user-scoped tables
-        if (isUserScopedTable && !parameters.user_id) {
+        if (isUserScopedTable && !parameters['user_id']) {
           queryBuilder = queryBuilder.eq('user_id', userId);
         }
 
         // Apply additional filters from parameters
-        if (parameters.filters) {
-          const filters = parameters.filters as Record<string, unknown>;
+        if (parameters['filters']) {
+          const filters = parameters['filters'] as Record<string, unknown>;
           for (const [key, value] of Object.entries(filters)) {
             queryBuilder = queryBuilder.eq(key, value);
           }
@@ -538,14 +538,14 @@ class ToolInvocationService {
       case 'insert': {
         // Automatically add user_id for user-scoped tables
         const insertData = isUserScopedTable
-          ? { ...(parameters.data as Record<string, unknown>), user_id: userId }
-          : (parameters.data as Record<string, unknown>);
+          ? { ...(parameters['data'] as Record<string, unknown>), user_id: userId }
+          : (parameters['data'] as Record<string, unknown>);
 
-        result = await db.from(table).insert(insertData);
+        result = await db.from(table!).insert(insertData);
         break;
       }
       case 'update': {
-        let queryBuilder = db.from(table).update(parameters.data as Record<string, unknown>);
+        let queryBuilder = db.from(table!).update(parameters['data'] as Record<string, unknown>);
 
         // For user-scoped tables, require user_id in where clause
         if (isUserScopedTable) {
@@ -553,15 +553,15 @@ class ToolInvocationService {
         }
 
         // Apply additional where conditions
-        if (parameters.column && parameters.value) {
-          queryBuilder = queryBuilder.eq(parameters.column as string, parameters.value);
+        if (parameters['column'] && parameters['value']) {
+          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
         }
 
         result = await queryBuilder;
         break;
       }
       case 'delete': {
-        let queryBuilder = db.from(table).delete();
+        let queryBuilder = db.from(table!).delete();
 
         // For user-scoped tables, require user_id in where clause
         if (isUserScopedTable) {
@@ -569,8 +569,8 @@ class ToolInvocationService {
         }
 
         // Apply additional where conditions
-        if (parameters.column && parameters.value) {
-          queryBuilder = queryBuilder.eq(parameters.column as string, parameters.value);
+        if (parameters['column'] && parameters['value']) {
+          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
         }
 
         result = await queryBuilder;
@@ -578,7 +578,7 @@ class ToolInvocationService {
       }
       case 'custom':
         // For custom RPC calls, pass userId in parameters
-        result = await db.rpc(query, {
+        result = await db.rpc(query!, {
           ...parameters,
           user_id: userId,
         });

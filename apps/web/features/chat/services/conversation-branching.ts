@@ -99,9 +99,9 @@ export class ConversationBranchingService {
 
       // Create a new session for the branch
       const branchSession = await chatPersistenceService.createSession(userId, branchTitle, {
-        employeeId: originalSession.metadata?.employeeId as string,
-        role: originalSession.metadata?.role as string,
-        provider: originalSession.metadata?.provider as string,
+        employeeId: originalSession.metadata?.['employeeId'] as string,
+        role: originalSession.metadata?.['role'] as string,
+        provider: originalSession.metadata?.['provider'] as string,
       });
 
       // Copy messages up to and including the branch point to the new session
@@ -146,7 +146,9 @@ export class ConversationBranchingService {
   ): Promise<ConversationBranch> {
     // conversation_branches is a custom table not in Supabase generated types
 
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .insert({
         parent_session_id: parentSessionId,
         child_session_id: childSessionId,
@@ -172,7 +174,9 @@ export class ConversationBranchingService {
     sessionId: string,
     _userId?: string,
   ): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select(
         `
         *,
@@ -298,7 +302,9 @@ export class ConversationBranchingService {
    * Check if a session is a branch (has a parent)
    */
   async isBranchSession(sessionId: string): Promise<boolean> {
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select('id')
       .eq('child_session_id', sessionId)
       .maybeSingle();
@@ -315,7 +321,9 @@ export class ConversationBranchingService {
    * Get branch info for a session if it is a branch
    */
   async getBranchInfo(sessionId: string): Promise<ConversationBranch | null> {
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select('*')
       .eq('child_session_id', sessionId)
       .maybeSingle();
@@ -331,7 +339,9 @@ export class ConversationBranchingService {
    * Update branch name
    */
   async updateBranchName(branchId: string, newName: string): Promise<ConversationBranch> {
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .update({ branch_name: newName })
       .eq('id', branchId)
       .select()
@@ -348,7 +358,9 @@ export class ConversationBranchingService {
    * Delete a branch record (does not delete the session)
    */
   async deleteBranch(branchId: string): Promise<void> {
-    const { error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .delete()
       .eq('id', branchId);
 
@@ -437,9 +449,9 @@ export class ConversationBranchingService {
       const duplicateTitle = newTitle || `${originalSession.title} (Copy)`;
 
       const duplicateSession = await chatPersistenceService.createSession(userId, duplicateTitle, {
-        employeeId: originalSession.metadata?.employeeId as string,
-        role: originalSession.metadata?.role as string,
-        provider: originalSession.metadata?.provider as string,
+        employeeId: originalSession.metadata?.['employeeId'] as string,
+        role: originalSession.metadata?.['role'] as string,
+        provider: originalSession.metadata?.['provider'] as string,
       });
 
       // Copy all messages
@@ -485,9 +497,9 @@ export class ConversationBranchingService {
       const mergeTitle = newTitle || `Merged: ${session1.title} + ${session2.title}`;
 
       const mergeSession = await chatPersistenceService.createSession(userId, mergeTitle, {
-        employeeId: session1.metadata?.employeeId as string,
-        role: session1.metadata?.role as string,
-        provider: session1.metadata?.provider as string,
+        employeeId: session1.metadata?.['employeeId'] as string,
+        role: session1.metadata?.['role'] as string,
+        provider: session1.metadata?.['provider'] as string,
       });
 
       // Combine messages sorted by timestamp
@@ -553,7 +565,9 @@ export class ConversationBranchingService {
    * Get branches at a specific message point
    */
   async getBranchesAtMessage(messageId: string): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select(
         `
         *,
@@ -621,7 +635,9 @@ export class ConversationBranchingService {
    * Count branches for a session
    */
   async countBranches(sessionId: string): Promise<number> {
-    const { count, error } = await (supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { count, error } = await (
+      supabase.from('conversation_branches' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select('*', { count: 'exact', head: true })
       .eq('parent_session_id', sessionId);
 

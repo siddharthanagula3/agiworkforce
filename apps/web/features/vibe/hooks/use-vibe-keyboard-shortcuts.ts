@@ -49,9 +49,6 @@ export function useVibeKeyboardShortcuts(options: UseVibeKeyboardShortcutsOption
       if (!enabled) return;
 
       // Don't trigger shortcuts when typing in input fields (except for specific keys)
-      const target = event.target as HTMLElement;
-      const _isInputField =
-        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
       // Use modern platform detection instead of deprecated navigator.platform
       const isMac = safePlatform.isMac();

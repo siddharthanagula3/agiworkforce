@@ -261,7 +261,7 @@ export class EmployeeChatService {
   private async handleSimpleTask(
     userMessage: string,
     conversationHistory: Array<{ role: string; content: string }>,
-    complexityReason: string,
+    _complexityReason: string,
     mode?: string,
     userId?: string,
   ): Promise<{
@@ -1174,7 +1174,6 @@ export class EmployeeChatService {
     let bestEmployee = this.employees[0];
     let bestScore = 0;
     let bestReasons: string[] = ['general assistant'];
-    let _bestExpertise: string[] = [];
 
     scores.forEach((data, employeeName) => {
       if (data.score > bestScore) {
@@ -1183,7 +1182,6 @@ export class EmployeeChatService {
           bestEmployee = employee;
           bestScore = data.score;
           bestReasons = data.reasons;
-          _bestExpertise = data.matchedExpertise;
         }
       }
     });

@@ -3,7 +3,7 @@
  * Displays image attachments in messages with lightbox viewer
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import NextImage from 'next/image';
 import { Dialog, DialogContent, DialogTitle } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';

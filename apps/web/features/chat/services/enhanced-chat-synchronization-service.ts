@@ -107,13 +107,13 @@ function isDatabaseChatMessage(value: unknown): value is DatabaseChatMessage {
   if (value === null || typeof value !== 'object') return false;
   const record = value as Record<string, unknown>;
   return (
-    typeof record.id === 'string' &&
-    typeof record.conversation_id === 'string' &&
-    typeof record.sender_id === 'string' &&
-    typeof record.sender_name === 'string' &&
-    typeof record.sender_type === 'string' &&
-    typeof record.content === 'string' &&
-    typeof record.timestamp === 'string'
+    typeof record['id'] === 'string' &&
+    typeof record['conversation_id'] === 'string' &&
+    typeof record['sender_id'] === 'string' &&
+    typeof record['sender_name'] === 'string' &&
+    typeof record['sender_type'] === 'string' &&
+    typeof record['content'] === 'string' &&
+    typeof record['timestamp'] === 'string'
   );
 }
 
@@ -478,7 +478,9 @@ export class EnhancedChatSynchronizationService {
     store.setSyncing(true);
 
     try {
-      const { error } = await (supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>)
+      const { error } = await (
+        supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
+      )
         .update(this.transformLocalMessage(message as ChatMessage))
         .eq('id', message.id);
 

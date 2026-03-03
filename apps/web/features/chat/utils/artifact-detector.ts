@@ -32,7 +32,7 @@ export function extractCodeBlocks(markdown: string): CodeBlock[] {
   while ((match = regex.exec(markdown)) !== null) {
     codeBlocks.push({
       language: match[1] || 'text',
-      content: match[2].trim(),
+      content: match[2]!.trim(),
       startIndex: match.index,
       endIndex: match.index + match[0].length,
     });
@@ -101,7 +101,7 @@ export function extractArtifactTitle(content: string): string | undefined {
   // Try comment-based title
   const commentMatch = content.match(/(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i);
   if (commentMatch) {
-    return commentMatch[1].trim();
+    return commentMatch[1]!.trim();
   }
 
   // Try first heading
@@ -111,9 +111,9 @@ export function extractArtifactTitle(content: string): string | undefined {
     let prev;
     do {
       prev = text;
-      text = text.replace(/<[^>]*>/g, '');
+      text = text?.replace(/<[^>]*>/g, '');
     } while (text !== prev);
-    return text.trim();
+    return text!.trim();
   }
 
   return undefined;

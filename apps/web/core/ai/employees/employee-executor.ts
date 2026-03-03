@@ -180,7 +180,7 @@ export class AIEmployeeExecutor {
 
     // If no specific tools identified, use the first available tool
     if (requiredTools.length === 0 && availableTools.length > 0) {
-      requiredTools.push(availableTools[0]);
+      requiredTools.push(availableTools[0]!);
     }
 
     return requiredTools;
@@ -219,15 +219,15 @@ export class AIEmployeeExecutor {
       task,
       employee: this.employee.name,
 
-      role: (this.employee as unknown as Record<string, unknown>).role,
+      role: (this.employee as unknown as Record<string, unknown>)['role'],
       timestamp: new Date().toISOString(),
     };
 
     // Add job context if available
     if (job) {
-      baseParameters.jobId = job.id;
-      baseParameters.jobTitle = job.title;
-      baseParameters.jobDescription = job.description;
+      baseParameters['jobId'] = job.id;
+      baseParameters['jobTitle'] = job.title;
+      baseParameters['jobDescription'] = job.description;
     }
 
     // Tool-specific parameter preparation
@@ -349,7 +349,7 @@ export class AIEmployeeExecutor {
   private extractSubject(task: string): string | null {
     // Simple extraction - look for "subject:" or similar patterns
     const subjectMatch = task.match(/subject:\s*(.+)/i);
-    return subjectMatch ? subjectMatch[1].trim() : null;
+    return subjectMatch ? subjectMatch[1]!.trim() : null;
   }
 
   /**
@@ -357,7 +357,7 @@ export class AIEmployeeExecutor {
    */
   private extractFilename(task: string): string | null {
     const filenameMatch = task.match(/filename:\s*(.+)/i);
-    return filenameMatch ? filenameMatch[1].trim() : null;
+    return filenameMatch ? filenameMatch[1]!.trim() : null;
   }
 
   /**
@@ -394,11 +394,11 @@ export class AIEmployeeExecutor {
 
       const pd = performanceData as Record<string, unknown> | null;
       const currentMetrics: PerformanceMetrics = {
-        tasksCompleted: (pd?.tasks_completed as number) ?? 0,
-        successRate: (pd?.success_rate as number) ?? 0,
-        averageExecutionTime: (pd?.average_execution_time as number) ?? 0,
-        errorRate: (pd?.error_rate as number) ?? 0,
-        lastUpdated: pd?.last_updated as string | undefined,
+        tasksCompleted: (pd?.['tasks_completed'] as number) ?? 0,
+        successRate: (pd?.['success_rate'] as number) ?? 0,
+        averageExecutionTime: (pd?.['average_execution_time'] as number) ?? 0,
+        errorRate: (pd?.['error_rate'] as number) ?? 0,
+        lastUpdated: pd?.['last_updated'] as string | undefined,
       };
 
       const updatedMetrics = {

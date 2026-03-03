@@ -90,7 +90,7 @@ export type GrokErrorCode =
   | `HTTP_${number}`;
 
 export class GrokError extends Error {
-  public readonly name = 'GrokError' as const;
+  public override readonly name = 'GrokError' as const;
 
   constructor(
     message: string,
@@ -447,7 +447,7 @@ export class GrokProvider {
         content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
 
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
+        const parsed = JSON.parse(jsonMatch[1]!);
         return parsed;
       }
 
@@ -473,8 +473,8 @@ export class GrokProvider {
     author?: string;
   }> {
     // Grok may include source citations in metadata
-    if (data.sources && Array.isArray(data.sources)) {
-      return data.sources;
+    if (data['sources'] && Array.isArray(data['sources'])) {
+      return data['sources'];
     }
     return [];
   }

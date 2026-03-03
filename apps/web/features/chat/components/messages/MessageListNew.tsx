@@ -131,6 +131,7 @@ function MessageItem({
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    return undefined;
   }, [showActions]);
 
   const handleCopy = async () => {

@@ -129,7 +129,7 @@ export type AnthropicErrorCode =
   | `HTTP_${number}`;
 
 export class AnthropicError extends Error {
-  public readonly name = 'AnthropicError' as const;
+  public override readonly name = 'AnthropicError' as const;
 
   constructor(
     message: string,
@@ -152,11 +152,11 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
 
   if (status === 402) {
     // Payment Required - Insufficient tokens
-    toast.error(errorInfo.title, {
-      description: errorInfo.message,
-      action: errorInfo.action
+    toast.error(errorInfo?.title, {
+      description: errorInfo?.message,
+      action: errorInfo?.action
         ? {
-            label: errorInfo.action,
+            label: errorInfo?.action,
             onClick: () => {
               // Navigate to billing page
               window.location.href = '/settings/billing';
@@ -185,8 +185,8 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
 
   if (status === 504) {
     // Gateway Timeout
-    toast.error(errorInfo.title, {
-      description: errorInfo.message,
+    toast.error(errorInfo?.title, {
+      description: errorInfo?.message,
       action: {
         label: 'Retry',
         onClick: () => {
@@ -205,7 +205,7 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
   }
 
   // Generic HTTP error
-  const errorMessage = (errorData.error as string) || `HTTP error! status: ${status}`;
+  const errorMessage = (errorData['error'] as string) || `HTTP error! status: ${status}`;
   throw new AnthropicError(
     errorMessage,
     `HTTP_${status}`,
@@ -262,7 +262,7 @@ export class AnthropicProvider {
             continue;
           } else {
             // Max retries exceeded for rate limit
-            toast.error(HTTP_ERROR_MESSAGES[429].title, {
+            toast.error(HTTP_ERROR_MESSAGES![429]!.title, {
               description: 'Maximum retry attempts reached. Please try again later.',
               duration: 8000,
             });
@@ -437,7 +437,7 @@ export class AnthropicProvider {
             continue;
           } else {
             // Max retries exceeded for rate limit
-            toast.error(HTTP_ERROR_MESSAGES[429].title, {
+            toast.error(HTTP_ERROR_MESSAGES![429]!.title, {
               description: 'Maximum retry attempts reached. Please try again later.',
               duration: 8000,
             });
@@ -584,33 +584,10 @@ export class AnthropicProvider {
   /**
    * Extract content from Anthropic response
    */
-  private extractContentFromResponse(response: Anthropic.Messages.Message): string {
-    if (response.content && response.content.length > 0) {
-      return response.content
-        .filter((block) => block.type === 'text')
-        .map((block) => (block as Anthropic.Messages.TextBlock).text)
-        .join('');
-    }
-    return '';
-  }
 
   /**
    * Extract usage information from Anthropic response
    */
-  private extractUsageFromResponse(response: Anthropic.Messages.Message): {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  } {
-    if (response.usage) {
-      return {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
-      };
-    }
-    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  }
 
   /**
    * Save message to database
@@ -674,7 +651,12 @@ export class AnthropicProvider {
    * Get models with computer use capability
    */
   static getComputerUseModels(): string[] {
-    return ['claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20251101'];
+    return [
+      'claude-sonnet-4-6',
+      'claude-sonnet-4-5-20250929',
+      'claude-haiku-4-5-20251001',
+      'claude-opus-4-5-20251101',
+    ];
   }
 
   /**

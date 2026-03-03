@@ -355,7 +355,7 @@ describe('VibeViewStore', () => {
       expect(id).toBe('test-uuid-1');
       const { terminalState } = useVibeViewStore.getState();
       expect(terminalState.history).toHaveLength(1);
-      expect(terminalState.history[0].command).toBe('ls -la');
+      expect(terminalState!.history[0]!.command!).toBe('ls -la');
       expect(terminalState.activeCommand).toBe('test-uuid-1');
     });
 
@@ -366,7 +366,7 @@ describe('VibeViewStore', () => {
         status: 'completed',
       });
       const cmd = useVibeViewStore.getState().terminalState.history[0];
-      expect(cmd.timestamp).toBeInstanceOf(Date);
+      expect(cmd!.timestamp).toBeInstanceOf(Date);
     });
   });
 
@@ -377,10 +377,12 @@ describe('VibeViewStore', () => {
         output: '',
         status: 'running',
       });
-      useVibeViewStore.getState().updateTerminalCommand(id, { output: 'Tests passed', status: 'completed' });
+      useVibeViewStore
+        .getState()
+        .updateTerminalCommand(id, { output: 'Tests passed', status: 'completed' });
       const cmd = useVibeViewStore.getState().terminalState.history[0];
-      expect(cmd.output).toBe('Tests passed');
-      expect(cmd.status).toBe('completed');
+      expect(cmd!.output).toBe('Tests passed');
+      expect(cmd!.status).toBe('completed');
     });
 
     it('clears activeCommand when status is completed', () => {
@@ -414,7 +416,9 @@ describe('VibeViewStore', () => {
         output: '',
         status: 'running',
       });
-      useVibeViewStore.getState().updateTerminalCommand(id2, { output: 'result2', status: 'completed' });
+      useVibeViewStore
+        .getState()
+        .updateTerminalCommand(id2, { output: 'result2', status: 'completed' });
       const history = useVibeViewStore.getState().terminalState.history;
       const cmd1 = history.find((c) => c.id === id1);
       expect(cmd1?.status).toBe('running');
@@ -423,7 +427,9 @@ describe('VibeViewStore', () => {
 
   describe('clearTerminalHistory', () => {
     it('clears all history and activeCommand', () => {
-      useVibeViewStore.getState().addTerminalCommand({ command: 'ls', output: '', status: 'running' });
+      useVibeViewStore
+        .getState()
+        .addTerminalCommand({ command: 'ls', output: '', status: 'running' });
       useVibeViewStore.getState().clearTerminalHistory();
       const { terminalState } = useVibeViewStore.getState();
       expect(terminalState.history).toEqual([]);
@@ -488,7 +494,7 @@ describe('VibeViewStore', () => {
       };
       useVibeViewStore.getState().addTask(task);
       expect(useVibeViewStore.getState().plannerState.tasks).toHaveLength(1);
-      expect(useVibeViewStore.getState().plannerState.tasks[0].id).toBe('task-1');
+      expect(useVibeViewStore!.getState().plannerState.tasks[0]!.id!).toBe('task-1');
     });
   });
 
@@ -506,8 +512,8 @@ describe('VibeViewStore', () => {
       useVibeViewStore.getState().addTask(task);
       useVibeViewStore.getState().updateTask('task-2', { status: 'in_progress', progress: 50 });
       const updated = useVibeViewStore.getState().plannerState.tasks[0];
-      expect(updated.status).toBe('in_progress');
-      expect(updated.progress).toBe(50);
+      expect(updated!.status).toBe('in_progress');
+      expect(updated!.progress).toBe(50);
     });
   });
 
@@ -535,7 +541,7 @@ describe('VibeViewStore', () => {
       ];
       useVibeViewStore.getState().setFileTree(tree);
       expect(useVibeViewStore.getState().fileTree).toHaveLength(1);
-      expect(useVibeViewStore.getState().fileTree[0].id).toBe('f1');
+      expect(useVibeViewStore!.getState().fileTree[0]!.id!).toBe('f1');
     });
   });
 
@@ -547,7 +553,7 @@ describe('VibeViewStore', () => {
       useVibeViewStore.getState().setFileTree(tree);
       useVibeViewStore.getState().expandFolder('folder-1');
       const folder = useVibeViewStore.getState().fileTree[0];
-      expect(folder.metadata?.isExpanded).toBe(true);
+      expect(folder!.metadata?.['isExpanded']).toBe(true);
     });
   });
 
@@ -560,7 +566,7 @@ describe('VibeViewStore', () => {
       useVibeViewStore.getState().expandFolder('folder-2');
       useVibeViewStore.getState().collapseFolder('folder-2');
       const folder = useVibeViewStore.getState().fileTree[0];
-      expect(folder.metadata?.isExpanded).toBe(false);
+      expect(folder!.metadata?.['isExpanded']).toBe(false);
     });
   });
 
@@ -576,8 +582,8 @@ describe('VibeViewStore', () => {
       ];
       useVibeViewStore.getState().setFileMetadata(meta);
       const stored = useVibeViewStore.getState().fileMetadata;
-      expect(stored['/src/index.ts'].id).toBe('m1');
-      expect(stored['/src/app.ts'].id).toBe('m2');
+      expect(stored!['/src/index.ts']!.id!).toBe('m1');
+      expect(stored!['/src/app.ts']!.id!).toBe('m2');
     });
   });
 
@@ -585,7 +591,7 @@ describe('VibeViewStore', () => {
     it('inserts new metadata', () => {
       const meta: FileMetadata = { id: 'm3', name: 'util.ts', path: '/src/util.ts', url: '' };
       useVibeViewStore.getState().upsertFileMetadata(meta);
-      expect(useVibeViewStore.getState().fileMetadata['/src/util.ts'].id).toBe('m3');
+      expect(useVibeViewStore!.getState().fileMetadata['/src/util.ts']!.id!).toBe('m3');
     });
 
     it('overwrites existing metadata for the same path', () => {
@@ -593,7 +599,7 @@ describe('VibeViewStore', () => {
       const meta2: FileMetadata = { id: 'm4', name: 'helper.ts', path: '/helper.ts', url: 'v2' };
       useVibeViewStore.getState().upsertFileMetadata(meta1);
       useVibeViewStore.getState().upsertFileMetadata(meta2);
-      expect(useVibeViewStore.getState().fileMetadata['/helper.ts'].url).toBe('v2');
+      expect(useVibeViewStore!.getState().fileMetadata['/helper.ts']!.url!).toBe('v2');
     });
   });
 
@@ -638,7 +644,9 @@ describe('VibeViewStore', () => {
       useVibeViewStore.getState().setActiveView('app-viewer');
       useVibeViewStore.getState().setFollowingAgent(true);
       useVibeViewStore.getState().openFile('/a.ts', 'content', 'typescript');
-      useVibeViewStore.getState().addTerminalCommand({ command: 'ls', output: '', status: 'running' });
+      useVibeViewStore
+        .getState()
+        .addTerminalCommand({ command: 'ls', output: '', status: 'running' });
       useVibeViewStore.getState().setAppViewerUrl('http://localhost');
       useVibeViewStore.getState().addTask({
         id: 't1',

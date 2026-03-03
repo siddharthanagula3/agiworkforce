@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
@@ -146,7 +146,7 @@ function AIConfigurationTab() {
           </div>
           <Slider
             value={[temperature]}
-            onValueChange={([v]) => setTemperature(v)}
+            onValueChange={([v]) => setTemperature(v!)}
             min={0}
             max={1}
             step={0.1}

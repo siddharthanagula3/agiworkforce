@@ -7,7 +7,7 @@
  * - Creates branch and navigates to it
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,

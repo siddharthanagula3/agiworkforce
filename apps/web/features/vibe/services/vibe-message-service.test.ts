@@ -10,7 +10,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Build chainable supabase mock
 function createChainMock(terminal: Record<string, unknown> = {}) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const method of ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'order', 'limit', 'maybeSingle', 'single']) {
+  for (const method of [
+    'select',
+    'insert',
+    'update',
+    'delete',
+    'upsert',
+    'eq',
+    'order',
+    'limit',
+    'maybeSingle',
+    'single',
+  ]) {
     chain[method] = vi.fn().mockReturnValue(chain);
   }
   // Apply terminal overrides
@@ -63,26 +74,26 @@ describe('VibeMessageService', () => {
         { id: '2', session_id: 's1', role: 'assistant', content: 'hello' },
       ];
 
-      mockChain.order = vi.fn().mockResolvedValue({ data: fakeMessages, error: null });
+      mockChain['order'] = vi.fn().mockResolvedValue({ data: fakeMessages, error: null });
 
       const result = await VibeMessageService.getMessages('s1');
 
       expect(mockFrom).toHaveBeenCalledWith('vibe_messages');
-      expect(mockChain.select).toHaveBeenCalledWith('*');
-      expect(mockChain.eq).toHaveBeenCalledWith('session_id', 's1');
-      expect(mockChain.order).toHaveBeenCalledWith('timestamp', { ascending: true });
+      expect(mockChain['select']).toHaveBeenCalledWith('*');
+      expect(mockChain['eq']).toHaveBeenCalledWith('session_id', 's1');
+      expect(mockChain['order']).toHaveBeenCalledWith('timestamp', { ascending: true });
       expect(result).toEqual(fakeMessages);
     });
 
     it('returns empty array when data is null', async () => {
-      mockChain.order = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockChain['order'] = vi.fn().mockResolvedValue({ data: null, error: null });
 
       const result = await VibeMessageService.getMessages('s1');
       expect(result).toEqual([]);
     });
 
     it('throws on supabase error', async () => {
-      mockChain.order = vi.fn().mockResolvedValue({
+      mockChain['order'] = vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'DB error' },
       });
@@ -107,7 +118,7 @@ describe('VibeMessageService', () => {
         user_id: 'u1',
       };
 
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({ data: created, error: null });
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({ data: created, error: null });
 
       const result = await VibeMessageService.createMessage({
         sessionId: 's1',
@@ -117,12 +128,12 @@ describe('VibeMessageService', () => {
       });
 
       expect(mockFrom).toHaveBeenCalledWith('vibe_messages');
-      expect(mockChain.insert).toHaveBeenCalled();
+      expect(mockChain['insert']).toHaveBeenCalled();
       expect(result).toEqual(created);
     });
 
     it('uses provided id when given', async () => {
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({
         data: { id: 'custom-id', session_id: 's1', role: 'user', content: 'x' },
         error: null,
       });
@@ -135,13 +146,13 @@ describe('VibeMessageService', () => {
         content: 'x',
       });
 
-      const insertArg = mockChain.insert.mock.calls[0][0];
+      const insertArg = mockChain!['insert']!.mock.calls[0]![0]!;
       expect(insertArg.id).toBe('custom-id');
       expect(result.id).toBe('custom-id');
     });
 
     it('throws on supabase error', async () => {
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'Insert failed' },
       });
@@ -157,7 +168,7 @@ describe('VibeMessageService', () => {
     });
 
     it('throws when no data is returned', async () => {
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({ data: null, error: null });
 
       await expect(
         VibeMessageService.createMessage({
@@ -183,28 +194,30 @@ describe('VibeMessageService', () => {
         content: 'updated content',
       };
 
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({ data: updated, error: null });
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({ data: updated, error: null });
 
-      const result = await VibeMessageService.updateMessage('msg-1', { content: 'updated content' });
+      const result = await VibeMessageService.updateMessage('msg-1', {
+        content: 'updated content',
+      });
 
-      expect(mockChain.update).toHaveBeenCalledWith({ content: 'updated content' });
-      expect(mockChain.eq).toHaveBeenCalledWith('id', 'msg-1');
+      expect(mockChain['update']).toHaveBeenCalledWith({ content: 'updated content' });
+      expect(mockChain['eq']).toHaveBeenCalledWith('id', 'msg-1');
       expect(result).toEqual(updated);
     });
 
     it('throws on supabase error', async () => {
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'Update failed' },
       });
 
-      await expect(
-        VibeMessageService.updateMessage('msg-1', { content: 'x' }),
-      ).rejects.toThrow('Failed to update message: Update failed');
+      await expect(VibeMessageService.updateMessage('msg-1', { content: 'x' })).rejects.toThrow(
+        'Failed to update message: Update failed',
+      );
     });
 
     it('throws when message not found', async () => {
-      mockChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockChain['maybeSingle'] = vi.fn().mockResolvedValue({ data: null, error: null });
 
       await expect(
         VibeMessageService.updateMessage('nonexistent', { content: 'x' }),
@@ -218,17 +231,17 @@ describe('VibeMessageService', () => {
 
   describe('deleteMessage', () => {
     it('deletes a message by id', async () => {
-      mockChain.eq = vi.fn().mockResolvedValue({ error: null });
+      mockChain['eq'] = vi.fn().mockResolvedValue({ error: null });
 
       await VibeMessageService.deleteMessage('msg-1');
 
       expect(mockFrom).toHaveBeenCalledWith('vibe_messages');
-      expect(mockChain.delete).toHaveBeenCalled();
-      expect(mockChain.eq).toHaveBeenCalledWith('id', 'msg-1');
+      expect(mockChain['delete']).toHaveBeenCalled();
+      expect(mockChain['eq']).toHaveBeenCalledWith('id', 'msg-1');
     });
 
     it('throws on supabase error', async () => {
-      mockChain.eq = vi.fn().mockResolvedValue({ error: { message: 'Delete failed' } });
+      mockChain['eq'] = vi.fn().mockResolvedValue({ error: { message: 'Delete failed' } });
 
       await expect(VibeMessageService.deleteMessage('msg-1')).rejects.toThrow(
         'Failed to delete message: Delete failed',
@@ -251,7 +264,7 @@ describe('VibeMessageService', () => {
     beforeEach(() => {
       // Default: createMessage succeeds
       let callCount = 0;
-      mockChain.maybeSingle = vi.fn().mockImplementation(() => {
+      mockChain['maybeSingle'] = vi.fn().mockImplementation(() => {
         callCount++;
         if (callCount === 1) {
           // User message create
@@ -263,13 +276,25 @@ describe('VibeMessageService', () => {
         if (callCount === 2) {
           // Assistant message create
           return Promise.resolve({
-            data: { id: 'asst-msg', session_id: 's1', role: 'assistant', content: '', is_streaming: true },
+            data: {
+              id: 'asst-msg',
+              session_id: 's1',
+              role: 'assistant',
+              content: '',
+              is_streaming: true,
+            },
             error: null,
           });
         }
         // Update (final)
         return Promise.resolve({
-          data: { id: 'asst-msg', session_id: 's1', role: 'assistant', content: 'A joke!', is_streaming: false },
+          data: {
+            id: 'asst-msg',
+            session_id: 's1',
+            role: 'assistant',
+            content: 'A joke!',
+            is_streaming: false,
+          },
           error: null,
         });
       });
@@ -373,9 +398,9 @@ describe('VibeMessageService', () => {
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse));
 
-      await expect(
-        VibeMessageService.processUserMessage(baseParams),
-      ).rejects.toThrow('No response received from AI');
+      await expect(VibeMessageService.processUserMessage(baseParams)).rejects.toThrow(
+        'No response received from AI',
+      );
     });
 
     it('calls onError and resets streaming state on failure', async () => {
@@ -399,9 +424,9 @@ describe('VibeMessageService', () => {
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse));
 
-      await expect(
-        VibeMessageService.processUserMessage(baseParams),
-      ).rejects.toThrow('Request failed');
+      await expect(VibeMessageService.processUserMessage(baseParams)).rejects.toThrow(
+        'Request failed',
+      );
     });
   });
 
@@ -415,10 +440,18 @@ describe('VibeMessageService', () => {
       let statusCallback: ((status: string) => void) | undefined;
 
       const channelObj = {
-        on: vi.fn().mockImplementation((_event: string, _filter: unknown, handler: (payload: Record<string, unknown>) => void) => {
-          payloadHandler = handler;
-          return channelObj;
-        }),
+        on: vi
+          .fn()
+          .mockImplementation(
+            (
+              _event: string,
+              _filter: unknown,
+              handler: (payload: Record<string, unknown>) => void,
+            ) => {
+              payloadHandler = handler;
+              return channelObj;
+            },
+          ),
         subscribe: vi.fn().mockImplementation((cb: (status: string) => void) => {
           statusCallback = cb;
           return channelObj;
@@ -482,33 +515,33 @@ describe('VibeMessageService', () => {
         { id: '1', session_id: 's1', role: 'user', content: 'oldest' },
       ];
 
-      mockChain.limit = vi.fn().mockResolvedValue({ data, error: null });
+      mockChain['limit'] = vi.fn().mockResolvedValue({ data, error: null });
 
       const result = await VibeMessageService.getRecentMessages('s1', 10);
 
-      expect(mockChain.order).toHaveBeenCalledWith('timestamp', { ascending: false });
-      expect(mockChain.limit).toHaveBeenCalledWith(10);
-      expect(result[0].id).toBe('1');
-      expect(result[2].id).toBe('3');
+      expect(mockChain['order']).toHaveBeenCalledWith('timestamp', { ascending: false });
+      expect(mockChain['limit']).toHaveBeenCalledWith(10);
+      expect(result![0]!.id!).toBe('1');
+      expect(result![2]!.id!).toBe('3');
     });
 
     it('uses default limit of 50', async () => {
-      mockChain.limit = vi.fn().mockResolvedValue({ data: [], error: null });
+      mockChain['limit'] = vi.fn().mockResolvedValue({ data: [], error: null });
 
       await VibeMessageService.getRecentMessages('s1');
 
-      expect(mockChain.limit).toHaveBeenCalledWith(50);
+      expect(mockChain['limit']).toHaveBeenCalledWith(50);
     });
 
     it('returns empty array when data is null', async () => {
-      mockChain.limit = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockChain['limit'] = vi.fn().mockResolvedValue({ data: null, error: null });
 
       const result = await VibeMessageService.getRecentMessages('s1');
       expect(result).toEqual([]);
     });
 
     it('throws on supabase error', async () => {
-      mockChain.limit = vi.fn().mockResolvedValue({
+      mockChain['limit'] = vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'Fetch error' },
       });
@@ -525,17 +558,17 @@ describe('VibeMessageService', () => {
 
   describe('clearSessionMessages', () => {
     it('deletes all messages for a session', async () => {
-      mockChain.eq = vi.fn().mockResolvedValue({ error: null });
+      mockChain['eq'] = vi.fn().mockResolvedValue({ error: null });
 
       await VibeMessageService.clearSessionMessages('s1');
 
       expect(mockFrom).toHaveBeenCalledWith('vibe_messages');
-      expect(mockChain.delete).toHaveBeenCalled();
-      expect(mockChain.eq).toHaveBeenCalledWith('session_id', 's1');
+      expect(mockChain['delete']).toHaveBeenCalled();
+      expect(mockChain['eq']).toHaveBeenCalledWith('session_id', 's1');
     });
 
     it('throws on supabase error', async () => {
-      mockChain.eq = vi.fn().mockResolvedValue({ error: { message: 'Clear failed' } });
+      mockChain['eq'] = vi.fn().mockResolvedValue({ error: { message: 'Clear failed' } });
 
       await expect(VibeMessageService.clearSessionMessages('s1')).rejects.toThrow(
         'Failed to clear messages: Clear failed',

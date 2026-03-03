@@ -1177,7 +1177,7 @@ export class ConsultingOrchestrator {
         const nextStepIndex = workflow.steps.indexOf(step) + 1;
         if (nextStepIndex < workflow.steps.length) {
           const nextStep = workflow.steps[nextStepIndex];
-          const nextAgent = this.agents[nextStep.agentId];
+          const nextAgent = this.agents[nextStep!.agentId];
 
           if (nextAgent) {
             employeeMemoryService.createHandoff(
@@ -1192,7 +1192,7 @@ export class ConsultingOrchestrator {
                 keyPoints: step.produces,
                 userRequest: request.query,
                 workCompleted: step.description,
-                pendingTasks: [nextStep.description],
+                pendingTasks: [nextStep?.description],
               },
               stepResult.structuredOutput,
             );
@@ -1307,32 +1307,10 @@ export class ConsultingOrchestrator {
     store.addMessage({
       from: 'system',
       type: 'system',
-      content: `👔 **${supervisor.name}** is coordinating your consultation...`,
+      content: `👔 **${supervisor?.name}** is coordinating your consultation...`,
     });
 
     // First, supervisor analyzes the query and creates a plan
-    const planPrompt = `As the consultation supervisor, analyze this client request and create an execution plan.
-
-Client Request: ${request.query}
-
-Available Experts:
-${workflow.steps.map((s) => `- ${this.agents[s.agentId]?.name}: ${this.agents[s.agentId]?.role}`).join('\n')}
-
-Create a plan specifying:
-1. Which experts should be consulted
-2. In what order (sequential or parallel)
-3. What specific questions each expert should address
-4. How their outputs should be combined
-
-Respond in JSON format:
-{
-  "plan": [
-    { "agentId": "...", "task": "...", "parallel": true/false }
-  ],
-  "rationale": "..."
-}`;
-
-    const _planResponse = await this.callLLM(request, supervisor, planPrompt);
 
     // Execute based on supervisor's plan
     const contributions: AgentContribution[] = [];
@@ -1374,7 +1352,7 @@ Create a comprehensive final consultation that:
 3. Prioritizes action items
 4. Provides a clear next steps plan`;
 
-    const synthesis = await this.callLLM(request, supervisor, synthesisPrompt);
+    const synthesis = await this.callLLM(request, supervisor!, synthesisPrompt);
 
     const result = this.synthesizeResults(contributions, workflow);
     result.summary = synthesis.content;
@@ -1463,7 +1441,7 @@ Respond with JSON:
   "reasoning": "Why this answer won"
 }`;
 
-    const judging = await this.callLLM(request, supervisor, judgingPrompt);
+    const judging = await this.callLLM(request, supervisor!, judgingPrompt);
 
     // Parse judging result
     let winnerIndex = 0;
@@ -1496,14 +1474,14 @@ Respond with JSON:
     store.addMessage({
       from: 'system',
       type: 'system',
-      content: `🏆 **${winner.agentName}** wins the race!\n📊 Scores: ${raceResultsFinal.map((r) => `${r.agentName}: ${r.score.toFixed(1)}`).join(' | ')}`,
+      content: `🏆 **${winner?.agentName}** wins the race!\n📊 Scores: ${raceResultsFinal.map((r) => `${r.agentName}: ${r.score.toFixed(1)}`).join(' | ')}`,
     });
 
     store.addMessage({
-      from: winner.agentName,
+      from: winner?.agentName,
       type: 'employee',
-      content: winner.output,
-      metadata: { employeeName: winner.agentName, isRaceWinner: true },
+      content: winner?.output,
+      metadata: { employeeName: winner?.agentName, isRaceWinner: true },
     });
 
     const contributions: AgentContribution[] = raceResults.map((r) => ({
@@ -1525,7 +1503,7 @@ Respond with JSON:
       domain: workflow.domain,
       mode: 'race',
       result: {
-        summary: winner.output,
+        summary: winner?.output,
         recommendations: [],
         actionItems: [],
       },
@@ -1645,7 +1623,7 @@ ${step.instructions || ''}`;
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
       try {
-        const parsed = JSON.parse(jsonMatch[1]);
+        const parsed = JSON.parse(jsonMatch[1]!);
         Object.assign(output, parsed);
       } catch {
         // Not valid JSON
@@ -1657,11 +1635,11 @@ ${step.instructions || ''}`;
       const pattern = new RegExp(`${key}[:\\s]+([^\\n]+)`, 'i');
       const match = content.match(pattern);
       if (match && !output[key]) {
-        output[key] = match[1].trim();
+        output[key] = match[1]!.trim();
       }
     }
 
-    output.raw = content;
+    output['raw'] = content;
     return output;
   }
 

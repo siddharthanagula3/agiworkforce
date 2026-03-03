@@ -17,10 +17,10 @@ vi.mock('gray-matter', () => ({
 
       // Parse simple key: value pairs
       const data: Record<string, unknown> = {};
-      frontmatterStr.split('\n').forEach((line) => {
+      frontmatterStr!.split('\n').forEach((line) => {
         const match = line.match(/^(\w+):\s*(.+)$/);
         if (match) {
-          data[match[1]] = match[2];
+          data[match![1]!] = match[2];
         }
       });
 

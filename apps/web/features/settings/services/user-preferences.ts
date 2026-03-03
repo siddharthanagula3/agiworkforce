@@ -50,7 +50,7 @@ async function getTOTPEncryptionKey(): Promise<CryptoKey> {
   // Try to get key from environment (for server-side rendering/Netlify functions)
   const envKey =
     typeof process !== 'undefined'
-      ? process.env.TOTP_ENCRYPTION_KEY || process.env.VITE_TOTP_ENCRYPTION_KEY
+      ? process.env['TOTP_ENCRYPTION_KEY'] || process.env['VITE_TOTP_ENCRYPTION_KEY']
       : undefined;
 
   let keyMaterial: Uint8Array;
@@ -62,7 +62,7 @@ async function getTOTPEncryptionKey(): Promise<CryptoKey> {
   } else {
     // Fallback: derive key from Supabase URL (deterministic but not ideal)
     // This ensures the same key is used across sessions
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'default-key-material';
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'] || 'default-key-material';
     const encoder = new TextEncoder();
     const baseKey = encoder.encode(supabaseUrl + '-totp-encryption-v1');
     const hash = await crypto.subtle.digest('SHA-256', baseKey);
@@ -225,7 +225,7 @@ function encodeBase32(buffer: Uint8Array): string {
   let value = 0;
 
   for (let i = 0; i < buffer.length; i++) {
-    value = (value << 8) | buffer[i];
+    value = (value << 8) | buffer[i]!;
     bits += 8;
 
     while (bits >= 5) {
@@ -255,7 +255,7 @@ function decodeBase32(input: string): Uint8Array {
 
   for (let i = 0; i < cleanInput.length; i++) {
     const char = cleanInput[i];
-    const index = BASE32_ALPHABET.indexOf(char);
+    const index = BASE32_ALPHABET.indexOf(char!);
 
     if (index === -1) {
       // Skip padding characters
@@ -346,12 +346,12 @@ async function generateTOTPCode(secret: string, timestamp: number = Date.now()):
   const hmac = await hmacSha1(keyBuffer, timeBuffer);
 
   // Dynamic truncation (RFC 4226)
-  const offset = hmac[hmac.length - 1] & 0x0f;
+  const offset = hmac[hmac.length - 1]! & 0x0f;
   const code =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
+    ((hmac[offset]! & 0x7f) << 24) |
+    ((hmac[offset + 1]! & 0xff) << 16) |
+    ((hmac[offset + 2]! & 0xff) << 8) |
+    (hmac[offset + 3]! & 0xff);
 
   // Generate digits
   const otp = code % Math.pow(10, TOTP_CONFIG.DIGITS);
@@ -420,7 +420,7 @@ function generateBackupCodes(): string[] {
 
     let code = '';
     for (let j = 0; j < buffer.length; j++) {
-      code += charset[buffer[j] % charset.length];
+      code += charset[buffer[j]! % charset.length]!;
       // Add dash in the middle for readability
       if (j === 3) code += '-';
     }
@@ -456,7 +456,7 @@ async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<nu
   const inputHash = await hashBackupCode(code);
 
   for (let i = 0; i < hashedCodes.length; i++) {
-    if (constantTimeCompare(inputHash, hashedCodes[i])) {
+    if (constantTimeCompare(inputHash, hashedCodes[i]!)) {
       return i;
     }
   }
@@ -479,7 +479,9 @@ class SettingsService {
 
       // Fetch profile from user_profiles table
 
-      const { data, error } = await (supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
@@ -524,7 +526,9 @@ class SettingsService {
         return { error: 'User not authenticated' };
       }
 
-      const { error } = await (supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>).upsert({
+      const { error } = await (
+        supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>
+      ).upsert({
         id: user.id,
         name: profile.name,
         avatar_url: profile.avatar_url,
@@ -561,7 +565,9 @@ class SettingsService {
         return { data: {}, error: 'User not authenticated' };
       }
 
-      const { data, error } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
@@ -624,7 +630,9 @@ class SettingsService {
         return { error: 'User not authenticated' };
       }
 
-      const { error } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>).upsert({
+      const { error } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      ).upsert({
         id: user.id,
         ...settings,
         updated_at: new Date().toISOString(),
@@ -725,7 +733,9 @@ class SettingsService {
         return { data: [], error: 'User not authenticated' };
       }
 
-      const { data, error } = await (supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -763,7 +773,9 @@ class SettingsService {
       const fullKey = `ak_${this.generateSecureToken(32)}`;
       const keyPrefix = fullKey.substring(0, 12);
 
-      const { data, error } = await (supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .insert({
           user_id: user.id,
           name,
@@ -794,7 +806,11 @@ class SettingsService {
    */
   async deleteAPIKey(keyId: string): Promise<{ error?: string }> {
     try {
-      const { error } = await (supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>).delete().eq('id', keyId);
+      const { error } = await (
+        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
+      )
+        .delete()
+        .eq('id', keyId);
 
       if (error) {
         console.error('Error deleting API key:', error);
@@ -829,7 +845,9 @@ class SettingsService {
         };
       }
 
-      const { data, error } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('two_factor_enabled, totp_enabled_at, backup_codes, backup_codes_used')
         .eq('id', user.id)
         .maybeSingle();
@@ -882,7 +900,9 @@ class SettingsService {
 
       // Check if 2FA is already enabled
 
-      const { data: existingSettings } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data: existingSettings } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('two_factor_enabled')
         .eq('id', user.id)
         .maybeSingle();
@@ -909,7 +929,9 @@ class SettingsService {
 
       // Store the encrypted secret and hashed backup codes (not yet enabled)
 
-      const { error: updateError } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>).upsert({
+      const { error: updateError } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      ).upsert({
         id: user.id,
         totp_secret: encryptedSecret,
         backup_codes: hashedBackupCodes,
@@ -995,7 +1017,9 @@ class SettingsService {
 
       // Enable 2FA
 
-      const { error: updateError } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { error: updateError } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .update({
           two_factor_enabled: true,
           totp_enabled_at: new Date().toISOString(),
@@ -1069,7 +1093,9 @@ class SettingsService {
           // Mark the backup code as used by incrementing the counter
           // (We don't remove codes from array to maintain audit trail)
 
-          const { error: updateError } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+          const { error: updateError } = await (
+            supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+          )
             .update({
               backup_codes_used: (settings.backup_codes_used || 0) + 1,
               updated_at: new Date().toISOString(),
@@ -1118,7 +1144,9 @@ class SettingsService {
 
       // Disable 2FA and clear sensitive data
 
-      const { error: updateError } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { error: updateError } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .update({
           two_factor_enabled: false,
           totp_secret: null,
@@ -1192,7 +1220,9 @@ class SettingsService {
 
       // Store new hashed backup codes
 
-      const { error: updateError } = await (supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { error: updateError } = await (
+        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .update({
           backup_codes: hashedBackupCodes,
           backup_codes_generated_at: new Date().toISOString(),
@@ -1244,7 +1274,7 @@ class SettingsService {
     const randomArray = new Uint8Array(length);
     crypto.getRandomValues(randomArray);
     for (let i = 0; i < length; i++) {
-      result += chars[randomArray[i] % chars.length];
+      result += chars[randomArray[i]! % chars.length]!;
     }
     return result;
   }

@@ -336,47 +336,6 @@ const ArtifactGalleryPage: React.FC = () => {
 };
 
 // Demo data for development
-const _DEMO_ARTIFACTS: PublicArtifact[] = [
-  {
-    id: '1',
-    title: 'Interactive Button Component',
-    type: 'html',
-    description: 'A beautiful animated button with hover effects',
-    content: '<button>Demo</button>',
-    author: 'Alice Chen',
-    authorId: 'user1',
-    views: 1250,
-    likes: 89,
-    createdAt: '2025-01-10T12:00:00Z',
-    tags: ['button', 'animation', 'css'],
-  },
-  {
-    id: '2',
-    title: 'React Counter App',
-    type: 'react',
-    description: 'Simple counter with increment and decrement buttons',
-    content: 'function Counter() { ... }',
-    author: 'Bob Smith',
-    authorId: 'user2',
-    views: 2340,
-    likes: 156,
-    createdAt: '2025-01-09T10:30:00Z',
-    tags: ['react', 'hooks', 'tutorial'],
-  },
-  {
-    id: '3',
-    title: 'SVG Logo Animation',
-    type: 'svg',
-    description: 'Animated logo with smooth transitions',
-    content: '<svg>...</svg>',
-    author: 'Charlie Davis',
-    authorId: 'user3',
-    views: 890,
-    likes: 67,
-    createdAt: '2025-01-08T15:45:00Z',
-    tags: ['svg', 'animation', 'logo'],
-  },
-];
 
 const ArtifactGalleryPageWithErrorBoundary: React.FC = () => (
   <ErrorBoundary componentName="ArtifactGalleryPage" showReportDialog>

@@ -12,14 +12,18 @@
  * - WASI 0.3 roadmap ready
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   SandpackProvider,
   SandpackPreview,
   SandpackConsole,
   useSandpack,
 } from '@codesandbox/sandpack-react';
-import type { SandpackFiles, SandpackPredefinedTemplate, SandpackTheme } from '@codesandbox/sandpack-react';
+import type {
+  SandpackFiles,
+  SandpackPredefinedTemplate,
+  SandpackTheme,
+} from '@codesandbox/sandpack-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import {

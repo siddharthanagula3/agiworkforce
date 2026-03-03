@@ -12,11 +12,7 @@
  */
 
 import { AgentType } from '../orchestration/reasoning/task-breakdown';
-import {
-  resolveToolName,
-  type UserPermissionLevel,
-  PERMISSION_LEVELS,
-} from './types';
+import { resolveToolName, type UserPermissionLevel, PERMISSION_LEVELS } from './types';
 
 export type ToolCategory = 'code' | 'data' | 'automation' | 'search' | 'file' | 'system' | 'ai';
 
@@ -481,10 +477,10 @@ export class ToolManager {
       category: 'file',
       execute: async (params: Record<string, unknown>) => {
         // Integration with filesystem API
-        return { content: 'file content', path: params.path };
+        return { content: 'file content', path: params['path'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.path) {
+        if (!params['path']) {
           return { valid: false, errors: ['Path is required'] };
         }
         return { valid: true };
@@ -502,10 +498,10 @@ export class ToolManager {
       category: 'file',
       execute: async (params: Record<string, unknown>) => {
         // Integration with filesystem API
-        return { success: true, path: params.path };
+        return { success: true, path: params['path'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.path || !params.content) {
+        if (!params['path'] || !params['content']) {
           return { valid: false, errors: ['Path and content are required'] };
         }
         return { valid: true };
@@ -523,10 +519,10 @@ export class ToolManager {
       category: 'file',
       execute: async (params: Record<string, unknown>) => {
         // Integration with filesystem API
-        return { success: true, path: params.path };
+        return { success: true, path: params['path'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.path || !params.old_string) {
+        if (!params['path'] || !params['old_string']) {
           return { valid: false, errors: ['Path and old_string are required'] };
         }
         return { valid: true };
@@ -544,10 +540,10 @@ export class ToolManager {
       description: 'Search for patterns in files using regex',
       category: 'search',
       execute: async (params: Record<string, unknown>) => {
-        return { matches: [], pattern: params.pattern };
+        return { matches: [], pattern: params['pattern'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.pattern) {
+        if (!params['pattern']) {
           return { valid: false, errors: ['Pattern is required'] };
         }
         return { valid: true };
@@ -564,10 +560,10 @@ export class ToolManager {
       description: 'Find files matching glob pattern',
       category: 'search',
       execute: async (params: Record<string, unknown>) => {
-        return { files: [], pattern: params.pattern };
+        return { files: [], pattern: params['pattern'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.pattern) {
+        if (!params['pattern']) {
           return { valid: false, errors: ['Pattern is required'] };
         }
         return { valid: true };
@@ -589,7 +585,7 @@ export class ToolManager {
         return { output: '', exitCode: 0 };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.command) {
+        if (!params['command']) {
           return { valid: false, errors: ['Command is required'] };
         }
         return { valid: true };
@@ -608,10 +604,10 @@ export class ToolManager {
       category: 'search',
       execute: async (params: Record<string, unknown>) => {
         // Integration with search API
-        return { results: [], query: params.query };
+        return { results: [], query: params['query'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.query) {
+        if (!params['query']) {
           return { valid: false, errors: ['Query is required'] };
         }
         return { valid: true };
@@ -630,10 +626,10 @@ export class ToolManager {
       category: 'search',
       execute: async (params: Record<string, unknown>) => {
         // Integration with fetch API
-        return { content: '', url: params.url };
+        return { content: '', url: params['url'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.url) {
+        if (!params['url']) {
           return { valid: false, errors: ['URL is required'] };
         }
         return { valid: true };
@@ -655,7 +651,7 @@ export class ToolManager {
         return { issues: [], suggestions: [] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.code) {
+        if (!params['code']) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
@@ -673,10 +669,10 @@ export class ToolManager {
       category: 'code',
       execute: async (params: Record<string, unknown>) => {
         // Integration with code generation
-        return { code: '', language: params.language };
+        return { code: '', language: params['language'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.prompt) {
+        if (!params['prompt']) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
@@ -698,7 +694,7 @@ export class ToolManager {
         return { passed: 0, failed: 0, results: [] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.testPath) {
+        if (!params['testPath']) {
           return { valid: false, errors: ['Test path is required'] };
         }
         return { valid: true };
@@ -719,7 +715,7 @@ export class ToolManager {
         return { tests: '' };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.code) {
+        if (!params['code']) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
@@ -741,7 +737,7 @@ export class ToolManager {
         return { success: true, data: {} };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.action) {
+        if (!params['action']) {
           return { valid: false, errors: ['Action is required'] };
         }
         return { valid: true };
@@ -763,7 +759,7 @@ export class ToolManager {
         return { processedData: {} };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.data || !params.operation) {
+        if (!params['data'] || !params['operation']) {
           return { valid: false, errors: ['Data and operation are required'] };
         }
         return { valid: true };
@@ -784,7 +780,7 @@ export class ToolManager {
         return { insights: [], statistics: {} };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.data) {
+        if (!params['data']) {
           return { valid: false, errors: ['Data is required'] };
         }
         return { valid: true };
@@ -806,7 +802,7 @@ export class ToolManager {
         return { content: '' };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.prompt) {
+        if (!params['prompt']) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
@@ -827,7 +823,7 @@ export class ToolManager {
         return { documentation: '' };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.code) {
+        if (!params['code']) {
           return { valid: false, errors: ['Code is required'] };
         }
         return { valid: true };
@@ -845,10 +841,10 @@ export class ToolManager {
       description: 'Generate images from text descriptions',
       category: 'ai',
       execute: async (params: Record<string, unknown>) => {
-        return { imageUrl: '', prompt: params.prompt };
+        return { imageUrl: '', prompt: params['prompt'] };
       },
       validate: (params: Record<string, unknown>) => {
-        if (!params.prompt) {
+        if (!params['prompt']) {
           return { valid: false, errors: ['Prompt is required'] };
         }
         return { valid: true };
@@ -889,7 +885,7 @@ export class ToolManager {
 
     if (tracker.requests.length >= tracker.limit.maxRequests) {
       const oldestRequest = tracker.requests[0];
-      const retryAfter = oldestRequest + tracker.limit.windowMs - now;
+      const retryAfter = oldestRequest! + tracker.limit.windowMs - now;
       return { allowed: false, retryAfter };
     }
 

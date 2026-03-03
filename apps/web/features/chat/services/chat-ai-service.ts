@@ -156,7 +156,7 @@ export class ChatAIService {
 
       // Pass skillId as metadata if a specific skill was chosen
       if (skillId && skillId !== 'auto') {
-        requestBody.metadata = { skillId };
+        requestBody['metadata'] = { skillId };
       }
 
       const response = await fetch('/api/llm/completion', {

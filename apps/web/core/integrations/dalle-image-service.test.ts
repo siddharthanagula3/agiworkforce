@@ -93,14 +93,14 @@ describe('DALL-E Image Service', () => {
       const results = await dallEImageService.generateImage(mockRequest);
 
       expect(results.length).toBe(1);
-      expect(results[0].url).toBe('https://dalle.openai.com/image123.png');
-      expect(results[0].prompt).toBe(mockRequest.prompt);
-      expect(results[0].revisedPrompt).toBe('A stunning sunset with vibrant colors');
-      expect(results[0].size).toBe('1024x1024');
-      expect(results[0].quality).toBe('standard');
-      expect(results[0].style).toBe('vivid');
-      expect(results[0].model).toBe('dall-e-3');
-      expect(results[0].createdAt).toBeInstanceOf(Date);
+      expect(results![0]!.url!).toBe('https://dalle.openai.com/image123.png');
+      expect(results![0]!.prompt!).toBe(mockRequest.prompt);
+      expect(results![0]!.revisedPrompt!).toBe('A stunning sunset with vibrant colors');
+      expect(results![0]!.size!).toBe('1024x1024');
+      expect(results![0]!.quality!).toBe('standard');
+      expect(results![0]!.style!).toBe('vivid');
+      expect(results![0]!.model!).toBe('dall-e-3');
+      expect(results![0]!.createdAt!).toBeInstanceOf(Date);
     });
 
     it('should throw error for empty prompt', async () => {
@@ -175,7 +175,7 @@ describe('DALL-E Image Service', () => {
 
       await dallEImageService.generateImage({ prompt: 'Simple test' });
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.size).toBe('1024x1024');
       expect(requestBody.quality).toBe('standard');
       expect(requestBody.style).toBe('vivid');
@@ -198,7 +198,7 @@ describe('DALL-E Image Service', () => {
         model: 'dall-e-2',
       });
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.style).toBeUndefined();
     });
 
@@ -214,7 +214,7 @@ describe('DALL-E Image Service', () => {
 
       await dallEImageService.generateImage({ prompt: '  Test prompt  ' });
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.prompt).toBe('Test prompt');
     });
 
@@ -263,8 +263,8 @@ describe('DALL-E Image Service', () => {
         n: 2,
       });
 
-      expect(results[0].id).toBe(`${timestamp}-0`);
-      expect(results[1].id).toBe(`${timestamp}-1`);
+      expect(results![0]!.id!).toBe(`${timestamp}-0`);
+      expect(results![1]!.id!).toBe(`${timestamp}-1`);
     });
   });
 

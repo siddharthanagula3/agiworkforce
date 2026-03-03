@@ -60,26 +60,26 @@ function getCommandMetadata(
 
   const result: CommandActionMetadata = {};
 
-  if (typeof metadata.command === 'string') {
-    result.command = metadata.command;
+  if (typeof metadata['command'] === 'string') {
+    result.command = metadata['command'];
   }
-  if (typeof metadata.label === 'string') {
-    result.label = metadata.label;
+  if (typeof metadata['label'] === 'string') {
+    result.label = metadata['label'];
   }
-  if (typeof metadata.title === 'string') {
-    result.title = metadata.title;
+  if (typeof metadata['title'] === 'string') {
+    result.title = metadata['title'];
   }
-  if (typeof metadata.output === 'string') {
-    result.output = metadata.output;
+  if (typeof metadata['output'] === 'string') {
+    result.output = metadata['output'];
   }
-  if (typeof metadata.stdout === 'string') {
-    result.stdout = metadata.stdout;
+  if (typeof metadata['stdout'] === 'string') {
+    result.stdout = metadata['stdout'];
   }
-  if (typeof metadata.exit_code === 'number') {
-    result.exit_code = metadata.exit_code;
+  if (typeof metadata['exit_code'] === 'number') {
+    result.exit_code = metadata['exit_code'];
   }
-  if (typeof metadata.code === 'number') {
-    result.code = metadata.code;
+  if (typeof metadata['code'] === 'number') {
+    result.code = metadata['code'];
   }
 
   return result;
@@ -95,11 +95,11 @@ function getCommandResult(result: Record<string, unknown> | null | undefined): C
 
   const validated: CommandActionResult = {};
 
-  if (typeof result.output === 'string') {
-    validated.output = result.output;
+  if (typeof result['output'] === 'string') {
+    validated.output = result['output'];
   }
-  if (typeof result.exit_code === 'number') {
-    validated.exit_code = result.exit_code;
+  if (typeof result['exit_code'] === 'number') {
+    validated.exit_code = result['exit_code'];
   }
 
   return validated;
@@ -117,14 +117,14 @@ function getAppPreviewMetadata(
 
   const result: AppPreviewMetadata = {};
 
-  if (typeof metadata.preview_url === 'string') {
-    result.preview_url = metadata.preview_url;
+  if (typeof metadata['preview_url'] === 'string') {
+    result.preview_url = metadata['preview_url'];
   }
-  if (typeof metadata.url === 'string') {
-    result.url = metadata.url;
+  if (typeof metadata['url'] === 'string') {
+    result.url = metadata['url'];
   }
-  if (typeof metadata.endpoint === 'string') {
-    result.endpoint = metadata.endpoint;
+  if (typeof metadata['endpoint'] === 'string') {
+    result.endpoint = metadata['endpoint'];
   }
 
   return result;
@@ -144,25 +144,15 @@ const toTerminalStatus = (
 };
 
 export function useVibeRealtime({ sessionId, onAction }: UseVibeRealtimeOptions) {
-  const setFileMetadata = useVibeViewStore(
-    (state: VibeViewStore) => state.setFileMetadata,
-  );
-  const upsertFileMetadata = useVibeViewStore(
-    (state: VibeViewStore) => state.upsertFileMetadata,
-  );
-  const removeFileMetadata = useVibeViewStore(
-    (state: VibeViewStore) => state.removeFileMetadata,
-  );
+  const setFileMetadata = useVibeViewStore((state: VibeViewStore) => state.setFileMetadata);
+  const upsertFileMetadata = useVibeViewStore((state: VibeViewStore) => state.upsertFileMetadata);
+  const removeFileMetadata = useVibeViewStore((state: VibeViewStore) => state.removeFileMetadata);
   const setFileTree = useVibeViewStore((state: VibeViewStore) => state.setFileTree);
-  const addTerminalCommand = useVibeViewStore(
-    (state: VibeViewStore) => state.addTerminalCommand,
-  );
+  const addTerminalCommand = useVibeViewStore((state: VibeViewStore) => state.addTerminalCommand);
   const updateTerminalCommand = useVibeViewStore(
     (state: VibeViewStore) => state.updateTerminalCommand,
   );
-  const setAppViewerUrl = useVibeViewStore(
-    (state: VibeViewStore) => state.setAppViewerUrl,
-  );
+  const setAppViewerUrl = useVibeViewStore((state: VibeViewStore) => state.setAppViewerUrl);
   const updateAppViewerState = useVibeViewStore(
     (state: VibeViewStore) => state.updateAppViewerState,
   );

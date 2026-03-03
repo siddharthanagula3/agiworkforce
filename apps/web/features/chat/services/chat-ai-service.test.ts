@@ -161,7 +161,7 @@ describe('ChatAIService', () => {
 
       expect(Array.isArray(categories)).toBe(true);
       expect(categories.length).toBe(2);
-      expect(categories[0].name).toBe('Technical');
+      expect(categories![0]!.name!).toBe('Technical');
     });
   });
 });

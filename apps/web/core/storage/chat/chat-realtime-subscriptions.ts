@@ -254,7 +254,7 @@ export class ChatRealtimeSubscriptionManager {
     const channel = supabase
       .channel(channelName)
       .on('broadcast', { event: 'typing' }, (payload) => {
-        onTyping(payload.payload as TypingIndicator);
+        onTyping(payload['payload'] as TypingIndicator);
       });
 
     channel.subscribe();

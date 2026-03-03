@@ -331,7 +331,7 @@ export const useVibeViewStore = create<VibeViewStore>()(
                   if (!item.metadata) {
                     item.metadata = {};
                   }
-                  item.metadata.isExpanded = true;
+                  item.metadata['isExpanded'] = true;
                   return true;
                 }
                 if (item.children && expandInTree(item.children)) {
@@ -353,7 +353,7 @@ export const useVibeViewStore = create<VibeViewStore>()(
                   if (!item.metadata) {
                     item.metadata = {};
                   }
-                  item.metadata.isExpanded = false;
+                  item.metadata['isExpanded'] = false;
                   return true;
                 }
                 if (item.children && collapseInTree(item.children)) {

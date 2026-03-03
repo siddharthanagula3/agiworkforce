@@ -276,7 +276,7 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
       const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
 
-      const index = await verifyBackupCode(codes[0], hashedCodes);
+      const index = await verifyBackupCode(codes[0]!, hashedCodes);
 
       expect(index).toBe(0);
     });
@@ -285,7 +285,7 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
       const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
 
-      const index = await verifyBackupCode(codes[3], hashedCodes);
+      const index = await verifyBackupCode(codes[3]!, hashedCodes);
 
       expect(index).toBe(3);
     });
@@ -304,7 +304,7 @@ describe('TOTP 2FA Implementation', () => {
       const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
 
       // Remove dash from code
-      const codeWithoutDash = codes[0].replace('-', '');
+      const codeWithoutDash = codes![0]!.replace('-', '')!;
       const index = await verifyBackupCode(codeWithoutDash, hashedCodes);
 
       expect(index).toBe(0);
@@ -314,7 +314,7 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
       const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
 
-      const lowercaseCode = codes[0].toLowerCase();
+      const lowercaseCode = codes![0]!.toLowerCase()!;
       const index = await verifyBackupCode(lowercaseCode, hashedCodes);
 
       expect(index).toBe(0);

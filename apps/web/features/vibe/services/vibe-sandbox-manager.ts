@@ -501,7 +501,7 @@ export const useSandboxManager = create<SandboxManagerState>()(
 
     createSession: (template?: SandboxTemplate) => {
       const sessionId = `sandbox-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`;
-      const selectedTemplate = template || SANDBOX_TEMPLATES['react-ts'];
+      const selectedTemplate = template || SANDBOX_TEMPLATES['react-ts']!;
 
       // Convert template files to SandboxFile objects
       const files = new Map<string, SandboxFile>();
