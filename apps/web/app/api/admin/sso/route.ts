@@ -5,8 +5,8 @@ import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 /**
  * Admin SSO Management API

@@ -59,8 +59,8 @@ export async function GET(request: NextRequest) {
 
   // Check database connectivity
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+    const supabaseKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
     if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
 
   // Check Stripe connectivity
   try {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const stripeKey = process.env['STRIPE_SECRET_KEY'];
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, {

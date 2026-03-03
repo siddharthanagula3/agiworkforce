@@ -74,18 +74,18 @@ interface GoogleVeoResponse {
  * Determine which provider to use
  */
 function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
-  if (requestedProvider === 'runway' && process.env.RUNWAY_API_KEY) {
+  if (requestedProvider === 'runway' && process.env['RUNWAY_API_KEY']) {
     return 'runway';
   }
-  if (requestedProvider === 'google' && process.env.GOOGLE_API_KEY) {
+  if (requestedProvider === 'google' && process.env['GOOGLE_API_KEY']) {
     return 'google';
   }
 
   // Default: Runway if available, else Google Veo
-  if (process.env.RUNWAY_API_KEY) {
+  if (process.env['RUNWAY_API_KEY']) {
     return 'runway';
   }
-  if (process.env.GOOGLE_API_KEY) {
+  if (process.env['GOOGLE_API_KEY']) {
     return 'google';
   }
 
@@ -112,7 +112,7 @@ async function generateWithRunway(
   durationSecs: number,
   resolution: string,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
-  const apiKey = process.env.RUNWAY_API_KEY;
+  const apiKey = process.env['RUNWAY_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Runway API not configured');
   }
@@ -189,7 +189,7 @@ async function generateWithGoogleVeo(
   durationSecs: number,
   resolution: string,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = process.env['GOOGLE_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Google Veo API not configured');
   }

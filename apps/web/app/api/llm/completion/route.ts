@@ -47,7 +47,7 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
   'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
-  'kimi-k2.5-turbo': ['pro', 'max', 'enterprise'],
+  'kimi-k2.5': ['pro', 'max', 'enterprise'],
   'qwen-max': ['pro', 'max', 'enterprise'],
   'qwen-coder-plus': ['pro', 'max', 'enterprise'],
   'sonar-pro': ['pro', 'max', 'enterprise'],
@@ -321,7 +321,7 @@ async function handleLLMCompletion(request: NextRequest) {
   // Check if user's subscription tier allows access to the requested model
   if (!checkModelTierAccess(llmRequest.model, subscription.plan_tier)) {
     const requiredTiers = MODEL_TIER_REQUIREMENTS[llmRequest.model.toLowerCase()];
-    const requiredTierDisplay = requiredTiers ? requiredTiers[0].toUpperCase() : 'PRO';
+    const requiredTierDisplay = requiredTiers?.[0]?.toUpperCase() ?? 'PRO';
     logger.warn(
       {
         userId: user.id,

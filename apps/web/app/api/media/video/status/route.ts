@@ -110,7 +110,7 @@ function parseTaskId(taskId: string): { provider: 'runway' | 'google'; originalI
  * Required header: X-Runway-Version: 2024-11-06
  */
 async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
-  const apiKey = process.env.RUNWAY_API_KEY;
+  const apiKey = process.env['RUNWAY_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Runway API not configured');
   }
@@ -186,7 +186,7 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
  * We store only the numeric/alphanumeric ID portion and reconstruct the path here.
  */
 async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusResponse> {
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = process.env['GOOGLE_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Google Veo API not configured');
   }
@@ -257,7 +257,7 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
   if (status === 'completed' && result.response) {
     const samples = result.response.generatedSamples ?? result.response.videos ?? [];
     if (samples.length > 0) {
-      const firstVideo = samples[0].video;
+      const firstVideo = samples[0]?.video;
       if (firstVideo?.uri) {
         statusResponse.video_url = firstVideo.uri;
       } else if (firstVideo?.bytesBase64Encoded) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import QRCode from 'qrcode';
 import { getEnv, requireEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -150,10 +151,8 @@ async function handleDeviceLink(request: NextRequest) {
 
     const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 
-    // Generate QR code URL using a reliable public service
-    // The QR code encodes the verification URL for easy mobile scanning
-    const encodedVerifyUrl = encodeURIComponent(verify_url);
-    const qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=svg&data=${encodedVerifyUrl}`;
+    // Generate QR code in-process to avoid leaking verification URLs to external services
+    const qr_code_url = await QRCode.toDataURL(verify_url, { width: 200, margin: 1 });
 
     return NextResponse.json(
       {

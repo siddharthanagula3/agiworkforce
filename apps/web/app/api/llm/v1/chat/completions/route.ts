@@ -14,9 +14,10 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
-const TTFT_SLO_TARGET_MS = Number(process.env.LLM_TTFT_SLO_TARGET_MS ?? 2500);
-const TTFT_SLO_BREACH_MS = Number(process.env.LLM_TTFT_SLO_BREACH_MS ?? 5000);
+const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
+const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -292,6 +293,10 @@ async function handleChatCompletions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
+  // CSRF protection
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
+
   // Authentication
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -452,7 +457,9 @@ async function handleChatCompletions(request: NextRequest) {
     const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
     // Safely get the first required tier, defaulting to 'PRO' if not found
     const requiredTier =
-      requiredTiers && requiredTiers.length > 0 ? requiredTiers[0].toUpperCase() : 'PRO';
+      requiredTiers && requiredTiers.length > 0
+        ? (requiredTiers[0]?.toUpperCase() ?? 'PRO')
+        : 'PRO';
     return NextResponse.json(
       {
         error: {
