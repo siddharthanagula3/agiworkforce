@@ -6,10 +6,10 @@ import { logRateLimitExceeded } from './security-audit';
 
 // Initialize Redis client (falls back to in-memory if not configured)
 const redis =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  process.env['UPSTASH_REDIS_REST_URL'] && process.env['UPSTASH_REDIS_REST_TOKEN']
     ? new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+        url: process.env['UPSTASH_REDIS_REST_URL'],
+        token: process.env['UPSTASH_REDIS_REST_TOKEN'],
       })
     : null;
 
@@ -214,7 +214,7 @@ if (process.env.NODE_ENV === 'production' && !redis) {
 function parseWindow(window: string): number {
   const match = window.match(/^(\d+)\s*(s|m|h|d)$/);
   if (!match) return 60000; // Default 1 minute
-  const value = parseInt(match[1], 10);
+  const value = parseInt(match[1]!, 10);
   const unit = match[2];
   switch (unit) {
     case 's':
@@ -253,7 +253,7 @@ function cleanupInMemoryStore(): void {
 
     const toRemove = sortedEntries.length - IN_MEMORY_MAX_ENTRIES;
     for (let i = 0; i < toRemove; i++) {
-      inMemoryStore.delete(sortedEntries[i][0]);
+      inMemoryStore.delete(sortedEntries[i]![0]);
     }
 
     logger.warn(
@@ -370,7 +370,7 @@ function getRateLimitIdentifier(request: NextRequest, identifier?: string): stri
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     try {
-      const payload = JSON.parse(atob(authHeader.slice(7).split('.')[1]));
+      const payload = JSON.parse(atob(authHeader.slice(7).split('.')[1]!));
       if (payload.sub) {
         return `user:${payload.sub}`;
       }

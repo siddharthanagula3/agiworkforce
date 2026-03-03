@@ -104,7 +104,9 @@ function logProviderDiagnostics() {
   const status: Record<string, string> = {};
   for (const p of providers) {
     const envKey = envKeyMap[p];
-    const value = process.env[envKey];
+    const envKeyStr = envKey;
+    if (!envKeyStr) continue;
+    const value = process.env[envKeyStr];
     if (value) {
       // Show first 4 and last 4 chars for debugging (minimise key exposure)
       const masked =

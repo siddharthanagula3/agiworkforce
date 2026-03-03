@@ -8,8 +8,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 const supabaseAdmin =
   SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
@@ -90,7 +90,7 @@ export function getClientIp(request: Request): string | undefined {
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) {
     // x-forwarded-for can contain multiple IPs, take the first one
-    return forwardedFor.split(',')[0].trim();
+    return forwardedFor.split(',')[0]?.trim();
   }
 
   const realIp = request.headers.get('x-real-ip');
