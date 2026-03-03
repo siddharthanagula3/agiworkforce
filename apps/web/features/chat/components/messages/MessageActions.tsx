@@ -3,7 +3,7 @@
  * Provides edit, regenerate, copy, pin, and reaction options (ChatGPT/Claude style)
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,

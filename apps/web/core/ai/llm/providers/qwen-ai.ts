@@ -81,7 +81,7 @@ export type QwenErrorCode =
   | `HTTP_${number}`;
 
 export class QwenError extends Error {
-  public readonly name = 'QwenError' as const;
+  public override readonly name = 'QwenError' as const;
 
   constructor(
     message: string,

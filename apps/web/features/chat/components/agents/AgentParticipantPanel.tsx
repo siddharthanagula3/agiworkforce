@@ -45,12 +45,6 @@ interface AgentParticipantPanelProps {
   className?: string;
 }
 
-interface _AgentGroup {
-  role: string;
-  agents: Agent[];
-  expanded: boolean;
-}
-
 export function AgentParticipantPanel({
   agents,
   onAgentSelect,

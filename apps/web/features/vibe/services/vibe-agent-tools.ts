@@ -83,7 +83,7 @@ export const readFilesTool: ToolDefinition = {
     },
   },
   execute: async (args, context) => {
-    const paths = args.paths as string[];
+    const paths = args['paths'] as string[];
     const sandboxManager = useSandboxManager.getState();
 
     if (!context.sandboxId) {
@@ -145,7 +145,7 @@ export const writeFilesTool: ToolDefinition = {
     },
   },
   execute: async (args, context) => {
-    const files = args.files as Array<{ path: string; content: string }>;
+    const files = args['files'] as Array<{ path: string; content: string }>;
     const sandboxManager = useSandboxManager.getState();
     const orchestrator = useVibeOrchestrator.getState();
 
@@ -196,7 +196,7 @@ export const deleteFilesTool: ToolDefinition = {
     },
   },
   execute: async (args, context) => {
-    const paths = args.paths as string[];
+    const paths = args['paths'] as string[];
     const sandboxManager = useSandboxManager.getState();
 
     if (!context.sandboxId) {
@@ -231,7 +231,7 @@ export const listFilesTool: ToolDefinition = {
     },
   },
   execute: async (args, context) => {
-    const directory = args.directory as string | undefined;
+    const directory = args['directory'] as string | undefined;
     const sandboxManager = useSandboxManager.getState();
 
     if (!context.sandboxId) {
@@ -273,9 +273,9 @@ export const searchFilesTool: ToolDefinition = {
     },
   },
   execute: async (args, context) => {
-    const query = args.query as string;
-    const filePattern = args.filePattern as string | undefined;
-    const caseSensitive = args.caseSensitive as boolean | undefined;
+    const query = args['query'] as string;
+    const filePattern = args['filePattern'] as string | undefined;
+    const caseSensitive = args['caseSensitive'] as boolean | undefined;
     const sandboxManager = useSandboxManager.getState();
 
     if (!context.sandboxId) {
@@ -375,8 +375,8 @@ export const gitTool: ToolDefinition = {
     },
   },
   execute: async (args, _context) => {
-    const operation = args.operation as string;
-    const message = args.message as string | undefined;
+    const operation = args['operation'] as string;
+    const message = args['message'] as string | undefined;
 
     // Simulated git operations (in browser, we track changes in memory)
     switch (operation) {
@@ -424,7 +424,7 @@ export const webSearchTool: ToolDefinition = {
     },
   },
   execute: async (args, _context) => {
-    const query = args.query as string;
+    const query = args['query'] as string;
 
     // This would integrate with a search API
     return {

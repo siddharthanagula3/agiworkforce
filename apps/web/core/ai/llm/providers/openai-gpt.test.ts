@@ -413,7 +413,7 @@ describe('OpenAIProvider', () => {
 
       await provider.sendMessage(messagesWithSystem);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
 
       // OpenAI includes system messages in the messages array
       expect(requestBody.messages).toEqual([
@@ -446,7 +446,7 @@ describe('OpenAIProvider', () => {
 
       await provider.sendMessage(mockMessages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.tools).toEqual(tools);
       expect(requestBody.tool_choice).toBe('auto');
     });
@@ -462,7 +462,7 @@ describe('OpenAIProvider', () => {
 
       await provider.sendMessage(mockMessages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.tools).toBeUndefined();
       expect(requestBody.tool_choice).toBeUndefined();
     });
@@ -489,7 +489,7 @@ describe('OpenAIProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('gpt-4o');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -515,11 +515,11 @@ describe('OpenAIProvider', () => {
       }
 
       expect(chunks.length).toBe(2);
-      expect(chunks[0].content).toBe('Streamed response');
-      expect(chunks[0].done).toBe(false);
-      expect(chunks[1].content).toBe('');
-      expect(chunks[1].done).toBe(true);
-      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
+      expect(chunks![0]!.content!).toBe('Streamed response');
+      expect(chunks![0]!.done!).toBe(false);
+      expect(chunks![1]!.content!).toBe('');
+      expect(chunks![1]!.done!).toBe(true);
+      expect((chunks[1] as Record<string, unknown>)['usage']).toBeDefined();
     });
 
     it('should throw NOT_AUTHENTICATED error when not logged in', async () => {

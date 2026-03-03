@@ -115,7 +115,7 @@ export class GoogleVeoService {
 
   private constructor() {
     // SECURITY: API keys are managed by Netlify proxy functions
-    this.isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+    this.isDemoMode = process.env['NEXT_PUBLIC_DEMO_MODE'] === 'true';
   }
 
   static getInstance(): GoogleVeoService {

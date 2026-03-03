@@ -122,16 +122,16 @@ export class AgentConversationProtocol {
 
       // If only one participant, direct response
       if (participants.length === 1) {
-        const response = await this.getSingleEmployeeResponse(participants[0], userQuery, userId);
+        const response = await this.getSingleEmployeeResponse(participants[0]!, userQuery, userId);
 
         this.addMessage(state, {
           id: crypto.randomUUID(),
-          employeeName: participants[0].name,
-          employeeAvatar: this.getEmployeeAvatar(participants[0]),
+          employeeName: participants[0]!.name!,
+          employeeAvatar: this.getEmployeeAvatar(participants[0]!),
           content: response,
           timestamp: new Date(),
           role: 'agent',
-          metadata: { model: participants[0].model },
+          metadata: { model: participants[0]!.model! },
         });
 
         state.isComplete = true;
@@ -422,7 +422,7 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
     const lastEmployeeName = lastAgentMessage.employeeName;
     const currentIndex = state.participants.findIndex((p) => p.name === lastEmployeeName);
 
-    if (currentIndex === -1) return state.participants[0];
+    if (currentIndex === -1) return state.participants[0]!;
 
     const nextIndex = (currentIndex + 1) % state.participants.length;
     return state.participants[nextIndex];
@@ -452,7 +452,7 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
 
     // Check if last two messages are very similar
     for (let i = 0; i < contents.length - 1; i++) {
-      const similarity = this.calculateSimilarity(contents[i], contents[i + 1]);
+      const similarity = this.calculateSimilarity(contents[i]!, contents[i + 1]!);
       if (similarity > MAX_REPETITION_THRESHOLD) {
         return true;
       }
@@ -485,24 +485,24 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
     }
 
     for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
+      matrix![0]![j] = j;
     }
 
     for (let i = 1; i <= str2.length; i++) {
       for (let j = 1; j <= str1.length; j++) {
         if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
+          matrix![i]![j] = matrix![i - 1]![j - 1]!;
         } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1,
+          matrix![i]![j] = Math.min(
+            matrix![i - 1]![j - 1]! + 1,
+            matrix![i]![j - 1]! + 1,
+            matrix![i - 1]![j]! + 1,
           );
         }
       }
     }
 
-    return matrix[str2.length][str1.length];
+    return matrix![str2.length]![str1.length]!;
   }
 
   /**

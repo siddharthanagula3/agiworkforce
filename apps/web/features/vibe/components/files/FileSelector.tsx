@@ -72,10 +72,10 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
 
     filteredFiles.forEach((file) => {
       if (file.type === 'folder') {
-        groups.folders.push(file);
+        groups['folders']!.push(file);
       } else {
         const category = categorizeFile(file);
-        groups[category].push(file);
+        groups[category]!.push(file);
       }
     });
 

@@ -59,6 +59,7 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
       }, 100);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [isRecording, isPaused, audioLevels.length]);
 
   // Generate bars to display
@@ -78,7 +79,7 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
         const endIdx = Math.floor((i + 1) * ratio);
         let sum = 0;
         for (let j = startIdx; j < endIdx && j < audioLevels.length; j++) {
-          sum += audioLevels[j];
+          sum += audioLevels[j]!;
         }
         resampled.push(sum / (endIdx - startIdx));
       }

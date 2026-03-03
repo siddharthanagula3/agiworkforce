@@ -1,17 +1,9 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import {
-  Code2,
-  X,
-  Copy,
-  Check,
-  Download,
-  FileCode,
-  PanelRightOpen,
-} from 'lucide-react';
+import { Code2, X, Copy, Check, Download, FileCode, PanelRightOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
@@ -98,13 +90,10 @@ function ArtifactViewer({ artifact }: { artifact: Artifact }) {
       markdown: 'md',
     };
 
-    const ext =
-      extensionMap[artifact.language] || artifact.language || 'txt';
+    const ext = extensionMap[artifact.language] || artifact.language || 'txt';
 
     // Use title as filename if it looks like a filename (has extension)
-    const filename = artifact.title.includes('.')
-      ? artifact.title
-      : `artifact.${ext}`;
+    const filename = artifact.title.includes('.') ? artifact.title : `artifact.${ext}`;
 
     const blob = new Blob([artifact.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -148,12 +137,7 @@ function ArtifactViewer({ artifact }: { artifact: Artifact }) {
 
       {/* Action bar */}
       <div className="flex items-center gap-2 border-t border-border/30 px-3 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCopy}
-          className="h-8 gap-1.5 text-xs"
-        >
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs">
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5 text-green-500" />
@@ -166,12 +150,7 @@ function ArtifactViewer({ artifact }: { artifact: Artifact }) {
             </>
           )}
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDownload}
-          className="h-8 gap-1.5 text-xs"
-        >
+        <Button variant="ghost" size="sm" onClick={handleDownload} className="h-8 gap-1.5 text-xs">
           <Download className="h-3.5 w-3.5" />
           Download
         </Button>
@@ -188,13 +167,8 @@ function ArtifactViewer({ artifact }: { artifact: Artifact }) {
 // ============================================================================
 
 export function ArtifactsPanel() {
-  const {
-    artifacts,
-    selectedArtifactId,
-    panelOpen,
-    selectArtifact,
-    setPanelOpen,
-  } = useArtifactsStore();
+  const { artifacts, selectedArtifactId, panelOpen, selectArtifact, setPanelOpen } =
+    useArtifactsStore();
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId);
 
@@ -264,11 +238,7 @@ export function ArtifactsPanel() {
 
             {/* Content */}
             <div className="flex flex-1 flex-col overflow-hidden bg-[#1e1e1e]">
-              {selectedArtifact ? (
-                <ArtifactViewer artifact={selectedArtifact} />
-              ) : (
-                <EmptyState />
-              )}
+              {selectedArtifact ? <ArtifactViewer artifact={selectedArtifact} /> : <EmptyState />}
             </div>
           </>
         )}

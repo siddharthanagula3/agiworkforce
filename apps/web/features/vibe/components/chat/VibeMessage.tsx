@@ -8,7 +8,7 @@
  * - Memoized markdown components
  */
 
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';

@@ -110,7 +110,7 @@ export class ChatPersistenceService {
     return (data || []).map((session: Record<string, unknown>) => {
       // Extract message count from nested select result
       // Supabase returns count as an array with single object or direct count
-      const chatMessages = session.web_messages as
+      const chatMessages = session['web_messages'] as
         | { count: number }[]
         | { count: number }
         | undefined;
@@ -163,7 +163,7 @@ export class ChatPersistenceService {
     const resultItems = hasMore ? items.slice(0, limit) : items;
 
     const sessions = resultItems.map((session: Record<string, unknown>) => {
-      const chatMessages = session.web_messages as
+      const chatMessages = session['web_messages'] as
         | { count: number }[]
         | { count: number }
         | undefined;
@@ -282,7 +282,9 @@ export class ChatPersistenceService {
     role: 'user' | 'assistant' | 'system',
     content: string,
   ): Promise<ChatMessage> {
-    const { data, error } = await (supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
+    )
       .insert({
         conversation_id: sessionId,
         role,
@@ -445,7 +447,9 @@ export class ChatPersistenceService {
    * Note: RLS policies ensure users can only update messages from their own sessions
    */
   async updateMessage(messageId: string, newContent: string): Promise<ChatMessage> {
-    const { data, error } = await (supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
+    )
       .update({
         content: newContent,
         // updated_at, edited, and edit_count are automatically handled by the database trigger
@@ -731,7 +735,7 @@ export class ChatPersistenceService {
         ? dbSession.metadata
         : {}
     ) as Record<string, unknown>;
-    const metadataTags = (metadataObj.tags as string[]) || [];
+    const metadataTags = (metadataObj['tags'] as string[]) || [];
 
     return {
       id: dbSession.id,

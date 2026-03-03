@@ -219,7 +219,7 @@ describe('Social Media Analyzer', () => {
         analysisType: ['all'],
       });
 
-      const sentMessages = mockGrokProvider.sendMessage.mock.calls[0][0];
+      const sentMessages = mockGrokProvider!.sendMessage.mock.calls[0]![0]!;
       const userPrompt = sentMessages[1].content;
 
       expect(userPrompt).toContain('Sentiment Analysis');
@@ -279,7 +279,7 @@ describe('Social Media Analyzer', () => {
 
       await analyzer.quickSentiment('test');
 
-      const sentMessages = mockGrokProvider.sendMessage.mock.calls[0][0];
+      const sentMessages = mockGrokProvider!.sendMessage.mock.calls[0]![0]!;
       const userPrompt = sentMessages[1].content;
 
       expect(userPrompt).toContain('24h');
@@ -338,7 +338,7 @@ describe('Social Media Analyzer', () => {
       expect(result.trending.length).toBe(2);
       expect(result.emerging.length).toBe(1);
       expect(result.declining.length).toBe(1);
-      expect(result.trending[0].topic).toBe('#AI');
+      expect(result!.trending[0]!.topic!).toBe('#AI');
     });
 
     it('should return empty arrays when no trends found', async () => {
@@ -392,7 +392,7 @@ describe('Social Media Analyzer', () => {
       const result = await analyzer.findInfluencers('AI', 'x');
 
       expect(result.topInfluencers.length).toBe(1);
-      expect(result.topInfluencers[0].username).toBe('@tech_guru');
+      expect(result!.topInfluencers[0]!.username!).toBe('@tech_guru');
       expect(result.risingVoices.length).toBe(1);
     });
 
@@ -407,7 +407,7 @@ describe('Social Media Analyzer', () => {
 
       await analyzer.findInfluencers('test');
 
-      const sentMessages = mockGrokProvider.sendMessage.mock.calls[0][0];
+      const sentMessages = mockGrokProvider!.sendMessage.mock.calls[0]![0]!;
       const userPrompt = sentMessages[1].content;
 
       expect(userPrompt).toContain('7d');
@@ -458,10 +458,10 @@ describe('Social Media Analyzer', () => {
       const result = await analyzer.compareSentiment(['bitcoin', 'ethereum']);
 
       expect(result.length).toBe(2);
-      expect(result[0].topic).toBe('bitcoin');
-      expect(result[0].sentiment).toBe('positive');
-      expect(result[1].topic).toBe('ethereum');
-      expect(result[1].sentiment).toBe('neutral');
+      expect(result![0]!.topic!).toBe('bitcoin');
+      expect(result![0]!.sentiment!).toBe('positive');
+      expect(result![1]!.topic!).toBe('ethereum');
+      expect(result![1]!.sentiment!).toBe('neutral');
     });
 
     it('should run comparisons in parallel', async () => {
@@ -564,7 +564,7 @@ describe('Social Media Analyzer', () => {
         keywords: ['machine learning', 'neural networks'],
       });
 
-      const userPrompt = mockGrokProvider.sendMessage.mock.calls[0][0][1].content;
+      const userPrompt = mockGrokProvider!.sendMessage.mock.calls[0]![0][1]!.content!;
 
       expect(userPrompt).toContain('machine learning');
       expect(userPrompt).toContain('neural networks');
@@ -584,7 +584,7 @@ describe('Social Media Analyzer', () => {
         hashtags: ['#AI', '#MachineLearning'],
       });
 
-      const userPrompt = mockGrokProvider.sendMessage.mock.calls[0][0][1].content;
+      const userPrompt = mockGrokProvider!.sendMessage.mock.calls[0]![0][1]!.content!;
 
       expect(userPrompt).toContain('#AI');
       expect(userPrompt).toContain('#MachineLearning');
@@ -604,7 +604,7 @@ describe('Social Media Analyzer', () => {
         location: 'San Francisco',
       });
 
-      const userPrompt = mockGrokProvider.sendMessage.mock.calls[0][0][1].content;
+      const userPrompt = mockGrokProvider!.sendMessage.mock.calls[0]![0][1]!.content!;
 
       expect(userPrompt).toContain('San Francisco');
     });

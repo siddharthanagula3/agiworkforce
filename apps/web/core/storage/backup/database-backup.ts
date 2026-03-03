@@ -76,7 +76,10 @@ class BackupService {
 
     console.log('BackupService initialized with config:', this.config);
 
-    monitoringService.trackEvent('backup_service_initialized', this.config as unknown as Record<string, unknown>);
+    monitoringService.trackEvent(
+      'backup_service_initialized',
+      this.config as unknown as Record<string, unknown>,
+    );
   }
 
   /**
@@ -190,7 +193,7 @@ class BackupService {
 
       if (error) throw error;
 
-      return data.map((row: Record<string, unknown>) => row.table_name as string);
+      return data.map((row: Record<string, unknown>) => row['table_name'] as string);
     } catch (error) {
       console.error('Error getting tables to backup:', error);
       return [];
@@ -324,14 +327,14 @@ class BackupService {
       }
 
       this.backups = data.map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        timestamp: new Date(row.timestamp as string),
-        type: row.type as BackupMetadata['type'],
-        size: row.size as number,
-        status: row.status as BackupMetadata['status'],
-        tables: row.tables as string[],
-        checksum: row.checksum as string,
-        location: row.location as string,
+        id: row['id'] as string,
+        timestamp: new Date(row['timestamp'] as string),
+        type: row['type'] as BackupMetadata['type'],
+        size: row['size'] as number,
+        status: row['status'] as BackupMetadata['status'],
+        tables: row['tables'] as string[],
+        checksum: row['checksum'] as string,
+        location: row['location'] as string,
       }));
     } catch (error) {
       console.debug(
@@ -364,7 +367,7 @@ class BackupService {
       }
 
       const backupDataTyped = backupData as Record<string, unknown>;
-      const backupDataContent = (backupDataTyped.data || {}) as Record<string, unknown[]>;
+      const backupDataContent = (backupDataTyped['data'] || {}) as Record<string, unknown[]>;
 
       if (dryRun) {
         console.log('Dry run restore - would restore:', {

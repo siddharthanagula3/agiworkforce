@@ -322,7 +322,12 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
       };
     }
 
-    const used = Math.abs(transactions?.reduce((sum: number, tx: Record<string, unknown>) => sum + (tx.tokens as number), 0) || 0);
+    const used = Math.abs(
+      transactions?.reduce(
+        (sum: number, tx: Record<string, unknown>) => sum + (tx['tokens'] as number),
+        0,
+      ) || 0,
+    );
     const limit = 1000000; // 1M tokens/month for free tier (matches billing dashboard)
 
     return {

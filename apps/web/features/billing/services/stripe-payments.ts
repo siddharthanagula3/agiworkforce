@@ -9,31 +9,6 @@ import { supabase } from '@shared/lib/supabase-client';
 
 // Lazy loader with guard
 
-let stripePromise: Promise<unknown> | null = null;
-
-async function loadStripe(key: string): Promise<unknown> {
-  try {
-    const mod = await import('@stripe/stripe-js');
-    return mod.loadStripe(key);
-  } catch {
-    return null;
-  }
-}
-function _getStripe() {
-  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-  if (!publishableKey || !publishableKey.startsWith('pk_')) {
-    return Promise.resolve(null);
-  }
-  if (!stripePromise) {
-    try {
-      stripePromise = loadStripe(publishableKey);
-    } catch (_e) {
-      stripePromise = Promise.resolve(null);
-    }
-  }
-  return stripePromise;
-}
-
 /**
  * Get authorization token for API calls
  */
@@ -90,7 +65,7 @@ export function formatPrice(amount: number): string {
  * Check if Stripe is properly configured
  */
 export function isStripeConfigured(): boolean {
-  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  const publishableKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
   return !!publishableKey && publishableKey.startsWith('pk_');
 }
 
@@ -99,8 +74,8 @@ export function isStripeConfigured(): boolean {
  */
 export function getStripeConfig() {
   return {
-    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-      ? `${process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.substring(0, 20)}...`
+    publishableKey: process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY']
+      ? `${process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'].substring(0, 20)}...`
       : 'Not configured',
     isConfigured: isStripeConfigured(),
   };

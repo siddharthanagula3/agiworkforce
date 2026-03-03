@@ -776,7 +776,7 @@ function parseAspectRatio(message: string): '1:1' | '16:9' | '9:16' | '4:3' | '3
 function parseDuration(message: string): number {
   const match = message.match(/(\d+)\s*(?:second|sec|s)\b/i);
   if (match) {
-    return Math.min(parseInt(match[1]), 30); // Max 30 seconds
+    return Math.min(parseInt(match[1]!), 30); // Max 30 seconds
   }
   return 8; // default 8 seconds
 }

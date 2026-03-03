@@ -63,44 +63,6 @@ class MultiAgentCollaborationService {
     const messageLower = userMessage.toLowerCase();
 
     // Complexity indicators
-    const complexityKeywords = [
-      'build',
-      'create',
-      'develop',
-      'design',
-      'implement',
-      'architect',
-      'system',
-      'platform',
-      'application',
-      'full',
-      'complete',
-      'entire',
-      'comprehensive',
-      'end-to-end',
-      'full-stack',
-      'production-ready',
-    ];
-
-    const multiDomainKeywords = [
-      'frontend and backend',
-      'ui and api',
-      'design and code',
-      'security and performance',
-      'database and api',
-      'test and deploy',
-    ];
-
-    const technicalDepthKeywords = [
-      'scalable',
-      'production',
-      'enterprise',
-      'distributed',
-      'microservices',
-      'infrastructure',
-      'architecture',
-      'deployment',
-    ];
 
     // Check for complexity indicators
     let complexityScore = 0;
@@ -108,34 +70,10 @@ class MultiAgentCollaborationService {
     const requiredExpertise: string[] = [];
 
     // Check for build/create keywords
-    const _hasBuildKeywords = complexityKeywords.some((keyword) => {
-      if (messageLower.includes(keyword)) {
-        detectedKeywords.push(keyword);
-        complexityScore += 2;
-        return true;
-      }
-      return false;
-    });
 
     // Check for multi-domain requirements
-    const _hasMultiDomain = multiDomainKeywords.some((keyword) => {
-      if (messageLower.includes(keyword)) {
-        detectedKeywords.push(keyword);
-        complexityScore += 3;
-        return true;
-      }
-      return false;
-    });
 
     // Check for technical depth
-    const _hasTechnicalDepth = technicalDepthKeywords.some((keyword) => {
-      if (messageLower.includes(keyword)) {
-        detectedKeywords.push(keyword);
-        complexityScore += 2;
-        return true;
-      }
-      return false;
-    });
 
     // Analyze required expertise areas
     if (messageLower.match(/frontend|ui|interface|react|component|page/)) {
@@ -247,8 +185,8 @@ class MultiAgentCollaborationService {
       }>[] = [];
 
       for (let i = 0; i < Math.min(selectedEmployees.length - 1, 2); i++) {
-        const employee = selectedEmployees[i];
-        const otherEmployee = selectedEmployees[i + 1];
+        const employee = selectedEmployees[i]!;
+        const otherEmployee = selectedEmployees[i + 1]!;
         const otherContribution = employeeResponses.get(otherEmployee.name);
 
         if (otherContribution) {
@@ -366,16 +304,16 @@ class MultiAgentCollaborationService {
 
     const MAX_EMPLOYEES = 3; // Hard cap at 3 employees
     for (let i = 0; i < Math.min(maxEmployees, scoredEmployees.length, MAX_EMPLOYEES); i++) {
-      if (scoredEmployees[i].score > 0) {
-        selected.push(scoredEmployees[i].employee);
+      if (scoredEmployees[i]!.score > 0) {
+        selected.push(scoredEmployees[i]!.employee);
       }
     }
 
     // Ensure at least 2 employees for collaboration
     if (selected.length === 0 && this.employees.length >= 2) {
-      selected.push(this.employees[0], this.employees[1]);
+      selected.push(this.employees[0]!, this.employees[1]!);
     } else if (selected.length === 1 && this.employees.length >= 2) {
-      const second = this.employees.find((e) => e.name !== selected[0].name);
+      const second = this.employees.find((e) => e.name !== selected[0]!.name);
       if (second) selected.push(second);
     }
 
@@ -432,7 +370,7 @@ Focus on your area of expertise and provide actionable insights. Keep it concise
    */
   private async getEmployeeDiscussion(
     employee: AIEmployee,
-    userMessage: string,
+    _userMessage: string,
     otherEmployeeName: string,
     otherContribution: string,
   ): Promise<{ content: string; tokensUsed?: number }> {
@@ -472,7 +410,7 @@ Based on your expertise in ${employee.description}, provide a brief response or 
    */
   private async synthesizeFinalAnswer(
     userMessage: string,
-    employees: AIEmployee[],
+    _employees: AIEmployee[],
     employeeResponses: Map<string, string>,
     conversationHistory: Array<{ role: string; content: string }>,
   ): Promise<{ content: string; tokensUsed?: number }> {

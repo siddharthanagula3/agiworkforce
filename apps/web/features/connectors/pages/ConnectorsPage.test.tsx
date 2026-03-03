@@ -18,7 +18,12 @@ vi.mock('@shared/lib/utils', () => ({
 vi.mock('@shared/ui/button', () => {
   const Button = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
     ({ children, onClick, disabled, ...props }, ref) => (
-      <button ref={ref} onClick={onClick as React.MouseEventHandler} disabled={disabled as boolean | undefined} {...props}>
+      <button
+        ref={ref}
+        onClick={onClick as React.MouseEventHandler}
+        disabled={disabled as boolean | undefined}
+        {...props}
+      >
         {children as React.ReactNode}
       </button>
     ),
@@ -156,9 +161,7 @@ describe('ConnectorsPage', () => {
     fireEvent.change(input, { target: { value: 'xyznonexistentconnector' } });
 
     expect(screen.getByText('No connectors found')).toBeDefined();
-    expect(
-      screen.getByText('Try a different search term or category.'),
-    ).toBeDefined();
+    expect(screen.getByText('Try a different search term or category.')).toBeDefined();
   });
 
   // 10. Category filter tabs are rendered
@@ -218,7 +221,7 @@ describe('ConnectorsPage', () => {
     // There may be multiple "Connect" buttons; find the one near Gmail text
     const connectButtons = screen.getAllByText('Connect');
     // Click the first one (Gmail is the first unconnected phase-1 connector)
-    fireEvent.click(connectButtons[0]);
+    fireEvent.click(connectButtons[0]!);
 
     // After connecting, the count badge should increase from 3 to 4
     expect(screen.getByText('4 connected')).toBeDefined();

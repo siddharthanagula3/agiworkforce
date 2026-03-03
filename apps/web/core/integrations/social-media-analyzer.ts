@@ -260,8 +260,8 @@ export class SocialMediaAnalyzer {
 
     return topics.map((topic, index) => ({
       topic,
-      sentiment: results[index].sentiment,
-      score: results[index].score,
+      sentiment: results[index]!.sentiment,
+      score: results[index]!.score,
       volume: 0, // Would need additional API call to get volume
     }));
   }
@@ -421,7 +421,7 @@ Your analysis should be data-driven, actionable, and insightful.`;
 
       let parsed: Record<string, unknown>;
       if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[1]) as Record<string, unknown>;
+        parsed = JSON.parse(jsonMatch[1]!) as Record<string, unknown>;
       } else {
         // Try parsing the entire content as JSON
         parsed = JSON.parse(content) as Record<string, unknown>;
@@ -429,13 +429,13 @@ Your analysis should be data-driven, actionable, and insightful.`;
 
       return {
         query,
-        summary: (parsed.summary as string) || 'Analysis completed',
-        sentiment: parsed.sentiment as SentimentAnalysis | undefined,
-        trends: parsed.trends as TrendAnalysis | undefined,
-        influencers: parsed.influencers as InfluencerAnalysis | undefined,
-        topContent: parsed.topContent as TopContent | undefined,
-        insights: (parsed.insights as string[]) || [],
-        recommendations: (parsed.recommendations as string[]) || [],
+        summary: (parsed['summary'] as string) || 'Analysis completed',
+        sentiment: parsed['sentiment'] as SentimentAnalysis | undefined,
+        trends: parsed['trends'] as TrendAnalysis | undefined,
+        influencers: parsed['influencers'] as InfluencerAnalysis | undefined,
+        topContent: parsed['topContent'] as TopContent | undefined,
+        insights: (parsed['insights'] as string[]) || [],
+        recommendations: (parsed['recommendations'] as string[]) || [],
         metadata: {
           analyzedAt: new Date().toISOString(),
           dataSourcesCount: this.estimateDataSources(parsed),
@@ -469,9 +469,9 @@ Your analysis should be data-driven, actionable, and insightful.`;
    */
   private estimateDataSources(parsed: Record<string, unknown>): number {
     let count = 0;
-    const topContent = parsed.topContent as TopContent | undefined;
-    const influencers = parsed.influencers as InfluencerAnalysis | undefined;
-    const trends = parsed.trends as TrendAnalysis | undefined;
+    const topContent = parsed['topContent'] as TopContent | undefined;
+    const influencers = parsed['influencers'] as InfluencerAnalysis | undefined;
+    const trends = parsed['trends'] as TrendAnalysis | undefined;
 
     if (topContent?.posts) {
       count += topContent.posts.length;
@@ -491,12 +491,12 @@ Your analysis should be data-driven, actionable, and insightful.`;
    */
   private calculateConfidenceScore(parsed: Record<string, unknown>): number {
     let score = 50; // Base score
-    const sentiment = parsed.sentiment as SentimentAnalysis | undefined;
-    const trends = parsed.trends as TrendAnalysis | undefined;
-    const influencers = parsed.influencers as InfluencerAnalysis | undefined;
-    const topContent = parsed.topContent as TopContent | undefined;
-    const insights = parsed.insights as string[] | undefined;
-    const recommendations = parsed.recommendations as string[] | undefined;
+    const sentiment = parsed['sentiment'] as SentimentAnalysis | undefined;
+    const trends = parsed['trends'] as TrendAnalysis | undefined;
+    const influencers = parsed['influencers'] as InfluencerAnalysis | undefined;
+    const topContent = parsed['topContent'] as TopContent | undefined;
+    const insights = parsed['insights'] as string[] | undefined;
+    const recommendations = parsed['recommendations'] as string[] | undefined;
 
     if (sentiment?.scores) score += 10;
     if (trends?.trending?.length && trends.trending.length > 0) score += 10;

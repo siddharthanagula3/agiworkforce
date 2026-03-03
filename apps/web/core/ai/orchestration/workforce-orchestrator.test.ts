@@ -139,7 +139,7 @@ describe('WorkforceOrchestrator', () => {
       expect(result.plan).toHaveLength(3);
       // Note: setMissionPlan is called BEFORE delegation, so assignedTo is null at this point
       // Employee assignment happens in the delegation stage via updateTaskStatus
-      expect(mockStore.setMissionPlan).toHaveBeenCalledWith(
+      expect(mockStore['setMissionPlan']).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
             status: 'pending',
@@ -163,7 +163,7 @@ describe('WorkforceOrchestrator', () => {
       // Implementation creates a fallback plan instead of failing
       expect(result.success).toBe(true);
       expect(result.plan).toHaveLength(1);
-      expect(result.plan?.[0].description).toBe('Test task');
+      expect(result.plan?.[0]?.description).toBe('Test task');
     });
 
     it('should handle empty plan by creating fallback task', async () => {
@@ -195,7 +195,7 @@ describe('WorkforceOrchestrator', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockStore.addMessage).toHaveBeenCalledWith(
+      expect(mockStore['addMessage']).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'system',
           content: expect.stringContaining('plan'),
@@ -216,7 +216,7 @@ describe('WorkforceOrchestrator', () => {
       // Implementation creates fallback plan instead of failing (resilient behavior)
       expect(result.success).toBe(true);
       expect(result.plan).toHaveLength(1);
-      expect(result.plan?.[0].description).toBe('Test task');
+      expect(result.plan?.[0]?.description).toBe('Test task');
     }, 15000); // Increased timeout for retry backoff
 
     it('should handle network timeout errors with fallback plan', async () => {
@@ -257,9 +257,11 @@ describe('WorkforceOrchestrator', () => {
 
       // Verify that employees with matching tools were selected
       // Note: updateTaskStatus is called during delegation with 'in_progress' status
-      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = vi.mocked(mockStore['updateTaskStatus'] as ReturnType<typeof vi.fn>).mock.calls;
       // Filter for delegation calls (status = 'in_progress')
-      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
+      const delegationCalls = calls.filter(
+        (call: unknown[]) => (call as unknown[])[1] === 'in_progress',
+      );
       expect(delegationCalls.length).toBe(3);
       // Each task should have an assigned employee (third argument)
       delegationCalls.forEach((call: unknown[]) => {
@@ -286,8 +288,10 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Both tasks should get assigned during delegation
-      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
-      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
+      const calls = vi.mocked(mockStore['updateTaskStatus'] as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter(
+        (call: unknown[]) => (call as unknown[])[1] === 'in_progress',
+      );
       expect(delegationCalls.length).toBe(2);
     });
 
@@ -328,11 +332,13 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Verify an employee was selected (selection happens in delegation)
-      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
-      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
+      const calls = vi.mocked(mockStore['updateTaskStatus'] as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter(
+        (call: unknown[]) => (call as unknown[])[1] === 'in_progress',
+      );
       expect(delegationCalls.length).toBeGreaterThan(0);
       // Debugger should be selected because it has Bash tool
-      expect(delegationCalls[0][2]).toBe('debugger');
+      expect(delegationCalls![0]![2]!).toBe('debugger');
     });
   });
 
@@ -370,7 +376,7 @@ describe('WorkforceOrchestrator', () => {
       expect(result.mode).toBe('chat');
       expect(result.chatResponse).toBe('I can help you with that!');
       // Chat mode doesn't use setMissionPlan
-      expect(mockStore.setMissionPlan).not.toHaveBeenCalled();
+      expect(mockStore['setMissionPlan']).not.toHaveBeenCalled();
     });
 
     it('should auto-select employees for chat mode', async () => {
@@ -497,7 +503,7 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Verify error was logged to mission messages
-      expect(mockStore.addMessage).toHaveBeenCalledWith(
+      expect(mockStore['addMessage']).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'error',
           content: expect.stringContaining('failed'),
@@ -518,7 +524,7 @@ describe('WorkforceOrchestrator', () => {
         input: 'Test task',
       });
 
-      expect(mockStore.startMission).toHaveBeenCalledWith(
+      expect(mockStore['startMission']).toHaveBeenCalledWith(
         expect.stringMatching(/^[\w-]+$/), // UUID format
       );
     });
@@ -535,7 +541,7 @@ describe('WorkforceOrchestrator', () => {
         input: userInput,
       });
 
-      expect(mockStore.addMessage).toHaveBeenCalledWith(
+      expect(mockStore['addMessage']).toHaveBeenCalledWith(
         expect.objectContaining({
           from: 'user',
           type: 'user',
@@ -556,8 +562,10 @@ describe('WorkforceOrchestrator', () => {
       });
 
       // Delegation stage updates status to 'in_progress' with assigned employee
-      const calls = vi.mocked(mockStore.updateTaskStatus as ReturnType<typeof vi.fn>).mock.calls;
-      const delegationCalls = calls.filter((call: unknown[]) => (call as unknown[])[1] === 'in_progress');
+      const calls = vi.mocked(mockStore['updateTaskStatus'] as ReturnType<typeof vi.fn>).mock.calls;
+      const delegationCalls = calls.filter(
+        (call: unknown[]) => (call as unknown[])[1] === 'in_progress',
+      );
       expect(delegationCalls.length).toBe(2);
       // Each delegation call should have task id, 'in_progress' status, and employee name
       delegationCalls.forEach((call: unknown[]) => {

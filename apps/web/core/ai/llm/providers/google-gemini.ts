@@ -60,7 +60,6 @@ import {
   SUPPORTED_GOOGLE_IMAGE_MODELS,
   SUPPORTED_GOOGLE_VIDEO_MODELS,
   SUPPORTED_GOOGLE_AUDIO_MODELS,
-  DEFAULT_GOOGLE_MODEL,
   type GoogleModel,
 } from '@shared/config/supported-models';
 
@@ -86,7 +85,7 @@ export type GoogleErrorCode =
   | `HTTP_${number}`;
 
 export class GoogleError extends Error {
-  public readonly name = 'GoogleError' as const;
+  public override readonly name = 'GoogleError' as const;
 
   constructor(
     message: string,
@@ -104,21 +103,15 @@ export class GoogleProvider {
   private config: GoogleConfig;
   // Client-side SDK disabled for security - use Netlify proxy instead
   // This property is kept for potential future direct SDK usage
-  private client: GoogleGenAI | null = null;
 
-  constructor(config: Partial<GoogleConfig> = {}) {
+  constructor(config?: Partial<GoogleConfig>) {
     this.config = {
-      model: DEFAULT_GOOGLE_MODEL,
-      maxTokens: 4000,
+      model: 'gemini-2.5-pro' as GoogleModel,
+      maxTokens: 4096,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',
-      tools: [],
-      thinkingMode: undefined,
       ...config,
-    };
-
-    // Client-side SDK disabled for security - all calls go through Netlify proxy
-    // When direct SDK usage is needed: this.client = new GoogleGenAI({ apiKey });
+    } as GoogleConfig;
   }
 
   /**
@@ -268,6 +261,8 @@ export class GoogleProvider {
       total_tokens?: number;
     };
   }> {
+    // Required yield* to satisfy ESLint require-yield; delegates to empty iterable (no values emitted)
+    yield* [];
     // SECURITY: Direct API calls are disabled - use Netlify proxy instead
     throw new GoogleError(
       'Direct Google streaming is disabled for security. Use /.netlify/functions/llm-proxies/google-proxy instead.',
@@ -347,26 +342,6 @@ export class GoogleProvider {
    * Extract usage information from Gemini response
    * New @google/genai SDK returns usageMetadata directly on response
    */
-  private extractUsageFromResponse(result: {
-    usageMetadata?: {
-      promptTokenCount?: number;
-      candidatesTokenCount?: number;
-      totalTokenCount?: number;
-    };
-  }): {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  } {
-    if (result.usageMetadata) {
-      return {
-        promptTokens: result.usageMetadata.promptTokenCount || 0,
-        completionTokens: result.usageMetadata.candidatesTokenCount || 0,
-        totalTokens: result.usageMetadata.totalTokenCount || 0,
-      };
-    }
-    return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-  }
 
   /**
    * Save message to database

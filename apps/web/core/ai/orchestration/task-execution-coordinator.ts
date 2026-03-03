@@ -162,52 +162,52 @@ export class ExecutionCoordinator extends SimpleEventEmitter {
           timestamp: new Date(),
           data: {
             status: 'running',
-            message: `Executing level ${levelIndex + 1}/${context.plan.executionOrder.length} with ${taskIds.length} tasks...`,
+            message: `Executing level ${levelIndex + 1}/${context.plan.executionOrder.length} with ${taskIds?.length} tasks...`,
           },
         };
 
         // Execute all tasks in this level in parallel
-        const levelTasks = taskIds.map((id) => context.plan.tasks.find((t) => t.id === id)!);
+        const levelTasks = taskIds?.map((id) => context.plan.tasks.find((t) => t.id === id)!);
 
         const results = await Promise.allSettled(
-          levelTasks.map((task) => this.executeTask(context, task)),
+          levelTasks!.map((task) => this.executeTask(context, task)),
         );
 
         // Process results and yield updates
         for (let i = 0; i < results.length; i++) {
           const result = results[i];
-          const task = levelTasks[i];
+          const task = levelTasks![i]!;
 
-          if (result.status === 'fulfilled') {
-            context.completedTasks.push(task);
+          if (result?.status === 'fulfilled') {
+            context.completedTasks.push(task!);
 
             yield {
               type: 'task_complete',
               executionId: context.id,
               timestamp: new Date(),
               data: {
-                task: task.id,
-                title: task.title,
-                result: result.value,
+                task: task?.id,
+                title: task?.title,
+                result: result?.value,
               },
             };
           } else {
-            context.failedTasks.push(task);
+            context.failedTasks.push(task!);
 
             yield {
               type: 'task_error',
               executionId: context.id,
               timestamp: new Date(),
               data: {
-                task: task.id,
-                title: task.title,
-                error: result.reason?.message || 'Unknown error',
+                task: task?.id,
+                title: task?.title,
+                error: result?.reason?.message || 'Unknown error',
               },
             };
 
             // Check if we should continue or abort
-            if (task.priority === 'critical') {
-              throw new Error(`Critical task ${task.title} failed: ${result.reason?.message}`);
+            if (task?.priority === 'critical') {
+              throw new Error(`Critical task ${task?.title} failed: ${result?.reason?.message}`);
             }
           }
         }
@@ -589,7 +589,7 @@ export class ExecutionCoordinator extends SimpleEventEmitter {
       const context = Array.from(this.activeExecutions.values()).find(
         (ctx) =>
           ctx.currentTask &&
-          (message.payload as Record<string, unknown>)?.taskId === ctx.currentTask.id,
+          (message.payload as Record<string, unknown>)?.['taskId'] === ctx.currentTask.id,
       );
 
       if (context) {

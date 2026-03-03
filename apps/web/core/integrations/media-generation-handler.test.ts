@@ -236,7 +236,7 @@ describe('Media Generation Handler', () => {
 
       const history = mediaGenerationService.getGenerationHistory();
       expect(history.length).toBe(1);
-      expect(history[0].type).toBe('image');
+      expect(history![0]!.type!).toBe('image');
     });
 
     it('should include images array in result', async () => {
@@ -258,7 +258,7 @@ describe('Media Generation Handler', () => {
 
       expect(result.images).toBeDefined();
       expect(result.images?.length).toBe(1);
-      expect(result.images?.[0].mimeType).toBe('image/png');
+      expect(result.images?.[0]?.mimeType).toBe('image/png');
     });
   });
 
@@ -425,7 +425,7 @@ describe('Media Generation Handler', () => {
 
       const history = mediaGenerationService.getGenerationHistory();
       expect(history.length).toBe(1);
-      expect(history[0].type).toBe('video');
+      expect(history![0]!.type!).toBe('video');
     });
   });
 

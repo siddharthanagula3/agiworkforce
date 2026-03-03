@@ -208,7 +208,7 @@ export class MessageRoutingService {
     if (mentions.length === 1) {
       routeType = 'direct';
       const mentionedParticipant = participants.find(
-        (p) => p.name.toLowerCase() === mentions[0].toLowerCase() || p.id === mentions[0],
+        (p) => p.name.toLowerCase() === mentions[0]!.toLowerCase() || p.id === mentions[0],
       );
       if (mentionedParticipant) {
         toIds = [mentionedParticipant.id];
@@ -406,7 +406,7 @@ export class MessageRoutingService {
     let match;
 
     while ((match = mentionRegex.exec(content)) !== null) {
-      mentions.push(match[1]);
+      mentions.push(match[1]!);
     }
 
     return mentions;

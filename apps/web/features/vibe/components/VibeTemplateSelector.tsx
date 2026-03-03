@@ -3,7 +3,7 @@
  * Allows users to scaffold new projects from pre-built templates
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,

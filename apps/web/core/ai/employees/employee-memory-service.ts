@@ -258,11 +258,11 @@ export class EmployeeMemoryService {
     // Start from most recent
     for (let i = context.messages.length - 1; i >= 0; i--) {
       const message = context.messages[i];
-      const messageTokens = message.tokens || countTokens(message.content);
+      const messageTokens = message?.tokens || countTokens(message!.content);
 
       if (currentTokens + messageTokens > maxTokens) break;
 
-      result.unshift(message);
+      result.unshift(message!);
       currentTokens += messageTokens;
     }
 
@@ -311,12 +311,12 @@ export class EmployeeMemoryService {
       if (data) {
         const row = data as Record<string, unknown>;
         const memory: EmployeeMemory = {
-          employeeId: row.employee_id as string,
-          userId: row.user_id as string,
-          knowledgeBase: (row.knowledge_base as MemoryEntry[]) || [],
-          preferences: (row.preferences as Record<string, unknown>) || {},
-          lastInteraction: new Date(row.last_interaction as string),
-          interactionCount: (row.interaction_count as number) || 0,
+          employeeId: row['employee_id'] as string,
+          userId: row['user_id'] as string,
+          knowledgeBase: (row['knowledge_base'] as MemoryEntry[]) || [],
+          preferences: (row['preferences'] as Record<string, unknown>) || {},
+          lastInteraction: new Date(row['last_interaction'] as string),
+          interactionCount: (row['interaction_count'] as number) || 0,
         };
         this.memories[key] = memory;
         return memory;
@@ -415,36 +415,36 @@ export class EmployeeMemoryService {
     const byCategory = memory.knowledgeBase.reduce(
       (acc, entry) => {
         if (!acc[entry.category]) acc[entry.category] = [];
-        acc[entry.category].push(entry);
+        acc[entry.category]!.push(entry);
         return acc;
       },
       {} as Record<string, MemoryEntry[]>,
     );
 
-    if (byCategory.personal?.length) {
+    if (byCategory['personal']?.length) {
       sections.push(
         '**About this user:**\n' +
-          byCategory.personal.map((e) => `- ${e.key}: ${e.value}`).join('\n'),
+          byCategory['personal'].map((e) => `- ${e.key}: ${e.value}`).join('\n'),
       );
     }
 
-    if (byCategory.preferences?.length) {
+    if (byCategory['preferences']?.length) {
       sections.push(
         '**User preferences:**\n' +
-          byCategory.preferences.map((e) => `- ${e.key}: ${e.value}`).join('\n'),
+          byCategory['preferences'].map((e) => `- ${e.key}: ${e.value}`).join('\n'),
       );
     }
 
-    if (byCategory.goals?.length) {
+    if (byCategory['goals']?.length) {
       sections.push(
-        '**User goals:**\n' + byCategory.goals.map((e) => `- ${e.key}: ${e.value}`).join('\n'),
+        '**User goals:**\n' + byCategory['goals'].map((e) => `- ${e.key}: ${e.value}`).join('\n'),
       );
     }
 
-    if (byCategory.history?.length) {
+    if (byCategory['history']?.length) {
       sections.push(
         '**Previous interactions:**\n' +
-          byCategory.history
+          byCategory['history']
             .slice(-5)
             .map((e) => `- ${e.value}`)
             .join('\n'),

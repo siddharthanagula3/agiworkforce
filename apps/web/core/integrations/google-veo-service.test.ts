@@ -456,16 +456,16 @@ describe('Google Veo Service', () => {
       const models = googleVeoService.getAvailableModels();
 
       expect(models.length).toBe(1);
-      expect(models[0].id).toBe('veo-3.1-generate-preview');
-      expect(models[0].name).toBe('Veo 3.1');
+      expect(models![0]!.id!).toBe('veo-3.1-generate-preview');
+      expect(models![0]!.name!).toBe('Veo 3.1');
     });
 
     it('should include features for each model', () => {
       const models = googleVeoService.getAvailableModels();
 
-      expect(models[0].features).toContain('720p or 1080p resolution');
-      expect(models[0].features).toContain('Native audio generation');
-      expect(models[0].features).toContain('Text-to-video');
+      expect(models![0]!.features!).toContain('720p or 1080p resolution');
+      expect(models![0]!.features!).toContain('Native audio generation');
+      expect(models![0]!.features!).toContain('Text-to-video');
     });
   });
 
@@ -563,7 +563,7 @@ describe('Google Veo Service', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('veo-3.1-generate-preview');
       expect(requestBody.prompt).toBe('Test video');
       expect(requestBody.resolution).toBe('1080p');
@@ -597,7 +597,7 @@ describe('Google Veo Service', () => {
         firstFrame: { imageData: 'firstFrameData', mimeType: 'image/jpeg' },
       });
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.referenceImages).toBeDefined();
       expect(requestBody.firstFrame).toBeDefined();
     });

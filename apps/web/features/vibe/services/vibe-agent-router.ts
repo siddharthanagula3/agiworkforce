@@ -428,7 +428,7 @@ Respond in JSON format:
               .map((dep: string) => taskIdMap.get(dep))
               .filter((id: string | undefined) => id !== undefined);
 
-            tasks[idx].dependencies = dependencyIds;
+            tasks[idx]!.dependencies = dependencyIds;
           }
         },
       );

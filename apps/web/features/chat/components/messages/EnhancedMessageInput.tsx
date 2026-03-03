@@ -407,6 +407,7 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
       textarea.addEventListener('keydown', handleKeyDown);
       return () => textarea.removeEventListener('keydown', handleKeyDown);
     }
+    return undefined;
   }, [
     showMentions,
     filteredAgents,

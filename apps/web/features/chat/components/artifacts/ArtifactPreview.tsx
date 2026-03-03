@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import {
@@ -81,7 +81,7 @@ export function ArtifactPreview({
   const getPreviewHTML = useCallback((): string => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
-        ? artifact.versions[artifact.currentVersion].content
+        ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
 
     // SECURITY: Check for XSS risks and show warning
@@ -215,7 +215,7 @@ export function ArtifactPreview({
   const handleCopy = async () => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
-        ? artifact.versions[artifact.currentVersion].content
+        ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
 
     await navigator.clipboard.writeText(content);
@@ -226,7 +226,7 @@ export function ArtifactPreview({
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
-        ? artifact.versions[artifact.currentVersion].content
+        ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
 
     let blob: Blob;
@@ -451,7 +451,7 @@ export function ArtifactPreview({
             <pre className="p-4">
               <code className="text-sm text-gray-100">
                 {artifact.versions && artifact.currentVersion !== undefined
-                  ? artifact.versions[artifact.currentVersion].content
+                  ? artifact!.versions[artifact.currentVersion]!.content
                   : artifact.content}
               </code>
             </pre>

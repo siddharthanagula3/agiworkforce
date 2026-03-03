@@ -104,7 +104,7 @@ export function VibeMessageInput({
       if (e.key === 'Tab' || e.key === 'Enter') {
         if (!e.shiftKey) {
           e.preventDefault();
-          insertMention(mentionSuggestions[selectedSuggestionIndex]);
+          insertMention(mentionSuggestions[selectedSuggestionIndex]!);
           return;
         }
       }
@@ -159,7 +159,7 @@ export function VibeMessageInput({
     // Check for @ mention (agents)
     const atMatch = textBeforeCursor.match(/@(\w*)$/);
     if (atMatch) {
-      const query = atMatch[1].toLowerCase();
+      const query = atMatch[1]!.toLowerCase();
       setMentionType('agent');
       setMentionQuery(query);
       setMentionStartPos(cursorPos - atMatch[0].length);
@@ -189,7 +189,7 @@ export function VibeMessageInput({
     // Check for # mention (files)
     const hashMatch = textBeforeCursor.match(/#(\S*)$/);
     if (hashMatch) {
-      const query = hashMatch[1].toLowerCase();
+      const query = hashMatch[1]!.toLowerCase();
       setMentionType('file');
       setMentionQuery(query);
       setMentionStartPos(cursorPos - hashMatch[0].length);

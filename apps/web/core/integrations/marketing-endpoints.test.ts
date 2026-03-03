@@ -162,7 +162,7 @@ describe('Marketing Endpoints', () => {
 
       await subscribeToNewsletter({ email: 'test@example.com' });
 
-      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const callBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(callBody.email).toBe('test@example.com');
     });
   });
@@ -288,11 +288,11 @@ describe('Marketing Endpoints', () => {
       // Create a chainable mock that supports the full query builder pattern
       const createQueryBuilder = (finalData: unknown) => {
         const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-        builder.select = vi.fn().mockReturnValue(builder);
-        builder.eq = vi.fn().mockReturnValue(builder);
-        builder.order = vi.fn().mockReturnValue(builder);
+        builder['select'] = vi.fn().mockReturnValue(builder);
+        builder['eq'] = vi.fn().mockReturnValue(builder);
+        builder['order'] = vi.fn().mockReturnValue(builder);
         // Make the builder also act as a promise that resolves with data
-        builder.then = vi.fn((resolve: (value: unknown) => void) => {
+        builder['then'] = vi.fn((resolve: (value: unknown) => void) => {
           resolve({ data: finalData, error: null });
           return Promise.resolve({ data: finalData, error: null });
         });
@@ -314,13 +314,13 @@ describe('Marketing Endpoints', () => {
       const eqCalls: Array<[string, unknown]> = [];
       const createQueryBuilder = (finalData: unknown) => {
         const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-        builder.select = vi.fn().mockReturnValue(builder);
-        builder.eq = vi.fn().mockImplementation((col, val) => {
+        builder['select'] = vi.fn().mockReturnValue(builder);
+        builder['eq'] = vi.fn().mockImplementation((col, val) => {
           eqCalls.push([col, val]);
           return builder;
         });
-        builder.order = vi.fn().mockReturnValue(builder);
-        builder.then = vi.fn((resolve: (value: unknown) => void) => {
+        builder['order'] = vi.fn().mockReturnValue(builder);
+        builder['then'] = vi.fn((resolve: (value: unknown) => void) => {
           resolve({ data: finalData, error: null });
           return Promise.resolve({ data: finalData, error: null });
         });
@@ -341,13 +341,13 @@ describe('Marketing Endpoints', () => {
       const eqCalls: Array<[string, unknown]> = [];
       const createQueryBuilder = (_finalData: unknown) => {
         const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-        builder.select = vi.fn().mockReturnValue(builder);
-        builder.eq = vi.fn().mockImplementation((col, val) => {
+        builder['select'] = vi.fn().mockReturnValue(builder);
+        builder['eq'] = vi.fn().mockImplementation((col, val) => {
           eqCalls.push([col, val]);
           return builder;
         });
-        builder.order = vi.fn().mockReturnValue(builder);
-        builder.then = vi.fn((resolve: (value: unknown) => void) => {
+        builder['order'] = vi.fn().mockReturnValue(builder);
+        builder['then'] = vi.fn((resolve: (value: unknown) => void) => {
           resolve({ data: [], error: null });
           return Promise.resolve({ data: [], error: null });
         });
@@ -394,7 +394,7 @@ describe('Marketing Endpoints', () => {
 
       await trackResourceDownload('resource-123');
 
-      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const callBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(callBody.resourceId).toBe('resource-123');
       expect(callBody.userEmail).toBeUndefined();
     });
@@ -486,10 +486,10 @@ describe('Marketing Endpoints', () => {
       // Create a chainable mock for help_articles
       const createQueryBuilder = (finalData: unknown) => {
         const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-        builder.select = vi.fn().mockReturnValue(builder);
-        builder.eq = vi.fn().mockReturnValue(builder);
-        builder.order = vi.fn().mockReturnValue(builder);
-        builder.then = vi.fn((resolve: (value: unknown) => void) => {
+        builder['select'] = vi.fn().mockReturnValue(builder);
+        builder['eq'] = vi.fn().mockReturnValue(builder);
+        builder['order'] = vi.fn().mockReturnValue(builder);
+        builder['then'] = vi.fn((resolve: (value: unknown) => void) => {
           resolve({ data: finalData, error: null });
           return Promise.resolve({ data: finalData, error: null });
         });
@@ -507,9 +507,9 @@ describe('Marketing Endpoints', () => {
       // The getHelpArticles function first looks up category by slug, then queries articles
       // First call: support_categories lookup
       const categoryBuilder: Record<string, ReturnType<typeof vi.fn>> = {};
-      categoryBuilder.select = vi.fn().mockReturnValue(categoryBuilder);
-      categoryBuilder.eq = vi.fn().mockReturnValue(categoryBuilder);
-      categoryBuilder.maybeSingle = vi.fn().mockResolvedValue({
+      categoryBuilder['select'] = vi.fn().mockReturnValue(categoryBuilder);
+      categoryBuilder['eq'] = vi.fn().mockReturnValue(categoryBuilder);
+      categoryBuilder['maybeSingle'] = vi.fn().mockResolvedValue({
         data: { id: 'cat-1' },
         error: null,
       });
@@ -517,12 +517,12 @@ describe('Marketing Endpoints', () => {
       // Second call: help_articles query with category filter
       const eqCalls: Array<[string, unknown]> = [];
       const articlesBuilder: Record<string, ReturnType<typeof vi.fn>> = {};
-      articlesBuilder.select = vi.fn().mockReturnValue(articlesBuilder);
-      articlesBuilder.eq = vi.fn().mockImplementation((col, val) => {
+      articlesBuilder['select'] = vi.fn().mockReturnValue(articlesBuilder);
+      articlesBuilder['eq'] = vi.fn().mockImplementation((col, val) => {
         eqCalls.push([col, val]);
         return articlesBuilder;
       });
-      articlesBuilder.then = vi.fn((resolve: (value: unknown) => void) => {
+      articlesBuilder['then'] = vi.fn((resolve: (value: unknown) => void) => {
         resolve({ data: [{ id: '1', title: 'Article' }], error: null });
         return Promise.resolve({ data: [{ id: '1', title: 'Article' }], error: null });
       });

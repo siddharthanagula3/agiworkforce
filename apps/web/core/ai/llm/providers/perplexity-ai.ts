@@ -83,7 +83,7 @@ export type PerplexityErrorCode =
   | `HTTP_${number}`;
 
 export class PerplexityError extends Error {
-  public readonly name = 'PerplexityError' as const;
+  public override readonly name = 'PerplexityError' as const;
 
   constructor(
     message: string,
@@ -271,6 +271,8 @@ export class PerplexityProvider {
       total_tokens?: number;
     };
   }> {
+    // Required yield* to satisfy ESLint require-yield; delegates to empty iterable (no values emitted)
+    yield* [];
     // SECURITY: Direct API calls are disabled - use Netlify proxy instead
     throw new PerplexityError(
       'Direct Perplexity streaming is disabled for security. Use /.netlify/functions/llm-proxies/perplexity-proxy instead.',
@@ -324,72 +326,18 @@ export class PerplexityProvider {
   /**
    * Convert our message format to Perplexity format
    */
-  private convertMessagesToPerplexity(messages: PerplexityMessage[]): string {
-    // For Perplexity, we typically send the last user message as the prompt
-    // since it's designed for single-turn interactions with web search
-    const lastUserMessage = messages.filter((msg) => msg.role === 'user').pop();
-
-    if (!lastUserMessage) {
-      throw new PerplexityError('No user message found', 'NO_USER_MESSAGE');
-    }
-
-    return lastUserMessage.content;
-  }
-
-  /**
-   * Type for Perplexity API response structure
-   */
-  private isPerplexityApiResponse(response: unknown): response is {
-    choices?: Array<{ message?: { content?: string } }>;
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-    };
-    citations?: unknown[];
-  } {
-    return typeof response === 'object' && response !== null;
-  }
 
   /**
    * Extract content from Perplexity response
    */
-  private extractContentFromResponse(response: unknown): string {
-    if (!this.isPerplexityApiResponse(response)) {
-      return '';
-    }
-    return response.choices?.[0]?.message?.content || '';
-  }
 
   /**
    * Extract usage information from Perplexity response
    */
-  private extractUsageFromResponse(response: unknown): {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  } {
-    if (!this.isPerplexityApiResponse(response) || !response.usage) {
-      return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-    }
-    return {
-      promptTokens: response.usage.prompt_tokens || 0,
-      completionTokens: response.usage.completion_tokens || 0,
-      totalTokens: response.usage.total_tokens || 0,
-    };
-  }
 
   /**
    * Extract citations from Perplexity response
    */
-  private extractCitationsFromResponse(response: unknown): unknown[] {
-    // Perplexity responses may include citations from web search
-    // This would need to be implemented based on the actual response structure
-    if (!this.isPerplexityApiResponse(response)) {
-      return [];
-    }
-    return response.citations || [];
-  }
 
   /**
    * Save message to database

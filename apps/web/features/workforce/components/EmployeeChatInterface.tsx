@@ -177,19 +177,19 @@ export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({ employee, userId
               }`}
             >
               <div className="whitespace-pre-wrap">{message.message}</div>
-              {(message.metadata?.toolsUsed as string[]) && (
+              {(message.metadata?.['toolsUsed'] as string[]) && (
                 <div className="mt-2 text-xs opacity-75">
-                  Tools used: {(message.metadata.toolsUsed as string[]).join(', ')}
+                  Tools used: {(message.metadata['toolsUsed'] as string[]).join(', ')}
                 </div>
               )}
-              {message.metadata?.executionTime != null ? (
+              {message.metadata?.['executionTime'] != null ? (
                 <div className="mt-1 text-xs opacity-75">
-                  Execution time: {String(message.metadata.executionTime)}ms
+                  Execution time: {String(message.metadata['executionTime'])}ms
                 </div>
               ) : null}
-              {message.metadata?.cost != null ? (
+              {message.metadata?.['cost'] != null ? (
                 <div className="mt-1 text-xs opacity-75">
-                  Cost: ${Number(message.metadata.cost).toFixed(4)}
+                  Cost: ${Number(message.metadata['cost']).toFixed(4)}
                 </div>
               ) : null}
             </div>
