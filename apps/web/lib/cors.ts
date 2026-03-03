@@ -14,7 +14,7 @@ import { logger } from './logger';
 
 // Parse allowed origins from environment variable
 function getAllowedOrigins(): string[] {
-  const envOrigins = process.env.ALLOWED_ORIGINS;
+  const envOrigins = process.env['ALLOWED_ORIGINS'];
   const origins: string[] = [];
 
   // Always allow localhost in development
@@ -43,7 +43,7 @@ function getAllowedOrigins(): string[] {
   }
 
   // Add default production origin if NEXT_PUBLIC_APP_URL is set
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
   if (appUrl && !origins.includes(appUrl)) {
     origins.push(appUrl);
   }

@@ -13,11 +13,26 @@ import { logger } from '@/lib/logger';
  * Handles three cases: already-Anthropic format, OpenAI function format, and bare format.
  */
 
-function transformTools(tools: any[]): any[] {
-  return tools.map((tool: any) => {
+interface OpenAITool {
+  type?: string;
+  function?: { name?: string; description?: string; parameters?: unknown };
+  name?: string;
+  description?: string;
+  parameters?: unknown;
+  input_schema?: unknown;
+}
+
+interface AnthropicTool {
+  name?: string;
+  description?: string;
+  input_schema: unknown;
+}
+
+function transformTools(tools: OpenAITool[]): AnthropicTool[] {
+  return tools.map((tool) => {
     // If tool is already in Anthropic format (has input_schema), use as-is
     if (tool.input_schema) {
-      return tool;
+      return tool as unknown as AnthropicTool;
     }
     // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
     if (tool.type === 'function' && tool.function) {
@@ -85,7 +100,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return 'https://api.anthropic.com/v1';
   }
 
-  protected getHeaders(): Record<string, string> {
+  protected override getHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
@@ -127,7 +142,9 @@ export class AnthropicProvider extends BaseLLMProvider {
     }
 
     // Transform tools from OpenAI format to Anthropic format if needed
-    const anthropicTools = request.tools ? transformTools(request.tools) : undefined;
+    const anthropicTools = request.tools
+      ? transformTools(request.tools as OpenAITool[])
+      : undefined;
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -140,7 +157,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     };
 
     if (systemContent) {
-      body.system = systemContent;
+      body['system'] = systemContent;
     }
 
     try {
@@ -242,7 +259,9 @@ export class AnthropicProvider extends BaseLLMProvider {
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
 
     // Transform tools from OpenAI format to Anthropic format if needed
-    const anthropicTools = request.tools ? transformTools(request.tools) : undefined;
+    const anthropicTools = request.tools
+      ? transformTools(request.tools as OpenAITool[])
+      : undefined;
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -258,7 +277,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     // Apply prompt cache on system message (matching sendRequest behavior)
     if (systemMessage) {
       if (request.usePromptCache) {
-        body.system = [
+        body['system'] = [
           {
             type: 'text',
             text: systemMessage.content,
@@ -266,7 +285,7 @@ export class AnthropicProvider extends BaseLLMProvider {
           },
         ];
       } else {
-        body.system = systemMessage.content;
+        body['system'] = systemMessage.content;
       }
     }
 
@@ -325,6 +344,7 @@ function mapMessagesToAnthropic(
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
+    if (!msg) continue;
     const isLast = i === messages.length - 1;
 
     // Tool role messages → Anthropic tool_result inside a user message
@@ -333,11 +353,13 @@ function mapMessagesToAnthropic(
       // Collect consecutive tool messages into a single user message.
       const toolResults: Array<Record<string, unknown>> = [];
       let j = i;
-      while (j < messages.length && messages[j].role === 'tool' && messages[j].tool_call_id) {
+      while (j < messages.length) {
+        const jMsg = messages[j];
+        if (!jMsg || jMsg.role !== 'tool' || !jMsg.tool_call_id) break;
         toolResults.push({
           type: 'tool_result',
-          tool_use_id: messages[j].tool_call_id,
-          content: messages[j].content || '',
+          tool_use_id: jMsg.tool_call_id,
+          content: jMsg.content || '',
         });
         j++;
       }
@@ -349,7 +371,7 @@ function mapMessagesToAnthropic(
         if (batchIsLast && usePromptCache && toolResults.length > 0) {
           // Apply cache_control to the last tool_result block in the batch
           const lastResult = toolResults[toolResults.length - 1]!;
-          (lastResult as Record<string, unknown>).cache_control = { type: 'ephemeral' };
+          (lastResult as Record<string, unknown>)['cache_control'] = { type: 'ephemeral' };
         }
         result.push({
           role: 'user',
@@ -380,7 +402,7 @@ function mapMessagesToAnthropic(
           input: tc.function?.arguments
             ? (() => {
                 try {
-                  return JSON.parse(tc.function.arguments as string);
+                  return JSON.parse(tc.function!.arguments as string);
                 } catch {
                   return {};
                 }
@@ -406,7 +428,7 @@ function mapMessagesToAnthropic(
     // Add cache_control to last message if prompt caching is enabled.
     // The Anthropic API requires cache_control inside content block objects, not at message level.
     if (usePromptCache && isLast) {
-      contentObj.content = [
+      contentObj['content'] = [
         { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
       ];
     }
