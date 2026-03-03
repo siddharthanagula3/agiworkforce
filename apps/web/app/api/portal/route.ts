@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
 if (!STRIPE_SECRET_KEY) {
   logger.warn(
@@ -32,7 +32,8 @@ const stripe = STRIPE_SECRET_KEY
 function getValidatedOrigin(request: Request): string {
   // Parse allowed origins from environment variable
   // Format: comma-separated list, e.g., "https://agiworkforce.com,https://app.agiworkforce.com"
-  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_URL || '';
+  const allowedOriginsEnv =
+    process.env['ALLOWED_ORIGINS'] || process.env['NEXT_PUBLIC_APP_URL'] || '';
   const allowedOrigins = allowedOriginsEnv
     .split(',')
     .map((origin) => origin.trim().toLowerCase())
@@ -209,7 +210,7 @@ async function handlePortal(request: NextRequest) {
             'Selected customer with active subscription from multiple matches',
           );
         } else {
-          customerId = customers.data[0].id;
+          customerId = customers.data[0]?.id ?? null;
         }
 
         // CRITICAL: Store customer_id for future lookups
@@ -227,6 +228,9 @@ async function handlePortal(request: NextRequest) {
       // Found customer, allow portal access
       // Ideally we should also trigger a sync here to fix the local state
       // We'll proceed with creating the session using this ID
+      if (!customerId) {
+        throw createError.internal('No Stripe customer found for this account');
+      }
       const origin = getValidatedOrigin(request);
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,

@@ -154,7 +154,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       if (!stripeCustomerId && user.email) {
         const customers = await stripe.customers.list({ email: user.email, limit: 1 });
         if (customers.data.length > 0) {
-          stripeCustomerId = customers.data[0].id;
+          stripeCustomerId = customers.data[0]?.id ?? null;
           await supabase
             .from('profiles')
             .update({ stripe_customer_id: stripeCustomerId })
@@ -168,7 +168,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: stripeCustomerId,
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+        return_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       });
 
       return NextResponse.json({ url: portalSession.url });
@@ -195,8 +195,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/dashboard`,
+      cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler
       // resolves the Supabase user via metadata first (O(1) map read) before falling

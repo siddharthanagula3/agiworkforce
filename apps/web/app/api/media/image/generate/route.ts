@@ -182,16 +182,16 @@ async function generateWithDallE(
 
     if (!response.ok) {
       const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      const errorObj = errorData.error as Record<string, unknown> | undefined;
+      const errorObj = errorData['error'] as Record<string, unknown> | undefined;
       const errorMessage =
-        (errorObj?.message as string) ||
+        (errorObj?.['message'] as string) ||
         `DALL-E API error: ${response.status} ${response.statusText}`;
       throw new Error(errorMessage);
     }
 
     const data = (await response.json()) as { data?: Array<{ url?: string }> };
     if (data.data && data.data.length > 0) {
-      images.push({ url: data.data[0].url });
+      images.push({ url: data.data[0]?.url });
     }
   }
 
@@ -223,7 +223,8 @@ async function generateWithImagen(
   if (sizeParts.length !== 2 || sizeParts.some((n) => !Number.isFinite(n) || n <= 0)) {
     throw new Error(`Invalid size format: "${size}". Expected format: WxH (e.g. 1024x1024)`);
   }
-  const [width, height] = sizeParts;
+  const width = sizeParts[0] ?? 1024;
+  const height = sizeParts[1] ?? 1024;
   let aspectRatio = '1:1';
   if (width > height) {
     aspectRatio = '16:9';
@@ -257,9 +258,9 @@ async function generateWithImagen(
 
   if (!response.ok) {
     const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    const errorObj = errorData.error as Record<string, unknown> | undefined;
+    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
     const errorMessage =
-      (errorObj?.message as string) ||
+      (errorObj?.['message'] as string) ||
       `Imagen API error: ${response.status} ${response.statusText}`;
     throw new Error(errorMessage);
   }
@@ -300,11 +301,13 @@ async function generateWithStability(
   const apiKey = getApiKey('stability');
 
   // Map size to closest supported aspect_ratio
-  const [width, height] = size.split('x').map(Number);
+  const sizeParts = size.split('x').map(Number);
+  const sWidth = sizeParts[0] ?? 1024;
+  const sHeight = sizeParts[1] ?? 1024;
   let aspectRatio = '1:1';
-  if (width > height) {
+  if (sWidth > sHeight) {
     // landscape
-    const ratio = width / height;
+    const ratio = sWidth / sHeight;
     if (ratio >= 1.7) {
       aspectRatio = '16:9';
     } else if (ratio >= 1.4) {
@@ -314,9 +317,9 @@ async function generateWithStability(
     } else {
       aspectRatio = '4:5';
     }
-  } else if (height > width) {
+  } else if (sHeight > sWidth) {
     // portrait
-    const ratio = height / width;
+    const ratio = sHeight / sWidth;
     if (ratio >= 1.7) {
       aspectRatio = '9:16';
     } else if (ratio >= 1.4) {
@@ -371,8 +374,8 @@ async function generateWithStability(
       // v2beta returns JSON errors
       const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const errorMessage =
-        (errorData.message as string) ||
-        (errorData.errors as string[] | undefined)?.[0] ||
+        (errorData['message'] as string) ||
+        (errorData['errors'] as string[] | undefined)?.[0] ||
         `Stability API error: ${response.status} ${response.statusText}`;
       throw new Error(errorMessage);
     }
