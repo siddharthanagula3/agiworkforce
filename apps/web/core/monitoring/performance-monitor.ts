@@ -138,7 +138,7 @@ class PerformanceService {
    */
   optimizeImage(
     src: string,
-    alt: string,
+    _alt: string,
     options: {
       width?: number;
       height?: number;
@@ -190,7 +190,7 @@ class PerformanceService {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const img = entry.target as HTMLImageElement;
-            const src = img.dataset.src;
+            const src = img.dataset['src'];
 
             if (src) {
               img.src = src;
@@ -235,10 +235,10 @@ class PerformanceService {
 
     // Optimize existing images
     document.querySelectorAll('img').forEach((img) => {
-      if (!img.dataset.optimized) {
+      if (!img.dataset['optimized']) {
         const optimizedSrc = this.optimizeImage(img.src, img.alt);
         img.src = optimizedSrc;
-        img.dataset.optimized = 'true';
+        img.dataset['optimized'] = 'true';
       }
     });
   }

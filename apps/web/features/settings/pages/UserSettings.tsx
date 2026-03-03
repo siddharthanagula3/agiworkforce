@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- zodResolver type incompatibility with react-hook-form */
 /**
  * Settings Page - Real Functional Implementation with Supabase
  * NO MOCK DATA - All data comes from and saves to Supabase
@@ -95,7 +96,7 @@ import {
 
 const SettingsPageContent: React.FC = () => {
   const params = useParams();
-  const section = params?.section as string | undefined;
+  const section = params?.['section'] as string | undefined;
   const router = useRouter();
   const { user } = useAuthStore();
   const metricsStore = useAgentMetricsStore();
@@ -125,7 +126,6 @@ const SettingsPageContent: React.FC = () => {
 
   // Profile Form
   const profileForm = useForm<ProfileSettingsFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(profileSettingsSchema) as any,
     defaultValues: {
       name: '',
@@ -513,7 +513,7 @@ const SettingsPageContent: React.FC = () => {
                       <div className="flex items-center space-x-4">
                         <InteractiveHoverCard>
                           <Avatar className="h-20 w-20 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
-                            {/* eslint-disable-next-line react-hooks/incompatible-library */}
+                            {}
                             <AvatarImage src={profileForm.watch('avatar_url')} />
                             <AvatarFallback className="bg-accent text-lg text-foreground">
                               {profileForm

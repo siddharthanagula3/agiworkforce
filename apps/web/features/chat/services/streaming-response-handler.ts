@@ -63,13 +63,9 @@ interface StreamRecoveryState {
 }
 
 // Backpressure configuration
-const _BACKPRESSURE_THRESHOLD = 100; // Max buffered chunks
-const BACKPRESSURE_HIGH_WATER = 80; // Start applying backpressure
-const BACKPRESSURE_LOW_WATER = 20; // Resume normal flow
 
 // Stream recovery configuration
 const RECOVERY_TIMEOUT = 30000; // 30 seconds
-const MAX_RECONNECT_ATTEMPTS = 3;
 
 export class ChatStreamingService {
   private activeStreams: Map<string, ActiveStream> = new Map();
@@ -130,30 +126,6 @@ export class ChatStreamingService {
   /**
    * Apply backpressure to stream
    */
-  private async applyBackpressure(stream: ActiveStream): Promise<void> {
-    const bufferSize = stream.buffer.length;
-
-    if (bufferSize >= BACKPRESSURE_HIGH_WATER && !stream.isBackpressured) {
-      stream.isBackpressured = true;
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `[Backpressure] Stream ${stream.id} entering backpressure mode (buffer: ${bufferSize})`,
-        );
-      }
-    }
-
-    // Wait until buffer drains below low water mark
-    while (stream.buffer.length > BACKPRESSURE_LOW_WATER && stream.isBackpressured) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    if (stream.isBackpressured) {
-      stream.isBackpressured = false;
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[Backpressure] Stream ${stream.id} exiting backpressure mode`);
-      }
-    }
-  }
 
   /**
    * Enhanced streaming with multi-agent support and recovery
@@ -321,7 +293,7 @@ export class ChatStreamingService {
 
       // Check if we should retry
       if (
-        reconnectAttempts < MAX_RECONNECT_ATTEMPTS &&
+        reconnectAttempts < reconnectAttempts &&
         !controller.signal.aborted &&
         this.isRecoverableError(error)
       ) {
@@ -330,7 +302,7 @@ export class ChatStreamingService {
 
         if (process.env.NODE_ENV === 'development') {
           console.log(
-            `[StreamRecovery] Attempting recovery ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`,
+            `[StreamRecovery] Attempting recovery ${reconnectAttempts}/${reconnectAttempts}`,
           );
         }
 
@@ -460,7 +432,6 @@ export class ChatStreamingService {
       options: StreamingOptions;
     }>,
   ): AsyncGenerator<MultiAgentStreamingUpdate> {
-    const _sessionId = agentStreams[0]?.options.sessionId || `multiplex-${Date.now()}`;
     const generators: Array<{
       agentId: string;
       generator: AsyncGenerator<MultiAgentStreamingUpdate>;

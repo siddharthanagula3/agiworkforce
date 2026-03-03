@@ -152,11 +152,7 @@ class BackgroundChatService {
 
       // Execute the plan with error handling
       try {
-        const _results = await multiAgentOrchestrator.executePlan(
-          plan,
-          handleCommunication,
-          handleStatusUpdate,
-        );
+        await multiAgentOrchestrator.executePlan(plan, handleCommunication, handleStatusUpdate);
       } catch (executeError) {
         console.error('[BackgroundChatService] Error executing plan:', executeError);
         throw new Error(

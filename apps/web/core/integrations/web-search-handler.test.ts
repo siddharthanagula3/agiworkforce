@@ -104,8 +104,8 @@ describe('Web Search Handler', () => {
       expect(result.query).toBe('artificial intelligence');
       expect(result.answer).toBe('AI is transforming industries [1][2]');
       expect(result.results.length).toBe(2);
-      expect(result.results[0].url).toBe('https://example.com/ai-article');
-      expect(result.results[0].title).toBe('AI Trends');
+      expect(result!.results[0]!.url!).toBe('https://example.com/ai-article');
+      expect(result!.results[0]!.title!).toBe('AI Trends');
       expect(result.sources).toContain('https://example.com/ai-article');
       expect(result.timestamp).toBeInstanceOf(Date);
     });
@@ -162,7 +162,7 @@ describe('Web Search Handler', () => {
       const result = await searchWithPerplexity('test');
 
       expect(result.results.length).toBe(1);
-      expect(result.results[0].url).toBe('https://valid.com');
+      expect(result!.results[0]!.url!).toBe('https://valid.com');
     });
 
     it('should send correct request format', async () => {
@@ -191,7 +191,7 @@ describe('Web Search Handler', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetchWithTimeout.mock.calls[0][1].fetchOptions.body);
+      const requestBody = JSON.parse(mockFetchWithTimeout!.mock.calls[0]![1]!.fetchOptions.body!);
       expect(requestBody.model).toBe('sonar-pro');
       expect(requestBody.messages[1].content).toBe('test query');
     });
@@ -222,8 +222,8 @@ describe('Web Search Handler', () => {
 
       expect(result.query).toBe('test query');
       expect(result.results.length).toBe(2);
-      expect(result.results[0].title).toBe('Google Result 1');
-      expect(result.results[0].source).toBe('google.com');
+      expect(result!.results[0]!.title!).toBe('Google Result 1');
+      expect(result!.results[0]!.source!).toBe('google.com');
     });
 
     it('should throw error when not authenticated', async () => {
@@ -253,7 +253,7 @@ describe('Web Search Handler', () => {
       const result = await searchWithGoogle('test');
 
       expect(result.results.length).toBe(1);
-      expect(result.results[0].url).toBe('https://example.com');
+      expect(result!.results[0]!.url!).toBe('https://example.com');
     });
 
     it('should limit results to maxResults', async () => {
@@ -264,7 +264,7 @@ describe('Web Search Handler', () => {
 
       await searchWithGoogle('test', 15);
 
-      const requestBody = JSON.parse(mockFetchWithTimeout.mock.calls[0][1].fetchOptions.body);
+      const requestBody = JSON.parse(mockFetchWithTimeout!.mock.calls[0]![1]!.fetchOptions.body!);
       expect(requestBody.maxResults).toBe(10); // Max is 10
     });
 
@@ -309,8 +309,8 @@ describe('Web Search Handler', () => {
 
       expect(result.query).toBe('test query');
       expect(result.results.length).toBe(2);
-      expect(result.results[0].title).toBe('Test Topic');
-      expect(result.results[0].snippet).toBe('This is the abstract text');
+      expect(result!.results[0]!.title!).toBe('Test Topic');
+      expect(result!.results[0]!.snippet!).toBe('This is the abstract text');
     });
 
     it('should handle response without abstract', async () => {

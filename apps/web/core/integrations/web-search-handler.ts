@@ -12,9 +12,6 @@ import { supabase } from '@shared/lib/supabase-client';
 // SECURITY: API keys removed - all calls go through authenticated proxies
 // Provider availability is determined by proxy configuration, not client-side keys
 
-/** Matches bracketed numeric citations like [1], [2], etc. in search responses */
-const BRACKETED_CITATION_PATTERN = /\[(\d+)\]/g;
-
 /**
  * Helper function to get the current Supabase session token
  * Required for authenticated API proxy calls
@@ -121,10 +118,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
     const answer = data.choices?.[0]?.message?.content || data.content || '';
 
     // Extract citations/sources from the response
-    const citationRegex = BRACKETED_CITATION_PATTERN;
-    const _citations = Array.from(answer.matchAll(citationRegex), (m: RegExpExecArray) =>
-      parseInt(m[1]),
-    );
+
     const sources = data.citations || [];
 
     // Parse results, filtering out entries with invalid URLs
@@ -140,7 +134,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
         } =>
           source !== null &&
           typeof source === 'object' &&
-          isValidUrl((source as Record<string, unknown>).url),
+          isValidUrl((source as Record<string, unknown>)['url']),
       )
       .map(
         (
@@ -159,7 +153,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
     const validSourceUrls = sources
       .filter(
         (s: unknown): s is { url: string } =>
-          s !== null && typeof s === 'object' && isValidUrl((s as Record<string, unknown>).url),
+          s !== null && typeof s === 'object' && isValidUrl((s as Record<string, unknown>)['url']),
       )
 
       .map((s: { url: string }) => s.url);
@@ -231,22 +225,30 @@ export async function searchWithGoogle(
         } =>
           item !== null &&
           typeof item === 'object' &&
-          (isValidUrl((item as Record<string, unknown>).link) ||
-            isValidUrl((item as Record<string, unknown>).url)),
+          (isValidUrl((item as Record<string, unknown>)['link']) ||
+            isValidUrl((item as Record<string, unknown>)['url'])),
       )
 
-      .map((item: { link?: string; url?: string; title?: string; snippet?: string; pagemap?: { metatags?: Array<Record<string, string>> } }) => {
-        const url = item.link || item.url || '';
-        const hostname = safeGetHostname(url);
-        return {
-          title: item.title || '',
-          url,
-          snippet: item.snippet || '',
-          source: hostname,
-          publishedDate: item.pagemap?.metatags?.[0]?.['article:published_time'],
-          favicon: `https://www.google.com/s2/favicons?domain=${hostname}`,
-        };
-      });
+      .map(
+        (item: {
+          link?: string;
+          url?: string;
+          title?: string;
+          snippet?: string;
+          pagemap?: { metatags?: Array<Record<string, string>> };
+        }) => {
+          const url = item.link || item.url || '';
+          const hostname = safeGetHostname(url);
+          return {
+            title: item.title || '',
+            url,
+            snippet: item.snippet || '',
+            source: hostname,
+            publishedDate: item.pagemap?.metatags?.[0]?.['article:published_time'],
+            favicon: `https://www.google.com/s2/favicons?domain=${hostname}`,
+          };
+        },
+      );
 
     return {
       query,

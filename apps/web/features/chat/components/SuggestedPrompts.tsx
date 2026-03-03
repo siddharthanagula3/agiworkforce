@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Search, Code2, PenLine, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 

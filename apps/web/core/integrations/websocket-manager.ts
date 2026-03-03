@@ -192,7 +192,7 @@ export class WebSocketManager {
     connection.supabaseChannel = supabase
       .channel(channelName)
       .on('broadcast', { event: 'message' }, (payload) => {
-        this.handleMessage(connection, payload.payload as WebSocketMessage);
+        this.handleMessage(connection, payload['payload'] as WebSocketMessage);
       })
       .on('presence', { event: 'sync' }, () => {
         this.handlePresenceSync(connection);

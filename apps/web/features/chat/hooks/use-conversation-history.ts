@@ -259,6 +259,7 @@ export const useChatHistory = () => {
         return result.newSession;
       } catch (error) {
         logger.error('Failed to duplicate session:', error);
+        return undefined;
       }
     },
     [duplicateMutation],

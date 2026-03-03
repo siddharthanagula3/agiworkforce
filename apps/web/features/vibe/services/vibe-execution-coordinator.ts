@@ -54,7 +54,7 @@ export class VibeExecutionCoordinator {
     // Execute level by level
     for (let levelIndex = 0; levelIndex < executionPlan.execution_order.length; levelIndex++) {
       const levelTaskIds = executionPlan.execution_order[levelIndex];
-      const levelTasks = levelTaskIds
+      const levelTasks = levelTaskIds!
         .map((id) => tasks.find((t) => t.id === id))
         .filter((t): t is VibeTask => t !== undefined);
 
@@ -68,7 +68,7 @@ export class VibeExecutionCoordinator {
       let hasFailures = false;
 
       levelResults.forEach((result, idx) => {
-        const task = levelTasks[idx];
+        const task = levelTasks[idx]!;
 
         if (result.status === 'fulfilled') {
           results.set(task.id, result.value);

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -211,10 +211,6 @@ const ChatSidebarContent = memo(function ChatSidebarContent({
   );
 
   // Memoize session count display
-  const _sessionCountText = useMemo(
-    () => `${sessions.length} chat${sessions.length !== 1 ? 's' : ''}`,
-    [sessions.length],
-  );
 
   return (
     <div className="flex h-full flex-col bg-card/50 backdrop-blur-sm">
@@ -288,10 +284,10 @@ const ChatSidebarContent = memo(function ChatSidebarContent({
                   updatedAt={safeUpdatedAt}
                   totalMessages={session.messageCount}
                   isActive={currentSession?.id === session.id}
-                  isStarred={session.metadata?.starred as boolean | undefined}
-                  isPinned={session.metadata?.pinned as boolean | undefined}
-                  isArchived={session.metadata?.archived as boolean | undefined}
-                  tags={(session.metadata?.tags as string[] | undefined) || []}
+                  isStarred={session.metadata?.['starred'] as boolean | undefined}
+                  isPinned={session.metadata?.['pinned'] as boolean | undefined}
+                  isArchived={session.metadata?.['archived'] as boolean | undefined}
+                  tags={(session.metadata?.['tags'] as string[] | undefined) || []}
                   onClick={() => onSessionSelect(session)}
                   onRename={() => onSessionRename(session.id, session.title)}
                   onDelete={() => onSessionDelete(session.id)}

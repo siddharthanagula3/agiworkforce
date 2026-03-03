@@ -39,7 +39,7 @@ export function parseCodeBlocks(content: string): ParseResult {
   while ((match = codeBlockRegex.exec(content)) !== null) {
     const language = match[1] || 'plaintext';
     const filePath = match[2];
-    const code = match[3].trim();
+    const code = match[3]!.trim();
 
     // Only include blocks with file paths
     if ((filePath && filePath.includes('/')) || filePath?.includes('.')) {
@@ -61,13 +61,13 @@ export function parseCodeBlocks(content: string): ParseResult {
 
   while ((match = htmlCommentRegex.exec(content)) !== null) {
     const filePath = match[1];
-    const code = match[2].trim();
+    const code = match[2]!.trim();
 
     // Extract language from file extension
-    const ext = filePath.split('.').pop()?.toLowerCase() || 'plaintext';
+    const ext = filePath?.split('.').pop()?.toLowerCase() || 'plaintext';
 
     codeBlocks.push({
-      filePath: normalizeFilePath(filePath),
+      filePath: normalizeFilePath(filePath!),
       language: detectLanguageFromExtension(ext),
       content: code,
       lineNumber: lineNumber++,
@@ -220,7 +220,7 @@ export function generateFileTree(filePaths: string[]): FileTreeNode[] {
       currentPath += '/' + part;
       const isFile = i === parts.length - 1;
 
-      if (!currentLevel.has(part)) {
+      if (!currentLevel.has(part!)) {
         const node: FileTreeNode = {
           name: part,
           path: currentPath,
@@ -228,11 +228,11 @@ export function generateFileTree(filePaths: string[]): FileTreeNode[] {
           children: isFile ? undefined : [],
         };
 
-        currentLevel.set(part, node);
+        currentLevel.set(part!, node);
       }
 
       if (!isFile) {
-        const folder = currentLevel.get(part)!;
+        const folder = currentLevel.get(part!)!;
         if (!folder.children) {
           folder.children = [];
         }
@@ -269,7 +269,7 @@ export function extractPlainCodeBlocks(
   let match;
   while ((match = codeBlockRegex.exec(content)) !== null) {
     const language = match[1] || 'plaintext';
-    const code = match[2].trim();
+    const code = match[2]!.trim();
 
     blocks.push({
       language: normalizeLanguage(language),

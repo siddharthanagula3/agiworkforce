@@ -6,7 +6,6 @@ import { useChatHistory } from '../hooks/use-conversation-history';
 import { useTools } from '../hooks/use-tool-integration';
 import { useExport } from '../hooks/use-export-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
-import { useAIPreferences } from '../hooks/use-ai-preferences';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { MessageList } from '../components/Main/MessageList';
 import { ChatComposer } from '../components/Composer/ChatComposer';
@@ -39,14 +38,13 @@ const FREE_TIER_DEFAULT_LIMIT = DEFAULT_TOKEN_LIMITS.free;
 
 const ChatPage: React.FC = () => {
   const params = useParams();
-  const sessionId = params?.sessionId as string | undefined;
+  const sessionId = params?.['sessionId'] as string | undefined;
   const router = useRouter();
 
   // Get user's token usage/limits from subscription
   const userUsage = useUserUsage();
 
   // Load user AI preferences (applies to LLM service on mount)
-  const _aiPreferences = useAIPreferences();
 
   // Chat state management
   const {
@@ -104,8 +102,8 @@ const ChatPage: React.FC = () => {
 
   const { availableTools, executeTool, activeTool, toolResults } = useTools();
 
-  const { exportAsMarkdown, exportAsJSON, exportAsHTML, exportAsText, copyToClipboard } =
-    useExport();
+  // Export functions available via useExport()
+  useExport();
 
   // Local state
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -246,50 +244,9 @@ const ChatPage: React.FC = () => {
     }
   };
 
-  const _handleExport = async (format: 'markdown' | 'json' | 'html' | 'text') => {
-    if (!currentSession) return;
-
-    switch (format) {
-      case 'markdown':
-        await exportAsMarkdown(currentSession, messages);
-        break;
-      case 'json':
-        await exportAsJSON(currentSession, messages);
-        break;
-      case 'html':
-        await exportAsHTML(currentSession, messages);
-        break;
-      case 'text':
-        await exportAsText(currentSession, messages);
-        break;
-    }
-  };
-
-  const _handleShare = useCallback(async () => {
-    if (!currentSession) return;
-    try {
-      await shareSession(currentSession.id);
-      showSuccess('Share link generated successfully', 'Session Shared');
-    } catch (error) {
-      console.error('Failed to share session:', error);
-      showError('Unable to generate share link. Please try again.', 'Share Failed');
-    }
-  }, [currentSession, shareSession, showSuccess, showError]);
-
-  const _handleCopyToClipboard = useCallback(async () => {
-    if (!currentSession) return;
-    try {
-      await copyToClipboard(currentSession, messages, 'markdown');
-      showSuccess('Conversation copied to clipboard', 'Copied');
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-      showError('Unable to copy to clipboard. Please try again.', 'Copy Failed');
-    }
-  }, [currentSession, messages, copyToClipboard, showSuccess, showError]);
-
   // Monitor token usage for warnings
   const { usageData } = useUsageMonitoring(
-    ((currentSession as Record<string, unknown> | null)?.userId as string | null) ?? null,
+    ((currentSession as Record<string, unknown> | null)?.['userId'] as string | null) ?? null,
   );
 
   // Usage warning system

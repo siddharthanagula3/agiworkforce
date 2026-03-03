@@ -42,7 +42,7 @@ class AnalyticsService {
   initialize(trackingId?: string): void {
     if (this.isInitialized) return;
 
-    this.trackingId = (trackingId || process.env.NEXT_PUBLIC_GA_TRACKING_ID) ?? null;
+    this.trackingId = (trackingId || process.env['NEXT_PUBLIC_GA_TRACKING_ID']) ?? null;
 
     if (this.trackingId) {
       this.initializeGoogleAnalytics();

@@ -121,7 +121,7 @@ function getPhaseState(
 
 function getCurrentPhaseIndex(status: PhaseStatus): number {
   for (let i = phases.length - 1; i >= 0; i--) {
-    if (phases[i].statusMatch.includes(status)) {
+    if (phases[i]!.statusMatch.includes(status)) {
       return i;
     }
   }

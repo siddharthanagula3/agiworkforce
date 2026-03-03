@@ -79,7 +79,7 @@ export type DeepSeekErrorCode =
   | `HTTP_${number}`;
 
 export class DeepSeekError extends Error {
-  public readonly name = 'DeepSeekError' as const;
+  public override readonly name = 'DeepSeekError' as const;
 
   constructor(
     message: string,

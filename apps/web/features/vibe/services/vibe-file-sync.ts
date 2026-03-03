@@ -140,7 +140,9 @@ class VibeFileSyncService {
    */
   async loadFilesFromDatabase(sessionId: string): Promise<void> {
     try {
-      const { data, error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('session_id', sessionId)
         .order('uploaded_at', { ascending: true });
@@ -158,37 +160,37 @@ class VibeFileSyncService {
       const store = useVibeFileStore.getState();
       for (const rawRow of data as Array<Record<string, unknown>>) {
         const file: VibeFile = {
-          id: rawRow.id as string,
-          name: rawRow.name as string,
-          type: rawRow.type as string,
-          size: rawRow.size as number,
-          url: rawRow.url as string,
-          uploaded_at: new Date(rawRow.uploaded_at as string),
-          uploaded_by: rawRow.uploaded_by as string,
-          session_id: rawRow.session_id as string,
+          id: rawRow['id'] as string,
+          name: rawRow['name'] as string,
+          type: rawRow['type'] as string,
+          size: rawRow['size'] as number,
+          url: rawRow['url'] as string,
+          uploaded_at: new Date(rawRow['uploaded_at'] as string),
+          uploaded_by: rawRow['uploaded_by'] as string,
+          session_id: rawRow['session_id'] as string,
         };
         store.addFile(file);
 
         // Try to load file content from metadata if available
-        const metadata = rawRow.metadata as Record<string, unknown> | null;
-        if (metadata?.content && typeof metadata.content === 'string') {
-          const path = this.extractPathFromMetadata(metadata, rawRow.name as string);
+        const metadata = rawRow['metadata'] as Record<string, unknown> | null;
+        if (metadata?.['content'] && typeof metadata['content'] === 'string') {
+          const path = this.extractPathFromMetadata(metadata, rawRow['name'] as string);
           try {
             // Check if file exists in file system
             try {
               vibeFileSystem.readFile(path);
-              vibeFileSystem.updateFile(path, metadata.content);
+              vibeFileSystem.updateFile(path, metadata['content']);
             } catch {
               // File doesn't exist, create it
-              vibeFileSystem.createFile(path, metadata.content);
+              vibeFileSystem.createFile(path, metadata['content']);
             }
 
             // Mark as synced
             this.syncStates.set(path, {
               path,
               status: 'synced',
-              lastSyncedAt: new Date(rawRow.uploaded_at as string),
-              lastModifiedAt: new Date(rawRow.uploaded_at as string),
+              lastSyncedAt: new Date(rawRow['uploaded_at'] as string),
+              lastModifiedAt: new Date(rawRow['uploaded_at'] as string),
               retryCount: 0,
             });
           } catch (err) {
@@ -207,8 +209,8 @@ class VibeFileSyncService {
    */
   private extractPathFromMetadata(metadata: Record<string, unknown>, fallbackName: string): string {
     const rawPath =
-      (typeof metadata.original_path === 'string' && metadata.original_path) ||
-      (typeof metadata.path === 'string' && metadata.path) ||
+      (typeof metadata['original_path'] === 'string' && metadata['original_path']) ||
+      (typeof metadata['path'] === 'string' && metadata['path']) ||
       fallbackName;
 
     // Normalize path to have leading slash
@@ -317,7 +319,7 @@ class VibeFileSyncService {
       const store = useVibeFileStore.getState();
       const existingFile = Object.values(store.files).find((f) => {
         const metadata = (f as VibeFile & { metadata?: Record<string, unknown> }).metadata;
-        const filePath = metadata?.original_path || metadata?.path || f.name;
+        const filePath = metadata?.['original_path'] || metadata?.['path'] || f.name;
         return filePath === path || `/${filePath}` === path;
       });
 
@@ -327,7 +329,9 @@ class VibeFileSyncService {
 
       // Upsert file record
 
-      const { error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>).upsert(
+      const { error } = await (
+        supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>
+      ).upsert(
         {
           id: fileId,
           session_id: sessionId,
@@ -417,7 +421,9 @@ class VibeFileSyncService {
     try {
       // Find the file by path in metadata
 
-      const { data: files } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
+      const { data: files } = await (
+        supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>
+      )
         .select('id, metadata')
         .eq('session_id', this.currentSessionId);
 
@@ -425,12 +431,14 @@ class VibeFileSyncService {
         files as Array<{ id: string; metadata: Record<string, unknown> | null }> | null
       )?.find((f: { id: string; metadata: Record<string, unknown> | null }) => {
         const metadata = f.metadata as Record<string, unknown> | null;
-        const filePath = metadata?.original_path || metadata?.path;
+        const filePath = metadata?.['original_path'] || metadata?.['path'];
         return filePath === path || `/${filePath}` === path;
       });
 
       if (fileToDelete) {
-        const { error } = await (supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>)
+        const { error } = await (
+          supabase.from('vibe_files' as never) as ReturnType<typeof supabase.from>
+        )
           .delete()
           .eq('id', fileToDelete.id);
 

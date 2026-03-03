@@ -254,7 +254,7 @@ const BillingPage: React.FC = () => {
         await contactEnterpriseSales({
           userId: user.id,
           userEmail: user.email || '',
-          userName: (user.user_metadata?.full_name as string) || user.email || '',
+          userName: (user.user_metadata?.['full_name'] as string) || user.email || '',
         });
       }
     } catch (error) {

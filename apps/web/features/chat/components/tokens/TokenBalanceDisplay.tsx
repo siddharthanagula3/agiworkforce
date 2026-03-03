@@ -4,7 +4,7 @@
  * Fetches from /api/usage server endpoint for accurate billing data.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { Card } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';

@@ -71,7 +71,6 @@ interface MessageWithSession {
 class GlobalSearchService {
   private readonly CONTEXT_LENGTH = 50; // Characters of context before/after match
   private readonly DEFAULT_LIMIT = 50;
-  private readonly MAX_HISTORY_PER_USER = 100;
 
   /**
    * Search across all chat sessions and messages

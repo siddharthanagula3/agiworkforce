@@ -71,55 +71,55 @@ function getValidatedMetadata(
   const result: MessageMetadata = {};
 
   // String fields
-  result.employeeId = validateField<string>(md.employeeId, 'string');
-  result.employeeName = validateField<string>(md.employeeName, 'string');
-  result.employeeAvatar = validateField<string>(md.employeeAvatar, 'string');
-  result.model = validateField<string>(md.model, 'string');
-  result.selectionReason = validateField<string>(md.selectionReason, 'string');
+  result.employeeId = validateField<string>(md['employeeId'], 'string');
+  result.employeeName = validateField<string>(md['employeeName'], 'string');
+  result.employeeAvatar = validateField<string>(md['employeeAvatar'], 'string');
+  result.model = validateField<string>(md['model'], 'string');
+  result.selectionReason = validateField<string>(md['selectionReason'], 'string');
 
   // Number fields
-  result.inputTokens = validateField<number>(md.inputTokens, 'number');
-  result.outputTokens = validateField<number>(md.outputTokens, 'number');
-  result.tokens = validateField<number>(md.tokens, 'number');
-  result.tokensUsed = validateField<number>(md.tokensUsed, 'number');
-  result.cost = validateField<number>(md.cost, 'number');
+  result.inputTokens = validateField<number>(md['inputTokens'], 'number');
+  result.outputTokens = validateField<number>(md['outputTokens'], 'number');
+  result.tokens = validateField<number>(md['tokens'], 'number');
+  result.tokensUsed = validateField<number>(md['tokensUsed'], 'number');
+  result.cost = validateField<number>(md['cost'], 'number');
 
   // Boolean fields
-  result.isPinned = validateField<boolean>(md.isPinned, 'boolean');
-  result.isThinking = validateField<boolean>(md.isThinking, 'boolean');
-  result.isSearching = validateField<boolean>(md.isSearching, 'boolean');
-  result.isToolProcessing = validateField<boolean>(md.isToolProcessing, 'boolean');
+  result.isPinned = validateField<boolean>(md['isPinned'], 'boolean');
+  result.isThinking = validateField<boolean>(md['isThinking'], 'boolean');
+  result.isSearching = validateField<boolean>(md['isSearching'], 'boolean');
+  result.isToolProcessing = validateField<boolean>(md['isToolProcessing'], 'boolean');
 
   // Array fields
   if (
-    Array.isArray(md.thinkingSteps) &&
-    (md.thinkingSteps as unknown[]).every((step: unknown) => typeof step === 'string')
+    Array.isArray(md['thinkingSteps']) &&
+    (md['thinkingSteps'] as unknown[]).every((step: unknown) => typeof step === 'string')
   ) {
-    result.thinkingSteps = md.thinkingSteps as string[];
+    result.thinkingSteps = md['thinkingSteps'] as string[];
   }
 
   // Tool execution result fields for inline display
-  result.toolType = validateField<string>(md.toolType, 'string');
-  if (md.toolResult !== undefined) {
-    result.toolResult = md.toolResult;
+  result.toolType = validateField<string>(md['toolType'], 'string');
+  if (md['toolResult'] !== undefined) {
+    result.toolResult = md['toolResult'];
   }
-  result.imageUrl = validateField<string>(md.imageUrl, 'string');
-  if (md.imageData && typeof md.imageData === 'object') {
-    result.imageData = md.imageData as MessageMetadata['imageData'];
+  result.imageUrl = validateField<string>(md['imageUrl'], 'string');
+  if (md['imageData'] && typeof md['imageData'] === 'object') {
+    result.imageData = md['imageData'] as MessageMetadata['imageData'];
   }
-  result.videoUrl = validateField<string>(md.videoUrl, 'string');
-  result.thumbnailUrl = validateField<string>(md.thumbnailUrl, 'string');
-  if (md.videoData && typeof md.videoData === 'object') {
-    result.videoData = md.videoData as MessageMetadata['videoData'];
+  result.videoUrl = validateField<string>(md['videoUrl'], 'string');
+  result.thumbnailUrl = validateField<string>(md['thumbnailUrl'], 'string');
+  if (md['videoData'] && typeof md['videoData'] === 'object') {
+    result.videoData = md['videoData'] as MessageMetadata['videoData'];
   }
-  if (Array.isArray(md.searchResults)) {
-    result.searchResults = md.searchResults as MessageMetadata['searchResults'];
+  if (Array.isArray(md['searchResults'])) {
+    result.searchResults = md['searchResults'] as MessageMetadata['searchResults'];
   }
-  if (md.documentData && typeof md.documentData === 'object') {
-    result.documentData = md.documentData as MessageMetadata['documentData'];
+  if (md['documentData'] && typeof md['documentData'] === 'object') {
+    result.documentData = md['documentData'] as MessageMetadata['documentData'];
   }
-  if (md.downloadData && typeof md.downloadData === 'object') {
-    result.downloadData = md.downloadData as MessageMetadata['downloadData'];
+  if (md['downloadData'] && typeof md['downloadData'] === 'object') {
+    result.downloadData = md['downloadData'] as MessageMetadata['downloadData'];
   }
 
   return result;
@@ -184,7 +184,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     updateMessage(messageId, {
       metadata: {
         ...meta,
-        isPinned: !meta?.isPinned,
+        isPinned: !meta?.['isPinned'],
       } as ChatMessage['metadata'],
     });
   };

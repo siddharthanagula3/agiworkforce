@@ -8,7 +8,7 @@
  * - Auto-scroll behavior
  */
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@shared/ui/avatar';
 import { Badge } from '@shared/ui/badge';
@@ -52,12 +52,12 @@ function SimpleChatPanelContent({
   useEffect(() => {
     if (!messages.length) return;
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage.role !== 'assistant') return;
+    if (lastMessage?.role !== 'assistant') return;
 
-    const parseResult = parseCodeBlocks(lastMessage.content);
+    const parseResult = parseCodeBlocks(lastMessage?.content);
     if (!parseResult.hasFiles) return;
 
-    const operations = extractFileOperations(lastMessage.content, parseResult.codeBlocks);
+    const operations = extractFileOperations(lastMessage?.content, parseResult.codeBlocks);
 
     for (const operation of operations) {
       try {

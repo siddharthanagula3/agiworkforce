@@ -237,7 +237,7 @@ export type UnifiedLLMErrorCode =
   | 'INVALID_RESPONSE';
 
 export class UnifiedLLMError extends Error {
-  public readonly name = 'UnifiedLLMError' as const;
+  public override readonly name = 'UnifiedLLMError' as const;
 
   constructor(
     message: string,
@@ -681,9 +681,9 @@ export class UnifiedLLMService {
       typeof response === 'object' &&
       response !== null &&
       'content' in response &&
-      typeof (response as Record<string, unknown>).content === 'string' &&
+      typeof (response as Record<string, unknown>)['content'] === 'string' &&
       'model' in response &&
-      typeof (response as Record<string, unknown>).model === 'string'
+      typeof (response as Record<string, unknown>)['model'] === 'string'
     );
   }
 

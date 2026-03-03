@@ -388,7 +388,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendMessage(messagesWithSystem);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
 
       // System messages should be in system field, not messages array
       expect(requestBody.messages).toEqual([{ role: 'user', content: 'User message' }]);
@@ -412,7 +412,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendMessage(mockMessages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.tools).toEqual(tools);
     });
 
@@ -424,7 +424,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendMessage(mockMessages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.tools).toBeUndefined();
     });
   });
@@ -448,11 +448,11 @@ describe('AnthropicProvider', () => {
       }
 
       expect(chunks.length).toBe(2);
-      expect(chunks[0].content).toBe('Streamed response');
-      expect(chunks[0].done).toBe(false);
-      expect(chunks[1].content).toBe('');
-      expect(chunks[1].done).toBe(true);
-      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
+      expect(chunks![0]!.content!).toBe('Streamed response');
+      expect(chunks![0]!.done!).toBe(false);
+      expect(chunks![1]!.content!).toBe('');
+      expect(chunks![1]!.done!).toBe(true);
+      expect((chunks[1] as Record<string, unknown>)['usage']).toBeDefined();
     });
 
     it('should throw NOT_AUTHENTICATED error when not logged in', async () => {

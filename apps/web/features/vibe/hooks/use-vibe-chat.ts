@@ -9,7 +9,6 @@ import { useVibeAgentStore } from '../stores/vibe-agent-store';
 import { useVibeFileStore } from '../stores/vibe-file-store';
 import { useStreamingResponse } from './use-streaming-response';
 import { useAgentSelection } from './use-agent-selection';
-import { useFileUpload } from './use-file-upload';
 import type { AIEmployee } from '@core/types/ai-employee';
 import type { VibeMessage } from '../types';
 
@@ -112,7 +111,6 @@ export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
   // Hooks
   const streaming = useStreamingResponse();
   const agentSelection = useAgentSelection();
-  const _fileUpload = useFileUpload();
 
   const [error, setError] = useState<string | null>(null);
   const lastMessageRef = useRef<VibeMessage | null>(null);
@@ -255,7 +253,7 @@ export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
         }
 
         // Store last message for regeneration
-        lastMessageRef.current = messages[messages.length - 1];
+        lastMessageRef.current = messages[messages.length - 1]!;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
         setError(errorMessage);
@@ -302,7 +300,6 @@ export function useVibeChat(options: UseVibeChatOptions): UseVibeChatReturn {
       .findIndex((m) => m.role === 'assistant');
 
     if (lastAssistantIndex !== -1) {
-      const _messageId = messages[messages.length - 1 - lastAssistantIndex].id;
       // In a real implementation, we'd delete from the store
       // For now, just resend
     }

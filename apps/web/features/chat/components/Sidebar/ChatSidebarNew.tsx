@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   Plus,
@@ -103,6 +103,7 @@ function SessionItem({
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    return undefined;
   }, [showMenu]);
 
   const handleRenameSubmit = () => {
@@ -198,7 +199,7 @@ export function ChatSidebarNew({
   onToggleSidebar,
 }: ChatSidebarProps) {
   const params = useParams();
-  const activeSessionId = params?.sessionId as string | undefined;
+  const activeSessionId = params?.['sessionId'] as string | undefined;
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredSessions = useMemo(() => {

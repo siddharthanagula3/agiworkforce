@@ -94,7 +94,9 @@ export const MarketplacePublicPage: React.FC = () => {
   const { data: dbEmployees = [], isLoading: isLoadingEmployees } = useQuery<AIEmployee[]>({
     queryKey: ['public-marketplace-employees', selectedCategory, searchQuery],
     queryFn: async () => {
-      let query = (supabase.from('ai_employees') as ReturnType<typeof supabase.from>).select('*').eq('status', 'active');
+      let query = (supabase.from('ai_employees') as ReturnType<typeof supabase.from>)
+        .select('*')
+        .eq('status', 'active');
 
       // Apply category filter
       if (selectedCategory !== 'all') {
@@ -119,26 +121,29 @@ export const MarketplacePublicPage: React.FC = () => {
       // Transform database employees to marketplace format
 
       return (data || []).map((dbEmp: Record<string, unknown>): AIEmployee => {
-        const cost = dbEmp.cost || { monthly: 0, yearly: 0 };
+        const cost = dbEmp['cost'] || { monthly: 0, yearly: 0 };
         const costObj = cost as { monthly?: unknown; yearly?: unknown };
-        const monthlyPrice = typeof cost === 'object' && costObj.monthly ? Number(costObj.monthly) : 0;
+        const monthlyPrice =
+          typeof cost === 'object' && costObj.monthly ? Number(costObj.monthly) : 0;
         const yearlyPrice = typeof cost === 'object' && costObj.yearly ? Number(costObj.yearly) : 0;
 
         return {
-          id: (dbEmp.employee_id || dbEmp.id) as string,
-          name: dbEmp.name as string,
-          role: dbEmp.role as string,
-          category: (dbEmp.category as string) || 'general',
-          description: (dbEmp.system_prompt as string | undefined)?.slice(0, 150) || `Expert ${dbEmp.role as string}`,
+          id: (dbEmp['employee_id'] || dbEmp['id']) as string,
+          name: dbEmp['name'] as string,
+          role: dbEmp['role'] as string,
+          category: (dbEmp['category'] as string) || 'general',
+          description:
+            (dbEmp['system_prompt'] as string | undefined)?.slice(0, 150) ||
+            `Expert ${dbEmp['role'] as string}`,
           provider: 'claude' as const,
           price: monthlyPrice,
           originalPrice: monthlyPrice * 2,
           yearlyPrice: yearlyPrice,
-          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${dbEmp.employee_id as string}&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128`,
-          skills: Array.isArray(dbEmp.capabilities) ? (dbEmp.capabilities as string[]) : [],
-          specialty: (dbEmp.department as string) || (dbEmp.category as string) || 'General',
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${dbEmp['employee_id'] as string}&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128`,
+          skills: Array.isArray(dbEmp['capabilities']) ? (dbEmp['capabilities'] as string[]) : [],
+          specialty: (dbEmp['department'] as string) || (dbEmp['category'] as string) || 'General',
           fitLevel: 'excellent' as const,
-          popular: dbEmp.level === 'senior',
+          popular: dbEmp['level'] === 'senior',
         };
       });
     },

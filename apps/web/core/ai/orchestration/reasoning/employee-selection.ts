@@ -63,12 +63,12 @@ export class AgentSelector {
     const sortedEvaluations = evaluations.sort((a, b) => b.score - a.score);
 
     // Select primary and fallback agents
-    const primaryAgent = sortedEvaluations[0].agent;
+    const primaryAgent = sortedEvaluations[0]!.agent;
     const fallbackAgents = sortedEvaluations.slice(1, 4).map((e) => e.agent);
 
     // Generate selection reason
     const bestEval = sortedEvaluations[0];
-    const selectionReason = this.generateSelectionReason(bestEval, task);
+    const selectionReason = this.generateSelectionReason(bestEval!, task);
 
     return {
       primaryAgent,
@@ -457,7 +457,7 @@ export class AgentSelector {
 
     // Return the best alternative
     const best = evaluations.sort((a, b) => b.score - a.score)[0];
-    return best.agent;
+    return best?.agent;
   }
 
   /**

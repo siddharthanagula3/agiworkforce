@@ -64,7 +64,7 @@ const VibeStatusBar: React.FC<VibeStatusBarProps> = ({ agents }) => {
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={agent.employee.avatar} alt={agent.employee.name} />
                     <AvatarFallback className="bg-primary text-xs text-primary-foreground">
-                      {agent.employee.name[0].toUpperCase()}
+                      {agent!.employee.name[0]!.toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
 

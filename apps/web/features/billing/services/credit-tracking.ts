@@ -187,14 +187,14 @@ export class TokenTrackingService {
           percentage: 0,
         };
       }
-      providerBreakdown[usage.provider].tokens += usage.totalTokens;
-      providerBreakdown[usage.provider].cost += usage.totalCost;
+      providerBreakdown[usage.provider]!.tokens += usage.totalTokens;
+      providerBreakdown[usage.provider]!.cost += usage.totalCost;
     });
 
     // Calculate percentages
     Object.keys(providerBreakdown).forEach((provider) => {
-      providerBreakdown[provider].percentage =
-        totalTokens > 0 ? (providerBreakdown[provider].tokens / totalTokens) * 100 : 0;
+      providerBreakdown[provider]!.percentage =
+        totalTokens > 0 ? (providerBreakdown[provider]!.tokens / totalTokens) * 100 : 0;
     });
 
     // Model breakdown
@@ -210,8 +210,8 @@ export class TokenTrackingService {
 
     // Calculate percentages for models
     Object.keys(modelBreakdown).forEach((model) => {
-      modelBreakdown[model].percentage =
-        totalTokens > 0 ? (modelBreakdown[model].tokens / totalTokens) * 100 : 0;
+      modelBreakdown[model]!.percentage =
+        totalTokens > 0 ? (modelBreakdown[model]!.tokens! / totalTokens) * 100 : 0;
     });
 
     // Daily usage (last 30 days)
@@ -263,7 +263,7 @@ export class TokenTrackingService {
         if (!breakdown[usage.provider]) {
           breakdown[usage.provider] = 0;
         }
-        breakdown[usage.provider] += usage.totalCost;
+        breakdown[usage.provider] = (breakdown[usage.provider] ?? 0) + usage.totalCost;
       });
 
     return breakdown;
@@ -300,7 +300,7 @@ export class TokenTrackingService {
       providerCounts[usage.provider] = (providerCounts[usage.provider] || 0) + 1;
     });
     const mostUsedProvider = Object.keys(providerCounts).reduce(
-      (a, b) => (providerCounts[a] > providerCounts[b] ? a : b),
+      (a, b) => (providerCounts[a]! > providerCounts[b]! ? a : b),
       '',
     );
 
@@ -311,7 +311,7 @@ export class TokenTrackingService {
       modelCounts[key] = (modelCounts[key] || 0) + 1;
     });
     const mostUsedModel = Object.keys(modelCounts).reduce(
-      (a, b) => (modelCounts[a] > modelCounts[b] ? a : b),
+      (a, b) => (modelCounts[a]! > modelCounts[b]! ? a : b),
       '',
     );
 
@@ -361,10 +361,10 @@ export class TokenTrackingService {
    */
   private updateDailyStats(usage: TokenUsage): void {
     const dateKey = usage.timestamp.toISOString().split('T')[0];
-    const current = this.dailyStats.get(dateKey) || { tokens: 0, cost: 0 };
+    const current = this.dailyStats.get(dateKey!) || { tokens: 0, cost: 0 };
     current.tokens += usage.totalTokens;
     current.cost += usage.totalCost;
-    this.dailyStats.set(dateKey, current);
+    this.dailyStats.set(dateKey!, current);
   }
 
   /**
@@ -389,7 +389,7 @@ export class TokenTrackingService {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateKey = date.toISOString().split('T')[0];
-      const stats = this.dailyStats.get(dateKey) || { tokens: 0, cost: 0 };
+      const stats = this.dailyStats.get(dateKey!) || { tokens: 0, cost: 0 };
       result.push({
         date: dateKey,
         tokens: stats.tokens,

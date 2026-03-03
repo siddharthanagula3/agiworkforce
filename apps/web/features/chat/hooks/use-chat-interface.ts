@@ -454,7 +454,7 @@ export const useChat = (sessionId?: string) => {
           setMessages((prev) => [...prev, assistantMessage]);
 
           // Stream the synthesized response word-by-word
-          await streamText(result.response, (chunk, accumulated) => {
+          await streamText(result.response, (accumulated) => {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -518,7 +518,7 @@ export const useChat = (sessionId?: string) => {
           setMessages((prev) => [...prev, assistantMessage]);
 
           // Stream the response word-by-word
-          await streamText(result.response, (chunk, accumulated) => {
+          await streamText(result.response, (accumulated) => {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -603,7 +603,7 @@ export const useChat = (sessionId?: string) => {
       if (userMessageIndex < 0) return;
 
       const userMessage = messages[userMessageIndex];
-      if (userMessage.role !== 'user') return;
+      if (userMessage?.role !== 'user') return;
 
       // Remove the old assistant message
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
@@ -615,10 +615,10 @@ export const useChat = (sessionId?: string) => {
 
       // Resend with same parameters
       await sendMessage({
-        content: userMessage.content,
-        mode: userMessage.metadata?.mode as ChatMode,
-        model: userMessage.metadata?.model as string,
-        temperature: userMessage.metadata?.temperature as number,
+        content: userMessage?.content,
+        mode: userMessage?.metadata?.mode as ChatMode,
+        model: userMessage?.metadata?.model as string,
+        temperature: userMessage?.metadata?.temperature as number,
       });
     },
     [messages, sendMessage, sessionId],
@@ -633,7 +633,7 @@ export const useChat = (sessionId?: string) => {
       const editedMessage = messages[messageIndex];
 
       // Only allow editing user messages
-      if (editedMessage.role !== 'user') {
+      if (editedMessage?.role !== 'user') {
         toast.error('Can only edit your own messages');
         return;
       }

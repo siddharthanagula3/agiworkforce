@@ -130,7 +130,7 @@ export type OpenAIErrorCode =
   | `HTTP_${number}`;
 
 export class OpenAIError extends Error {
-  public readonly name = 'OpenAIError' as const;
+  public override readonly name = 'OpenAIError' as const;
 
   constructor(
     message: string,
@@ -153,11 +153,11 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
 
   if (status === 402) {
     // Payment Required - Insufficient tokens
-    toast.error(errorInfo.title, {
-      description: errorInfo.message,
-      action: errorInfo.action
+    toast.error(errorInfo?.title, {
+      description: errorInfo?.message,
+      action: errorInfo?.action
         ? {
-            label: errorInfo.action,
+            label: errorInfo?.action,
             onClick: () => {
               // Navigate to billing page
               window.location.href = '/settings/billing';
@@ -186,8 +186,8 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
 
   if (status === 504) {
     // Gateway Timeout
-    toast.error(errorInfo.title, {
-      description: errorInfo.message,
+    toast.error(errorInfo?.title, {
+      description: errorInfo?.message,
       action: {
         label: 'Retry',
         onClick: () => {
@@ -206,7 +206,7 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
   }
 
   // Generic HTTP error
-  const errorMessage = (errorData.error as string) || `HTTP error! status: ${status}`;
+  const errorMessage = (errorData['error'] as string) || `HTTP error! status: ${status}`;
   throw new OpenAIError(
     errorMessage,
     `HTTP_${status}`,
@@ -261,7 +261,7 @@ export class OpenAIProvider {
             continue;
           } else {
             // Max retries exceeded for rate limit
-            toast.error(HTTP_ERROR_MESSAGES[429].title, {
+            toast.error(HTTP_ERROR_MESSAGES![429]!.title, {
               description: 'Maximum retry attempts reached. Please try again later.',
               duration: 8000,
             });
@@ -434,7 +434,7 @@ export class OpenAIProvider {
             continue;
           } else {
             // Max retries exceeded for rate limit
-            toast.error(HTTP_ERROR_MESSAGES[429].title, {
+            toast.error(HTTP_ERROR_MESSAGES![429]!.title, {
               description: 'Maximum retry attempts reached. Please try again later.',
               duration: 8000,
             });
@@ -565,27 +565,10 @@ export class OpenAIProvider {
   /**
    * Extract content from OpenAI response
    */
-  private extractContentFromResponse(response: OpenAI.Chat.Completions.ChatCompletion): string {
-    return response.choices[0]?.message?.content || '';
-  }
 
   /**
    * Extract usage information from OpenAI response
    */
-  private extractUsageFromResponse(response: OpenAI.Chat.Completions.ChatCompletion): {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  } {
-    if (response.usage) {
-      return {
-        promptTokens: response.usage.prompt_tokens,
-        completionTokens: response.usage.completion_tokens,
-        totalTokens: response.usage.total_tokens,
-      };
-    }
-    return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-  }
 
   /**
    * Save message to database
