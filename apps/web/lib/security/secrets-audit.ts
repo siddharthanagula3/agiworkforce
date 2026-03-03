@@ -95,7 +95,7 @@ function isPublicSupabaseKey(jwt: string): boolean {
   try {
     const parts = jwt.split('.');
     if (parts.length !== 3) return false;
-    const payload = JSON.parse(atob(parts[1]));
+    const payload = JSON.parse(atob(parts[1]!));
     return payload.role === 'anon';
   } catch {
     return false;
@@ -215,7 +215,7 @@ export function safeLog(message: string, data?: unknown): void {
 /**
  * Validate environment variables don't contain obvious test/placeholder values.
  */
-export function validateEnvNotPlaceholder(envName: string, value: string | undefined): boolean {
+export function validateEnvNotPlaceholder(_envName: string, value: string | undefined): boolean {
   if (!value) return false;
 
   const placeholderPatterns = [

@@ -21,7 +21,7 @@ const AUTH_TAG_LENGTH = 16; // 128-bit auth tag
  * affects development environments; production must use DEVICE_TOKEN_ENCRYPTION_KEY.
  */
 function getEncryptionKey(): Buffer {
-  const keyEnv = process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
+  const keyEnv = process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
   if (keyEnv) {
     if (keyEnv.length !== 64) {
       throw new Error('DEVICE_TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
@@ -40,7 +40,7 @@ function getEncryptionKey(): Buffer {
   }
 
   // Development fallback: HKDF from SUPABASE_SERVICE_ROLE_KEY
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRole = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!serviceRole) {
     throw new Error('Neither DEVICE_TOKEN_ENCRYPTION_KEY nor SUPABASE_SERVICE_ROLE_KEY is set');
   }
