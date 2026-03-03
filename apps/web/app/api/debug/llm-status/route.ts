@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify admin via app_metadata (set by service role only, not user-editable)
-    const isAdmin = user.app_metadata?.role === 'admin';
+    const isAdmin = user.app_metadata?.['role'] === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
 
   // Environment info (safe subset only)
   const envInfo = {
-    NODE_ENV: process.env.NODE_ENV,
-    VERCEL_ENV: process.env.VERCEL_ENV || null,
+    NODE_ENV: process.env['NODE_ENV'],
+    VERCEL_ENV: process.env['VERCEL_ENV'] || null,
   };
 
   // Log detailed info server-side only

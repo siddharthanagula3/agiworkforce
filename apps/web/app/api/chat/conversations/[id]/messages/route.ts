@@ -184,7 +184,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   }));
 
   // Call LLM API
-  const llmApiUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
+  const llmApiUrl = process.env['NEXT_PUBLIC_SITE_URL'] || 'http://localhost:3001';
   const llmEndpoint = `${llmApiUrl}/api/llm/v1/chat/completions`;
 
   // Validate outbound URL uses a trusted origin

@@ -79,22 +79,30 @@ function validatePlatformConfig(
 ): { valid: boolean; error?: string } {
   switch (platform) {
     case 'whatsapp': {
-      if (!config.phone || typeof config.phone !== 'string' || config.phone.trim().length === 0) {
+      if (
+        !config['phone'] ||
+        typeof config['phone'] !== 'string' ||
+        config['phone'].trim().length === 0
+      ) {
         return { valid: false, error: 'WhatsApp requires a phone number' };
       }
       return { valid: true };
     }
     case 'telegram': {
-      if (!config.token || typeof config.token !== 'string' || config.token.trim().length === 0) {
+      if (
+        !config['token'] ||
+        typeof config['token'] !== 'string' ||
+        config['token'].trim().length === 0
+      ) {
         return { valid: false, error: 'Telegram requires a bot token' };
       }
       return { valid: true };
     }
     case 'slack': {
       if (
-        !config.workspaceUrl ||
-        typeof config.workspaceUrl !== 'string' ||
-        config.workspaceUrl.trim().length === 0
+        !config['workspaceUrl'] ||
+        typeof config['workspaceUrl'] !== 'string' ||
+        config['workspaceUrl'].trim().length === 0
       ) {
         return { valid: false, error: 'Slack requires a workspace URL' };
       }

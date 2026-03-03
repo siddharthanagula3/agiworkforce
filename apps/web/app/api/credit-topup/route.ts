@@ -12,7 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 
 // Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 function getStripeClient(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = process.env['STRIPE_SECRET_KEY'];
   if (!key) {
     throw createError.serviceUnavailable('STRIPE_SECRET_KEY is not configured');
   }
@@ -121,7 +121,7 @@ async function handleCreditTopup(request: NextRequest) {
     baseUrl = requestOrigin;
   } else {
     // Fall back to configured app URL
-    baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
+    baseUrl = process.env['NEXT_PUBLIC_APP_URL'] || process.env['NEXT_PUBLIC_SITE_URL'];
     if (requestOrigin) {
       logger.warn(
         { origin: requestOrigin },

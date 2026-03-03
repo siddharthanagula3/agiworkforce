@@ -13,10 +13,10 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 // AUDIT-P3: Use shared Stripe type helpers for type safety
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
+const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
   logger.error(
@@ -261,7 +261,9 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
   }
 }
 
-async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
+async function upsertSubscriptionFromSession(
+  session: Stripe.Checkout.Session,
+): Promise<NextResponse | void> {
   if (!supabaseAdmin || !stripe) {
     logger.error('upsertSubscriptionFromSession: missing dependencies');
     throw new Error('Missing dependencies');
@@ -444,7 +446,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       {
         sessionId: session.id,
         priceId,
-        hasMetadata: !!session.metadata?.plan_tier,
+        hasMetadata: !!session.metadata?.['plan_tier'],
         inferredFromPrice: priceId ? 'attempted' : 'no-price-id',
         registeredPriceIds: Object.keys(getTierMapping()),
         envVarHint:
@@ -477,14 +479,14 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   let stripePriceId: string | null = null;
   if (session.line_items?.data && session.line_items.data.length > 0) {
-    stripePriceId = session.line_items.data[0].price?.id || null;
+    stripePriceId = session.line_items.data[0]?.price?.id || null;
   } else if (stripe && session.id) {
     try {
       const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
         expand: ['line_items'],
       });
       if (expandedSession.line_items?.data && expandedSession.line_items.data.length > 0) {
-        stripePriceId = expandedSession.line_items.data[0].price?.id || null;
+        stripePriceId = expandedSession.line_items.data[0]?.price?.id || null;
       }
     } catch (error) {
       logger.error({ error, sessionId: session.id }, 'Failed to retrieve expanded session');
@@ -544,8 +546,9 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       const subscription = await stripe.subscriptions.retrieve(stripeSubId, {
         expand: ['items.data.price'],
       });
-      if (subscription.items.data.length > 0) {
-        stripePriceId = subscription.items.data[0].price.id;
+      const retryItem = subscription.items.data[0];
+      if (retryItem) {
+        stripePriceId = retryItem.price.id;
         logger.info(
           { priceId: stripePriceId, subscriptionId: stripeSubId },
           'Successfully retrieved price_id from subscription on retry',
@@ -567,11 +570,9 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       const finalSubscription = await stripe.subscriptions.retrieve(stripeSubId, {
         expand: ['items.data.price', 'items.data.plan'],
       });
-      if (finalSubscription.items.data.length > 0) {
-        stripePriceId =
-          finalSubscription.items.data[0].price?.id ||
-          finalSubscription.items.data[0].plan?.id ||
-          null;
+      const finalItem = finalSubscription.items.data[0];
+      if (finalItem) {
+        stripePriceId = finalItem.price?.id || finalItem.plan?.id || null;
         if (stripePriceId) {
           logger.info(
             { priceId: stripePriceId },
@@ -727,8 +728,9 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   const stripeCustomerId = subscription.customer as string | null;
 
   let stripePriceId: string | null = null;
-  if (subscription.items.data.length > 0) {
-    stripePriceId = subscription.items.data[0].price.id;
+  const firstSubItem = subscription.items.data[0];
+  if (firstSubItem) {
+    stripePriceId = firstSubItem.price.id;
   }
 
   // Use centralized price-tier-mapping for consistent plan resolution
@@ -745,7 +747,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       {
         subscriptionId: subscription.id,
         priceId: stripePriceId,
-        hasMetadata: !!subscription.metadata?.plan_tier,
+        hasMetadata: !!subscription.metadata?.['plan_tier'],
         registeredPriceIds: Object.keys(getTierMapping()),
         envVarHint:
           'Ensure STRIPE_PRICE_HOBBY_MONTHLY, STRIPE_PRICE_PRO_MONTHLY, etc. are set in Vercel environment variables',
@@ -761,7 +763,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     return;
   }
 
-  if (!subscription.metadata?.plan_tier) {
+  if (!subscription.metadata?.['plan_tier']) {
     logger.warn(
       {
         subscriptionId: subscription.id,
@@ -904,7 +906,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     } else {
       // Subscription doesn't exist - need to find user_id and create it
       // First, try metadata (most reliable)
-      const metadataUserId = subscription.metadata?.supabase_user_id;
+      const metadataUserId = subscription.metadata?.['supabase_user_id'];
       if (metadataUserId) {
         logger.info(
           { stripeSubId, metadataUserId },

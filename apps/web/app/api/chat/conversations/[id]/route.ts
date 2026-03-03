@@ -138,8 +138,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const updates: Record<string, unknown> = {};
-  if (body.title) updates.title = body.title;
-  if (body.model) updates.model = body.model;
+  if (body['title']) updates['title'] = body['title'];
+  if (body['model']) updates['model'] = body['model'];
 
   const { data, error } = await supabase
     .from('web_conversations')
