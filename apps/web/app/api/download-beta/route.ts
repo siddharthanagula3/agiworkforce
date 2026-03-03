@@ -70,6 +70,10 @@ async function handleDownloadBeta(request: NextRequest) {
   }
 
   const info = DOWNLOAD_INFO[platform];
+  const filePlatformPath = FILE_PATHS[platform];
+  if (!info || !filePlatformPath) {
+    throw createError.validation('Invalid platform.');
+  }
   const externalUrl = process.env[info.envVar];
 
   if (externalUrl && !externalUrl.startsWith('/')) {
@@ -77,7 +81,7 @@ async function handleDownloadBeta(request: NextRequest) {
   }
 
   try {
-    const filePath = path.join(process.cwd(), 'public', 'downloads', FILE_PATHS[platform]);
+    const filePath = path.join(process.cwd(), 'public', 'downloads', filePlatformPath);
     const fileBuffer = await readFile(filePath);
 
     return new NextResponse(fileBuffer, {

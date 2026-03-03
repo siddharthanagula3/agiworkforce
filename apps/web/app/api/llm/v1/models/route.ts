@@ -376,7 +376,7 @@ function filterModelsByTier(models: typeof MODELS, userTier: string) {
 }
 
 function getAllowedAutoModes(userTier: string): string[] {
-  return AUTO_MODES_BY_TIER[userTier.toLowerCase()] || AUTO_MODES_BY_TIER.free;
+  return AUTO_MODES_BY_TIER[userTier.toLowerCase()] || AUTO_MODES_BY_TIER['free'] || [];
 }
 
 async function handleListModels(request: NextRequest) {

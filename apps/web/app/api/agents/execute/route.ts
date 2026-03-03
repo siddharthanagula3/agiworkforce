@@ -2,6 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
@@ -13,6 +16,52 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
+
+// H9: Zod validation schema for execute requests
+const ExecuteRequestSchema = z.object({
+  employeeId: z.string(),
+  message: z.string().max(50000),
+  systemPrompt: z.string().max(10000).optional(),
+  conversationHistory: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant', 'system']),
+        content: z.string(),
+      }),
+    )
+    .max(50)
+    .optional(),
+  model: z.string().optional(),
+  provider: z.string().optional(),
+});
+
+/**
+ * Load the canonical system prompt for an employee from the filesystem.
+ * Returns the markdown content after YAML frontmatter, or null if not found.
+ */
+function loadEmployeeSystemPrompt(employeeId: string): string | null {
+  // Sanitize employeeId to prevent path traversal
+  const sanitized = employeeId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (sanitized !== employeeId) {
+    return null;
+  }
+
+  const filePath = join(process.cwd(), '.agi', 'employees', `${sanitized}.md`);
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  const content = readFileSync(filePath, 'utf-8');
+
+  // Extract content after YAML frontmatter (--- ... ---)
+  const frontmatterMatch = content.match(/^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/);
+  if (frontmatterMatch?.[1]) {
+    return frontmatterMatch[1].trim();
+  }
+
+  // No frontmatter, use entire content
+  return content.trim();
 }
 
 /**
@@ -86,22 +135,43 @@ async function handler(request: NextRequest) {
     userId = user.id;
   }
 
-  const body = await request.json();
-  const { employeeId, message, model, provider, systemPrompt, conversationHistory } = body;
+  // H9: Validate request body with Zod
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw createError.badRequest('Invalid JSON in request body');
+  }
 
-  if (!message) {
-    throw createError.badRequest('Message is required');
+  const validationResult = ExecuteRequestSchema.safeParse(body);
+  if (!validationResult.success) {
+    throw createError.badRequest(
+      'Invalid request body: ' + validationResult.error.issues.map((i) => i.message).join(', '),
+    );
+  }
+
+  const { employeeId, message, model, provider, systemPrompt, conversationHistory } =
+    validationResult.data;
+
+  // H10: Load canonical skill from filesystem — caller's systemPrompt is appended as context, never replaces
+  const canonicalPrompt = loadEmployeeSystemPrompt(employeeId);
+  if (!canonicalPrompt) {
+    throw createError.badRequest(`Employee "${employeeId}" not found`);
   }
 
   // Build messages array
   const messages: Array<{ role: string; content: string }> = [];
 
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
+  // Use the server-loaded canonical system prompt
+  messages.push({ role: 'system', content: canonicalPrompt });
+
+  if (conversationHistory) {
+    messages.push(...conversationHistory);
   }
 
-  if (conversationHistory && Array.isArray(conversationHistory)) {
-    messages.push(...conversationHistory);
+  // If caller provided a systemPrompt, append it as additional user context (not system override)
+  if (systemPrompt) {
+    messages.push({ role: 'user', content: `[Additional context from caller]: ${systemPrompt}` });
   }
 
   messages.push({ role: 'user', content: message });

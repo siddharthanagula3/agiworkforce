@@ -143,8 +143,8 @@ async function handleGetMe(request: NextRequest) {
     return NextResponse.json({
       id: user.id,
       email: user.email,
-      name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-      avatar_url: user.user_metadata?.avatar_url || null,
+      name: user.user_metadata?.['full_name'] || user.email?.split('@')[0] || 'User',
+      avatar_url: user.user_metadata?.['avatar_url'] || null,
       created_at: new Date(user.created_at).getTime() / 1000,
       updated_at: user.updated_at ? new Date(user.updated_at).getTime() / 1000 : Date.now() / 1000,
       plan,

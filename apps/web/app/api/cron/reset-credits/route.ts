@@ -17,20 +17,20 @@ function getSupabaseClient() {
 // Verify cron secret to prevent unauthorized access
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  const nodeEnv = process.env.NODE_ENV;
+  const cronSecret = process.env['CRON_SECRET'];
+  const nodeEnv = process.env['NODE_ENV'];
 
   // AUDIT-008-010: Explicit NODE_ENV check to block production without secret
   // This prevents accidental deployment of dev-mode bypass to production
   const isProduction = nodeEnv === 'production';
-  const isVercelProduction = process.env.VERCEL_ENV === 'production';
+  const isVercelProduction = process.env['VERCEL_ENV'] === 'production';
   const shouldRequireSecret = isProduction || isVercelProduction;
 
   // In production (or Vercel production), CRON_SECRET is required
   if (!cronSecret) {
     if (shouldRequireSecret) {
       logger.error(
-        { nodeEnv, vercelEnv: process.env.VERCEL_ENV },
+        { nodeEnv, vercelEnv: process.env['VERCEL_ENV'] },
         'CRON_SECRET not set in production environment - denying request',
       );
       return false;

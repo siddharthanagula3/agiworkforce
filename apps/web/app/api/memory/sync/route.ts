@@ -92,13 +92,13 @@ async function handleGetSyncStatus(request: NextRequest) {
   }
 
   const memories = allMemories || [];
-  const lastSync = memories.length > 0 ? memories[0].updated_at : null;
+  const lastSync = memories.length > 0 ? (memories[0]?.updated_at ?? null) : null;
 
   // Count by source
   const sources: Record<string, number> = { mobile: 0, desktop: 0, web: 0, auto: 0 };
   for (const m of memories) {
     const src = m.source ?? 'web';
-    if (src in sources) {
+    if (src in sources && sources[src] !== undefined) {
       sources[src]++;
     }
   }
