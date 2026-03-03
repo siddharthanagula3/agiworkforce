@@ -7,8 +7,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 // Module-level admin client — created once and reused across requests.
 // Returns null when environment variables are missing so callers can
@@ -61,7 +61,7 @@ async function verifyAdminAccess(
   // AUDIT-008-013: Verify admin via app_metadata (set by service role only, not user-editable)
   // app_metadata is secure because it can only be modified via service role key or admin API
   // user_metadata is NOT secure as users can modify it themselves
-  const isAdminFromAppMetadata = user.app_metadata?.role === 'admin';
+  const isAdminFromAppMetadata = user.app_metadata?.['role'] === 'admin';
 
   if (isAdminFromAppMetadata) {
     return { isAdmin: true, userId: user.id };
