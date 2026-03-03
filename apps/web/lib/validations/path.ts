@@ -57,7 +57,7 @@ export function validatePathWithinBase(userPath: string, baseDirectory: string):
   // First validate the path format
   const parseResult = SafePathSchema.safeParse(userPath);
   if (!parseResult.success) {
-    throw new Error(parseResult.error.issues[0].message);
+    throw new Error(parseResult.error.issues[0]!.message);
   }
 
   // Normalize paths

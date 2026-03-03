@@ -257,7 +257,7 @@ export class SubscriptionService {
    * Falls back to email only for legacy data
    */
   static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const stripeKey = process.env['STRIPE_SECRET_KEY'];
     if (!stripeKey) {
       logger.warn('STRIPE_SECRET_KEY not set, skipping sync');
       return null;
@@ -278,7 +278,7 @@ export class SubscriptionService {
         .eq('id', userId)
         .maybeSingle();
 
-      let customerId: string | null = profile?.stripe_customer_id || null;
+      let customerId: string | null = (profile?.stripe_customer_id as string | undefined) || null;
 
       if (customerId) {
         logger.info({ customerId, userId }, 'Found stripe_customer_id in profiles (BEST PRACTICE)');
@@ -294,7 +294,7 @@ export class SubscriptionService {
           return null;
         }
 
-        customerId = customers.data[0].id;
+        customerId = customers.data[0]!.id;
 
         // Store customer_id for future lookups
         await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
@@ -320,7 +320,7 @@ export class SubscriptionService {
         });
 
         if (subscriptions.data.length > 0) {
-          stripeSubscription = subscriptions.data[0];
+          stripeSubscription = subscriptions.data[0] ?? null;
           break;
         }
       }
@@ -335,7 +335,7 @@ export class SubscriptionService {
 
         // Find the most recent valid subscription (past_due excluded — payment has failed)
         const validStatusSet = new Set(['active', 'trialing']);
-        stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) || null;
+        stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) ?? null;
       }
 
       if (!stripeSubscription) {

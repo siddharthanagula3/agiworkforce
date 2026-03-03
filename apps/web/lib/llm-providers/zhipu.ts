@@ -32,21 +32,21 @@ export class ZhipuProvider extends BaseLLMProvider {
       })),
     };
 
-    if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
-    if (request.stream !== undefined) body.stream = request.stream;
+    if (request.temperature !== undefined) body['temperature'] = request.temperature;
+    if (request.max_tokens !== undefined) body['max_tokens'] = request.max_tokens;
+    if (request.stream !== undefined) body['stream'] = request.stream;
 
     // ZhipuAI supports tools/function calling
     if (request.tools && request.tools.length > 0) {
-      body.tools = request.tools;
+      body['tools'] = request.tools;
     }
     if (request.tool_choice) {
-      body.tool_choice = request.tool_choice;
+      body['tool_choice'] = request.tool_choice;
     }
 
     // Enable thinking mode if requested (for glm-4.7 deep thinking)
     if (request.thinking_mode) {
-      body.thinking = { type: 'enabled' };
+      body['thinking'] = { type: 'enabled' };
     }
 
     try {
@@ -123,12 +123,12 @@ export class ZhipuProvider extends BaseLLMProvider {
       stream: true,
     };
 
-    if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+    if (request.temperature !== undefined) body['temperature'] = request.temperature;
+    if (request.max_tokens !== undefined) body['max_tokens'] = request.max_tokens;
 
     // Enable thinking mode if requested
     if (request.thinking_mode) {
-      body.thinking = { type: 'enabled' };
+      body['thinking'] = { type: 'enabled' };
     }
 
     const response = await fetch(url, {

@@ -10,7 +10,7 @@ export class QwenProvider extends BaseLLMProvider {
     return 'https://dashscope.aliyuncs.com/api/v1';
   }
 
-  protected getHeaders(): Record<string, string> {
+  protected override getHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${this.apiKey}`,
@@ -46,19 +46,19 @@ export class QwenProvider extends BaseLLMProvider {
     };
 
     if (request.temperature !== undefined) {
-      body.temperature = request.temperature;
+      body['temperature'] = request.temperature;
     }
     if (request.max_tokens !== undefined) {
-      body.max_tokens = request.max_tokens;
+      body['max_tokens'] = request.max_tokens;
     }
     if (request.stream !== undefined) {
-      body.stream = request.stream;
+      body['stream'] = request.stream;
     }
     if (request.tools) {
-      body.tools = request.tools;
+      body['tools'] = request.tools;
     }
     if (request.tool_choice) {
-      body.tool_choice = request.tool_choice;
+      body['tool_choice'] = request.tool_choice;
     }
 
     try {
@@ -205,8 +205,8 @@ export class QwenProvider extends BaseLLMProvider {
       stream: true,
     };
 
-    if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+    if (request.temperature !== undefined) body['temperature'] = request.temperature;
+    if (request.max_tokens !== undefined) body['max_tokens'] = request.max_tokens;
 
     const response = await fetch(url, {
       method: 'POST',

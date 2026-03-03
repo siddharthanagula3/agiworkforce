@@ -142,12 +142,12 @@ export function validatePriceIdConsistency(): ValidationResult {
 
     // Verify exact matches for each plan tier
     const expectedMappings = {
-      hobby_monthly: process.env.STRIPE_PRICE_HOBBY_MONTHLY,
-      hobby_yearly: process.env.STRIPE_PRICE_HOBBY_YEARLY,
-      pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
-      pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
-      max_monthly: process.env.STRIPE_PRICE_MAX_MONTHLY,
-      max_yearly: process.env.STRIPE_PRICE_MAX_YEARLY,
+      hobby_monthly: process.env['STRIPE_PRICE_HOBBY_MONTHLY'],
+      hobby_yearly: process.env['STRIPE_PRICE_HOBBY_YEARLY'],
+      pro_monthly: process.env['STRIPE_PRICE_PRO_MONTHLY'],
+      pro_yearly: process.env['STRIPE_PRICE_PRO_YEARLY'],
+      max_monthly: process.env['STRIPE_PRICE_MAX_MONTHLY'],
+      max_yearly: process.env['STRIPE_PRICE_MAX_YEARLY'],
     };
 
     // Log the mappings for debugging
@@ -177,7 +177,7 @@ export function validateSupabaseUrl(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
 
   if (supabaseUrl) {
     // Check if it's a valid URL
@@ -212,7 +212,7 @@ export function validateAppUrl(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
 
   if (appUrl) {
     // Check if it's a valid URL
