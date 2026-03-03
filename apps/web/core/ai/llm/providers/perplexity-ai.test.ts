@@ -131,10 +131,10 @@ describe('PerplexityProvider', () => {
     it('should return models by capability', () => {
       const capabilities = PerplexityProvider.getModelsByCapability();
 
-      expect(capabilities.search).toContain('sonar');
-      expect(capabilities.search).toContain('sonar-pro');
-      expect(capabilities.reasoning).toContain('sonar-reasoning');
-      expect(capabilities.research).toContain('sonar-deep-research');
+      expect(capabilities['search']).toContain('sonar');
+      expect(capabilities['search']).toContain('sonar-pro');
+      expect(capabilities['reasoning']).toContain('sonar-reasoning');
+      expect(capabilities['research']).toContain('sonar-deep-research');
     });
   });
 
@@ -171,7 +171,7 @@ describe('PerplexityProvider', () => {
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
       expect(response.model).toBe('sonar');
-      expect(response.metadata?.citations).toEqual(['https://example.com/news']);
+      expect(response.metadata?.['citations']).toEqual(['https://example.com/news']);
     });
 
     it('should handle response with content field directly', async () => {
@@ -390,7 +390,7 @@ describe('PerplexityProvider', () => {
 
       await provider.sendMessage(mockMessages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.search_domain_filter).toBe('news.example.com');
       expect(requestBody.search_recency_filter).toBe('day');
     });
@@ -414,7 +414,7 @@ describe('PerplexityProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('sonar');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -440,7 +440,7 @@ describe('PerplexityProvider', () => {
 
       await provider.sendMessage(messagesWithMetadata);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       // Messages sent to API should have role and content only
       expect(requestBody.messages[0]).toEqual({
         role: 'user',
@@ -574,7 +574,7 @@ describe('PerplexityProvider', () => {
 
       await provider.sendMessage(messages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       // All messages should be sent
       expect(requestBody.messages.length).toBe(4);
     });

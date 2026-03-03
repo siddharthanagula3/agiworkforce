@@ -8,7 +8,7 @@
  * - React.memo to prevent unnecessary re-renders when parent re-renders
  */
 
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';

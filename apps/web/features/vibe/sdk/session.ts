@@ -138,8 +138,8 @@ export class BuildSession {
 
     const headers: Record<string, string> = { ...(agentOptions.headers ?? {}) };
     const token = this.init.getAuthToken?.();
-    if (token && !headers.Authorization) {
-      headers.Authorization = `Bearer ${token}`;
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const connectOptions: AgentConnectionOptions = {

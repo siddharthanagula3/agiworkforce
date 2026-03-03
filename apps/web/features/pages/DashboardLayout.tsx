@@ -43,6 +43,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ className, children }
         document.removeEventListener('keydown', handleEscape);
       };
     }
+    return undefined;
   }, [mobileMenuOpen, closeMobileMenu]);
 
   return (

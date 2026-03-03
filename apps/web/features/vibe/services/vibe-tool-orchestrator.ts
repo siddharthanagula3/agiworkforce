@@ -371,9 +371,9 @@ export class VibeToolOrchestrator {
    * Execute Read tool - read file contents from virtual file system
    */
   private async executeRead(parameters: Record<string, unknown>): Promise<unknown> {
-    const filePath = parameters.file_path as string;
-    const offset = (parameters.offset as number) || 0;
-    const limit = (parameters.limit as number) || -1;
+    const filePath = parameters['file_path'] as string;
+    const offset = (parameters['offset'] as number) || 0;
+    const limit = (parameters['limit'] as number) || -1;
 
     const file = virtualFileSystem.get(filePath);
     if (!file) {
@@ -402,8 +402,8 @@ export class VibeToolOrchestrator {
    * Execute Write tool - write content to virtual file system
    */
   private async executeWrite(parameters: Record<string, unknown>): Promise<unknown> {
-    const filePath = parameters.file_path as string;
-    const content = parameters.content as string;
+    const filePath = parameters['file_path'] as string;
+    const content = parameters['content'] as string;
 
     // Determine file type from extension
     const ext = filePath.split('.').pop()?.toLowerCase() || 'txt';
@@ -439,10 +439,10 @@ export class VibeToolOrchestrator {
    * Execute Edit tool - find/replace in file
    */
   private async executeEdit(parameters: Record<string, unknown>): Promise<unknown> {
-    const filePath = parameters.file_path as string;
-    const oldString = parameters.old_string as string;
-    const newString = parameters.new_string as string;
-    const replaceAll = (parameters.replace_all as boolean) || false;
+    const filePath = parameters['file_path'] as string;
+    const oldString = parameters['old_string'] as string;
+    const newString = parameters['new_string'] as string;
+    const replaceAll = (parameters['replace_all'] as boolean) || false;
 
     const file = virtualFileSystem.get(filePath);
     if (!file) {
@@ -485,8 +485,7 @@ export class VibeToolOrchestrator {
    * Note: Actual execution is sandboxed for security
    */
   private async executeBash(parameters: Record<string, unknown>): Promise<unknown> {
-    const command = parameters.command as string;
-    const _timeout = (parameters.timeout as number) || 30000;
+    const command = parameters['command'] as string;
 
     // Parse common commands and simulate output
     const parts = command.trim().split(/\s+/);
@@ -543,7 +542,7 @@ export class VibeToolOrchestrator {
    */
   private simulateLs(args: string[]): { output: string; exitCode: number } {
     const path = args[0] || '.';
-    const _showAll = args.includes('-a') || args.includes('-la');
+
     const longFormat = args.includes('-l') || args.includes('-la');
 
     const files = Array.from(virtualFileSystem.values())
@@ -592,9 +591,9 @@ export class VibeToolOrchestrator {
    * Execute Grep tool - search for patterns in virtual files
    */
   private async executeGrep(parameters: Record<string, unknown>): Promise<unknown> {
-    const pattern = parameters.pattern as string;
-    const path = (parameters.path as string) || '.';
-    const outputMode = (parameters.output_mode as string) || 'files_with_matches';
+    const pattern = parameters['pattern'] as string;
+    const path = (parameters['path'] as string) || '.';
+    const outputMode = (parameters['output_mode'] as string) || 'files_with_matches';
 
     const regex = new RegExp(pattern, 'gi');
     const matches: { file: string; line: number; content: string }[] = [];
@@ -638,8 +637,8 @@ export class VibeToolOrchestrator {
    * Execute Glob tool - find files matching pattern
    */
   private async executeGlob(parameters: Record<string, unknown>): Promise<unknown> {
-    const pattern = parameters.pattern as string;
-    const basePath = (parameters.path as string) || '.';
+    const pattern = parameters['pattern'] as string;
+    const basePath = (parameters['path'] as string) || '.';
 
     // Convert glob pattern to regex
     const regexPattern = pattern
@@ -666,8 +665,8 @@ export class VibeToolOrchestrator {
    * Attempts to use the Perplexity API via Netlify function proxy
    */
   private async executeWebSearch(parameters: Record<string, unknown>): Promise<unknown> {
-    const query = parameters.query as string;
-    const allowedDomains = parameters.allowed_domains as string[] | undefined;
+    const query = parameters['query'] as string;
+    const allowedDomains = parameters['allowed_domains'] as string[] | undefined;
 
     if (!query) {
       return {
@@ -740,8 +739,8 @@ export class VibeToolOrchestrator {
    * Uses the fetch-page Netlify function to bypass CORS
    */
   private async executeWebFetch(parameters: Record<string, unknown>): Promise<unknown> {
-    const url = parameters.url as string;
-    const prompt = parameters.prompt as string;
+    const url = parameters['url'] as string;
+    const prompt = parameters['prompt'] as string;
 
     if (!url) {
       return {
@@ -876,7 +875,7 @@ export class VibeToolOrchestrator {
    *
    * @private
    */
-  private hasPermission(agentName: string, toolName: string): boolean {
+  private hasPermission(_agentName: string, toolName: string): boolean {
     const tool = this.tools.get(toolName);
     if (!tool) return false;
 

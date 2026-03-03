@@ -39,31 +39,31 @@ const ContactSalesPage: React.FC = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
+      newErrors['firstName'] = 'First name is required';
     }
 
     if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
+      newErrors['lastName'] = 'Last name is required';
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
+      newErrors['email'] = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+      newErrors['email'] = 'Please enter a valid email address';
     }
 
     if (!formData.company.trim()) {
-      newErrors.company = 'Company name is required';
+      newErrors['company'] = 'Company name is required';
     }
 
     if (!formData.message.trim()) {
-      newErrors.message = 'Message is required';
+      newErrors['message'] = 'Message is required';
     } else if (formData.message.trim().length < 10) {
-      newErrors.message = 'Message must be at least 10 characters long';
+      newErrors['message'] = 'Message must be at least 10 characters long';
     }
 
     if (formData.phone && !/^[+]?[1-9][\d]{0,15}$/.test(formData.phone.replace(/[\s\-()]/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
+      newErrors['phone'] = 'Please enter a valid phone number';
     }
 
     setErrors(newErrors);
@@ -292,10 +292,10 @@ const ContactSalesPage: React.FC = () => {
                       required
                       value={formData.firstName}
                       onChange={(e) => handleInputChange('firstName', e.target.value)}
-                      className={`border-border/40 bg-background/60 ${errors.firstName ? 'border-red-500' : ''}`}
+                      className={`border-border/40 bg-background/60 ${errors['firstName'] ? 'border-red-500' : ''}`}
                     />
-                    {errors.firstName && (
-                      <p className="mt-1 text-sm text-red-500">{errors.firstName}</p>
+                    {errors['firstName'] && (
+                      <p className="mt-1 text-sm text-red-500">{errors['firstName']}</p>
                     )}
                   </div>
                   <div>
@@ -304,10 +304,10 @@ const ContactSalesPage: React.FC = () => {
                       required
                       value={formData.lastName}
                       onChange={(e) => handleInputChange('lastName', e.target.value)}
-                      className={`border-border/40 bg-background/60 ${errors.lastName ? 'border-red-500' : ''}`}
+                      className={`border-border/40 bg-background/60 ${errors['lastName'] ? 'border-red-500' : ''}`}
                     />
-                    {errors.lastName && (
-                      <p className="mt-1 text-sm text-red-500">{errors.lastName}</p>
+                    {errors['lastName'] && (
+                      <p className="mt-1 text-sm text-red-500">{errors['lastName']}</p>
                     )}
                   </div>
                 </div>
@@ -319,9 +319,11 @@ const ContactSalesPage: React.FC = () => {
                     required
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`border-border/40 bg-background/60 ${errors.email ? 'border-red-500' : ''}`}
+                    className={`border-border/40 bg-background/60 ${errors['email'] ? 'border-red-500' : ''}`}
                   />
-                  {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+                  {errors['email'] && (
+                    <p className="mt-1 text-sm text-red-500">{errors['email']}</p>
+                  )}
                 </div>
 
                 <div>
@@ -330,9 +332,11 @@ const ContactSalesPage: React.FC = () => {
                     required
                     value={formData.company}
                     onChange={(e) => handleInputChange('company', e.target.value)}
-                    className={`border-border/40 bg-background/60 ${errors.company ? 'border-red-500' : ''}`}
+                    className={`border-border/40 bg-background/60 ${errors['company'] ? 'border-red-500' : ''}`}
                   />
-                  {errors.company && <p className="mt-1 text-sm text-red-500">{errors.company}</p>}
+                  {errors['company'] && (
+                    <p className="mt-1 text-sm text-red-500">{errors['company']}</p>
+                  )}
                 </div>
 
                 <div>
@@ -341,9 +345,11 @@ const ContactSalesPage: React.FC = () => {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className={`border-border/40 bg-background/60 ${errors.phone ? 'border-red-500' : ''}`}
+                    className={`border-border/40 bg-background/60 ${errors['phone'] ? 'border-red-500' : ''}`}
                   />
-                  {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
+                  {errors['phone'] && (
+                    <p className="mt-1 text-sm text-red-500">{errors['phone']}</p>
+                  )}
                 </div>
 
                 <div>
@@ -352,7 +358,7 @@ const ContactSalesPage: React.FC = () => {
                     required
                     value={formData.employees}
                     onChange={(e) => handleInputChange('employees', e.target.value)}
-                    className={`h-10 w-full rounded-md border border-border/40 bg-background/60 px-3 ${errors.employees ? 'border-red-500' : ''}`}
+                    className={`h-10 w-full rounded-md border border-border/40 bg-background/60 px-3 ${errors['employees'] ? 'border-red-500' : ''}`}
                   >
                     <option value="">Select...</option>
                     <option value="1-10">1-10 employees</option>
@@ -361,8 +367,8 @@ const ContactSalesPage: React.FC = () => {
                     <option value="201-1000">201-1,000 employees</option>
                     <option value="1000+">1,000+ employees</option>
                   </select>
-                  {errors.employees && (
-                    <p className="mt-1 text-sm text-red-500">{errors.employees}</p>
+                  {errors['employees'] && (
+                    <p className="mt-1 text-sm text-red-500">{errors['employees']}</p>
                   )}
                 </div>
 
@@ -373,9 +379,11 @@ const ContactSalesPage: React.FC = () => {
                     value={formData.message}
                     onChange={(e) => handleInputChange('message', e.target.value)}
                     rows={4}
-                    className={`w-full resize-none rounded-md border border-border/40 bg-background/60 px-3 py-2 ${errors.message ? 'border-red-500' : ''}`}
+                    className={`w-full resize-none rounded-md border border-border/40 bg-background/60 px-3 py-2 ${errors['message'] ? 'border-red-500' : ''}`}
                   />
-                  {errors.message && <p className="mt-1 text-sm text-red-500">{errors.message}</p>}
+                  {errors['message'] && (
+                    <p className="mt-1 text-sm text-red-500">{errors['message']}</p>
+                  )}
                 </div>
 
                 <Button

@@ -3,7 +3,7 @@
  * Displays folder tree with create/rename/delete capabilities
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
@@ -58,7 +58,7 @@ export function FolderManagement({
   const { user } = useAuthStore();
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [_expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<ChatFolder | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<ChatFolder | null>(null);
@@ -184,18 +184,6 @@ export function FolderManagement({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const _toggleFolderExpand = (folderId: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
   };
 
   const openEditDialog = (folder: ChatFolder) => {

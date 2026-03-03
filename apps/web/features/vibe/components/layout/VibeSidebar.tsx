@@ -15,7 +15,7 @@ const VibeSidebar: React.FC = () => {
 
   const getUserInitials = () => {
     if (!user?.email) return 'U';
-    return user.email[0].toUpperCase();
+    return user!.email[0]!.toUpperCase();
   };
 
   return (
@@ -51,7 +51,7 @@ const VibeSidebar: React.FC = () => {
           <TooltipTrigger asChild>
             <Link href="/settings" className="rounded-lg p-2 transition-colors hover:bg-muted">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.user_metadata?.avatar_url as string | undefined} />
+                <AvatarImage src={user?.user_metadata?.['avatar_url'] as string | undefined} />
                 <AvatarFallback className="bg-primary text-xs text-primary-foreground">
                   {getUserInitials()}
                 </AvatarFallback>

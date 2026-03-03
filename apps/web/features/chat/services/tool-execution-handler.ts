@@ -193,9 +193,9 @@ export class ToolsExecutionService {
    * Fully implemented using the web-search-handler
    */
   private async executeWebSearch(args: Record<string, unknown>): Promise<SearchResponse> {
-    const query = args.query as string;
-    const maxResults = (args.maxResults as number) || 10;
-    const provider = args.provider as 'perplexity' | 'google' | 'duckduckgo' | undefined;
+    const query = args['query'] as string;
+    const maxResults = (args['maxResults'] as number) || 10;
+    const provider = args['provider'] as 'perplexity' | 'google' | 'duckduckgo' | undefined;
 
     if (!query) throw new Error('Search query is required');
 
@@ -235,9 +235,9 @@ export class ToolsExecutionService {
    * - Input sanitization for dangerous patterns
    */
   private async executeCodeRunner(args: Record<string, unknown>): Promise<CodeRunnerResult> {
-    const code = args.code as string;
-    const language = (args.language as string) || 'javascript';
-    const timeout = args.timeout as number | undefined;
+    const code = args['code'] as string;
+    const language = (args['language'] as string) || 'javascript';
+    const timeout = args['timeout'] as number | undefined;
 
     if (!code) {
       return {
@@ -319,11 +319,11 @@ export class ToolsExecutionService {
    * Fully implemented using the DALL-E image service through secure proxy
    */
   private async executeImageGenerator(args: Record<string, unknown>): Promise<ImageGenResult> {
-    const prompt = args.prompt as string;
-    const sizeArg = args.size as string | undefined;
-    const qualityArg = args.quality as string | undefined;
-    const styleArg = args.style as string | undefined;
-    const modelArg = args.model as string | undefined;
+    const prompt = args['prompt'] as string;
+    const sizeArg = args['size'] as string | undefined;
+    const qualityArg = args['quality'] as string | undefined;
+    const styleArg = args['style'] as string | undefined;
+    const modelArg = args['model'] as string | undefined;
 
     // Validate prompt
     if (!prompt || prompt.trim().length === 0) {
@@ -449,7 +449,7 @@ export class ToolsExecutionService {
    * - Only reads from in-memory Vibe workspace (no real file system access)
    */
   private async executeFileReader(args: Record<string, unknown>): Promise<FileOperationResult> {
-    const path = args.path as string;
+    const path = args['path'] as string;
 
     if (!path) {
       return {
@@ -637,8 +637,8 @@ export class ToolsExecutionService {
    * - Automatically creates parent directories as needed
    */
   private async executeFileWriter(args: Record<string, unknown>): Promise<FileOperationResult> {
-    const path = args.path as string;
-    const content = args.content as string;
+    const path = args['path'] as string;
+    const content = args['content'] as string;
 
     if (!path) {
       return {

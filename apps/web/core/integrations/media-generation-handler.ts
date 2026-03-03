@@ -79,7 +79,6 @@ export interface MediaGenerationStats {
 export class MediaGenerationService {
   private static instance: MediaGenerationService;
   private generationHistory: MediaGenerationResult[] = [];
-  private isGenerating: boolean = false;
 
   static getInstance(): MediaGenerationService {
     if (!MediaGenerationService.instance) {
@@ -237,7 +236,7 @@ export class MediaGenerationService {
     const styleKeys = Object.keys(styleCounts);
     const mostUsedStyle =
       styleKeys.length > 0
-        ? styleKeys.reduce((a, b) => (styleCounts[a] > styleCounts[b] ? a : b))
+        ? styleKeys.reduce((a, b) => (styleCounts[a]! > styleCounts[b]! ? a : b))
         : 'unknown';
 
     return {

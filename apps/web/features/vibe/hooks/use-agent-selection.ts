@@ -59,7 +59,7 @@ export interface UseAgentSelectionReturn {
  */
 export function useAgentSelection(): UseAgentSelectionReturn {
   const selectedAgentId = useVibeChatStore((state) => state.selectedAgent);
-  const _messages = useVibeChatStore((state) => state.messages);
+
   const setPrimaryAgent = useVibeAgentStore((state) => state.setPrimaryAgent);
 
   const [selectedAgent, setSelectedAgent] = useState<AIEmployee | null>(null);
@@ -117,12 +117,12 @@ export function useAgentSelection(): UseAgentSelectionReturn {
       // Get best match
       matches.sort((a, b) => b.score - a.score);
       const bestMatch = matches[0];
-      const confidence = Math.min(bestMatch.score / 100, 1);
+      const confidence = Math.min(bestMatch!.score / 100, 1);
 
       return {
-        employee: bestMatch.employee,
+        employee: bestMatch?.employee,
         confidence,
-        reasoning: `Keyword match based on: ${bestMatch.employee.description}`,
+        reasoning: `Keyword match based on: ${bestMatch?.employee.description}`,
       };
     },
     [],
@@ -168,8 +168,8 @@ export function useAgentSelection(): UseAgentSelectionReturn {
       const bestMatch = matches[0];
 
       return {
-        employee: bestMatch.employee,
-        confidence: bestMatch.score,
+        employee: bestMatch?.employee,
+        confidence: bestMatch?.score,
         reasoning: `Semantic match based on description similarity`,
       };
     },
@@ -330,8 +330,8 @@ export function useAgentSelection(): UseAgentSelectionReturn {
 
         // Fallback: Use first available employee or best keyword match
         const fallbackAgent = keywordResult?.employee || employees[0];
-        setSelectedAgent(fallbackAgent);
-        setPrimaryAgent(fallbackAgent);
+        setSelectedAgent(fallbackAgent!);
+        setPrimaryAgent(fallbackAgent!);
         setRoutingResult({
           mode: 'single',
           primaryAgent: fallbackAgent,

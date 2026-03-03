@@ -155,7 +155,11 @@ export async function addTokensToUserBalance(
       if (balanceData) {
         // Update existing record
 
-        const { error: updateError } = await (supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>)
+        const { error: updateError } = await (
+          supabase.from('user_token_balances' as never) as unknown as ReturnType<
+            typeof supabase.from
+          >
+        )
           .update({
             current_balance: updatedBalance,
             updated_at: new Date().toISOString(),
@@ -174,7 +178,9 @@ export async function addTokensToUserBalance(
         // Create new record with default monthly allowance
 
         const { error: insertError } = await (
-          supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
+          supabase.from('user_token_balances' as never) as unknown as ReturnType<
+            typeof supabase.from
+          >
         ).insert({
           user_id: userId,
           current_balance: tokens,
@@ -256,12 +262,14 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
     );
 
     if (!rpcError && rpcData && (rpcData as Array<Record<string, unknown>>).length > 0) {
-      return ((rpcData as Array<Record<string, unknown>>)[0].current_balance as number) || 0;
+      return ((rpcData as Array<Record<string, unknown>>)[0]!['current_balance'] as number) || 0;
     }
 
     // Fallback: Query user_token_balances table directly
 
-    const { data, error } = await (supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .select('current_balance')
       .eq('user_id', userId)
       .maybeSingle();
@@ -276,7 +284,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
       return 0;
     }
 
-    return ((data as Record<string, unknown> | null)?.current_balance as number) || 0;
+    return ((data as Record<string, unknown> | null)?.['current_balance'] as number) || 0;
   } catch (error) {
     console.error('[Get Token Balance] Error:', error);
     captureError(error as Error, {
@@ -293,7 +301,6 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
  */
 export function isStripeConfigured(): boolean {
   // Check if we're in development or production
-  const _isDev = window.location.hostname === 'localhost';
 
   // In production, Stripe should always be configured
   // In development, it's optional

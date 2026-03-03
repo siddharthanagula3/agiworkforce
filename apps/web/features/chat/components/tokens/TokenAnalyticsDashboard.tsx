@@ -4,7 +4,7 @@
  * Updated: Jan 18th 2026 - Migrated to React Query for server state management
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';

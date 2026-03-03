@@ -3,7 +3,6 @@
  * Shows token count and cost per message (like ChatGPT/Claude.ai)
  */
 
-import React from 'react';
 import { Badge } from '@shared/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
 import { Zap, TrendingUp, DollarSign } from 'lucide-react';

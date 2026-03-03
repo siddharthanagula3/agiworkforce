@@ -87,8 +87,8 @@ export class ChatPersistenceService {
    * Initialize Supabase client
    */
   private initializeSupabase(): void {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+    const supabaseKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
 
     if (!supabaseUrl || !supabaseKey) {
       console.warn('Supabase not configured, using local storage only');
@@ -380,15 +380,15 @@ export class ChatPersistenceService {
       }
 
       this.state.sessions = sessions.map((s: Record<string, unknown>) => ({
-        id: s.id as string,
-        userId: s.user_id as string,
-        employeeId: s.employee_id as string,
-        role: s.role as string,
-        provider: s.provider as string,
-        title: s.title as string | undefined,
-        createdAt: new Date(s.created_at as string),
-        updatedAt: new Date(s.updated_at as string),
-        isActive: s.is_active as boolean,
+        id: s['id'] as string,
+        userId: s['user_id'] as string,
+        employeeId: s['employee_id'] as string,
+        role: s['role'] as string,
+        provider: s['provider'] as string,
+        title: s['title'] as string | undefined,
+        createdAt: new Date(s['created_at'] as string),
+        updatedAt: new Date(s['updated_at'] as string),
+        isActive: s['is_active'] as boolean,
       }));
 
       // Load messages for each session
@@ -408,12 +408,12 @@ export class ChatPersistenceService {
           session.id,
 
           messages.map((m: Record<string, unknown>) => ({
-            id: m.id as string,
-            sessionId: m.session_id as string,
-            role: m.role as import('@shared/types').MessageRole,
-            content: m.content as string,
-            timestamp: new Date(m.created_at as string),
-            metadata: m.metadata,
+            id: m['id'] as string,
+            sessionId: m['session_id'] as string,
+            role: m['role'] as import('@shared/types').MessageRole,
+            content: m['content'] as string,
+            timestamp: new Date(m['created_at'] as string),
+            metadata: m['metadata'],
           })),
         );
       }

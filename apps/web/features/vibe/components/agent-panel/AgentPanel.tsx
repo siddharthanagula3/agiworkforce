@@ -3,7 +3,6 @@
  * Combines: AgentStatusCard + WorkingProcessSection + AgentMessageList
  */
 
-import React from 'react';
 import { AgentStatusCard, type AgentStatus } from './AgentStatusCard';
 import { WorkingProcessSection, type WorkingStep } from './WorkingProcessSection';
 import { AgentMessageList, type AgentMessage } from './AgentMessageList';

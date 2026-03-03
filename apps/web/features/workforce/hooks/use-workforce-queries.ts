@@ -299,7 +299,9 @@ export function useEmployeeReviews(
       // Try to fetch from database
       // Note: employee_reviews table may not exist in Supabase schema yet
 
-      const { data, error } = await (supabase.from('employee_reviews' as never) as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('employee_reviews' as never) as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('employee_id', employeeId)
         .order('created_at', { ascending: false });
@@ -314,14 +316,14 @@ export function useEmployeeReviews(
       }
 
       return (data || []).map((r: Record<string, unknown>) => ({
-        id: r.id as string,
-        userId: r.user_id as string,
-        employeeId: r.employee_id as string,
-        rating: r.rating as number,
-        comment: (r.comment as string) || '',
-        createdAt: r.created_at as string,
-        userName: r.user_name as string | undefined,
-        userAvatar: r.user_avatar as string | undefined,
+        id: r['id'] as string,
+        userId: r['user_id'] as string,
+        employeeId: r['employee_id'] as string,
+        rating: r['rating'] as number,
+        comment: (r['comment'] as string) || '',
+        createdAt: r['created_at'] as string,
+        userName: r['user_name'] as string | undefined,
+        userAvatar: r['user_avatar'] as string | undefined,
       }));
     },
     enabled: !!employeeId,
@@ -362,7 +364,9 @@ export function useWorkforceStats(
       // Fetch token usage (table may not exist in schema yet)
       let totalTokensUsed = 0;
       try {
-        const { data: tokenData } = await (supabase.from('user_token_balances' as never) as ReturnType<typeof supabase.from>)
+        const { data: tokenData } = await (
+          supabase.from('user_token_balances' as never) as ReturnType<typeof supabase.from>
+        )
           .select('current_balance')
           .eq('user_id', userId)
           .maybeSingle();
@@ -532,7 +536,9 @@ export function useSubmitEmployeeReview(): UseMutationResult<
         throw new Error('You must be logged in to submit a review');
       }
 
-      const { data, error } = await (supabase.from('employee_reviews' as never) as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('employee_reviews' as never) as ReturnType<typeof supabase.from>
+      )
         .insert({
           user_id: user.id,
           employee_id: employeeId,

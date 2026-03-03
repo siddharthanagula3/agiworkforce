@@ -185,7 +185,7 @@ describe('WebSocket Manager', () => {
       await manager.disconnect('test-connection');
 
       expect(events.length).toBe(1);
-      expect(events[0].type).toBe('disconnected');
+      expect(events![0]!.type!).toBe('disconnected');
     });
 
     it('should clear timers on disconnect', async () => {
@@ -253,7 +253,7 @@ describe('WebSocket Manager', () => {
         payload: { text: 'Test' },
       });
 
-      const sentPayload = mockChannel.send.mock.calls[0][0].payload;
+      const sentPayload = mockChannel!.send.mock.calls[0]![0]!.payload!;
       expect(sentPayload.id).toBeDefined();
       expect(sentPayload.timestamp).toBeDefined();
     });
@@ -500,7 +500,7 @@ describe('WebSocket Manager', () => {
         priority: 'high',
       });
 
-      const sentPayload = mockChannel.send.mock.calls[0][0].payload;
+      const sentPayload = mockChannel!.send.mock.calls[0]![0]!.payload!;
       expect(sentPayload.priority).toBe('high');
     });
   });

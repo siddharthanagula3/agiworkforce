@@ -8,7 +8,7 @@
  * - Agent-driven workspace (Monaco removed for web deployment)
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -148,7 +148,7 @@ function CodeEditorPanelContent() {
 
       if (currentFilePath === path) {
         const remaining = Array.from(openFiles.keys()).filter((p) => p !== path);
-        setCurrentFilePath(remaining.length > 0 ? remaining[0] : null);
+        setCurrentFilePath(remaining.length > 0 ? remaining[0]! : null);
       }
     },
     [currentFilePath, openFiles],
@@ -201,23 +201,6 @@ function CodeEditorPanelContent() {
       URL.revokeObjectURL(url);
     }
   };
-
-  const _handleEditorChange = useCallback(
-    (value: string | undefined) => {
-      if (value !== undefined && currentFilePath) {
-        setOpenFiles((prev) => {
-          const next = new Map(prev);
-          const file = next.get(currentFilePath);
-          if (file) {
-            file.content = value;
-            file.isDirty = true;
-          }
-          return next;
-        });
-      }
-    },
-    [currentFilePath],
-  );
 
   // Open create dialog
   const handleFileCreate = useCallback((parentPath: string, type: 'file' | 'folder') => {

@@ -514,9 +514,9 @@ describe('UnifiedLLMService', () => {
       }
 
       expect(chunks.length).toBe(3);
-      expect(chunks[0].content).toBe('Hello');
-      expect(chunks[0].provider).toBe('openai');
-      expect(chunks[2].done).toBe(true);
+      expect(chunks![0]!.content!).toBe('Hello');
+      expect(chunks![0]!.provider!).toBe('openai');
+      expect(chunks![2]!.done!).toBe(true);
     });
 
     it('should stream from specified provider', async () => {
@@ -537,7 +537,7 @@ describe('UnifiedLLMService', () => {
         chunks.push(chunk);
       }
 
-      expect(chunks[0].provider).toBe('anthropic');
+      expect(chunks![0]!.provider!).toBe('anthropic');
     });
 
     it('should throw error for unknown provider', async () => {
@@ -666,8 +666,8 @@ describe('UnifiedLLMService', () => {
 
       const response = await service.sendMessage(mockMessages, undefined, undefined, 'google');
 
-      expect(response.metadata?.provider).toBe('google');
-      expect(response.metadata?.custom).toBe('data');
+      expect(response.metadata?.['provider']).toBe('google');
+      expect(response.metadata?.['custom']).toBe('data');
     });
   });
 });

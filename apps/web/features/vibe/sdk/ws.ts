@@ -41,7 +41,7 @@ export function createAgentConnection(
   const retryCfg = normalizeRetryConfig(options.retry, WS_RETRY_DEFAULTS);
 
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
-  if (options.origin) headers.Origin = options.origin;
+  if (options.origin) headers['Origin'] = options.origin;
 
   let ws: WebSocketLike | null = null;
   let isOpen = false;

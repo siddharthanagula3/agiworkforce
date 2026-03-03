@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- supabase client type bridge and dynamic query results */
 /**
  * Dashboard Home Page - Stats & Activity Overview
  * Landing page with usage stats, recent conversations, quick actions, and activity feed.
@@ -262,7 +263,7 @@ export const DashboardHomePage: React.FC = () => {
 
     // web_conversations and token_credits are not in the generated Supabase types yet,
     // so we cast the client to `any` for these queries.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const untypedClient = supabase as any;
 
     // Fetch 5 most recent non-deleted conversations
@@ -279,7 +280,6 @@ export const DashboardHomePage: React.FC = () => {
 
         if (!error && data) {
           setRecentConversations(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (data as any[]).map((row: any) => ({
               id: row.id as string,
               title: (row.title as string) || 'Untitled conversation',

@@ -263,7 +263,7 @@ export function validateFormData<T>(
 
   // If no path-based errors found, add a root error
   if (Object.keys(errors).length === 0 && issues.length > 0) {
-    errors['_root'] = issues[0].message;
+    errors['_root'] = issues[0]!.message;
   }
 
   return { success: false, errors };

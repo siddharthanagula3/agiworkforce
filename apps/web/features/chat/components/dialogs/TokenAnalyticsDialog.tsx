@@ -2,7 +2,6 @@
  * TokenAnalyticsDialog - Modal wrapper for Token Analytics Dashboard
  */
 
-import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import { TokenAnalyticsDashboard } from '../tokens/TokenAnalyticsDashboard';
 

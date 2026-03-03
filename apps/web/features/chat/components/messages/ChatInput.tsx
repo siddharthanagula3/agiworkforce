@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, KeyboardEvent } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@/shared/components/ui/badge';

@@ -117,7 +117,9 @@ export class WorkforceOrchestratorRefactored {
 
     if (userId) {
       try {
-        const { data: hiredEmployees, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+        const { data: hiredEmployees, error } = await (
+          supabase as unknown as import('@supabase/supabase-js').SupabaseClient
+        )
           .from('hired_employees')
           .select('employee_id, employee_name')
           .eq('user_id', userId);
@@ -593,7 +595,9 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
 
       if (user) {
         try {
-          const { data: hiredEmployees, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+          const { data: hiredEmployees, error } = await (
+            supabase as unknown as import('@supabase/supabase-js').SupabaseClient
+          )
             .from('hired_employees')
             .select('employee_id, employee_name')
             .eq('user_id', user.id);
@@ -1171,40 +1175,6 @@ Query: "Help me learn Python" → Answer: "expert-tutor"
    * Select optimal employee for chat interaction
    * Uses simpler matching than full task delegation
    */
-  private async selectEmployeeForChat(userMessage: string): Promise<AIEmployee | null> {
-    if (this.employees.length === 0) {
-      return null;
-    }
-
-    // Simple keyword matching for chat mode
-    const messageLower = userMessage.toLowerCase();
-    let bestMatch: AIEmployee | null = null;
-    let bestScore = 0;
-
-    for (const employee of this.employees) {
-      let score = 0;
-      const descLower = employee.description.toLowerCase();
-
-      // Score based on description relevance
-      if (messageLower.includes('code') && descLower.includes('code')) score += 10;
-      if (messageLower.includes('debug') && descLower.includes('debug')) score += 10;
-      if (messageLower.includes('review') && descLower.includes('review')) score += 10;
-      if (messageLower.includes('test') && descLower.includes('test')) score += 10;
-      if (messageLower.includes('write') && descLower.includes('write')) score += 5;
-      if (messageLower.includes('analyze') && descLower.includes('analyze')) score += 5;
-
-      // General capability score
-      score += employee.tools.length * 0.5;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = employee;
-      }
-    }
-
-    // Return best match or first employee as fallback
-    return bestMatch || this.employees[0];
-  }
 
   /**
    * Route message to specific employee (for multi-agent chat)

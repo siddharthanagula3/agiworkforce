@@ -74,15 +74,15 @@ export const inferLanguageFromPath = (path: string): string => {
   if (!match) {
     return 'plaintext';
   }
-  const ext = match[1].toLowerCase();
+  const ext = match[1]!.toLowerCase();
   return EXTENSION_LANGUAGE_MAP[ext] || 'plaintext';
 };
 
 export const mapFileRowToMetadata = (row: VibeFileRow): FileMetadata => {
   const metadata = row.metadata || {};
   const rawPath =
-    (typeof metadata.original_path === 'string' && metadata.original_path) ||
-    (typeof metadata.path === 'string' && metadata.path) ||
+    (typeof metadata['original_path'] === 'string' && metadata['original_path']) ||
+    (typeof metadata['path'] === 'string' && metadata['path']) ||
     row.name;
 
   const normalizedPath = normalizeFilePath(rawPath, row.name);
@@ -95,8 +95,8 @@ export const mapFileRowToMetadata = (row: VibeFileRow): FileMetadata => {
     size: typeof row.size === 'number' ? row.size : undefined,
     uploadedAt: row.uploaded_at ? new Date(row.uploaded_at) : undefined,
     language:
-      typeof metadata.language === 'string'
-        ? metadata.language
+      typeof metadata['language'] === 'string'
+        ? metadata['language']
         : inferLanguageFromPath(normalizedPath),
     ...metadata,
   };
@@ -127,9 +127,12 @@ const convertTreeToArray = (nodes: Record<string, TreeNode>): FileTreeItem[] =>
       type: node.type,
       path: node.path,
       children: node.children ? convertTreeToArray(node.children) : undefined,
-      size: typeof node.metadata?.size === 'number' ? (node.metadata.size as number) : undefined,
+      size:
+        typeof node.metadata?.['size'] === 'number' ? (node.metadata['size'] as number) : undefined,
       modified:
-        node.metadata?.uploadedAt instanceof Date ? (node.metadata.uploadedAt as Date) : undefined,
+        node.metadata?.['uploadedAt'] instanceof Date
+          ? (node.metadata['uploadedAt'] as Date)
+          : undefined,
       metadata: node.metadata,
     }));
 

@@ -263,7 +263,7 @@ export class NLPProcessor {
   /**
    * Identify the domain of the task
    */
-  private identifyDomain(input: string, keywords: string[]): DomainType {
+  private identifyDomain(_input: string, keywords: string[]): DomainType {
     let maxScore = 0;
     let bestDomain: DomainType = 'code';
 

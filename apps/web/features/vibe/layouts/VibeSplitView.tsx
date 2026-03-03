@@ -19,7 +19,7 @@ export function VibeSplitView({ children }: VibeSplitViewProps) {
   const handleResize = (layout: Record<string, number>) => {
     const values = Object.values(layout);
     if (values.length > 0) {
-      updateSplitLayout(values[0]);
+      updateSplitLayout(values[0]!);
     }
   };
 
