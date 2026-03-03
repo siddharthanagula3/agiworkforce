@@ -49,7 +49,7 @@ function noUpdateResponse(): NextResponse {
 
 function parseSemver(version: string): [number, number, number] | null {
   // Strip leading "v" and pre-release/build metadata.
-  const clean = version.trim().replace(/^v/i, '').split('-')[0].split('+')[0];
+  const clean = version.trim().replace(/^v/i, '').split('-')[0]?.split('+')[0] ?? '';
   const parts = clean.split('.');
   if (parts.length < 1 || parts.length > 3) return null;
 
@@ -107,8 +107,8 @@ async function handleReleaseCheck(
   };
 
   // Add auth if token exists (for private repos or higher rate limits)
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (process.env['GITHUB_TOKEN']) {
+    headers['Authorization'] = `Bearer ${process.env['GITHUB_TOKEN']}`;
   }
 
   // Desktop release repo configuration (required for updater)

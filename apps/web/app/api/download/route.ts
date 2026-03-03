@@ -6,8 +6,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
-const REPO_OWNER = process.env.DESKTOP_GITHUB_OWNER || 'siddharthanagula3';
-const REPO_NAME = process.env.DESKTOP_GITHUB_REPO || 'agiworkforce-desktop-app';
+const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
+const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
 
 /**
  * PUBLIC ENDPOINT: Download route for desktop application installers.
@@ -59,8 +59,8 @@ async function handleDownload(request: NextRequest) {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         'User-Agent': 'AGI-Workforce-Downloader',
-        ...(process.env.GITHUB_TOKEN
-          ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+        ...(process.env['GITHUB_TOKEN']
+          ? { Authorization: `Bearer ${process.env['GITHUB_TOKEN']}` }
           : {}),
       },
       next: { revalidate: 0 }, // No cache - always fetch latest release
@@ -133,9 +133,10 @@ async function handleDownload(request: NextRequest) {
 
 function fallbackToStatic(platform: string, request: Request) {
   const downloadUrls: Record<string, string | undefined> = {
-    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agiworkforce.dmg',
-    windows: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/downloads/agi-workforce-win.exe',
-    linux: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX || '/downloads/agi-workforce-linux.AppImage',
+    mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || '/downloads/agiworkforce.dmg',
+    windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || '/downloads/agi-workforce-win.exe',
+    linux:
+      process.env['NEXT_PUBLIC_DOWNLOAD_URL_LINUX'] || '/downloads/agi-workforce-linux.AppImage',
   };
 
   let url = downloadUrls[platform];

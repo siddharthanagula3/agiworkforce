@@ -52,7 +52,7 @@ interface ReleaseRecord {
  */
 function parseSemver(version: string): [number, number, number] | null {
   // Strip leading "v" and pre-release/build metadata
-  const clean = version.trim().replace(/^v/i, '').split('-')[0].split('+')[0];
+  const clean = version.trim().replace(/^v/i, '').split('-')[0]?.split('+')[0] ?? '';
   const parts = clean.split('.');
 
   if (parts.length < 1 || parts.length > 3) return null;
@@ -77,8 +77,10 @@ function compareSemver(a: string, b: string): number {
   }
 
   for (let i = 0; i < 3; i++) {
-    if (parsedA[i] > parsedB[i]) return 1;
-    if (parsedA[i] < parsedB[i]) return -1;
+    const aVal = parsedA[i] ?? 0;
+    const bVal = parsedB[i] ?? 0;
+    if (aVal > bVal) return 1;
+    if (aVal < bVal) return -1;
   }
 
   return 0;

@@ -9,8 +9,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 // Environment
 // ---------------------------------------------------------------------------
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 // ---------------------------------------------------------------------------
 // Admin auth verification (mirrors /api/admin/security pattern)
@@ -44,7 +44,7 @@ async function verifyAdminAccess(
   }
 
   // Check admin via app_metadata (secure — only modifiable via service role)
-  const isAdminFromAppMetadata = user.app_metadata?.role === 'admin';
+  const isAdminFromAppMetadata = user.app_metadata?.['role'] === 'admin';
 
   if (!isAdminFromAppMetadata) {
     // Not a global admin — check if they are an org owner/admin.

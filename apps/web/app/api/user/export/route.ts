@@ -187,7 +187,7 @@ async function handleExportUserData(request: NextRequest) {
       .eq('id', user.id)
       .single();
     if (profile) {
-      exportData.profile = profile;
+      exportData['profile'] = profile;
     }
 
     // Fetch subscription
@@ -198,7 +198,7 @@ async function handleExportUserData(request: NextRequest) {
       .single();
     if (subscription) {
       // Remove sensitive Stripe IDs from export
-      exportData.subscription = {
+      exportData['subscription'] = {
         ...subscription,
         stripe_customer_id: subscription.stripe_customer_id ? '[REDACTED]' : null,
         stripe_subscription_id: subscription.stripe_subscription_id ? '[REDACTED]' : null,
@@ -212,7 +212,7 @@ async function handleExportUserData(request: NextRequest) {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (tokenCredits && tokenCredits.length > 0) {
-      exportData.token_credits = tokenCredits;
+      exportData['token_credits'] = tokenCredits;
     }
 
     // Fetch credit transactions (limited to last 1000)
@@ -223,7 +223,7 @@ async function handleExportUserData(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(1000);
     if (creditTransactions && creditTransactions.length > 0) {
-      exportData.credit_transactions = creditTransactions;
+      exportData['credit_transactions'] = creditTransactions;
     }
 
     // Fetch email preferences
@@ -234,7 +234,7 @@ async function handleExportUserData(request: NextRequest) {
       .single();
     if (emailPreferences) {
       // Remove sensitive tokens from export
-      exportData.email_preferences = {
+      exportData['email_preferences'] = {
         ...emailPreferences,
         unsubscribe_token: '[REDACTED]',
         consent_ip_address: emailPreferences.consent_ip_address ? '[PARTIALLY_REDACTED]' : null,
@@ -247,7 +247,7 @@ async function handleExportUserData(request: NextRequest) {
       .select('*, organizations(*)')
       .eq('user_id', user.id);
     if (orgMemberships && orgMemberships.length > 0) {
-      exportData.organization_memberships = orgMemberships;
+      exportData['organization_memberships'] = orgMemberships;
     }
 
     // Fetch beta redemptions
@@ -256,7 +256,7 @@ async function handleExportUserData(request: NextRequest) {
       .select('*, beta_invites(code, plan_tier, trial_days)')
       .eq('user_id', user.id);
     if (betaRedemptions && betaRedemptions.length > 0) {
-      exportData.beta_redemptions = betaRedemptions;
+      exportData['beta_redemptions'] = betaRedemptions;
     }
 
     // Fetch device authorizations
@@ -267,7 +267,7 @@ async function handleExportUserData(request: NextRequest) {
       .order('created_at', { ascending: false });
     if (deviceAuths && deviceAuths.length > 0) {
       // Redact sensitive device tokens
-      exportData.device_authorizations = deviceAuths.map((auth) => ({
+      exportData['device_authorizations'] = deviceAuths.map((auth) => ({
         ...auth,
         user_code: auth.user_code ? '[REDACTED]' : null,
         access_token: auth.access_token ? '[REDACTED]' : null,
@@ -281,7 +281,7 @@ async function handleExportUserData(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id);
     if (desktopDevices && desktopDevices.length > 0) {
-      exportData.desktop_devices = desktopDevices;
+      exportData['desktop_devices'] = desktopDevices;
     }
 
     // Fetch mobile devices
@@ -290,7 +290,7 @@ async function handleExportUserData(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id);
     if (mobileDevices && mobileDevices.length > 0) {
-      exportData.mobile_devices = mobileDevices;
+      exportData['mobile_devices'] = mobileDevices;
     }
 
     // Fetch sync data
@@ -299,7 +299,7 @@ async function handleExportUserData(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id);
     if (syncData && syncData.length > 0) {
-      exportData.sync_data = syncData;
+      exportData['sync_data'] = syncData;
     }
 
     logger.info(

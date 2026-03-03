@@ -21,7 +21,7 @@ async function handleDevicePoll(request: NextRequest) {
   // Rate limiting - use device_id as identifier.
   // Validate device_id length and format BEFORE using it as a rate-limit key
   // to prevent memory exhaustion via arbitrarily long or crafted identifiers.
-  const rawDeviceId = (parsedBody as Record<string, unknown>)?.device_id;
+  const rawDeviceId = (parsedBody as Record<string, unknown>)?.['device_id'];
   const deviceId =
     typeof rawDeviceId === 'string' && /^[a-zA-Z0-9-_]{1,128}$/.test(rawDeviceId)
       ? rawDeviceId

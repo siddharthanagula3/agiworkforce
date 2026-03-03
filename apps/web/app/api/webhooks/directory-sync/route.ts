@@ -11,9 +11,9 @@ import crypto from 'crypto';
 // Environment
 // ---------------------------------------------------------------------------
 
-const WORKOS_WEBHOOK_SECRET = process.env.WORKOS_WEBHOOK_SECRET;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const WORKOS_WEBHOOK_SECRET = process.env['WORKOS_WEBHOOK_SECRET'];
+const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 if (!WORKOS_WEBHOOK_SECRET) {
   logger.error(
@@ -382,14 +382,14 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
     updated_at: new Date().toISOString(),
   };
 
-  if (email) updates.email = email;
-  if (displayName) updates.display_name = displayName;
-  if (user.department !== undefined) updates.department = user.department;
-  if (user.job_title !== undefined) updates.job_title = user.job_title;
+  if (email) updates['email'] = email;
+  if (displayName) updates['display_name'] = displayName;
+  if (user.department !== undefined) updates['department'] = user.department;
+  if (user.job_title !== undefined) updates['job_title'] = user.job_title;
 
   // If the directory reports the user as inactive, disable the account
   if (user.state === 'inactive') {
-    updates.account_status = 'disabled';
+    updates['account_status'] = 'disabled';
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -562,11 +562,11 @@ async function handleGroupUserAdded(
   // Map group name to role via exact-match allowlists (env-var driven, not substring)
   // SCIM_ADMIN_GROUP_NAMES: comma-separated exact group names that grant admin role (default: "Admins")
   // SCIM_VIEWER_GROUP_NAMES: comma-separated exact group names that grant viewer role (default: "Viewers,ReadOnly")
-  const adminGroups = (process.env.SCIM_ADMIN_GROUP_NAMES ?? 'Admins')
+  const adminGroups = (process.env['SCIM_ADMIN_GROUP_NAMES'] ?? 'Admins')
     .split(',')
     .map((g) => g.trim().toLowerCase())
     .filter(Boolean);
-  const viewerGroups = (process.env.SCIM_VIEWER_GROUP_NAMES ?? 'Viewers,ReadOnly')
+  const viewerGroups = (process.env['SCIM_VIEWER_GROUP_NAMES'] ?? 'Viewers,ReadOnly')
     .split(',')
     .map((g) => g.trim().toLowerCase())
     .filter(Boolean);
@@ -781,12 +781,11 @@ export async function POST(request: NextRequest) {
   }
 
   // -- 5. Record the event before processing (claim it) ---
+  const eventData = event.data as Record<string, unknown>;
   const directoryId =
-    ((event.data as Record<string, unknown>).directory_id as string) ??
-    (((event.data as Record<string, unknown>).user as Record<string, unknown>)
-      ?.directory_id as string) ??
-    (((event.data as Record<string, unknown>).group as Record<string, unknown>)
-      ?.directory_id as string) ??
+    (eventData['directory_id'] as string) ??
+    ((eventData['user'] as Record<string, unknown> | undefined)?.['directory_id'] as string) ??
+    ((eventData['group'] as Record<string, unknown> | undefined)?.['directory_id'] as string) ??
     'unknown';
 
   const { error: insertError } = await supabaseAdmin.from('directory_sync_events').insert({

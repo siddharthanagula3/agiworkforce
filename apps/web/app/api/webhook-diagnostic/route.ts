@@ -6,11 +6,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 
 function verifyDiagnosticSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env['CRON_SECRET'];
 
   // In production, CRON_SECRET is required
   if (!cronSecret) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env['NODE_ENV'] === 'production';
     if (isProduction) {
       logger.error('CRON_SECRET not set in production - denying diagnostic request');
       return false;
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   // Check environment configuration (DO NOT expose actual keys)
   // AUDIT-P3-008-011: Mask supabaseUrl to prevent info disclosure
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
   let maskedSupabaseUrl = 'NOT_SET';
   if (supabaseUrl) {
     try {
@@ -46,12 +46,12 @@ export async function GET(request: NextRequest) {
   }
 
   const config = {
-    environment: process.env.NODE_ENV,
+    environment: process.env['NODE_ENV'],
     host,
-    hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-    hasStripeWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    hasStripeKey: !!process.env['STRIPE_SECRET_KEY'],
+    hasStripeWebhookSecret: !!process.env['STRIPE_WEBHOOK_SECRET'],
     hasSupabaseUrl: !!supabaseUrl,
-    hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasSupabaseServiceKey: !!process.env['SUPABASE_SERVICE_ROLE_KEY'],
     supabaseHost: maskedSupabaseUrl,
     timestamp: new Date().toISOString(),
   };

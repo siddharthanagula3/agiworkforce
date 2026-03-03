@@ -70,13 +70,13 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
 
 function mapRowToRun(row: Record<string, unknown>) {
   return {
-    id: row.id,
-    scheduleId: row.schedule_id,
-    status: row.status,
-    startedAt: row.started_at,
-    completedAt: row.completed_at ?? null,
-    result: row.result ?? null,
-    error: row.error ?? null,
+    id: row['id'],
+    scheduleId: row['schedule_id'],
+    status: row['status'],
+    startedAt: row['started_at'],
+    completedAt: row['completed_at'] ?? null,
+    result: row['result'] ?? null,
+    error: row['error'] ?? null,
   };
 }
 
