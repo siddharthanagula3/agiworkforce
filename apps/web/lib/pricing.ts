@@ -32,16 +32,19 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
 
 export const STRIPE_PRICE_IDS = {
   hobby: {
-    monthly: validatePriceId(process.env.STRIPE_PRICE_HOBBY_MONTHLY, 'STRIPE_PRICE_HOBBY_MONTHLY'),
-    annual: validatePriceId(process.env.STRIPE_PRICE_HOBBY_YEARLY, 'STRIPE_PRICE_HOBBY_YEARLY'),
+    monthly: validatePriceId(
+      process.env['STRIPE_PRICE_HOBBY_MONTHLY'],
+      'STRIPE_PRICE_HOBBY_MONTHLY',
+    ),
+    annual: validatePriceId(process.env['STRIPE_PRICE_HOBBY_YEARLY'], 'STRIPE_PRICE_HOBBY_YEARLY'),
   },
   pro: {
-    monthly: validatePriceId(process.env.STRIPE_PRICE_PRO_MONTHLY, 'STRIPE_PRICE_PRO_MONTHLY'),
-    annual: validatePriceId(process.env.STRIPE_PRICE_PRO_YEARLY, 'STRIPE_PRICE_PRO_YEARLY'),
+    monthly: validatePriceId(process.env['STRIPE_PRICE_PRO_MONTHLY'], 'STRIPE_PRICE_PRO_MONTHLY'),
+    annual: validatePriceId(process.env['STRIPE_PRICE_PRO_YEARLY'], 'STRIPE_PRICE_PRO_YEARLY'),
   },
   max: {
-    monthly: validatePriceId(process.env.STRIPE_PRICE_MAX_MONTHLY, 'STRIPE_PRICE_MAX_MONTHLY'),
-    annual: validatePriceId(process.env.STRIPE_PRICE_MAX_YEARLY, 'STRIPE_PRICE_MAX_YEARLY'),
+    monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
+    annual: validatePriceId(process.env['STRIPE_PRICE_MAX_YEARLY'], 'STRIPE_PRICE_MAX_YEARLY'),
   },
 };
 
