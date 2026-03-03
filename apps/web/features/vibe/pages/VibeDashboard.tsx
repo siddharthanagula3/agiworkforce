@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- supabase client type bridge */
 /**
  * VibeDashboard - Redesigned AI Development Agent Interface
  * Inspired by: Lovable.dev, Bolt.new, Replit.com, Emergent.sh
@@ -115,20 +116,20 @@ function getValidatedActionMetadata(
 
   const result: AgentActionMetadata = {};
 
-  if (typeof metadata.summary === 'string') {
-    result.summary = metadata.summary;
+  if (typeof metadata['summary'] === 'string') {
+    result.summary = metadata['summary'];
   }
-  if (typeof metadata.description === 'string') {
-    result.description = metadata.description;
+  if (typeof metadata['description'] === 'string') {
+    result.description = metadata['description'];
   }
-  if (typeof metadata.command === 'string') {
-    result.command = metadata.command;
+  if (typeof metadata['command'] === 'string') {
+    result.command = metadata['command'];
   }
-  if (typeof metadata.agent_role === 'string') {
-    result.agent_role = metadata.agent_role;
+  if (typeof metadata['agent_role'] === 'string') {
+    result.agent_role = metadata['agent_role'];
   }
-  if (typeof metadata.is_streaming === 'boolean') {
-    result.is_streaming = metadata.is_streaming;
+  if (typeof metadata['is_streaming'] === 'boolean') {
+    result.is_streaming = metadata['is_streaming'];
   }
 
   return result;
@@ -146,11 +147,11 @@ function getValidatedActionResult(
 
   const validated: AgentActionResult = {};
 
-  if (typeof result.output === 'string') {
-    validated.output = result.output;
+  if (typeof result['output'] === 'string') {
+    validated.output = result['output'];
   }
-  if (typeof result.summary === 'string') {
-    validated.summary = result.summary;
+  if (typeof result['summary'] === 'string') {
+    validated.summary = result['summary'];
   }
 
   return validated;
@@ -163,7 +164,7 @@ function getMessageIsStreaming(metadata: Record<string, unknown> | null | undefi
   if (!metadata || typeof metadata !== 'object') {
     return false;
   }
-  return typeof metadata.is_streaming === 'boolean' ? metadata.is_streaming : false;
+  return typeof metadata['is_streaming'] === 'boolean' ? metadata['is_streaming'] : false;
 }
 
 // Removed OutputPanel - using new CodeEditorPanel and LivePreviewPanel instead
@@ -174,11 +175,7 @@ const VibeDashboard: React.FC = () => {
   const { currentSessionId, setCurrentSession } = useVibeChatStore();
 
   // Phase orchestrator for VibeSDK-style workflow tracking
-  const {
-    session: orchestratorSession,
-    initSession,
-    processEvent,
-  } = useVibeOrchestrator();
+  const { session: orchestratorSession, initSession, processEvent } = useVibeOrchestrator();
 
   const [activeAgent, setActiveAgent] = useState<AgentStatus>({
     name: 'Vibe Assistant',
@@ -267,7 +264,7 @@ const VibeDashboard: React.FC = () => {
 
     try {
       // vibe_sessions not in generated Supabase types — use untyped client
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const untypedSupabase = supabase as any;
 
       const { data, error } = await untypedSupabase

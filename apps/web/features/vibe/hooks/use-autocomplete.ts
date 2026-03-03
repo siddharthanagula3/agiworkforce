@@ -332,7 +332,7 @@ export function useAutocomplete(options: UseAutocompleteOptions = {}): UseAutoco
   const selectByIndex = useCallback(
     (index: number): string | null => {
       if (index < 0 || index >= state.matches.length) return null;
-      return selectMatch(state.matches[index]);
+      return selectMatch(state.matches[index]!);
     },
     [state.matches, selectMatch],
   );

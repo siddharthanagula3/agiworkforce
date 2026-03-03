@@ -472,8 +472,8 @@ export class ModelRouter {
         AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.2') ||
         AVAILABLE_MODELS[0];
       return {
-        provider: fallback.provider,
-        model: fallback.model,
+        provider: fallback?.provider,
+        model: fallback?.model,
         reason: `No specialized model found for "${category}". Using general-purpose model.`,
         confidence: 0.5,
         alternatives: [],
@@ -488,9 +488,9 @@ export class ModelRouter {
     }));
 
     return {
-      provider: primary.provider,
-      model: primary.model,
-      reason: this.getRecommendationReason(category, primary),
+      provider: primary?.provider,
+      model: primary?.model,
+      reason: this.getRecommendationReason(category, primary!),
       confidence: 0.85,
       alternatives,
     };
@@ -565,7 +565,7 @@ export class ModelRouter {
       if (!grouped[model.provider]) {
         grouped[model.provider] = [];
       }
-      grouped[model.provider].push(model);
+      grouped[model.provider]!.push(model);
     }
     return grouped as Record<LLMProvider, ModelInfo[]>;
   }

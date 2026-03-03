@@ -96,7 +96,7 @@ const HelpSupportPage: React.FC = () => {
       if (!acc[faq.category]) {
         acc[faq.category] = [];
       }
-      acc[faq.category].push(faq);
+      acc[faq.category]!.push(faq);
       return acc;
     },
     {} as Record<string, FAQItem[]>,

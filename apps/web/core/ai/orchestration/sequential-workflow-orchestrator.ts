@@ -325,8 +325,8 @@ export class SequentialWorkflowOrchestrator {
 
       // Update execution state
       execution.currentStepIndex = i;
-      stepExecution.status = 'running';
-      stepExecution.startedAt = new Date();
+      stepExecution!.status = 'running';
+      stepExecution!.startedAt = new Date();
 
       // Find employee
       const employee = this.employees.find(
@@ -337,10 +337,10 @@ export class SequentialWorkflowOrchestrator {
 
       if (!employee) {
         logger.warn(
-          `[Sequential Workflow] Employee not found: ${step.employeeName}, skipping step`,
+          `[Sequential Workflow] Employee not found: ${step?.employeeName}, skipping step`,
         );
-        stepExecution.status = 'skipped';
-        stepExecution.error = 'Employee not found';
+        stepExecution!.status = 'skipped';
+        stepExecution!.error = 'Employee not found';
         continue;
       }
 
@@ -354,17 +354,11 @@ export class SequentialWorkflowOrchestrator {
         employee.name,
         'thinking',
         undefined,
-        `Step ${i + 1}: ${step.instructions || 'Processing'}`,
+        `Step ${i + 1}: ${step?.instructions || 'Processing'}`,
       );
 
       try {
         // Get employee's context window
-        const _contextWindow = employeeMemoryService.getContextWindow(
-          request.sessionId,
-          employee.name,
-          employee.name,
-          employee.systemPrompt,
-        );
 
         // Build memory context from previous interactions
         const memoryContext = await employeeMemoryService.buildMemoryContext(
@@ -374,7 +368,7 @@ export class SequentialWorkflowOrchestrator {
 
         // Build input for this step
         const stepInput = this.buildStepInput(
-          step,
+          step!,
           request.input,
           previousOutput,
           previousHandoffData,
@@ -395,7 +389,7 @@ export class SequentialWorkflowOrchestrator {
         );
 
         // Execute step
-        store.updateEmployeeStatus(employee.name, 'using_tool', 'LLM', step.instructions);
+        store.updateEmployeeStatus(employee.name, 'using_tool', 'LLM', step?.instructions);
         store.updateEmployeeProgress(employee.name, 25);
 
         const response = await unifiedLLMService.sendMessage({
@@ -415,7 +409,7 @@ export class SequentialWorkflowOrchestrator {
 
         // Track tokens
         if (response.usage) {
-          stepExecution.tokensUsed = response.usage.totalTokens;
+          stepExecution!.tokensUsed = response.usage.totalTokens;
 
           await tokenLogger.logTokenUsage(
             response.model,
@@ -426,7 +420,7 @@ export class SequentialWorkflowOrchestrator {
             employee.name,
             response.usage.promptTokens,
             response.usage.completionTokens,
-            `Workflow step ${i + 1}: ${step.employeeName}`,
+            `Workflow step ${i + 1}: ${step?.employeeName}`,
           );
         }
 
@@ -437,13 +431,13 @@ export class SequentialWorkflowOrchestrator {
         });
 
         // Extract any structured data for handoff
-        const handoffData = this.extractHandoffData(response.content, step.requiredOutput);
+        const handoffData = this.extractHandoffData(response.content, step?.requiredOutput);
 
         // Update step execution
-        stepExecution.status = 'completed';
-        stepExecution.completedAt = new Date();
-        stepExecution.output = response.content;
-        stepExecution.handoffData = handoffData;
+        stepExecution!.status = 'completed';
+        stepExecution!.completedAt = new Date();
+        stepExecution!.output = response.content;
+        stepExecution!.handoffData = handoffData;
 
         // Update store
         store.updateEmployeeProgress(employee.name, 100);
@@ -484,11 +478,11 @@ export class SequentialWorkflowOrchestrator {
                   ([k, v]) => `${k}: ${String(v).slice(0, 100)}`,
                 ),
                 userRequest: request.input,
-                workCompleted: step.instructions || `Step ${i + 1}`,
-                pendingTasks: [nextStep.instructions || `Step ${i + 2}`],
+                workCompleted: step?.instructions || `Step ${i + 1}`,
+                pendingTasks: [nextStep?.instructions || `Step ${i + 2}`],
               },
               handoffData,
-              nextStep.instructions,
+              nextStep?.instructions,
             );
 
             store.addMessage({
@@ -512,8 +506,8 @@ export class SequentialWorkflowOrchestrator {
         previousHandoffData = { ...previousHandoffData, ...handoffData };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        stepExecution.status = 'failed';
-        stepExecution.error = errorMsg;
+        stepExecution!.status = 'failed';
+        stepExecution!.error = errorMsg;
 
         store.updateEmployeeStatus(employee.name, 'error');
         store.addMessage({
@@ -591,7 +585,7 @@ export class SequentialWorkflowOrchestrator {
     const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
       try {
-        const parsed = JSON.parse(jsonMatch[1]);
+        const parsed = JSON.parse(jsonMatch[1]!);
         Object.assign(data, parsed);
       } catch {
         // Not valid JSON, continue
@@ -604,13 +598,13 @@ export class SequentialWorkflowOrchestrator {
         const pattern = new RegExp(`${key}[:\\s]+(.+?)(?:\\n|$)`, 'i');
         const match = response.match(pattern);
         if (match) {
-          data[key] = match[1].trim();
+          data[key] = match[1]!.trim();
         }
       }
     }
 
     // Always include a summary
-    data.summary = response.slice(0, 500);
+    data['summary'] = response.slice(0, 500);
 
     return data;
   }
@@ -622,21 +616,9 @@ export class SequentialWorkflowOrchestrator {
     userId: string,
     employeeName: string,
     userInput: string,
-    response: string,
+    _response: string,
   ): Promise<void> {
     // Extract key information to remember
-    const _learningPrompt = `Analyze this interaction and extract 1-2 key facts about the user that would be helpful to remember for future interactions.
-
-User said: "${userInput.slice(0, 500)}"
-
-Your response included: "${response.slice(0, 500)}"
-
-If there's useful information about the user (preferences, goals, facts about them), format as:
-- Category: [personal|preferences|goals|history]
-- Key: brief identifier
-- Value: the information
-
-If no useful information, respond with "NO_LEARNING"`;
 
     try {
       // This could be done async/in background

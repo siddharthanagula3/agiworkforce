@@ -3,7 +3,7 @@
  * Compact view optimized for left sidebar
  */
 
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Bot, User } from 'lucide-react';

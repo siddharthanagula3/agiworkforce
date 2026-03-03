@@ -31,15 +31,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 // Stubs for functions not yet migrated
-function _getConfiguredProviders(): string[] {
-  return ['openai', 'anthropic', 'google', 'perplexity'];
-}
-function _getAvailableModels(_provider: string): string[] {
-  return [];
-}
-function _createCustomSystemPrompt(_prompt: string): string {
-  return _prompt;
-}
+
 import { settingsService } from '@features/settings/services/user-preferences';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 
@@ -214,7 +206,7 @@ const AIConfigurationPageContent: React.FC = () => {
     setConfigs((prev) => ({
       ...prev,
       [provider]: {
-        ...prev[provider],
+        ...prev[provider]!,
         apiKey,
         isConfigured: !!apiKey,
       },

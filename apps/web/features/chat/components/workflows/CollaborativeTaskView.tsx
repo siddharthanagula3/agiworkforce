@@ -10,7 +10,7 @@
  * - Task status indicators
  */
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { cn } from '@shared/lib/utils';
 import { Badge } from '@shared/components/ui/badge';
 import { Progress } from '@shared/components/ui/progress';

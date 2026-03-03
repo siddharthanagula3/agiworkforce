@@ -120,10 +120,10 @@ describe('DeepSeekProvider', () => {
     it('should return models by capability', () => {
       const capabilities = DeepSeekProvider.getModelsByCapability();
 
-      expect(capabilities.chat).toContain('deepseek-chat');
-      expect(capabilities.reasoning).toContain('deepseek-reasoner');
-      expect(capabilities.coding).toContain('deepseek-coder');
-      expect(capabilities.tools).toContain('deepseek-chat');
+      expect(capabilities['chat']).toContain('deepseek-chat');
+      expect(capabilities['reasoning']).toContain('deepseek-reasoner');
+      expect(capabilities['coding']).toContain('deepseek-coder');
+      expect(capabilities['tools']).toContain('deepseek-chat');
     });
   });
 
@@ -371,7 +371,7 @@ describe('DeepSeekProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('deepseek-chat');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -398,11 +398,11 @@ describe('DeepSeekProvider', () => {
       }
 
       expect(chunks.length).toBe(2);
-      expect(chunks[0].content).toBe('Streamed response');
-      expect(chunks[0].done).toBe(false);
-      expect(chunks[1].content).toBe('');
-      expect(chunks[1].done).toBe(true);
-      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
+      expect(chunks![0]!.content!).toBe('Streamed response');
+      expect(chunks![0]!.done!).toBe(false);
+      expect(chunks![1]!.content!).toBe('');
+      expect(chunks![1]!.done!).toBe(true);
+      expect((chunks[1] as Record<string, unknown>)['usage']).toBeDefined();
     });
 
     it('should throw error when not logged in', async () => {

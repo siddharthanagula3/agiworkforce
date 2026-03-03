@@ -9,10 +9,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
-import {
-  accountLockoutService,
-  type LockoutCheckResult,
-} from './account-lockout-service';
+import { accountLockoutService, type LockoutCheckResult } from './account-lockout-service';
 import { logger } from '@shared/lib/logger';
 
 export interface AuthUser {
@@ -78,10 +75,10 @@ class AuthService {
       const authUser: AuthUser = {
         id: user.id,
         email: user.email || '',
-        name: user.user_metadata?.full_name || user.user_metadata?.name,
-        avatar: user.user_metadata?.avatar_url,
-        role: user.user_metadata?.role || 'user',
-        plan: user.user_metadata?.plan || 'free',
+        name: user.user_metadata?.['full_name'] || user.user_metadata?.['name'],
+        avatar: user.user_metadata?.['avatar_url'],
+        role: user.user_metadata?.['role'] || 'user',
+        plan: user.user_metadata?.['plan'] || 'free',
         user_metadata: user.user_metadata,
       };
 
@@ -168,10 +165,10 @@ class AuthService {
       const authUser: AuthUser = {
         id: data.user.id,
         email: data.user.email || '',
-        name: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
-        avatar: data.user.user_metadata?.avatar_url,
-        role: data.user.user_metadata?.role || 'user',
-        plan: data.user.user_metadata?.plan || 'free',
+        name: data.user.user_metadata?.['full_name'] || data.user.user_metadata?.['name'],
+        avatar: data.user.user_metadata?.['avatar_url'],
+        role: data.user.user_metadata?.['role'] || 'user',
+        plan: data.user.user_metadata?.['plan'] || 'free',
         user_metadata: data.user.user_metadata,
       };
 
@@ -293,10 +290,10 @@ class AuthService {
       const authUser: AuthUser = {
         id: data.user.id,
         email: data.user.email || '',
-        name: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
-        avatar: data.user.user_metadata?.avatar_url,
-        role: data.user.user_metadata?.role || 'user',
-        plan: data.user.user_metadata?.plan || 'free',
+        name: data.user.user_metadata?.['full_name'] || data.user.user_metadata?.['name'],
+        avatar: data.user.user_metadata?.['avatar_url'],
+        role: data.user.user_metadata?.['role'] || 'user',
+        plan: data.user.user_metadata?.['plan'] || 'free',
         user_metadata: data.user.user_metadata,
       };
 

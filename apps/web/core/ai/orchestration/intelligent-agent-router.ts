@@ -798,11 +798,11 @@ export class IntelligentAgentRouter {
 
     let explanation = '';
     if (primary.length > 0) {
-      const agent = this.agents.get(primary[0].agentId);
-      explanation = `Based on your query, I recommend **${agent?.name}** (matched keywords: ${primary[0].matchedKeywords.join(', ')}).`;
+      const agent = this.agents.get(primary[0]!.agentId);
+      explanation = `Based on your query, I recommend **${agent?.name}** (matched keywords: ${primary[0]!.matchedKeywords.join(', ')}).`;
 
       if (primary.length > 1) {
-        const agent2 = this.agents.get(primary[1].agentId);
+        const agent2 = this.agents.get(primary[1]!.agentId);
         explanation += ` **${agent2?.name}** could also help with this.`;
       }
     } else if (alternatives.length > 0) {

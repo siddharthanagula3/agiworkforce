@@ -111,84 +111,6 @@ export class RealtimeCollaborationService {
   private activityDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private supabaseChannels: Map<string, ReturnType<typeof supabase.channel>> = new Map();
   private currentUserId?: string;
-  private currentSessionId?: string;
-
-  /**
-   * Initialize collaboration for a session
-   */
-  async initializeSession(
-    sessionId: string,
-    userId: string,
-    metadata?: UserPresence['metadata'],
-  ): Promise<void> {
-    this.currentUserId = userId;
-    this.currentSessionId = sessionId;
-
-    // Create session if it doesn't exist
-    if (!this.sessions.has(sessionId)) {
-      this.sessions.set(sessionId, {
-        id: sessionId,
-        participants: new Map(),
-        typingUsers: new Map(),
-        cursors: new Map(),
-        activities: new Map(),
-        startedAt: Date.now(),
-        lastActivity: Date.now(),
-      });
-    }
-
-    // Set up Supabase Realtime channel for collaboration
-    const channel = supabase.channel(`collaboration:${sessionId}`);
-
-    // Subscribe to presence
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        this.handlePresenceSync(sessionId, state);
-      })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        this.handlePresenceJoin(sessionId, key, newPresences);
-      })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        this.handlePresenceLeave(sessionId, key, leftPresences);
-      });
-
-    // Subscribe to typing indicators
-    channel.on('broadcast', { event: 'typing' }, (payload) => {
-      this.handleTypingUpdate(sessionId, payload.payload as TypingIndicator);
-    });
-
-    // Subscribe to cursor updates
-    channel.on('broadcast', { event: 'cursor' }, (payload) => {
-      this.handleCursorUpdate(sessionId, payload.payload as CursorPosition);
-    });
-
-    // Subscribe to activity updates
-    channel.on('broadcast', { event: 'activity' }, (payload) => {
-      this.handleActivityUpdate(sessionId, payload.payload as ActivityUpdate);
-    });
-
-    // Subscribe to channel
-    await channel.subscribe();
-
-    // Track presence
-    await channel.track({
-      userId,
-      sessionId,
-      status: PresenceStatus.ONLINE,
-      activity: ActivityType.VIEWING,
-      lastSeen: Date.now(),
-      metadata,
-    });
-
-    this.supabaseChannels.set(sessionId, channel);
-
-    // Start presence heartbeat
-    this.startPresenceHeartbeat(sessionId, userId, metadata);
-
-    // Also set up WebSocket fallback
-    await websocketManager.connect(`collaboration-${sessionId}`, sessionId);
-  }
 
   /**
    * Clean up collaboration session
@@ -515,7 +437,7 @@ export class RealtimeCollaborationService {
    */
   onPresenceChange(
     sessionId: string,
-    callback: (participants: UserPresence[]) => void,
+    _callback: (participants: UserPresence[]) => void,
   ): () => void {
     const channel = this.supabaseChannels.get(sessionId);
     if (!channel) {
@@ -524,9 +446,6 @@ export class RealtimeCollaborationService {
     }
 
     // Return the callback directly since we handle it in handlePresenceSync
-    const _handler = () => {
-      callback(this.getParticipants(sessionId));
-    };
 
     // Store the handler (we could use a Map if we need to manage multiple handlers)
     return () => {
@@ -539,7 +458,7 @@ export class RealtimeCollaborationService {
    */
   onTypingChange(
     sessionId: string,
-    callback: (typingUsers: TypingIndicator[]) => void,
+    _callback: (typingUsers: TypingIndicator[]) => void,
   ): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -548,9 +467,6 @@ export class RealtimeCollaborationService {
     }
 
     // We'll emit via a custom event system
-    const _handler = () => {
-      callback(this.getTypingUsers(sessionId));
-    };
 
     return () => {
       // Cleanup
@@ -560,16 +476,12 @@ export class RealtimeCollaborationService {
   /**
    * Subscribe to cursor updates
    */
-  onCursorUpdate(sessionId: string, callback: (cursors: CursorPosition[]) => void): () => void {
+  onCursorUpdate(sessionId: string, _callback: (cursors: CursorPosition[]) => void): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
       console.warn(`[Collaboration] Session not found: ${sessionId}`);
       return () => {};
     }
-
-    const _handler = () => {
-      callback(this.getCursors(sessionId));
-    };
 
     return () => {
       // Cleanup
@@ -581,17 +493,13 @@ export class RealtimeCollaborationService {
    */
   onActivityUpdate(
     sessionId: string,
-    callback: (activities: ActivityUpdate[]) => void,
+    _callback: (activities: ActivityUpdate[]) => void,
   ): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
       console.warn(`[Collaboration] Session not found: ${sessionId}`);
       return () => {};
     }
-
-    const _handler = () => {
-      callback(this.getActivities(sessionId));
-    };
 
     return () => {
       // Cleanup
@@ -601,7 +509,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle presence sync from Supabase
    */
-  private handlePresenceSync(sessionId: string, state: Record<string, unknown>): void {
+  protected handlePresenceSync(sessionId: string, state: Record<string, unknown>): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -617,7 +525,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle presence join
    */
-  private handlePresenceJoin(sessionId: string, _key: string, presences: unknown[]): void {
+  protected handlePresenceJoin(sessionId: string, _key: string, presences: unknown[]): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -629,7 +537,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle presence leave
    */
-  private handlePresenceLeave(sessionId: string, _key: string, presences: unknown[]): void {
+  protected handlePresenceLeave(sessionId: string, _key: string, presences: unknown[]): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -644,7 +552,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle typing update
    */
-  private handleTypingUpdate(sessionId: string, indicator: TypingIndicator): void {
+  protected handleTypingUpdate(sessionId: string, indicator: TypingIndicator): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -661,7 +569,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle cursor update
    */
-  private handleCursorUpdate(sessionId: string, cursor: CursorPosition): void {
+  protected handleCursorUpdate(sessionId: string, cursor: CursorPosition): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -674,7 +582,7 @@ export class RealtimeCollaborationService {
   /**
    * Handle activity update
    */
-  private handleActivityUpdate(sessionId: string, update: ActivityUpdate): void {
+  protected handleActivityUpdate(sessionId: string, update: ActivityUpdate): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -687,7 +595,7 @@ export class RealtimeCollaborationService {
   /**
    * Start presence heartbeat to keep user online
    */
-  private startPresenceHeartbeat(
+  protected startPresenceHeartbeat(
     sessionId: string,
     userId: string,
     metadata?: UserPresence['metadata'],

@@ -188,7 +188,6 @@ export function sanitizeEmployeeInput(
   const fullConfig: EmployeeInputConfig = { ...DEFAULT_CONFIG, ...config };
   const modifications: string[] = [];
   let sanitized = input;
-  let _blocked = false;
   let blockReason: string | undefined;
 
   // ============================================
@@ -204,7 +203,6 @@ export function sanitizeEmployeeInput(
   // Validate basic input requirements
   const validationResult = validatePromptInput(sanitized, fullConfig.maxInputLength);
   if (!validationResult.valid) {
-    _blocked = true;
     blockReason = validationResult.reason;
     return {
       sanitized: '',
@@ -234,7 +232,6 @@ export function sanitizeEmployeeInput(
 
   // Check if we should block based on risk level
   if (shouldBlock(combinedRiskLevel, fullConfig.blockThreshold)) {
-    _blocked = true;
     const allPatterns = [
       ...injectionResult.detectedPatterns,
       ...employeeInjectionResult.detectedPatterns,
@@ -634,26 +631,28 @@ async function logSuspiciousInput(
   },
 ): Promise<void> {
   try {
-    const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient).from('analytics_events').insert({
-      user_id: userId,
-      event_type: 'security_audit',
-      event_data: {
-        audit_type: 'employee_input_sanitization',
-        employee_name: context.employeeName,
-        original_length: originalInput.length,
-        sanitized_length: sanitizedInput.length,
-        was_modified: sanitizedInput !== originalInput,
-        modifications: context.modifications,
-        risk_level: getHigherRiskLevel(
-          context.injectionResult.riskLevel,
-          context.employeeInjectionResult.riskLevel,
-        ),
-        standard_patterns: context.injectionResult.detectedPatterns,
-        employee_patterns: context.employeeInjectionResult.detectedPatterns,
-        input_preview: originalInput.substring(0, 200),
-      },
-      created_at: new Date().toISOString(),
-    });
+    const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+      .from('analytics_events')
+      .insert({
+        user_id: userId,
+        event_type: 'security_audit',
+        event_data: {
+          audit_type: 'employee_input_sanitization',
+          employee_name: context.employeeName,
+          original_length: originalInput.length,
+          sanitized_length: sanitizedInput.length,
+          was_modified: sanitizedInput !== originalInput,
+          modifications: context.modifications,
+          risk_level: getHigherRiskLevel(
+            context.injectionResult.riskLevel,
+            context.employeeInjectionResult.riskLevel,
+          ),
+          standard_patterns: context.injectionResult.detectedPatterns,
+          employee_patterns: context.employeeInjectionResult.detectedPatterns,
+          input_preview: originalInput.substring(0, 200),
+        },
+        created_at: new Date().toISOString(),
+      });
 
     if (error) {
       logger.error('[Employee Input Sanitizer] Failed to log suspicious input:', error.message);

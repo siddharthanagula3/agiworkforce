@@ -665,22 +665,22 @@ export async function getCollaborationStats(conversationId: string): Promise<{
     const stats = {
       total_collaborations: collaborations?.length || 0,
       active_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'in_progress')
+        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'in_progress')
           .length || 0,
       completed_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'completed')
+        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'completed')
           .length || 0,
       failed_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'failed').length ||
-        0,
+        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'failed')
+          .length || 0,
       total_messages:
         collaborations?.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + (c.total_messages as number),
+          (sum: number, c: Record<string, unknown>) => sum + (c['total_messages'] as number),
           0,
         ) || 0,
       total_iterations:
         collaborations?.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + (c.total_iterations as number),
+          (sum: number, c: Record<string, unknown>) => sum + (c['total_iterations'] as number),
           0,
         ) || 0,
       average_consensus_score: 0,
@@ -690,23 +690,26 @@ export async function getCollaborationStats(conversationId: string): Promise<{
 
     // Calculate average consensus score
     const collaborationsWithConsensus =
-      collaborations?.filter((c: Record<string, unknown>) => c.consensus_score !== null) || [];
+      collaborations?.filter((c: Record<string, unknown>) => c['consensus_score'] !== null) || [];
     if (collaborationsWithConsensus.length > 0) {
       stats.average_consensus_score =
         collaborationsWithConsensus.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + ((c.consensus_score as number) || 0),
+          (sum: number, c: Record<string, unknown>) =>
+            sum + ((c['consensus_score'] as number) || 0),
           0,
         ) / collaborationsWithConsensus.length;
     }
 
     // Calculate average duration
     const completedCollaborations =
-      collaborations?.filter((c: Record<string, unknown>) => c.completed_at && c.started_at) || [];
+      collaborations?.filter(
+        (c: Record<string, unknown>) => c['completed_at'] && c['started_at'],
+      ) || [];
     if (completedCollaborations.length > 0) {
       const totalDuration = completedCollaborations.reduce(
         (sum: number, c: Record<string, unknown>) => {
-          const start = new Date(c.started_at as string).getTime();
-          const end = new Date(c.completed_at as string).getTime();
+          const start = new Date(c['started_at'] as string).getTime();
+          const end = new Date(c['completed_at'] as string).getTime();
           return sum + (end - start);
         },
         0,
@@ -718,8 +721,8 @@ export async function getCollaborationStats(conversationId: string): Promise<{
 
     // Count collaboration types
     collaborations?.forEach((c: Record<string, unknown>) => {
-      stats.collaboration_types[c.session_type as string] =
-        (stats.collaboration_types[c.session_type as string] || 0) + 1;
+      stats.collaboration_types[c['session_type'] as string] =
+        (stats.collaboration_types[c['session_type'] as string] || 0) + 1;
     });
 
     return stats;

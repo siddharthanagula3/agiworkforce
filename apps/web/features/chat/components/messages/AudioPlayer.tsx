@@ -130,7 +130,7 @@ export const AudioPlayer = React.memo(function AudioPlayer({
         for (let i = 0; i < samples; i++) {
           let sum = 0;
           for (let j = 0; j < blockSize; j++) {
-            sum += Math.abs(rawData[i * blockSize + j]);
+            sum += Math.abs(rawData[i * blockSize + j]!);
           }
           filteredData.push(sum / blockSize);
         }

@@ -11,7 +11,7 @@
  * - Collapsible panels
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/components/ui/button';
 import { ScrollArea } from '@shared/components/ui/scroll-area';
@@ -458,7 +458,7 @@ function extractMentions(content: string): string[] {
   let match;
 
   while ((match = mentionRegex.exec(content)) !== null) {
-    mentions.push(match[1]);
+    mentions.push(match[1]!);
   }
 
   return mentions;

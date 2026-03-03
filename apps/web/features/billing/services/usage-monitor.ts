@@ -1,5 +1,4 @@
 import { supabase } from '@shared/lib/supabase-client';
-import { captureError } from '@shared/lib/sentry';
 
 interface DBUsageRow {
   tokens_used: number;
@@ -45,66 +44,42 @@ export interface DateRange {
 
 export class UsageTracker {
   private cache: Map<string, UsageRecord[]> = new Map();
-  private cacheTimeout: number = 2 * 60 * 1000; // 2 minutes
 
-  async trackAPICall(call: APICallRecord): Promise<void> {
+  async trackAPICall(params: {
+    userId: string;
+    agentType: string;
+    provider: string;
+    tokensUsed: number;
+    inputTokens: number;
+    outputTokens: number;
+    taskId: string;
+    timestamp: Date;
+    cost: number;
+  }): Promise<void> {
     try {
-      const usage: UsageRecord = {
-        userId: call.userId,
-        timestamp: call.timestamp,
-        agentType: call.agentType,
-        apiProvider: call.provider,
-        tokensUsed: call.tokensUsed,
-        cost: call.cost,
-        taskId: call.taskId,
-      };
-
-      // Store in database
-
-      const { error } = await (supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>).insert({
-        user_id: call.userId,
-        timestamp: call.timestamp.toISOString(),
-        agent_type: call.agentType,
-        api_provider: call.provider,
-        tokens_used: call.tokensUsed,
-        input_tokens: call.inputTokens,
-        output_tokens: call.outputTokens,
-        cost: call.cost,
-        task_id: call.taskId,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      // Update local cache
-      const userUsage = this.cache.get(call.userId) || [];
-      userUsage.push(usage);
-      this.cache.set(call.userId, userUsage);
-
-      // Keep cache size manageable
-      if (userUsage.length > 1000) {
-        userUsage.splice(0, 500); // Remove oldest 500 entries
-      }
+      await (
+        supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>
+      ).insert({
+        user_id: params.userId,
+        agent_type: params.agentType,
+        provider: params.provider,
+        tokens_used: params.tokensUsed,
+        input_tokens: params.inputTokens,
+        output_tokens: params.outputTokens,
+        task_id: params.taskId,
+        timestamp: params.timestamp.toISOString(),
+        cost: params.cost,
+      } as never);
     } catch (error) {
-      console.error('Failed to track API usage:', error);
-      captureError(error as Error, {
-        tags: { feature: 'billing', operation: 'track_api_usage' },
-        extra: {
-          userId: call.userId,
-          agentType: call.agentType,
-          provider: call.provider,
-          tokensUsed: call.tokensUsed,
-          taskId: call.taskId,
-        },
-      });
-      throw new Error(`Usage tracking failed: ${(error as Error).message}`);
+      console.error('[UsageTracker] Failed to track API call:', error);
     }
   }
 
   async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
     try {
-      const { data, error } = await (supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('user_id', userId)
         .gte('timestamp', period.start.toISOString())
@@ -159,13 +134,13 @@ export class UsageTracker {
     for (const record of usage) {
       const date = new Date(record.timestamp).toISOString().split('T')[0];
 
-      if (!grouped[date]) {
-        grouped[date] = { calls: 0, tokens: 0, cost: 0 };
+      if (!grouped[date!]) {
+        grouped[date!] = { calls: 0, tokens: 0, cost: 0 };
       }
 
-      grouped[date].calls += 1;
-      grouped[date].tokens += record.tokens_used || 0;
-      grouped[date].cost += record.cost || 0;
+      grouped![date!]!.calls += 1;
+      grouped![date!]!.tokens += record.tokens_used || 0;
+      grouped![date!]!.cost += record.cost || 0;
     }
 
     return grouped;

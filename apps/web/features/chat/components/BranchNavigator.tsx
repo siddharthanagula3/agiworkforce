@@ -8,7 +8,7 @@
  * - Create and name branches
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';

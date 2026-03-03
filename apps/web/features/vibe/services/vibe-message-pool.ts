@@ -223,7 +223,9 @@ export class MessagePool extends EventEmitter {
    */
   async loadMessagesFromDatabase(sessionId: string): Promise<void> {
     try {
-      const { data, error } = await (supabase.from('vibe_agent_messages') as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('vibe_agent_messages') as ReturnType<typeof supabase.from>
+      )
         .select('*')
         .eq('session_id', sessionId)
         .order('timestamp', { ascending: true });
@@ -234,14 +236,14 @@ export class MessagePool extends EventEmitter {
         (data as unknown[]).forEach((row: unknown) => {
           const typedRow = row as Record<string, unknown>;
           const message: VibeAgentMessage = {
-            id: typedRow.id as string,
-            session_id: typedRow.session_id as string,
-            type: typedRow.type as AgentMessageType,
-            from_agent: typedRow.from_agent as string,
-            to_agents: typedRow.to_agents as string[],
-            timestamp: new Date(typedRow.timestamp as string),
-            content: typedRow.content as VibeAgentMessage['content'],
-            metadata: typedRow.metadata as VibeAgentMessage['metadata'],
+            id: typedRow['id'] as string,
+            session_id: typedRow['session_id'] as string,
+            type: typedRow['type'] as AgentMessageType,
+            from_agent: typedRow['from_agent'] as string,
+            to_agents: typedRow['to_agents'] as string[],
+            timestamp: new Date(typedRow['timestamp'] as string),
+            content: typedRow['content'] as VibeAgentMessage['content'],
+            metadata: typedRow['metadata'] as VibeAgentMessage['metadata'],
           };
 
           this.messages.set(message.id, message);

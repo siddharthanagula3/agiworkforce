@@ -98,14 +98,6 @@ interface SessionMutationContext {
 }
 
 /**
- * Optimistic update context for message mutations
- */
-interface _MessageMutationContext {
-  previousMessages: ChatMessage[] | undefined;
-  sessionId: string;
-}
-
-/**
  * Share session result
  */
 interface ShareSessionResult extends SessionMutationResult {

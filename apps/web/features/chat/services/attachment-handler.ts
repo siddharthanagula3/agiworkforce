@@ -277,7 +277,7 @@ export class AttachmentHandler {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const result = await this.uploadFile(
-        file,
+        file!,
         userId,
         sessionId,
         onProgress ? (progress) => onProgress(i, progress) : undefined,
@@ -326,9 +326,9 @@ export class AttachmentHandler {
       .createSignedUrl(filePath, 3600);
 
     return {
-      name: file.name,
-      size: file.metadata?.size || 0,
-      type: file.metadata?.mimetype || 'application/octet-stream',
+      name: file?.name,
+      size: file?.metadata?.['size'] || 0,
+      type: file?.metadata?.['mimetype'] || 'application/octet-stream',
       url: urlData?.signedUrl || '',
     };
   }
@@ -388,8 +388,8 @@ export class AttachmentHandler {
         attachments.push({
           id: filePath,
           name: file.name,
-          type: file.metadata?.mimetype || 'application/octet-stream',
-          size: file.metadata?.size || 0,
+          type: file.metadata?.['mimetype'] || 'application/octet-stream',
+          size: file.metadata?.['size'] || 0,
           url: urlData.signedUrl,
           thumbnailUrl: thumbData?.signedUrl,
         });

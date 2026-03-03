@@ -156,13 +156,15 @@ class AccountLockoutService {
       const rpcData = data as Array<Record<string, unknown>> | null;
       if (rpcData && rpcData.length > 0) {
         const result = rpcData[0];
-        const isLocked = result.is_locked === true;
-        const lockedUntil = result.locked_until ? new Date(result.locked_until as string) : null;
+        const isLocked = result?.['is_locked'] === true;
+        const lockedUntil = result?.['locked_until']
+          ? new Date(result?.['locked_until'] as string)
+          : null;
 
         return {
           isLocked,
           lockedUntil,
-          failedAttempts: (result.failed_attempts as number) || 0,
+          failedAttempts: (result?.['failed_attempts'] as number) || 0,
           message: isLocked
             ? `Account is locked until ${lockedUntil?.toLocaleString()}. Please try again later.`
             : 'Account is not locked.',
@@ -209,10 +211,12 @@ class AccountLockoutService {
       const rpcData = data as Array<Record<string, unknown>> | null;
       if (rpcData && rpcData.length > 0) {
         const result = rpcData[0];
-        const isLocked = result.is_locked === true;
-        const justLocked = result.should_lock === true;
-        const lockedUntil = result.locked_until ? new Date(result.locked_until as string) : null;
-        const attemptsRemaining = (result.attempts_remaining as number) || 0;
+        const isLocked = result?.['is_locked'] === true;
+        const justLocked = result?.['should_lock'] === true;
+        const lockedUntil = result?.['locked_until']
+          ? new Date(result?.['locked_until'] as string)
+          : null;
+        const attemptsRemaining = (result?.['attempts_remaining'] as number) || 0;
 
         // Log security event
         if (this.config.enableAuditLogging) {
@@ -378,10 +382,10 @@ class AccountLockoutService {
       if (rpcData && rpcData.length > 0) {
         const stats = rpcData[0];
         return {
-          totalLockedAccounts: (stats.total_locked_accounts as number) || 0,
-          totalTrackedAccounts: (stats.total_tracked_accounts as number) || 0,
-          recentLockouts: (stats.recent_lockouts as number) || 0,
-          avgFailedAttempts: parseFloat(String(stats.avg_failed_attempts)) || 0,
+          totalLockedAccounts: (stats?.['total_locked_accounts'] as number) || 0,
+          totalTrackedAccounts: (stats?.['total_tracked_accounts'] as number) || 0,
+          recentLockouts: (stats?.['recent_lockouts'] as number) || 0,
+          avgFailedAttempts: parseFloat(String(stats?.['avg_failed_attempts'])) || 0,
         };
       }
 

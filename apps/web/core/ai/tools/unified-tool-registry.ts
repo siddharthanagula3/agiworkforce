@@ -345,7 +345,7 @@ export class UnifiedToolRegistry {
 
     if (tracker.requests.length >= tracker.limit.maxRequests) {
       const oldestRequest = tracker.requests[0];
-      const retryAfter = oldestRequest + tracker.limit.windowMs - now;
+      const retryAfter = oldestRequest! + tracker.limit.windowMs - now;
       return { allowed: false, retryAfter };
     }
 

@@ -332,11 +332,11 @@ export class TokenLoggerService {
     }
 
     const modelStats = summary.byModel[entry.model];
-    modelStats.inputTokens += entry.inputTokens;
-    modelStats.outputTokens += entry.outputTokens;
-    modelStats.totalTokens += entry.totalTokens;
-    modelStats.cost += entry.cost;
-    modelStats.callCount += 1;
+    modelStats!.inputTokens += entry.inputTokens;
+    modelStats!.outputTokens += entry.outputTokens;
+    modelStats!.totalTokens += entry.totalTokens;
+    modelStats!.cost += entry.cost;
+    modelStats!.callCount += 1;
   }
 
   /**

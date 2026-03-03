@@ -371,7 +371,7 @@ describe('GoogleProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('gemini-2.0-flash');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -409,7 +409,7 @@ describe('GoogleProvider', () => {
 
       await provider.sendMessage(messages);
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
 
       // Check that system prompt is included
       expect(requestBody.system).toBe('You are a helpful bot.');

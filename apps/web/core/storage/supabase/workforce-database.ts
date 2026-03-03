@@ -11,6 +11,18 @@ const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient
 import type { ExecutionPlan, Task } from '@core/ai/orchestration/reasoning/task-breakdown';
 import type { AnalysisResult } from '@core/ai/orchestration/reasoning/natural-language-processor';
 
+/** Supabase PostgrestError shape for safe error logging */
+interface DbError {
+  code?: string;
+  hint?: string;
+  message?: string;
+}
+
+function logDbError(label: string, error: unknown): void {
+  const dbErr = error as DbError;
+  console.error(label, { code: dbErr?.code, hint: dbErr?.hint, message: dbErr?.message });
+}
+
 // ================================================
 // TYPES
 // ================================================
@@ -111,7 +123,7 @@ export async function createExecution(
       .single();
 
     if (error) {
-      console.error('Error creating execution:', error);
+      logDbError('DB operation failed', error);
       return null;
     }
 
@@ -122,7 +134,7 @@ export async function createExecution(
 
     return data;
   } catch (error) {
-    console.error('Exception creating execution:', error);
+    logDbError('DB operation failed', error);
     return null;
   }
 }
@@ -147,18 +159,19 @@ export async function updateExecutionStatus(
     };
 
     if (status === 'running' && !updates) {
-      updateData.started_at = new Date().toISOString();
+      updateData['started_at'] = new Date().toISOString();
     }
 
     if (status === 'completed' || status === 'failed' || status === 'cancelled') {
-      updateData.completed_at = new Date().toISOString();
+      updateData['completed_at'] = new Date().toISOString();
     }
 
     if (updates) {
-      if (updates.completedTasks !== undefined) updateData.completed_tasks = updates.completedTasks;
-      if (updates.failedTasks !== undefined) updateData.failed_tasks = updates.failedTasks;
-      if (updates.actualCost !== undefined) updateData.actual_cost = updates.actualCost;
-      if (updates.errorMessage) updateData.error_message = updates.errorMessage;
+      if (updates.completedTasks !== undefined)
+        updateData['completed_tasks'] = updates.completedTasks;
+      if (updates.failedTasks !== undefined) updateData['failed_tasks'] = updates.failedTasks;
+      if (updates.actualCost !== undefined) updateData['actual_cost'] = updates.actualCost;
+      if (updates.errorMessage) updateData['error_message'] = updates.errorMessage;
     }
 
     const { error } = await db
@@ -167,36 +180,40 @@ export async function updateExecutionStatus(
       .eq('id', executionId);
 
     if (error) {
-      console.error('Error updating execution status:', error);
+      logDbError('DB operation failed', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Exception updating execution status:', error);
+    logDbError('DB operation failed', error);
     return false;
   }
 }
 
 /**
- * Get execution by ID
+ * Get execution by ID (scoped to user to prevent IDOR)
  */
-export async function getExecution(executionId: string): Promise<WorkforceExecution | null> {
+export async function getExecution(
+  executionId: string,
+  userId: string,
+): Promise<WorkforceExecution | null> {
   try {
     const { data, error } = await db
       .from('workforce_executions')
       .select('*')
       .eq('id', executionId)
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (error) {
-      console.error('Error getting execution:', error);
+      logDbError('DB operation failed', error);
       return null;
     }
 
     return data || null;
   } catch (error) {
-    console.error('Exception getting execution:', error);
+    logDbError('DB operation failed', error);
     return null;
   }
 }
@@ -217,13 +234,13 @@ export async function getUserExecutions(
       .limit(limit);
 
     if (error) {
-      console.error('Error getting user executions:', error);
+      logDbError('DB operation failed', error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception getting user executions:', error);
+    logDbError('DB operation failed', error);
     return [];
   }
 }
@@ -241,13 +258,13 @@ export async function getActiveExecutions(userId: string): Promise<WorkforceExec
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error getting active executions:', error);
+      logDbError('DB operation failed', error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception getting active executions:', error);
+    logDbError('DB operation failed', error);
     return [];
   }
 }
@@ -280,13 +297,13 @@ export async function createExecutionTasks(executionId: string, tasks: Task[]): 
     const { error } = await db.from('workforce_tasks').insert(taskData);
 
     if (error) {
-      console.error('Error creating execution tasks:', error);
+      logDbError('DB operation failed', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Exception creating execution tasks:', error);
+    logDbError('DB operation failed', error);
     return false;
   }
 }
@@ -311,18 +328,18 @@ export async function updateTaskStatus(
     };
 
     if (status === 'in_progress') {
-      updateData.started_at = new Date().toISOString();
+      updateData['started_at'] = new Date().toISOString();
     }
 
     if (status === 'completed' || status === 'failed') {
-      updateData.completed_at = new Date().toISOString();
+      updateData['completed_at'] = new Date().toISOString();
     }
 
     if (updates) {
-      if (updates.result !== undefined) updateData.result = updates.result;
-      if (updates.errorMessage) updateData.error_message = updates.errorMessage;
-      if (updates.retryCount !== undefined) updateData.retry_count = updates.retryCount;
-      if (updates.actualTime !== undefined) updateData.actual_time = updates.actualTime;
+      if (updates.result !== undefined) updateData['result'] = updates.result;
+      if (updates.errorMessage) updateData['error_message'] = updates.errorMessage;
+      if (updates.retryCount !== undefined) updateData['retry_count'] = updates.retryCount;
+      if (updates.actualTime !== undefined) updateData['actual_time'] = updates.actualTime;
     }
 
     const { error } = await db
@@ -332,22 +349,31 @@ export async function updateTaskStatus(
       .eq('task_id', taskId);
 
     if (error) {
-      console.error('Error updating task status:', error);
+      logDbError('DB operation failed', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Exception updating task status:', error);
+    logDbError('DB operation failed', error);
     return false;
   }
 }
 
 /**
- * Get tasks for an execution
+ * Get tasks for an execution (scoped to user via execution ownership to prevent IDOR)
  */
-export async function getExecutionTasks(executionId: string): Promise<WorkforceTask[]> {
+export async function getExecutionTasks(
+  executionId: string,
+  userId: string,
+): Promise<WorkforceTask[]> {
   try {
+    // Verify user owns the execution before returning tasks
+    const execution = await getExecution(executionId, userId);
+    if (!execution) {
+      return [];
+    }
+
     const { data, error } = await db
       .from('workforce_tasks')
       .select('*')
@@ -355,13 +381,13 @@ export async function getExecutionTasks(executionId: string): Promise<WorkforceT
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error getting execution tasks:', error);
+      logDbError('DB operation failed', error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception getting execution tasks:', error);
+    logDbError('DB operation failed', error);
     return [];
   }
 }
@@ -396,7 +422,7 @@ export async function trackAPIUsage(
     });
 
     if (error) {
-      console.error('Error tracking API usage:', error);
+      logDbError('DB operation failed', error);
       return false;
     }
 
@@ -405,7 +431,7 @@ export async function trackAPIUsage(
 
     return true;
   } catch (error) {
-    console.error('Exception tracking API usage:', error);
+    logDbError('DB operation failed', error);
     return false;
   }
 }
@@ -434,13 +460,13 @@ export async function getUserAPIUsage(
     });
 
     if (error) {
-      console.error('Error getting API usage:', error);
+      logDbError('DB operation failed', error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception getting API usage:', error);
+    logDbError('DB operation failed', error);
     return [];
   }
 }
@@ -490,13 +516,13 @@ export async function getAPIUsageSummary(
         summary.byProvider[record.provider] = { cost: 0, tokens: 0 };
       }
 
-      summary.byProvider[record.provider].cost += record.cost;
-      summary.byProvider[record.provider].tokens += record.tokens_used;
+      summary!.byProvider[record.provider]!.cost += record.cost;
+      summary!.byProvider[record.provider]!.tokens += record.tokens_used;
     });
 
     return summary;
   } catch (error) {
-    console.error('Exception getting API usage summary:', error);
+    logDbError('DB operation failed', error);
     return {
       totalCost: 0,
       totalTokens: 0,
@@ -550,14 +576,14 @@ async function updateSubscriptionUsage(userId: string, tokensUsed: number): Prom
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error('Error updating subscription usage:', updateError);
+        logDbError('DB operation failed', updateError);
         return false;
       }
     }
 
     return true;
   } catch (error) {
-    console.error('Exception updating subscription usage:', error);
+    logDbError('DB operation failed', error);
     return false;
   }
 }
@@ -574,13 +600,13 @@ export async function getUserSubscription(userId: string): Promise<unknown> {
       .maybeSingle();
 
     if (error) {
-      console.error('Error getting subscription:', error);
+      logDbError('DB operation failed', error);
       return null;
     }
 
     return data || null;
   } catch (error) {
-    console.error('Exception getting subscription:', error);
+    logDbError('DB operation failed', error);
     return null;
   }
 }
@@ -637,7 +663,7 @@ export async function getDashboardStats(userId: string): Promise<{
       totalCost: data.total_spent || 0,
     };
   } catch (error) {
-    console.error('Exception getting dashboard stats:', error);
+    logDbError('DB operation failed', error);
     return {
       activeEmployees: 0,
       totalEmployees: 0,
@@ -666,13 +692,13 @@ export async function getRecentActivity(
       .limit(limit);
 
     if (error) {
-      console.error('Error getting recent activity:', error);
+      logDbError('DB operation failed', error);
       return [];
     }
 
     return (data as RecentActivity[]) || [];
   } catch (error) {
-    console.error('Exception getting recent activity:', error);
+    logDbError('DB operation failed', error);
     return [];
   }
 }

@@ -93,18 +93,14 @@ function languageLabel(lang: string): string {
  *   -- filename.sql
  */
 function extractFilename(content: string): string | null {
-  const firstLine = content.split('\n')[0].trim();
+  const firstLine = content.split('\n')[0]!.trim();
 
   // // filename.ext  or  # filename.ext
-  const singleLineComment = firstLine.match(
-    /^(?:\/\/|#|--)\s+([\w./-]+\.\w+)\s*$/,
-  );
+  const singleLineComment = firstLine.match(/^(?:\/\/|#|--)\s+([\w./-]+\.\w+)\s*$/);
   if (singleLineComment) return singleLineComment[1];
 
   // /* filename.ext */
-  const blockComment = firstLine.match(
-    /^\/\*\s*([\w./-]+\.\w+)\s*\*\/\s*$/,
-  );
+  const blockComment = firstLine.match(/^\/\*\s*([\w./-]+\.\w+)\s*\*\/\s*$/);
   if (blockComment) return blockComment[1];
 
   return null;
@@ -114,17 +110,14 @@ function extractFilename(content: string): string | null {
  * Parse markdown code fences from content and return structured artifacts.
  * Matches ```language\n...\n``` patterns.
  */
-function parseCodeBlocks(
-  content: string,
-  messageId: string,
-): Omit<Artifact, 'id' | 'createdAt'>[] {
+function parseCodeBlocks(content: string, messageId: string): Omit<Artifact, 'id' | 'createdAt'>[] {
   const results: Omit<Artifact, 'id' | 'createdAt'>[] = [];
   const regex = /```(\w+)?\s*\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
     const language = match[1] || 'text';
-    const code = match[2].trim();
+    const code = match[2]!.trim();
 
     // Skip very short code blocks (one-liners that are not meaningful artifacts)
     if (code.length < 10) continue;

@@ -49,12 +49,17 @@ export type AgentCapability = ProtocolAgentCapability;
 export class CollaborationProtocol {
   private context: CollaborationContext;
   private agents: Map<string, AgentCapability>;
-  private messageHandlers: Map<string, (message: AgentMessage) => Promise<void>>;
 
-  constructor(context: CollaborationContext) {
-    this.context = context;
+  constructor(context?: CollaborationContext) {
+    this.context = context ?? {
+      userId: '',
+      sessionId: '',
+      activeAgents: [],
+      conversationHistory: [],
+      sharedContext: {},
+      toolsEnabled: false,
+    };
     this.agents = new Map();
-    this.messageHandlers = new Map();
   }
 
   /**

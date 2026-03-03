@@ -86,7 +86,9 @@ export class VibeMessageService {
       is_streaming: params.isStreaming || false,
     };
 
-    const { data, error } = await (supabase.from('vibe_messages') as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('vibe_messages') as ReturnType<typeof supabase.from>
+    )
       .insert(message)
       .select()
       .maybeSingle();
@@ -110,7 +112,9 @@ export class VibeMessageService {
     messageId: string,
     updates: Partial<VibeMessage>,
   ): Promise<VibeMessage> {
-    const { data, error } = await (supabase.from('vibe_messages') as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('vibe_messages') as ReturnType<typeof supabase.from>
+    )
       .update(updates)
       .eq('id', messageId)
       .select()
@@ -168,12 +172,6 @@ export class VibeMessageService {
       const selectedModelId = useModelStore.getState().selectedModelId;
 
       // Step 2: Create user message
-      const _userMessage = await this.createMessage({
-        sessionId,
-        userId,
-        role: 'user',
-        content,
-      });
 
       // Build messages for API
       const messages = [
@@ -252,8 +250,7 @@ export class VibeMessageService {
                 choices?: Array<{ delta?: { content?: string } }>;
                 delta?: { text?: string };
               };
-              const chunk =
-                parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
+              const chunk = parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
               if (chunk) {
                 fullResponse += chunk;
                 if (onChunk) onChunk(chunk);

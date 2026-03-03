@@ -79,7 +79,9 @@ interface FileSyncService {
 
 // Now import the service class
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { VibeFileSyncService } = require('./vibe-file-sync') as { VibeFileSyncService: new () => FileSyncService };
+const { VibeFileSyncService } = require('./vibe-file-sync') as {
+  VibeFileSyncService: new () => FileSyncService;
+};
 
 describe('VibeFileSyncService', () => {
   let service: FileSyncService;
@@ -173,8 +175,8 @@ describe('VibeFileSyncService', () => {
       // Should have one file with error
       const errors = service.getFilesWithErrors();
       expect(errors).toHaveLength(1);
-      expect(errors[0].path).toBe('/test.ts');
-      expect(errors[0].error).toBe('Test error');
+      expect(errors![0]!.path!).toBe('/test.ts');
+      expect(errors![0]!.error!).toBe('Test error');
     });
   });
 
