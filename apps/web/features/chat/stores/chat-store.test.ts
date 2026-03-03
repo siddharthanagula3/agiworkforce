@@ -50,10 +50,10 @@ describe('ChatStore (features/chat)', () => {
 
       const state = useChatStore.getState();
       expect(state.sessions).toHaveLength(1);
-      expect(state.sessions[0].id).toBe(id);
-      expect(state.sessions[0].title).toBe('New Chat');
-      expect(state.sessions[0].messageCount).toBe(0);
-      expect(state.sessions[0].preview).toBe('');
+      expect(state!.sessions[0]!.id!).toBe(id);
+      expect(state!.sessions[0]!.title!).toBe('New Chat');
+      expect(state!.sessions[0]!.messageCount!).toBe(0);
+      expect(state!.sessions[0]!.preview!).toBe('');
     });
 
     it('sets the new session as active', () => {
@@ -86,8 +86,8 @@ describe('ChatStore (features/chat)', () => {
       const id2 = useChatStore.getState().createSession();
 
       const { sessions } = useChatStore.getState();
-      expect(sessions[0].id).toBe(id2);
-      expect(sessions[1].id).toBe(id1);
+      expect(sessions![0]!.id!).toBe(id2);
+      expect(sessions![1]!.id!).toBe(id1);
     });
   });
 
@@ -178,10 +178,10 @@ describe('ChatStore (features/chat)', () => {
 
       const messages = useChatStore.getState().messages[sessionId];
       expect(messages).toHaveLength(1);
-      expect(messages[0].id).toBe(msgId);
-      expect(messages[0].content).toBe('Hello');
-      expect(messages[0].role).toBe('user');
-      expect(messages[0].sessionId).toBe(sessionId);
+      expect(messages![0]!.id!).toBe(msgId);
+      expect(messages![0]!.content!).toBe('Hello');
+      expect(messages![0]!.role!).toBe('user');
+      expect(messages![0]!.sessionId!).toBe(sessionId);
     });
 
     it('returns a unique message id', () => {
@@ -258,7 +258,7 @@ describe('ChatStore (features/chat)', () => {
 
       useChatStore.getState().appendToMessage(sessionId, msgId, ' world');
 
-      const msg = useChatStore.getState().messages[sessionId].find((m) => m.id === msgId);
+      const msg = useChatStore!.getState().messages[sessionId]!.find((m) => m.id === msgId)!;
       expect(msg?.content).toBe('Hello world');
     });
 
@@ -283,11 +283,11 @@ describe('ChatStore (features/chat)', () => {
       });
 
       useChatStore.getState().setStreaming(sessionId, msgId, true);
-      let msg = useChatStore.getState().messages[sessionId].find((m) => m.id === msgId);
+      let msg = useChatStore!.getState().messages[sessionId]!.find((m) => m.id === msgId)!;
       expect(msg?.isStreaming).toBe(true);
 
       useChatStore.getState().setStreaming(sessionId, msgId, false);
-      msg = useChatStore.getState().messages[sessionId].find((m) => m.id === msgId);
+      msg = useChatStore!.getState().messages[sessionId]!.find((m) => m.id === msgId)!;
       expect(msg?.isStreaming).toBe(false);
     });
   });
@@ -320,7 +320,7 @@ describe('ChatStore (features/chat)', () => {
 
       useChatStore.getState().updateMessage(sessionId, msgId, 'new content');
 
-      const msg = useChatStore.getState().messages[sessionId].find((m) => m.id === msgId);
+      const msg = useChatStore!.getState().messages[sessionId]!.find((m) => m.id === msgId)!;
       expect(msg?.content).toBe('new content');
     });
   });
@@ -407,7 +407,7 @@ describe('ChatStore (features/chat)', () => {
 
       const messages = useChatStore.getState().getSessionMessages(sessionId);
       expect(messages).toHaveLength(1);
-      expect(messages[0].content).toBe('hello');
+      expect(messages![0]!.content!).toBe('hello');
     });
 
     it('returns empty array for non-existent session', () => {
@@ -520,7 +520,7 @@ describe('ChatStore (features/chat)', () => {
 
         // Set up a local-only session first
         useChatStore.getState().createSession();
-        const localId = useChatStore.getState().sessions[0].id;
+        const localId = useChatStore!.getState().sessions[0]!.id!;
 
         // Mock supabase chain
         const chain = {
@@ -643,18 +643,18 @@ describe('ChatStore (features/chat)', () => {
         expect(msgs).toHaveLength(3);
 
         // First msg: has timestamp
-        expect(msgs[0].id).toBe('m1');
-        expect(msgs[0].content).toBe('hello');
-        expect(msgs[0].createdAt).toEqual(new Date('2024-06-01T10:00:00Z'));
-        expect(msgs[0].metadata).toEqual({ model: 'gpt-4' });
-        expect(msgs[0].isStreaming).toBe(false);
+        expect(msgs![0]!.id!).toBe('m1');
+        expect(msgs![0]!.content!).toBe('hello');
+        expect(msgs![0]!.createdAt!).toEqual(new Date('2024-06-01T10:00:00Z'));
+        expect(msgs![0]!.metadata!).toEqual({ model: 'gpt-4' });
+        expect(msgs![0]!.isStreaming!).toBe(false);
 
         // Second msg: null timestamp, falls back to created_at
-        expect(msgs[1].createdAt).toEqual(new Date('2024-06-01T10:01:00Z'));
-        expect(msgs[1].content).toBe('');
+        expect(msgs![1]!.createdAt!).toEqual(new Date('2024-06-01T10:01:00Z'));
+        expect(msgs![1]!.content!).toBe('');
 
         // Third msg: both null, falls back to new Date()
-        expect(msgs[2].createdAt).toBeInstanceOf(Date);
+        expect(msgs![2]!.createdAt!).toBeInstanceOf(Date);
       });
 
       it('handles DB error gracefully', async () => {
@@ -727,9 +727,7 @@ describe('ChatStore (features/chat)', () => {
 
         await useChatStore.getState().saveMessageToDb(message, 'u1');
 
-        expect(upsertMock).toHaveBeenCalledWith(
-          expect.objectContaining({ metadata: {} }),
-        );
+        expect(upsertMock).toHaveBeenCalledWith(expect.objectContaining({ metadata: {} }));
       });
 
       it('handles upsert error gracefully', async () => {

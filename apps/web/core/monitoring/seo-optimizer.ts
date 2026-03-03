@@ -32,7 +32,7 @@ class SEOService {
   private defaultSEO: SEOData;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://agiworkforce.com';
+    this.baseUrl = process.env['NEXT_PUBLIC_APP_URL'] || 'https://agiworkforce.com';
     this.defaultSEO = {
       title: 'AGI Workforce - Your AI Workforce, On Demand',
       description:
@@ -127,8 +127,8 @@ class SEOService {
       '@context': 'https://schema.org',
       '@type': type,
       url: this.getCanonicalUrl(window.location.pathname),
-      name: data.name || document.title,
-      description: data.description || this.getMetaContent('description'),
+      name: data['name'] || document.title,
+      description: data['description'] || this.getMetaContent('description'),
     };
 
     switch (type) {
@@ -162,10 +162,10 @@ class SEOService {
       case 'Article':
         return {
           ...baseStructuredData,
-          headline: data.headline,
+          headline: data['headline'],
           author: {
             '@type': 'Person',
-            name: data.author || 'AGI Workforce Team',
+            name: data['author'] || 'AGI Workforce Team',
           },
           publisher: {
             '@type': 'Organization',
@@ -175,9 +175,9 @@ class SEOService {
               url: `${this.baseUrl}/logo.png`,
             },
           },
-          datePublished: data.datePublished,
-          dateModified: data.dateModified,
-          image: data.image,
+          datePublished: data['datePublished'],
+          dateModified: data['dateModified'],
+          image: data['image'],
         };
 
       case 'Product':
@@ -189,11 +189,11 @@ class SEOService {
           },
           offers: {
             '@type': 'Offer',
-            price: data.price,
-            priceCurrency: data.priceCurrency || 'USD',
+            price: data['price'],
+            priceCurrency: data['priceCurrency'] || 'USD',
             availability: 'https://schema.org/InStock',
           },
-          aggregateRating: data.aggregateRating,
+          aggregateRating: data['aggregateRating'],
         };
 
       case 'SoftwareApplication':
@@ -203,10 +203,10 @@ class SEOService {
           operatingSystem: 'Web Browser',
           offers: {
             '@type': 'Offer',
-            price: data.price || '0',
+            price: data['price'] || '0',
             priceCurrency: 'USD',
           },
-          aggregateRating: data.aggregateRating,
+          aggregateRating: data['aggregateRating'],
         };
 
       default:

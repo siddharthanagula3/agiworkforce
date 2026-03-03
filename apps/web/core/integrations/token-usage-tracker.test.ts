@@ -4,10 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  tokenLogger,
-  logTokenUsage,
-} from './token-usage-tracker';
+import { tokenLogger, logTokenUsage } from './token-usage-tracker';
 
 // Mock the UsageTracker class - define inside factory to avoid hoisting issues
 vi.mock('@features/billing/services/usage-monitor', () => {
@@ -101,9 +98,9 @@ describe('Token Usage Tracker', () => {
       const summary = tokenLogger.getSessionSummary('session-1');
 
       expect(summary?.byModel['gpt-4o']).toBeDefined();
-      expect(summary?.byModel['gpt-4o'].totalTokens).toBe(100);
+      expect(summary?.byModel['gpt-4o']?.totalTokens).toBe(100);
       expect(summary?.byModel['claude-3-5-sonnet-20241022']).toBeDefined();
-      expect(summary?.byModel['claude-3-5-sonnet-20241022'].totalTokens).toBe(200);
+      expect(summary?.byModel['claude-3-5-sonnet-20241022']?.totalTokens).toBe(200);
     });
 
     it('should calculate cost correctly', async () => {
@@ -130,8 +127,8 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].inputTokens).toBe(400); // 40% of 1000
-      expect(logs[0].outputTokens).toBe(600); // 60% of 1000
+      expect(logs![0]!.inputTokens!).toBe(400); // 40% of 1000
+      expect(logs![0]!.outputTokens!).toBe(600); // 60% of 1000
     });
 
     it('should use provided agent info', async () => {
@@ -146,8 +143,8 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].agentId).toBe('agent-custom');
-      expect(logs[0].agentName).toBe('Custom Agent Name');
+      expect(logs![0]!.agentId!).toBe('agent-custom');
+      expect(logs![0]!.agentName!).toBe('Custom Agent Name');
     });
 
     it('should handle concurrent calls safely', async () => {
@@ -168,7 +165,7 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      expect(summary?.byModel['gpt-4o'].callCount).toBe(3);
+      expect(summary?.byModel['gpt-4o']?.callCount).toBe(3);
     });
   });
 
@@ -268,7 +265,7 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].taskDescription).toBe('Generating code review');
+      expect(logs![0]!.taskDescription!).toBe('Generating code review');
     });
   });
 
@@ -375,8 +372,8 @@ describe('Token Usage Tracker', () => {
       const logs = tokenLogger.getSessionLogs('session-1');
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      expect(logs[0].provider).toBe('openai');
-      expect(summary?.byModel['gpt-4o'].provider).toBe('openai');
+      expect(logs?.[0]?.provider).toBe('openai');
+      expect(summary?.byModel['gpt-4o']?.provider).toBe('openai');
     });
 
     it('should detect Anthropic provider', async () => {
@@ -384,7 +381,7 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].provider).toBe('anthropic');
+      expect(logs![0]!.provider!).toBe('anthropic');
     });
 
     it('should detect Google provider', async () => {
@@ -392,7 +389,7 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].provider).toBe('google');
+      expect(logs![0]!.provider!).toBe('google');
     });
 
     it('should detect Perplexity provider', async () => {
@@ -400,7 +397,7 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].provider).toBe('perplexity');
+      expect(logs![0]!.provider!).toBe('perplexity');
     });
 
     it('should detect Grok provider', async () => {
@@ -408,7 +405,7 @@ describe('Token Usage Tracker', () => {
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
-      expect(logs[0].provider).toBe('grok');
+      expect(logs![0]!.provider!).toBe('grok');
     });
   });
 
@@ -495,7 +492,9 @@ describe('Token Usage Tracker', () => {
     it('should handle database persistence errors gracefully', async () => {
       // Get the mock from the module
       const { __getMockTrackAPICall } =
-        (await import('@features/billing/services/usage-monitor')) as unknown as { __getMockTrackAPICall: () => ReturnType<typeof vi.fn> };
+        (await import('@features/billing/services/usage-monitor')) as unknown as {
+          __getMockTrackAPICall: () => ReturnType<typeof vi.fn>;
+        };
       const mockTrackAPICall = __getMockTrackAPICall();
 
       // Make the mock trackAPICall reject for this test

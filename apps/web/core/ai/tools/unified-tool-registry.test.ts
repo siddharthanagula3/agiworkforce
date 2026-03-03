@@ -275,7 +275,7 @@ describe('UnifiedToolRegistry', () => {
 
       const history = registry.getExecutionHistory({ userId: 'test-user' });
       expect(history.length).toBe(1);
-      expect(history[0].userId).toBe('test-user');
+      expect(history![0]!.userId!).toBe('test-user');
     });
 
     it('should filter history by status', async () => {
@@ -284,7 +284,7 @@ describe('UnifiedToolRegistry', () => {
 
       const failed = registry.getExecutionHistory({ status: 'failed' });
       expect(failed.length).toBe(1);
-      expect(failed[0].call.error).toBeDefined();
+      expect(failed![0]!.call.error!).toBeDefined();
     });
 
     it('should clear history', async () => {

@@ -226,7 +226,7 @@ export class VibeFileManager {
       const file = files[i];
 
       try {
-        const vibeFile = await this.uploadFile(file, userId, sessionId, (progress) => {
+        const vibeFile = await this.uploadFile(file!, userId, sessionId, (progress) => {
           if (onProgress) {
             // Calculate overall progress
             const fileProgress = progress / files.length;
@@ -237,7 +237,7 @@ export class VibeFileManager {
 
         uploadedFiles.push(vibeFile);
       } catch (error) {
-        console.error(`Failed to upload file ${file.name}:`, error);
+        console.error(`Failed to upload file ${file?.name}:`, error);
         // Continue with other files
       }
     }
@@ -349,7 +349,7 @@ export class VibeFileManager {
         throw new Error('File not found');
       }
 
-      const filePath = (file.metadata as Record<string, unknown> | undefined)?.original_path as
+      const filePath = (file.metadata as Record<string, unknown> | undefined)?.['original_path'] as
         | string
         | undefined;
       if (!filePath) {
@@ -389,7 +389,7 @@ export class VibeFileManager {
         throw new Error('File not found');
       }
 
-      const filePath = (file.metadata as Record<string, unknown> | undefined)?.original_path as
+      const filePath = (file.metadata as Record<string, unknown> | undefined)?.['original_path'] as
         | string
         | undefined;
       if (!filePath) {
@@ -437,7 +437,7 @@ export class VibeFileManager {
 
       // Extract file paths for storage deletion
       const filePaths = (files as Array<{ metadata?: Record<string, unknown> }>)
-        .map((f) => f.metadata?.original_path)
+        .map((f) => f.metadata?.['original_path'])
         .filter((path): path is string => typeof path === 'string' && !!path);
 
       // Batch delete from storage (single API call)
@@ -482,7 +482,7 @@ export class VibeFileManager {
 
       // Delete from storage
       const filePaths = (files as Array<{ metadata?: Record<string, unknown> }>)
-        .map((f) => f.metadata?.original_path)
+        .map((f) => f.metadata?.['original_path'])
         .filter((path): path is string => typeof path === 'string' && !!path);
 
       if (filePaths.length > 0) {

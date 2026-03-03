@@ -545,13 +545,13 @@ export class TaskDecomposer {
       const nextTask = tasksWithDeps[i + 1];
 
       // Next task depends on current task
-      if (!nextTask.dependencies.includes(currentTask.id)) {
-        nextTask.dependencies.push(currentTask.id);
+      if (!nextTask?.dependencies.includes(currentTask!.id)) {
+        nextTask?.dependencies.push(currentTask!.id);
       }
 
       // Current task has next task as dependent
-      if (!currentTask.dependents.includes(nextTask.id)) {
-        currentTask.dependents.push(nextTask.id);
+      if (!currentTask?.dependents.includes(nextTask!.id)) {
+        currentTask?.dependents.push(nextTask!.id);
       }
     }
 
@@ -702,7 +702,7 @@ export class TaskDecomposer {
   /**
    * Estimate total time considering parallel execution
    */
-  private estimateTotalTime(tasks: Task[], graph: DependencyGraph): number {
+  private estimateTotalTime(_tasks: Task[], graph: DependencyGraph): number {
     let totalTime = 0;
 
     // Sum up time for each level (parallel tasks count as one)

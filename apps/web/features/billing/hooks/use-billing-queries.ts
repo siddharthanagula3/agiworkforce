@@ -203,8 +203,8 @@ async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
   }
 
   const row = data as Record<string, unknown>;
-  const remaining = Math.max(Number(row.credits_remaining_cents ?? 0), 0);
-  const allocated = Number(row.credits_allocated_cents ?? 0);
+  const remaining = Math.max(Number(row['credits_remaining_cents'] ?? 0), 0);
+  const allocated = Number(row['credits_allocated_cents'] ?? 0);
   return {
     currentBalance: remaining,
     totalGranted: allocated,
@@ -516,12 +516,12 @@ export function useTokenAnalytics(
       const dailyMap = new Map<string, DailyUsage>();
       processedData.forEach((d) => {
         const dateKey = d.createdAt.toISOString().split('T')[0];
-        const existing = dailyMap.get(dateKey) || {
+        const existing = dailyMap.get(dateKey!) || {
           date: dateKey,
           tokens: 0,
           cost: 0,
         };
-        dailyMap.set(dateKey, {
+        dailyMap.set(dateKey!, {
           date: dateKey,
           tokens: existing.tokens + d.totalTokens,
           cost: existing.cost + d.totalCost,
@@ -1148,8 +1148,8 @@ export function useBillingAnalytics(
       const trendsMap = new Map<string, { tokens: number; cost: number; sessions: number }>();
       currentRecords.forEach((r) => {
         const date = r.created_at.split('T')[0];
-        const existing = trendsMap.get(date) || { tokens: 0, cost: 0, sessions: 0 };
-        trendsMap.set(date, {
+        const existing = trendsMap.get(date!) || { tokens: 0, cost: 0, sessions: 0 };
+        trendsMap.set(date!, {
           tokens: existing.tokens + (r.total_tokens || 0),
           cost: existing.cost + (r.total_cost || 0),
           sessions: existing.sessions + 1,

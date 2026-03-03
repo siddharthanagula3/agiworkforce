@@ -495,7 +495,7 @@ class MultiAgentOrchestrator {
    */
   private selectAgents(
     userRequest: string,
-    intent: string,
+    _intent: string,
     complexity: OrchestrationPlan['complexity'],
   ): string[] {
     const lowerRequest = userRequest.toLowerCase();
@@ -627,7 +627,7 @@ class MultiAgentOrchestrator {
    * Create tasks from requirements
    */
   private createTasks(
-    userRequest: string,
+    _userRequest: string,
     requiredAgents: string[],
     _complexity: OrchestrationPlan['complexity'],
   ): AgentTask[] {
@@ -661,7 +661,7 @@ class MultiAgentOrchestrator {
         assignedTo: 'Frontend Engineer',
         status: 'pending',
         priority: 'high',
-        dependencies: tasks.length > 0 ? [tasks[0].id] : [],
+        dependencies: tasks.length > 0 ? [tasks[0]!.id] : [],
         retryCount: 0,
         maxRetries: 3,
       });
@@ -675,7 +675,7 @@ class MultiAgentOrchestrator {
         assignedTo: 'Backend Engineer',
         status: 'pending',
         priority: 'high',
-        dependencies: tasks.length > 0 ? [tasks[0].id] : [],
+        dependencies: tasks.length > 0 ? [tasks[0]!.id] : [],
         retryCount: 0,
         maxRetries: 3,
       });
@@ -819,7 +819,7 @@ class MultiAgentOrchestrator {
     if (taskIndex === 0) return false;
 
     const prevTask = plan.tasks[taskIndex - 1];
-    return prevTask.assignedTo !== task.assignedTo;
+    return prevTask?.assignedTo !== task.assignedTo;
   }
 
   /**
@@ -835,7 +835,7 @@ class MultiAgentOrchestrator {
 
     onCommunication({
       id: `comm-${Date.now()}`,
-      from: prevTask.assignedTo,
+      from: prevTask?.assignedTo,
       to: task.assignedTo,
       type: 'handoff',
       message: `Handing off to ${task.assignedTo} for "${task.description}"`,

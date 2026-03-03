@@ -346,7 +346,7 @@ describe('GrokProvider', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('grok-4');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
@@ -373,11 +373,11 @@ describe('GrokProvider', () => {
       }
 
       expect(chunks.length).toBe(2);
-      expect(chunks[0].content).toBe('Streamed response');
-      expect(chunks[0].done).toBe(false);
-      expect(chunks[1].content).toBe('');
-      expect(chunks[1].done).toBe(true);
-      expect((chunks[1] as Record<string, unknown>).usage).toBeDefined();
+      expect(chunks![0]!.content!).toBe('Streamed response');
+      expect(chunks![0]!.done!).toBe(false);
+      expect(chunks![1]!.content!).toBe('');
+      expect(chunks![1]!.done!).toBe(true);
+      expect((chunks[1] as Record<string, unknown>)['usage']).toBeDefined();
     });
 
     it('should throw error when not logged in', async () => {
@@ -623,7 +623,7 @@ describe('GrokProvider', () => {
       const response = await provider.sendMessage(mockMessages);
 
       expect(response.metadata?.sources).toHaveLength(2);
-      expect(response.metadata?.sources?.[0].type).toBe('tweet');
+      expect(response.metadata?.sources?.[0]?.type).toBe('tweet');
     });
 
     it('should return empty sources when not present', async () => {

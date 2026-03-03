@@ -306,7 +306,7 @@ export async function listConversations(
     }
 
     // Batch fetch participants for all conversations
-    const conversationIds = conversations?.map((c: Record<string, unknown>) => c.id) || [];
+    const conversationIds = conversations?.map((c: Record<string, unknown>) => c['id']) || [];
     let participantsMap: Record<string, ConversationParticipant[]> = {};
 
     if (conversationIds.length > 0) {
@@ -324,10 +324,10 @@ export async function listConversations(
             acc: Record<string, ConversationParticipant[]>,
             participant: Record<string, unknown>,
           ) => {
-            if (!acc[participant.conversation_id as string]) {
-              acc[participant.conversation_id as string] = [];
+            if (!acc[participant['conversation_id'] as string]) {
+              acc[participant['conversation_id'] as string] = [];
             }
-            acc[participant.conversation_id as string].push(
+            acc[participant['conversation_id'] as string]!.push(
               participant as unknown as ConversationParticipant,
             );
             return acc;
@@ -340,7 +340,7 @@ export async function listConversations(
     const conversationsWithParticipants: ConversationWithParticipants[] =
       conversations?.map((conv: Record<string, unknown>) => ({
         ...(conv as unknown as ConversationWithParticipants),
-        participants: participantsMap[conv.id as string] || [],
+        participants: participantsMap[conv['id'] as string] || [],
       })) || [];
 
     return {
@@ -958,30 +958,31 @@ export async function getConversationStats(userId: string): Promise<Conversation
 
     const total_conversations = conversations?.length || 0;
     const active_conversations =
-      conversations?.filter((c: Record<string, unknown>) => c.status === 'active').length || 0;
+      conversations?.filter((c: Record<string, unknown>) => c['status'] === 'active').length || 0;
     const total_messages =
       conversations?.reduce(
-        (sum: number, c: Record<string, unknown>) => sum + (c.total_messages as number),
+        (sum: number, c: Record<string, unknown>) => sum + (c['total_messages'] as number),
         0,
       ) || 0;
     const total_tokens =
       conversations?.reduce(
-        (sum: number, c: Record<string, unknown>) => sum + (c.total_tokens as number),
+        (sum: number, c: Record<string, unknown>) => sum + (c['total_tokens'] as number),
         0,
       ) || 0;
     const total_cost =
       conversations?.reduce(
-        (sum: number, c: Record<string, unknown>) => sum + (c.total_cost as number),
+        (sum: number, c: Record<string, unknown>) => sum + (c['total_cost'] as number),
         0,
       ) || 0;
 
     // Calculate average duration
     const completedConversations =
-      conversations?.filter((c: Record<string, unknown>) => c.completed_at && c.started_at) || [];
+      conversations?.filter((c: Record<string, unknown>) => c['completed_at'] && c['started_at']) ||
+      [];
     const totalDuration = completedConversations.reduce(
       (sum: number, c: Record<string, unknown>) => {
-        const start = new Date(c.started_at as string).getTime();
-        const end = new Date(c.completed_at as string).getTime();
+        const start = new Date(c['started_at'] as string).getTime();
+        const end = new Date(c['completed_at'] as string).getTime();
         return sum + (end - start);
       },
       0,
@@ -992,7 +993,7 @@ export async function getConversationStats(userId: string): Promise<Conversation
         : 0;
 
     // Get most used agents
-    const conversationIds2 = conversations?.map((c: Record<string, unknown>) => c.id) || [];
+    const conversationIds2 = conversations?.map((c: Record<string, unknown>) => c['id']) || [];
     let most_used_agents: Array<{
       employee_id: string;
       employee_name: string;
@@ -1008,7 +1009,7 @@ export async function getConversationStats(userId: string): Promise<Conversation
       if (!partError && participants) {
         const agentCounts = participants.reduce(
           (acc: Record<string, number>, p: Record<string, unknown>) => {
-            const key = `${p.employee_id}|${p.employee_name}`;
+            const key = `${p['employee_id']}|${p['employee_name']}`;
             acc[key] = (acc[key] || 0) + 1;
             return acc;
           },

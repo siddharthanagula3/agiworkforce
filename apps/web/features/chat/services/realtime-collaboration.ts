@@ -268,14 +268,14 @@ export class RealtimeCollaborationService {
 
     // Map database record to ChatMessage
     const message: ChatMessage = {
-      id: record.id as string,
-      sessionId: record.session_id as string,
-      role: record.role as 'user' | 'assistant' | 'system',
-      content: record.content as string,
-      createdAt: new Date(record.created_at as string),
-      updatedAt: record.updated_at ? new Date(record.updated_at as string) : undefined,
-      edited: (record.edited as boolean) || false,
-      editCount: (record.edit_count as number) || 0,
+      id: record['id'] as string,
+      sessionId: record['session_id'] as string,
+      role: record['role'] as 'user' | 'assistant' | 'system',
+      content: record['content'] as string,
+      createdAt: new Date(record['created_at'] as string),
+      updatedAt: record['updated_at'] ? new Date(record['updated_at'] as string) : undefined,
+      edited: (record['edited'] as boolean) || false,
+      editCount: (record['edit_count'] as number) || 0,
     };
 
     let changeType: MessageChangeType;

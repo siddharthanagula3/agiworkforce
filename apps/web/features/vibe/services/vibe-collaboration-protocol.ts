@@ -281,7 +281,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleTaskAssignment(message: VibeAgentMessage): void {
-    const task = message.content.task;
+    const task = message.content['task'];
     if (!task) return;
 
     // Emit event for external handling (e.g., by execution coordinator)
@@ -298,7 +298,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleQuestion(message: VibeAgentMessage): void {
-    const question = message.content.question;
+    const question = message.content['question'];
     if (!question) return;
 
     // Emit event for external handling
@@ -316,7 +316,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleResourceRequest(message: VibeAgentMessage): void {
-    const resource = message.content.resource;
+    const resource = message.content['resource'];
     if (!resource) return;
 
     // Emit event for external handling
@@ -334,7 +334,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleHandoff(message: VibeAgentMessage): void {
-    const handoff = message.content.handoff;
+    const handoff = message.content['handoff'];
     if (!handoff) return;
 
     // Emit event for external handling
@@ -352,7 +352,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleStatusUpdate(message: VibeAgentMessage): void {
-    const status = message.content.status;
+    const status = message.content['status'];
     if (!status) return;
 
     // Emit event for external handling (e.g., for UI updates)
@@ -369,7 +369,7 @@ export class AgentCollaborationManager {
    * @private
    */
   private handleTaskResult(message: VibeAgentMessage): void {
-    const result = message.content.result;
+    const result = message.content['result'];
     if (!result) return;
 
     // Emit event for external handling

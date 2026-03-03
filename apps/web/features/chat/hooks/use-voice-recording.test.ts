@@ -197,7 +197,7 @@ describe('useVoiceRecording', () => {
       const stream = new MockMediaStream();
       const tracks = stream.getTracks();
       expect(tracks).toHaveLength(1);
-      expect(typeof tracks[0].stop).toBe('function');
+      expect(typeof tracks![0]!.stop!).toBe('function');
     });
   });
 
@@ -304,7 +304,7 @@ describe('useVoiceRecording', () => {
       for (let i = 0; i < barCount; i++) {
         let sum = 0;
         for (let j = 0; j < barsPerSegment; j++) {
-          sum += data[i * barsPerSegment + j];
+          sum += data![i * barsPerSegment + j]!;
         }
         levels.push(sum / barsPerSegment / 255);
       }

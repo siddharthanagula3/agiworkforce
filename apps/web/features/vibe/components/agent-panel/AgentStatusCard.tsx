@@ -3,7 +3,6 @@
  * Shows: Avatar, Name, Role, Status indicator (like MGX)
  */
 
-import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { Badge } from '@shared/ui/badge';
 import { Bot, Circle } from 'lucide-react';

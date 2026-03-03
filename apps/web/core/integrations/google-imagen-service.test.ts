@@ -110,7 +110,7 @@ describe('Google Imagen Service', () => {
 
       expect(result.id).toBeDefined();
       expect(result.images.length).toBe(1);
-      expect(result.images[0].mimeType).toBe('image/png');
+      expect(result!.images[0]!.mimeType!).toBe('image/png');
       expect(result.prompt).toBe(mockRequest.prompt);
       expect(result.model).toBe('imagen-4.0-generate-001');
       expect(result.status).toBe('completed');
@@ -242,7 +242,7 @@ describe('Google Imagen Service', () => {
         }),
       );
 
-      const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.model).toBe('imagen-4.0-ultra-generate-001');
       expect(requestBody.numberOfImages).toBe(2);
       expect(requestBody.aspectRatio).toBe('16:9');
@@ -264,7 +264,7 @@ describe('Google Imagen Service', () => {
       });
 
       expect(result.images.length).toBe(1);
-      expect(result.images[0].url).toBe('https://example.com/image.png');
+      expect(result!.images[0]!.url!).toBe('https://example.com/image.png');
     });
 
     it('should include safety ratings when available', async () => {
@@ -284,7 +284,7 @@ describe('Google Imagen Service', () => {
       });
 
       expect(result.metadata.safetyRatings).toBeDefined();
-      expect(result.metadata.safetyRatings?.[0].category).toBe('HARM_CATEGORY_VIOLENCE');
+      expect(result.metadata.safetyRatings?.[0]?.category).toBe('HARM_CATEGORY_VIOLENCE');
     });
   });
 

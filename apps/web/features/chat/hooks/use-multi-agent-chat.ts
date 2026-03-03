@@ -73,7 +73,7 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
   const setChatSession = useMissionStore((state) => state.setChatSession);
   const addCollaborativeAgent = useMissionStore((state) => state.addCollaborativeAgent);
   const removeCollaborativeAgent = useMissionStore((state) => state.removeCollaborativeAgent);
-  const _startMission = useMissionStore((state) => state.startMission);
+
   const reset = useMissionStore((state) => state.reset);
 
   // Local state

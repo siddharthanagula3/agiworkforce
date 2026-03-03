@@ -3,7 +3,7 @@
  * Alerts users when approaching credit limits (ChatGPT/Claude.ai style)
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@shared/ui/alert';
 import { Button } from '@shared/ui/button';
 import { Progress } from '@shared/ui/progress';

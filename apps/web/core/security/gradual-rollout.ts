@@ -253,7 +253,7 @@ async function sendSecurityAlert(feature: FeatureFlag, errorRate: number): Promi
   console.error('[SECURITY ALERT]', JSON.stringify(alertPayload, null, 2));
 
   // Attempt to send to monitoring webhook if configured
-  const webhookUrl = process.env.NEXT_PUBLIC_MONITORING_WEBHOOK_URL;
+  const webhookUrl = process.env['NEXT_PUBLIC_MONITORING_WEBHOOK_URL'];
   if (webhookUrl) {
     try {
       await fetch(webhookUrl, {

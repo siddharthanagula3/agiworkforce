@@ -35,11 +35,11 @@ export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]
       data?.map((rawShortcut) => {
         const shortcut = rawShortcut as Record<string, unknown>;
         return {
-          id: shortcut.id as string,
-          label: shortcut.label as string,
+          id: shortcut['id'] as string,
+          label: shortcut['label'] as string,
           icon: () => null, // Custom shortcuts don't have icons
-          prompt: shortcut.prompt as string,
-          category: shortcut.category as
+          prompt: shortcut['prompt'] as string,
+          category: shortcut['category'] as
             | 'coding'
             | 'writing'
             | 'business'
@@ -91,11 +91,11 @@ export async function createUserShortcut(
 
     const d = data as Record<string, unknown>;
     return {
-      id: d.id as string,
-      label: d.label as string,
+      id: d['id'] as string,
+      label: d['label'] as string,
       icon: () => null,
-      prompt: d.prompt as string,
-      category: d.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
+      prompt: d['prompt'] as string,
+      category: d['category'] as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
     };
   } catch (error) {
     console.error('[User Shortcuts] Error:', error);
@@ -119,7 +119,9 @@ export async function updateUserShortcut(
   try {
     // SECURITY: Add user_id check to prevent unauthorized updates
 
-    const { error } = await (supabase.from('user_shortcuts') as unknown as ReturnType<typeof supabase.from>)
+    const { error } = await (
+      supabase.from('user_shortcuts') as unknown as ReturnType<typeof supabase.from>
+    )
       .update({
         ...updates,
         updated_at: new Date().toISOString(),

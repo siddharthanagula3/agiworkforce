@@ -8,7 +8,7 @@
  * - useMemo for computed values
  */
 
-import React, { useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import { useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@shared/components/ui/scroll-area';
 import { VibeMessage } from './VibeMessage';

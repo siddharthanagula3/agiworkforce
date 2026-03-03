@@ -78,7 +78,7 @@ const BlogPage: React.FC = () => {
   };
 
   const getCategoryIcon = (slug: string) => {
-    return categoryIcons[slug] || categoryIcons.default;
+    return categoryIcons[slug] || categoryIcons['default'];
   };
 
   // Fetch blog posts from Supabase function
@@ -162,12 +162,6 @@ const BlogPage: React.FC = () => {
   }, [fetchCategories, fetchBlogPosts]);
 
   // Calculate read time based on content length
-  const _calculateReadTime = (content: string) => {
-    const wordsPerMinute = 200;
-    const wordCount = content.split(/\s+/).length;
-    const minutes = Math.ceil(wordCount / wordsPerMinute);
-    return `${minutes} min read`;
-  };
 
   const featuredPost = blogPosts.find((post) => post.featured);
   const regularPosts = blogPosts.filter((post) => !post.featured);

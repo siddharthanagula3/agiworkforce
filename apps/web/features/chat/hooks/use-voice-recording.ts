@@ -249,7 +249,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     for (let i = 0; i < barCount; i++) {
       let sum = 0;
       for (let j = 0; j < barsPerSegment; j++) {
-        sum += dataArray[i * barsPerSegment + j];
+        sum += dataArray[i * barsPerSegment + j]!;
       }
       // Normalize to 0-1 range
       levels.push(sum / barsPerSegment / 255);

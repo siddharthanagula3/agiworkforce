@@ -444,43 +444,6 @@ export const AIEmployeeMarketplace: React.FC<AIEmployeeMarketplaceProps> = ({
     });
   }, []);
 
-  const _getStatusColor = (status: AIEmployee['status']) => {
-    switch (status) {
-      case 'available':
-        return 'bg-green-500';
-      case 'busy':
-        return 'bg-yellow-500';
-      case 'offline':
-        return 'bg-gray-500';
-      case 'in_training':
-        return 'bg-blue-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
-  const _getStatusText = (status: AIEmployee['status']) => {
-    switch (status) {
-      case 'available':
-        return 'Available';
-      case 'busy':
-        return 'Busy';
-      case 'offline':
-        return 'Offline';
-      case 'in_training':
-        return 'In Training';
-      default:
-        return 'Unknown';
-    }
-  };
-
-  const _formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(amount);
-  };
-
   return (
     <div className={cn('space-y-6 p-6', className)}>
       {/* Header */}

@@ -67,7 +67,7 @@ export function parseCodeBlocks(markdown: string): CodeBlock[] {
     codeBlocks.push({
       language: language || 'plaintext',
       filePath: filePath || undefined,
-      content: content.trim(),
+      content: content?.trim(),
     });
   }
 
@@ -332,7 +332,7 @@ export async function processAIResponse(
   // Auto-open first file if any were created
   if (filesCreated > 0 && files.length > 0) {
     try {
-      const firstPath = files[0].path.startsWith('/') ? files[0].path : `/${files[0].path}`;
+      const firstPath = files[0]!.path.startsWith('/') ? files[0]!.path : `/${files[0]!.path}`;
       vibeFileSystem.openFile(firstPath);
     } catch (error) {
       console.error('[VIBE] Failed to auto-open first file:', error);

@@ -1,4 +1,3 @@
-import React from 'react';
 import Link from 'next/link';
 import { Sparkles, ExternalLink } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';

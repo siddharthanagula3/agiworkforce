@@ -50,7 +50,6 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   const messages = useMissionStore((state) => state.messages);
   const activeEmployees = useMissionStore((state) => state.activeEmployees);
   const mode = useMissionStore((state) => state.mode);
-  const _activeChatSession = useMissionStore((state) => state.activeChatSession);
 
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,13 +79,13 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
 
       const sd = sessionData as Record<string, unknown>;
       const session: ChatSession = {
-        id: sd.id as string,
-        userId: sd.user_id as string,
-        title: (sd.title as string) ?? 'Untitled',
-        mode: (sd.mode as ChatSession['mode']) || 'chat',
-        createdAt: new Date((sd.created_at as string) ?? Date.now()),
-        updatedAt: new Date((sd.updated_at as string) ?? Date.now()),
-        metadata: (sd.metadata as ChatSession['metadata']) ?? {
+        id: sd['id'] as string,
+        userId: sd['user_id'] as string,
+        title: (sd['title'] as string) ?? 'Untitled',
+        mode: (sd['mode'] as ChatSession['mode']) || 'chat',
+        createdAt: new Date((sd['created_at'] as string) ?? Date.now()),
+        updatedAt: new Date((sd['updated_at'] as string) ?? Date.now()),
+        metadata: (sd['metadata'] as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
@@ -108,13 +107,13 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (messagesData && messagesData.length > 0) {
         const restoredMessages = messagesData.map((rawMsg) => {
           const msg = rawMsg as Record<string, unknown>;
-          const md = msg.metadata as Record<string, unknown> | undefined;
+          const md = msg['metadata'] as Record<string, unknown> | undefined;
           return {
-            id: msg.id as string,
-            from: (md?.from as string) || (msg.role === 'user' ? 'user' : 'assistant'),
+            id: msg['id'] as string,
+            from: (md?.['from'] as string) || (msg['role'] === 'user' ? 'user' : 'assistant'),
             type:
-              (md?.type as string) ||
-              ((msg.role === 'user' ? 'user' : 'assistant') as
+              (md?.['type'] as string) ||
+              ((msg['role'] === 'user' ? 'user' : 'assistant') as
                 | 'user'
                 | 'assistant'
                 | 'system'
@@ -124,8 +123,8 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
                 | 'task_update'
                 | 'plan'
                 | 'error'),
-            content: msg.content as string,
-            timestamp: new Date((msg.created_at as string) ?? Date.now()),
+            content: msg['content'] as string,
+            timestamp: new Date((msg['created_at'] as string) ?? Date.now()),
             metadata: md || {},
           };
         });
@@ -175,7 +174,9 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         new Set(Object.keys(activeEmployees).concat(currentSession.metadata.agentsInvolved || [])),
       );
 
-      const { error: updateError } = await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
+      const { error: updateError } = await (
+        supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>
+      )
         .update({
           metadata: {
             messageCount: messages.length,
@@ -247,13 +248,13 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
 
         const d = data as Record<string, unknown>;
         const newSession: ChatSession = {
-          id: d.id as string,
-          userId: d.user_id as string,
-          title: (d.title as string) ?? 'Untitled',
-          mode: (d.mode as ChatSession['mode']) || 'chat',
-          createdAt: new Date((d.created_at as string) ?? Date.now()),
-          updatedAt: new Date((d.updated_at as string) ?? Date.now()),
-          metadata: (d.metadata as ChatSession['metadata']) ?? {
+          id: d['id'] as string,
+          userId: d['user_id'] as string,
+          title: (d['title'] as string) ?? 'Untitled',
+          mode: (d['mode'] as ChatSession['mode']) || 'chat',
+          createdAt: new Date((d['created_at'] as string) ?? Date.now()),
+          updatedAt: new Date((d['updated_at'] as string) ?? Date.now()),
+          metadata: (d['metadata'] as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -263,7 +264,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         setCurrentSession(newSession);
         toast.success('Chat session created');
 
-        return d.id as string;
+        return d['id'] as string;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create session';
         setError(errorMsg);
@@ -282,7 +283,9 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (!currentSession) return;
 
       try {
-        const { error: updateError } = await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
+        const { error: updateError } = await (
+          supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>
+        )
           .update({ title, updated_at: new Date().toISOString() })
           .eq('id', currentSession.id);
 
@@ -354,13 +357,13 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       return data.map((rawSession) => {
         const session = rawSession as Record<string, unknown>;
         return {
-          id: session.id as string,
-          userId: session.user_id as string,
-          title: (session.title as string) ?? 'Untitled',
-          mode: (session.mode as ChatSession['mode']) || 'chat',
-          createdAt: new Date((session.created_at as string) ?? Date.now()),
-          updatedAt: new Date((session.updated_at as string) ?? Date.now()),
-          metadata: (session.metadata as ChatSession['metadata']) ?? {
+          id: session['id'] as string,
+          userId: session['user_id'] as string,
+          title: (session['title'] as string) ?? 'Untitled',
+          mode: (session['mode'] as ChatSession['mode']) || 'chat',
+          createdAt: new Date((session['created_at'] as string) ?? Date.now()),
+          updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
+          metadata: (session['metadata'] as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -388,13 +391,13 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       return data.map((rawSession) => {
         const session = rawSession as Record<string, unknown>;
         return {
-          id: session.id as string,
-          userId: session.user_id as string,
-          title: (session.title as string) ?? 'Untitled',
-          mode: (session.mode as ChatSession['mode']) || 'chat',
-          createdAt: new Date((session.created_at as string) ?? Date.now()),
-          updatedAt: new Date((session.updated_at as string) ?? Date.now()),
-          metadata: (session.metadata as ChatSession['metadata']) ?? {
+          id: session['id'] as string,
+          userId: session['user_id'] as string,
+          title: (session['title'] as string) ?? 'Untitled',
+          mode: (session['mode'] as ChatSession['mode']) || 'chat',
+          createdAt: new Date((session['created_at'] as string) ?? Date.now()),
+          updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
+          metadata: (session['metadata'] as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
