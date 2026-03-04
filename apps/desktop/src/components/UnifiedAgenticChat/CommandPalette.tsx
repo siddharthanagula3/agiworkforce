@@ -466,7 +466,13 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-28" onClick={onClose}>
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center pt-28"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        onClick={onClose}
+      >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

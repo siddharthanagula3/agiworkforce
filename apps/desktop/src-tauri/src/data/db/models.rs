@@ -99,12 +99,16 @@ impl Default for Message {
             model: None,
             created_at: Utc::now(),
             parent_message_id: None,
-            branch_id: Some("main".to_string()),
+            branch_id: Some(DEFAULT_BRANCH_ID.to_string()),
         }
     }
 }
 
+/// Default branch ID constant — used across fork/list/switch/delete operations.
+pub const DEFAULT_BRANCH_ID: &str = "main";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationBranch {
     pub id: String,
     pub conversation_id: i64,
@@ -112,6 +116,14 @@ pub struct ConversationBranch {
     pub fork_point_message_id: Option<i64>,
     pub name: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// Result from a conversation fork operation — returned to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkResult {
+    pub branch: ConversationBranch,
+    pub messages: Vec<Message>,
 }
 
 impl Message {
@@ -128,7 +140,7 @@ impl Message {
             model: None,
             created_at: Utc::now(),
             parent_message_id: None,
-            branch_id: Some("main".to_string()),
+            branch_id: Some(DEFAULT_BRANCH_ID.to_string()),
         }
     }
 

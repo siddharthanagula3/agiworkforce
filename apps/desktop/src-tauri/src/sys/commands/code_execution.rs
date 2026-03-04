@@ -2,6 +2,21 @@ use crate::core::agi::sandbox::{ExecutionConfig, SandboxManager};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
+const MAX_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MiB cap on stdout/stderr
+
+/// Truncate a string to at most `max_bytes` bytes, appending a note if truncated.
+fn truncate_output(s: String, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...\n[truncated — output exceeded {} bytes]", &s[..end], max_bytes)
+}
+
 /// Result returned to the frontend from code execution
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CodeExecutionResponse {
@@ -38,7 +53,7 @@ pub async fn execute_code(
         timeout_secs: Some(timeout_secs.unwrap_or(30)),
         env_vars,
         allow_network: allow_network.unwrap_or(false),
-        memory_limit_mb: Some(512),
+        memory_limit_mb: Some(DEFAULT_MEMORY_LIMIT_MB),
         files,
     };
 
@@ -49,9 +64,9 @@ pub async fn execute_code(
 
     Ok(CodeExecutionResponse {
         success: result.success,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        output: result.output,
+        stdout: truncate_output(result.stdout, MAX_OUTPUT_BYTES),
+        stderr: truncate_output(result.stderr, MAX_OUTPUT_BYTES),
+        output: truncate_output(result.output, MAX_OUTPUT_BYTES),
         error: result.error,
         exit_code: result.exit_code,
         execution_time_ms: result.execution_time_ms,
