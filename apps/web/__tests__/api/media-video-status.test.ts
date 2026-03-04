@@ -538,7 +538,7 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(data.error.code).toBe('INTERNAL_ERROR');
     });
 
     it('should return 503 when RUNWAY_API_KEY is not set', async () => {
@@ -616,7 +616,7 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(data.error.code).toBe('INTERNAL_ERROR');
     });
 
     it('should return 500 when fetch throws a network error', async () => {
