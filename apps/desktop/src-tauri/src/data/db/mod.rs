@@ -7,16 +7,18 @@ pub mod models;
 pub mod repository;
 
 pub use models::{
-    AutomationHistory, Conversation, Message, MessageRole, OverlayEvent, OverlayEventType,
-    PaginatedOverlayEvents, Setting, TaskType,
+    AutomationHistory, Conversation, ConversationBranch, Message, MessageRole, OverlayEvent,
+    OverlayEventType, PaginatedOverlayEvents, Setting, TaskType,
 };
 
 pub use repository::{
-    create_automation_history, create_conversation, create_message, create_overlay_event,
-    delete_conversation, delete_message, delete_overlay_events_before, delete_setting,
-    get_automation_history, get_automation_stats, get_conversation, get_message, get_overlay_event,
-    get_setting, list_automation_history, list_conversations, list_messages, list_overlay_events,
-    list_settings, set_setting, update_conversation_title, update_message_content,
+    create_automation_history, create_branch, create_conversation, create_message,
+    create_overlay_event, delete_branch, delete_conversation, delete_message,
+    delete_overlay_events_before, delete_setting, get_automation_history, get_automation_stats,
+    get_conversation, get_message, get_overlay_event, get_setting, list_automation_history,
+    list_branches, list_conversations, list_messages, list_messages_by_branch,
+    list_overlay_events, list_settings, set_setting, update_conversation_title,
+    update_message_content,
 };
 
 #[derive(Clone)]
