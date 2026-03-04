@@ -19,19 +19,19 @@ export interface ImageInlinePanelProps {
 
 const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
-    const [copied, setCopied] = useState(false);
+    const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
     const imageContent = panel.content.image;
 
     if (!imageContent) {
       return null;
     }
 
-    const handleCopyUrl = async (url: string) => {
+    const handleCopyUrl = async (url: string, index: number) => {
       try {
         await navigator.clipboard.writeText(url);
-        setCopied(true);
+        setCopiedIndex(index);
         toast.success('Image URL copied to clipboard');
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => setCopiedIndex(null), 2000);
       } catch {
         toast.error('Failed to copy URL');
       }
@@ -92,12 +92,12 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
                     {/* Hover action bar */}
                     <div className="absolute bottom-0 left-0 right-0 flex items-center justify-end gap-1 p-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handleCopyUrl(url)}
+                        onClick={() => handleCopyUrl(url, i)}
                         className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
                         title="Copy image URL"
                       >
-                        {copied ? <Check size={12} /> : <Copy size={12} />}
-                        <span>{copied ? 'Copied' : 'Copy URL'}</span>
+                        {copiedIndex === i ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedIndex === i ? 'Copied' : 'Copy URL'}</span>
                       </button>
                       <button
                         onClick={() => handleDownload(url, i)}

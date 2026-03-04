@@ -5,6 +5,7 @@ use super::models::{
     AutomationHistory, Conversation, ConversationBranch, ConversationCostBreakdown,
     CostTimeseriesPoint, Message, MessageRole, OverlayEvent, OverlayEventType,
     PaginatedOverlayEvents, ProviderCostBreakdown, Setting, TaskType, TokenUsage,
+    DEFAULT_BRANCH_ID,
 };
 
 /// Validates a provider or model name string (M12).
@@ -117,7 +118,7 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
             message.provider,
             message.model,
             message.parent_message_id,
-            message.branch_id.as_deref().unwrap_or("main"),
+            message.branch_id.as_deref().unwrap_or(DEFAULT_BRANCH_ID),
         ],
     )?;
 
@@ -275,7 +276,7 @@ pub fn delete_branch(
     conversation_id: i64,
     branch_id: &str,
 ) -> Result<()> {
-    if branch_id == "main" {
+    if branch_id == DEFAULT_BRANCH_ID {
         return Err(rusqlite::Error::InvalidParameterName(
             "Cannot delete the 'main' branch".to_string(),
         ));

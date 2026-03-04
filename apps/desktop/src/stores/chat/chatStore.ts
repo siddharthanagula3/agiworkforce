@@ -29,6 +29,7 @@ import type {
   MessageReaction,
   BranchSummary,
 } from './types';
+import { DEFAULT_BRANCH_ID } from './types';
 
 // Re-export types for backwards compatibility
 export type {
@@ -427,7 +428,7 @@ export const useChatStore = create<ChatState>()(
           selectedMessage: null,
           toolTimelineByMessage: {},
           agenticLoopStatus: null,
-          activeBranchId: 'main',
+          activeBranchId: DEFAULT_BRANCH_ID,
           branches: [] as BranchSummary[],
 
           // Conversation management
@@ -799,6 +800,7 @@ export const useChatStore = create<ChatState>()(
                   state.messages = state.messagesByConversation[convoId]!.slice();
                 } else if (state.messages.length > 1000) {
                   state.messages = state.messages.slice(-1000);
+                  state.messagesByConversation[convoId] = state.messages.slice();
                 }
                 const convo = state.conversations.find((c) => c.id === convoId);
                 if (convo) {
@@ -1033,10 +1035,14 @@ export const useChatStore = create<ChatState>()(
             const state = get();
             const convoId = state.activeConversationId;
             const dbId = convoId ? uuidToDbId(convoId) : undefined;
-            const msgDbId = parseInt(messageId, 10);
+            const msgDbId = uuidToDbId(messageId);
 
-            if (dbId && !isNaN(msgDbId)) {
-              void get().forkAndRegenerate(dbId, msgDbId, newContent);
+            if (dbId && msgDbId !== undefined) {
+              get()
+                .forkAndRegenerate(dbId, msgDbId, newContent)
+                .catch((err) => {
+                  console.error('[ChatStore] Fork failed:', err);
+                });
               return;
             }
 
@@ -1568,6 +1574,8 @@ export const useChatStore = create<ChatState>()(
           },
 
           switchBranch: async (conversationId: number, branchId: string) => {
+            // Capture activeConversationId before async to prevent TOCTOU race
+            const currentConvoId = get().activeConversationId;
             try {
               const messages = await invoke<BackendMessage[]>('conversation_switch_branch', {
                 conversationId,
@@ -1576,11 +1584,12 @@ export const useChatStore = create<ChatState>()(
               const enhanced = messages.map(convertBackendMessage);
               set(
                 (state) => {
+                  // Only update if the user hasn't switched conversations during the await
+                  if (state.activeConversationId !== currentConvoId) return;
                   state.activeBranchId = branchId;
                   state.messages = enhanced;
-                  const convoId = state.activeConversationId;
-                  if (convoId) {
-                    state.messagesByConversation[convoId] = enhanced;
+                  if (currentConvoId) {
+                    state.messagesByConversation[currentConvoId] = enhanced;
                   }
                 },
                 undefined,
@@ -1594,8 +1603,9 @@ export const useChatStore = create<ChatState>()(
           forkAndRegenerate: async (
             conversationId: number,
             messageId: number,
-            _newContent: string,
+            newContent: string,
           ) => {
+            const currentConvoId = get().activeConversationId;
             try {
               const branchName = `Edit at message ${messageId}`;
               const result = await invoke<{ branch: BranchSummary; messages: BackendMessage[] }>(
@@ -1605,14 +1615,27 @@ export const useChatStore = create<ChatState>()(
 
               const enhanced = result.messages.map(convertBackendMessage);
 
+              // Apply the user's edited content to the last message on the new branch
+              if (enhanced.length > 0 && newContent) {
+                const lastMsg = enhanced[enhanced.length - 1];
+                if (lastMsg && lastMsg.role === 'user') {
+                  lastMsg.content = newContent;
+                  lastMsg.metadata = {
+                    ...lastMsg.metadata,
+                    edited: true,
+                    editedAt: new Date(),
+                  };
+                }
+              }
+
               set(
                 (state) => {
+                  if (state.activeConversationId !== currentConvoId) return;
                   state.branches = [...state.branches, result.branch];
                   state.activeBranchId = result.branch.id;
                   state.messages = enhanced;
-                  const convoId = state.activeConversationId;
-                  if (convoId) {
-                    state.messagesByConversation[convoId] = enhanced;
+                  if (currentConvoId) {
+                    state.messagesByConversation[currentConvoId] = enhanced;
                   }
                 },
                 undefined,
@@ -1626,16 +1649,21 @@ export const useChatStore = create<ChatState>()(
           deleteBranch: async (conversationId: number, branchId: string) => {
             try {
               await invoke('conversation_delete_branch', { conversationId, branchId });
+              // If deleting the active branch, switch back to main and reload its messages
+              const wasActive = get().activeBranchId === branchId;
               set(
                 (state) => {
                   state.branches = state.branches.filter((b) => b.id !== branchId);
                   if (state.activeBranchId === branchId) {
-                    state.activeBranchId = 'main';
+                    state.activeBranchId = DEFAULT_BRANCH_ID;
                   }
                 },
                 undefined,
                 'chat/deleteBranch',
               );
+              if (wasActive) {
+                await get().switchBranch(conversationId, DEFAULT_BRANCH_ID);
+              }
             } catch (error) {
               console.error('[ChatStore] Failed to delete branch:', error);
             }
@@ -1717,7 +1745,7 @@ export const useChatStore = create<ChatState>()(
                 state.selectedMessage = null;
                 state.toolTimelineByMessage = {};
                 state.agenticLoopStatus = null;
-                state.activeBranchId = 'main';
+                state.activeBranchId = DEFAULT_BRANCH_ID;
                 state.branches = [];
               },
               undefined,

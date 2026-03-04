@@ -6151,7 +6151,10 @@ pub async fn conversation_export(
             rusqlite::params![conv_id],
             |row| row.get(0),
         )
-        .unwrap_or_else(|_| "Untitled Conversation".to_string());
+        .unwrap_or_else(|e| {
+            warn!("Could not fetch title for conversation {}: {e}", conv_id);
+            "Untitled Conversation".to_string()
+        });
 
     // Fetch messages ordered by creation time.
     let mut stmt = conn
@@ -6203,6 +6206,33 @@ pub async fn conversation_export_pdf(
 ) -> Result<String, String> {
     use crate::features::document::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
 
+    // C4 fix: Validate output_path to prevent arbitrary file writes
+    let path = std::path::Path::new(&output_path);
+    if let Some(ext) = path.extension() {
+        if ext != "pdf" {
+            return Err("Output path must have a .pdf extension".to_string());
+        }
+    } else {
+        return Err("Output path must have a .pdf extension".to_string());
+    }
+    // Reject path traversal
+    let canonical_dir = path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .canonicalize()
+        .map_err(|e| format!("Invalid output directory: {e}"))?;
+    let canonical_str = canonical_dir.to_string_lossy();
+    if canonical_str.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    // Block writes to sensitive system directories
+    let blocked_prefixes = ["/etc", "/usr", "/bin", "/sbin", "/var", "/System"];
+    for prefix in &blocked_prefixes {
+        if canonical_str.starts_with(prefix) {
+            return Err(format!("Cannot write to system directory: {prefix}"));
+        }
+    }
+
     let conv_id: i64 = conversation_id
         .parse()
         .map_err(|_| "Invalid conversation ID".to_string())?;
@@ -6216,7 +6246,10 @@ pub async fn conversation_export_pdf(
             rusqlite::params![conv_id],
             |row| row.get(0),
         )
-        .unwrap_or_else(|_| "Untitled Conversation".to_string());
+        .unwrap_or_else(|e| {
+            warn!("Could not fetch title for conversation {}: {e}", conv_id);
+            "Untitled Conversation".to_string()
+        });
 
     // Fetch messages ordered by creation time
     let mut stmt = conn
