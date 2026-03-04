@@ -1,4 +1,4 @@
-import type { PlanTier, SubscriptionStatus } from '../stores/accountStore';
+import type { PlanTier, SubscriptionStatus } from '../stores/auth';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.agiworkforce.com';
 

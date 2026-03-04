@@ -15,7 +15,7 @@ import {
   type TaskRouting,
   type Provider,
 } from '../../stores/settingsStore';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Button } from '../ui/Button';

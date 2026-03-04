@@ -24,7 +24,7 @@ import {
 } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
 import { useBillingStore } from '../../stores/auth';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import {
   queryTimeSeriesData,
   queryCategoryData,
