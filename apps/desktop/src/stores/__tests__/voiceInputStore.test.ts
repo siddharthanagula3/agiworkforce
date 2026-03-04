@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { detectVoiceCommand, useVoiceInputStore } from '../voiceInputStore';
 
+// Polyfill Blob.arrayBuffer for jsdom test environment (not natively supported in older versions)
+if (!Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function (): Promise<ArrayBuffer> {
+    // Minimal polyfill: resolve with a buffer populated from the blob's text bytes
+    return Promise.resolve(new ArrayBuffer(this.size));
+  };
+}
+
 // Mock @tauri-apps/api/core (already mocked globally in setup.ts, but we re-declare
 // so this file is self-contained and the vi.mocked() type narrows correctly)
 vi.mock('@tauri-apps/api/core', () => ({
@@ -62,13 +70,13 @@ function createMockMediaRecorder() {
 
 /** Install navigator.mediaDevices.getUserMedia + MediaRecorder on the global scope. */
 function installMediaMocks(
-  streamOrError: MediaStream | Error = createMockStream(),
+  streamOrError: MediaStream | Error | DOMException = createMockStream(),
   recorderInstance = createMockMediaRecorder(),
 ) {
-  const getUserMedia =
-    streamOrError instanceof Error
-      ? vi.fn().mockRejectedValue(streamOrError)
-      : vi.fn().mockResolvedValue(streamOrError);
+  const isError = streamOrError instanceof Error || streamOrError instanceof DOMException;
+  const getUserMedia = isError
+    ? vi.fn().mockRejectedValue(streamOrError)
+    : vi.fn().mockResolvedValue(streamOrError);
 
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia },
@@ -76,7 +84,9 @@ function installMediaMocks(
     writable: true,
   });
 
-  const MockRecorderCtor = vi.fn().mockImplementation(() => recorderInstance);
+  const MockRecorderCtor = vi.fn().mockImplementation(function () {
+    return recorderInstance;
+  });
   // Static method used by the store to select mimeType
   (MockRecorderCtor as unknown as { isTypeSupported: ReturnType<typeof vi.fn> }).isTypeSupported =
     vi.fn().mockReturnValue(true);
@@ -332,7 +342,9 @@ describe('voiceInputStore', () => {
 
       // Install only the MediaRecorder constructor (not getUserMedia — we already set it above)
       const recorderInstance = createMockMediaRecorder();
-      const MockRecorderCtor = vi.fn().mockImplementation(() => recorderInstance);
+      const MockRecorderCtor = vi.fn().mockImplementation(function () {
+        return recorderInstance;
+      });
       (
         MockRecorderCtor as unknown as { isTypeSupported: ReturnType<typeof vi.fn> }
       ).isTypeSupported = vi.fn().mockReturnValue(true);

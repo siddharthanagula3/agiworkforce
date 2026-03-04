@@ -1,24 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useModelStore, formatOllamaModelSize, getOllamaModelDisplayName } from '../modelStore';
 
-// Mock @tauri-apps/api/core
+// Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(() => Promise.resolve()),
+  invoke: vi.fn((command: string) => {
+    // Throw for provider status checks so error-handling path returns a defined errorStatus
+    if (command === 'llm_check_provider_status') {
+      return Promise.reject(new Error('provider status unavailable'));
+    }
+    return Promise.resolve(undefined);
+  }),
   isTauri: vi.fn(() => Promise.resolve(false)),
 }));
 
 // Mock the auth store to avoid circular dependency issues
+// Use 'max' plan so model selection is not blocked by tier restrictions
 vi.mock('../auth', () => ({
   useUnifiedAuthStore: {
     getState: () => ({
-      plan: 'hobby',
-      account: { plan: 'hobby' },
+      plan: 'max',
+      account: { plan: 'max' },
     }),
     subscribe: vi.fn(() => () => {}),
   },
   useAccountStore: {
     getState: () => ({
-      account: { plan: 'hobby' },
+      account: { plan: 'max' },
     }),
   },
 }));
@@ -54,18 +61,20 @@ describe('modelStore', () => {
 
   describe('selectModel', () => {
     it('updates selectedModel and selectedProvider', async () => {
-      await useModelStore.getState().selectModel('claude-sonnet-4-6', 'anthropic');
+      // Use claude-sonnet-4.6 (dot, not hyphen) which is in the pro/max allowed list
+      await useModelStore.getState().selectModel('claude-sonnet-4.6', 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('claude-sonnet-4-6');
+      expect(state.selectedModel).toBe('claude-sonnet-4.6');
       expect(state.selectedProvider).toBe('anthropic');
     });
 
     it('adds model to recent models', async () => {
-      await useModelStore.getState().selectModel('gpt-4o', 'openai');
+      // Use gpt-5.2 which is in the pro/max allowed list
+      await useModelStore.getState().selectModel('gpt-5.2', 'openai');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('gpt-4o');
+      expect(state.recentModels).toContain('gpt-5.2');
     });
   });
 
