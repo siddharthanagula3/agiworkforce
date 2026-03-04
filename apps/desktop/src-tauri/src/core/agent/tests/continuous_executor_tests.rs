@@ -351,6 +351,10 @@ fn test_checkpoint_load_latest() {
 
     let task_id = Uuid::new_v4().to_string();
 
+    // M17 fix: Use deterministic timestamps instead of sleep(10ms) to avoid flakiness.
+    // Each checkpoint gets a timestamp 1 second apart, guaranteeing ordering.
+    let base_time = Utc::now() - chrono::Duration::minutes(10);
+
     // Create multiple checkpoints
     for step in 1..=5 {
         let checkpoint = ExecutionCheckpoint {
@@ -362,12 +366,9 @@ fn test_checkpoint_load_latest() {
             tool_results_json: "[]".to_string(),
             goal_json: "\"test\"".to_string(),
             metadata: HashMap::new(),
-            created_at: Utc::now(),
+            created_at: base_time + chrono::Duration::seconds(step as i64),
         };
         persistence.save_checkpoint(&checkpoint).unwrap();
-
-        // Small delay to ensure different timestamps
-        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     // Should get the latest checkpoint (step 5)

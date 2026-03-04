@@ -1,26 +1,161 @@
 use std::sync::RwLock;
-use tauri::command;
+use tauri::{command, State};
 
-// In-memory session storage - avoids OS keychain permission prompts
-// The session is stored in localStorage on the frontend and synced here for Rust API calls
-static SESSION_STORE: RwLock<Option<String>> = RwLock::new(None);
+/// Managed state for session tokens — avoids process-global statics.
+/// Wrapped in an RwLock so multiple readers can coexist with exclusive writers.
+pub struct SessionState(pub RwLock<Option<String>>);
+
+impl SessionState {
+    pub fn new() -> Self {
+        Self(RwLock::new(None))
+    }
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Validate that a string has valid JWT structure (three base64url-encoded
+/// segments separated by dots) and that the payload contains a non-expired
+/// `exp` claim. This is a structural check only — it does NOT verify the
+/// cryptographic signature (that is the auth server's responsibility).
+fn validate_jwt_structure(token: &str) -> Result<(), String> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err("Invalid JWT: expected 3 dot-separated parts".to_string());
+    }
+
+    // Each segment must be non-empty and contain only valid base64url characters
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            return Err(format!("Invalid JWT: segment {} is empty", i));
+        }
+        if !part
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '=')
+        {
+            return Err(format!(
+                "Invalid JWT: segment {} contains invalid base64url characters",
+                i
+            ));
+        }
+    }
+
+    // Decode the payload (segment 1) and check for `exp`
+    let payload_b64 = parts[1];
+
+    // base64url -> standard base64
+    let std_b64: String = payload_b64
+        .chars()
+        .map(|c| match c {
+            '-' => '+',
+            '_' => '/',
+            other => other,
+        })
+        .collect();
+
+    // Add padding if necessary
+    let padded = match std_b64.len() % 4 {
+        2 => format!("{}==", std_b64),
+        3 => format!("{}=", std_b64),
+        _ => std_b64,
+    };
+
+    // Decode using the data_encoding crate or manual approach
+    // We'll use a simple approach that doesn't require new crates
+    let decoded_bytes = base64_decode(&padded)
+        .map_err(|e| format!("Invalid JWT: failed to decode payload: {}", e))?;
+
+    let payload_str = String::from_utf8(decoded_bytes)
+        .map_err(|_| "Invalid JWT: payload is not valid UTF-8".to_string())?;
+
+    // Parse as JSON and check for exp
+    let payload: serde_json::Value = serde_json::from_str(&payload_str)
+        .map_err(|_| "Invalid JWT: payload is not valid JSON".to_string())?;
+
+    let exp = payload
+        .get("exp")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| "Invalid JWT: missing or non-numeric 'exp' claim".to_string())?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "System clock error".to_string())?
+        .as_secs();
+
+    if exp <= now {
+        return Err("Session expired. Please log in again.".to_string());
+    }
+
+    Ok(())
+}
+
+/// Minimal base64 decoder (standard alphabet) that avoids adding a new crate.
+/// Handles the base64 alphabet A-Z a-z 0-9 + / with = padding.
+fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    fn char_to_val(c: u8) -> Result<u8, String> {
+        match c {
+            b'A'..=b'Z' => Ok(c - b'A'),
+            b'a'..=b'z' => Ok(c - b'a' + 26),
+            b'0'..=b'9' => Ok(c - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            b'=' => Ok(0), // padding
+            _ => Err(format!("Invalid base64 character: {}", c as char)),
+        }
+    }
+
+    let bytes = input.as_bytes();
+    if !bytes.len().is_multiple_of(4) {
+        return Err("Invalid base64: length is not a multiple of 4".to_string());
+    }
+
+    let mut output = Vec::with_capacity(bytes.len() * 3 / 4);
+
+    for chunk in bytes.chunks(4) {
+        let a = char_to_val(chunk[0])?;
+        let b = char_to_val(chunk[1])?;
+        let c_val = char_to_val(chunk[2])?;
+        let d = char_to_val(chunk[3])?;
+
+        output.push((a << 2) | (b >> 4));
+        if chunk[2] != b'=' {
+            output.push((b << 4) | (c_val >> 2));
+        }
+        if chunk[3] != b'=' {
+            output.push((c_val << 6) | d);
+        }
+    }
+
+    Ok(output)
+}
 
 #[command]
-pub async fn auth_store_session(session: String) -> Result<(), String> {
-    let mut store = SESSION_STORE.write().map_err(|e| e.to_string())?;
+pub async fn auth_store_session(
+    session: String,
+    state: State<'_, SessionState>,
+) -> Result<(), String> {
+    validate_jwt_structure(&session)?;
+    let mut store = state.0.write().map_err(|e| e.to_string())?;
     *store = Some(session);
     Ok(())
 }
 
 #[command]
-pub async fn auth_retrieve_session() -> Result<String, String> {
-    let store = SESSION_STORE.read().map_err(|e| e.to_string())?;
+pub async fn auth_retrieve_session(
+    state: State<'_, SessionState>,
+) -> Result<String, String> {
+    let store = state.0.read().map_err(|e| e.to_string())?;
     store.clone().ok_or_else(|| "No session stored".to_string())
 }
 
 #[command]
-pub async fn auth_remove_session() -> Result<(), String> {
-    let mut store = SESSION_STORE.write().map_err(|e| e.to_string())?;
+pub async fn auth_remove_session(
+    state: State<'_, SessionState>,
+) -> Result<(), String> {
+    let mut store = state.0.write().map_err(|e| e.to_string())?;
     *store = None;
     Ok(())
 }

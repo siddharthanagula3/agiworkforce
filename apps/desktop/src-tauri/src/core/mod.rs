@@ -17,9 +17,8 @@ pub mod sync_utils;
 // Re-export scheduler types
 pub use scheduler::nlp_parser::parse_schedule;
 pub use scheduler::{
-    ActionHandler, BriefingConfig, BriefingGenerator, CallbackAction, EmailBrief, EmailFetcher,
-    EmailSummary, JobAction, JobExecution, JobInterval, JobSchedule, JobState, JobSummary,
-    ParseError, ParsedSchedule, ProactiveScheduler, ScheduledJob, ScheduledJobBuilder,
+    ActionHandler, CallbackAction, JobAction, JobExecution, JobInterval, JobSchedule, JobState,
+    JobSummary, ParseError, ParsedSchedule, ProactiveScheduler, ScheduledJob, ScheduledJobBuilder,
     SchedulerError, SchedulerResult,
 };
 

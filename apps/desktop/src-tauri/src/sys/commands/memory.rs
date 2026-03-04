@@ -41,6 +41,24 @@ impl MemoryState {
             injection_config: Arc::new(RwLock::new(default_config)),
         })
     }
+
+    /// Create a degraded MemoryState backed by an in-memory database.
+    /// Commands will function but data will not persist across restarts.
+    pub fn new_degraded() -> Self {
+        // Use in-memory SQLite so MemoryManager construction succeeds without a real path.
+        let manager = MemoryManager::new(":memory:")
+            .expect("in-memory MemoryManager should never fail to construct");
+        let default_config = MemoryInjectionConfig {
+            enabled: false,
+            max_memories: 0,
+            min_importance: 10,
+            priority_categories: vec![],
+        };
+        Self {
+            manager: Arc::new(manager),
+            injection_config: Arc::new(RwLock::new(default_config)),
+        }
+    }
 }
 
 /// Store or update a memory

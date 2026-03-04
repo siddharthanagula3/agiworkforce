@@ -179,7 +179,7 @@ mod h13_resolve_model_for_strategy {
             8000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-sonnet-4-5");
+        assert_eq!(model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -278,7 +278,7 @@ mod h13_resolve_model_for_strategy {
     fn auto_premium_boundary_at_15999() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 15999, "fallback");
-        assert_eq!(model, "claude-sonnet-4-5");
+        assert_eq!(model, "claude-sonnet-4-6");
     }
 }
 
