@@ -100,10 +100,8 @@ impl SseStreamParser {
     }
 
     fn process_buffer(&mut self) {
-        let delimiter: &[u8] = match self.provider {
-            crate::core::llm::Provider::Ollama => b"\n",
-            _ => b"\n\n",
-        };
+        let delimiter: &[u8] =
+            crate::core::llm::models_config::get_sse_delimiter(&self.provider);
 
         while let Some(event_end) = self
             .buffer
@@ -273,6 +271,7 @@ pub(crate) fn parse_sse_event(
         crate::core::llm::Provider::Qwen => parse_openai_sse(event),
         crate::core::llm::Provider::Moonshot => parse_openai_sse(event),
         crate::core::llm::Provider::Zhipu => parse_openai_sse(event), // ZhipuAI uses OpenAI-compatible format
+        crate::core::llm::Provider::Mistral => parse_openai_sse(event), // Mistral uses OpenAI-compatible format
         crate::core::llm::Provider::ManagedCloud => parse_openai_sse(event), // ManagedCloud uses OpenAI-compatible format
     }
 }
