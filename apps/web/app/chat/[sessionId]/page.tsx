@@ -21,7 +21,7 @@ import { ChatAIService } from '@features/chat/services/chat-ai-service';
 export default function ChatSessionPage() {
   const router = useRouter();
   const params = useParams();
-  const rawSessionId = params?.sessionId;
+  const rawSessionId = params?.['sessionId'];
   const sessionId: string | undefined =
     typeof rawSessionId === 'string'
       ? rawSessionId
@@ -191,7 +191,7 @@ export default function ChatSessionPage() {
     const lastMsg = msgs[msgs.length - 1];
     const hasStreamingAssistant = msgs.some((m) => m.role === 'assistant' && m.isStreaming);
 
-    if (lastMsg.role === 'user' && !hasStreamingAssistant) {
+    if (lastMsg && lastMsg.role === 'user' && !hasStreamingAssistant) {
       processAIResponse(lastMsg.content, msgs);
     }
     // processAIResponse is intentionally excluded from deps — a ref keeps it current
@@ -209,7 +209,7 @@ export default function ChatSessionPage() {
       if (id === sessionId) {
         const remaining = useChatStore.getState().sessions;
         if (remaining.length > 0) {
-          router.push(`/chat/${remaining[0].id}`);
+          router.push(`/chat/${remaining[0]!.id}`);
         } else {
           router.push('/chat');
         }

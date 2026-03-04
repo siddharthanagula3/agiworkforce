@@ -190,7 +190,7 @@ test.describe('Signup and Checkout Flow', () => {
                 discount_amounts: [],
                 discounts: [],
                 price: {
-                  id: process.env.STRIPE_PRICE_HOBBY_MONTHLY,
+                  id: process.env['STRIPE_PRICE_HOBBY_MONTHLY'],
                   object: 'price',
                   active: true,
                   billing_scheme: 'per_unit',

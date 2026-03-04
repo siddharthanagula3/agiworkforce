@@ -84,7 +84,10 @@ const BASE_URL = 'http://localhost/api/media/video/status';
 
 const TEST_USER = { id: 'user-test-id', email: 'test@example.com' };
 
-function makeRequest(taskId: string | null, extraHeaders: Record<string, string> = {}): NextRequest {
+function makeRequest(
+  taskId: string | null,
+  extraHeaders: Record<string, string> = {},
+): NextRequest {
   const url = taskId ? `${BASE_URL}?task_id=${encodeURIComponent(taskId)}` : BASE_URL;
   return new NextRequest(url, {
     method: 'GET',
@@ -112,16 +115,16 @@ describe('GET /api/media/video/status', () => {
     mockGetUser.mockResolvedValue({ data: { user: TEST_USER }, error: null });
 
     // Set env vars
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
-    process.env.RUNWAY_API_KEY = 'test-runway-key';
-    process.env.GOOGLE_API_KEY = 'test-google-key';
+    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
+    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
+    process.env['RUNWAY_API_KEY'] = 'test-runway-key';
+    process.env['GOOGLE_API_KEY'] = 'test-google-key';
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.RUNWAY_API_KEY;
-    delete process.env.GOOGLE_API_KEY;
+    delete process.env['RUNWAY_API_KEY'];
+    delete process.env['GOOGLE_API_KEY'];
   });
 
   // =========================================================================
@@ -181,7 +184,7 @@ describe('GET /api/media/video/status', () => {
       mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
       const response = await GET(makeRequest('runway_task-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(401);
     });
@@ -366,7 +369,10 @@ describe('GET /api/media/video/status', () => {
         ok: true,
         json: async () => ({
           name: 'operations/12345678',
-          metadata: { '@type': 'type.googleapis.com/google.cloud.aiplatform.v1.GenerateVideoResponse', state: 'PENDING' },
+          metadata: {
+            '@type': 'type.googleapis.com/google.cloud.aiplatform.v1.GenerateVideoResponse',
+            state: 'PENDING',
+          },
           done: false,
         }),
       });
@@ -536,10 +542,10 @@ describe('GET /api/media/video/status', () => {
     });
 
     it('should return 503 when RUNWAY_API_KEY is not set', async () => {
-      delete process.env.RUNWAY_API_KEY;
+      delete process.env['RUNWAY_API_KEY'];
 
       const response = await GET(makeRequest('runway_task-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(503);
     });
@@ -570,7 +576,7 @@ describe('GET /api/media/video/status', () => {
       });
 
       const response = await GET(makeRequest('google_op-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(503);
     });
@@ -584,16 +590,16 @@ describe('GET /api/media/video/status', () => {
       });
 
       const response = await GET(makeRequest('google_op-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(503);
     });
 
     it('should return 503 when GOOGLE_API_KEY is not set', async () => {
-      delete process.env.GOOGLE_API_KEY;
+      delete process.env['GOOGLE_API_KEY'];
 
       const response = await GET(makeRequest('google_op-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(503);
     });
@@ -617,7 +623,7 @@ describe('GET /api/media/video/status', () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNRESET'));
 
       const response = await GET(makeRequest('runway_task-abc'));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(500);
     });

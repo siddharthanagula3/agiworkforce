@@ -142,7 +142,7 @@ test.describe('Subscription and Stripe Integration Tests', () => {
 
     // If there are products, list prices for the first one
     if (products.length > 0) {
-      const prices = await stripe.listTestPrices(products[0].id, 5);
+      const prices = await stripe.listTestPrices(products[0]!.id, 5);
       expect(Array.isArray(prices)).toBe(true);
     }
   });

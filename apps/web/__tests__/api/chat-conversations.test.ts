@@ -41,7 +41,7 @@ const mockSupabaseData = {
 };
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn((url: string, key: string) => {
+  createClient: vi.fn((_url: string, key: string) => {
     // Return different mock based on the key (anon vs service role)
     if (key.includes('service')) {
       return mockSupabaseData;

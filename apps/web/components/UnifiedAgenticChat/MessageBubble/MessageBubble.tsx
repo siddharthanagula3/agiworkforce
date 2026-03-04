@@ -636,7 +636,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               })();
 
               const resultUI: ToolResultUI = {
-                tool_call_id: actionId || 'unknown', // Should exist if toolState exists
+                toolCallId: actionId || 'unknown', // Should exist if toolState exists
+                toolName: 'tool',
                 success: success,
                 data: resultData || errorData || 'No output',
                 error: errorData,

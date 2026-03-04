@@ -247,7 +247,7 @@ function categorizeFile(file: FileItem): string {
  */
 function getFileExtension(filename: string): string {
   const parts = filename.split('.');
-  return parts.length > 1 ? parts[parts.length - 1] : '';
+  return parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
 }
 
 /**

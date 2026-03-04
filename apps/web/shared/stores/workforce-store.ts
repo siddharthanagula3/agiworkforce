@@ -100,6 +100,7 @@ export const useWorkforceStore = create<WorkforceState>()(
         try {
           const { data, error } = await supabase
             .from('hired_employees')
+            // @ts-expect-error - Supabase upsert type inference issue with onConflict
             .upsert(
               {
                 user_id: user.id,

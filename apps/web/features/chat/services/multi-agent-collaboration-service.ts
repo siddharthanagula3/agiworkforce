@@ -494,7 +494,7 @@ Provide the final synthesized answer:`;
       return acc + char.charCodeAt(0);
     }, 0);
 
-    return colors[hash % colors.length];
+    return colors[hash % colors.length] ?? '#6366f1';
   }
 
   /**

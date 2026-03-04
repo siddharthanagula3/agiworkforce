@@ -424,15 +424,15 @@ describe('Subscription Service', () => {
     beforeEach(() => {
       vi.clearAllMocks();
       // Default: STRIPE_SECRET_KEY is set
-      process.env.STRIPE_SECRET_KEY = 'sk_test_mock';
+      process.env['STRIPE_SECRET_KEY'] = 'sk_test_mock';
     });
 
     afterEach(() => {
-      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env['STRIPE_SECRET_KEY'];
     });
 
     it('returns null when STRIPE_SECRET_KEY is not set', async () => {
-      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env['STRIPE_SECRET_KEY'];
 
       const result = await SubscriptionService.syncWithStripe(mockUserId, mockEmail);
 

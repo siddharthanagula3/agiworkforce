@@ -457,7 +457,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.recurrence).toBe('once');
     });
 
@@ -479,7 +479,7 @@ describe('Schedules API', () => {
         const response = await POST(request);
         expect(response.status).toBe(201);
 
-        const insertCall = mockInsert.mock.calls[0][0];
+        const insertCall = mockInsert.mock.calls[0]![0]!;
         expect(insertCall.recurrence).toBe(recurrence);
       }
     });
@@ -494,7 +494,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.model).toBe('auto-balanced');
     });
 
@@ -508,7 +508,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.time_of_day).toBe('09:00');
     });
 
@@ -529,7 +529,7 @@ describe('Schedules API', () => {
         const response = await POST(request);
         expect(response.status).toBe(201);
 
-        const insertCall = mockInsert.mock.calls[0][0];
+        const insertCall = mockInsert.mock.calls[0]![0]!;
         expect(insertCall.time_of_day).toBe(timeOfDay);
       }
     });
@@ -544,7 +544,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.timezone).toBe('UTC');
     });
 
@@ -558,7 +558,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.cron_expression).toBe('0 9 * * 1');
     });
 
@@ -576,7 +576,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.scheduled_at).toBe('2024-12-25T10:00:00Z');
     });
 
@@ -590,7 +590,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.days_of_week).toEqual([1, 3, 5]);
     });
 
@@ -608,7 +608,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.days_of_week).toEqual([1, 5]);
     });
 
@@ -622,7 +622,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.days_of_week).toBeUndefined();
     });
 
@@ -636,7 +636,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.day_of_month).toBe(15);
     });
 
@@ -650,7 +650,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.day_of_month).toBeUndefined();
     });
 
@@ -664,7 +664,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.is_active).toBe(true);
     });
 
@@ -678,7 +678,7 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.is_active).toBe(false);
     });
 
@@ -724,14 +724,18 @@ describe('Schedules API', () => {
     it('should trim name and prompt before saving', async () => {
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'POST',
-        body: JSON.stringify({ ...validBody, name: '  Padded Name  ', prompt: '  Padded Prompt  ' }),
+        body: JSON.stringify({
+          ...validBody,
+          name: '  Padded Name  ',
+          prompt: '  Padded Prompt  ',
+        }),
         headers: { 'Content-Type': 'application/json' },
       });
 
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.name).toBe('Padded Name');
       expect(insertCall.prompt).toBe('Padded Prompt');
     });

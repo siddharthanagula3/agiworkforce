@@ -363,10 +363,10 @@ export class EmployeeMemoryService {
     if (existingIndex >= 0) {
       // Update existing
       memory.knowledgeBase[existingIndex] = {
-        ...memory.knowledgeBase[existingIndex],
+        ...memory.knowledgeBase[existingIndex]!,
         ...entry,
         updatedAt: new Date(),
-      };
+      } as MemoryEntry;
     } else {
       // Add new
       memory.knowledgeBase.push(fullEntry);

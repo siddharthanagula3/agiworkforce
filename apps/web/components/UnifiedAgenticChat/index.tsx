@@ -2227,6 +2227,7 @@ export const UnifiedAgenticChat: React.FC<{
         query: content,
         progress: 0,
         status: 'running',
+        createdAt: new Date(),
         steps: [
           {
             id: `${researchTaskId}-step-1`,

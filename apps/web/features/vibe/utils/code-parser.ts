@@ -222,7 +222,7 @@ export function generateFileTree(filePaths: string[]): FileTreeNode[] {
 
       if (!currentLevel.has(part!)) {
         const node: FileTreeNode = {
-          name: part,
+          name: part ?? '',
           path: currentPath,
           type: isFile ? 'file' : 'folder',
           children: isFile ? undefined : [],

@@ -10,7 +10,7 @@ export class ChatPage extends BasePage {
   private readonly chatInput: Locator;
   private readonly sendButton: Locator;
   private readonly stopButton: Locator;
-  private readonly messageList: Locator;
+  // private readonly messageList: Locator;
   private readonly userMessages: Locator;
   private readonly assistantMessages: Locator;
   private readonly modelSelector: Locator;
@@ -31,9 +31,6 @@ export class ChatPage extends BasePage {
     this.stopButton = page.getByRole('button', { name: /stop/i });
 
     // Message display
-    this.messageList = page.locator(
-      '[data-testid="chat-stream"], [class*="ChatStream"], .messages-container',
-    );
     this.userMessages = page.locator('[data-message-role="user"], .message-user');
     this.assistantMessages = page.locator('[data-message-role="assistant"], .message-assistant');
     this.loadingIndicator = page.locator('[data-testid="thinking-indicator"], .animate-pulse');
@@ -59,7 +56,7 @@ export class ChatPage extends BasePage {
   /**
    * Navigate to the chat page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/chat');
     await this.waitForLoad();
   }
@@ -142,7 +139,7 @@ export class ChatPage extends BasePage {
   async getLastAssistantMessage(): Promise<string> {
     const messages = await this.assistantMessages.all();
     if (messages.length === 0) return '';
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messages[messages.length - 1]!;
     return (await lastMessage.textContent()) || '';
   }
 

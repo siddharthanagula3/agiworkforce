@@ -15,7 +15,7 @@ export class StripePage extends BasePage {
 
   // Billing details
   private readonly nameInput = 'input[placeholder*="Name"], input[aria-label*="Name"]';
-  private readonly addressInput = 'input[placeholder*="Address"], input[aria-label*="Address"]';
+  // private readonly addressInput = 'input[placeholder*="Address"], input[aria-label*="Address"]';
   private readonly postalCodeInput = 'input[placeholder*="Postal code"], input[aria-label*="ZIP"]';
 
   // Submit button

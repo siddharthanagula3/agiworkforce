@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         document.removeEventListener('keydown', handleEscape);
       };
     }
+    return undefined;
   }, [mobileMenuOpen, closeMobileMenu]);
 
   return (

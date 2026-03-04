@@ -391,7 +391,7 @@ export class TokenTrackingService {
       const dateKey = date.toISOString().split('T')[0];
       const stats = this.dailyStats.get(dateKey!) || { tokens: 0, cost: 0 };
       result.push({
-        date: dateKey,
+        date: dateKey ?? '',
         tokens: stats.tokens,
         cost: stats.cost,
       });
