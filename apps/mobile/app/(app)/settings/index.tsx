@@ -1,7 +1,7 @@
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { Menu, LogOut, Bell, Vibrate, ExternalLink } from 'lucide-react-native';
+import { Menu, LogOut, Bell, Vibrate, ExternalLink, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
@@ -15,7 +15,7 @@ function SettingRow({
   value,
   onPress,
 }: {
-  icon: React.ComponentType<{ size?: number | string | null; color?: string }>;
+  icon: LucideIcon;
   label: string;
   value?: string;
   onPress?: () => void;
