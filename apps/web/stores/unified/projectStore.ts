@@ -10,6 +10,7 @@ _useModelStoreFn.getState = () => ({});
 export const useModelStore = _useModelStoreFn;
 const _useProjectStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
 _useProjectStoreFn.getState = () => ({});
+_useProjectStoreFn.setState = (_partial: any) => {};
 export const useProjectStore = _useProjectStoreFn;
 const _useMemoryStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
 _useMemoryStoreFn.getState = () => ({});

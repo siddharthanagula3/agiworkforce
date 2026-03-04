@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { VibeFileSyncService as _VibeFileSyncClass } from './vibe-file-sync';
 
 // Mock supabase before importing the service
 vi.mock('@shared/lib/supabase-client', () => ({
@@ -77,11 +78,8 @@ interface FileSyncService {
   extractPathFromMetadata(metadata: Record<string, unknown>, fallback: string): string;
 }
 
-// Now import the service class
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { VibeFileSyncService } = require('./vibe-file-sync') as {
-  VibeFileSyncService: new () => FileSyncService;
-};
+// Cast to our interface type for private property access in tests
+const VibeFileSyncService = _VibeFileSyncClass as unknown as new () => FileSyncService;
 
 describe('VibeFileSyncService', () => {
   let service: FileSyncService;

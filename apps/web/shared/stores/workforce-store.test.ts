@@ -30,9 +30,7 @@ vi.mock('@shared/lib/supabase-client', () => ({
       const chainable = {
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              order: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
-            })),
+            order: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
           })),
         })),
         upsert: vi.fn(() => ({
@@ -143,12 +141,10 @@ describe('Workforce Store', () => {
       originalFrom.mockImplementationOnce((() => ({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              order: vi.fn(async () => {
-                loadingDuringFetch = useWorkforceStore.getState().isLoading;
-                return { data: [], error: null };
-              }),
-            })),
+            order: vi.fn(async () => {
+              loadingDuringFetch = useWorkforceStore.getState().isLoading;
+              return { data: [], error: null };
+            }),
           })),
         })),
         upsert: vi.fn(),
