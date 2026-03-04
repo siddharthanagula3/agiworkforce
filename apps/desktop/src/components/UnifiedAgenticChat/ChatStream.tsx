@@ -36,6 +36,8 @@ import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
 import { ToolRationaleDisplay } from './ToolRationaleDisplay';
+import { ToolTimeline } from './ToolTimeline';
+import { useChatStore } from '../../stores/chat/chatStore';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -227,6 +229,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
   const editAndRegenerateFromMessage = useUnifiedChatStore(
     (state) => state.editAndRegenerateFromMessage,
   );
+
+  const toolTimelineByMessage = useChatStore((state) => state.toolTimelineByMessage);
 
   const items = useMemo(() => messages ?? [], [messages]);
 
@@ -723,19 +727,25 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
               );
             }
 
+            const toolEntries = toolTimelineByMessage[message.id];
+
             return (
-              <ChatMessageItem
-                key={message.id}
-                message={message}
-                messageIndex={messageIndex}
-                isCurrentMatch={Boolean(isCurrentMatch)}
-                isSearchMatch={Boolean(isSearchMatch)}
-                isKeyboardFocused={Boolean(isKeyboardFocused)}
-                showMessageTimestamps={showMessageTimestamps}
-                onOpenSidecar={onOpenSidecar}
-                onRetry={handleRetry}
-                onEditSave={handleEditSave}
-              />
+              <React.Fragment key={message.id}>
+                {message.role === 'assistant' && toolEntries && toolEntries.length > 0 && (
+                  <ToolTimeline entries={toolEntries} className="mx-4 mb-1" />
+                )}
+                <ChatMessageItem
+                  message={message}
+                  messageIndex={messageIndex}
+                  isCurrentMatch={Boolean(isCurrentMatch)}
+                  isSearchMatch={Boolean(isSearchMatch)}
+                  isKeyboardFocused={Boolean(isKeyboardFocused)}
+                  showMessageTimestamps={showMessageTimestamps}
+                  onOpenSidecar={onOpenSidecar}
+                  onRetry={handleRetry}
+                  onEditSave={handleEditSave}
+                />
+              </React.Fragment>
             );
           })
         )}

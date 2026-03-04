@@ -222,6 +222,19 @@ function generateTitleFromMessage(content: string): string {
 // Storage version for migrations
 const STORAGE_VERSION = 1;
 
+/**
+ * Represents a single tool execution entry in the per-message tool timeline.
+ * Used by the ToolTimeline component to render Claude Code-style inline tool labels.
+ */
+export interface ToolLabelEntry {
+  id: string;
+  displayName: string;
+  displayArgs: string;
+  status: 'running' | 'completed' | 'error';
+  durationMs?: number;
+  error?: string;
+}
+
 export interface ChatState {
   // Conversation management
   conversations: ConversationSummary[];
@@ -250,6 +263,17 @@ export interface ChatState {
   editingMessageId: string | null;
   showMessageTimestamps: boolean;
   selectedMessage: string | null;
+
+  // Tool timeline: per-message list of tool executions (for ToolTimeline component)
+  toolTimelineByMessage: Record<string, ToolLabelEntry[]>;
+
+  // Agentic loop status (updated by tool event listener)
+  agenticLoopStatus: {
+    active: boolean;
+    conversationId: number | null;
+    iteration: number;
+    maxIterations: number;
+  } | null;
 
   // Actions - Conversation management
   ensureActiveConversation: () => void;
@@ -333,6 +357,17 @@ export interface ChatState {
     totalCost: number;
   };
 
+  // Actions - Tool timeline
+  addToolTimelineEntry: (messageId: string, entry: ToolLabelEntry) => void;
+  updateToolTimelineEntry: (
+    messageId: string,
+    entryId: string,
+    updates: Partial<ToolLabelEntry>,
+  ) => void;
+
+  // Actions - Agentic loop status
+  setAgenticLoopStatus: (status: ChatState['agenticLoopStatus']) => void;
+
   // Actions - Clear/export
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
@@ -372,6 +407,8 @@ export const useChatStore = create<ChatState>()(
           editingMessageId: null,
           showMessageTimestamps: true,
           selectedMessage: null,
+          toolTimelineByMessage: {},
+          agenticLoopStatus: null,
 
           // Conversation management
           ensureActiveConversation: () =>
@@ -571,6 +608,13 @@ export const useChatStore = create<ChatState>()(
           deleteConversation: (id: string) =>
             set(
               (state) => {
+                // Prune tool timeline entries for messages in this conversation
+                const msgs = state.messagesByConversation[id];
+                if (msgs) {
+                  for (const msg of msgs) {
+                    delete state.toolTimelineByMessage[msg.id];
+                  }
+                }
                 state.conversations = state.conversations.filter((c) => c.id !== id);
                 delete state.messagesByConversation[id];
                 if (state.activeConversationId === id) {
@@ -1439,6 +1483,47 @@ export const useChatStore = create<ChatState>()(
             };
           },
 
+          // Tool timeline
+          addToolTimelineEntry: (messageId, entry) =>
+            set(
+              (state) => {
+                if (!state.toolTimelineByMessage[messageId]) {
+                  state.toolTimelineByMessage[messageId] = [];
+                }
+                const entries = state.toolTimelineByMessage[messageId]!;
+                // Cap per-message timeline at 200 entries to prevent unbounded growth
+                if (entries.length < 200) {
+                  entries.push(entry);
+                }
+              },
+              undefined,
+              'chat/addToolTimelineEntry',
+            ),
+
+          updateToolTimelineEntry: (messageId, entryId, updates) =>
+            set(
+              (state) => {
+                const entries = state.toolTimelineByMessage[messageId];
+                if (!entries) return;
+                const idx = entries.findIndex((e) => e.id === entryId);
+                if (idx !== -1 && entries[idx]) {
+                  entries[idx] = { ...entries[idx]!, ...updates };
+                }
+              },
+              undefined,
+              'chat/updateToolTimelineEntry',
+            ),
+
+          // Agentic loop status
+          setAgenticLoopStatus: (status) =>
+            set(
+              (state) => {
+                state.agenticLoopStatus = status;
+              },
+              undefined,
+              'chat/setAgenticLoopStatus',
+            ),
+
           // Clear/export
           clearHistory: () => {
             set(
@@ -1511,6 +1596,8 @@ export const useChatStore = create<ChatState>()(
                 state.draftContent = '';
                 state.editingMessageId = null;
                 state.selectedMessage = null;
+                state.toolTimelineByMessage = {};
+                state.agenticLoopStatus = null;
               },
               undefined,
               'chat/resetOnLogout',
@@ -1573,3 +1660,6 @@ export const selectNonArchivedConversations = (state: ChatState) =>
 
 export const selectPinnedConversations = (state: ChatState) =>
   state.conversations.filter((c) => c.pinned && !c.archived);
+
+export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimelineByMessage;
+export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;

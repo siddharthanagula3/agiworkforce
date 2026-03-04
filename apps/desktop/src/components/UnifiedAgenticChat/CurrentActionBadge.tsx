@@ -12,13 +12,40 @@ import {
   FileEdit,
   Globe,
   Camera,
+  FileText,
+  FolderOpen,
+  GitBranch,
+  Database,
+  Image,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ActionTrailEntry } from '../../stores/unifiedChatStore';
 
-function getIconForType(type: ActionTrailEntry['type'], message?: string) {
-  // Check message for specific tool types
-  const lowerMessage = message?.toLowerCase() ?? '';
+const TOOL_ICON_MAP: Record<string, LucideIcon> = {
+  Read: FileText,
+  Write: FileText,
+  Edit: FileEdit,
+  LS: FolderOpen,
+  Search: Search,
+  Bash: Terminal,
+  WebSearch: Globe,
+  WebFetch: Globe,
+  Git: GitBranch,
+  Memory: Database,
+  ImageGen: Image,
+};
+
+function getIcon(entry: ActionTrailEntry) {
+  // Prefer display name from tool events (populated by the tool:event listener)
+  const displayName = entry.metadata?.['displayName'] as string | undefined;
+  if (displayName) {
+    const IconComponent = TOOL_ICON_MAP[displayName] ?? Wrench;
+    return <IconComponent className="w-3.5 h-3.5" />;
+  }
+
+  // Fall back to existing keyword-based matching on the message string
+  const lowerMessage = entry.message?.toLowerCase() ?? '';
   if (lowerMessage.includes('screenshot') || lowerMessage.includes('capture')) {
     return <Camera className="w-3.5 h-3.5" />;
   }
@@ -39,7 +66,7 @@ function getIconForType(type: ActionTrailEntry['type'], message?: string) {
     return <Wrench className="w-3.5 h-3.5" />;
   }
 
-  switch (type) {
+  switch (entry.type) {
     case 'thinking':
       return <Brain className="w-3.5 h-3.5" />;
     case 'searching':
@@ -167,7 +194,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
                 'animate-pulse',
             )}
           >
-            {getIconForType(displayAction.type, displayAction.message)}
+            {getIcon(displayAction)}
           </span>
 
           {/* Message */}
@@ -241,9 +268,7 @@ export function CurrentActionStack({ className }: CurrentActionBadgeProps) {
                 colors.border,
               )}
             >
-              <span className={cn('shrink-0 animate-pulse', colors.icon)}>
-                {getIconForType(action.type, action.message)}
-              </span>
+              <span className={cn('shrink-0 animate-pulse', colors.icon)}>{getIcon(action)}</span>
               <span className={cn('text-xs font-medium truncate flex-1', colors.text)}>
                 {action.message}
               </span>

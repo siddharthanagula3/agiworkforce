@@ -20,7 +20,7 @@ import {
   initializeAgentStatusListener,
   applyAgentStatusSnapshot,
 } from './chat/agentStore';
-import { useToolStore } from './chat/toolStore';
+import { useToolStore, initializeToolEventListener } from './chat/toolStore';
 import { useUIStore as useSidecarStore } from './ui';
 
 // Re-export all types for backwards compatibility
@@ -81,7 +81,7 @@ export type { ContextItem } from '@agiworkforce/types';
 export { dbIdToUuid, uuidToDbId } from './chat/chatStore';
 
 // Re-export initialization functions
-export { initializeAgentStatusListener, applyAgentStatusSnapshot };
+export { initializeAgentStatusListener, applyAgentStatusSnapshot, initializeToolEventListener };
 
 /**
  * Shared clear/reset logic used by both the hook and getState() forms.
