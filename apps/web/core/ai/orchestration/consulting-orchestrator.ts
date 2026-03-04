@@ -1024,7 +1024,7 @@ export class ConsultingOrchestrator {
   private selectWorkflow(request: ConsultationRequest): ConsultingWorkflow {
     // If workflow specified, use it
     if (request.workflowId && this.workflows[request.workflowId]) {
-      return this.workflows[request.workflowId];
+      return this.workflows[request.workflowId]!;
     }
 
     // Auto-detect based on query
@@ -1192,7 +1192,7 @@ export class ConsultingOrchestrator {
                 keyPoints: step.produces,
                 userRequest: request.query,
                 workCompleted: step.description,
-                pendingTasks: [nextStep?.description],
+                pendingTasks: [nextStep?.description ?? ''],
               },
               stepResult.structuredOutput,
             );
@@ -1478,10 +1478,10 @@ Respond with JSON:
     });
 
     store.addMessage({
-      from: winner?.agentName,
+      from: winner?.agentName ?? '',
       type: 'employee',
-      content: winner?.output,
-      metadata: { employeeName: winner?.agentName, isRaceWinner: true },
+      content: winner?.output ?? '',
+      metadata: { employeeName: winner?.agentName ?? '', isRaceWinner: true },
     });
 
     const contributions: AgentContribution[] = raceResults.map((r) => ({
@@ -1503,7 +1503,7 @@ Respond with JSON:
       domain: workflow.domain,
       mode: 'race',
       result: {
-        summary: winner?.output,
+        summary: winner?.output ?? '',
         recommendations: [],
         actionItems: [],
       },

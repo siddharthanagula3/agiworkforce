@@ -227,7 +227,7 @@ export class BlueprintStreamParser {
   private extractJsonStringField(buffer: string, field: string): string | null {
     const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i');
     const match = buffer.match(regex);
-    return match ? match[1] : null;
+    return match ? (match[1] ?? null) : null;
   }
 
   private blueprintToMarkdown(bp: Blueprint): string {

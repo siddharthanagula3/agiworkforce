@@ -368,7 +368,7 @@ const ResourcesPage: React.FC = () => {
       {/* Featured Resource */}
       <section className="px-4 pb-16 sm:px-6 lg:px-8">
         <div className="container mx-auto max-w-7xl">
-          <FeaturedResourceCard resource={resources[0]} />
+          {resources[0] && <FeaturedResourceCard resource={resources[0]} />}
         </div>
       </section>
 

@@ -203,8 +203,8 @@ describe('Rate Limiting', () => {
   describe('checkRateLimit - In-Memory Fallback', () => {
     beforeEach(() => {
       // Ensure Redis env vars are not set
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -338,8 +338,8 @@ describe('Rate Limiting', () => {
   // =========================================================================
   describe('withRateLimit', () => {
     beforeEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -420,8 +420,8 @@ describe('Rate Limiting', () => {
   // =========================================================================
   describe('withRateLimitHandler', () => {
     beforeEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -543,8 +543,8 @@ describe('Rate Limiting', () => {
   // =========================================================================
   describe('RateLimitInfo Interface', () => {
     beforeEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -577,8 +577,8 @@ describe('Rate Limiting', () => {
   // =========================================================================
   describe('Window Configuration', () => {
     beforeEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -603,8 +603,8 @@ describe('Rate Limiting', () => {
   // =========================================================================
   describe('Identifier Extraction', () => {
     beforeEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
       vi.resetModules();
     });
 
@@ -692,15 +692,15 @@ describe('Rate Limiting', () => {
   describe('Redis-backed Rate Limiting (Upstash)', () => {
     beforeEach(() => {
       // Set Redis env vars so the module initialises the Redis client path
-      process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
-      process.env.UPSTASH_REDIS_REST_TOKEN = 'test-redis-token';
+      process.env['UPSTASH_REDIS_REST_URL'] = 'https://test-redis.upstash.io';
+      process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-redis-token';
       vi.resetModules();
       vi.clearAllMocks();
     });
 
     afterEach(() => {
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env['UPSTASH_REDIS_REST_URL'];
+      delete process.env['UPSTASH_REDIS_REST_TOKEN'];
     });
 
     it('delegates to rateLimiter.limit() when Redis is configured and allows request', async () => {

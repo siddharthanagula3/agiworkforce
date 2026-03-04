@@ -182,8 +182,8 @@ describe('Audit Service', () => {
       const logs = await AuditService.getOrganizationLogs(mockOrgId);
 
       expect(logs).toHaveLength(2);
-      expect(logs[0].actor_email).toBe('user@example.com');
-      expect(logs[1].actor_email).toBe('other@example.com');
+      expect(logs[0]!.actor_email).toBe('user@example.com');
+      expect(logs[1]!.actor_email).toBe('other@example.com');
     });
 
     it('should use default limit of 50', async () => {
@@ -273,7 +273,7 @@ describe('Audit Service', () => {
 
       const logs = await AuditService.getOrganizationLogs(mockOrgId);
 
-      expect(logs[0].actor_email).toBeUndefined();
+      expect(logs[0]!.actor_email).toBeUndefined();
     });
   });
 });

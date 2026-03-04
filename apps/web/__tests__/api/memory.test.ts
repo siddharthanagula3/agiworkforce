@@ -538,7 +538,7 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0][0];
+      const insertCall = mockInsert.mock.calls[0]![0]!;
       expect(insertCall.category).toBeNull();
     });
   });

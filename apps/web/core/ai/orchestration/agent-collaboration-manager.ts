@@ -835,7 +835,7 @@ class MultiAgentOrchestrator {
 
     onCommunication({
       id: `comm-${Date.now()}`,
-      from: prevTask?.assignedTo,
+      from: prevTask?.assignedTo ?? '',
       to: task.assignedTo,
       type: 'handoff',
       message: `Handing off to ${task.assignedTo} for "${task.description}"`,

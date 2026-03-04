@@ -105,8 +105,8 @@ describe('Concurrent Login / Multi-Session Handling', () => {
     vi.clearAllMocks();
     vi.resetModules();
     process.env = { ...originalEnv };
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
+    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
+    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
   });
 
   afterEach(() => {
@@ -662,7 +662,7 @@ describe('Concurrent Login / Multi-Session Handling', () => {
 
       let sessionIndex = 0;
       mockGetSession.mockImplementation(async () => {
-        const session = sessions[sessionIndex % sessions.length];
+        const session = sessions[sessionIndex % sessions.length]!;
         sessionIndex++;
         return {
           data: {

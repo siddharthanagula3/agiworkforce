@@ -46,8 +46,8 @@ export class TestDatabase {
   private serviceRoleKey: string;
 
   constructor(supabaseUrl?: string, serviceRoleKey?: string) {
-    this.supabaseUrl = supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    this.serviceRoleKey = serviceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    this.supabaseUrl = supabaseUrl || process.env['NEXT_PUBLIC_SUPABASE_URL'] || '';
+    this.serviceRoleKey = serviceRoleKey || process.env['SUPABASE_SERVICE_ROLE_KEY'] || '';
 
     if (!this.supabaseUrl || !this.serviceRoleKey) {
       throw new Error(

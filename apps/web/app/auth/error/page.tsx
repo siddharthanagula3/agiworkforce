@@ -53,7 +53,7 @@ function AuthErrorContent() {
     const errorCode = searchParams.get('error') || 'default';
     const errorDescription = searchParams.get('error_description');
 
-    const knownError = ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.default;
+    const knownError = ERROR_MESSAGES[errorCode] ?? ERROR_MESSAGES['default']!;
 
     return {
       ...knownError,

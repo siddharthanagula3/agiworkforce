@@ -52,7 +52,7 @@ const mockSupabaseData = {
 };
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn((url: string, key: string) => {
+  createClient: vi.fn((_url: string, key: string) => {
     if (key.includes('service')) {
       return mockSupabaseData;
     }
@@ -419,7 +419,7 @@ describe('Chat Messages API', () => {
         );
 
         // Parse the body to verify content
-        const fetchCall = mockFetch.mock.calls[0];
+        const fetchCall = mockFetch.mock.calls[0]!;
         const body = JSON.parse(fetchCall[1].body);
         expect(body.model).toBe('gpt-4');
         expect(body.stream).toBe(false);
@@ -553,7 +553,7 @@ describe('Chat Messages API', () => {
               select: vi
                 .fn()
                 .mockImplementation(
-                  (selector: string, options?: { count?: string; head?: boolean }) => {
+                  (_selector: string, options?: { count?: string; head?: boolean }) => {
                     if (options?.count === 'exact') {
                       return {
                         eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
@@ -622,7 +622,7 @@ describe('Chat Messages API', () => {
               select: vi
                 .fn()
                 .mockImplementation(
-                  (selector: string, options?: { count?: string; head?: boolean }) => {
+                  (_selector: string, options?: { count?: string; head?: boolean }) => {
                     if (options?.count === 'exact') {
                       return {
                         eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
@@ -726,7 +726,7 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        const fetchCall = mockFetch.mock.calls[0];
+        const fetchCall = mockFetch.mock.calls[0]!;
         const body = JSON.parse(fetchCall[1].body);
         expect(body.model).toBe('claude-3-opus');
       });
@@ -783,7 +783,7 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        const fetchCall = mockFetch.mock.calls[0];
+        const fetchCall = mockFetch.mock.calls[0]!;
         const body = JSON.parse(fetchCall[1].body);
         expect(body.model).toBe('auto');
       });
@@ -821,7 +821,7 @@ describe('Chat Messages API', () => {
               select: vi
                 .fn()
                 .mockImplementation(
-                  (selector: string, options?: { count?: string; head?: boolean }) => {
+                  (_selector: string, options?: { count?: string; head?: boolean }) => {
                     if (options?.count === 'exact') {
                       return {
                         eq: vi.fn().mockResolvedValue({ count: 5, error: null }),

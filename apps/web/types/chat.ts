@@ -12,7 +12,13 @@ export type ArtifactType =
   | 'json'
   | 'csv'
   | 'image'
-  | 'video';
+  | 'video'
+  | 'spreadsheet'
+  | 'presentation'
+  | 'chart'
+  | 'diagram'
+  | 'document'
+  | 'table';
 
 export interface Artifact {
   id: string;
@@ -22,6 +28,7 @@ export interface Artifact {
   language?: string;
   mimeType?: string;
   url?: string;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,11 +66,22 @@ export interface ToolApprovalRequest {
 export interface ResearchTask {
   id: string;
   query: string;
-  status: 'pending' | 'searching' | 'analyzing' | 'completed' | 'failed';
+  status: 'pending' | 'searching' | 'analyzing' | 'completed' | 'failed' | 'running';
   sources: ResearchSource[];
   summary?: string;
+  steps?: ResearchStep[];
+  findings?: string[];
+  progress?: number;
+  timeElapsed?: number | string;
   createdAt: Date;
   completedAt?: Date;
+}
+
+export interface ResearchStep {
+  id: string;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  timestamp?: number;
 }
 
 export interface ResearchSource {

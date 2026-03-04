@@ -1204,7 +1204,7 @@ export class EmployeeChatService {
       bestReasons.length > 0 ? bestReasons.slice(0, 3).join(', ') : 'general capabilities';
 
     return {
-      employee: bestEmployee,
+      employee: bestEmployee!,
       reason,
       confidence,
     };
@@ -1247,7 +1247,7 @@ export class EmployeeChatService {
     }, 0);
 
     const colorIndex = hash % colors.length;
-    return colors[colorIndex];
+    return colors[colorIndex] ?? '#6366f1';
   }
 
   /**
