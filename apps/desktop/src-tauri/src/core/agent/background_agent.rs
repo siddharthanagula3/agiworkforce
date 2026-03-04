@@ -1262,7 +1262,7 @@ async fn execute_background_agent(
                     a.status = BackgroundAgentStatus::Paused;
                 }
                 RunOutcome::Cancelled => {
-                    a.fail("Cancelled by user command".to_string());
+                    a.cancel();
                 }
                 RunOutcome::TimedOut => {
                     a.fail(format!("Agent timed out after {} seconds", timeout_secs));
@@ -1277,53 +1277,55 @@ async fn execute_background_agent(
 
     // Emit frontend event
     if let Some(ref app) = app_handle {
-        match &outcome {
+        let emit_result = match &outcome {
             RunOutcome::Finished(Ok(_)) => {
-                let _ = app.emit(
+                app.emit(
                     "background_agent:completed",
                     serde_json::json!({
                         "agentId": agent_id,
                         "goal": goal,
                         "summaryPath": summary_path,
                     }),
-                );
+                )
             }
             RunOutcome::Paused => {
-                let _ = app.emit(
+                app.emit(
                     "background_agent:paused",
                     serde_json::json!({ "agentId": agent_id }),
-                );
+                )
             }
             RunOutcome::Cancelled => {
-                let _ = app.emit(
-                    "background_agent:failed",
+                app.emit(
+                    "background_agent:cancelled",
                     serde_json::json!({
                         "agentId": agent_id,
                         "goal": goal,
-                        "error": "Cancelled by user",
                     }),
-                );
+                )
             }
             RunOutcome::TimedOut => {
-                let _ = app.emit(
+                app.emit(
                     "background_agent:failed",
                     serde_json::json!({
                         "agentId": agent_id,
                         "goal": goal,
                         "error": format!("Timed out after {} seconds", timeout_secs),
                     }),
-                );
+                )
             }
             RunOutcome::Finished(Err(e)) => {
-                let _ = app.emit(
+                app.emit(
                     "background_agent:failed",
                     serde_json::json!({
                         "agentId": agent_id,
                         "goal": goal,
                         "error": e.to_string(),
                     }),
-                );
+                )
             }
+        };
+        if let Err(e) = emit_result {
+            tracing::warn!("Failed to emit background_agent event: {}", e);
         }
     }
 

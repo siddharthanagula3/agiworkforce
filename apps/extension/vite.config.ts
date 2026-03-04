@@ -2,14 +2,14 @@ import { defineConfig } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'node:path';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: __dirname,
   publicDir: false,
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     minify: 'terser',
-    sourcemap: true,
+    sourcemap: mode !== 'production',
     rollupOptions: {
       input: {
         background: resolve(__dirname, 'src/background.ts'),
@@ -42,4 +42,4 @@ export default defineConfig({
       ],
     }),
   ],
-});
+}));

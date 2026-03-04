@@ -113,30 +113,72 @@ pub struct ConnectionGuard {
 }
 
 impl ConnectionGuard {
-    /// Get a reference to the underlying connection
-    /// Panics if the connection was already returned to the pool
-    pub fn get(&self) -> &Connection {
-        &self
-            .conn
-            .as_ref()
-            .unwrap_or_else(|| {
-                tracing::error!("Connection already returned to pool");
-                panic!("Connection already returned to pool");
-            })
-            .conn
+    /// Try to get a reference to the underlying connection.
+    ///
+    /// Returns `None` if the connection has already been returned to the pool.
+    /// Prefer this method over [`get`] to avoid panics in production code.
+    pub fn try_get(&self) -> Option<&Connection> {
+        self.conn.as_ref().map(|c| &c.conn)
     }
 
-    /// Get a mutable reference to the underlying connection
-    /// Panics if the connection was already returned to the pool
-    pub fn get_mut(&mut self) -> &mut Connection {
-        &mut self
-            .conn
-            .as_mut()
-            .unwrap_or_else(|| {
-                tracing::error!("Connection already returned to pool");
+    /// Try to get a mutable reference to the underlying connection.
+    ///
+    /// Returns `None` if the connection has already been returned to the pool.
+    /// Prefer this method over [`get_mut`] to avoid panics in production code.
+    pub fn try_get_mut(&mut self) -> Option<&mut Connection> {
+        self.conn.as_mut().map(|c| &mut c.conn)
+    }
+
+    /// Get a reference to the underlying connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection was already returned to the pool. In debug
+    /// builds the assertion fires eagerly; in release builds the code path
+    /// should never be reached because `ConnectionGuard` is consumed on drop.
+    /// Prefer [`try_get`] in any code that may encounter a returned connection.
+    pub fn get(&self) -> &Connection {
+        debug_assert!(
+            self.conn.is_some(),
+            "ConnectionGuard::get() called after connection was returned to pool"
+        );
+        match self.conn.as_ref() {
+            Some(c) => &c.conn,
+            None => {
+                tracing::error!(
+                    "ConnectionGuard::get() called after connection was returned to pool; \
+                     this is a bug — use try_get() for fallible access"
+                );
+                // SAFETY: unreachable in correct usage; debug_assert fires first in debug builds.
                 panic!("Connection already returned to pool");
-            })
-            .conn
+            }
+        }
+    }
+
+    /// Get a mutable reference to the underlying connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection was already returned to the pool. In debug
+    /// builds the assertion fires eagerly; in release builds the code path
+    /// should never be reached because `ConnectionGuard` is consumed on drop.
+    /// Prefer [`try_get_mut`] in any code that may encounter a returned connection.
+    pub fn get_mut(&mut self) -> &mut Connection {
+        debug_assert!(
+            self.conn.is_some(),
+            "ConnectionGuard::get_mut() called after connection was returned to pool"
+        );
+        match self.conn.as_mut() {
+            Some(c) => &mut c.conn,
+            None => {
+                tracing::error!(
+                    "ConnectionGuard::get_mut() called after connection was returned to pool; \
+                     this is a bug — use try_get_mut() for fallible access"
+                );
+                // SAFETY: unreachable in correct usage; debug_assert fires first in debug builds.
+                panic!("Connection already returned to pool");
+            }
+        }
     }
 }
 

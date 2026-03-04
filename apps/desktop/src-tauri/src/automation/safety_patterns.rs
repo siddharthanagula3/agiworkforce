@@ -23,21 +23,32 @@ pub fn dangerous_command_patterns() -> &'static Vec<Regex> {
     DANGEROUS_COMMAND_PATTERNS.get_or_init(|| {
         vec![
             // Destructive file-system commands
-            Regex::new(r"(?i)rm\s+-(?:rf|fr)").unwrap(),
-            Regex::new(r"(?i)format\s+[a-z]:").unwrap(),
-            Regex::new(r"(?i)del\s+/[fqs]").unwrap(),
-            Regex::new(r"(?i)\bdeltree\b").unwrap(),
-            Regex::new(r"(?i)mkfs").unwrap(),
+            Regex::new(r"(?i)rm\s+-(?:rf|fr)")
+                .expect("safety pattern regex: rm -rf destructive removal"),
+            Regex::new(r"(?i)format\s+[a-z]:")
+                .expect("safety pattern regex: format drive"),
+            Regex::new(r"(?i)del\s+/[fqs]")
+                .expect("safety pattern regex: del /f forced delete"),
+            Regex::new(r"(?i)\bdeltree\b")
+                .expect("safety pattern regex: deltree recursive delete"),
+            Regex::new(r"(?i)mkfs")
+                .expect("safety pattern regex: mkfs filesystem creation"),
             // Sensitive system paths
-            Regex::new(r"(?i)system32").unwrap(),
-            Regex::new(r"(?i)/etc/passwd").unwrap(),
-            Regex::new(r"(?i)~/.ssh").unwrap(),
+            Regex::new(r"(?i)system32")
+                .expect("safety pattern regex: system32 path"),
+            Regex::new(r"(?i)/etc/passwd")
+                .expect("safety pattern regex: /etc/passwd"),
+            Regex::new(r"(?i)~/.ssh")
+                .expect("safety pattern regex: ~/.ssh directory"),
             // Sensitive data keywords
-            Regex::new(r"(?i)password|passwd|credential|api[_-]?key|secret|token").unwrap(),
+            Regex::new(r"(?i)password|passwd|credential|api[_-]?key|secret|token")
+                .expect("safety pattern regex: sensitive data keywords"),
             // Registry manipulation (Windows)
-            Regex::new(r"(?i)regedit|reg\s+delete|reg\s+add").unwrap(),
+            Regex::new(r"(?i)regedit|reg\s+delete|reg\s+add")
+                .expect("safety pattern regex: Windows registry manipulation"),
             // Privileged destructive commands
-            Regex::new(r"(?i)sudo\s+rm|sudo\s+dd").unwrap(),
+            Regex::new(r"(?i)sudo\s+rm|sudo\s+dd")
+                .expect("safety pattern regex: sudo destructive commands"),
         ]
     })
 }

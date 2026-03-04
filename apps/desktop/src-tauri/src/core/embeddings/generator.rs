@@ -57,6 +57,13 @@ pub struct EmbeddingGenerator {
 }
 
 impl EmbeddingGenerator {
+    /// Create a degraded generator that skips the async connection test.
+    /// Used when the full async initialization fails and we need a valid but non-functional state.
+    pub fn new_degraded(config: EmbeddingConfig) -> Result<Self> {
+        let client = Client::builder().timeout(config.timeout).build()?;
+        Ok(Self { config, client })
+    }
+
     pub async fn new(config: EmbeddingConfig) -> Result<Self> {
         let client = Client::builder().timeout(config.timeout).build()?;
 

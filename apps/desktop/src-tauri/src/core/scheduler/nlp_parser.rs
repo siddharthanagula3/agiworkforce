@@ -23,7 +23,58 @@
 use chrono::{DateTime, Datelike, Duration, Local, NaiveTime, Timelike, Utc, Weekday};
 use regex::Regex;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use thiserror::Error;
+
+// ── Pre-compiled regex patterns (compiled once, reused across calls) ───────
+
+static RE_RELATIVE_TIME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^in\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months)$").expect("RE_RELATIVE_TIME")
+});
+
+static RE_AT_TIME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_AT_TIME")
+});
+
+static RE_TOMORROW_AT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^tomorrow\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_TOMORROW_AT")
+});
+
+static RE_WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$").expect("RE_WEEKDAY")
+});
+
+static RE_ON_DATE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^on\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$").expect("RE_ON_DATE")
+});
+
+static RE_EVERY_N_UNIT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$").expect("RE_EVERY_N_UNIT")
+});
+
+static RE_EVERY_UNIT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+(second|minute|hour|day|week)$").expect("RE_EVERY_UNIT")
+});
+
+static RE_EVERY_DAY_AT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+day\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_EVERY_DAY_AT")
+});
+
+static RE_EVERY_WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$").expect("RE_EVERY_WEEKDAY")
+});
+
+static RE_EVERY_WEEKDAY_AT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_EVERY_WEEKDAY_AT")
+});
+
+static RE_WEEKLY_ON: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^weekly\s+on\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$").expect("RE_WEEKLY_ON")
+});
+
+static RE_DAILY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^daily(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$").expect("RE_DAILY")
+});
 
 /// Errors that can occur during schedule parsing.
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -163,10 +214,7 @@ pub fn parse_schedule(input: &str) -> Result<ParsedSchedule, ParseError> {
 
 /// Attempts to parse a relative time expression like "in 5 minutes".
 fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
-    let re = Regex::new(r"^in\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months)$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = re.captures(input) {
+    if let Some(caps) = RE_RELATIVE_TIME.captures(input) {
         let amount_str = caps.get(1).map(|m| m.as_str()).unwrap_or("0");
         let amount: i64 = amount_str
             .parse()
@@ -194,10 +242,7 @@ fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
 /// Attempts to parse an absolute time expression like "at 3pm" or "tomorrow at 9am".
 fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
     // Pattern: "at HH:MM" or "at Ham/pm"
-    let at_time_re = Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = at_time_re.captures(input) {
+    if let Some(caps) = RE_AT_TIME.captures(input) {
         let time = parse_time_from_captures(&caps)?;
         let now = Local::now();
         let mut target = now
@@ -216,10 +261,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     }
 
     // Pattern: "tomorrow at HH:MM"
-    let tomorrow_re = Regex::new(r"^tomorrow\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = tomorrow_re.captures(input) {
+    if let Some(caps) = RE_TOMORROW_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
         let tomorrow = Local::now().date_naive() + Duration::days(1);
         let target = tomorrow
@@ -232,12 +274,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     }
 
     // Pattern: "next/this <weekday> at HH:MM"
-    let weekday_re = Regex::new(
-        r"^(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
-    )
-    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = weekday_re.captures(input) {
+    if let Some(caps) = RE_WEEKDAY.captures(input) {
         let modifier = caps.get(1).map(|m| m.as_str()).unwrap_or("");
         let weekday = parse_weekday(caps.get(2).map(|m| m.as_str()).unwrap_or(""))?;
 
@@ -258,12 +295,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     }
 
     // Pattern: "on <month> <day>" or "on <month> <day> at HH:MM"
-    let date_re = Regex::new(
-        r"^on\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
-    )
-    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = date_re.captures(input) {
+    if let Some(caps) = RE_ON_DATE.captures(input) {
         let month = parse_month(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let day: u32 = caps
             .get(2)
@@ -309,12 +341,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
 /// Attempts to parse recurring expressions like "every hour" or "every day at 8am".
 fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
     // Pattern: "every N <unit>"
-    let interval_re = Regex::new(
-        r"^every\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$",
-    )
-    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = interval_re.captures(input) {
+    if let Some(caps) = RE_EVERY_N_UNIT.captures(input) {
         let amount: i64 = caps
             .get(1)
             .ok_or_else(|| ParseError::InvalidInterval("Invalid number".to_string()))?
@@ -337,10 +364,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "every <unit>" (singular, meaning every 1 unit)
-    let single_interval_re = Regex::new(r"^every\s+(second|minute|hour|day|week)$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = single_interval_re.captures(input) {
+    if let Some(caps) = RE_EVERY_UNIT.captures(input) {
         let unit = caps.get(1).map(|m| m.as_str()).unwrap_or("");
 
         let duration = match unit {
@@ -356,21 +380,14 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "every day at HH:MM"
-    let daily_at_re = Regex::new(r"^every\s+day\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = daily_at_re.captures(input) {
+    if let Some(caps) = RE_EVERY_DAY_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
         let cron = format!("{} {} * * *", time.minute(), time.hour());
         return Ok(Some(ParsedSchedule::Cron(cron)));
     }
 
     // Pattern: "every <weekday>"
-    let weekly_day_re =
-        Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$")
-            .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = weekly_day_re.captures(input) {
+    if let Some(caps) = RE_EVERY_WEEKDAY.captures(input) {
         let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let cron_day = weekday_to_cron(weekday);
         // Default to 9am
@@ -379,12 +396,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "every <weekday> at HH:MM"
-    let weekly_at_re = Regex::new(
-        r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$",
-    )
-    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = weekly_at_re.captures(input) {
+    if let Some(caps) = RE_EVERY_WEEKDAY_AT.captures(input) {
         let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let time = parse_time_from_captures_offset(&caps, 2)?;
         let cron_day = weekday_to_cron(weekday);
@@ -393,12 +405,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "weekly on <weekday>"
-    let weekly_on_re = Regex::new(
-        r"^weekly\s+on\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
-    )
-    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = weekly_on_re.captures(input) {
+    if let Some(caps) = RE_WEEKLY_ON.captures(input) {
         let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let time = if caps.get(2).is_some() {
             parse_time_from_captures_offset(&caps, 2)?
@@ -411,10 +418,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "daily" or "daily at HH:MM"
-    let daily_re = Regex::new(r"^daily(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$")
-        .unwrap_or_else(|_| Regex::new("^$").unwrap());
-
-    if let Some(caps) = daily_re.captures(input) {
+    if let Some(caps) = RE_DAILY.captures(input) {
         let time = if caps.get(1).is_some() {
             parse_time_from_captures(&caps)?
         } else {

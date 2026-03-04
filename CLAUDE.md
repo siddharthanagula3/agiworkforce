@@ -69,10 +69,14 @@ pnpm format                          # Prettier
 pnpm format:check                    # Prettier check only
 
 # Tests (only run when explicitly asked)
-cd apps/desktop && pnpm test         # Vitest unit tests
-cd apps/desktop && pnpm test:e2e     # Playwright E2E
-cd apps/web && pnpm test             # Web app tests
-cd services/api-gateway && pnpm test # API tests
+cd apps/desktop && pnpm test                                  # Vitest unit tests
+cd apps/desktop && pnpm test src/__tests__/foo.test.ts        # Run a single test file
+cd apps/desktop && pnpm test:coverage                         # With coverage report
+cd apps/desktop && pnpm test:e2e                              # Playwright E2E
+cd apps/web && pnpm test                                      # Web app tests
+cd services/api-gateway && pnpm test                          # API tests
+cargo test                                                    # Rust unit tests (from repo root)
+cargo test -p agiworkforce -- module::test_name               # Run a single Rust test
 ```
 
 ## Commit Conventions
@@ -96,7 +100,7 @@ The Rust backend is organized into six top-level modules:
   - `swarm/` — Parallel agent orchestration: task decomposition, agent spawning, result aggregation
   - `mcp/` — Model Context Protocol: server connections, tool registration, extensions
   - `agi/` — Higher-level AGI orchestration, executors, templates
-  - `embeddings/`, `research/`, `scheduler/`, `skills/`, `intent/`, `artifacts/`
+  - `embeddings/`, `research/`, `scheduler/` (NLP parser, proactive scheduling, types), `skills/`, `intent/`, `artifacts/`
 
 - **`sys/`** — System services and platform integration
   - `commands/` — All `#[tauri::command]` handlers (100+ files), invoked from frontend via `invoke()`
@@ -107,6 +111,11 @@ The Rust backend is organized into six top-level modules:
 - **`features/`** — Domain features: terminal, speech/voice, calendar, teams, workflows, documents, canvas
 - **`integrations/`** — External service integrations: cloud sync, native messaging, realtime, APIs
 - **`data/`** — Data layer: SQLite database, settings, cache, analytics, metrics
+- **`ui/`** — Native UI helpers: tray icon (`tray.rs`), window management, overlay, onboarding
+- **`models/`** — Shared Rust data model structs (not the AI models — those live in `core/llm/`)
+- **`state.rs`** — Global `AppState` that is `app.manage()`d and passed to Tauri commands
+
+`core/` also contains **`orchestration/`** (workflow engine, executor, scheduler) — separate from the swarm orchestration layer.
 
 Entry point: `main.rs` calls `lib.rs::run()` which sets up Tauri with all plugins and managed state.
 
@@ -140,6 +149,7 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 ## Key Technical Details
 
+- **State Management Pattern** (lib.rs): Uses degraded state constructors for optional features — `MemoryState::degraded()`, `MasterPasswordState::degraded()`, `ProjectMemoryState::degraded()`, `McpExtensionsState::degraded()`, `EmbeddingServiceState::degraded()`, `AppState::degraded()`. Allows graceful fallback if initialization fails. However, some commands (embedding\_\*) have type mismatches and may panic if state is not properly managed.
 - **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalog lives in both `src/constants/llm.ts` (frontend) and `provider_adapter.rs` (Rust) — these must stay in sync.
 - **Streaming**: SSE parsing via `sse_parser.rs`. Uses dual HTTP clients (one with streaming timeout disabled).
 - **Security**: ToolGuard validates all tool execution. SecretManager encrypts API keys via Argon2id + AES-GCM, stored in SQLite/keychain. Never plaintext.
@@ -171,13 +181,13 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 When parallel agents work, each writes only to its assigned zone:
 
-| Zone   | Files                                                |
-| ------ | ---------------------------------------------------- |
-| A      | `src/components/**`, `src/pages/**`, `src/styles/**` |
-| B      | `src/services/**`, `src/api/**`                      |
-| C      | `src/db/**`, `migrations/**`, `src/models/**`        |
-| D      | `src/integrations/**`, `src/mcp/**`                  |
-| E      | `Dockerfile`, `.github/**`, `scripts/**`             |
-| F      | `docs/**`, `README.md`, `CHANGELOG.md`               |
-| SYSTEM | `apps/desktop/src-tauri/**`                          |
-| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`         |
+| Zone   | Files                                                                                   |
+| ------ | --------------------------------------------------------------------------------------- |
+| A      | `apps/desktop/src/components/**`, `apps/desktop/src/pages/**`, `apps/web/components/**` |
+| B      | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**`                        |
+| C      | `apps/web/core/storage/**`, `supabase/migrations/**`                                    |
+| D      | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**`                                |
+| E      | `Dockerfile`, `.github/**`, `scripts/**`                                                |
+| F      | `docs/**`, `README.md`, `CHANGELOG.md`                                                  |
+| SYSTEM | `apps/desktop/src-tauri/**`                                                             |
+| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`, `packages/**`                             |

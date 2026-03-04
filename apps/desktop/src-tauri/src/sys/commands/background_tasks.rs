@@ -1,5 +1,6 @@
 use crate::features::tasks::types::{Priority, Task, TaskFilter, TaskStatus};
 use crate::features::tasks::TaskManager;
+use chrono::Utc;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -167,11 +168,24 @@ pub async fn agi_get_timeout_status(
     state: State<'_, TaskManagerState>,
 ) -> Result<TimeoutStatusResponse, String> {
     let task = bg_get_task_status(task_id, state).await?;
+    let config = TIMEOUT_CONFIG.lock().map_err(|e| e.to_string())?;
+    let max_timeout_secs = config.max_duration_secs;
+
+    // Compute elapsed time from task creation to derive remaining seconds
+    let elapsed_secs = task
+        .started_at
+        .map(|started| {
+            let now = Utc::now();
+            (now - started).num_seconds().max(0)
+        })
+        .unwrap_or(0);
+    let remaining = (max_timeout_secs - elapsed_secs).max(0);
+
     Ok(TimeoutStatusResponse {
         task_id: task.id,
         task_name: task.name,
-        remaining_seconds: 0, // Would need actual timeout tracking
-        max_timeout_minutes: 30,
+        remaining_seconds: remaining,
+        max_timeout_minutes: (max_timeout_secs / 60) as i32,
         executed_steps: 0,
         total_estimated_steps: None,
     })

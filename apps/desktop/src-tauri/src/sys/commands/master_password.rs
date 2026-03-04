@@ -28,6 +28,18 @@ impl MasterPasswordState {
             manager: Arc::new(Mutex::new(manager)),
         })
     }
+
+    /// Create a degraded MasterPasswordState backed by an in-memory database.
+    /// The master password table will not be initialized; commands will return
+    /// meaningful errors instead of panicking on missing state.
+    pub fn new_degraded() -> Self {
+        let conn = Connection::open_in_memory()
+            .expect("in-memory SQLite connection should never fail");
+        let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
+        Self {
+            manager: Arc::new(Mutex::new(manager)),
+        }
+    }
 }
 
 /// Response for master password operations
