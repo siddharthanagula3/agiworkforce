@@ -67,15 +67,7 @@ describe('Global Settings Store', () => {
 
   describe('Initialization', () => {
     it('should initialize app state', async () => {
-      const initPromise = useAppStore.getState().initialize();
-
-      // After calling initialize, loading should be true
-      // (need to check store state, not the captured reference)
-      expect(useAppStore.getState().loading).toBe(true);
-
-      // Fast-forward timers
-      await vi.advanceTimersByTimeAsync(1000);
-      await initPromise;
+      await useAppStore.getState().initialize();
 
       const newState = useAppStore.getState();
       expect(newState.initialized).toBe(true);

@@ -113,16 +113,19 @@ describe('ConnectorsPage', () => {
   // 4. Shows connector count badges (connected + total)
   it('shows connected and total count badges', () => {
     render(<ConnectorsPage />);
-    // Default: 3 connected (local-filesystem, terminal, screen-vision)
-    expect(screen.getByText('3 connected')).toBeDefined();
-    // Total count badge: CONNECTORS.length is 29
+    // Default: 0 connected (connectors start unconnected)
+    expect(screen.getByText('0 connected')).toBeDefined();
+    // Total count badge: CONNECTORS.length
     expect(screen.getByText(/\d+ total/)).toBeDefined();
   });
 
-  // 5. Shows "Connected" section header with count when some are connected
+  // 5. Shows "Connected" section header with count after connecting
   it('shows the Connected section when connectors are connected', () => {
     render(<ConnectorsPage />);
-    // The "Connected (3)" heading should be visible
+    // Connect a connector first
+    const connectButtons = screen.getAllByText('Connect');
+    fireEvent.click(connectButtons[0]!);
+    // The "Connected (1)" heading should now be visible
     expect(screen.getByText(/Connected \(\d+\)/)).toBeDefined();
   });
 
@@ -223,8 +226,8 @@ describe('ConnectorsPage', () => {
     // Click the first one (Gmail is the first unconnected phase-1 connector)
     fireEvent.click(connectButtons[0]!);
 
-    // After connecting, the count badge should increase from 3 to 4
-    expect(screen.getByText('4 connected')).toBeDefined();
+    // After connecting, the count badge should increase from 0 to 1
+    expect(screen.getByText('1 connected')).toBeDefined();
   });
 
   // 14. Roadmap callout is visible in "All" category view
