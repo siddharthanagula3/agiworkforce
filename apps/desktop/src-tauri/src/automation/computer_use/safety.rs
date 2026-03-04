@@ -189,27 +189,40 @@ impl PromptInjectionDetector {
             .get_or_init(|| {
                 vec![
                     // Direct instruction injection
-                    Regex::new(r"(?i)ignore\s+(all\s+)?previous\s+instructions?").unwrap(),
+                    Regex::new(r"(?i)ignore\s+(all\s+)?previous\s+instructions?")
+                        .expect("computer_use safety regex: ignore previous instructions"),
                     Regex::new(r"(?i)disregard\s+(all\s+)?(everything|prior|previous|above)")
-                        .unwrap(),
+                        .expect("computer_use safety regex: disregard previous"),
                     Regex::new(r"(?i)forget\s+(everything|all|what)\s+(you|i)\s+(know|said|told)")
-                        .unwrap(),
+                        .expect("computer_use safety regex: forget everything"),
                     // Role manipulation
-                    Regex::new(r"(?i)you\s+are\s+(now|actually)\s+a").unwrap(),
-                    Regex::new(r"(?i)pretend\s+(you|to\s+be)").unwrap(),
-                    Regex::new(r"(?i)act\s+as\s+(if|though|a)").unwrap(),
+                    Regex::new(r"(?i)you\s+are\s+(now|actually)\s+a")
+                        .expect("computer_use safety regex: role override 'you are now'"),
+                    Regex::new(r"(?i)pretend\s+(you|to\s+be)")
+                        .expect("computer_use safety regex: role override 'pretend'"),
+                    Regex::new(r"(?i)act\s+as\s+(if|though|a)")
+                        .expect("computer_use safety regex: role override 'act as'"),
                     // System prompt extraction
-                    Regex::new(r"(?i)what\s+(is|are)\s+your\s+(system\s+)?prompt").unwrap(),
-                    Regex::new(r"(?i)show\s+me\s+your\s+instructions").unwrap(),
-                    Regex::new(r"(?i)print\s+(your\s+)?(system\s+)?prompt").unwrap(),
+                    Regex::new(r"(?i)what\s+(is|are)\s+your\s+(system\s+)?prompt")
+                        .expect("computer_use safety regex: system prompt extraction 'what is'"),
+                    Regex::new(r"(?i)show\s+me\s+your\s+instructions")
+                        .expect("computer_use safety regex: system prompt extraction 'show me'"),
+                    Regex::new(r"(?i)print\s+(your\s+)?(system\s+)?prompt")
+                        .expect("computer_use safety regex: system prompt extraction 'print'"),
                     // Jailbreak attempts
-                    Regex::new(r"(?i)do\s+anything\s+now").unwrap(),
-                    Regex::new(r"(?i)developer\s+mode").unwrap(),
-                    Regex::new(r"(?i)jailbreak").unwrap(),
+                    Regex::new(r"(?i)do\s+anything\s+now")
+                        .expect("computer_use safety regex: DAN jailbreak"),
+                    Regex::new(r"(?i)developer\s+mode")
+                        .expect("computer_use safety regex: developer mode jailbreak"),
+                    Regex::new(r"(?i)jailbreak")
+                        .expect("computer_use safety regex: jailbreak keyword"),
                     // Hidden instructions markers
-                    Regex::new(r"(?i)\[SYSTEM\]").unwrap(),
-                    Regex::new(r"(?i)<\|im_start\|>system").unwrap(),
-                    Regex::new(r"(?i)###\s*instruction").unwrap(),
+                    Regex::new(r"(?i)\[SYSTEM\]")
+                        .expect("computer_use safety regex: SYSTEM marker injection"),
+                    Regex::new(r"(?i)<\|im_start\|>system")
+                        .expect("computer_use safety regex: ChatML system injection"),
+                    Regex::new(r"(?i)###\s*instruction")
+                        .expect("computer_use safety regex: instruction marker injection"),
                 ]
             })
             .clone();
@@ -319,14 +332,22 @@ impl ComputerUseSafetyLayer {
 
         SENSITIVE_WINDOW_TITLES.get_or_init(|| {
             vec![
-                Regex::new(r"(?i)password").unwrap(),
-                Regex::new(r"(?i)credential").unwrap(),
-                Regex::new(r"(?i)keychain").unwrap(),
-                Regex::new(r"(?i)security\s+preferences").unwrap(),
-                Regex::new(r"(?i)system\s+preferences").unwrap(),
-                Regex::new(r"(?i)control\s+panel").unwrap(),
-                Regex::new(r"(?i)task\s+manager").unwrap(),
-                Regex::new(r"(?i)terminal|cmd\.exe|powershell").unwrap(),
+                Regex::new(r"(?i)password")
+                    .expect("sensitive window regex: password"),
+                Regex::new(r"(?i)credential")
+                    .expect("sensitive window regex: credential"),
+                Regex::new(r"(?i)keychain")
+                    .expect("sensitive window regex: keychain"),
+                Regex::new(r"(?i)security\s+preferences")
+                    .expect("sensitive window regex: security preferences"),
+                Regex::new(r"(?i)system\s+preferences")
+                    .expect("sensitive window regex: system preferences"),
+                Regex::new(r"(?i)control\s+panel")
+                    .expect("sensitive window regex: control panel"),
+                Regex::new(r"(?i)task\s+manager")
+                    .expect("sensitive window regex: task manager"),
+                Regex::new(r"(?i)terminal|cmd\.exe|powershell")
+                    .expect("sensitive window regex: terminal/cmd/powershell"),
             ]
         });
     }

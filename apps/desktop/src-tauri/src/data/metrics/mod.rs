@@ -5,6 +5,6 @@ pub mod realtime_collector;
 pub use comparison::{BenchmarkComparison, Comparison, MetricsComparison, PeriodComparison};
 pub use live_stream::{LiveMetricsStream, MetricsUpdate, UpdateType};
 pub use realtime_collector::{
-    AutomationRun, EmployeePerformance, MetricsSnapshot, PeriodStats, RealtimeMetricsCollector,
-    RealtimeStats,
+    AutomationRun, DailyBreakdownRow, EmployeePerformance, MetricsSnapshot, MonthlyBreakdownRow,
+    PeriodStats, RealtimeMetricsCollector, RealtimeStats, WeeklyBreakdownRow,
 };

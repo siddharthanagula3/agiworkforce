@@ -1,3 +1,5 @@
+pub mod audit_regression_tests;
+pub mod cache_manager_tests;
 pub mod coderabbit_fix_tests;
 pub mod cost_calculator_tests;
 pub mod llm_router_tests;

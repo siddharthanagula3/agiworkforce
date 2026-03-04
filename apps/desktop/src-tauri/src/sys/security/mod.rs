@@ -8,7 +8,6 @@ pub mod command_validator;
 pub mod dm_protection;
 pub mod encryption;
 pub mod guardrails;
-pub mod injection_detector;
 pub mod machine_key;
 pub mod master_password;
 pub mod oauth;

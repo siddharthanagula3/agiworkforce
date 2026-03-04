@@ -47,7 +47,6 @@ pub async fn execute_terminal_command(
     // AUDIT-TERMINAL-066 fix: Add timeout_ms parameter instead of hardcoded 60s
     timeout_ms: Option<u64>,
 ) -> Result<ExecuteResult, String> {
-    use std::path::Path;
     use std::process::Stdio;
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
@@ -89,10 +88,12 @@ pub async fn execute_terminal_command(
         .await?;
     }
 
+    let mut cwd = cwd;
     if let Some(ref dir) = cwd {
-        if !Path::new(dir).exists() {
-            return Err(format!("Working directory does not exist: {}", dir));
-        }
+        let canonical = std::fs::canonicalize(dir)
+            .map_err(|e| format!("Invalid working directory: {}", e))?;
+        // Use canonical path from here
+        cwd = Some(canonical.to_string_lossy().to_string());
     }
 
     // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded powershell/bash

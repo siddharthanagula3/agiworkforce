@@ -70,6 +70,21 @@ pub struct AppState {
     pub(crate) suppress_events: Arc<AtomicBool>,
 }
 
+impl Default for AppState {
+    /// Create a default AppState with default window geometry and a temp storage path.
+    /// Used when `load()` fails so commands don't panic on missing managed state.
+    fn default() -> Self {
+        let storage_path = std::env::temp_dir()
+            .join("agiworkforce")
+            .join("window_state_fallback.json");
+        Self {
+            inner: Arc::new(RwLock::new(PersistentWindowState::default())),
+            storage_path: Arc::new(storage_path),
+            suppress_events: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
 impl AppState {
     pub fn load(app: &AppHandle) -> anyhow::Result<Self> {
         let path = app.path().app_config_dir()?.join("window_state.json");

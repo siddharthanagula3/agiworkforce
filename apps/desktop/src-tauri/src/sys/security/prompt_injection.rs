@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,8 +19,203 @@ pub enum SecurityRecommendation {
     Block,
 }
 
+/// Compiled regex patterns for prompt injection detection, initialized once.
+static INJECTION_PATTERNS: OnceLock<Vec<(Regex, &'static str, f64)>> = OnceLock::new();
+
+fn get_injection_patterns() -> &'static Vec<(Regex, &'static str, f64)> {
+    INJECTION_PATTERNS.get_or_init(|| {
+        vec![
+            // System prompt override patterns
+            (
+                Regex::new(r"(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?|directions?)")
+                    .expect("prompt injection regex: system prompt override pattern"),
+                "System prompt override attempt",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)system\s*prompt\s*[:=]")
+                    .expect("prompt injection regex: system prompt leakage pattern"),
+                "System prompt leakage attempt",
+                0.85,
+            ),
+            (
+                Regex::new(r"(?i)(what|show|tell|reveal|display)(\s+is)?\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions?|rules?)")
+                    .expect("prompt injection regex: system prompt extraction pattern"),
+                "System prompt extraction attempt",
+                0.8,
+            ),
+
+            // Instruction injection patterns
+            (
+                Regex::new(r"(?i)new\s+(instructions?|task|goal)\s*[:=]")
+                    .expect("prompt injection regex: instruction injection pattern"),
+                "Instruction injection attempt",
+                0.85,
+            ),
+            (
+                Regex::new(r"(?i)(instead|now)\s+you\s+(must|will|should)\s+(do|perform|execute)")
+                    .expect("prompt injection regex: command override pattern"),
+                "Command override attempt",
+                0.8,
+            ),
+
+            // Role manipulation patterns
+            (
+                Regex::new(r"(?i)(you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as)(\s+now)?\s+(a\s+)?(developer|administrator|root|sudo|system)")
+                    .expect("prompt injection regex: role manipulation pattern"),
+                "Role manipulation attempt",
+                0.75,
+            ),
+            (
+                Regex::new(r"(?i)(enter|switch\s+to|enable)\s+(developer|debug|admin|god)\s+mode")
+                    .expect("prompt injection regex: privileged mode activation pattern"),
+                "Privileged mode activation attempt",
+                0.85,
+            ),
+
+            // Encoding obfuscation patterns
+            (
+                Regex::new(r"(?i)(base64|hex|unicode|rot13)\s+(decode|encoded?|string)")
+                    .expect("prompt injection regex: encoding obfuscation pattern"),
+                "Encoding obfuscation detected",
+                0.7,
+            ),
+            (
+                Regex::new(r"[A-Za-z0-9+/]{40,}={0,2}")
+                    .expect("prompt injection regex: base64 encoded instruction pattern"),
+                "Potential base64 encoded instruction",
+                0.8,
+            ),
+
+            // Jailbreak patterns
+            (
+                Regex::new(r"(?i)(DAN|do\s+anything\s+now)")
+                    .expect("prompt injection regex: DAN jailbreak pattern"),
+                "Known jailbreak keyword detected",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)hypothetical\s+(scenario|situation|world)")
+                    .expect("prompt injection regex: hypothetical scenario pattern"),
+                "Hypothetical scenario jailbreak",
+                0.65,
+            ),
+            (
+                Regex::new(r"(?i)(without\s+)?(any\s+)?(restrictions?|limitations?|rules?|ethics?)")
+                    .expect("prompt injection regex: restriction bypass pattern"),
+                "Restriction bypass attempt",
+                0.75,
+            ),
+
+            // Code injection patterns
+            (
+                Regex::new(r"(?i)```\s*(python|bash|sh|javascript|code)\s*\n")
+                    .expect("prompt injection regex: code block injection pattern"),
+                "Code block injection attempt",
+                0.7,
+            ),
+            (
+                Regex::new(r"[;&|]\s*(rm|del|format|dd|sudo|curl|wget)\s+")
+                    .expect("prompt injection regex: shell command injection pattern"),
+                "Shell command injection detected",
+                0.95,
+            ),
+
+            // Nested instruction patterns
+            (
+                Regex::new(r"(?i)\[SYSTEM\]|\[INST\]|\[/INST\]|\[USER\]|\[ASSISTANT\]")
+                    .expect("prompt injection regex: nested instruction block pattern"),
+                "Nested instruction block detected",
+                0.8,
+            ),
+
+            // Data exfiltration patterns
+            (
+                Regex::new(r"(?i)(send|post|upload|exfiltrate)\s+(to|this\s+to)\s+(http|https?:)")
+                    .expect("prompt injection regex: data exfiltration pattern"),
+                "Data exfiltration attempt",
+                0.9,
+            ),
+
+            // Token manipulation patterns
+            (
+                Regex::new(r"(?i)(token|context)\s+(limit|window|size)\s*(is|=)")
+                    .expect("prompt injection regex: token manipulation pattern"),
+                "Token manipulation attempt",
+                0.65,
+            ),
+
+            // SECSYS-008 fix: Additional jailbreak patterns
+            (
+                Regex::new(r"(?i)(evil\s*mode|chaos\s*mode|unrestricted\s*mode)")
+                    .expect("prompt injection regex: jailbreak mode activation pattern"),
+                "Jailbreak mode activation attempt",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)(anti-?ai|bypass|circumvent|evade)\s+(filter|safety|guardrail|protection)")
+                    .expect("prompt injection regex: safety bypass pattern"),
+                "Safety bypass attempt",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)from\s+now\s+on[,\s]+(you\s+)?(will|must|should)")
+                    .expect("prompt injection regex: behavioral override pattern"),
+                "Behavioral override attempt",
+                0.8,
+            ),
+            (
+                Regex::new(r"(?i)your\s+real\s+(purpose|goal|objective|mission)")
+                    .expect("prompt injection regex: identity confusion pattern"),
+                "Identity confusion attempt",
+                0.75,
+            ),
+            (
+                Regex::new(r"(?i)(opposite|reverse)\s+(of\s+)?(what|your)\s+(instructions?|rules?)")
+                    .expect("prompt injection regex: instruction reversal pattern"),
+                "Instruction reversal attempt",
+                0.85,
+            ),
+
+            // SECSYS-008 fix: Delimiter injection patterns
+            (
+                Regex::new(r"```+\s*system|```+\s*assistant")
+                    .expect("prompt injection regex: role delimiter injection pattern"),
+                "Role delimiter injection",
+                0.9,
+            ),
+            (
+                Regex::new(r"<\|im_(start|end)\|>|<\|system\|>|<\|user\|>")
+                    .expect("prompt injection regex: ChatML delimiter injection pattern"),
+                "ChatML delimiter injection",
+                0.95,
+            ),
+            (
+                Regex::new(r"Human:|Assistant:|System:")
+                    .expect("prompt injection regex: Anthropic format injection pattern"),
+                "Anthropic format injection",
+                0.85,
+            ),
+
+            // SECSYS-008 fix: Invisible/special character patterns
+            (
+                Regex::new(r"[\u200B-\u200D\uFEFF]")
+                    .expect("prompt injection regex: zero-width character pattern"),
+                "Zero-width character injection",
+                0.8,
+            ),
+            (
+                Regex::new(r"[\u0000-\u001F\u007F]")
+                    .expect("prompt injection regex: control character pattern"),
+                "Control character injection",
+                0.7,
+            ),
+        ]
+    })
+}
+
 pub struct PromptInjectionDetector {
-    patterns: Vec<(Regex, &'static str, f64)>,
+    patterns: &'static Vec<(Regex, &'static str, f64)>,
 }
 
 impl Default for PromptInjectionDetector {
@@ -30,168 +226,7 @@ impl Default for PromptInjectionDetector {
 
 impl PromptInjectionDetector {
     pub fn new() -> Self {
-        let patterns = vec![
-            // System prompt override patterns
-            (
-                Regex::new(r"(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?|directions?)").unwrap(),
-                "System prompt override attempt",
-                0.9,
-            ),
-            (
-                Regex::new(r"(?i)system\s*prompt\s*[:=]").unwrap(),
-                "System prompt leakage attempt",
-                0.85,
-            ),
-            (
-                Regex::new(r"(?i)(what|show|tell|reveal|display)(\s+is)?\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions?|rules?)").unwrap(),
-                "System prompt extraction attempt",
-                0.8,
-            ),
-
-            // Instruction injection patterns
-            (
-                Regex::new(r"(?i)new\s+(instructions?|task|goal)\s*[:=]").unwrap(),
-                "Instruction injection attempt",
-                0.85,
-            ),
-            (
-                Regex::new(r"(?i)(instead|now)\s+you\s+(must|will|should)\s+(do|perform|execute)").unwrap(),
-                "Command override attempt",
-                0.8,
-            ),
-
-            // Role manipulation patterns
-            (
-                Regex::new(r"(?i)(you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as)(\s+now)?\s+(a\s+)?(developer|administrator|root|sudo|system)").unwrap(),
-                "Role manipulation attempt",
-                0.75,
-            ),
-            (
-                Regex::new(r"(?i)(enter|switch\s+to|enable)\s+(developer|debug|admin|god)\s+mode").unwrap(),
-                "Privileged mode activation attempt",
-                0.85,
-            ),
-
-            // Encoding obfuscation patterns
-            (
-                Regex::new(r"(?i)(base64|hex|unicode|rot13)\s+(decode|encoded?|string)").unwrap(),
-                "Encoding obfuscation detected",
-                0.7,
-            ),
-            (
-                Regex::new(r"[A-Za-z0-9+/]{40,}={0,2}").unwrap(),
-                "Potential base64 encoded instruction",
-                0.8,
-            ),
-
-            // Jailbreak patterns
-            (
-                Regex::new(r"(?i)(DAN|do\s+anything\s+now)").unwrap(),
-                "Known jailbreak keyword detected",
-                0.9,
-            ),
-            (
-                Regex::new(r"(?i)hypothetical\s+(scenario|situation|world)").unwrap(),
-                "Hypothetical scenario jailbreak",
-                0.65,
-            ),
-            (
-                Regex::new(r"(?i)(without\s+)?(any\s+)?(restrictions?|limitations?|rules?|ethics?)").unwrap(),
-                "Restriction bypass attempt",
-                0.75,
-            ),
-
-            // Code injection patterns
-            (
-                Regex::new(r"(?i)```\s*(python|bash|sh|javascript|code)\s*\n").unwrap(),
-                "Code block injection attempt",
-                0.7,
-            ),
-            (
-                Regex::new(r"[;&|]\s*(rm|del|format|dd|sudo|curl|wget)\s+").unwrap(),
-                "Shell command injection detected",
-                0.95,
-            ),
-
-            // Nested instruction patterns
-            (
-                Regex::new(r"(?i)\[SYSTEM\]|\[INST\]|\[/INST\]|\[USER\]|\[ASSISTANT\]").unwrap(),
-                "Nested instruction block detected",
-                0.8,
-            ),
-
-            // Data exfiltration patterns
-            (
-                Regex::new(r"(?i)(send|post|upload|exfiltrate)\s+(to|this\s+to)\s+(http|https?:)").unwrap(),
-                "Data exfiltration attempt",
-                0.9,
-            ),
-
-            // Token manipulation patterns
-            (
-                Regex::new(r"(?i)(token|context)\s+(limit|window|size)\s*(is|=)").unwrap(),
-                "Token manipulation attempt",
-                0.65,
-            ),
-
-            // SECSYS-008 fix: Additional jailbreak patterns
-            (
-                Regex::new(r"(?i)(evil\s*mode|chaos\s*mode|unrestricted\s*mode)").unwrap(),
-                "Jailbreak mode activation attempt",
-                0.9,
-            ),
-            (
-                Regex::new(r"(?i)(anti-?ai|bypass|circumvent|evade)\s+(filter|safety|guardrail|protection)").unwrap(),
-                "Safety bypass attempt",
-                0.9,
-            ),
-            (
-                Regex::new(r"(?i)from\s+now\s+on[,\s]+(you\s+)?(will|must|should)").unwrap(),
-                "Behavioral override attempt",
-                0.8,
-            ),
-            (
-                Regex::new(r"(?i)your\s+real\s+(purpose|goal|objective|mission)").unwrap(),
-                "Identity confusion attempt",
-                0.75,
-            ),
-            (
-                Regex::new(r"(?i)(opposite|reverse)\s+(of\s+)?(what|your)\s+(instructions?|rules?)").unwrap(),
-                "Instruction reversal attempt",
-                0.85,
-            ),
-
-            // SECSYS-008 fix: Delimiter injection patterns
-            (
-                Regex::new(r"```+\s*system|```+\s*assistant").unwrap(),
-                "Role delimiter injection",
-                0.9,
-            ),
-            (
-                Regex::new(r"<\|im_(start|end)\|>|<\|system\|>|<\|user\|>").unwrap(),
-                "ChatML delimiter injection",
-                0.95,
-            ),
-            (
-                Regex::new(r"Human:|Assistant:|System:").unwrap(),
-                "Anthropic format injection",
-                0.85,
-            ),
-
-            // SECSYS-008 fix: Invisible/special character patterns
-            (
-                Regex::new(r"[\u200B-\u200D\uFEFF]").unwrap(),
-                "Zero-width character injection",
-                0.8,
-            ),
-            (
-                Regex::new(r"[\u0000-\u001F\u007F]").unwrap(),
-                "Control character injection",
-                0.7,
-            ),
-        ];
-
-        Self { patterns }
+        Self { patterns: get_injection_patterns() }
     }
 
     /// SECSYS-008 fix: Normalize Unicode lookalikes to detect evasion
@@ -225,9 +260,12 @@ impl PromptInjectionDetector {
 
     /// SECSYS-008 fix: Normalize spacing variations for detection
     fn normalize_spacing(&self, input: &str) -> String {
-        // Replace multiple spaces, tabs, and various whitespace with single space
-        let whitespace_regex = Regex::new(r"[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+").unwrap();
-        whitespace_regex.replace_all(input, " ").to_string()
+        static WHITESPACE_REGEX: OnceLock<Regex> = OnceLock::new();
+        let re = WHITESPACE_REGEX.get_or_init(|| {
+            Regex::new(r"[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+")
+                .expect("prompt injection regex: whitespace normalization pattern")
+        });
+        re.replace_all(input, " ").to_string()
     }
 
     pub fn analyze(&self, input: &str) -> SecurityAnalysis {
@@ -298,7 +336,7 @@ impl PromptInjectionDetector {
         let mut max_risk: f64 = 0.0;
         let mut detected = Vec::new();
 
-        for (pattern, description, weight) in &self.patterns {
+        for (pattern, description, weight) in self.patterns.iter() {
             if pattern.is_match(input) {
                 detected.push(description.to_string());
                 max_risk = max_risk.max(*weight);

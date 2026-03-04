@@ -15,14 +15,11 @@ panic = "abort"
 
 
 [profile.dev]
-debug = 0            
-incremental = false  
-opt-level = 0        
-strip = "symbols"    
-split-debuginfo = "off"  
+debug = true           # enable debug info for readable backtraces
+opt-level = 0
+split-debuginfo = "off"
 
 
 [profile.dev.package."*"]
 debug = 0
 opt-level = 0
-strip = "symbols"
