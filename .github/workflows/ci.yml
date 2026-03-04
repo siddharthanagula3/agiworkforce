@@ -100,7 +100,7 @@ jobs:
         run: rustup show active-toolchain && rustc --version && cargo --version
 
       - name: Dependency audit (Rust)
-        run: cargo install cargo-audit --version 0.21.1 --locked --quiet && cargo audit
+        run: cargo install cargo-audit --version 0.22.1 --locked --quiet && cargo audit
         env:
           CARGO_HOME: ~/.cargo
 
