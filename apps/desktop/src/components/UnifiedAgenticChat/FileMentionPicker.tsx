@@ -83,7 +83,19 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
   const currentFolder = useProjectStore(selectCurrentFolder);
+
+  // Refs for keyboard handler to avoid stale closures
+  const filteredRef = useRef<MentionFile[]>([]);
+  const selectedIndexRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Determine the directory to list based on the query
   const rootPath = browsePath ?? currentFolder ?? null;
@@ -92,6 +104,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     setIsLoading(true);
     try {
       const results = await invoke<DirEntry[]>('dir_list', { path });
+      if (!isMountedRef.current) return;
       const mapped: MentionFile[] = results
         .filter((e) => !e.name.startsWith('.'))
         .map((e) => ({
@@ -107,9 +120,9 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         });
       setEntries(mapped);
     } catch {
-      setEntries([]);
+      if (isMountedRef.current) setEntries([]);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     }
   }, []);
 
@@ -129,26 +142,43 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     })
     .slice(0, MAX_RESULTS);
 
+  // Keep refs in sync for keyboard handler
+  filteredRef.current = filtered;
+  selectedIndexRef.current = selectedIndex;
+
   // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
   }, [filtered.length, query]);
 
-  // Keyboard navigation
+  const handleEntryActivate = useCallback(
+    (entry: MentionFile) => {
+      if (entry.isDir) {
+        setBrowsePath(entry.path);
+      } else {
+        onSelect(entry);
+      }
+    },
+    [onSelect],
+  );
+
+  // Keyboard navigation — uses refs to avoid stale closures
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const currentFiltered = filteredRef.current;
+      const currentIdx = selectedIndexRef.current;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev >= filtered.length - 1 ? 0 : prev + 1));
+        setSelectedIndex((prev) => (prev >= currentFiltered.length - 1 ? 0 : prev + 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev <= 0 ? filtered.length - 1 : prev - 1));
-      } else if (e.key === 'Enter' && filtered.length > 0) {
+        setSelectedIndex((prev) => (prev <= 0 ? currentFiltered.length - 1 : prev - 1));
+      } else if (e.key === 'Enter' && currentFiltered.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        const entry = filtered[selectedIndex];
+        const entry = currentFiltered[currentIdx];
         if (entry) handleEntryActivate(entry);
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -157,8 +187,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     };
     window.addEventListener('keydown', handleKey, true);
     return () => window.removeEventListener('keydown', handleKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, selectedIndex, onClose]);
+  }, [onClose, handleEntryActivate]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -167,15 +196,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     const selected = list.children[selectedIndex] as HTMLElement | undefined;
     selected?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
-
-  const handleEntryActivate = (entry: MentionFile) => {
-    if (entry.isDir) {
-      // Navigate into directory
-      setBrowsePath(entry.path);
-    } else {
-      onSelect(entry);
-    }
-  };
 
   if (!rootPath) {
     return (
