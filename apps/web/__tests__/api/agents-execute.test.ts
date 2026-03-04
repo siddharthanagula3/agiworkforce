@@ -7,6 +7,10 @@ vi.mock('server-only', () => ({}));
 
 // Mock fs so loadEmployeeSystemPrompt returns a fake prompt for any employeeId
 vi.mock('fs', () => ({
+  default: {
+    existsSync: vi.fn(() => true),
+    readFileSync: vi.fn(() => 'You are a helpful AI assistant.'),
+  },
   existsSync: vi.fn(() => true),
   readFileSync: vi.fn(() => 'You are a helpful AI assistant.'),
 }));
