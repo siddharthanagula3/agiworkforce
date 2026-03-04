@@ -642,6 +642,20 @@ pub fn run() {
 
             app.manage(Arc::new(LSPState::new()));
 
+            // Codebase indexer state (tokio-rusqlite backed, Send+Sync)
+            let codebase_workspace = app_data_dir.join("codebase_index");
+            match tauri::async_runtime::block_on(
+                crate::core::codebase::CodebaseServiceState::new(codebase_workspace)
+            ) {
+                Ok(state) => {
+                    app.manage(state);
+                    tracing::info!("CodebaseServiceState initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize codebase indexer: {}. Codebase indexing features will be degraded.", e);
+                    app.manage(crate::core::codebase::CodebaseServiceState::new_degraded());
+                }
+            }
 
             let cache_conn = crate::data::db::encryption::open_encrypted_connection(
                 &db_path.to_string_lossy(),
@@ -1328,10 +1342,10 @@ pub fn run() {
             crate::sys::commands::on_file_changed,
             crate::sys::commands::on_file_deleted,
 
-            // NOTE: core::codebase commands (index_workspace_file, search_symbols,
-            // get_file_symbols, get_index_stats) are not registered because
-            // CodebaseIndexer holds a rusqlite Connection which is not Send-safe
-            // across async boundaries. These need to be refactored first.
+            crate::core::codebase::index_workspace_file,
+            crate::core::codebase::search_symbols,
+            crate::core::codebase::get_file_symbols,
+            crate::core::codebase::get_index_stats,
 
 
             crate::sys::commands::settings_load,
