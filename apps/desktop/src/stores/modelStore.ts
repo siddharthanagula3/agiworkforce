@@ -191,6 +191,7 @@ const defaultUsageStats: UsageStats = {
     'black-forest-labs': { tokens: 0, cost: 0, messages: 0 },
     suno: { tokens: 0, cost: 0, messages: 0 },
     udio: { tokens: 0, cost: 0, messages: 0 },
+    mistral: { tokens: 0, cost: 0, messages: 0 },
   },
   byModel: {},
 };
@@ -223,6 +224,7 @@ export const useModelStore = create<ModelState>()(
           'black-forest-labs': null,
           suno: null,
           udio: null,
+          mistral: null,
         },
         availableModels: [],
         usageStats: null,
@@ -593,9 +595,6 @@ export const useModelStore = create<ModelState>()(
             timestamp: Date.now(),
           };
 
-          // Store the routing decision for UI feedback
-          set({ lastRoutingDecision: decision }, undefined, 'model/getRoutedModel');
-
           return decision;
         },
 
@@ -627,6 +626,7 @@ export const useModelStore = create<ModelState>()(
                 'black-forest-labs': null,
                 suno: null,
                 udio: null,
+                mistral: null,
               },
               availableModels: [],
               usageStats: null,
