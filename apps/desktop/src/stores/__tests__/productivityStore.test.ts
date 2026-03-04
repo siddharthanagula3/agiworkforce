@@ -10,11 +10,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Override the global sonner mock to provide toast sub-methods used by productivityStore
 vi.mock('sonner', () => {
-  const toastFn = vi.fn();
-  toastFn.success = vi.fn();
-  toastFn.error = vi.fn();
-  toastFn.info = vi.fn();
-  toastFn.warning = vi.fn();
+  const toastFn = Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  });
   return { toast: toastFn };
 });
 
