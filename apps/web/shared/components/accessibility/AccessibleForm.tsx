@@ -48,8 +48,7 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
       }
 
       // Call original onSubmit handler
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onSubmit?.(event as any);
+      onSubmit?.(event as React.FormEvent<HTMLFormElement>);
     };
 
     return (

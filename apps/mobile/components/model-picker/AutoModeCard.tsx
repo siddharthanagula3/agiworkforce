@@ -1,3 +1,4 @@
+import { type ComponentType } from 'react';
 import { View, Pressable } from 'react-native';
 import { Zap, Scale, Crown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -6,7 +7,7 @@ import type { AutoModeDef } from '@/lib/models';
 
 // Map icon name strings to Lucide components so we can render dynamically.
 
-const ICON_MAP: Record<string, any> = {
+const ICON_MAP: Record<string, ComponentType<{ size?: number; color?: string }>> = {
   Zap,
   Scale,
   Crown,
