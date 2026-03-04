@@ -8,6 +8,7 @@ pub mod llm_router;
 pub mod memory_integration;
 pub mod models_config;
 pub mod prompt_policy;
+pub mod prompt_tool_injection;
 pub mod provider_adapter;
 pub mod providers;
 pub mod server_tools;
@@ -473,15 +474,74 @@ pub struct ToolDefinition {
 
 impl ToolDefinition {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
+/// Tool choice configuration for LLM requests.
+///
+/// Serializes as:
+/// - `Auto`        → `"auto"`
+/// - `Required`    → `"required"`
+/// - `None`        → `"none"`
+/// - `Specific(n)` → `{"type": "function", "function": {"name": "<n>"}}`
+///
+/// The `Specific` variant uses the OpenAI function-calling format.
+/// Provider adapters (e.g. Google, Anthropic) convert from this canonical
+/// form into their native format.
+#[derive(Debug, Clone, Default)]
 pub enum ToolChoice {
     #[default]
     Auto,
     Required,
-    #[serde(rename = "none")]
     None,
     Specific(String),
+}
+
+impl serde::Serialize for ToolChoice {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            ToolChoice::Auto => serializer.serialize_str("auto"),
+            ToolChoice::Required => serializer.serialize_str("required"),
+            ToolChoice::None => serializer.serialize_str("none"),
+            ToolChoice::Specific(name) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "function")?;
+                map.serialize_entry(
+                    "function",
+                    &std::collections::HashMap::from([("name", name.as_str())]),
+                )?;
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ToolChoice {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match &value {
+            serde_json::Value::String(s) => match s.as_str() {
+                "auto" => Ok(ToolChoice::Auto),
+                "required" => Ok(ToolChoice::Required),
+                "none" => Ok(ToolChoice::None),
+                other => Ok(ToolChoice::Specific(other.to_string())),
+            },
+            serde_json::Value::Object(map) => {
+                // OpenAI format: {"type": "function", "function": {"name": "..."}}
+                if let Some(func) = map.get("function") {
+                    if let Some(name) = func.get("name").and_then(|n| n.as_str()) {
+                        return Ok(ToolChoice::Specific(name.to_string()));
+                    }
+                }
+                // Legacy format: {"specific": "tool_name"}
+                if let Some(name) = map.get("specific").and_then(|n| n.as_str()) {
+                    return Ok(ToolChoice::Specific(name.to_string()));
+                }
+                Err(serde::de::Error::custom(
+                    "unrecognized tool_choice object format",
+                ))
+            }
+            _ => Err(serde::de::Error::custom("expected string or object for tool_choice")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

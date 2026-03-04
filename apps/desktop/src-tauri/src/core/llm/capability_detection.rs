@@ -191,3 +191,286 @@ pub async fn clear_capability_cache() {
     let mut cache = CAPABILITY_CACHE.write().await;
     cache.clear();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // TOOL_CAPABLE_FAMILIES content
+    // -----------------------------------------------------------------------
+
+    /// The list must contain every well-known function-calling family so that
+    /// capability detection does not silently drop tool support for a model.
+    #[test]
+    fn tool_capable_families_contains_expected_entries() {
+        let expected = [
+            "llama3.1",
+            "llama3.2",
+            "llama3.3",
+            "llama4",
+            "qwen2.5",
+            "qwen3",
+            "mistral",
+            "mixtral",
+            "mistral-nemo",
+            "command-r",
+            "command-r-plus",
+            "deepseek-v2",
+            "deepseek-v3",
+            "deepseek-r1",
+            "phi-3",
+            "phi-4",
+            "gemma2",
+            "gemma3",
+            "hermes3",
+            "firefunction",
+            "nemotron",
+        ];
+        for entry in &expected {
+            assert!(
+                TOOL_CAPABLE_FAMILIES.contains(entry),
+                "TOOL_CAPABLE_FAMILIES is missing expected family: {entry}"
+            );
+        }
+    }
+
+    #[test]
+    fn tool_capable_families_has_no_duplicates() {
+        let mut seen = std::collections::HashSet::new();
+        for family in TOOL_CAPABLE_FAMILIES {
+            assert!(
+                seen.insert(*family),
+                "Duplicate entry in TOOL_CAPABLE_FAMILIES: {family}"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // default_capabilities — pure name-based fallback (no network)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn default_capabilities_llama31_supports_tools() {
+        let caps = default_capabilities("llama3.1:8b");
+        assert!(
+            caps.supports_tools,
+            "llama3.1 model must report supports_tools via name matching"
+        );
+        assert!(!caps.supports_vision, "llama3.1 is not a vision model");
+        assert_eq!(caps.context_length, 4096, "fallback context_length is 4096");
+    }
+
+    #[test]
+    fn default_capabilities_llama32_vision_supports_both() {
+        let caps = default_capabilities("llama3.2-vision:11b");
+        assert!(caps.supports_tools, "llama3.2 is a tool-capable family");
+        assert!(caps.supports_vision, "model name contains 'vision'");
+    }
+
+    #[test]
+    fn default_capabilities_llava_supports_vision() {
+        let caps = default_capabilities("llava:13b");
+        assert!(caps.supports_vision, "llava model must report supports_vision");
+        assert!(!caps.supports_tools, "plain llava is not a tool-capable family");
+    }
+
+    #[test]
+    fn default_capabilities_qwen25_supports_tools() {
+        let caps = default_capabilities("qwen2.5-coder:7b");
+        assert!(
+            caps.supports_tools,
+            "qwen2.5 family must match via name substring"
+        );
+    }
+
+    #[test]
+    fn default_capabilities_qwen3_supports_tools() {
+        let caps = default_capabilities("qwen3:14b");
+        assert!(caps.supports_tools, "qwen3 family must match via name substring");
+    }
+
+    #[test]
+    fn default_capabilities_deepseek_r1_supports_tools() {
+        let caps = default_capabilities("deepseek-r1:70b");
+        assert!(
+            caps.supports_tools,
+            "deepseek-r1 family must be detected as tool-capable"
+        );
+    }
+
+    #[test]
+    fn default_capabilities_phi4_supports_tools() {
+        let caps = default_capabilities("phi-4:latest");
+        assert!(
+            caps.supports_tools,
+            "phi-4 family must be detected as tool-capable"
+        );
+    }
+
+    #[test]
+    fn default_capabilities_gemma3_supports_tools() {
+        let caps = default_capabilities("gemma3:27b");
+        assert!(
+            caps.supports_tools,
+            "gemma3 family must be detected as tool-capable"
+        );
+    }
+
+    #[test]
+    fn default_capabilities_unknown_model_does_not_support_tools() {
+        let caps = default_capabilities("tinyllama:1.1b");
+        assert!(
+            !caps.supports_tools,
+            "unknown model family must not claim tool support"
+        );
+        assert!(!caps.supports_vision, "unknown model must not claim vision support");
+        assert_eq!(caps.context_length, 4096);
+    }
+
+    #[test]
+    fn default_capabilities_name_matching_is_case_insensitive() {
+        // The model name might arrive in any casing from the Ollama API.
+        let caps_lower = default_capabilities("mistral:7b");
+        let caps_upper = default_capabilities("Mistral:7b");
+        assert_eq!(
+            caps_lower.supports_tools, caps_upper.supports_tools,
+            "Family matching must be case-insensitive"
+        );
+    }
+
+    #[test]
+    fn default_capabilities_command_r_supports_tools() {
+        let caps = default_capabilities("command-r-plus:latest");
+        assert!(caps.supports_tools, "command-r-plus must be detected as tool-capable");
+    }
+
+    #[test]
+    fn default_capabilities_hermes3_supports_tools() {
+        let caps = default_capabilities("hermes3:8b");
+        assert!(caps.supports_tools, "hermes3 must be detected as tool-capable");
+    }
+
+    #[test]
+    fn default_capabilities_nemotron_supports_tools() {
+        let caps = default_capabilities("nemotron-mini:4b");
+        assert!(caps.supports_tools, "nemotron must be detected as tool-capable");
+    }
+
+    // -----------------------------------------------------------------------
+    // Cache key collision — different base_urls must not share entries
+    // -----------------------------------------------------------------------
+
+    /// Verifies that the cache key incorporates the base_url so that two
+    /// Ollama instances serving the same model name are treated independently.
+    #[test]
+    fn cache_key_format_includes_base_url() {
+        let base_url_a = "http://localhost:11434";
+        let base_url_b = "http://192.168.1.5:11434";
+        let model = "llama3.1:8b";
+
+        let key_a = format!("{}:{}", base_url_a, model);
+        let key_b = format!("{}:{}", base_url_b, model);
+
+        assert_ne!(
+            key_a, key_b,
+            "Cache keys for different base_urls must not collide"
+        );
+        assert!(
+            key_a.starts_with(base_url_a),
+            "Cache key must start with the base_url"
+        );
+        assert!(
+            key_b.starts_with(base_url_b),
+            "Cache key must start with the base_url"
+        );
+    }
+
+    #[test]
+    fn cache_key_format_includes_model_name() {
+        let base_url = "http://localhost:11434";
+        let model_a = "llama3.1:8b";
+        let model_b = "mistral:7b";
+
+        let key_a = format!("{}:{}", base_url, model_a);
+        let key_b = format!("{}:{}", base_url, model_b);
+
+        assert_ne!(
+            key_a, key_b,
+            "Cache keys for different model names on the same host must not collide"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // clear_capability_cache — async cache management
+    // -----------------------------------------------------------------------
+
+    /// Manually insert an entry into the cache and verify that
+    /// `clear_capability_cache` removes it.
+    #[tokio::test]
+    async fn clear_capability_cache_removes_all_entries() {
+        // Seed two entries directly into the shared cache.
+        {
+            let mut cache = CAPABILITY_CACHE.write().await;
+            cache.insert(
+                "http://localhost:11434:seed-model-a:latest".to_string(),
+                ModelCapabilities {
+                    supports_tools: true,
+                    supports_vision: false,
+                    context_length: 8192,
+                },
+            );
+            cache.insert(
+                "http://localhost:11434:seed-model-b:latest".to_string(),
+                ModelCapabilities {
+                    supports_tools: false,
+                    supports_vision: true,
+                    context_length: 4096,
+                },
+            );
+            assert_eq!(
+                cache.len(),
+                2,
+                "Pre-condition: cache must have 2 seeded entries"
+            );
+        }
+
+        clear_capability_cache().await;
+
+        {
+            let cache = CAPABILITY_CACHE.read().await;
+            assert!(
+                cache.is_empty(),
+                "Cache must be empty after clear_capability_cache()"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn clear_capability_cache_is_idempotent_on_empty_cache() {
+        // Ensure the cache is empty first.
+        clear_capability_cache().await;
+        // Calling again on an already-empty cache must not panic.
+        clear_capability_cache().await;
+
+        let cache = CAPABILITY_CACHE.read().await;
+        assert!(cache.is_empty(), "Cache must remain empty after double clear");
+    }
+
+    // -----------------------------------------------------------------------
+    // ModelCapabilities struct
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn model_capabilities_clone_is_independent() {
+        let original = ModelCapabilities {
+            supports_tools: true,
+            supports_vision: false,
+            context_length: 16384,
+        };
+        let cloned = original.clone();
+        assert_eq!(original.supports_tools, cloned.supports_tools);
+        assert_eq!(original.supports_vision, cloned.supports_vision);
+        assert_eq!(original.context_length, cloned.context_length);
+    }
+}
