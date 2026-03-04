@@ -552,6 +552,99 @@ export async function executeCompactCommand(
 }
 
 /**
+ * Generates an image from a text prompt using the media_generate_image Tauri command.
+ * Handles the /imagine slash command for AI image generation.
+ *
+ * @param prompt - The text description of the image to generate
+ * @returns An InlinePanel with the generated image URL(s) or an error
+ *
+ * @example
+ * const panel = await executeImagineCommand('a red fox in a snowy forest');
+ * // panel.content.image.urls contains the generated image URLs
+ */
+export async function executeImagineCommand(prompt: string): Promise<InlinePanel> {
+  const panelId = `image-${Date.now()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'image',
+    content: {
+      image: {
+        prompt,
+        status: 'loading',
+        urls: undefined,
+        provider: undefined,
+        model: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  if (!prompt.trim()) {
+    panel.content.image = {
+      prompt,
+      status: 'error',
+      error: 'Please provide a prompt after /imagine',
+    };
+    panel.metadata = { status: 'error' };
+    return panel;
+  }
+
+  try {
+    const startTime = Date.now();
+    const response = await invoke<{
+      images: Array<{ url?: string; b64_json?: string }>;
+      provider: string;
+      model?: string;
+      latencyMs: number;
+    }>('media_generate_image', {
+      request: {
+        prompt: prompt.trim(),
+        n: 1,
+      },
+    });
+
+    const latencyMs = Date.now() - startTime;
+    const urls = response.images
+      .map((img) => img.url ?? (img.b64_json ? `data:image/png;base64,${img.b64_json}` : undefined))
+      .filter((u): u is string => Boolean(u));
+
+    panel.content.image = {
+      prompt,
+      status: urls.length > 0 ? 'success' : 'error',
+      urls,
+      provider: response.provider,
+      model: response.model,
+      latencyMs,
+      error: urls.length === 0 ? 'No images were returned' : undefined,
+    };
+
+    panel.metadata = {
+      status: urls.length > 0 ? 'success' : 'error',
+      duration: latencyMs,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    panel.content.image = {
+      prompt,
+      status: 'error',
+      error: errorMessage,
+    };
+
+    panel.metadata = {
+      status: 'error',
+    };
+  }
+
+  return panel;
+}
+
+/**
  * Reverts previous file or system changes made by the AI agent.
  * Handles the /undo slash command for safely reversing actions.
  *

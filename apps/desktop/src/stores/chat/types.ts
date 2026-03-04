@@ -132,11 +132,20 @@ export interface InlinePanelContent {
     executionTime?: number;
     error?: string;
   };
+  image?: {
+    prompt: string;
+    status: 'loading' | 'success' | 'error';
+    urls?: string[];
+    provider?: string;
+    model?: string;
+    latencyMs?: number;
+    error?: string;
+  };
 }
 
 export interface InlinePanel {
   id: string;
-  type: 'terminal' | 'browser' | 'code' | 'database';
+  type: 'terminal' | 'browser' | 'code' | 'database' | 'image';
   content: InlinePanelContent;
   isCollapsed: boolean;
   timestamp: Date;
@@ -144,7 +153,17 @@ export interface InlinePanel {
 }
 
 export interface SlashCommandMetadata {
-  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact' | 'pdf' | 'word' | 'excel';
+  command:
+    | 'browser'
+    | 'terminal'
+    | 'code'
+    | 'database'
+    | 'undo'
+    | 'compact'
+    | 'pdf'
+    | 'word'
+    | 'excel'
+    | 'imagine';
   args: string;
   rawInput: string;
 }
@@ -165,6 +184,19 @@ export interface EnhancedMessage {
   reactions?: MessageReaction[];
   inlinePanels?: InlinePanel[];
   slashCommand?: SlashCommandMetadata;
+  /** Branch this message belongs to (defaults to 'main') */
+  branchId?: string;
+  /** Parent message ID for branched conversations */
+  parentMessageId?: string;
+}
+
+/** Represents a conversation branch (fork point) */
+export interface BranchSummary {
+  id: string;
+  name: string;
+  parentBranchId?: string;
+  forkPointMessageId?: number;
+  createdAt: string;
 }
 
 export interface ConversationSummary {
