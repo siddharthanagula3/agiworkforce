@@ -737,3 +737,65 @@ pub async fn router_suggestions(
         reason: suggestion.reason,
     })
 }
+
+/// Returns capability metadata for a given model.
+///
+/// For Ollama models the detection queries `/api/show` (cached).
+/// For cloud providers a default set is returned since they universally
+/// support tools, vision, and streaming.
+#[tauri::command]
+pub async fn get_model_capabilities(
+    provider: String,
+    model_id: String,
+    base_url: Option<String>,
+) -> Result<serde_json::Value, String> {
+    if provider.eq_ignore_ascii_case("ollama") {
+        let url = base_url
+            .filter(|u| !u.is_empty())
+            .unwrap_or_else(|| OLLAMA_BASE_URL.to_string());
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+        let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
+            &client, &url, &model_id,
+        )
+        .await;
+
+        let tool_mode = if caps.supports_tools {
+            "native"
+        } else {
+            "prompt_injection"
+        };
+
+        Ok(serde_json::json!({
+            "supports_tools": caps.supports_tools,
+            "supports_vision": caps.supports_vision,
+            "supports_streaming": true,
+            "supports_thinking": false,
+            "context_length": caps.context_length,
+            "tool_mode": tool_mode,
+        }))
+    } else {
+        // Cloud providers (openai, anthropic, google, xai, mistral, deepseek, etc.)
+        // universally support tools, streaming, and vision for modern models.
+        Ok(serde_json::json!({
+            "supports_tools": true,
+            "supports_vision": true,
+            "supports_streaming": true,
+            "supports_thinking": true,
+            "context_length": 128_000,
+            "tool_mode": "native",
+        }))
+    }
+}
+
+/// Clears the in-memory Ollama capability cache so that subsequent
+/// `get_model_capabilities` calls re-query `/api/show`.
+#[tauri::command]
+pub async fn clear_model_capability_cache() -> Result<(), String> {
+    crate::core::llm::capability_detection::clear_capability_cache().await;
+    Ok(())
+}
