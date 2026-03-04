@@ -62,13 +62,16 @@ describe('resetInFlightChatState', () => {
   });
 
   it('clears transient in-flight state and emits new-conversation event', async () => {
-    const eventSpy = vi.fn();
-    window.addEventListener('chat:new-conversation', eventSpy);
-
     const { resetInFlightChatState } = await import('../lib/newChatReset');
     await resetInFlightChatState();
 
-    expect(eventSpy).toHaveBeenCalledTimes(1);
+    // window.dispatchEvent is mocked globally in setup.ts — verify it was called
+    // with a CustomEvent of the correct type
+    const dispatchSpy = vi.mocked(window.dispatchEvent);
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    const dispatchedEvent = dispatchSpy.mock.calls[0]![0];
+    expect(dispatchedEvent.type).toBe('chat:new-conversation');
+
     expect(setIsLoading).toHaveBeenCalledWith(false);
     expect(setStreamingMessage).toHaveBeenCalledWith(null);
     expect(setAgentStatus).toHaveBeenCalledWith(null);
@@ -76,8 +79,6 @@ describe('resetInFlightChatState', () => {
     expect(clearBackgroundTasks).toHaveBeenCalledTimes(1);
     expect(cancelToolExecution).toHaveBeenCalledWith('tool-1');
     expect(clearToolStreams).toHaveBeenCalledTimes(1);
-
-    window.removeEventListener('chat:new-conversation', eventSpy);
   });
 });
 
@@ -129,16 +130,14 @@ describe('resetInFlightChatState (integration with real stores)', () => {
   });
 
   it('dispatches chat:new-conversation custom event', async () => {
-    const events: Event[] = [];
-    const handler = (e: Event) => events.push(e);
-    window.addEventListener('chat:new-conversation', handler);
-
     const { resetInFlightChatState } = await import('../lib/newChatReset');
     await resetInFlightChatState();
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toBeInstanceOf(CustomEvent);
-
-    window.removeEventListener('chat:new-conversation', handler);
+    // window.dispatchEvent is mocked globally in setup.ts — verify the event type
+    const dispatchSpy = vi.mocked(window.dispatchEvent);
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    const dispatchedEvent = dispatchSpy.mock.calls[0]![0];
+    expect(dispatchedEvent).toBeInstanceOf(CustomEvent);
+    expect(dispatchedEvent.type).toBe('chat:new-conversation');
   });
 });

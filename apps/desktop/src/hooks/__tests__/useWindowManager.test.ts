@@ -408,11 +408,26 @@ describe('useWindowManager - Fullscreen Functionality', () => {
 
   describe('Keyboard Shortcuts', () => {
     it('should handle Ctrl+Alt+Arrow keyboard shortcuts for docking', async () => {
+      // Capture the keydown handler registered via the mocked window.addEventListener
+      let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+      vi.mocked(window.addEventListener).mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'keydown') {
+            capturedKeydownHandler = handler as (e: KeyboardEvent) => void;
+          }
+        },
+      );
+
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
         expect(result.current.actions).toBeDefined();
       });
+
+      // Clear mock after initial window_get_state call so we only see subsequent dock calls
+      vi.mocked(invoke).mockClear();
+
+      expect(capturedKeydownHandler).not.toBeNull();
 
       const leftArrowEvent = new KeyboardEvent('keydown', {
         key: 'ArrowLeft',
@@ -422,8 +437,8 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         bubbles: true,
       });
 
-      act(() => {
-        window.dispatchEvent(leftArrowEvent);
+      await act(async () => {
+        capturedKeydownHandler!(leftArrowEvent);
       });
 
       await waitFor(() => {
@@ -432,11 +447,26 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
 
     it('should handle Ctrl+Alt+Right for docking right', async () => {
+      // Capture the keydown handler registered via the mocked window.addEventListener
+      let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+      vi.mocked(window.addEventListener).mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'keydown') {
+            capturedKeydownHandler = handler as (e: KeyboardEvent) => void;
+          }
+        },
+      );
+
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
         expect(result.current.actions).toBeDefined();
       });
+
+      // Clear mock after initial window_get_state call so we only see subsequent dock calls
+      vi.mocked(invoke).mockClear();
+
+      expect(capturedKeydownHandler).not.toBeNull();
 
       const rightArrowEvent = new KeyboardEvent('keydown', {
         key: 'ArrowRight',
@@ -446,8 +476,8 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         bubbles: true,
       });
 
-      act(() => {
-        window.dispatchEvent(rightArrowEvent);
+      await act(async () => {
+        capturedKeydownHandler!(rightArrowEvent);
       });
 
       await waitFor(() => {
@@ -456,11 +486,26 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
 
     it('should handle Ctrl+Alt+Down for undocking', async () => {
+      // Capture the keydown handler registered via the mocked window.addEventListener
+      let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+      vi.mocked(window.addEventListener).mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'keydown') {
+            capturedKeydownHandler = handler as (e: KeyboardEvent) => void;
+          }
+        },
+      );
+
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
         expect(result.current.actions).toBeDefined();
       });
+
+      // Clear mock after initial window_get_state call so we only see subsequent dock calls
+      vi.mocked(invoke).mockClear();
+
+      expect(capturedKeydownHandler).not.toBeNull();
 
       const downArrowEvent = new KeyboardEvent('keydown', {
         key: 'ArrowDown',
@@ -470,8 +515,8 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         bubbles: true,
       });
 
-      act(() => {
-        window.dispatchEvent(downArrowEvent);
+      await act(async () => {
+        capturedKeydownHandler!(downArrowEvent);
       });
 
       await waitFor(() => {

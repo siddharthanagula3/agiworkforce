@@ -49,6 +49,12 @@ describe('modelStore', () => {
   });
 
   describe('selectModel', () => {
+    beforeEach(async () => {
+      // Set plan to 'max' so model selection is not blocked by tier restrictions
+      const { useUnifiedAuthStore } = await import('../stores/auth');
+      useUnifiedAuthStore.setState({ plan: 'max' });
+    });
+
     it('should select a model and provider', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
@@ -73,15 +79,16 @@ describe('modelStore', () => {
     it('should handle selection errors gracefully', async () => {
       const { useModelStore } = await import('../stores/modelStore');
 
-      // Mock settingsStore to throw an error
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const store = useModelStore.getState();
       await store.selectModel('invalid-model', 'openai');
 
-      // Should still update state even if there's an error in settings
+      // The model tier guard blocks unknown models and falls back to auto-economy
+      // This is the expected behavior — the store handles it gracefully without throwing
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('invalid-model');
+      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedProvider).toBe('managed_cloud');
     });
 
     it('should block hobby-tier users from selecting Codex models', async () => {
