@@ -877,7 +877,7 @@ export const useUIStore = create<UIState>()(
             // "Simple Mode: Just type and chat - we handle the rest!"
             if (newMode === 'simple') {
               // Dynamically import to avoid circular dependency
-              Promise.all([import('./modelStore'), import('./accountStore')]).then(
+              Promise.all([import('./modelStore'), import('./auth')]).then(
                 ([{ useModelStore }, { useAccountStore }]) => {
                   const modelStore = useModelStore.getState();
                   const accountStore = useAccountStore.getState();

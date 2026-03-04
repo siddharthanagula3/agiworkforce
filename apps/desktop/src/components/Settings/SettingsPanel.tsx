@@ -28,8 +28,7 @@ import {
   type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
 import type { SettingsTab } from '../../stores/settingsDialogStore';
-import { useAccountStore } from '../../stores/accountStore';
-import { useAuthStore } from '../../stores/auth';
+import { useAccountStore, useAuthStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';

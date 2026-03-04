@@ -2137,6 +2137,54 @@ impl ToolExecutor {
 
         let is_mcp_tool = tool_call.name.starts_with("mcp__");
 
+        // Enforce capability toggles from Settings > Features & Privacy.
+        // If a user disables a capability (e.g. "fileOperations"), all tools
+        // mapped to that capability are blocked before any further checks.
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(cap_state) = app_handle.try_state::<crate::sys::commands::capabilities::CapabilityState>() {
+                if let Some(capability) = crate::sys::commands::capabilities::tool_to_capability(&tool_call.name) {
+                    if !cap_state.is_enabled(capability).await {
+                        let msg = format!(
+                            "Capability '{}' is disabled in Settings. Enable it in Features & Privacy to use this tool.",
+                            capability
+                        );
+                        tracing::warn!(
+                            "[ToolExecutor] Blocked tool '{}': capability '{}' is disabled",
+                            tool_call.name, capability
+                        );
+                        self.emit_tool_action(
+                            &action_id,
+                            &tool_call.name,
+                            "blocked",
+                            &metadata_snapshot,
+                            Some(msg.clone()),
+                        );
+
+                        if let Some(ah) = &self.app_handle {
+                            emit_tool_error(
+                                ah,
+                                &action_id,
+                                &msg,
+                                start_time.elapsed().as_millis() as u64,
+                                false,
+                            );
+                        }
+
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "capability_disabled": true, "capability": capability }),
+                            error: Some(msg),
+                            metadata: HashMap::from([
+                                ("capability_disabled".to_string(), json!(true)),
+                                ("capability".to_string(), json!(capability)),
+                                ("tool_name".to_string(), json!(tool_call.name)),
+                            ]),
+                        });
+                    }
+                }
+            }
+        }
+
         // Enforce tool policy validation (allowed tools, parameters, and path rules)
         if let Some(app_handle) = &self.app_handle {
             if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {

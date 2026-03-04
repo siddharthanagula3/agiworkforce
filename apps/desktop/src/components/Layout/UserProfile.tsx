@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
-import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
-import { useAuthStore } from '../../stores/auth';
+import { useAccountStore, selectIsTierLoading, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { SUPPORTED_LANGUAGES } from '../../i18n';

@@ -1,3 +1,4 @@
+use crate::sys::commands::auth::{get_session_user_id, SessionState};
 use crate::sys::telemetry::{
     AnalyticsMetricsCollector, AppMetrics, SystemMetrics, TelemetryCollector, TelemetryEvent,
 };
@@ -450,9 +451,10 @@ pub async fn analytics_export_report(
 
 #[tauri::command]
 pub async fn analytics_generate_weekly_report(
-    user_id: String,
+    session: State<'_, SessionState>,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
     let db = create_analytics_db_connection(&state)?;
     let generator = ScheduledReportGenerator::new(db);
 
@@ -461,9 +463,10 @@ pub async fn analytics_generate_weekly_report(
 
 #[tauri::command]
 pub async fn analytics_generate_monthly_report(
-    user_id: String,
+    session: State<'_, SessionState>,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
     let db = create_analytics_db_connection(&state)?;
     let generator = ScheduledReportGenerator::new(db);
 
@@ -488,12 +491,13 @@ pub async fn analytics_get_top_processes(
 
 #[tauri::command]
 pub async fn analytics_save_snapshot(
-    user_id: String,
     team_id: Option<String>,
     start_date: i64,
     end_date: i64,
+    session: State<'_, SessionState>,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
     let db = create_analytics_db_connection(&state)?;
     let calculator = ROICalculator::new(db);
 
@@ -511,9 +515,10 @@ pub async fn analytics_save_snapshot(
 #[tauri::command]
 pub async fn track_workflow_view(
     workflow_id: String,
-    user_id: String,
+    session: State<'_, SessionState>,
     state: State<'_, TelemetryState>,
 ) -> Result<(), String> {
+    let user_id = get_session_user_id(&session)?;
     let collector = state.collector.read().await;
 
     if !collector.is_enabled() {
@@ -524,7 +529,7 @@ pub async fn track_workflow_view(
 
     let mut properties = std::collections::HashMap::new();
     properties.insert("workflow_id".to_string(), serde_json::json!(workflow_id));
-    properties.insert("user_id".to_string(), serde_json::json!(user_id));
+    properties.insert("user_id".to_string(), serde_json::json!(&user_id));
 
     let event = TelemetryEvent {
         name: "workflow_view".to_string(),
@@ -544,9 +549,10 @@ pub async fn track_workflow_view(
 #[tauri::command]
 pub async fn acknowledge_milestone(
     milestone_id: String,
-    user_id: String,
+    session: State<'_, SessionState>,
     state: State<'_, TelemetryState>,
 ) -> Result<(), String> {
+    let user_id = get_session_user_id(&session)?;
     let collector = state.collector.read().await;
 
     if !collector.is_enabled() {
@@ -557,7 +563,7 @@ pub async fn acknowledge_milestone(
 
     let mut properties = std::collections::HashMap::new();
     properties.insert("milestone_id".to_string(), serde_json::json!(milestone_id));
-    properties.insert("user_id".to_string(), serde_json::json!(user_id));
+    properties.insert("user_id".to_string(), serde_json::json!(&user_id));
     properties.insert(
         "acknowledged_at".to_string(),
         serde_json::json!(chrono::Utc::now().to_rfc3339()),
