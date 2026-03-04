@@ -96,6 +96,7 @@ The Rust backend is organized into six top-level modules:
 
 - **`core/`** — AI engine and intelligence layer
   - `llm/` — LLM routing (`llm_router.rs`, 2274 lines), SSE streaming (`sse_parser.rs`), provider adapters, cost calculation, token counting
+    - `capability_detection.rs` — Ollama/local LLM capability probing via `/api/show`; detects tool support to prevent silent failures on non-tool models (caches results)
   - `agent/` — Agent runtime: planner, executor, autonomous mode, background agents, vision, RAG
   - `swarm/` — Parallel agent orchestration: task decomposition, agent spawning, result aggregation
   - `mcp/` — Model Context Protocol: server connections, tool registration, extensions
@@ -103,6 +104,8 @@ The Rust backend is organized into six top-level modules:
   - `embeddings/`, `research/`, `scheduler/` (NLP parser, proactive scheduling, types), `skills/`, `intent/`, `artifacts/`
 
 - **`sys/`** — System services and platform integration
+  - `commands/chat/` — Chat command handlers
+    - `tool_events.rs` — Structured `ToolEvent` emission to frontend (Started, Progress, Completed); display name mapping for Claude Code-style labels (Read, Write, Bash, WebSearch, etc.)
   - `commands/` — All `#[tauri::command]` handlers (100+ files), invoked from frontend via `invoke()`
   - `security/` — ToolGuard (`tool_guard.rs`, 1778 lines), SecretManager, encryption (Argon2id + AES-GCM), auth, RBAC, rate limiting
   - `billing/`, `diagnostics/`, `logging/`, `telemetry/`, `permissions/`, `account/`
@@ -138,6 +141,14 @@ React 19 SPA with Vite, using react-router-dom for routing:
 
 Frontend calls Rust via `@tauri-apps/api invoke()`. Each command is a `#[tauri::command]` function registered in `lib.rs`. State is passed via Tauri's managed state system (`app.manage(StateWrapper)` → `State<'_, T>` in handlers).
 
+**Tool & Agentic Events** (Tauri event system):
+
+- `tool:event` — Structured ToolEvent (type: Started, Progress, or Completed) during tool execution. Includes tool metadata (tool_name, display_name, display_args, duration_ms, result_preview).
+- `agentic:loop-started` — Agentic loop iteration started
+- `agentic:loop-status` — Loop status: current iteration count, tools executed, elapsed time, cost
+- `agentic:loop-ended` — Loop completed; includes reason (max_iterations, max_cost, no_tool_calls, error)
+- `agentic:message-consumed` — User queued message was consumed by the loop
+
 ### Web App (`apps/web/`)
 
 Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing`, `/chat`, `/docs`, `/download`, etc. Uses Supabase for auth (SSR via `@supabase/ssr`), Stripe for billing, Upstash Redis for rate limiting.
@@ -149,6 +160,8 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 ## Key Technical Details
 
+- **Tool Events** (sys/commands/chat/tool_events.rs): Structured `ToolEvent` emission to frontend during tool execution. Each event carries `ToolEvent::Started`, `ToolEvent::Progress`, `ToolEvent::Completed` with metadata (tool_name, display_name, display_args, result_preview). Display name mapping converts raw MCP tool names to Claude Code-style labels via pattern matching: `Read(path)`, `Write(path)`, `Bash(cmd)`, `WebSearch(query)`, `Edit(path:lines)`, `Git(cmd)`, etc.
+- **Local LLM Capability Detection** (core/llm/capability_detection.rs): Ollama capability detection via `/api/show` endpoint. Probes model template for tool-calling support tokens and checks model family against known tool-capable families (llama3.1+, qwen2.5+, mistral, etc.). Results cached in memory to avoid repeated network calls. Includes fallback to model name heuristics when /api/show is unreachable.
 - **State Management Pattern** (lib.rs): Uses degraded state constructors for optional features — `MemoryState::degraded()`, `MasterPasswordState::degraded()`, `ProjectMemoryState::degraded()`, `McpExtensionsState::degraded()`, `EmbeddingServiceState::degraded()`, `AppState::degraded()`. Allows graceful fallback if initialization fails. However, some commands (embedding\_\*) have type mismatches and may panic if state is not properly managed.
 - **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalog lives in both `src/constants/llm.ts` (frontend) and `provider_adapter.rs` (Rust) — these must stay in sync.
 - **Streaming**: SSE parsing via `sse_parser.rs`. Uses dual HTTP clients (one with streaming timeout disabled).
