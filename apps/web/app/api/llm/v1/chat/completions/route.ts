@@ -66,7 +66,7 @@ const ChatCompletionRequestSchema = z.object({
   logit_bias: z
     .record(
       z.string().regex(/^\d+$/, 'logit_bias keys must be token IDs (numeric strings)'),
-      z.number(),
+      z.number().min(-100).max(100),
     )
     .optional(),
   user: z.string().optional(),

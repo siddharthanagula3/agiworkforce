@@ -112,8 +112,8 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
   return `${input}/${output} per 1M tokens`;
 }
 
-export function isModelAllowedForTier(modelId: string, _tier: string): boolean {
-  const allowedModels = TIER_ALLOWED_MODELS[_tier];
+export function isModelAllowedForTier(modelId: string, tier: string): boolean {
+  const allowedModels = TIER_ALLOWED_MODELS[tier];
   return allowedModels?.includes(modelId) ?? false;
 }
 

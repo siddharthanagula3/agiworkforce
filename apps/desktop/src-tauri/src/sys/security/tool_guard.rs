@@ -187,7 +187,7 @@ impl ToolExecutionGuard {
             "ui_click".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 60,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec!["x".to_string(), "y".to_string(), "button".to_string()],
                 risk_level: RiskLevel::Medium,
             },
@@ -197,7 +197,7 @@ impl ToolExecutionGuard {
             "ui_type".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 60,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec!["text".to_string(), "delay_ms".to_string()],
                 risk_level: RiskLevel::Medium,
             },
@@ -644,7 +644,7 @@ impl ToolExecutionGuard {
             "api_call".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 30,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec![
                     "url".to_string(),
                     "method".to_string(),
@@ -1017,11 +1017,18 @@ impl ToolExecutionGuard {
 
     /// Override the allowed paths for file operations.
     /// Use this to enforce per-user allowed directories from settings.
+    /// Paths are canonicalized to prevent symlink bypass attacks.
     /// This method uses interior mutability via RwLock.
     pub fn set_allowed_paths(&self, paths: Vec<PathBuf>) {
         if !paths.is_empty() {
+            // Canonicalize each path to resolve symlinks and relative segments,
+            // preventing traversal via symlinks that point outside allowed directories.
+            let canonical_paths: Vec<PathBuf> = paths
+                .into_iter()
+                .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+                .collect();
             if let Ok(mut guard) = self.allowed_paths.write() {
-                *guard = paths;
+                *guard = canonical_paths;
             }
         }
     }
@@ -1087,7 +1094,7 @@ impl ToolExecutionGuard {
                     ));
                 }
             }
-            "browser_navigate" => {
+            "browser_navigate" | "api_call" | "api_download" | "api_upload" | "git_clone" => {
                 if let Some(url) = parameters.get("url").and_then(|u| u.as_str()) {
                     self.validate_url(url)?;
                 } else {
@@ -1406,11 +1413,51 @@ impl ToolExecutionGuard {
                 }
             }
 
+            // Block private/reserved IPv4 ranges (RFC 1918 + link-local + loopback)
             if host.starts_with("192.168.")
                 || host.starts_with("10.")
                 || host.starts_with("172.16.")
+                || host.starts_with("172.17.")
+                || host.starts_with("172.18.")
+                || host.starts_with("172.19.")
+                || host.starts_with("172.20.")
+                || host.starts_with("172.21.")
+                || host.starts_with("172.22.")
+                || host.starts_with("172.23.")
+                || host.starts_with("172.24.")
+                || host.starts_with("172.25.")
+                || host.starts_with("172.26.")
+                || host.starts_with("172.27.")
+                || host.starts_with("172.28.")
+                || host.starts_with("172.29.")
+                || host.starts_with("172.30.")
+                || host.starts_with("172.31.")
             {
                 warn!("Private IP address detected: {}", host);
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // Block 127.0.0.0/8 loopback range
+            if host.starts_with("127.") {
+                warn!("Loopback IP address detected: {}", host);
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // Block 169.254.0.0/16 link-local / cloud metadata (IMDS)
+            if host.starts_with("169.254.") {
+                warn!("Link-local/cloud metadata IP detected: {}", host);
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // Block IPv6 loopback (::1) and IPv6 link-local (fe80::)
+            if host == "::1" || host == "[::1]" || host.starts_with("fe80:") || host.starts_with("[fe80:") {
+                warn!("IPv6 loopback/link-local address detected: {}", host);
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // Block 0.0.0.0
+            if host == "0.0.0.0" {
+                warn!("Null-route IP address detected: {}", host);
                 return Err(SecurityError::BlockedDomain(host.to_string()));
             }
         }
@@ -1452,23 +1499,52 @@ impl ToolExecutionGuard {
         debug!("Validating SQL query");
 
         let query_lower = query.to_lowercase();
+        let query_trimmed = query_lower.trim();
 
-        let dangerous_operations = vec![
-            "drop table",
-            "drop database",
-            "truncate table",
-            "delete from",
+        // Allow SELECT-based queries through without blocking
+        let is_select = query_trimmed.starts_with("select")
+            || query_trimmed.starts_with("with")
+            || query_trimmed.starts_with("explain")
+            || query_trimmed.starts_with("pragma");
+
+        // Destructive operations that must be blocked without explicit approval
+        let destructive_operations = vec![
+            ("drop table", "DROP TABLE is not allowed without explicit approval"),
+            ("drop database", "DROP DATABASE is not allowed without explicit approval"),
+            ("truncate table", "TRUNCATE TABLE is not allowed without explicit approval"),
+            ("grant ", "GRANT is not allowed without explicit approval"),
+            ("revoke ", "REVOKE is not allowed without explicit approval"),
+        ];
+
+        for (op, msg) in &destructive_operations {
+            if query_lower.contains(op) {
+                warn!("Blocked dangerous SQL operation: {}", op);
+                return Err(SecurityError::InvalidParameter(msg.to_string()));
+            }
+        }
+
+        // DELETE without WHERE clause is dangerous
+        if query_lower.contains("delete from") && !query_lower.contains("where") {
+            warn!("Blocked DELETE without WHERE clause");
+            return Err(SecurityError::InvalidParameter(
+                "DELETE without WHERE clause is not allowed".to_string(),
+            ));
+        }
+
+        // Non-SELECT write operations require approval via tool policy, but
+        // warn here for audit trail
+        let write_operations = vec![
             "update ",
             "insert into",
             "create table",
             "alter table",
-            "grant ",
-            "revoke ",
         ];
 
-        for op in dangerous_operations {
-            if query_lower.contains(op) {
-                warn!("Potentially dangerous SQL operation: {}", op);
+        if !is_select {
+            for op in &write_operations {
+                if query_lower.contains(op) {
+                    warn!("Write SQL operation detected (requires tool-level approval): {}", op);
+                }
             }
         }
 
@@ -1774,5 +1850,234 @@ mod tests {
         assert!(!guard.requires_approval("file_read"));
         assert!(guard.requires_approval("file_write"));
         assert!(guard.requires_approval("code_execute"));
+    }
+
+    // H21 — get_safety_tier tests
+    #[test]
+    fn test_get_safety_tier_low_risk_is_safe() {
+        let guard = ToolExecutionGuard::new();
+        // file_read is Low risk, requires_approval=false -> Safe
+        assert_eq!(guard.get_safety_tier("file_read"), ToolSafetyTier::Safe);
+        assert_eq!(guard.get_safety_tier("file_list"), ToolSafetyTier::Safe);
+        assert_eq!(
+            guard.get_safety_tier("ui_screenshot"),
+            ToolSafetyTier::Safe
+        );
+    }
+
+    #[test]
+    fn test_get_safety_tier_medium_risk_with_approval_requires_confirmation() {
+        let guard = ToolExecutionGuard::new();
+        // file_write is Medium risk, requires_approval=true -> RequiresConfirmation
+        assert_eq!(
+            guard.get_safety_tier("file_write"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+        // ui_click is Medium risk, requires_approval=true -> RequiresConfirmation
+        assert_eq!(
+            guard.get_safety_tier("ui_click"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+    }
+
+    #[test]
+    fn test_get_safety_tier_medium_risk_without_approval_requires_notification() {
+        let guard = ToolExecutionGuard::new();
+        // search_web is Medium risk, requires_approval=false -> RequiresNotification
+        assert_eq!(
+            guard.get_safety_tier("search_web"),
+            ToolSafetyTier::RequiresNotification
+        );
+        // browser_extract is Medium risk, requires_approval=false -> RequiresNotification
+        assert_eq!(
+            guard.get_safety_tier("browser_extract"),
+            ToolSafetyTier::RequiresNotification
+        );
+    }
+
+    #[test]
+    fn test_get_safety_tier_high_risk_requires_confirmation() {
+        let guard = ToolExecutionGuard::new();
+        // file_delete is High risk -> RequiresConfirmation
+        assert_eq!(
+            guard.get_safety_tier("file_delete"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+        // browser_navigate is High risk -> RequiresConfirmation
+        assert_eq!(
+            guard.get_safety_tier("browser_navigate"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+        // terminal_execute is High risk -> RequiresConfirmation
+        assert_eq!(
+            guard.get_safety_tier("terminal_execute"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+    }
+
+    #[test]
+    fn test_get_safety_tier_critical_risk_requires_explicit_approval() {
+        let guard = ToolExecutionGuard::new();
+        // code_execute is Critical risk -> RequiresExplicitApproval
+        assert_eq!(
+            guard.get_safety_tier("code_execute"),
+            ToolSafetyTier::RequiresExplicitApproval
+        );
+    }
+
+    #[test]
+    fn test_get_safety_tier_unknown_tool_defaults_to_confirmation() {
+        let guard = ToolExecutionGuard::new();
+        assert_eq!(
+            guard.get_safety_tier("nonexistent_tool"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+    }
+
+    // H21 — create_confirmation_request tests
+    #[test]
+    fn test_create_confirmation_request_file_delete_is_reversible() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({"path": "/tmp/test.txt"});
+        let request = guard.create_confirmation_request("file_delete", &params, Some("Delete a file"));
+
+        assert_eq!(request.tool_name, "file_delete");
+        assert!(request.reversible, "file_delete should be marked as reversible");
+        assert!(
+            request.undo_description.is_some(),
+            "file_delete should have an undo_description"
+        );
+        assert!(
+            request
+                .undo_description
+                .as_ref()
+                .unwrap()
+                .contains("Restore"),
+            "undo_description should mention restoring"
+        );
+        assert_eq!(request.risk_level, RiskLevel::High);
+        assert_eq!(request.safety_tier, ToolSafetyTier::RequiresConfirmation);
+    }
+
+    #[test]
+    fn test_create_confirmation_request_file_write_is_reversible() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({"path": "/tmp/file.txt", "content": "hello"});
+        let request = guard.create_confirmation_request("file_write", &params, None);
+
+        assert!(request.reversible);
+        assert!(request.undo_description.is_some());
+        assert_eq!(request.risk_level, RiskLevel::Medium);
+        assert_eq!(
+            request.tool_description,
+            "No description available",
+            "Omitted description should use default"
+        );
+    }
+
+    #[test]
+    fn test_create_confirmation_request_code_execute_not_reversible() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({"language": "python", "code": "print('hi')"});
+        let request = guard.create_confirmation_request("code_execute", &params, Some("Run code"));
+
+        assert!(!request.reversible);
+        assert!(request.undo_description.is_none());
+        assert_eq!(request.risk_level, RiskLevel::Critical);
+        assert_eq!(
+            request.safety_tier,
+            ToolSafetyTier::RequiresExplicitApproval
+        );
+    }
+
+    #[test]
+    fn test_create_confirmation_request_has_unique_request_id() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({});
+        let r1 = guard.create_confirmation_request("file_read", &params, None);
+        let r2 = guard.create_confirmation_request("file_read", &params, None);
+
+        assert_ne!(
+            r1.request_id, r2.request_id,
+            "Each confirmation request must have a unique ID"
+        );
+    }
+
+    #[test]
+    fn test_create_confirmation_request_db_query_select_not_reversible() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({"query": "SELECT * FROM users"});
+        let request = guard.create_confirmation_request("db_query", &params, None);
+
+        // SELECT queries are not reversible and have no undo description
+        assert!(!request.reversible);
+        assert!(request.undo_description.is_none());
+    }
+
+    #[test]
+    fn test_create_confirmation_request_db_query_mutation_has_undo_hint() {
+        let guard = ToolExecutionGuard::new();
+        let params = json!({"query": "DELETE FROM users WHERE id = 1"});
+        let request = guard.create_confirmation_request("db_query", &params, None);
+
+        assert!(!request.reversible);
+        assert!(
+            request.undo_description.is_some(),
+            "mutation queries should have a rollback hint"
+        );
+        assert!(request
+            .undo_description
+            .as_ref()
+            .unwrap()
+            .contains("manual rollback"));
+    }
+
+    // L5 — Concurrent rate-limit enforcement test
+    #[tokio::test]
+    async fn test_concurrent_rate_limit_enforcement() {
+        use std::sync::Arc;
+        use tokio::sync::Barrier;
+
+        let guard = Arc::new(ToolExecutionGuard::new());
+        // file_delete has max_rate_per_minute = 5
+        let num_tasks = 10;
+        let barrier = Arc::new(Barrier::new(num_tasks));
+
+        let mut handles = Vec::new();
+        for _ in 0..num_tasks {
+            let guard = Arc::clone(&guard);
+            let barrier = Arc::clone(&barrier);
+            handles.push(tokio::spawn(async move {
+                barrier.wait().await;
+                guard
+                    .validate_tool_call("file_delete", &json!({"path": "/tmp/test.txt"}))
+                    .await
+            }));
+        }
+
+        let mut successes = 0;
+        let mut rate_limited = 0;
+        for handle in handles {
+            match handle.await.unwrap() {
+                Ok(()) => successes += 1,
+                Err(SecurityError::RateLimitExceeded(_)) => rate_limited += 1,
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+        }
+
+        // file_delete allows 5 per minute, so at most 5 should succeed
+        assert!(
+            successes <= 5,
+            "At most 5 concurrent calls should succeed (rate limit is 5/min), got {successes}"
+        );
+        assert!(
+            rate_limited >= 5,
+            "At least 5 calls should be rate-limited, got {rate_limited}"
+        );
+        assert_eq!(
+            successes + rate_limited,
+            num_tasks,
+            "All tasks must complete"
+        );
     }
 }
