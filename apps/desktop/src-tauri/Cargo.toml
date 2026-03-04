@@ -235,7 +235,7 @@ cocoa = "0.25"
 
 
 [features]
-default = ["shell", "updater"]
+default = ["shell", "updater", "billing", "devtools", "vad", "remote-databases", "ocr"]
 devtools = ["tauri/devtools"]
 # Note: "ocr" feature requires Tesseract to be installed on the system
 # Enable with: cargo build --features ocr
