@@ -17,11 +17,10 @@ vi.mock('sonner', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock shared/ui wrappers that depend on UNINSTALLED Radix packages.
-// @radix-ui/react-radio-group is NOT installed, so we must mock the wrapper
-// before vitest tries to load the actual file.
+// Mock @radix-ui/react-radio-group to keep tests fast and isolated from
+// Radix DOM layout internals. The real package is installed; this mock
+// replaces it at the module boundary for unit test purposes only.
 // ---------------------------------------------------------------------------
-// Mock Radix UI primitives that the shared/ui components depend on
 vi.mock('@radix-ui/react-radio-group', () => {
   const Root = React.forwardRef<HTMLDivElement, Record<string, unknown>>(
     ({ children, ...props }, ref) => (
