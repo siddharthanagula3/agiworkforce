@@ -91,7 +91,7 @@ export function sanitizeHtml(
     const anchors = tempDiv.querySelectorAll('a');
     anchors.forEach((anchor) => {
       const href = anchor.getAttribute('href');
-      if (href && !/^https?:\/\//.test(href)) {
+      if (href && !/^https?:\/\//i.test(href)) {
         anchor.removeAttribute('href');
       }
     });
