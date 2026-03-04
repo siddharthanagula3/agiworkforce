@@ -989,6 +989,11 @@ pub fn run() {
             crate::sys::commands::search_chat_history,
             crate::sys::commands::search_chat_history_semantic,
             crate::sys::commands::conversation_export,
+            crate::sys::commands::conversation_export_pdf,
+            crate::sys::commands::conversation_fork,
+            crate::sys::commands::conversation_list_branches,
+            crate::sys::commands::conversation_switch_branch,
+            crate::sys::commands::conversation_delete_branch,
 
 
             crate::sys::commands::checkpoint_create,
@@ -2338,6 +2343,9 @@ pub fn run() {
             crate::sys::commands::google_batch::google_batch_create_images,
             crate::sys::commands::google_batch::google_batch_calculate_cost,
             crate::sys::commands::google_batch::google_batch_create_jsonl,
+
+            // Code execution (sandboxed)
+            crate::sys::commands::execute_code,
         ])
         .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())

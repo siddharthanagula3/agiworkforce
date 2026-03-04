@@ -1,8 +1,9 @@
 /**
  * ExportConversationDialog
  *
- * A modal dialog that exports a conversation as Markdown.
- * Offers "Copy as Markdown" (clipboard) and "Save as File" (disk) actions.
+ * A modal dialog that exports a conversation as Markdown or PDF.
+ * Offers "Copy as Markdown" (clipboard), "Save as File" (disk), and
+ * "Export as PDF" actions.
  */
 
 import { useCallback, useState } from 'react';
@@ -27,6 +28,7 @@ export function ShareConversationDialog({
   onClose,
 }: ShareConversationDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const exportMarkdown = useCallback(async () => {
@@ -75,6 +77,31 @@ export function ShareConversationDialog({
     }
   }, [exportMarkdown, conversationTitle]);
 
+  const handleExportPdf = useCallback(async () => {
+    setIsPdfLoading(true);
+    try {
+      const safeName = conversationTitle
+        .replace(/[^a-zA-Z0-9 _-]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 60);
+      const filePath = await save({
+        defaultPath: `${safeName || 'conversation'}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (filePath) {
+        await invoke<string>('conversation_export_pdf', {
+          conversationId,
+          outputPath: filePath,
+        });
+        toast.success('Conversation exported as PDF');
+      }
+    } catch {
+      toast.error('Failed to export conversation as PDF');
+    } finally {
+      setIsPdfLoading(false);
+    }
+  }, [conversationId, conversationTitle]);
+
   if (!isOpen) return null;
 
   return (
@@ -109,7 +136,11 @@ export function ShareConversationDialog({
 
         {/* Export actions */}
         <div className="flex flex-col gap-3 mb-4">
-          <Button onClick={handleCopyMarkdown} disabled={isLoading} className="w-full gap-2">
+          <Button
+            onClick={handleCopyMarkdown}
+            disabled={isLoading || isPdfLoading}
+            className="w-full gap-2"
+          >
             {copied ? (
               <Check className="h-4 w-4 text-green-500" />
             ) : (
@@ -120,11 +151,20 @@ export function ShareConversationDialog({
           <Button
             variant="outline"
             onClick={handleSaveFile}
-            disabled={isLoading}
+            disabled={isLoading || isPdfLoading}
             className="w-full gap-2"
           >
             <Download className="h-4 w-4" />
             Save as File
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={isLoading || isPdfLoading}
+            className="w-full gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            {isPdfLoading ? 'Generating PDF...' : 'Export as PDF'}
           </Button>
         </div>
 

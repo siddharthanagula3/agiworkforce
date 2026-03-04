@@ -87,9 +87,19 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'document_create_excel_simple':
       return (args?.['outputPath'] ?? '/tmp/mock-document') as T;
 
-    // Canvas code execution commands
+    // Sandboxed code execution
     case 'execute_code':
-      return { stdout: '(mock output)', stderr: '', exit_code: 0 } as T;
+      return {
+        success: true,
+        stdout: '(mock output)',
+        stderr: '',
+        output: '(mock output)',
+        error: null,
+        exit_code: 0,
+        execution_time_ms: 42,
+        language: (args?.['language'] as string | undefined) ?? 'python',
+        timed_out: false,
+      } as T;
     case 'terminal_execute':
       return { stdout: '(mock terminal output)', stderr: '', exit_code: 0 } as T;
 
@@ -353,6 +363,36 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return [] as T;
 
     case 'submit_feedback':
+      return undefined as T;
+
+    // Conversation branching commands
+    case 'conversation_fork':
+      return {
+        branch: {
+          id: `branch_${Date.now()}`,
+          name: (args?.['branchName'] as string | undefined) ?? 'fork',
+          parentBranchId: 'main',
+          forkPointMessageId: (args?.['messageId'] as number | undefined) ?? 0,
+          createdAt: new Date().toISOString(),
+        },
+        messages: [],
+      } as T;
+
+    case 'conversation_list_branches':
+      return [
+        {
+          id: 'main',
+          name: 'main',
+          parentBranchId: undefined,
+          forkPointMessageId: undefined,
+          createdAt: new Date().toISOString(),
+        },
+      ] as T;
+
+    case 'conversation_switch_branch':
+      return [] as T;
+
+    case 'conversation_delete_branch':
       return undefined as T;
 
     default:

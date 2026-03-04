@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 55;
+const CURRENT_VERSION: i32 = 56;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -174,6 +174,8 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "agi_tasks",
         "agi_task_checkpoints",
         "agi_checkpoint_restore_history",
+        // Conversation branching
+        "conversation_branches",
     ])
 });
 
@@ -522,6 +524,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 55 {
         run_migration_in_transaction(conn, 55, apply_migration_v55)?;
+    }
+
+    if current_version < 56 {
+        run_migration_in_transaction(conn, 56, apply_migration_v56)?;
     }
 
     Ok(())
@@ -4722,6 +4728,61 @@ fn apply_migration_v55(conn: &Connection) -> Result<()> {
         rows_inserted = rows_inserted,
         "Migration v55: Backfilled existing messages into messages_fts FTS index"
     );
+
+    Ok(())
+}
+
+/// Migration v56: Conversation branching support
+/// - Adds parent_message_id and branch_id columns to messages
+/// - Creates conversation_branches table
+/// - Backfills existing messages with branch_id = 'main'
+/// - Creates an index on messages(conversation_id, branch_id)
+fn apply_migration_v56(conn: &Connection) -> Result<()> {
+    // Add branching columns to messages
+    conn.execute(
+        "ALTER TABLE messages ADD COLUMN parent_message_id INTEGER DEFAULT NULL",
+        [],
+    )?;
+
+    conn.execute(
+        "ALTER TABLE messages ADD COLUMN branch_id TEXT DEFAULT 'main'",
+        [],
+    )?;
+
+    // Create conversation_branches table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS conversation_branches (
+            id TEXT PRIMARY KEY,
+            conversation_id INTEGER NOT NULL,
+            parent_branch_id TEXT,
+            fork_point_message_id INTEGER,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversation_branches_conversation
+         ON conversation_branches(conversation_id)",
+        [],
+    )?;
+
+    // Backfill existing messages
+    conn.execute(
+        "UPDATE messages SET branch_id = 'main' WHERE branch_id IS NULL",
+        [],
+    )?;
+
+    // Create index on messages(conversation_id, branch_id) for branch queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_branch
+         ON messages(conversation_id, branch_id)",
+        [],
+    )?;
+
+    tracing::info!("Migration v56: Conversation branching schema applied");
 
     Ok(())
 }

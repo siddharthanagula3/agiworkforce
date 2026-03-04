@@ -26,6 +26,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         browser: '🌐',
         code: '💻',
         database: '🗄️',
+        image: '🎨',
       };
       return icons[type];
     };
@@ -36,6 +37,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         browser: 'Browser',
         code: 'Code',
         database: 'Query Results',
+        image: 'Generated Image',
       };
       return titles[type];
     };

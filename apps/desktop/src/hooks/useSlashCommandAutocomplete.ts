@@ -67,6 +67,12 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     example: '/excel Sales Data',
     icon: '📊',
   },
+  {
+    command: '/imagine',
+    description: 'Generate an image from a text prompt',
+    example: '/imagine a sunset over the mountains',
+    icon: '🎨',
+  },
 ];
 
 export function useSlashCommandAutocomplete() {
