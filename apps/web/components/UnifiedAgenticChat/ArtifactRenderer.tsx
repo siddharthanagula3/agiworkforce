@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and string parsing callbacks */
 import { invoke } from '@/lib/tauri-mock';
-import { save } from '@tauri-apps/plugin-dialog';
+// @tauri-apps/plugin-dialog is desktop-only; web exports use browser download APIs.
 import {
   AlertTriangle,
   BarChart3,
@@ -174,105 +174,17 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     URL.revokeObjectURL(url);
   };
 
-  const handleExportPdf = async () => {
-    try {
-      const savePath = await save({
-        defaultPath: `${artifact.title || 'document'}.pdf`,
-        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
-      });
-      if (!savePath) return;
-
-      // Split content into paragraphs for PDF generation
-      const paragraphs = artifact.content
-        .split(/\n\n+/)
-        .map((p: any) => p.trim())
-        .filter((p: any) => p.length > 0);
-
-      await invoke('document_create_pdf_simple', {
-        output_path: savePath,
-        title: artifact.title || 'Document',
-        author: null,
-        paragraphs,
-      });
-      toast.success('Exported to PDF successfully');
-    } catch (error) {
-      console.error('Failed to export PDF:', error);
-      toast.error('Failed to export to PDF');
-    }
+  const handleExportPdf = () => {
+    toast.info('PDF export is only available in the desktop app');
   };
 
-  const handleExportWord = async () => {
-    try {
-      const savePath = await save({
-        defaultPath: `${artifact.title || 'document'}.docx`,
-        filters: [{ name: 'Word Document', extensions: ['docx'] }],
-      });
-      if (!savePath) return;
-
-      // Split content into paragraphs for Word generation
-      const paragraphs = artifact.content
-        .split(/\n\n+/)
-        .map((p: any) => p.trim())
-        .filter((p: any) => p.length > 0);
-
-      await invoke('document_create_word_simple', {
-        output_path: savePath,
-        title: artifact.title || 'Document',
-        author: null,
-        paragraphs,
-      });
-      toast.success('Exported to Word successfully');
-    } catch (error) {
-      console.error('Failed to export Word:', error);
-      toast.error('Failed to export to Word');
-    }
+  const handleExportWord = () => {
+    toast.info('Word export is only available in the desktop app');
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = () => {
     if (artifact.type !== 'spreadsheet' && artifact.type !== 'table') return;
-
-    try {
-      const savePath = await save({
-        defaultPath: `${artifact.title || 'spreadsheet'}.xlsx`,
-        filters: [{ name: 'Excel Spreadsheet', extensions: ['xlsx'] }],
-      });
-      if (!savePath) return;
-
-      // Parse the JSON content to extract headers and rows
-      let data: Record<string, string | number>[];
-      try {
-        data = JSON.parse(artifact.content) as Record<string, string | number>[];
-      } catch (parseError) {
-        toast.error('Invalid JSON format in artifact');
-        console.error('[ArtifactRenderer] JSON parse failed:', parseError);
-        return;
-      }
-
-      if (!Array.isArray(data) || data.length === 0) {
-        toast.error('No data to export');
-        return;
-      }
-
-      const firstRow = data[0];
-      if (!firstRow) {
-        toast.error('No data to export');
-        return;
-      }
-
-      const headers = Object.keys(firstRow);
-      const rows = data.map((row) => headers.map((h) => String(row[h] ?? '')));
-
-      await invoke('document_create_excel_simple', {
-        output_path: savePath,
-        sheet_name: artifact.title || 'Sheet1',
-        headers,
-        rows,
-      });
-      toast.success('Exported to Excel successfully');
-    } catch (error) {
-      console.error('Failed to export Excel:', error);
-      toast.error('Failed to export to Excel');
-    }
+    toast.info('Excel export is only available in the desktop app');
   };
 
   // Check if artifact type supports document export
@@ -283,7 +195,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
   const handleExportSvg = async () => {
     try {
-      // Find the SVG element in the artifact container
       const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
       const svgElement = container?.querySelector('svg');
 
@@ -292,11 +203,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         return;
       }
 
-      // Clone the SVG and add necessary attributes
       const clonedSvg = svgElement.cloneNode(true) as SVGElement;
       clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
-      // Add background for better visibility
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('width', '100%');
       rect.setAttribute('height', '100%');
@@ -305,53 +214,18 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
       const svgString = new XMLSerializer().serializeToString(clonedSvg);
       const blob = new Blob([svgString], { type: 'image/svg+xml' });
-
-      const savePath = await save({
-        defaultPath: `${artifact.title || 'chart'}.svg`,
-        filters: [{ name: 'SVG Image', extensions: ['svg'] }],
-      });
-
-      if (!savePath) return;
-
-      // AUDIT-005-007 fix: Track FileReader and add mount check before state updates
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        // Check if component is still mounted before proceeding
-        if (!isMountedRef.current) return;
-        const base64 = (reader.result as string).split(',')[1];
-        await invoke('file_write_binary', { file_path: savePath, content: base64 });
-        if (isMountedRef.current) {
-          toast.success('Exported as SVG');
-        }
-      };
-      reader.onerror = () => {
-        if (isMountedRef.current) {
-          toast.error('Failed to read SVG data');
-        }
-      };
-      reader.readAsDataURL(blob);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${artifact.title || 'chart'}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Exported as SVG');
     } catch (error) {
       console.error('Failed to export SVG:', error);
-      // Fallback: download using blob URL
-      try {
-        const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
-        const svgElement = container?.querySelector('svg');
-        if (svgElement) {
-          const svgString = new XMLSerializer().serializeToString(svgElement);
-          const blob = new Blob([svgString], { type: 'image/svg+xml' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${artifact.title || 'chart'}.svg`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          toast.success('Exported as SVG');
-        }
-      } catch {
-        toast.error('Failed to export SVG');
-      }
+      toast.error('Failed to export SVG');
     }
   };
 
