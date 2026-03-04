@@ -21,6 +21,7 @@ process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';
 vi.mock('next/headers', () => ({
   cookies: vi.fn(() => ({
     get: vi.fn(() => ({ value: 'test-cookie' })),
+    getAll: vi.fn(() => []),
     set: vi.fn(),
     delete: vi.fn(),
   })),
@@ -28,6 +29,14 @@ vi.mock('next/headers', () => ({
 
 // Mock server-only module
 vi.mock('server-only', () => ({}));
+
+// Mock @webcontainer/api — not installed; tests that use CodeExecutionService
+// rely on the service's internal graceful fallback
+vi.mock('@webcontainer/api', () => ({
+  WebContainer: {
+    boot: vi.fn().mockRejectedValue(new Error('WebContainer not available in test environment')),
+  },
+}));
 
 // Mock CSRF validation in API routes - skip CSRF token validation in tests
 // (Individual CSRF tests will test the real implementation)
