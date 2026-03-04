@@ -5,6 +5,7 @@ pub mod function_executor;
 pub mod job_autofill_runtime;
 pub mod llm_router;
 pub mod memory_integration;
+pub mod models_config;
 pub mod prompt_policy;
 pub mod provider_adapter;
 pub mod providers;
@@ -88,12 +89,6 @@ pub struct LLMRequest {
     // Request metadata
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
-    // Google-specific features removed (provider cleanup)
-    // The following fields have been commented out as Google provider support was removed:
-    // - image_generation, video_generation, tts_config
-    // - file_search, url_context
-    // - google_search, google_maps
-    // - computer_use, live_session, code_execution
 }
 
 impl LLMRequest {
@@ -475,22 +470,7 @@ pub struct ToolDefinition {
     pub parameters: serde_json::Value,
 }
 
-impl ToolDefinition {
-    /// Get the tool name
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Get the tool description
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    /// Get the tool parameters schema
-    pub fn parameters(&self) -> &serde_json::Value {
-        &self.parameters
-    }
-}
+impl ToolDefinition {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -532,6 +512,7 @@ pub enum Provider {
     Qwen,
     Moonshot,
     Zhipu,
+    Mistral,
     ManagedCloud,
 }
 
@@ -549,6 +530,7 @@ impl Provider {
             Provider::Qwen => "qwen",
             Provider::Moonshot => "moonshot",
             Provider::Zhipu => "zhipu",
+            Provider::Mistral => "mistral",
             Provider::ManagedCloud => "managed_cloud",
         }
     }
@@ -566,80 +548,26 @@ impl Provider {
             "qwen" | "alibaba" => Some(Provider::Qwen),
             "moonshot" | "kimi" => Some(Provider::Moonshot),
             "zhipu" | "zhipuai" | "bigmodel" | "glm" => Some(Provider::Zhipu),
+            "mistral" | "mistral-ai" | "mistral_ai" => Some(Provider::Mistral),
             "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
             _ => None,
         }
     }
 
     pub fn default_model(&self) -> &'static str {
-        match self {
-            Provider::OpenAI => "gpt-5.2",
-            Provider::Anthropic => "claude-sonnet-4-5",
-            Provider::Google => "gemini-3-pro-preview",
-            Provider::Ollama => "llama4-maverick",
-            Provider::Perplexity => "sonar-deep-research",
-            Provider::XAI => "grok-4",
-            Provider::DeepSeek => "deepseek-chat",
-            Provider::Qwen => "qwen-max",
-            Provider::Moonshot => "kimi-k2.5-thinking",
-            Provider::Zhipu => "glm-4.7",
-            Provider::ManagedCloud => "deepseek-chat",
-        }
+        models_config::get_default_model(self)
     }
 
     pub fn get_model_for_task(&self, task: TaskType) -> &'static str {
-        match (self, task) {
-            (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5.2-codex-medium",
-            (Provider::OpenAI, TaskType::ComplexReasoning) => "o3",
-            (Provider::OpenAI, TaskType::Chat) => "gpt-5.2",
-            (Provider::OpenAI, TaskType::Vision) => "gpt-5.2",
-            (Provider::OpenAI, TaskType::LongContext) => "gpt-5.2",
-
-            (Provider::Anthropic, TaskType::FastCompletion) => "claude-haiku-4-5",
-            (Provider::Anthropic, TaskType::CodeGeneration) => "claude-sonnet-4-5",
-            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-6",
-            (Provider::Anthropic, _) => "claude-sonnet-4-5",
-
-            (Provider::Google, TaskType::FastCompletion) => "gemini-3-flash-preview",
-            (Provider::Google, TaskType::CodeGeneration) => "gemini-3-pro-preview",
-            (Provider::Google, TaskType::ComplexReasoning) => "gemini-3-deep-think",
-            (Provider::Google, TaskType::Vision) => "gemini-3-pro-preview",
-            (Provider::Google, TaskType::LongContext) => "gemini-3-pro-preview",
-            (Provider::Google, _) => "gemini-3-flash-preview",
-
-            (Provider::XAI, TaskType::FastCompletion) => "grok-4-fast",
-            (Provider::XAI, TaskType::ComplexReasoning) => "grok-4-fast-reasoning",
-            (Provider::XAI, _) => "grok-4",
-
-            (Provider::DeepSeek, TaskType::CodeGeneration) => "deepseek-chat",
-            (Provider::DeepSeek, TaskType::ComplexReasoning) => "deepseek-reasoner",
-            (Provider::DeepSeek, _) => "deepseek-chat",
-
-            (Provider::Qwen, TaskType::CodeGeneration) => "qwen-coder",
-            (Provider::Qwen, _) => "qwen-max",
-
-            (Provider::Ollama, TaskType::CodeGeneration) => "llama4-maverick",
-            (Provider::Ollama, _) => "llama4-maverick",
-
-            (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2.5-thinking",
-            (Provider::Moonshot, _) => "kimi-k2.5-thinking",
-
-            (Provider::Perplexity, _) => "sonar-deep-research",
-
-            (Provider::Zhipu, TaskType::FastCompletion) => "glm-4.6v-flash",
-            (Provider::Zhipu, TaskType::CodeGeneration) => "glm-4.7",
-            (Provider::Zhipu, TaskType::ComplexReasoning) => "glm-4.7",
-            (Provider::Zhipu, TaskType::Vision) => "glm-4.6v",
-            (Provider::Zhipu, _) => "glm-4.7",
-
-            (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-chat",
-            (Provider::ManagedCloud, TaskType::ComplexReasoning) => "deepseek-reasoner",
-            (Provider::ManagedCloud, TaskType::Chat) => "deepseek-chat",
-            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash-preview",
-            (Provider::ManagedCloud, TaskType::LongContext) => "deepseek-chat",
-        }
+        let task_str = match task {
+            TaskType::FastCompletion => "fast_completion",
+            TaskType::CodeGeneration => "code_generation",
+            TaskType::ComplexReasoning => "complex_reasoning",
+            TaskType::Chat => "chat",
+            TaskType::Vision => "vision",
+            TaskType::LongContext => "long_context",
+        };
+        models_config::get_task_model(self, task_str)
     }
 }
 
