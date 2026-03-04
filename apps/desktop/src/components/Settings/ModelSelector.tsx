@@ -100,6 +100,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       'black-forest-labs': [],
       suno: [],
       udio: [],
+      mistral: [],
     };
 
     filteredModels.forEach((model) => {

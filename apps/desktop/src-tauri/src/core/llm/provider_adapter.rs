@@ -253,6 +253,7 @@ impl ProviderAdapterFactory {
             Provider::Qwen => Box::new(OpenAIAdapter), // Qwen uses OpenAI-compatible format
             Provider::Moonshot => Box::new(MoonshotAdapter),
             Provider::Zhipu => Box::new(ZhipuAdapter),
+            Provider::Mistral => Box::new(OpenAIAdapter), // Mistral uses OpenAI-compatible format
             Provider::ManagedCloud => Box::new(OpenAIAdapter), // ManagedCloud proxies OpenAI format
         }
     }
@@ -275,9 +276,8 @@ struct OpenAIAdapter;
 impl ProviderAdapter for OpenAIAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
         // Determine if we should use Responses API (for gpt-5+) or Chat Completions API
-        let use_responses_api = request.model.starts_with("gpt-5")
-            || request.model.starts_with("o3")
-            || request.model.starts_with("o4");
+        let use_responses_api =
+            super::models_config::model_uses_responses_api(&request.model);
 
         if use_responses_api {
             self.adapt_to_responses_api(request)
@@ -356,20 +356,7 @@ impl OpenAIAdapter {
     }
 
     fn canonicalize_model(model: &str) -> String {
-        // Normalize all gpt-5.2-codex effort variants and legacy gpt-5-codex alias to
-        // the canonical OpenAI API model ID "gpt-5.2-codex".
-        if model.starts_with("gpt-5.2-codex-") || model == "gpt-5.2-codex" || model == "gpt-5-codex"
-        {
-            "gpt-5.2-codex".to_string()
-        } else if model == "gpt-5-pro" || model == "gpt-5-pro-2026-01" {
-            // Normalize legacy/internal gpt-5-pro IDs to canonical OpenAI API model ID.
-            "gpt-5.2-pro".to_string()
-        } else if model == "grok-4" {
-            // Normalize the generic grok-4 alias to the canonical versioned xAI model ID.
-            "grok-4-0709".to_string()
-        } else {
-            model.to_string()
-        }
+        super::models_config::get_canonicalized_id(model)
     }
 
     /// Calculate token count for an image based on dimensions and detail level
@@ -817,7 +804,7 @@ impl OpenAIAdapter {
         let nested_tools: Vec<Value> = tools
             .iter()
             .map(|tool| {
-                let tool_name = tool.name();
+                let tool_name = &tool.name;
 
                 // Check if this is a built-in server-side tool
                 if let Some(server_tool) = OpenAIServerTool::from_str(tool_name) {
@@ -882,7 +869,7 @@ impl OpenAIAdapter {
         let tool_type = server_tool.as_str();
 
         // Extract configuration from tool parameters if present
-        let normalized_params = Self::normalize_array_items_in_schema(tool.parameters());
+        let normalized_params = Self::normalize_array_items_in_schema(&tool.parameters);
         let params = &normalized_params;
 
         let mut tool_def = serde_json::json!({
@@ -1498,7 +1485,7 @@ impl ProviderAdapter for AnthropicAdapter {
             let anthropic_tools: Vec<Value> = tools
                 .iter()
                 .filter_map(|tool| {
-                    let tool_name = tool.name();
+                    let tool_name = &tool.name;
 
                     // Check if this is a known Anthropic server-side tool
                     if server_tools::is_anthropic_server_tool(tool_name) {
@@ -1508,8 +1495,8 @@ impl ProviderAdapter for AnthropicAdapter {
                         // Regular client tool – flat format with input_schema
                         Some(serde_json::json!({
                             "name": tool_name,
-                            "description": tool.description(),
-                            "input_schema": tool.parameters()
+                            "description": &tool.description,
+                            "input_schema": &tool.parameters
                         }))
                     }
                 })
@@ -1704,15 +1691,7 @@ impl ProviderAdapter for AnthropicAdapter {
 
 impl AnthropicAdapter {
     fn canonicalize_model(model: &str) -> String {
-        match model {
-            // Frontend uses dotted IDs; Anthropic API expects hyphenated alias IDs.
-            // Snapshot-pinned IDs (e.g. claude-sonnet-4-5-20250929) are passed through as-is.
-            "claude-haiku-4.5" => "claude-haiku-4-5".to_string(),
-            "claude-sonnet-4.5" => "claude-sonnet-4-5".to_string(),
-            "claude-sonnet-4.6" => "claude-sonnet-4-6".to_string(),
-            "claude-opus-4.6" => "claude-opus-4-6".to_string(),
-            _ => model.to_string(),
-        }
+        super::models_config::get_canonicalized_id(model)
     }
 }
 
@@ -1753,13 +1732,13 @@ impl ProviderAdapter for GoogleAdapter {
                 .iter()
                 .map(|tool| {
                     let normalized_parameters =
-                        Self::normalize_google_tool_schema(tool.parameters());
+                        Self::normalize_google_tool_schema(&tool.parameters);
                     let mut declaration = serde_json::json!({
-                        "name": tool.name(),
-                        "description": tool.description(),
+                        "name": &tool.name,
+                        "description": &tool.description,
                     });
 
-                    if Self::requires_google_json_schema(tool.parameters()) {
+                    if Self::requires_google_json_schema(&tool.parameters) {
                         declaration["parametersJsonSchema"] = normalized_parameters;
                     } else {
                         declaration["parameters"] = normalized_parameters;
@@ -1787,7 +1766,7 @@ impl ProviderAdapter for GoogleAdapter {
         // ── Thinking config (Gemini Pro models only) ─────────────────
         // gemini-3-pro-preview and gemini-2.5-pro support thinking_config
         // in generationConfig. Flash models do not support thinking.
-        if request.model.contains("gemini-3-pro") || request.model.contains("gemini-2.5-pro") {
+        if super::models_config::model_supports_gemini_thinking(&request.model) {
             if let Some(thinking) = &request.thinking {
                 use super::ThinkingParameter;
                 let budget = match thinking {
@@ -2047,9 +2026,9 @@ impl ProviderAdapter for OllamaAdapter {
                     serde_json::json!({
                         "type": "function",
                         "function": {
-                            "name": tool.name(),
-                            "description": tool.description(),
-                            "parameters": tool.parameters()
+                            "name": &tool.name,
+                            "description": &tool.description,
+                            "parameters": &tool.parameters
                         }
                     })
                 })
@@ -2152,12 +2131,7 @@ struct DeepSeekAdapter;
 impl DeepSeekAdapter {
     /// Canonicalize DeepSeek model IDs to the API-expected identifiers.
     fn canonicalize_model(model: &str) -> String {
-        match model {
-            // The DeepSeek API expects "deepseek-reasoner" for all R1 variants.
-            // Users and frontends commonly send "deepseek-r1" or "deepseek-r1-zero".
-            "deepseek-r1" | "deepseek-r1-zero" => "deepseek-reasoner".to_string(),
-            _ => model.to_string(),
-        }
+        super::models_config::get_canonicalized_id(model)
     }
 }
 

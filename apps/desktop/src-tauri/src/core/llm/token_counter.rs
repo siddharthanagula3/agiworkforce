@@ -1,11 +1,20 @@
 use crate::core::llm::{ChatMessage, ContentPart, Provider};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 use tiktoken_rs::{cl100k_base, CoreBPE};
 
-lazy_static! {
-    static ref TOKENIZER: CoreBPE =
-        cl100k_base().expect("Failed to initialize cl100k_base tokenizer");
-}
+/// Optional tokenizer singleton — `None` if tiktoken data failed to load.
+///
+/// Uses `LazyLock<Option<CoreBPE>>` (stable since Rust 1.80) so that
+/// initialisation failures are handled gracefully without panicking.
+/// Callers fall back to a char-ratio heuristic (~4 chars per token)
+/// when the tokenizer is unavailable.
+static TOKENIZER: LazyLock<Option<CoreBPE>> = LazyLock::new(|| match cl100k_base() {
+    Ok(bpe) => Some(bpe),
+    Err(e) => {
+        eprintln!("[token_counter] WARNING: failed to load cl100k_base tokenizer: {e}");
+        None
+    }
+});
 
 /// Image detail level for token calculation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,29 +50,37 @@ impl TokenCounter {
 
         // Fast path for very short strings
         if text.len() < 10 {
-            return (text.len() as f64 / 3.0).ceil() as u32;
+            return (text.len() as f64 / 4.0).ceil() as u32;
         }
 
-        // tiktoken's encode_with_special_tokens returns Vec<usize> directly, not Result
-        let tokens = TOKENIZER.encode_with_special_tokens(text);
-        tokens.len() as u32
+        // Use tiktoken when available, otherwise fall back to char-ratio heuristic
+        match TOKENIZER.as_ref() {
+            Some(tokenizer) => {
+                let tokens = tokenizer.encode_with_special_tokens(text);
+                tokens.len() as u32
+            }
+            None => {
+                // Fallback: ~4 chars per token (conservative estimate for English text)
+                (text.len() as f64 / 4.0).ceil() as u32
+            }
+        }
     }
 
     /// Calculate tokens for an image based on its dimensions and detail level
     ///
     /// Based on OpenAI's token calculation:
     /// - Low detail: Always 85 tokens (image is resized to 512x512)
-    /// - High detail: 170 base + 85 tokens per 512x512 tile
+    /// - High detail: 170 base + 170 tokens per 512x512 tile
     ///
     /// For high detail:
     /// 1. Scale image so shortest side is 768px
     /// 2. Scale down so longest side is at most 2048px
     /// 3. Calculate tiles (512x512 each)
-    /// 4. Total = 170 + (85 * tiles)
+    /// 4. Total = 170 + (170 * tiles)
     pub fn estimate_image_tokens(width: u32, height: u32, detail: ImageDetail) -> u32 {
         const LOW_RES_TOKENS: u32 = 85;
         const HIGH_RES_BASE: u32 = 170;
-        const TOKENS_PER_TILE: u32 = 85;
+        const TOKENS_PER_TILE: u32 = 170;
         const TILE_SIZE: u32 = 512;
         const SHORT_SIDE_TARGET: u32 = 768;
         const LONG_SIDE_MAX: u32 = 2048;
@@ -196,19 +213,9 @@ impl TokenCounter {
         messages: &[ChatMessage],
         completion: &str,
     ) -> (u32, u32) {
-        let (prompt_multiplier, completion_multiplier) = match provider {
-            Provider::OpenAI => (1.0, 1.0),
-            Provider::Anthropic => (1.05, 1.05), // Higher due to different specialized tokenizer
-            Provider::Google => (0.95, 0.95),    // Gemini often uses fewer tokens
-            Provider::Ollama => (1.10, 1.10),    // Conservative for Llama types
-            Provider::Perplexity => (1.0, 1.0),
-            Provider::XAI => (1.0, 1.0),
-            Provider::DeepSeek => (1.05, 1.05),
-            Provider::Qwen => (1.0, 1.0),
-            Provider::Moonshot => (1.0, 1.0),
-            Provider::Zhipu => (1.0, 1.0), // ZhipuAI uses similar tokenization
-            Provider::ManagedCloud => (1.0, 1.0),
-        };
+        let multiplier =
+            crate::core::llm::models_config::get_token_multiplier(&provider);
+        let (prompt_multiplier, completion_multiplier) = (multiplier, multiplier);
 
         let prompt_base = Self::estimate_prompt_tokens(messages) as f64;
         let completion_base = Self::estimate_completion_tokens(completion) as f64;
@@ -246,33 +253,33 @@ mod tests {
         // 512x512 image gets scaled up so shortest side is 768
         // 512 * (768/512) = 768 -> becomes 768x768
         // ceil(768/512) x ceil(768/512) = 2x2 = 4 tiles
-        // Total: 170 + 85*4 = 510
+        // Total: 170 + 170*4 = 850
         let tokens = TokenCounter::estimate_image_tokens(512, 512, ImageDetail::High);
-        assert_eq!(tokens, 510);
+        assert_eq!(tokens, 850);
     }
 
     #[test]
     fn test_image_tokens_high_detail_medium_image() {
         // 1024x1024 scaled to 768 shortest side, then tiles calculated
-        // After scaling: ~768x768, needs 2x2 tiles = 170 + 85*4 = 510
+        // After scaling: ~768x768, needs 2x2 tiles = 170 + 170*4 = 850
         let tokens = TokenCounter::estimate_image_tokens(1024, 1024, ImageDetail::High);
-        assert_eq!(tokens, 510);
+        assert_eq!(tokens, 850);
     }
 
     #[test]
     fn test_image_tokens_high_detail_large_image() {
         // Very large image gets scaled down to fit within 2048 max
         // 4000x3000 -> scale shortest (3000) to 768 -> 1024x768
-        // -> within 2048 limit -> tiles: 2x2 = 4 -> 170 + 85*4 = 510
+        // -> within 2048 limit -> tiles: 2x2 = 4 -> 170 + 170*4 = 850
         let tokens = TokenCounter::estimate_image_tokens(4000, 3000, ImageDetail::High);
-        assert_eq!(tokens, 510);
+        assert_eq!(tokens, 850);
     }
 
     #[test]
     fn test_image_tokens_unknown_dimensions() {
         // Zero dimensions should give conservative estimate (2x2 tiles)
         let tokens = TokenCounter::estimate_image_tokens(0, 0, ImageDetail::High);
-        assert_eq!(tokens, 170 + 85 * 4); // 510
+        assert_eq!(tokens, 170 + 170 * 4); // 850
     }
 
     #[test]
