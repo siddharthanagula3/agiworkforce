@@ -233,6 +233,8 @@ export interface ToolLabelEntry {
   status: 'running' | 'completed' | 'error';
   durationMs?: number;
   error?: string;
+  /** Optional group identifier for visually grouping parallel tool executions. */
+  parallelGroup?: string;
 }
 
 export interface ChatState {
@@ -1542,6 +1544,8 @@ export const useChatStore = create<ChatState>()(
                 state.messagesByConversation[newId] = [];
                 state.isStreaming = false;
                 state.currentStreamingMessageId = null;
+                state.toolTimelineByMessage = {};
+                state.agenticLoopStatus = null;
                 state.citations = [];
                 state.focusMode = null;
               },

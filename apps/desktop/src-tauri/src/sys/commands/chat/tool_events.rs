@@ -2,7 +2,36 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Instant;
 use tauri::Emitter;
+
+/// Global rate-limit map: tracks the last emission timestamp per tool execution ID.
+static PROGRESS_LAST_EMIT: std::sync::LazyLock<Mutex<HashMap<String, Instant>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Returns true if enough time (100ms) has passed since the last Progress emission
+/// for the given `tool_id`. This prevents flooding the frontend with high-frequency
+/// progress events that can degrade UI performance.
+pub fn should_emit_progress(tool_id: &str) -> bool {
+    let mut map = PROGRESS_LAST_EMIT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    if let Some(last) = map.get(tool_id) {
+        if now.duration_since(*last).as_millis() < 100 {
+            return false;
+        }
+    }
+    map.insert(tool_id.to_string(), now);
+    // Prevent unbounded growth — clear old entries if map gets large
+    if map.len() > 500 {
+        let cutoff = now - std::time::Duration::from_secs(30);
+        map.retain(|_, v| *v > cutoff);
+    }
+    true
+}
 
 /// Structured tool event emitted to the frontend during agentic loop execution.
 #[derive(Debug, Clone, Serialize)]
@@ -16,6 +45,8 @@ pub enum ToolEvent {
         display_name: String,
         display_args: String,
         iteration: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parallel_group: Option<String>,
     },
     Progress {
         id: String,

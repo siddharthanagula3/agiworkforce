@@ -1,5 +1,6 @@
 use super::http_client_factory::{create_http_client, HttpClientConfig};
-use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
+use crate::core::llm::prompt_tool_injection;
+use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk, StreamingToolCall};
 use crate::core::llm::{ContentPart, LLMProvider, LLMRequest, LLMResponse};
 use futures_util::Stream;
 use reqwest::Client;
@@ -125,6 +126,38 @@ impl OllamaProvider {
             || m.contains("phi-4-multimodal")
             || m.contains("minicpm-v")
     }
+
+    /// Convert a list of `ChatMessage`s to `OllamaMessage`s.
+    fn to_ollama_messages(messages: &[crate::core::llm::ChatMessage]) -> Vec<OllamaMessage> {
+        messages
+            .iter()
+            .map(|m| {
+                let tool_calls = m.tool_calls.as_ref().map(|calls| {
+                    calls
+                        .iter()
+                        .map(|tc| {
+                            let args: serde_json::Value = serde_json::from_str(&tc.arguments)
+                                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": args
+                                }
+                            })
+                        })
+                        .collect()
+                });
+                OllamaMessage {
+                    role: m.role.clone(),
+                    content: m.content.clone(),
+                    tool_calls,
+                    tool_call_id: m.tool_call_id.clone(),
+                }
+            })
+            .collect()
+    }
 }
 
 #[async_trait::async_trait]
@@ -154,7 +187,10 @@ impl LLMProvider for OllamaProvider {
         };
 
         // Determine which tools (if any) to inject, gated on capability detection.
-        let tools = if let Some(req_tools) = &request.tools {
+        // When the model lacks native tool support we inject tool descriptions into the
+        // system prompt instead and will parse tool calls from the plain-text response.
+        let mut prompt_injected_tools = false;
+        let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
                     &self.client,
@@ -163,66 +199,48 @@ impl LLMProvider for OllamaProvider {
                 )
                 .await;
                 if caps.supports_tools {
-                    Some(
-                        req_tools
-                            .iter()
-                            .map(|tool| {
-                                serde_json::json!({
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool.name,
-                                        "description": tool.description,
-                                        "parameters": tool.parameters
-                                    }
+                    (
+                        Some(
+                            req_tools
+                                .iter()
+                                .map(|tool| {
+                                    serde_json::json!({
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool.name,
+                                            "description": tool.description,
+                                            "parameters": tool.parameters
+                                        }
+                                    })
                                 })
-                            })
-                            .collect::<Vec<_>>(),
+                                .collect::<Vec<_>>(),
+                        ),
+                        request.messages.clone(),
                     )
                 } else {
                     tracing::info!(
-                        "[Ollama] Model {} does not support native tools, stripping tool definitions",
-                        request.model
+                        "[Ollama] Model {} does not support native tools \
+                         — injecting {} tool(s) into system prompt",
+                        request.model,
+                        req_tools.len(),
                     );
-                    None
+                    prompt_injected_tools = true;
+                    let injected = prompt_tool_injection::inject_tools_into_system_prompt(
+                        &request.messages,
+                        req_tools,
+                    );
+                    (None, injected)
                 }
             } else {
-                None
+                (None, request.messages.clone())
             }
         } else {
-            None
+            (None, request.messages.clone())
         };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
-            messages: request
-                .messages
-                .iter()
-                .map(|m| {
-                    let tool_calls = m.tool_calls.as_ref().map(|calls| {
-                        calls
-                            .iter()
-                            .map(|tc| {
-                                let args: serde_json::Value = serde_json::from_str(&tc.arguments)
-                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                                serde_json::json!({
-                                    "id": tc.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.name,
-                                        "arguments": args
-                                    }
-                                })
-                            })
-                            .collect()
-                    });
-                    OllamaMessage {
-                        role: m.role.clone(),
-                        content: m.content.clone(),
-                        tool_calls,
-                        tool_call_id: m.tool_call_id.clone(),
-                    }
-                })
-                .collect(),
+            messages: Self::to_ollama_messages(&effective_messages),
             stream: Some(false),
             options: Some(OllamaOptions {
                 temperature: request.temperature,
@@ -267,36 +285,60 @@ impl LLMProvider for OllamaProvider {
             (None, None) => None,
         };
 
-        // Extract tool calls from the Ollama response
-        let response_tool_calls = ollama_response.message.tool_calls.as_ref().map(|calls| {
-            calls
-                .iter()
-                .filter_map(|tc| {
-                    let func = tc.get("function")?;
-                    let name = func.get("name")?.as_str()?.to_string();
-                    let arguments = func
-                        .get("arguments")
-                        .map(|a| {
-                            if a.is_string() {
-                                a.as_str().unwrap_or("{}").to_string()
-                            } else {
-                                serde_json::to_string(a).unwrap_or_else(|_| "{}".to_string())
-                            }
+        // Extract tool calls from the Ollama response.
+        // Two paths: (1) prompt-injected tool calls parsed from the plain-text
+        // response, (2) native tool calls returned by the Ollama API.
+        let mut response_content = ollama_response.message.content;
+
+        let response_tool_calls = if prompt_injected_tools {
+            // Parse tool calls the model attempted via text output
+            let parsed = prompt_tool_injection::parse_tool_calls_from_text(&response_content);
+            if !parsed.is_empty() {
+                tracing::info!(
+                    "[Ollama] Parsed {} prompt-injected tool call(s) from model {} text response",
+                    parsed.len(),
+                    request.model,
+                );
+                // Strip tool-call blocks from the content so the user sees clean text
+                response_content =
+                    prompt_tool_injection::strip_tool_call_blocks(&response_content);
+                Some(parsed)
+            } else {
+                None
+            }
+        } else {
+            // Native tool calls from the Ollama API
+            ollama_response.message.tool_calls.as_ref().map(|calls| {
+                calls
+                    .iter()
+                    .filter_map(|tc| {
+                        let func = tc.get("function")?;
+                        let name = func.get("name")?.as_str()?.to_string();
+                        let arguments = func
+                            .get("arguments")
+                            .map(|a| {
+                                if a.is_string() {
+                                    a.as_str().unwrap_or("{}").to_string()
+                                } else {
+                                    serde_json::to_string(a)
+                                        .unwrap_or_else(|_| "{}".to_string())
+                                }
+                            })
+                            .unwrap_or_else(|| "{}".to_string());
+                        let id = tc
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        Some(crate::core::llm::ToolCall {
+                            id,
+                            name,
+                            arguments,
                         })
-                        .unwrap_or_else(|| "{}".to_string());
-                    let id = tc
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    Some(crate::core::llm::ToolCall {
-                        id,
-                        name,
-                        arguments,
                     })
-                })
-                .collect::<Vec<_>>()
-        });
+                    .collect::<Vec<_>>()
+            })
+        };
 
         let finish_reason = if response_tool_calls
             .as_ref()
@@ -308,7 +350,7 @@ impl LLMProvider for OllamaProvider {
         };
 
         Ok(LLMResponse {
-            content: ollama_response.message.content,
+            content: response_content,
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
@@ -370,7 +412,10 @@ impl LLMProvider for OllamaProvider {
         };
 
         // Determine which tools (if any) to inject, gated on capability detection.
-        let tools = if let Some(req_tools) = &request.tools {
+        // When the model lacks native tool support we inject tool descriptions into the
+        // system prompt and will parse tool calls from the accumulated text on the final chunk.
+        let mut prompt_injected_tools = false;
+        let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
                     &self.client,
@@ -379,66 +424,48 @@ impl LLMProvider for OllamaProvider {
                 )
                 .await;
                 if caps.supports_tools {
-                    Some(
-                        req_tools
-                            .iter()
-                            .map(|tool| {
-                                serde_json::json!({
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool.name,
-                                        "description": tool.description,
-                                        "parameters": tool.parameters
-                                    }
+                    (
+                        Some(
+                            req_tools
+                                .iter()
+                                .map(|tool| {
+                                    serde_json::json!({
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool.name,
+                                            "description": tool.description,
+                                            "parameters": tool.parameters
+                                        }
+                                    })
                                 })
-                            })
-                            .collect::<Vec<_>>(),
+                                .collect::<Vec<_>>(),
+                        ),
+                        request.messages.clone(),
                     )
                 } else {
                     tracing::info!(
-                        "[Ollama] Model {} does not support native tools, stripping tool definitions",
-                        request.model
+                        "[Ollama] Model {} does not support native tools \
+                         — injecting {} tool(s) into system prompt (streaming)",
+                        request.model,
+                        req_tools.len(),
                     );
-                    None
+                    prompt_injected_tools = true;
+                    let injected = prompt_tool_injection::inject_tools_into_system_prompt(
+                        &request.messages,
+                        req_tools,
+                    );
+                    (None, injected)
                 }
             } else {
-                None
+                (None, request.messages.clone())
             }
         } else {
-            None
+            (None, request.messages.clone())
         };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
-            messages: request
-                .messages
-                .iter()
-                .map(|m| {
-                    let tool_calls = m.tool_calls.as_ref().map(|calls| {
-                        calls
-                            .iter()
-                            .map(|tc| {
-                                let args: serde_json::Value = serde_json::from_str(&tc.arguments)
-                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                                serde_json::json!({
-                                    "id": tc.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.name,
-                                        "arguments": args
-                                    }
-                                })
-                            })
-                            .collect()
-                    });
-                    OllamaMessage {
-                        role: m.role.clone(),
-                        content: m.content.clone(),
-                        tool_calls,
-                        tool_call_id: m.tool_call_id.clone(),
-                    }
-                })
-                .collect(),
+            messages: Self::to_ollama_messages(&effective_messages),
             stream: Some(true),
             options: Some(OllamaOptions {
                 temperature: request.temperature,
@@ -479,10 +506,83 @@ impl LLMProvider for OllamaProvider {
 
         tracing::debug!("Ollama streaming response received, starting JSON line parsing");
 
-        Ok(Box::pin(parse_sse_stream(
-            response,
-            crate::core::llm::Provider::Ollama,
-        )))
+        let inner_stream = parse_sse_stream(response, crate::core::llm::Provider::Ollama);
+
+        if prompt_injected_tools {
+            // Wrap the stream to accumulate text and parse tool calls on the final chunk.
+            let wrapped = PromptToolInjectionStream {
+                inner: Box::pin(inner_stream),
+                accumulated_text: String::new(),
+            };
+            Ok(Box::pin(wrapped))
+        } else {
+            Ok(Box::pin(inner_stream))
+        }
+    }
+}
+
+/// A stream wrapper that accumulates text from all chunks and, when the final
+/// chunk arrives (`done == true`), parses any prompt-injected tool calls from
+/// the accumulated text and attaches them to the final `StreamChunk`.
+///
+/// This is only used when the model does not support native function calling
+/// and tools were injected into the system prompt instead.
+struct PromptToolInjectionStream {
+    inner: Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+    accumulated_text: String,
+}
+
+impl Stream for PromptToolInjectionStream {
+    type Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        match self.inner.as_mut().poll_next(cx) {
+            std::task::Poll::Pending => std::task::Poll::Pending,
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
+            std::task::Poll::Ready(Some(Ok(mut chunk))) => {
+                // Accumulate text content
+                self.accumulated_text.push_str(&chunk.content);
+
+                if chunk.done {
+                    // Final chunk: parse tool calls from the full accumulated text
+                    let parsed =
+                        prompt_tool_injection::parse_tool_calls_from_text(&self.accumulated_text);
+                    if !parsed.is_empty() {
+                        tracing::info!(
+                            "[Ollama] Parsed {} prompt-injected tool call(s) from streaming response",
+                            parsed.len(),
+                        );
+                        // Convert ToolCall -> StreamingToolCall for the chunk
+                        let streaming_calls: Vec<StreamingToolCall> = parsed
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, tc)| StreamingToolCall {
+                                index: idx,
+                                id: tc.id.clone(),
+                                name: tc.name.clone(),
+                                arguments: tc.arguments.clone(),
+                            })
+                            .collect();
+
+                        chunk.tool_calls = Some(streaming_calls);
+                        chunk.finish_reason = Some("tool_calls".to_string());
+
+                        // Clean tool-call blocks from the content so downstream
+                        // consumers see clean conversational text.
+                        let cleaned = prompt_tool_injection::strip_tool_call_blocks(
+                            &self.accumulated_text,
+                        );
+                        chunk.content = cleaned;
+                    }
+                }
+
+                std::task::Poll::Ready(Some(Ok(chunk)))
+            }
+        }
     }
 }
 
