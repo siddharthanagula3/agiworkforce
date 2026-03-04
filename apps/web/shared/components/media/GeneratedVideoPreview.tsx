@@ -69,7 +69,7 @@ export const GeneratedVideoPreview: React.FC<GeneratedVideoPreviewProps> = ({
   };
 
   const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
+    const newVolume = value[0] ?? 0;
     setVolume(newVolume);
     if (videoRef.current) {
       videoRef.current.volume = newVolume / 100;
@@ -94,7 +94,7 @@ export const GeneratedVideoPreview: React.FC<GeneratedVideoPreviewProps> = ({
   };
 
   const handleSeek = (value: number[]) => {
-    const time = value[0];
+    const time = value[0] ?? 0;
     if (videoRef.current) {
       videoRef.current.currentTime = time;
       setCurrentTime(time);

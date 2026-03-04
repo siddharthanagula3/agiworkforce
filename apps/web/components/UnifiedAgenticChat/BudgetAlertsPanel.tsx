@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store type bridge requires dynamic typing */
 import { useMemo } from 'react';
 import { AlertCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';

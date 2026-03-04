@@ -46,6 +46,16 @@ let peerConnection: RTCPeerConnection | null = null;
 let localStream: MediaStream | null = null;
 let controlChannel: RTCDataChannel | null = null;
 
+const IDLE_CONNECTION_STATE: Partial<MobileCompanionState> = {
+  status: 'idle',
+  pairingCode: null,
+  qrData: null,
+  wsUrl: null,
+  expiresAt: null,
+  stream: null,
+  peerConnected: false,
+};
+
 export const useConnectionStore = create<MobileCompanionState>()(
   devtools(
     subscribeWithSelector((set, get) => {
@@ -97,12 +107,8 @@ export const useConnectionStore = create<MobileCompanionState>()(
         }
       };
 
-      const handleControlEvent = (message: MessageEvent<string>) => {
-        try {
-          JSON.parse(message.data) as Record<string, unknown>;
-        } catch (error) {
-          console.warn('[mobile-companion] failed to parse control payload', error);
-        }
+      const handleControlEvent = (_message: MessageEvent<string>) => {
+        // Control event handling not yet implemented
       };
 
       const handleSignalingEvent = async (event: SignalingEvent) => {
@@ -141,30 +147,14 @@ export const useConnectionStore = create<MobileCompanionState>()(
           case 'session_expired':
           case 'terminated':
             resetConnection();
-            set({
-              status: 'idle',
-              pairingCode: null,
-              qrData: null,
-              wsUrl: null,
-              expiresAt: null,
-              stream: null,
-              peerConnected: false,
-            });
+            set(IDLE_CONNECTION_STATE);
             break;
           case 'error':
             set({ status: 'error', error: event.error });
             break;
           case 'close':
             if (get().status !== 'idle') {
-              set({
-                status: 'idle',
-                pairingCode: null,
-                qrData: null,
-                wsUrl: null,
-                expiresAt: null,
-                stream: null,
-                peerConnected: false,
-              });
+              set(IDLE_CONNECTION_STATE);
             }
             break;
           default:
@@ -313,16 +303,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
 
       const stopSession = () => {
         resetConnection();
-        set({
-          status: 'idle',
-          pairingCode: null,
-          qrData: null,
-          expiresAt: null,
-          peerConnected: false,
-          stream: null,
-          wsUrl: null,
-          error: null,
-        });
+        set({ ...IDLE_CONNECTION_STATE, error: null });
       };
 
       const clearError = () =>

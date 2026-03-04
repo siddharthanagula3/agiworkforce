@@ -101,6 +101,7 @@ export interface RegisteredWidget<
   description?: string;
   // AUDIT-P3-TYPE: Using 'any' because widgets can be registered with either
   // BaseWidgetProps (new API) or WidgetRendererProps (legacy API)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional: widget component props vary by registration API
   component: React.ComponentType<any>;
   icon?: LucideIcon;
   defaultConfig?: Partial<TConfig>;

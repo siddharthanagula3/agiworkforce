@@ -194,8 +194,9 @@ const ChartTooltipContent = React.forwardRef<
         return null;
       }
 
-      const [item] = payload;
-      const key = `${labelKey || item.dataKey || item.name || 'value'}`;
+      const item = payload[0];
+      if (!item) return null;
+      const key = `${labelKey || item['dataKey'] || item['name'] || 'value'}`;
       const itemConfig = getPayloadConfigFromPayload(config, item, key);
       const value =
         !labelKey && typeof label === 'string'
@@ -232,21 +233,21 @@ const ChartTooltipContent = React.forwardRef<
         {!nestLabel ? tooltipLabel : null}
         <div className="grid gap-1.5">
           {payload.map((item, index) => {
-            const key = `${nameKey || item.name || item.dataKey || 'value'}`;
+            const key = `${nameKey || item['name'] || item['dataKey'] || 'value'}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const itemPayload = item.payload as Record<string, unknown> | undefined;
-            const indicatorColor = color || itemPayload?.fill || item.color;
+            const itemPayload = item['payload'] as Record<string, unknown> | undefined;
+            const indicatorColor = color || itemPayload?.['fill'] || item['color'];
 
             return (
               <div
-                key={item.dataKey as string}
+                key={item['dataKey'] as string}
                 className={cn(
                   'flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground',
                   indicator === 'dot' && 'items-center',
                 )}
               >
-                {formatter && item?.value !== undefined && item.name ? (
-                  formatter(item.value, item.name, item, index, item.payload)
+                {formatter && item?.['value'] !== undefined && item['name'] ? (
+                  formatter(item['value'], item['name'], item, index, item['payload'])
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -282,12 +283,12 @@ const ChartTooltipContent = React.forwardRef<
                       <div className="grid gap-1.5">
                         {nestLabel ? tooltipLabel : null}
                         <span className="text-muted-foreground">
-                          {itemConfig?.label || (item.name as React.ReactNode)}
+                          {itemConfig?.label || (item['name'] as React.ReactNode)}
                         </span>
                       </div>
-                      {item.value != null && (
+                      {item['value'] != null && (
                         <span className="font-mono font-medium tabular-nums text-foreground">
-                          {(item.value as number).toLocaleString()}
+                          {(item['value'] as number).toLocaleString()}
                         </span>
                       )}
                     </div>
@@ -330,12 +331,12 @@ const ChartLegendContent = React.forwardRef<
       )}
     >
       {payload.map((item) => {
-        const key = `${nameKey || item.dataKey || 'value'}`;
+        const key = `${nameKey || item['dataKey'] || 'value'}`;
         const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
         return (
           <div
-            key={item.value as string}
+            key={item['value'] as string}
             className={cn(
               'flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground',
             )}
@@ -346,7 +347,7 @@ const ChartLegendContent = React.forwardRef<
               <div
                 className="h-2 w-2 shrink-0 rounded-[2px]"
                 style={{
-                  backgroundColor: item.color as string,
+                  backgroundColor: item['color'] as string,
                 }}
               />
             )}

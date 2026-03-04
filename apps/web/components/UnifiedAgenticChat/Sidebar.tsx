@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors use untyped state access */
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Archive,

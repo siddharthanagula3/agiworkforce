@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- dynamic workflow step children have variable types */
 /**
  * ToolExecutionTimeline Component
  *

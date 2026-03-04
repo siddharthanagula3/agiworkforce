@@ -45,7 +45,7 @@ class DefaultErrorHandler implements ErrorHandler {
     return isRetryableError(error);
   }
 
-  getRetryDelay(error: APIException, attempt: number): number {
+  getRetryDelay(_error: APIException, attempt: number): number {
     return getRetryDelay(attempt);
   }
 }

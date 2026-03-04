@@ -32,9 +32,9 @@ describe('Chat Store', () => {
 
         const state = useChatStore.getState();
         expect(state.conversations[id]).toBeDefined();
-        expect(state.conversations[id].title).toBe('New Conversation');
-        expect(state.conversations[id].messages).toHaveLength(0);
-        expect(state.conversations[id].model).toBe('gpt-4o-mini');
+        expect(state.conversations[id]!.title).toBe('New Conversation');
+        expect(state.conversations[id]!.messages).toHaveLength(0);
+        expect(state.conversations[id]!.model).toBe('gpt-4o-mini');
         expect(state.activeConversationId).toBe(id);
       });
 
@@ -43,7 +43,7 @@ describe('Chat Store', () => {
 
         const id = createConversation('My Custom Chat');
 
-        expect(useChatStore.getState().conversations[id].title).toBe('My Custom Chat');
+        expect(useChatStore.getState().conversations[id]!.title).toBe('My Custom Chat');
       });
 
       it('should create conversation with custom model', () => {
@@ -51,7 +51,7 @@ describe('Chat Store', () => {
 
         const id = createConversation('Test', 'gpt-4');
 
-        expect(useChatStore.getState().conversations[id].model).toBe('gpt-4');
+        expect(useChatStore.getState().conversations[id]!.model).toBe('gpt-4');
       });
 
       it('should set metadata timestamps', () => {
@@ -61,7 +61,7 @@ describe('Chat Store', () => {
 
         const id = createConversation();
 
-        const conv = useChatStore.getState().conversations[id];
+        const conv = useChatStore.getState().conversations[id]!;
         expect(conv.metadata.createdAt).toEqual(now);
         expect(conv.metadata.updatedAt).toEqual(now);
       });
@@ -74,7 +74,7 @@ describe('Chat Store', () => {
         const id = createConversation();
         updateConversation(id, { title: 'Updated Title' });
 
-        expect(useChatStore.getState().conversations[id].title).toBe('Updated Title');
+        expect(useChatStore.getState().conversations[id]!.title).toBe('Updated Title');
       });
 
       it('should update metadata.updatedAt', () => {
@@ -87,7 +87,7 @@ describe('Chat Store', () => {
         vi.setSystemTime(new Date(createTime.getTime() + 1000));
         updateConversation(id, { title: 'Updated' });
 
-        const conv = useChatStore.getState().conversations[id];
+        const conv = useChatStore.getState().conversations[id]!;
         expect(conv.metadata.updatedAt.getTime()).toBeGreaterThan(
           conv.metadata.createdAt.getTime(),
         );
@@ -171,7 +171,7 @@ describe('Chat Store', () => {
 
         const copyId = duplicateConversation(originalId);
 
-        const copy = useChatStore.getState().conversations[copyId];
+        const copy = useChatStore.getState().conversations[copyId]!;
         expect(copy.title).toBe('Original (Copy)');
         expect(copy.messages).toHaveLength(1);
         expect(copy.id).not.toBe(originalId);
@@ -199,11 +199,11 @@ describe('Chat Store', () => {
           content: 'Hello, AI!',
         });
 
-        const conv = useChatStore.getState().conversations[convId];
+        const conv = useChatStore.getState().conversations[convId]!;
         expect(conv.messages).toHaveLength(1);
-        expect(conv.messages[0].id).toBe(msgId);
-        expect(conv.messages[0].content).toBe('Hello, AI!');
-        expect(conv.messages[0].role).toBe('user');
+        expect(conv.messages[0]!.id).toBe(msgId);
+        expect(conv.messages[0]!.content).toBe('Hello, AI!');
+        expect(conv.messages[0]!.role).toBe('user');
       });
 
       it('should auto-generate id and timestamp', () => {
@@ -218,7 +218,7 @@ describe('Chat Store', () => {
           content: 'Test',
         });
 
-        const msg = useChatStore.getState().conversations[convId].messages[0];
+        const msg = useChatStore.getState().conversations[convId]!.messages[0]!;
         expect(msg.id).toBe(msgId);
         expect(msg.timestamp).toEqual(now);
       });
@@ -227,7 +227,7 @@ describe('Chat Store', () => {
         const { createConversation, addMessage } = useChatStore.getState();
 
         const convId = createConversation();
-        expect(useChatStore.getState().conversations[convId].metadata.totalMessages).toBe(0);
+        expect(useChatStore.getState().conversations[convId]!.metadata.totalMessages).toBe(0);
 
         addMessage(convId, {
           conversationId: convId,
@@ -235,7 +235,7 @@ describe('Chat Store', () => {
           content: 'Test',
         });
 
-        expect(useChatStore.getState().conversations[convId].metadata.totalMessages).toBe(1);
+        expect(useChatStore.getState().conversations[convId]!.metadata.totalMessages).toBe(1);
       });
 
       it('should track token usage in metadata', () => {
@@ -252,7 +252,7 @@ describe('Chat Store', () => {
           },
         });
 
-        const conv = useChatStore.getState().conversations[convId];
+        const conv = useChatStore.getState().conversations[convId]!;
         expect(conv.metadata.totalTokens).toBe(100);
         expect(conv.metadata.totalCost).toBe(0.01);
       });
@@ -275,7 +275,7 @@ describe('Chat Store', () => {
           isStreaming: false,
         });
 
-        const msg = useChatStore.getState().conversations[convId].messages[0];
+        const msg = useChatStore.getState().conversations[convId]!.messages[0]!;
         expect(msg.content).toBe('Updated response');
         expect(msg.isStreaming).toBe(false);
       });
@@ -294,7 +294,7 @@ describe('Chat Store', () => {
 
         deleteMessage(msgId);
 
-        expect(useChatStore.getState().conversations[convId].messages).toHaveLength(0);
+        expect(useChatStore.getState().conversations[convId]!.messages).toHaveLength(0);
       });
 
       it('should decrement totalMessages count', () => {
@@ -307,11 +307,11 @@ describe('Chat Store', () => {
           content: 'Test',
         });
 
-        expect(useChatStore.getState().conversations[convId].metadata.totalMessages).toBe(1);
+        expect(useChatStore.getState().conversations[convId]!.metadata.totalMessages).toBe(1);
 
         deleteMessage(msgId);
 
-        expect(useChatStore.getState().conversations[convId].metadata.totalMessages).toBe(0);
+        expect(useChatStore.getState().conversations[convId]!.metadata.totalMessages).toBe(0);
       });
     });
 
@@ -328,9 +328,9 @@ describe('Chat Store', () => {
 
         reactToMessage(msgId, 'helpful');
 
-        const msg = useChatStore.getState().conversations[convId].messages[0];
+        const msg = useChatStore.getState().conversations[convId]!.messages[0]!;
         expect(msg.reactions).toHaveLength(1);
-        expect(msg.reactions![0].type).toBe('helpful');
+        expect(msg.reactions![0]!.type).toBe('helpful');
       });
 
       it('should toggle reaction on second click', () => {
@@ -346,7 +346,7 @@ describe('Chat Store', () => {
         reactToMessage(msgId, 'helpful');
         useChatStore.getState().reactToMessage(msgId, 'helpful');
 
-        const msg = useChatStore.getState().conversations[convId].messages[0];
+        const msg = useChatStore.getState().conversations[convId]!.messages[0]!;
         expect(msg.reactions).toHaveLength(0);
       });
     });
@@ -588,7 +588,7 @@ describe('Chat Store', () => {
         importConversations(conversations);
 
         // Title should remain 'Original', not 'Duplicate'
-        expect(useChatStore.getState().conversations[id].title).toBe('Original');
+        expect(useChatStore.getState().conversations[id]!.title).toBe('Original');
       });
 
       it('should set error for non-array input', () => {
@@ -635,13 +635,13 @@ describe('Chat Store', () => {
         const { createConversation, toggleStarConversation } = useChatStore.getState();
 
         const id = createConversation();
-        expect(useChatStore.getState().conversations[id].metadata.starred).toBe(false);
+        expect(useChatStore.getState().conversations[id]!.metadata.starred).toBe(false);
 
         toggleStarConversation(id);
-        expect(useChatStore.getState().conversations[id].metadata.starred).toBe(true);
+        expect(useChatStore.getState().conversations[id]!.metadata.starred).toBe(true);
 
         useChatStore.getState().toggleStarConversation(id);
-        expect(useChatStore.getState().conversations[id].metadata.starred).toBe(false);
+        expect(useChatStore.getState().conversations[id]!.metadata.starred).toBe(false);
       });
     });
 
@@ -652,7 +652,7 @@ describe('Chat Store', () => {
         const id = createConversation();
         togglePinConversation(id);
 
-        expect(useChatStore.getState().conversations[id].metadata.pinned).toBe(true);
+        expect(useChatStore.getState().conversations[id]!.metadata.pinned).toBe(true);
       });
     });
 
@@ -663,7 +663,7 @@ describe('Chat Store', () => {
         const id = createConversation();
         toggleArchiveConversation(id);
 
-        expect(useChatStore.getState().conversations[id].metadata.archived).toBe(true);
+        expect(useChatStore.getState().conversations[id]!.metadata.archived).toBe(true);
       });
     });
 
@@ -674,10 +674,10 @@ describe('Chat Store', () => {
         const id = createConversation();
 
         addConversationTag(id, 'work');
-        expect(useChatStore.getState().conversations[id].metadata.tags).toContain('work');
+        expect(useChatStore.getState().conversations[id]!.metadata.tags).toContain('work');
 
         useChatStore.getState().removeConversationTag(id, 'work');
-        expect(useChatStore.getState().conversations[id].metadata.tags).not.toContain('work');
+        expect(useChatStore.getState().conversations[id]!.metadata.tags).not.toContain('work');
       });
 
       it('should not add duplicate tags', () => {
@@ -688,7 +688,7 @@ describe('Chat Store', () => {
         useChatStore.getState().addConversationTag(id, 'work');
 
         expect(
-          useChatStore.getState().conversations[id].metadata.tags.filter((t) => t === 'work'),
+          useChatStore.getState().conversations[id]!.metadata.tags.filter((t) => t === 'work'),
         ).toHaveLength(1);
       });
     });
@@ -749,7 +749,7 @@ describe('Chat Store', () => {
         });
 
         expect(useChatStore.getState().workingProcesses['employee-1']).toBeDefined();
-        expect(useChatStore.getState().workingProcesses['employee-1'].status).toBe('working');
+        expect(useChatStore.getState().workingProcesses['employee-1']!.status).toBe('working');
       });
     });
 

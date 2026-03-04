@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- tool rationale metadata has dynamic shape */
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -142,7 +143,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
               []
             ).map((artifact, idx) => {
               const art = artifact as MessageArtifact;
-              const toolName = art.toolName || art.type;
+              const toolName = art.toolName || art['type'];
               const inlineRenderer =
                 toolName && hasInlineRenderer(toolName)
                   ? renderInlineToolResult(toolName, { data: art }, art.status || 'completed')
@@ -160,13 +161,13 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                 <div
                   key={idx}
                   onClick={() =>
-                    onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })
+                    onOpenSidecar?.('preview', { artifactId: art['id'], messageId: message.id })
                   }
                   className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
-                      {art.type === 'image' ? (
+                      {art['type'] === 'image' ? (
                         <FileText className="w-4 h-4" />
                       ) : (
                         <Braces className="w-4 h-4" />
@@ -174,10 +175,10 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                     </div>
                     <div>
                       <div className="text-sm font-medium text-zinc-200">
-                        {art.title || 'Generated Artifact'}
+                        {art['title'] || 'Generated Artifact'}
                       </div>
                       <div className="text-xs text-zinc-400">
-                        {art.type === 'code' ? art.language : art.type}
+                        {art['type'] === 'code' ? art['language'] : art['type']}
                       </div>
                     </div>
                   </div>

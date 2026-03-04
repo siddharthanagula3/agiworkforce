@@ -40,9 +40,9 @@ describe('Notification Store', () => {
 
         const state = useNotificationStore.getState();
         expect(state.notifications[id]).toBeDefined();
-        expect(state.notifications[id].title).toBe('Test');
-        expect(state.notifications[id].read).toBe(false);
-        expect(state.notifications[id].timestamp).toBeInstanceOf(Date);
+        expect(state.notifications[id]!.title).toBe('Test');
+        expect(state.notifications[id]!.read).toBe(false);
+        expect(state.notifications[id]!.timestamp).toBeInstanceOf(Date);
       });
 
       it('should increment unread count', () => {
@@ -97,7 +97,7 @@ describe('Notification Store', () => {
 
         updateNotification(id, { title: 'Updated' });
 
-        expect(useNotificationStore.getState().notifications[id].title).toBe('Updated');
+        expect(useNotificationStore.getState().notifications[id]!.title).toBe('Updated');
       });
 
       it('should update unread count when marking as read', () => {
@@ -197,7 +197,7 @@ describe('Notification Store', () => {
 
         markAsRead(id);
 
-        expect(useNotificationStore.getState().notifications[id].read).toBe(true);
+        expect(useNotificationStore.getState().notifications[id]!.read).toBe(true);
       });
     });
 
@@ -275,7 +275,7 @@ describe('Notification Store', () => {
 
         // Manually set the timestamp to 10 days ago
         useNotificationStore.setState((state) => {
-          state.notifications[id].timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+          state.notifications[id]!.timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
           return state;
         });
 
@@ -299,7 +299,7 @@ describe('Notification Store', () => {
 
         // Manually set the timestamp to 10 days ago
         useNotificationStore.setState((state) => {
-          state.notifications[id].timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+          state.notifications[id]!.timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
           return state;
         });
 
@@ -324,7 +324,7 @@ describe('Notification Store', () => {
 
         const state = useNotificationStore.getState();
         expect(state.toasts[id]).toBeDefined();
-        expect(state.toasts[id].message).toBe('Test toast');
+        expect(state.toasts[id]!.message).toBe('Test toast');
       });
 
       it('should auto-remove toast after duration', () => {
@@ -424,11 +424,11 @@ describe('Notification Store', () => {
         const state = useNotificationStore.getState();
         const notifications = Object.values(state.notifications);
         expect(notifications).toHaveLength(1);
-        expect(notifications[0].type).toBe('success');
-        expect(notifications[0].title).toBe('Success');
-        expect(notifications[0].message).toBe('Success message');
-        expect(notifications[0].priority).toBe('medium');
-        expect(notifications[0].persistent).toBe(false);
+        expect(notifications[0]!.type).toBe('success');
+        expect(notifications[0]!.title).toBe('Success');
+        expect(notifications[0]!.message).toBe('Success message');
+        expect(notifications[0]!.priority).toBe('medium');
+        expect(notifications[0]!.persistent).toBe(false);
       });
 
       it('should allow custom title', () => {
@@ -437,7 +437,7 @@ describe('Notification Store', () => {
         showSuccess('Success message', 'Custom Title');
 
         const notifications = Object.values(useNotificationStore.getState().notifications);
-        expect(notifications[0].title).toBe('Custom Title');
+        expect(notifications[0]!.title).toBe('Custom Title');
       });
     });
 
@@ -448,9 +448,9 @@ describe('Notification Store', () => {
         showError('Error message');
 
         const notifications = Object.values(useNotificationStore.getState().notifications);
-        expect(notifications[0].type).toBe('error');
-        expect(notifications[0].priority).toBe('high');
-        expect(notifications[0].persistent).toBe(true);
+        expect(notifications[0]!.type).toBe('error');
+        expect(notifications[0]!.priority).toBe('high');
+        expect(notifications[0]!.persistent).toBe(true);
       });
     });
 
@@ -461,9 +461,9 @@ describe('Notification Store', () => {
         showWarning('Warning message');
 
         const notifications = Object.values(useNotificationStore.getState().notifications);
-        expect(notifications[0].type).toBe('warning');
-        expect(notifications[0].priority).toBe('medium');
-        expect(notifications[0].persistent).toBe(true);
+        expect(notifications[0]!.type).toBe('warning');
+        expect(notifications[0]!.priority).toBe('medium');
+        expect(notifications[0]!.persistent).toBe(true);
       });
     });
 
@@ -474,10 +474,10 @@ describe('Notification Store', () => {
         showInfo('Info message');
 
         const notifications = Object.values(useNotificationStore.getState().notifications);
-        expect(notifications[0].type).toBe('info');
-        expect(notifications[0].priority).toBe('low');
-        expect(notifications[0].persistent).toBe(false);
-        expect(notifications[0].autoClose).toBe(4000);
+        expect(notifications[0]!.type).toBe('info');
+        expect(notifications[0]!.priority).toBe('low');
+        expect(notifications[0]!.persistent).toBe(false);
+        expect(notifications[0]!.autoClose).toBe(4000);
       });
     });
   });
@@ -588,7 +588,7 @@ describe('Notification Store', () => {
           .getState()
           .getNotificationsByCategory('system');
         expect(systemNotifications).toHaveLength(1);
-        expect(systemNotifications[0].title).toBe('System');
+        expect(systemNotifications[0]!.title).toBe('System');
       });
     });
 
@@ -620,7 +620,7 @@ describe('Notification Store', () => {
 
         const unread = useNotificationStore.getState().getUnreadNotifications();
         expect(unread).toHaveLength(1);
-        expect(unread[0].title).toBe('Will be read');
+        expect(unread[0]!.title).toBe('Will be read');
       });
     });
 

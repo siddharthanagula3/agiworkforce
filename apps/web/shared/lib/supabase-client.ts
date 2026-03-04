@@ -18,23 +18,12 @@ let _supabase: SupabaseClient<Database> | null = null;
 function getSupabaseClient(): SupabaseClient<Database> {
   if (_supabase) return _supabase;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+  const supabaseAnonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    if (typeof window === 'undefined') {
-      _supabase = createClient<Database>(
-        supabaseUrl || 'http://localhost:54321',
-        supabaseAnonKey || 'placeholder-key',
-        {
-          auth: { persistSession: false },
-          global: { headers: { 'X-Client-Info': 'agi-workforce@1.0.0' } },
-        },
-      );
-      return _supabase;
-    }
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required. ' +
+      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set. ' +
         'For local development, run: supabase start',
     );
   }

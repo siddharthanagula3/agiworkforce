@@ -384,6 +384,7 @@ Registry.register({
   displayName: 'Form',
   description: 'Embedded form for collecting user input with validation',
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- widget registration: props vary by API
   component: FormWidget as React.ComponentType<any>,
   icon: FileText,
 });

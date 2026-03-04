@@ -285,7 +285,7 @@ describe('MemoryManager', () => {
 
       const mockMemories: MemoryEntry[] = categories.map((category, index) => ({
         id: index + 1,
-        category: category as any,
+        category: category as MemoryEntry['category'],
         topic: `Memory ${index}`,
         content: `Content ${index}`,
         importance: 5,

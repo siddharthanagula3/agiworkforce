@@ -110,7 +110,7 @@ describe('Workforce Store', () => {
 
       const state = useWorkforceStore.getState();
       expect(state.hiredEmployees).toHaveLength(1);
-      expect(state.hiredEmployees[0].employee_name).toBe('Code Reviewer');
+      expect(state.hiredEmployees[0]!.employee_name).toBe('Code Reviewer');
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
     });
@@ -179,8 +179,8 @@ describe('Workforce Store', () => {
       useWorkforceStore.getState().addHiredEmployee(employee2);
 
       const state = useWorkforceStore.getState();
-      expect(state.hiredEmployees[0].employee_name).toBe('Employee 2');
-      expect(state.hiredEmployees[1].employee_name).toBe('Employee 1');
+      expect(state.hiredEmployees[0]!.employee_name).toBe('Employee 2');
+      expect(state.hiredEmployees[1]!.employee_name).toBe('Employee 1');
     });
   });
 

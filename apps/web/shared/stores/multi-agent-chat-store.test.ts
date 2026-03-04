@@ -55,7 +55,7 @@ describe('Multi-Agent Chat Store', () => {
         const state = useMultiAgentChatStore.getState();
         expect(id).toBeDefined();
         expect(state.conversations[id]).toBeDefined();
-        expect(state.conversations[id].title).toBe('Test Conversation');
+        expect(state.conversations[id]!.title).toBe('Test Conversation');
         expect(state.activeConversationId).toBe(id);
       });
 
@@ -63,7 +63,7 @@ describe('Multi-Agent Chat Store', () => {
         const id = useMultiAgentChatStore.getState().createConversation('Test', testParticipants);
 
         const state = useMultiAgentChatStore.getState();
-        const participants = state.conversations[id].participants;
+        const participants = state.conversations[id]!.participants;
 
         expect(participants).toHaveLength(2);
         participants.forEach((p) => {
@@ -76,7 +76,7 @@ describe('Multi-Agent Chat Store', () => {
         const id = useMultiAgentChatStore.getState().createConversation('Test', testParticipants);
 
         const state = useMultiAgentChatStore.getState();
-        const settings = state.conversations[id].settings;
+        const settings = state.conversations[id]!.settings;
 
         expect(settings.model).toBe('gpt-4');
         expect(settings.provider).toBe('openai');
@@ -88,7 +88,7 @@ describe('Multi-Agent Chat Store', () => {
         const id = useMultiAgentChatStore.getState().createConversation('Test', testParticipants);
 
         const state = useMultiAgentChatStore.getState();
-        const metadata = state.conversations[id].metadata;
+        const metadata = state.conversations[id]!.metadata;
 
         expect(metadata.totalMessages).toBe(0);
         expect(metadata.totalTokens).toBe(0);
@@ -110,14 +110,14 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].title).toBe('Updated Title');
-        expect(state.conversations[id].description).toBe('A test conversation');
+        expect(state.conversations[id]!.title).toBe('Updated Title');
+        expect(state.conversations[id]!.description).toBe('A test conversation');
       });
 
       it('should update the updatedAt timestamp', () => {
         const id = useMultiAgentChatStore.getState().createConversation('Test', testParticipants);
 
-        const originalUpdatedAt = useMultiAgentChatStore.getState().conversations[id].updatedAt;
+        const originalUpdatedAt = useMultiAgentChatStore.getState().conversations[id]!.updatedAt;
 
         // Wait a bit to ensure different timestamp
         vi.useFakeTimers();
@@ -127,7 +127,7 @@ describe('Multi-Agent Chat Store', () => {
           title: 'Updated',
         });
 
-        const newUpdatedAt = useMultiAgentChatStore.getState().conversations[id].updatedAt;
+        const newUpdatedAt = useMultiAgentChatStore.getState().conversations[id]!.updatedAt;
         expect(newUpdatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
 
         vi.useRealTimers();
@@ -170,7 +170,7 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().archiveConversation(id);
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].metadata.archived).toBe(true);
+        expect(state.conversations[id]!.metadata.archived).toBe(true);
       });
 
       it('should unarchive conversation', () => {
@@ -180,7 +180,7 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().unarchiveConversation(id);
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].metadata.archived).toBe(false);
+        expect(state.conversations[id]!.metadata.archived).toBe(false);
       });
     });
 
@@ -227,8 +227,8 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].participants).toHaveLength(2);
-        expect(state.conversations[id].participants.find((p) => p.id === 'agent-1')).toBeDefined();
+        expect(state.conversations[id]!.participants).toHaveLength(2);
+        expect(state.conversations[id]!.participants.find((p) => p.id === 'agent-1')).toBeDefined();
       });
 
       it('should not add duplicate participant', () => {
@@ -242,7 +242,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].participants).toHaveLength(1);
+        expect(state.conversations[id]!.participants).toHaveLength(1);
       });
 
       it('should initialize typing and lastSeen for new participant', () => {
@@ -256,7 +256,9 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        const newParticipant = state.conversations[id].participants.find((p) => p.id === 'agent-1');
+        const newParticipant = state.conversations[id]!.participants.find(
+          (p) => p.id === 'agent-1',
+        );
         expect(newParticipant?.isTyping).toBe(false);
         expect(newParticipant?.lastSeen).toBeInstanceOf(Date);
       });
@@ -274,9 +276,9 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().removeParticipant(id, 'agent-1');
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[id].participants).toHaveLength(1);
+        expect(state.conversations[id]!.participants).toHaveLength(1);
         expect(
-          state.conversations[id].participants.find((p) => p.id === 'agent-1'),
+          state.conversations[id]!.participants.find((p) => p.id === 'agent-1'),
         ).toBeUndefined();
       });
     });
@@ -288,7 +290,7 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().updateParticipantStatus(id, 'user-1', 'busy');
 
         const state = useMultiAgentChatStore.getState();
-        const participant = state.conversations[id].participants.find((p) => p.id === 'user-1');
+        const participant = state.conversations[id]!.participants.find((p) => p.id === 'user-1');
         expect(participant?.status).toBe('busy');
       });
 
@@ -301,7 +303,7 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().updateParticipantStatus(id, 'user-1', 'idle');
 
         const state = useMultiAgentChatStore.getState();
-        const participant = state.conversations[id].participants.find((p) => p.id === 'user-1');
+        const participant = state.conversations[id]!.participants.find((p) => p.id === 'user-1');
         expect(participant?.lastSeen).toBeInstanceOf(Date);
 
         vi.useRealTimers();
@@ -334,8 +336,8 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages).toHaveLength(1);
-        expect(state.conversations[conversationId].messages[0].content).toBe('Hello!');
+        expect(state.conversations[conversationId]!.messages).toHaveLength(1);
+        expect(state.conversations[conversationId]!.messages[0]!.content).toBe('Hello!');
         expect(messageId).toBeDefined();
       });
 
@@ -349,7 +351,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        const message = state.conversations[conversationId].messages[0];
+        const message = state.conversations[conversationId]!.messages[0]!;
         expect(message.id).toBeDefined();
         expect(message.timestamp).toBeInstanceOf(Date);
       });
@@ -364,7 +366,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].deliveryStatus).toBe('sent');
+        expect(state.conversations[conversationId]!.messages[0]!.deliveryStatus).toBe('sent');
       });
 
       it('should include sender in readBy', () => {
@@ -377,7 +379,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].readBy).toContain('user-1');
+        expect(state.conversations[conversationId]!.messages[0]!.readBy).toContain('user-1');
       });
 
       it('should update conversation metadata', () => {
@@ -394,9 +396,9 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].metadata.totalMessages).toBe(1);
-        expect(state.conversations[conversationId].metadata.totalTokens).toBe(100);
-        expect(state.conversations[conversationId].metadata.totalCost).toBe(0.01);
+        expect(state.conversations[conversationId]!.metadata.totalMessages).toBe(1);
+        expect(state.conversations[conversationId]!.metadata.totalTokens).toBe(100);
+        expect(state.conversations[conversationId]!.metadata.totalCost).toBe(0.01);
       });
     });
 
@@ -412,7 +414,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().updateMessage(messageId, {
           content: 'Updated content',
@@ -420,8 +422,8 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].content).toBe('Updated content');
-        expect(state.conversations[conversationId].messages[0].isStreaming).toBe(false);
+        expect(state.conversations[conversationId]!.messages[0]!.content).toBe('Updated content');
+        expect(state.conversations[conversationId]!.messages[0]!.isStreaming).toBe(false);
       });
     });
 
@@ -436,12 +438,12 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().deleteMessage(conversationId, messageId);
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages).toHaveLength(0);
+        expect(state.conversations[conversationId]!.messages).toHaveLength(0);
       });
 
       it('should decrement total messages count', () => {
@@ -454,15 +456,15 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         expect(
-          useMultiAgentChatStore.getState().conversations[conversationId].metadata.totalMessages,
+          useMultiAgentChatStore.getState().conversations[conversationId]!.metadata.totalMessages,
         ).toBe(1);
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
         useMultiAgentChatStore.getState().deleteMessage(conversationId, messageId);
 
         expect(
-          useMultiAgentChatStore.getState().conversations[conversationId].metadata.totalMessages,
+          useMultiAgentChatStore.getState().conversations[conversationId]!.metadata.totalMessages,
         ).toBe(0);
       });
     });
@@ -478,12 +480,12 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().markMessageAsRead(conversationId, messageId, 'agent-1');
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].readBy).toContain('agent-1');
+        expect(state.conversations[conversationId]!.messages[0]!.readBy).toContain('agent-1');
       });
 
       it('should update delivery status to read', () => {
@@ -496,12 +498,12 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().markMessageAsRead(conversationId, messageId, 'agent-1');
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].deliveryStatus).toBe('read');
+        expect(state.conversations[conversationId]!.messages[0]!.deliveryStatus).toBe('read');
       });
 
       it('should not add duplicate user to readBy', () => {
@@ -514,13 +516,13 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().markMessageAsRead(conversationId, messageId, 'user-1');
         useMultiAgentChatStore.getState().markMessageAsRead(conversationId, messageId, 'user-1');
 
         const state = useMultiAgentChatStore.getState();
-        const readByCount = state.conversations[conversationId].messages[0].readBy.filter(
+        const readByCount = state.conversations[conversationId]!.messages[0]!.readBy.filter(
           (id) => id === 'user-1',
         ).length;
         expect(readByCount).toBe(1);
@@ -538,7 +540,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         const reaction: MessageReaction = {
           type: 'helpful',
@@ -549,8 +551,10 @@ describe('Multi-Agent Chat Store', () => {
         useMultiAgentChatStore.getState().addMessageReaction(conversationId, messageId, reaction);
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].reactions).toHaveLength(1);
-        expect(state.conversations[conversationId].messages[0].reactions?.[0].type).toBe('helpful');
+        expect(state.conversations[conversationId]!.messages[0]!.reactions).toHaveLength(1);
+        expect(state.conversations[conversationId]!.messages[0]!.reactions?.[0]!.type).toBe(
+          'helpful',
+        );
       });
 
       it('should replace existing reaction of same type by same user', () => {
@@ -563,7 +567,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const messageId =
-          useMultiAgentChatStore.getState().conversations[conversationId].messages[0].id;
+          useMultiAgentChatStore.getState().conversations[conversationId]!.messages[0]!.id;
 
         useMultiAgentChatStore.getState().addMessageReaction(conversationId, messageId, {
           type: 'helpful',
@@ -578,7 +582,7 @@ describe('Multi-Agent Chat Store', () => {
         });
 
         const state = useMultiAgentChatStore.getState();
-        expect(state.conversations[conversationId].messages[0].reactions).toHaveLength(1);
+        expect(state.conversations[conversationId]!.messages[0]!.reactions).toHaveLength(1);
       });
     });
   });
@@ -602,7 +606,7 @@ describe('Multi-Agent Chat Store', () => {
 
         const state = useMultiAgentChatStore.getState();
         expect(state.typingIndicators[conversationId]).toHaveLength(1);
-        expect(state.typingIndicators[conversationId][0].participantName).toBe('AI Agent');
+        expect(state.typingIndicators[conversationId]![0]!.participantName).toBe('AI Agent');
       });
 
       it('should remove typing indicator', () => {
@@ -631,7 +635,7 @@ describe('Multi-Agent Chat Store', () => {
           .setTypingIndicator(conversationId, 'agent-1', 'AI Agent', true);
 
         const state = useMultiAgentChatStore.getState();
-        const participant = state.conversations[conversationId].participants.find(
+        const participant = state.conversations[conversationId]!.participants.find(
           (p) => p.id === 'agent-1',
         );
         expect(participant?.isTyping).toBe(true);
@@ -710,7 +714,7 @@ describe('Multi-Agent Chat Store', () => {
 
         const state = useMultiAgentChatStore.getState();
         expect(state.messageQueue).toHaveLength(1);
-        expect(state.messageQueue[0].content).toBe('Queued message');
+        expect(state.messageQueue[0]!.content).toBe('Queued message');
       });
 
       it('should not add duplicate message to queue', () => {

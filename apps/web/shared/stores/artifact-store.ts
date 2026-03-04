@@ -74,10 +74,7 @@ export const useArtifactStore = create<ArtifactState>()(
           const artifactIndex = messageArtifacts.findIndex((a) => a.id === artifactId);
           if (artifactIndex === -1) return;
 
-          messageArtifacts[artifactIndex] = {
-            ...messageArtifacts[artifactIndex],
-            ...updates,
-          };
+          Object.assign(messageArtifacts[artifactIndex]!, updates);
         });
       },
 
@@ -107,7 +104,7 @@ export const useArtifactStore = create<ArtifactState>()(
 
           if (versionIndex >= 0 && versionIndex < artifact.versions.length) {
             artifact.currentVersion = versionIndex;
-            artifact.content = artifact.versions[versionIndex].content;
+            artifact.content = artifact.versions[versionIndex]!.content;
           }
         });
       },
@@ -134,15 +131,19 @@ export const useArtifactStore = create<ArtifactState>()(
 
           // Persist to Supabase for sharing across sessions
 
-          const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient).from('shared_artifacts').insert({
-            id: shareId,
-            user_id: user?.id,
-            message_id: messageId,
-            artifact_id: artifactId,
-            artifact_data: artifact,
-            created_at: new Date().toISOString(),
-            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days expiry
-          });
+          const { error } = await (
+            supabase as unknown as import('@supabase/supabase-js').SupabaseClient
+          )
+            .from('shared_artifacts')
+            .insert({
+              id: shareId,
+              user_id: user?.id,
+              message_id: messageId,
+              artifact_id: artifactId,
+              artifact_data: artifact,
+              created_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days expiry
+            });
 
           if (error) {
             // If table doesn't exist, fall back to local storage only
@@ -176,7 +177,9 @@ export const useArtifactStore = create<ArtifactState>()(
 
         // Try to fetch from database
         try {
-          const { data, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+          const { data, error } = await (
+            supabase as unknown as import('@supabase/supabase-js').SupabaseClient
+          )
             .from('shared_artifacts')
             .select('artifact_data')
             .eq('id', shareId)
