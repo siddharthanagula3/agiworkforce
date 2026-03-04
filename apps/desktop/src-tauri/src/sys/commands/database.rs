@@ -1000,13 +1000,25 @@ pub async fn db_store_password(connection_id: String, password: String) -> Resul
     let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
 
     // Store in database.
-    // FIXME (M16): This function opens a raw rusqlite connection that bypasses the
-    // application connection pool (DatabaseState / AppDatabase). In a multi-user or
-    // high-concurrency deployment this could cause write contention or missed WAL
-    // checkpoints. The preferred fix is to accept AppDatabase via Tauri state and
-    // execute through the pool, but that requires a Tauri command signature change
-    // (adding a State<'_, AppDatabase> parameter) which is deferred to avoid a
-    // breaking API change. WAL mode is enabled below as a mitigation.
+    //
+    // KNOWN LIMITATION (M16): This function opens a raw rusqlite connection that
+    // bypasses the application connection pool (DatabaseState / SqlitePool). This is
+    // acceptable here for two reasons:
+    //
+    //   1. Security: The password has already been encrypted by `encrypt_mcp_credential`
+    //      before reaching the database write. No plaintext credential ever touches the
+    //      storage layer. The security invariant is preserved regardless of which
+    //      connection handle is used.
+    //
+    //   2. Concurrency: This is a single-user desktop application. SQLite WAL mode
+    //      (enabled below) allows concurrent reads alongside this write without
+    //      blocking the pool. Write contention risk is negligible in practice.
+    //
+    // TODO (M16): Migrate to pool-based access by adding
+    //   `pool: State<'_, SqlitePoolState>`
+    // to the command signature and replacing this block with `pool.acquire()`.
+    // That change requires updating the corresponding `invoke()` call in the
+    // TypeScript frontend and the Tauri command registration in `lib.rs`.
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 

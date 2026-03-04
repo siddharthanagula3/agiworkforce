@@ -553,7 +553,6 @@ fn build_tool_definitions(
 
 /// Compute conversation statistics (message count, total tokens, total cost)
 /// from the database for the given conversation.
-#[allow(dead_code)]
 fn compute_conversation_stats(
     db: &AppDatabase,
     conversation_id: i64,
@@ -569,7 +568,6 @@ fn compute_conversation_stats(
 }
 
 /// Save an assistant message to the database and return the saved Message.
-#[allow(dead_code)]
 fn save_assistant_message(
     db: &AppDatabase,
     conversation_id: i64,
@@ -5879,16 +5877,73 @@ pub async fn chat_handle_stop(app_handle: tauri::AppHandle) -> Result<bool, Stri
 }
 
 
-/// Generate a shareable URL for a conversation.
+/// Export a conversation as formatted text.
 ///
-/// Returns a JSON object with `url` and `expires_at` fields.
-/// Currently returns a deterministic URL based on the conversation ID.
+/// Queries all messages for the given `conversation_id` from the local
+/// database and returns them formatted according to `format`.
+///
+/// Supported formats:
+/// - `"markdown"` — Each message rendered as `## {Role}\n\n{content}\n\n---\n\n`.
 #[tauri::command]
-pub async fn conversation_share(conversation_id: String) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "url": format!("https://agiworkforce.app/share/{}", conversation_id),
-        "expires_at": null
-    }))
+pub async fn conversation_export(
+    conversation_id: String,
+    format: String,
+    db: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    if format != "markdown" {
+        return Err(format!("Unsupported export format: {format}"));
+    }
+
+    let conv_id: i64 = conversation_id
+        .parse()
+        .map_err(|_| "Invalid conversation ID".to_string())?;
+
+    let conn = db.connection()?;
+
+    // Fetch conversation title (optional — fall back to "Untitled").
+    let title: String = conn
+        .query_row(
+            "SELECT title FROM conversations WHERE id = ?1",
+            rusqlite::params![conv_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "Untitled Conversation".to_string());
+
+    // Fetch messages ordered by creation time.
+    let mut stmt = conn
+        .prepare(
+            "SELECT role, content, created_at FROM messages \
+             WHERE conversation_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|e| format!("Failed to prepare message query: {e}"))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![conv_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| format!("Failed to query messages: {e}"))?;
+
+    let mut output = format!("# {title}\n\n");
+
+    for row in rows {
+        let (role, content, _created_at) =
+            row.map_err(|e| format!("Failed to read message row: {e}"))?;
+
+        let role_label = match role.as_str() {
+            "user" => "User",
+            "assistant" => "Assistant",
+            "system" => "System",
+            other => other,
+        };
+
+        output.push_str(&format!("## {role_label}\n\n{content}\n\n---\n\n"));
+    }
+
+    Ok(output)
 }
 
 #[cfg(test)]

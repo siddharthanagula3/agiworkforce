@@ -402,7 +402,7 @@ impl WorkflowEngine {
         let conn = self.get_connection()?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_a
+            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_at
              FROM workflow_definitions WHERE id = ?1"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
@@ -444,7 +444,7 @@ impl WorkflowEngine {
         let conn = self.get_connection()?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_a
+            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_at
              FROM workflow_definitions WHERE user_id = ?1 ORDER BY updated_at DESC"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 

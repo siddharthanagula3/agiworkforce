@@ -363,7 +363,10 @@ impl DependencyGraph {
         path: &mut Vec<String>,
     ) -> bool {
         if rec_stack.contains(id) {
-            path.push(id.to_string());
+            // Trim path to only include the actual cycle, not ancestor nodes
+            let cycle_start = path.iter().position(|n| n == id).unwrap_or(0);
+            path.drain(0..cycle_start);
+            path.push(id.to_string()); // close the cycle
             return true;
         }
 
@@ -407,7 +410,7 @@ impl DependencyGraph {
             .values()
             .filter(|s| s.status == SubtaskStatus::Failed)
             .count();
-        let pending = total - completed - running - failed;
+        let pending = total.saturating_sub(completed + running + failed);
 
         GraphStats {
             total_subtasks: total,
@@ -760,7 +763,7 @@ Provide ONLY the JSON array, no other text."#,
             estimated_duration_ms,
             resource_intensity: if has_side_effects { 0.7 } else { 0.3 },
             has_side_effects,
-            suggested_parallelism: if parallelizable { 1 } else { 0 },
+            suggested_parallelism: 1,
         };
         subtask.parameters = item
             .get("parameters")

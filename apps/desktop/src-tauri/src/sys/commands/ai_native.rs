@@ -16,8 +16,19 @@ pub async fn ai_analyze_project(
 ) -> Result<String, String> {
     let router = llm_state.router.read().await;
 
+    let canonical = std::fs::canonicalize(&project_root)
+        .map_err(|e| format!("Invalid project path: {}", e))?;
+    let canonical_str = canonical.to_string_lossy();
+
+    // Only allow paths within home directory or /tmp
+    let home = dirs::home_dir().unwrap_or_default();
+    let home_str = home.to_string_lossy();
+    if !canonical_str.starts_with(home_str.as_ref()) && !canonical_str.starts_with("/tmp") {
+        return Err("Project path must be within home directory".to_string());
+    }
+
     let mut structure = String::new();
-    let walker = WalkDir::new(&project_root).max_depth(3).into_iter();
+    let walker = WalkDir::new(&canonical).max_depth(3).into_iter();
 
     let mut file_count = 0;
     for entry in walker
@@ -159,6 +170,67 @@ pub async fn ai_generate_context_prompt(
 
 #[tauri::command]
 pub async fn ai_access_file(file_path: String, _context: Option<String>) -> Result<String, String> {
-    std::fs::read_to_string(&file_path)
+    // Resolve the real path to prevent symlink/traversal attacks
+    let canonical = std::fs::canonicalize(&file_path)
+        .map_err(|e| format!("Invalid file path '{}': {}", file_path, e))?;
+
+    // Denylist of sensitive paths that must never be read
+    let denied_prefixes: &[&str] = &[
+        "/etc/shadow",
+        "/etc/gshadow",
+        "/etc/sudoers",
+        "/proc",
+        "/sys",
+    ];
+    let denied_contains: &[&str] = &[
+        ".ssh",
+        ".gnupg",
+        ".aws/credentials",
+        ".env",
+        "id_rsa",
+        "id_ed25519",
+        "id_ecdsa",
+        "id_dsa",
+    ];
+
+    let canonical_str = canonical.to_string_lossy();
+
+    for prefix in denied_prefixes {
+        if canonical_str.starts_with(prefix) {
+            return Err(format!(
+                "Access denied: '{}' is in a restricted system path",
+                file_path
+            ));
+        }
+    }
+
+    for pattern in denied_contains {
+        if canonical_str.contains(pattern) {
+            return Err(format!(
+                "Access denied: '{}' matches a sensitive path pattern",
+                file_path
+            ));
+        }
+    }
+
+    // Allowlist: must be under home dir, /tmp, or a typical project directory
+    let allowed = if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy();
+        canonical_str.starts_with(home_str.as_ref())
+            || canonical_str.starts_with("/tmp")
+            || canonical_str.starts_with("/var/tmp")
+    } else {
+        // If we can't determine home dir, only allow /tmp
+        canonical_str.starts_with("/tmp") || canonical_str.starts_with("/var/tmp")
+    };
+
+    if !allowed {
+        return Err(format!(
+            "Access denied: '{}' is outside allowed directories (home, /tmp)",
+            file_path
+        ));
+    }
+
+    std::fs::read_to_string(&canonical)
         .map_err(|e| format!("Failed to read file {}: {}", file_path, e))
 }

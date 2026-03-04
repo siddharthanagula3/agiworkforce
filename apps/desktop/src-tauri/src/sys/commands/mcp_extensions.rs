@@ -53,6 +53,39 @@ impl McpExtensionsState {
             installer,
         })
     }
+
+    /// Create a degraded extensions state backed by in-memory database and temp directory.
+    /// Extension commands will return meaningful errors instead of panicking on missing state.
+    pub fn new_degraded(mcp_client: Arc<McpClient>) -> Self {
+        let conn = Connection::open_in_memory()
+            .expect("in-memory SQLite connection should never fail");
+        let db = Arc::new(std::sync::Mutex::new(conn));
+        // Repository with in-memory db — table creation may fail but that's acceptable in degraded mode
+        let repository = Arc::new(
+            ExtensionRepository::new(db)
+                .unwrap_or_else(|_| {
+                    // Fallback: create repo with a fresh in-memory connection that has the tables
+                    let conn2 = Connection::open_in_memory()
+                        .expect("in-memory SQLite connection should never fail");
+                    let db2 = Arc::new(std::sync::Mutex::new(conn2));
+                    ExtensionRepository::new(db2)
+                        .expect("in-memory ExtensionRepository should never fail")
+                }),
+        );
+        let installer = Arc::new(
+            ExtensionInstaller::with_dir(std::env::temp_dir().join("agiworkforce_extensions_degraded")),
+        );
+        let manager = Arc::new(ExtensionManager::new(
+            repository.clone(),
+            installer.clone(),
+            mcp_client,
+        ));
+        Self {
+            manager,
+            repository,
+            installer,
+        }
+    }
 }
 
 /// Response type for extension operations
