@@ -1,4 +1,5 @@
 pub mod cache_manager;
+pub mod capability_detection;
 pub mod cost_calculator;
 pub mod fallback_chain;
 pub mod function_executor;

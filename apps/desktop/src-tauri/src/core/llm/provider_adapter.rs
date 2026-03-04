@@ -247,7 +247,7 @@ impl ProviderAdapterFactory {
             Provider::Anthropic => Box::new(AnthropicAdapter),
             Provider::Google => Box::new(GoogleAdapter),
             Provider::Ollama => Box::new(OllamaAdapter),
-            Provider::Perplexity => Box::new(OpenAIAdapter), // Perplexity uses OpenAI format
+            Provider::Perplexity => Box::new(PerplexityAdapter), // strips tools; Perplexity doesn't support function calling
             Provider::XAI => Box::new(OpenAIAdapter),        // XAI/Grok uses OpenAI format
             Provider::DeepSeek => Box::new(DeepSeekAdapter),
             Provider::Qwen => Box::new(OpenAIAdapter), // Qwen uses OpenAI-compatible format
@@ -1753,6 +1753,32 @@ impl ProviderAdapter for GoogleAdapter {
             }]);
         }
 
+        // Add tool_choice support for Google (toolConfig.functionCallingConfig)
+        if let Some(ref tool_choice) = request.tool_choice {
+            use super::ToolChoice;
+            match tool_choice {
+                ToolChoice::Specific(name) => {
+                    google_request["toolConfig"] = serde_json::json!({
+                        "functionCallingConfig": {
+                            "mode": "ANY",
+                            "allowedFunctionNames": [name]
+                        }
+                    });
+                }
+                other => {
+                    let mode = match other {
+                        ToolChoice::Auto => "AUTO",
+                        ToolChoice::Required => "ANY",
+                        ToolChoice::None => "NONE",
+                        ToolChoice::Specific(_) => unreachable!(),
+                    };
+                    google_request["toolConfig"] = serde_json::json!({
+                        "functionCallingConfig": { "mode": mode }
+                    });
+                }
+            }
+        }
+
         // Add system instruction if present
         if let Some(system) = &request.system {
             google_request["systemInstruction"] = serde_json::json!({
@@ -2122,6 +2148,35 @@ impl ProviderAdapter for OllamaAdapter {
 
     fn provider_name(&self) -> &str {
         "Ollama"
+    }
+}
+
+/// Perplexity adapter
+///
+/// Perplexity uses the OpenAI Chat Completions wire format but does **not**
+/// support function calling / tools.  Sending `tools` or `tool_choice` to the
+/// Perplexity API results in an HTTP 400 error, so we strip those fields
+/// before delegating to the OpenAI adapter.
+struct PerplexityAdapter;
+
+impl ProviderAdapter for PerplexityAdapter {
+    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        // Clone the request and strip tool-related fields
+        let mut stripped = request.clone();
+        stripped.tools = None;
+        stripped.tool_choice = None;
+        OpenAIAdapter.adapt_request(&stripped)
+    }
+
+    fn adapt_response(
+        &self,
+        response: &Value,
+    ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        OpenAIAdapter.adapt_response(response)
+    }
+
+    fn provider_name(&self) -> &str {
+        "Perplexity"
     }
 }
 

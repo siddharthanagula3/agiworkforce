@@ -153,21 +153,44 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
-        let tools = request.tools.as_ref().map(|tools| {
-            tools
-                .iter()
-                .map(|tool| {
-                    serde_json::json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect()
-        });
+        // Determine which tools (if any) to inject, gated on capability detection.
+        let tools = if let Some(req_tools) = &request.tools {
+            if !req_tools.is_empty() {
+                let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
+                    &self.client,
+                    &self.base_url,
+                    &request.model,
+                )
+                .await;
+                if caps.supports_tools {
+                    Some(
+                        req_tools
+                            .iter()
+                            .map(|tool| {
+                                serde_json::json!({
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool.name,
+                                        "description": tool.description,
+                                        "parameters": tool.parameters
+                                    }
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    tracing::info!(
+                        "[Ollama] Model {} does not support native tools, stripping tool definitions",
+                        request.model
+                    );
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
@@ -346,21 +369,44 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
-        let tools = request.tools.as_ref().map(|tools| {
-            tools
-                .iter()
-                .map(|tool| {
-                    serde_json::json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect()
-        });
+        // Determine which tools (if any) to inject, gated on capability detection.
+        let tools = if let Some(req_tools) = &request.tools {
+            if !req_tools.is_empty() {
+                let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
+                    &self.client,
+                    &self.base_url,
+                    &request.model,
+                )
+                .await;
+                if caps.supports_tools {
+                    Some(
+                        req_tools
+                            .iter()
+                            .map(|tool| {
+                                serde_json::json!({
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool.name,
+                                        "description": tool.description,
+                                        "parameters": tool.parameters
+                                    }
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    tracing::info!(
+                        "[Ollama] Model {} does not support native tools, stripping tool definitions",
+                        request.model
+                    );
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
