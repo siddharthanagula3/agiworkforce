@@ -76,18 +76,59 @@ const InlineScreenshot = React.lazy(() =>
   import('./InlineScreenshot').then((m) => ({ default: m.InlineScreenshot })),
 );
 
+const InlineSwarmProgress = React.lazy(() =>
+  import('./InlineSwarmProgress').then((m) => ({ default: m.InlineSwarmProgress })),
+);
+
+const InlineArtifactCard = React.lazy(() =>
+  import('./InlineArtifactCard').then((m) => ({ default: m.InlineArtifactCard })),
+);
+
+const InlineSkillCard = React.lazy(() =>
+  import('./InlineSkillCard').then((m) => ({ default: m.InlineSkillCard })),
+);
+
+const InlineVisionResult = React.lazy(() =>
+  import('./InlineVisionResult').then((m) => ({ default: m.InlineVisionResult })),
+);
+
+const InlineMemoryCard = React.lazy(() =>
+  import('./InlineMemoryCard').then((m) => ({ default: m.InlineMemoryCard })),
+);
+
+const InlineVoiceResult = React.lazy(() =>
+  import('./InlineVoiceResult').then((m) => ({ default: m.InlineVoiceResult })),
+);
+
+const InlineAgentCard = React.lazy(() =>
+  import('./InlineAgentCard').then((m) => ({ default: m.InlineAgentCard })),
+);
+
+const InlineGitResult = React.lazy(() =>
+  import('./InlineGitResult').then((m) => ({ default: m.InlineGitResult })),
+);
+
+const InlineScheduleCard = React.lazy(() =>
+  import('./InlineScheduleCard').then((m) => ({ default: m.InlineScheduleCard })),
+);
+
+const InlineLSPResult = React.lazy(() =>
+  import('./InlineLSPResult').then((m) => ({ default: m.InlineLSPResult })),
+);
+
+const InlineMarketplaceCard = React.lazy(() =>
+  import('./InlineMarketplaceCard').then((m) => ({ default: m.InlineMarketplaceCard })),
+);
+
 // Reuse existing components for multiple tool types
 const InlineBrowserAutomation = InlineTerminalOutput; // Browser ops usually return structured/text output
 const InlineEmailOperation = InlineTerminalOutput; // Reuse terminal style for email
 const InlineCalendarOperation = InlineTerminalOutput; // Reuse terminal style for calendar
 const InlineCloudOperation = InlineTerminalOutput; // Reuse terminal style for cloud ops
-const InlineMemoryOperation = InlineTerminalOutput; // Reuse terminal style for memory
-const InlineScheduleOperation = InlineTerminalOutput; // Reuse terminal style for schedule
-const InlineProductivityOperation = InlineTerminalOutput; // Reuse terminal style for productivity
-const InlineGitOperation = InlineTerminalOutput; // Reuse terminal style for git
 const InlineUIControl = InlineTerminalOutput; // UI click/type usually return status payloads
 const InlineCodeExecution = InlineTerminalOutput; // Reuse terminal for code execution
-const InlineImageAnalysis = InlineSearchResults; // Reuse search results style for image analysis
+const InlineProductivityOperation = InlineTerminalOutput; // Reuse terminal style for productivity
+const InlineImageAnalysis = InlineVisionResult; // Vision result for image analysis
 
 /**
  * Registry of tool renderers
@@ -260,28 +301,31 @@ export const TOOL_RENDERERS: Record<
   // ============================================
   // MEMORY OPERATIONS
   // ============================================
-  memory_remember: InlineMemoryOperation,
-  memory_recall: InlineMemoryOperation,
+  memory_remember: InlineMemoryCard,
+  memory_recall: InlineMemoryCard,
   memory_search: InlineSearchResults,
-  memory_forget: InlineMemoryOperation,
+  memory_forget: InlineMemoryCard,
 
   // ============================================
   // SCHEDULE OPERATIONS
   // ============================================
-  schedule_reminder: InlineScheduleOperation,
-  schedule_recurring_task: InlineScheduleOperation,
-  cancel_scheduled_task: InlineScheduleOperation,
-  list_scheduled_tasks: InlineScheduleOperation,
+  schedule_reminder: InlineScheduleCard,
+  schedule_recurring_task: InlineScheduleCard,
+  cancel_scheduled_task: InlineScheduleCard,
+  list_scheduled_tasks: InlineScheduleCard,
 
   // ============================================
   // GIT OPERATIONS
   // ============================================
-  git_init: InlineGitOperation,
-  git_add: InlineGitOperation,
-  git_commit: InlineGitOperation,
-  git_push: InlineGitOperation,
-  git_status: InlineGitOperation,
-  git_clone: InlineGitOperation,
+  git_init: InlineGitResult,
+  git_add: InlineGitResult,
+  git_commit: InlineGitResult,
+  git_push: InlineGitResult,
+  git_status: InlineGitResult,
+  git_clone: InlineGitResult,
+  git_diff: InlineGitResult,
+  git_branch: InlineGitResult,
+  git_log: InlineGitResult,
   github_create_repo: InlineGitHubPR,
 
   // ============================================
@@ -331,6 +375,65 @@ export const TOOL_RENDERERS: Record<
   // LLM REASONING
   // ============================================
   llm_reason: InlineSearchResults,
+
+  // ============================================
+  // SWARM / MULTI-AGENT
+  // ============================================
+  swarm_execute: InlineSwarmProgress,
+  swarm_run: InlineSwarmProgress,
+  agent_swarm: InlineSwarmProgress,
+  multi_agent_run: InlineSwarmProgress,
+
+  // ============================================
+  // ARTIFACTS
+  // ============================================
+  artifact_create: InlineArtifactCard,
+  artifact_generate: InlineArtifactCard,
+  create_artifact: InlineArtifactCard,
+
+  // ============================================
+  // SKILLS
+  // ============================================
+  skill_invoke: InlineSkillCard,
+  skill_run: InlineSkillCard,
+  invoke_skill: InlineSkillCard,
+
+  // ============================================
+  // VISION
+  // ============================================
+  vision_analyze: InlineVisionResult,
+  vision_ocr: InlineVisionResult,
+  analyze_image: InlineVisionResult,
+
+  // ============================================
+  // VOICE / AUDIO
+  // ============================================
+  voice_transcribe: InlineVoiceResult,
+  speech_to_text: InlineVoiceResult,
+  audio_transcribe: InlineVoiceResult,
+
+  // ============================================
+  // BACKGROUND AGENTS
+  // ============================================
+  agent_start: InlineAgentCard,
+  agent_create: InlineAgentCard,
+  background_agent: InlineAgentCard,
+  agent_status: InlineAgentCard,
+
+  // ============================================
+  // LSP
+  // ============================================
+  lsp_hover: InlineLSPResult,
+  lsp_definition: InlineLSPResult,
+  lsp_diagnostics: InlineLSPResult,
+  lsp_query: InlineLSPResult,
+
+  // ============================================
+  // MARKETPLACE
+  // ============================================
+  marketplace_search: InlineMarketplaceCard,
+  marketplace_install: InlineMarketplaceCard,
+  template_fetch: InlineMarketplaceCard,
 };
 
 /**

@@ -5,20 +5,32 @@ import {
   ChevronRight,
   Code2,
   Database,
+  Eye,
   FileText,
+  FolderOpen,
+  GitBranch,
   Globe,
   Image as ImageIcon,
+  MessageSquare,
+  Monitor,
   MousePointerClick,
   PanelTopOpen,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Store,
   Terminal,
   Video,
   X,
   Activity,
+  Calendar,
+  FileOutput,
+  Gauge,
+  Cloud,
+  ShieldCheck as GovernanceIcon,
+  Zap,
 } from 'lucide-react';
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useRef, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { cn } from '../../lib/utils';
@@ -32,6 +44,56 @@ import { BackgroundTasksPanel } from '../BackgroundTasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
 import { DiffViewer } from './Sidecar/DiffViewer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+
+// Lazy-loaded sidecar panels
+const LazyGitPanel = lazy(() => import('../Git/GitPanel').then((m) => ({ default: m.GitPanel })));
+const LazyDatabaseWorkspace = lazy(() =>
+  import('../Database/DatabaseWorkspace').then((m) => ({ default: m.DatabaseWorkspace })),
+);
+const LazyFilesystemWorkspace = lazy(() =>
+  import('../Filesystem/FilesystemWorkspace').then((m) => ({ default: m.FilesystemWorkspace })),
+);
+const LazyVisionWorkspace = lazy(() =>
+  import('../Vision/VisionWorkspace').then((m) => ({ default: m.VisionWorkspace })),
+);
+const LazyComputerUseMonitor = lazy(() =>
+  import('../ComputerUse/ComputerUseMonitor').then((m) => ({ default: m.ComputerUseMonitor })),
+);
+const LazySchedulerPanel = lazy(() =>
+  import('../Scheduler/SchedulerPanel').then((m) => ({ default: m.SchedulerPanel })),
+);
+const LazyDocumentGenerator = lazy(() =>
+  import('../Documents/DocumentGenerator').then((m) => ({ default: m.DocumentGenerator })),
+);
+const LazyActionRecorder = lazy(() =>
+  import('../Automation/ActionRecorder').then((m) => ({ default: m.ActionRecorder })),
+);
+const LazyMarketplacePage = lazy(() =>
+  import('../Marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })),
+);
+const LazyMessagingIntegrations = lazy(() =>
+  import('../Messaging/MessagingIntegrations').then((m) => ({ default: m.MessagingIntegrations })),
+);
+const LazyProductivityWorkspace = lazy(() =>
+  import('../Productivity/ProductivityWorkspace').then((m) => ({
+    default: m.ProductivityWorkspace,
+  })),
+);
+const LazyCloudStoragePanel = lazy(() =>
+  import('../Cloud/CloudStoragePanel').then((m) => ({ default: m.CloudStoragePanel })),
+);
+const LazyGovernanceDashboard = lazy(() =>
+  import('../Governance/GovernanceDashboard').then((m) => ({ default: m.GovernanceDashboard })),
+);
+const LazyCanvasWorkspace = lazy(() =>
+  import('../Canvas/CanvasWorkspace').then((m) => ({ default: m.CanvasWorkspace })),
+);
+
+const SidecarLoadingFallback = () => (
+  <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+    <div className="animate-pulse">Loading panel...</div>
+  </div>
+);
 
 export type DynamicPanelType =
   | 'terminal'
@@ -47,6 +109,20 @@ export type DynamicPanelType =
   | 'canvas'
   | 'artifact'
   | 'tasks'
+  | 'git'
+  | 'database'
+  | 'filesystem'
+  | 'vision'
+  | 'computer-use'
+  | 'swarm'
+  | 'scheduler'
+  | 'documents'
+  | 'automation'
+  | 'marketplace'
+  | 'messaging'
+  | 'productivity'
+  | 'cloud'
+  | 'governance'
   | null;
 
 interface DynamicSidecarProps {
@@ -73,6 +149,20 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   canvas: <Braces className="h-4 w-4 text-pink-400" />,
   artifact: <Code2 className="h-4 w-4 text-amber-400" />,
   tasks: <Activity className="h-4 w-4 text-cyan-400" />,
+  git: <GitBranch className="h-4 w-4 text-orange-400" />,
+  database: <Database className="h-4 w-4 text-blue-400" />,
+  filesystem: <FolderOpen className="h-4 w-4 text-yellow-400" />,
+  vision: <Eye className="h-4 w-4 text-purple-400" />,
+  'computer-use': <Monitor className="h-4 w-4 text-cyan-400" />,
+  swarm: <Zap className="h-4 w-4 text-amber-400" />,
+  scheduler: <Calendar className="h-4 w-4 text-green-400" />,
+  documents: <FileOutput className="h-4 w-4 text-rose-400" />,
+  automation: <Activity className="h-4 w-4 text-red-400" />,
+  marketplace: <Store className="h-4 w-4 text-violet-400" />,
+  messaging: <MessageSquare className="h-4 w-4 text-teal-400" />,
+  productivity: <Gauge className="h-4 w-4 text-lime-400" />,
+  cloud: <Cloud className="h-4 w-4 text-sky-400" />,
+  governance: <GovernanceIcon className="h-4 w-4 text-emerald-400" />,
 };
 
 // AUDIT-005-018 fix: Separate component to handle video autoPlay with error handling
@@ -388,6 +478,104 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           );
         }
         return <DiffViewer contextId={contextId ?? undefined} className="h-full" />;
+
+      case 'canvas':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyCanvasWorkspace />
+          </Suspense>
+        );
+
+      case 'git':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyGitPanel repoPath={(payload?.['repoPath'] as string) || '.'} />
+          </Suspense>
+        );
+
+      case 'database':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyDatabaseWorkspace />
+          </Suspense>
+        );
+
+      case 'filesystem':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyFilesystemWorkspace />
+          </Suspense>
+        );
+
+      case 'vision':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyVisionWorkspace />
+          </Suspense>
+        );
+
+      case 'computer-use':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyComputerUseMonitor />
+          </Suspense>
+        );
+
+      case 'scheduler':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazySchedulerPanel />
+          </Suspense>
+        );
+
+      case 'documents':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyDocumentGenerator />
+          </Suspense>
+        );
+
+      case 'automation':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyActionRecorder />
+          </Suspense>
+        );
+
+      case 'marketplace':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyMarketplacePage />
+          </Suspense>
+        );
+
+      case 'messaging':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyMessagingIntegrations userId={(payload?.['userId'] as string) || ''} />
+          </Suspense>
+        );
+
+      case 'productivity':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyProductivityWorkspace />
+          </Suspense>
+        );
+
+      case 'cloud':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyCloudStoragePanel />
+          </Suspense>
+        );
+
+      case 'governance':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyGovernanceDashboard />
+          </Suspense>
+        );
 
       default:
         return (

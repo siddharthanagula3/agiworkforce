@@ -61,17 +61,142 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     example: '/imagine a sunset over the mountains',
     icon: '🎨',
   },
+  {
+    command: '/swarm',
+    description: 'Launch a multi-agent swarm to accomplish a goal',
+    example: '/swarm research and summarize AI trends',
+    icon: '🐝',
+  },
+  {
+    command: '/vision',
+    description: 'Analyze screen or image with AI vision',
+    example: '/vision analyze',
+    icon: '👁️',
+  },
+  {
+    command: '/skills',
+    description: 'List or invoke AI employee skills',
+    example: '/skills or /skills web-developer',
+    icon: '🧠',
+  },
+  {
+    command: '/memory',
+    description: 'View, search, or save project memory',
+    example: '/memory search auth patterns',
+    icon: '💾',
+  },
+  {
+    command: '/recall',
+    description: 'Search and inject memory context',
+    example: '/recall database schema',
+    icon: '🔍',
+  },
+  {
+    command: '/agents',
+    description: 'Manage background agents',
+    example: '/agents or /agents push review code',
+    icon: '🤖',
+  },
+  {
+    command: '/git',
+    description: 'Git operations (status, diff, commit, PR)',
+    example: '/git status or /git diff',
+    icon: '📋',
+  },
+  {
+    command: '/schedule',
+    description: 'Schedule tasks and view upcoming jobs',
+    example: '/schedule or /schedule daily backup',
+    icon: '📅',
+  },
+  {
+    command: '/voice',
+    description: 'Voice input and text-to-speech',
+    example: '/voice or /voice tts Hello world',
+    icon: '🎤',
+  },
+  {
+    command: '/think',
+    description: 'Toggle extended thinking mode',
+    example: '/think or /think budget 10000',
+    icon: '🤔',
+  },
+  {
+    command: '/docs',
+    description: 'Generate documents (PDF, Word, Excel)',
+    example: '/docs report on Q4 metrics',
+    icon: '📄',
+  },
+  {
+    command: '/record',
+    description: 'Record and replay desktop automation',
+    example: '/record or /record stop',
+    icon: '⏺️',
+  },
+  {
+    command: '/metrics',
+    description: 'View usage metrics and analytics',
+    example: '/metrics',
+    icon: '📊',
+  },
+  {
+    command: '/marketplace',
+    description: 'Browse and install workflow templates',
+    example: '/marketplace or /marketplace install <id>',
+    icon: '🏪',
+  },
+  {
+    command: '/desktop',
+    description: 'Open computer use / desktop automation',
+    example: '/desktop',
+    icon: '🖥️',
+  },
+  {
+    command: '/ocr',
+    description: 'Extract text from screen or images',
+    example: '/ocr',
+    icon: '📝',
+  },
+  {
+    command: '/notify',
+    description: 'Manage notifications',
+    example: '/notify or /notify clear',
+    icon: '🔔',
+  },
+  {
+    command: '/lsp',
+    description: 'Language server: symbols, diagnostics, definitions',
+    example: '/lsp symbols handleClick',
+    icon: '🔗',
+  },
+  {
+    command: '/enhance',
+    description: 'Enhance the last prompt with AI',
+    example: '/enhance',
+    icon: '✨',
+  },
+  {
+    command: '/migrate',
+    description: 'Import projects from other platforms',
+    example: '/migrate',
+    icon: '📥',
+  },
+  {
+    command: '/message',
+    description: 'Send messages via integrated platforms',
+    example: '/message slack #general Hello',
+    icon: '💬',
+  },
+  {
+    command: '/settings',
+    description: 'Apply settings inline',
+    example: '/settings theme dark',
+    icon: '⚙️',
+  },
 ];
 
 export function useSlashCommandAutocomplete() {
-  /**
-   * Get autocomplete suggestions based on current input
-   * @param input - The current user input
-   * @param selectedIndex - Currently highlighted suggestion index
-   * @returns AutocompleteResult with suggestions and visibility state
-   */
   const getAutocomplete = (input: string, selectedIndex: number = -1): AutocompleteResult => {
-    // Show autocomplete only if input starts with / and has at least 1 character
     const showAutocomplete = input.startsWith('/') && input.length > 1;
 
     if (!showAutocomplete) {
@@ -82,7 +207,6 @@ export function useSlashCommandAutocomplete() {
       };
     }
 
-    // Extract the command part (after / and before space)
     const commandMatch = input.match(/^\/([a-zA-Z]*)/);
     if (!commandMatch || commandMatch[1] === undefined) {
       return {
@@ -94,12 +218,10 @@ export function useSlashCommandAutocomplete() {
 
     const searchTerm = commandMatch[1].toLowerCase();
 
-    // Filter suggestions based on search term
     const filtered = COMMAND_SUGGESTIONS.filter((cmd) =>
       cmd.command.slice(1).toLowerCase().startsWith(searchTerm),
     );
 
-    // Clamp selectedIndex to valid range
     const validSelectedIndex = Math.max(-1, Math.min(selectedIndex, filtered.length - 1));
 
     return {
@@ -109,12 +231,6 @@ export function useSlashCommandAutocomplete() {
     };
   };
 
-  /**
-   * Get the full command text for a suggestion
-   * @param suggestion - The command suggestion
-   * @param args - Optional arguments to append after command
-   * @returns The complete command string
-   */
   const getSuggestionText = (suggestion: CommandSuggestion, args: string = ''): string => {
     if (args) {
       return `${suggestion.command} ${args}`;
