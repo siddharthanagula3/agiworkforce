@@ -2,9 +2,9 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use rusqlite::{params, Connection, Result, Row};
 
 use super::models::{
-    AutomationHistory, Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message,
-    MessageRole, OverlayEvent, OverlayEventType, PaginatedOverlayEvents, ProviderCostBreakdown,
-    Setting, TaskType, TokenUsage,
+    AutomationHistory, Conversation, ConversationBranch, ConversationCostBreakdown,
+    CostTimeseriesPoint, Message, MessageRole, OverlayEvent, OverlayEventType,
+    PaginatedOverlayEvents, ProviderCostBreakdown, Setting, TaskType, TokenUsage,
 };
 
 /// Validates a provider or model name string (M12).
@@ -105,8 +105,8 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
     )?;
 
     tx.execute(
-        "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model, parent_message_id, branch_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             message.conversation_id,
             message.user_id,
@@ -116,6 +116,8 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
             message.cost,
             message.provider,
             message.model,
+            message.parent_message_id,
+            message.branch_id.as_deref().unwrap_or("main"),
         ],
     )?;
 
@@ -134,7 +136,7 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
 /// the caller must supply the authenticated user's ID to prevent cross-user IDOR.
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     conn.query_row(
-        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at
+        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
          FROM messages
          WHERE id = ?1",
         params![id],
@@ -143,18 +145,37 @@ pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
 }
 
 pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Message>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at
-         FROM messages
-         WHERE conversation_id = ?1
-         ORDER BY created_at ASC",
-    )?;
+    list_messages_by_branch(conn, conversation_id, None)
+}
 
-    let messages = stmt
-        .query_map(params![conversation_id], map_message)?
-        .collect::<Result<Vec<_>>>()?;
-
-    Ok(messages)
+pub fn list_messages_by_branch(
+    conn: &Connection,
+    conversation_id: i64,
+    branch_id: Option<&str>,
+) -> Result<Vec<Message>> {
+    if let Some(bid) = branch_id {
+        let mut stmt = conn.prepare(
+            "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
+             FROM messages
+             WHERE conversation_id = ?1 AND branch_id = ?2
+             ORDER BY created_at ASC",
+        )?;
+        let messages = stmt
+            .query_map(params![conversation_id, bid], map_message)?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(messages)
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
+             FROM messages
+             WHERE conversation_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+        let messages = stmt
+            .query_map(params![conversation_id], map_message)?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(messages)
+    }
 }
 
 /// Deletes a message by its primary key.
@@ -192,7 +213,83 @@ fn map_message(row: &Row) -> Result<Message> {
         provider: row.get(7)?,
         model: row.get(8)?,
         created_at: parse_datetime(&row.get::<_, String>(9)?),
+        parent_message_id: row.get(10)?,
+        branch_id: row.get(11)?,
     })
+}
+
+// =============================================================================
+// Conversation Branching
+// =============================================================================
+
+fn map_branch(row: &Row) -> Result<ConversationBranch> {
+    Ok(ConversationBranch {
+        id: row.get(0)?,
+        conversation_id: row.get(1)?,
+        parent_branch_id: row.get(2)?,
+        fork_point_message_id: row.get(3)?,
+        name: row.get(4)?,
+        created_at: parse_datetime(&row.get::<_, String>(5)?),
+    })
+}
+
+/// Creates a new branch record. Returns the branch id.
+pub fn create_branch(
+    conn: &Connection,
+    conversation_id: i64,
+    parent_branch_id: Option<&str>,
+    fork_point_message_id: Option<i64>,
+    name: &str,
+    branch_id: &str,
+) -> Result<ConversationBranch> {
+    conn.execute(
+        "INSERT INTO conversation_branches (id, conversation_id, parent_branch_id, fork_point_message_id, name)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![branch_id, conversation_id, parent_branch_id, fork_point_message_id, name],
+    )?;
+    conn.query_row(
+        "SELECT id, conversation_id, parent_branch_id, fork_point_message_id, name, created_at
+         FROM conversation_branches WHERE id = ?1",
+        params![branch_id],
+        map_branch,
+    )
+}
+
+/// Returns all branches for a conversation.
+pub fn list_branches(conn: &Connection, conversation_id: i64) -> Result<Vec<ConversationBranch>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, conversation_id, parent_branch_id, fork_point_message_id, name, created_at
+         FROM conversation_branches
+         WHERE conversation_id = ?1
+         ORDER BY created_at ASC",
+    )?;
+    let branches = stmt
+        .query_map(params![conversation_id], map_branch)?
+        .collect::<Result<Vec<_>>>()?;
+    Ok(branches)
+}
+
+/// Deletes a branch and all its messages. Refuses to delete 'main'.
+pub fn delete_branch(
+    conn: &Connection,
+    conversation_id: i64,
+    branch_id: &str,
+) -> Result<()> {
+    if branch_id == "main" {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "Cannot delete the 'main' branch".to_string(),
+        ));
+    }
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "DELETE FROM messages WHERE conversation_id = ?1 AND branch_id = ?2",
+        params![conversation_id, branch_id],
+    )?;
+    tx.execute(
+        "DELETE FROM conversation_branches WHERE conversation_id = ?1 AND id = ?2",
+        params![conversation_id, branch_id],
+    )?;
+    tx.commit()
 }
 
 pub fn sum_cost_since(conn: &Connection, since: DateTime<Utc>, user_id: &str) -> Result<f64> {

@@ -11,6 +11,7 @@ import { TerminalInlinePanel } from './TerminalInlinePanel';
 import { BrowserInlinePanel } from './BrowserInlinePanel';
 import { CodeInlinePanel } from './CodeInlinePanel';
 import { DatabaseInlinePanel } from './DatabaseInlinePanel';
+import { ImageInlinePanel } from './ImageInlinePanel';
 
 export interface InlinePanelRendererProps {
   panel: InlinePanelType;
@@ -51,6 +52,15 @@ const InlinePanelRendererComponent: React.FC<InlinePanelRendererProps> = memo(
       case 'database':
         return (
           <DatabaseInlinePanel
+            panel={panel}
+            messageId={messageId}
+            onToggleCollapse={onToggleCollapse}
+          />
+        );
+
+      case 'image':
+        return (
+          <ImageInlinePanel
             panel={panel}
             messageId={messageId}
             onToggleCollapse={onToggleCollapse}

@@ -11,6 +11,7 @@ import {
   Clock,
   Coins,
   Download,
+  FileText,
   FolderOpen,
   Layers,
   Link2,
@@ -65,6 +66,8 @@ import {
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleModeToggle } from '../SimpleMode';
 import { ShareConversationDialog } from './ShareConversationDialog';
+import { save } from '@tauri-apps/plugin-dialog';
+import { invoke } from '../../lib/tauri-mock';
 
 interface SidebarProps {
   className?: string;
@@ -106,6 +109,7 @@ interface ConversationItemProps {
   onTogglePin: (id: string) => void;
   onShare: (id: string, title: string) => void;
   onExport: (id: string, title: string) => void;
+  onExportPdf: (id: string, title: string) => void;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   onDelete: (id: string, title: string) => void;
@@ -129,6 +133,7 @@ const ConversationItem = memo<ConversationItemProps>(
     onTogglePin,
     onShare,
     onExport,
+    onExportPdf,
     onArchive,
     onRestore,
     onDelete,
@@ -229,6 +234,18 @@ const ConversationItem = memo<ConversationItemProps>(
                     title="Export to Markdown"
                   >
                     <Download className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExportPdf(conv.id, conv.title || 'Untitled');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-red-500"
+                    title="Export as PDF"
+                  >
+                    <FileText className="h-3 w-3" />
                   </Button>
                   {showArchived ? (
                     <Button
@@ -388,6 +405,28 @@ export function Sidebar({
     },
     [exportConversationToMarkdown],
   );
+
+  const handleExportPdf = useCallback(async (id: string, title: string) => {
+    try {
+      const safeName = title
+        .replace(/[^a-zA-Z0-9 _-]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 60);
+      const filePath = await save({
+        defaultPath: `${safeName || 'conversation'}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (filePath) {
+        await invoke<string>('conversation_export_pdf', {
+          conversationId: id,
+          outputPath: filePath,
+        });
+        toast.success('Conversation exported as PDF');
+      }
+    } catch {
+      toast.error('Failed to export conversation as PDF');
+    }
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -609,17 +648,8 @@ export function Sidebar({
     [restoreConversation],
   );
 
-  // AUDIT-005-016 fix: Combine two separate keydown listeners into single handler
-  // This is more efficient and prevents potential race conditions between handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Cmd/Ctrl+K for search
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowSearch(true);
-        return;
-      }
-
       // Handle Escape - close search and reset state
       if (e.key === 'Escape') {
         setShowSearch(false);
@@ -679,6 +709,7 @@ export function Sidebar({
         onTogglePin={togglePinnedConversation}
         onShare={handleShare}
         onExport={handleExportConversation}
+        onExportPdf={handleExportPdf}
         onArchive={handleArchive}
         onRestore={handleRestore}
         onDelete={openDeleteConfirmDialog}
@@ -698,6 +729,7 @@ export function Sidebar({
       togglePinnedConversation,
       handleShare,
       handleExportConversation,
+      handleExportPdf,
       handleArchive,
       handleRestore,
       openDeleteConfirmDialog,

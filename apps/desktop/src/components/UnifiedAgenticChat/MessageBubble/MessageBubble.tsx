@@ -9,8 +9,9 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
-import { invoke } from '../../../lib/tauri-mock';
 import { useUnifiedChatStore, uuidToDbId } from '../../../stores/unifiedChatStore';
+import { useChatStore } from '../../../stores/chat/chatStore';
+import { BranchNavigator } from '../BranchNavigator';
 import { useExecutionStore } from '../../../stores/executionStore';
 import { useToolStore } from '../../../stores/chat/toolStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
@@ -292,20 +293,29 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
 
+  const forkAndRegenerate = useChatStore((state) => state.forkAndRegenerate);
+  const branches = useChatStore((state) => state.branches);
+  const activeBranchId = useChatStore((state) => state.activeBranchId);
+  const switchBranch = useChatStore((state) => state.switchBranch);
+
   const handleFork = useCallback(async () => {
     try {
       const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
-      await invoke('checkpoint_create', {
-        conversationId: conversationDbId,
-        messageId: message.id,
-        branchName: `fork-${Date.now()}`,
-        label: `Fork from message ${message.id.slice(0, 8)}`,
-      });
+      if (!conversationDbId) {
+        toast.error('Conversation not saved yet — send a message first');
+        return;
+      }
+      const msgDbId = parseInt(message.id, 10);
+      if (isNaN(msgDbId)) {
+        toast.error('Cannot fork — message not persisted');
+        return;
+      }
+      await forkAndRegenerate(conversationDbId, msgDbId, message.content);
       toast.success('Conversation forked — new branch created');
     } catch {
       toast.error('Failed to fork conversation');
     }
-  }, [message.id, activeConversationId]);
+  }, [message.id, message.content, activeConversationId, forkAndRegenerate]);
 
   // Memoized values
   const formattedTime = useMemo(() => formatTimestamp(message.timestamp), [message.timestamp]);
@@ -869,6 +879,28 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               isStreaming={Boolean(message.metadata?.streaming)}
             />
           )}
+
+          {/* Branch navigator — shown at fork points */}
+          {(() => {
+            const msgDbId = parseInt(message.id, 10);
+            if (isNaN(msgDbId) || branches.length <= 1) return null;
+            const hasForks = branches.some((b) => b.forkPointMessageId === msgDbId);
+            if (!hasForks) return null;
+            const conversationDbId = activeConversationId
+              ? uuidToDbId(activeConversationId)
+              : undefined;
+            if (!conversationDbId) return null;
+            return (
+              <div className="mt-1">
+                <BranchNavigator
+                  branches={branches}
+                  activeBranchId={activeBranchId}
+                  messageId={msgDbId}
+                  onSwitch={(branchId) => void switchBranch(conversationDbId, branchId)}
+                />
+              </div>
+            );
+          })()}
 
           {/* Action buttons */}
           {enableActions && (

@@ -4,7 +4,7 @@ import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
-import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
+import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
@@ -605,9 +605,9 @@ const DesktopShell = () => {
           </div>
         </main>
         <CommandPalette
-          open={commandPaletteOpen}
-          onOpenChange={setCommandPaletteOpen}
-          options={commandOptions}
+          isOpen={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          commands={commandOptions}
         />
         <Suspense fallback={null}>
           <SettingsPanel
