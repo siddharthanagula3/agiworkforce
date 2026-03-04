@@ -158,9 +158,10 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
               };
             }),
           );
+          if (!isMountedRef.current) return;
           setAttachments((prev) => [...prev, ...newAttachments]);
         } finally {
-          setIsProcessingAttachments(false);
+          if (isMountedRef.current) setIsProcessingAttachments(false);
         }
         return;
       }
@@ -188,12 +189,15 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
             };
           }),
         );
+        if (!isMountedRef.current) return;
         setAttachments((prev) => [...prev, ...newAttachments]);
       } catch (error) {
         console.error('[useAttachments] Error reading files:', error);
-        onError?.('Failed to process one or more files. Please try again.');
+        if (isMountedRef.current) {
+          onError?.('Failed to process one or more files. Please try again.');
+        }
       } finally {
-        setIsProcessingAttachments(false);
+        if (isMountedRef.current) setIsProcessingAttachments(false);
       }
     },
     [selectedModel, attachments, readFileAsBase64, onError],

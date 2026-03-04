@@ -18,12 +18,15 @@ export interface AttachmentPreviewProps {
   onRemove: (id: string) => void;
   /** Optional className for the container */
   className?: string;
+  /** Whether the current model supports vision/images */
+  visionSupported?: boolean;
 }
 
 export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
   attachments,
   onRemove,
   className,
+  visionSupported = true,
 }) => {
   if (attachments.length === 0) {
     return null;
@@ -68,6 +71,16 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
                     className="h-16 w-16 object-cover rounded-md"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors rounded-md" />
+                  {!visionSupported && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 flex items-center justify-center rounded-b-md bg-amber-500/90 px-1 py-0.5"
+                      title="Model can't process images"
+                    >
+                      <span className="text-[10px] font-medium leading-none text-black">
+                        No vision
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>

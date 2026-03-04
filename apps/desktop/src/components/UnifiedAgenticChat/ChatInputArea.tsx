@@ -7,6 +7,7 @@
 
 import { motion } from 'framer-motion';
 import { FolderOpen, Globe, Loader2, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
@@ -36,6 +37,7 @@ import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
+import { useModelCapabilities } from '../../hooks/useModelCapabilities';
 
 // Sub-components
 import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
@@ -183,6 +185,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const thinkingModeEnabled = useModelStore((state) => state.thinkingModeEnabled);
   const availableModels = useModelStore((state) => state.availableModels);
+
+  const { capabilities, isToolFallback } = useModelCapabilities(selectedModel, selectedProvider);
+  const visionSupported = capabilities?.supportsVision ?? true;
 
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
   const currentFolder = useProjectStore(selectCurrentFolder);
@@ -416,6 +421,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       userModifiedContentRef.current = false;
     }
   }, [draftContent]);
+
+  // Agent mode toggle with capability notifications
+  const handleToggleAgentMode = useCallback(() => {
+    const next = !agentModeEnabled;
+    if (next) {
+      if (!capabilities?.supportsTools) {
+        toast.warning(
+          "Selected model doesn't support tools. Agent mode requires a tool-capable model.",
+        );
+      } else if (isToolFallback) {
+        toast.info(
+          'Tools will use prompt injection for this local model. Results may be less reliable than native tool calling.',
+        );
+      }
+    }
+    setAgentModeEnabled(next);
+  }, [agentModeEnabled, capabilities, isToolFallback]);
 
   // Keyboard shortcuts for model selector
   const toggleModelSelector = useCallback(() => setShowModelSelector((prev) => !prev), []);
@@ -843,6 +865,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       setLockGateResult(undefined);
     }
 
+    // Validate vision attachments against model capabilities
+    const hasImageAttachments = attachments.some(
+      (a) => a.type === 'image' || a.type === 'screenshot',
+    );
+    if (hasImageAttachments && capabilities && !capabilities.supportsVision) {
+      toast.error("Cannot send images — selected model doesn't support vision");
+      sendAbortControllerRef.current = null;
+      return;
+    }
+
     setIsSending(true);
     setSubmitError(null);
     const messageAttachments = attachments.length > 0 ? attachments : undefined;
@@ -1016,7 +1048,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   return (
     <>
       {/* Drag overlay */}
-      <DragOverlay isVisible={isDragging} />
+      <DragOverlay isVisible={isDragging} visionSupported={visionSupported} />
 
       {/* Hidden file input - accepts images, audio, documents, and code files */}
       <input
@@ -1107,7 +1139,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           )}
 
           {/* Attachments preview */}
-          <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+          <AttachmentPreview
+            attachments={attachments}
+            onRemove={removeAttachment}
+            visionSupported={visionSupported}
+          />
 
           {/* Error display */}
           {submitError && (
@@ -1187,6 +1223,24 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             />
           )}
 
+          {/* Ollama capability info line */}
+          {selectedProvider === 'ollama' && capabilities && !isSimpleMode && (
+            <div className="px-4 pb-1 flex items-center gap-2 text-[10px] text-muted-foreground/50">
+              <span>Local model</span>
+              <span>·</span>
+              <span>Vision: {capabilities.supportsVision ? '✓' : '✗'}</span>
+              <span>·</span>
+              <span>
+                Tools:{' '}
+                {capabilities.toolMode === 'native'
+                  ? 'native'
+                  : capabilities.toolMode === 'prompt_injection'
+                    ? 'fallback'
+                    : 'none'}
+              </span>
+            </div>
+          )}
+
           {/* Toolbar row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             <div className="flex items-center gap-1">
@@ -1200,6 +1254,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 })()}
                 webSearchEnabled={webSearchEnabled}
                 onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
+                visionSupported={visionSupported}
               />
 
               {/* Compact active mode icons — shown inline next to + button */}
@@ -1238,17 +1293,22 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   <FolderOpen size={16} />
                 </button>
               )}
-              {agentModeEnabled && (
-                <button
-                  type="button"
-                  onClick={() => setAgentModeEnabled(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
-                  title="Agent mode enabled (click to disable)"
-                  aria-label="Disable agent mode"
-                >
-                  <Zap size={16} />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleToggleAgentMode}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+                  agentModeEnabled
+                    ? 'text-blue-400 hover:bg-blue-500/10'
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                )}
+                title={
+                  agentModeEnabled ? 'Agent mode enabled (click to disable)' : 'Enable agent mode'
+                }
+                aria-label={agentModeEnabled ? 'Disable agent mode' : 'Enable agent mode'}
+              >
+                <Zap size={16} />
+              </button>
             </div>
             <div className="flex items-center gap-2">
               {content.length > maxLength * 0.8 && (
@@ -1270,6 +1330,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 onOpenChange={setShowModelSelector}
                 isSimpleMode={isSimpleMode}
                 containerRef={modelSelectorRef}
+                capabilities={capabilities}
+                isToolFallback={isToolFallback}
               />
               <VoiceInputButton
                 disabled={disabled}
