@@ -81,6 +81,8 @@ pub struct Message {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub parent_message_id: Option<i64>,
+    pub branch_id: Option<String>,
 }
 
 impl Default for Message {
@@ -96,8 +98,20 @@ impl Default for Message {
             provider: None,
             model: None,
             created_at: Utc::now(),
+            parent_message_id: None,
+            branch_id: Some("main".to_string()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationBranch {
+    pub id: String,
+    pub conversation_id: i64,
+    pub parent_branch_id: Option<String>,
+    pub fork_point_message_id: Option<i64>,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
 }
 
 impl Message {
@@ -113,6 +127,8 @@ impl Message {
             provider: None,
             model: None,
             created_at: Utc::now(),
+            parent_message_id: None,
+            branch_id: Some("main".to_string()),
         }
     }
 

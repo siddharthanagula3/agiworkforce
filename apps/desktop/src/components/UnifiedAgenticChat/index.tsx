@@ -66,6 +66,7 @@ import {
   executeCodeCommand,
   executeDatabaseCommand,
   executeUndoCommand,
+  executeImagineCommand,
 } from '../../handlers/slashCommandHandlers';
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
@@ -2199,6 +2200,9 @@ export const UnifiedAgenticChat: React.FC<{
           case 'undo':
             panel = await executeUndoCommand(slashCommand.args);
             break;
+          case 'imagine':
+            panel = await executeImagineCommand(slashCommand.args);
+            break;
           default:
             throw new Error(`Unknown command: ${slashCommand.command}`);
         }
@@ -2479,6 +2483,28 @@ export const UnifiedAgenticChat: React.FC<{
             mergedCustomInstructions = mergedCustomInstructions
               ? `${memoryContext}\n\n${mergedCustomInstructions}`
               : memoryContext;
+          }
+        }
+
+        // Inject file context items into custom instructions
+        if (options.context && options.context.length > 0) {
+          const fileContextBlocks = options.context
+            .filter(
+              (item): item is Extract<typeof item, { type: 'file' }> =>
+                item.type === 'file' &&
+                'content' in item &&
+                Boolean((item as { content?: string }).content),
+            )
+            .map((item) => {
+              const lang =
+                (item as { language?: string }).language ?? item.name.split('.').pop() ?? '';
+              return `## Attached file: ${item.name}\n\`\`\`${lang}\n${(item as { content?: string }).content}\n\`\`\``;
+            })
+            .join('\n\n');
+          if (fileContextBlocks) {
+            mergedCustomInstructions = mergedCustomInstructions
+              ? `${fileContextBlocks}\n\n${mergedCustomInstructions}`
+              : fileContextBlocks;
           }
         }
 

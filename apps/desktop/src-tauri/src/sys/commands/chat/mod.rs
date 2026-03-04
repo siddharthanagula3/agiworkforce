@@ -13,10 +13,12 @@ use tauri::{Emitter, Manager, State};
 
 use tracing::{debug, error, info, warn};
 
+pub mod branching;
 pub mod memory_handler;
 pub mod tool_events;
 pub mod tools;
 pub mod types;
+pub use branching::*;
 pub use types::*;
 
 use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
@@ -590,6 +592,8 @@ fn save_assistant_message(
         provider: provider.map(|p| p.to_string()),
         model: Some(model.to_string()),
         created_at: Utc::now(),
+        parent_message_id: None,
+        branch_id: Some("main".to_string()),
     };
     let id = repository::create_message(&conn, &msg)
         .map_err(|e| format!("Failed to save assistant message: {e}"))?;
@@ -622,6 +626,8 @@ fn save_or_skip_assistant_message(
             provider: provider.map(|p| p.to_string()),
             model: Some(model.to_string()),
             created_at: Utc::now(),
+            parent_message_id: None,
+            branch_id: Some("main".to_string()),
         })
     } else {
         save_assistant_message(
@@ -2895,6 +2901,8 @@ pub fn chat_create_message(
         provider: None,
         model: None,
         created_at: Utc::now(),
+        parent_message_id: None,
+        branch_id: Some("main".to_string()),
     };
 
     let id = repository::create_message(&conn, &message).map_err(|e| {
@@ -3210,6 +3218,8 @@ pub async fn chat_send_message(
             provider: provider_enum.map(|p| p.as_string().to_string()),
             model: Some(model.clone()),
             created_at: Utc::now(),
+            parent_message_id: None,
+            branch_id: Some("main".to_string()),
         }
     } else {
         let conn = _db.connection()?;
@@ -3224,6 +3234,8 @@ pub async fn chat_send_message(
             provider: provider_enum.map(|p| p.as_string().to_string()),
             model: Some(model.clone()),
             created_at: Utc::now(),
+            parent_message_id: None,
+            branch_id: Some("main".to_string()),
         };
         let id = repository::create_message(&conn, &msg)
             .map_err(|e| format!("Failed to save user message: {e}"))?;
@@ -3647,6 +3659,8 @@ pub async fn chat_send_message(
                                 provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                                 model: Some(model_clone.clone()),
                                 created_at: Utc::now(),
+                                parent_message_id: None,
+                                branch_id: Some("main".to_string()),
                             }
                         } else {
                             let conn = match db_arc_clone.connection() {
@@ -3674,6 +3688,8 @@ pub async fn chat_send_message(
                                 provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                                 model: Some(model_clone.clone()),
                                 created_at: Utc::now(),
+                                parent_message_id: None,
+                                branch_id: Some("main".to_string()),
                             };
                             match repository::create_message(&conn, &msg) {
                                 Ok(id) => match repository::get_message(&conn, id) {
@@ -3988,6 +4004,8 @@ pub async fn chat_send_message(
                                 provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                                 model: Some(model_clone.clone()),
                                 created_at: Utc::now(),
+                                parent_message_id: None,
+                                branch_id: Some("main".to_string()),
                             }
                         } else {
                             let conn = match db_arc_clone.connection() {
@@ -4015,6 +4033,8 @@ pub async fn chat_send_message(
                                 provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                                 model: Some(model_clone.clone()),
                                 created_at: Utc::now(),
+                                parent_message_id: None,
+                                branch_id: Some("main".to_string()),
                             };
                             match repository::create_message(&conn, &msg) {
                                 Ok(id) => {
@@ -4835,6 +4855,8 @@ Please confirm the tool permissions or try a different approach.",
                             provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                             model: Some(model_clone.clone()),
                             created_at: Utc::now(),
+                            parent_message_id: None,
+                            branch_id: Some("main".to_string()),
                         }
                     } else {
                         let conn = match db_arc_clone.connection() {
@@ -4897,6 +4919,8 @@ Please confirm the tool permissions or try a different approach.",
                             provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                             model: Some(model_clone.clone()),
                             created_at: Utc::now(),
+                            parent_message_id: None,
+                            branch_id: Some("main".to_string()),
                         };
                         match repository::create_message(&conn, &msg) {
                             Ok(id) => match repository::get_message(&conn, id) {
@@ -6164,6 +6188,116 @@ pub async fn conversation_export(
     }
 
     Ok(output)
+}
+
+/// Export a conversation as a PDF file.
+///
+/// Loads all messages for `conversation_id` from SQLite, builds structured
+/// PDF content (title heading, per-message role header + body), and writes
+/// the result to `output_path`.
+#[tauri::command]
+pub async fn conversation_export_pdf(
+    conversation_id: String,
+    output_path: String,
+    db: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    use crate::features::document::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
+
+    let conv_id: i64 = conversation_id
+        .parse()
+        .map_err(|_| "Invalid conversation ID".to_string())?;
+
+    let conn = db.connection()?;
+
+    // Fetch the conversation title
+    let title: String = conn
+        .query_row(
+            "SELECT title FROM conversations WHERE id = ?1",
+            rusqlite::params![conv_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "Untitled Conversation".to_string());
+
+    // Fetch messages ordered by creation time
+    let mut stmt = conn
+        .prepare(
+            "SELECT role, content FROM messages \
+             WHERE conversation_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|e| format!("Failed to prepare message query: {e}"))?;
+
+    let rows: Vec<(String, String)> = stmt
+        .query_map(rusqlite::params![conv_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("Failed to query messages: {e}"))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read message rows: {e}"))?;
+
+    // Build PDF content blocks
+    let mut contents: Vec<PdfContent> = Vec::new();
+
+    // Document title
+    contents.push(PdfContent::Heading {
+        level: 1,
+        text: title.clone(),
+    });
+
+    for (role, content) in rows {
+        let role_label = match role.as_str() {
+            "user" => "User",
+            "assistant" => "Assistant",
+            "system" => "System",
+            other => other,
+        }
+        .to_string();
+
+        // Role header
+        contents.push(PdfContent::Heading {
+            level: 2,
+            text: role_label,
+        });
+
+        // Message body — split on newlines so each line is a paragraph
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            // Detect code-block fences and render in a visually distinct style
+            if trimmed.starts_with("```") || trimmed.ends_with("```") {
+                contents.push(PdfContent::Paragraph {
+                    text: trimmed.to_string(),
+                    bold: Some(false),
+                    italic: Some(true),
+                    font_size: Some(10),
+                    alignment: None,
+                });
+            } else {
+                contents.push(PdfContent::Paragraph {
+                    text: trimmed.to_string(),
+                    bold: None,
+                    italic: None,
+                    font_size: None,
+                    alignment: None,
+                });
+            }
+        }
+    }
+
+    let creator = PdfDocumentCreator::new();
+    let pdf_config = PdfDocumentConfig {
+        title: Some(title.clone()),
+        author: None,
+        subject: Some("Exported conversation".to_string()),
+        page_size: Some("A4".to_string()),
+    };
+
+    creator
+        .create(&output_path, pdf_config, contents)
+        .map_err(|e| format!("Failed to create PDF: {e}"))?;
+
+    Ok(output_path)
 }
 
 #[cfg(test)]
