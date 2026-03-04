@@ -152,7 +152,7 @@ pub struct ModelCapabilities {
 
 /// Subscription tier allowed-model lists.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct TierConfig {
     pub economy: Vec<String>,
     pub pro_additions: Vec<String>,
