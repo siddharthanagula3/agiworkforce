@@ -288,7 +288,7 @@ describe('POST /api/agents/execute', () => {
     expect(mockStreamRequest).toHaveBeenCalledOnce();
 
     // Verify the messages array was built correctly
-    const streamCallArgs = mockStreamRequest.mock.calls[0][0] as {
+    const streamCallArgs = mockStreamRequest.mock.calls[0]![0] as {
       messages: Array<{ role: string; content: string }>;
     };
     const roles = streamCallArgs.messages.map((m) => m.role);
@@ -302,7 +302,7 @@ describe('POST /api/agents/execute', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    const streamCallArgs = mockStreamRequest.mock.calls[0][0] as { model: string };
+    const streamCallArgs = mockStreamRequest.mock.calls[0]![0] as { model: string };
     // Default model is claude-haiku-4.5 (mapped through mapModelIdToApiId)
     expect(typeof streamCallArgs.model).toBe('string');
   });
@@ -319,10 +319,7 @@ describe('POST /api/agents/execute', () => {
   });
 
   it('should include employeeId in credit deduction metadata', async () => {
-    const request = makeRequest(
-      { message: 'Hello', employeeId: 'legal-advisor' },
-      FAKE_BEARER,
-    );
+    const request = makeRequest({ message: 'Hello', employeeId: 'legal-advisor' }, FAKE_BEARER);
 
     const response = await POST(request);
     expect(response.status).toBe(200);

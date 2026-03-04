@@ -114,8 +114,8 @@ const mockStripeWebhooks = {
       throw new Error('Invalid signature format');
     }
 
-    const timestamp = parseInt(timestampPart.split('=')[1], 10);
-    const providedSignature = signaturePart.split('=')[1];
+    const timestamp = parseInt(timestampPart.split('=')[1]!, 10);
+    const providedSignature = signaturePart.split('=')[1]!;
 
     const currentTime = Math.floor(Date.now() / 1000);
     if (currentTime - timestamp > 300) {

@@ -97,11 +97,11 @@ function extractFilename(content: string): string | null {
 
   // // filename.ext  or  # filename.ext
   const singleLineComment = firstLine.match(/^(?:\/\/|#|--)\s+([\w./-]+\.\w+)\s*$/);
-  if (singleLineComment) return singleLineComment[1];
+  if (singleLineComment) return singleLineComment[1] ?? null;
 
   // /* filename.ext */
   const blockComment = firstLine.match(/^\/\*\s*([\w./-]+\.\w+)\s*\*\/\s*$/);
-  if (blockComment) return blockComment[1];
+  if (blockComment) return blockComment[1] ?? null;
 
   return null;
 }

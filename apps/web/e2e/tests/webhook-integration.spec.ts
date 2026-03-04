@@ -44,7 +44,7 @@ test.describe('Webhook Integration - Checkout Events', () => {
               data: [
                 {
                   price: {
-                    id: process.env.STRIPE_PRICE_HOBBY_MONTHLY || 'price_hobby',
+                    id: process.env['STRIPE_PRICE_HOBBY_MONTHLY'] || 'price_hobby',
                     recurring: { interval: 'month' },
                   },
                 },
@@ -135,7 +135,7 @@ test.describe('Webhook Integration - Subscription Events', () => {
               data: [
                 {
                   price: {
-                    id: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro',
+                    id: process.env['STRIPE_PRICE_PRO_MONTHLY'] || 'price_pro',
                   },
                 },
               ],
@@ -286,7 +286,7 @@ test.describe('Webhook Integration - Idempotency', () => {
               data: [
                 {
                   price: {
-                    id: process.env.STRIPE_PRICE_HOBBY_MONTHLY || 'price_hobby',
+                    id: process.env['STRIPE_PRICE_HOBBY_MONTHLY'] || 'price_hobby',
                   },
                 },
               ],

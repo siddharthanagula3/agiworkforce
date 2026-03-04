@@ -13,7 +13,7 @@
  * Cloudflare's Vibe API, we adapt the SDK's patterns locally.
  */
 
-import { create } from 'zustand';
+import { create, type UseBoundStore, type StoreApi } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
@@ -468,7 +468,7 @@ interface VibeSDKStoreState {
   _syncState: () => void;
 }
 
-export const useVibeSDKStore = create<VibeSDKStoreState>()(
+const _vibeSDKStoreRaw = create<VibeSDKStoreState>()(
   devtools(
     immer((set, get) => ({
       // Initial state
@@ -600,6 +600,12 @@ export const useVibeSDKStore = create<VibeSDKStoreState>()(
     { name: 'VibeSDKStore' },
   ),
 );
+
+// Cast away the immer/devtools wrapper types to prevent TS4023
+// (WritableNonArrayDraft from immer cannot be named in exported types)
+export const useVibeSDKStore = _vibeSDKStoreRaw as unknown as UseBoundStore<
+  StoreApi<VibeSDKStoreState>
+>;
 
 // ============================================================================
 // EXPORTS

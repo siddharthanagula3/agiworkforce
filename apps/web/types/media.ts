@@ -11,9 +11,13 @@ export type ImageProviderId =
   | 'replicate'
   | 'fal'
   | 'ideogram'
-  | 'black-forest-labs';
+  | 'black-forest-labs'
+  | 'google_imagen'
+  | 'google_imagen_lite'
+  | 'dalle'
+  | 'stable_diffusion';
 
-export type ImageQualityId = 'standard' | 'hd' | 'ultra';
+export type ImageQualityId = 'standard' | 'hd' | 'ultra' | 'premium';
 
 export type ImageSizeId =
   | '256x256'
@@ -22,7 +26,10 @@ export type ImageSizeId =
   | '1024x1792'
   | '1792x1024'
   | '1280x720'
-  | '1920x1080';
+  | '1920x1080'
+  | 'large'
+  | 'portrait'
+  | 'wide';
 
 export type VideoResolutionId = '480p' | '720p' | '1080p' | '4k';
 

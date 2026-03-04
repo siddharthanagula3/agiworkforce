@@ -25,8 +25,8 @@ describe('device-token-crypto', () => {
     // Reset module registry so env changes are picked up by the module
     vi.resetModules();
     // Start with a clean env using the explicit key
-    process.env.DEVICE_TOKEN_ENCRYPTION_KEY = VALID_HEX_KEY;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env['DEVICE_TOKEN_ENCRYPTION_KEY'] = VALID_HEX_KEY;
+    delete process.env['SUPABASE_SERVICE_ROLE_KEY'];
   });
 
   afterEach(() => {
@@ -116,7 +116,7 @@ describe('device-token-crypto', () => {
       const buf = Buffer.from(encrypted, 'base64');
 
       // Flip the last byte (part of the 16-byte auth tag)
-      buf[buf.length - 1] ^= 0xff;
+      buf[buf.length - 1]! ^= 0xff;
       const tampered = buf.toString('base64');
 
       expect(() => decryptToken(tampered)).toThrow();
@@ -129,7 +129,7 @@ describe('device-token-crypto', () => {
       const buf = Buffer.from(encrypted, 'base64');
 
       // IV is first 12 bytes; flip a byte in the ciphertext region (byte 12)
-      buf[12] ^= 0x01;
+      buf[12]! ^= 0x01;
       const tampered = buf.toString('base64');
 
       expect(() => decryptToken(tampered)).toThrow();
@@ -142,7 +142,7 @@ describe('device-token-crypto', () => {
       const buf = Buffer.from(encrypted, 'base64');
 
       // Flip a byte inside the IV (first 12 bytes)
-      buf[0] ^= 0xff;
+      buf[0]! ^= 0xff;
       const tampered = buf.toString('base64');
 
       expect(() => decryptToken(tampered)).toThrow();
@@ -154,7 +154,7 @@ describe('device-token-crypto', () => {
   // ---------------------------------------------------------------------------
   describe('key derivation — explicit DEVICE_TOKEN_ENCRYPTION_KEY', () => {
     it('should encrypt/decrypt successfully with a valid 64-hex key', async () => {
-      process.env.DEVICE_TOKEN_ENCRYPTION_KEY = VALID_HEX_KEY;
+      process.env['DEVICE_TOKEN_ENCRYPTION_KEY'] = VALID_HEX_KEY;
       const { encryptToken, decryptToken } = await import('@/lib/device-token-crypto');
 
       const plaintext = 'token-with-explicit-key';
@@ -162,7 +162,7 @@ describe('device-token-crypto', () => {
     });
 
     it('should throw when DEVICE_TOKEN_ENCRYPTION_KEY is not 64 hex chars (too short)', async () => {
-      process.env.DEVICE_TOKEN_ENCRYPTION_KEY = 'deadbeef'; // Only 4 bytes
+      process.env['DEVICE_TOKEN_ENCRYPTION_KEY'] = 'deadbeef'; // Only 4 bytes
       const { encryptToken } = await import('@/lib/device-token-crypto');
 
       expect(() => encryptToken('any-token')).toThrow(
@@ -171,7 +171,7 @@ describe('device-token-crypto', () => {
     });
 
     it('should throw when DEVICE_TOKEN_ENCRYPTION_KEY is 63 hex chars (odd length)', async () => {
-      process.env.DEVICE_TOKEN_ENCRYPTION_KEY = 'a'.repeat(63);
+      process.env['DEVICE_TOKEN_ENCRYPTION_KEY'] = 'a'.repeat(63);
       const { encryptToken } = await import('@/lib/device-token-crypto');
 
       // Buffer.from with 'hex' silently drops the last nibble → 31 bytes, not 32
@@ -181,8 +181,8 @@ describe('device-token-crypto', () => {
 
   describe('key derivation — SUPABASE_SERVICE_ROLE_KEY fallback', () => {
     it('should derive a key from SUPABASE_SERVICE_ROLE_KEY when explicit key is absent', async () => {
-      delete process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
-      process.env.SUPABASE_SERVICE_ROLE_KEY = 'super-secret-service-role-key';
+      delete process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
+      process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'super-secret-service-role-key';
 
       const { encryptToken, decryptToken } = await import('@/lib/device-token-crypto');
 
@@ -191,8 +191,8 @@ describe('device-token-crypto', () => {
     });
 
     it('should throw when neither env var is set', async () => {
-      delete process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
-      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      delete process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
+      delete process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
       const { encryptToken } = await import('@/lib/device-token-crypto');
 
@@ -202,8 +202,8 @@ describe('device-token-crypto', () => {
     });
 
     it('should produce consistent ciphertext keys from the same service role key', async () => {
-      delete process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
-      process.env.SUPABASE_SERVICE_ROLE_KEY = 'stable-service-role-key';
+      delete process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
+      process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'stable-service-role-key';
 
       const { encryptToken, decryptToken } = await import('@/lib/device-token-crypto');
 

@@ -38,7 +38,7 @@ export class StripeHelpers {
   private stripe: Stripe;
 
   constructor(secretKey?: string) {
-    const key = secretKey || process.env.STRIPE_SECRET_KEY;
+    const key = secretKey || process.env['STRIPE_SECRET_KEY'];
 
     if (!key) {
       throw new Error(

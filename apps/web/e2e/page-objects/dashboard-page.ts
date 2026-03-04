@@ -16,8 +16,7 @@ export class DashboardPage extends BasePage {
   private readonly planTierStatus = 'text=Current Plan >> .. >> .. >> .text-xs';
 
   // Subscription status
-  private readonly subscriptionStatusText =
-    'p:has-text("Active subscription"), p:has-text("Free tier")';
+  // private readonly subscriptionStatusText = 'p:has-text("Active subscription"), p:has-text("Free tier")';
 
   // API Usage card
   private readonly apiUsageCard = '.bg-zinc-900:has-text("API Usage")';
@@ -32,7 +31,7 @@ export class DashboardPage extends BasePage {
   private readonly manageBillingButton = 'a:has-text("Manage Billing")';
 
   // Loading states
-  private readonly loadingSpinner = 'div[class*="animate"]';
+  // private readonly loadingSpinner = 'div[class*="animate"]';
 
   constructor(page: Page) {
     super(page);
@@ -41,7 +40,7 @@ export class DashboardPage extends BasePage {
   /**
    * Navigate to the dashboard page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/dashboard');
   }
 

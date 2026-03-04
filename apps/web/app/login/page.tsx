@@ -11,7 +11,8 @@ import { getSupabaseClient } from '../../services/supabase';
 // Get the app URL for redirects - use env var for production, fallback to window for dev
 const getAppUrl = () => {
   return (
-    process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+    process.env['NEXT_PUBLIC_APP_URL'] ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
   );
 };
 

@@ -1018,7 +1018,9 @@ export async function getConversationStats(userId: string): Promise<Conversation
 
         most_used_agents = Object.entries(agentCounts)
           .map(([key, count]) => {
-            const [employee_id, employee_name] = key.split('|');
+            const parts = key.split('|');
+            const employee_id = parts[0] ?? '';
+            const employee_name = parts[1] ?? '';
             return { employee_id, employee_name, usage_count: count as number };
           })
           .sort((a, b) => b.usage_count - a.usage_count)

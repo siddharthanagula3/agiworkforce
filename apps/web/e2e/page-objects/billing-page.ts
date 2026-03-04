@@ -15,7 +15,7 @@ export class BillingPage extends BasePage {
 
   // Active subscription indicators
   private readonly activeSubscriptionBanner = '.bg-green-900\\/10:has-text("Active Subscription")';
-  private readonly activeSubscriptionTitle = 'h4:has-text("Active Subscription")';
+  // private readonly activeSubscriptionTitle = 'h4:has-text("Active Subscription")';
   private readonly renewalDate = 'p:has-text("Your plan renews on")';
 
   // No subscription indicators
@@ -33,7 +33,7 @@ export class BillingPage extends BasePage {
   /**
    * Navigate to the billing page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/dashboard/billing');
   }
 

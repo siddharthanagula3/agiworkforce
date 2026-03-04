@@ -98,7 +98,7 @@ vi.mock('@/lib/pricing', () => ({
 describe('POST /api/checkout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.STRIPE_SECRET_KEY = 'sk_test_key';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
   });
 
   it('should return 401 if user is not authenticated', async () => {

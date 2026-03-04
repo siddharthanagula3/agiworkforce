@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type UseBoundStore, type StoreApi } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
@@ -166,7 +166,7 @@ const initialState = {
 // Only enable devtools in development/staging, not production
 const enableDevtools = process.env.NODE_ENV !== 'production';
 
-export const useVibeViewStore = create<VibeViewStore>()(
+export const useVibeViewStore: UseBoundStore<StoreApi<VibeViewStore>> = create<VibeViewStore>()(
   devtools(
     persist(
       immer((set) => ({
@@ -255,8 +255,9 @@ export const useVibeViewStore = create<VibeViewStore>()(
           set((state) => {
             const commandIndex = state.terminalState.history.findIndex((c) => c.id === id);
             if (commandIndex !== -1) {
-              state.terminalState.history[commandIndex] = {
-                ...state.terminalState.history[commandIndex],
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (state.terminalState.history as any)[commandIndex] = {
+                ...state.terminalState.history[commandIndex]!,
                 ...updates,
               };
             }
@@ -303,8 +304,9 @@ export const useVibeViewStore = create<VibeViewStore>()(
           set((state) => {
             const taskIndex = state.plannerState.tasks.findIndex((t) => t.id === taskId);
             if (taskIndex !== -1) {
-              state.plannerState.tasks[taskIndex] = {
-                ...state.plannerState.tasks[taskIndex],
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (state.plannerState.tasks as any)[taskIndex] = {
+                ...state.plannerState.tasks[taskIndex]!,
                 ...updates,
               };
             }

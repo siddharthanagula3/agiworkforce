@@ -105,9 +105,9 @@ const createChainableMock = (returnData: unknown = null, returnError: unknown = 
     mock[method] = vi.fn().mockReturnValue(mock);
   });
 
-  mock.single = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
-  mock.maybeSingle = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
-  mock.delete = vi.fn().mockReturnValue(mock);
+  mock['single'] = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+  mock['maybeSingle'] = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+  mock['delete'] = vi.fn().mockReturnValue(mock);
 
   return mock;
 };
@@ -128,16 +128,16 @@ const mockSupabaseClient = {
     const chainable = createChainableMock();
 
     if (table === 'profiles') {
-      chainable.single = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
+      chainable['single'] = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
     } else if (table === 'subscriptions') {
-      chainable.single = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
+      chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
     } else {
-      chainable.single = vi.fn().mockResolvedValue({ data: null, error: null });
+      chainable['single'] = vi.fn().mockResolvedValue({ data: null, error: null });
     }
 
     // For order().limit() chains, return array
-    chainable.limit = vi.fn().mockResolvedValue({ data: [], error: null });
-    chainable.order = vi.fn().mockReturnValue(chainable);
+    chainable['limit'] = vi.fn().mockResolvedValue({ data: [], error: null });
+    chainable['order'] = vi.fn().mockReturnValue(chainable);
 
     return chainable;
   }),
@@ -552,9 +552,9 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
         const chainable = createChainableMock();
 
         if (table === 'profiles') {
-          chainable.single = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
+          chainable['single'] = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
         } else if (table === 'subscriptions') {
-          chainable.single = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
+          chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
         }
 
         return chainable;
@@ -608,7 +608,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
         const chainable = createChainableMock();
 
         if (table === 'subscriptions') {
-          chainable.single = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
+          chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
         }
 
         return chainable;

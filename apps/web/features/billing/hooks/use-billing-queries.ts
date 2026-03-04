@@ -522,7 +522,7 @@ export function useTokenAnalytics(
           cost: 0,
         };
         dailyMap.set(dateKey!, {
-          date: dateKey,
+          date: dateKey ?? '',
           tokens: existing.tokens + d.totalTokens,
           cost: existing.cost + d.totalCost,
         });

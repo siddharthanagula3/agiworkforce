@@ -30,7 +30,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
   const [activeTab, setActiveTab] = useState<'process' | 'findings' | 'sources'>('process');
 
   const currentStep =
-    task.steps.find((s: any) => s.status === 'running') || task.steps[task.steps.length - 1];
+    task.steps?.find((s: any) => s.status === 'running') || task.steps?.[task.steps.length - 1];
 
   const handleSourceClick = (url: string) => {
     if (onViewSource) {
@@ -77,8 +77,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               )}
               {task.status === 'running' && (
                 <span>
-                  • {task.steps.filter((s: any) => s.status === 'completed').length} /{' '}
-                  {task.steps.length} steps
+                  • {task.steps?.filter((s: any) => s.status === 'completed').length ?? 0} /{' '}
+                  {task.steps?.length ?? 0} steps
                 </span>
               )}
             </div>
@@ -143,7 +143,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                     : 'border-transparent text-zinc-500 hover:text-zinc-300',
                 )}
               >
-                Findings ({task.findings.length})
+                Findings ({task.findings?.length ?? 0})
               </button>
               <button
                 onClick={() => setActiveTab('sources')}
@@ -161,10 +161,10 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
             <div className="p-4 max-h-[300px] overflow-y-auto custom-scrollbar bg-black/10">
               {activeTab === 'process' && (
                 <div className="space-y-3">
-                  {task.steps.map((step: any, idx: any) => (
+                  {task.steps?.map((step: any, idx: any) => (
                     <div key={step.id || idx} className="flex gap-3 relative">
                       {}
-                      {idx !== task.steps.length - 1 && (
+                      {idx !== (task.steps?.length ?? 0) - 1 && (
                         <div className="absolute left-[9px] top-6 bottom-[-12px] w-[2px] bg-zinc-800" />
                       )}
 
@@ -223,8 +223,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
 
               {activeTab === 'findings' && (
                 <ul className="space-y-2">
-                  {task.findings.length > 0 ? (
-                    task.findings.map((finding: any, idx: any) => (
+                  {(task.findings?.length ?? 0) > 0 ? (
+                    task.findings!.map((finding: any, idx: any) => (
                       <li
                         key={idx}
                         className="flex gap-2 text-sm text-zinc-300 bg-white/5 p-2 rounded"
