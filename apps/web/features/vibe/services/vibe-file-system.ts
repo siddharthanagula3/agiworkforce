@@ -731,7 +731,7 @@ export default defineConfig({
     if (this.activeFile === normalizedPath) {
       // Switch to another open file if available
       const openFilesArray = Array.from(this.openFiles);
-      this.activeFile = openFilesArray.length > 0 ? openFilesArray[0] : null!;
+      this.activeFile = openFilesArray.length > 0 ? (openFilesArray[0] ?? null) : null;
     }
   }
 

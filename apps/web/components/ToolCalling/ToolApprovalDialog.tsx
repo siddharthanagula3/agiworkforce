@@ -94,7 +94,7 @@ export function ToolApprovalDialog({
             <span
               className={cn(
                 'px-2 py-0.5 rounded text-xs font-bold uppercase',
-                getRiskBadgeColor(approval.risk_level),
+                getRiskBadgeColor(approval.risk_level ?? ''),
               )}
             >
               {approval.risk_level}
@@ -109,7 +109,7 @@ export function ToolApprovalDialog({
             </div>
 
             {/* Reason for Approval */}
-            <div className={cn('p-3 rounded border', getRiskColor(approval.risk_level))}>
+            <div className={cn('p-3 rounded border', getRiskColor(approval.risk_level ?? ''))}>
               <div className="flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">

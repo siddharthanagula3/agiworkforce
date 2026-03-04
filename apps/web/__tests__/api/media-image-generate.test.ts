@@ -69,10 +69,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 // Mock: error-handler — pass-through wrapper so withErrorHandler works
 // ---------------------------------------------------------------------------
 vi.mock('@/lib/error-handler', () => ({
-  withErrorHandler:
-    (handler: (req: NextRequest) => Promise<Response>) =>
-    (req: NextRequest) =>
-      handler(req),
+  withErrorHandler: (handler: (req: NextRequest) => Promise<Response>) => (req: NextRequest) =>
+    handler(req),
 }));
 
 // ---------------------------------------------------------------------------
@@ -91,10 +89,7 @@ import { POST, OPTIONS } from '@/app/api/media/image/generate/route';
 // ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/image/generate';
 
-function makeRequest(
-  body: unknown,
-  headers: Record<string, string> = {},
-): NextRequest {
+function makeRequest(body: unknown, headers: Record<string, string> = {}): NextRequest {
   return new NextRequest(BASE_URL, {
     method: 'POST',
     headers: {
@@ -105,10 +100,7 @@ function makeRequest(
   });
 }
 
-function makeAuthedRequest(
-  body: unknown,
-  extraHeaders: Record<string, string> = {},
-): NextRequest {
+function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
   return makeRequest(body, {
     Authorization: 'Bearer valid-test-token',
     ...extraHeaders,
@@ -145,12 +137,12 @@ describe('POST /api/media/image/generate', () => {
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
 
     // Set required env vars
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
-    process.env.OPENAI_API_KEY = 'sk-test-openai-key';
+    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
+    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
+    process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     // Unset optional provider keys so getDefaultProvider() picks openai
-    delete process.env.GOOGLE_API_KEY;
-    delete process.env.STABILITY_API_KEY;
+    delete process.env['GOOGLE_API_KEY'];
+    delete process.env['STABILITY_API_KEY'];
   });
 
   afterEach(() => {
@@ -215,7 +207,7 @@ describe('POST /api/media/image/generate', () => {
       mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(401);
     });
@@ -229,7 +221,10 @@ describe('POST /api/media/image/generate', () => {
       const { requireCsrfToken } = await import('@/lib/csrf');
       vi.mocked(requireCsrfToken).mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ error: 'Invalid or missing CSRF token', code: 'CSRF_VALIDATION_FAILED' }),
+          JSON.stringify({
+            error: 'Invalid or missing CSRF token',
+            code: 'CSRF_VALIDATION_FAILED',
+          }),
           { status: 403, headers: { 'Content-Type': 'application/json' } },
         ),
       );
@@ -411,9 +406,7 @@ describe('POST /api/media/image/generate', () => {
 
     it('should return 400 when provider is unavailable', async () => {
       // Request google provider but GOOGLE_API_KEY is not set
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a cat', provider: 'google' }),
-      );
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'google' }));
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -426,9 +419,9 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Provider configuration', () => {
     it('should return 500 when no provider API keys are set', async () => {
-      delete process.env.OPENAI_API_KEY;
-      delete process.env.GOOGLE_API_KEY;
-      delete process.env.STABILITY_API_KEY;
+      delete process.env['OPENAI_API_KEY'];
+      delete process.env['GOOGLE_API_KEY'];
+      delete process.env['STABILITY_API_KEY'];
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
       const data = await response.json();
@@ -488,8 +481,8 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Success — Google Imagen provider', () => {
     beforeEach(() => {
-      process.env.GOOGLE_API_KEY = 'test-google-key';
-      delete process.env.OPENAI_API_KEY;
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+      delete process.env['OPENAI_API_KEY'];
     });
 
     it('should return 200 with base64 image from Google Imagen', async () => {
@@ -517,9 +510,9 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Success — Stability AI provider', () => {
     beforeEach(() => {
-      process.env.STABILITY_API_KEY = 'test-stability-key';
-      delete process.env.OPENAI_API_KEY;
-      delete process.env.GOOGLE_API_KEY;
+      process.env['STABILITY_API_KEY'] = 'test-stability-key';
+      delete process.env['OPENAI_API_KEY'];
+      delete process.env['GOOGLE_API_KEY'];
     });
 
     it('should return 200 with base64 image from Stability AI', async () => {
@@ -555,9 +548,7 @@ describe('POST /api/media/image/generate', () => {
         json: async () => ({ error: { message: 'Provider internal error' } }),
       });
 
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }),
-      );
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
       const data = await response.json();
 
       expect(response.status).toBe(422);
@@ -595,9 +586,7 @@ describe('POST /api/media/image/generate', () => {
         }),
       });
 
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }),
-      );
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
       const data = await response.json();
 
       expect(response.status).toBe(422);
@@ -607,9 +596,7 @@ describe('POST /api/media/image/generate', () => {
     it('should return 422 with timeout friendly message on timeout error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('TimeoutError: The operation was aborted'));
 
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }),
-      );
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
       const data = await response.json();
 
       expect(response.status).toBe(422);
@@ -622,8 +609,8 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Default provider selection', () => {
     it('should prefer Google when GOOGLE_API_KEY is set', async () => {
-      process.env.GOOGLE_API_KEY = 'test-google-key';
-      delete process.env.OPENAI_API_KEY;
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+      delete process.env['OPENAI_API_KEY'];
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -638,8 +625,8 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('should fall back to OpenAI when only OPENAI_API_KEY is set', async () => {
-      delete process.env.GOOGLE_API_KEY;
-      process.env.OPENAI_API_KEY = 'sk-test';
+      delete process.env['GOOGLE_API_KEY'];
+      process.env['OPENAI_API_KEY'] = 'sk-test';
 
       mockFetch.mockResolvedValueOnce({
         ok: true,

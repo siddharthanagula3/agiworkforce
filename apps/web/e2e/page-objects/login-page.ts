@@ -26,7 +26,7 @@ export class LoginPage extends BasePage {
   /**
    * Navigate to the login page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/login');
   }
 

@@ -87,7 +87,7 @@ describe('GoogleProvider', () => {
       }),
     );
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
     const declaration = body.tools[0].functionDeclarations[0];
 
     expect(declaration.parameters).toBeUndefined();
@@ -124,7 +124,7 @@ describe('GoogleProvider', () => {
       }),
     );
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
     const declaration = body.tools[0].functionDeclarations[0];
 
     expect(declaration.parameters).toEqual({

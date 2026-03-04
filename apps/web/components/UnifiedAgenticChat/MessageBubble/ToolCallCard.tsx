@@ -134,6 +134,8 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
 
     return {
       id: actionId || messageId, // Use actionId if avail, fallback to messageId
+      type: 'tool_use',
+      name: toolName || 'Unknown Tool',
       tool_id: actionId || 'unknown',
       tool_name: toolName || 'Unknown Tool',
       tool_description: toolCommand || '',

@@ -156,7 +156,7 @@ describe('API Key Service', () => {
       const keys = await ApiKeyService.listApiKeys(mockUserId);
 
       expect(keys).toHaveLength(2);
-      expect(keys[0].id).toBe('key-1');
+      expect(keys[0]!.id).toBe('key-1');
     });
 
     it('should throw on database error', async () => {

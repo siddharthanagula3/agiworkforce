@@ -15,14 +15,14 @@ describe('Price Tier Mapping', () => {
     vi.resetModules();
 
     // Set up test price IDs
-    process.env.STRIPE_PRICE_HOBBY_MONTHLY = 'price_hobby_monthly_123';
-    process.env.STRIPE_PRICE_HOBBY_YEARLY = 'price_hobby_yearly_123';
-    process.env.STRIPE_PRICE_PRO_MONTHLY = 'price_pro_monthly_456';
-    process.env.STRIPE_PRICE_PRO_YEARLY = 'price_pro_yearly_456';
-    process.env.STRIPE_PRICE_MAX_MONTHLY = 'price_max_monthly_789';
-    process.env.STRIPE_PRICE_MAX_YEARLY = 'price_max_yearly_789';
-    process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY = 'price_enterprise_monthly_000';
-    process.env.STRIPE_PRICE_ENTERPRISE_YEARLY = 'price_enterprise_yearly_000';
+    process.env['STRIPE_PRICE_HOBBY_MONTHLY'] = 'price_hobby_monthly_123';
+    process.env['STRIPE_PRICE_HOBBY_YEARLY'] = 'price_hobby_yearly_123';
+    process.env['STRIPE_PRICE_PRO_MONTHLY'] = 'price_pro_monthly_456';
+    process.env['STRIPE_PRICE_PRO_YEARLY'] = 'price_pro_yearly_456';
+    process.env['STRIPE_PRICE_MAX_MONTHLY'] = 'price_max_monthly_789';
+    process.env['STRIPE_PRICE_MAX_YEARLY'] = 'price_max_yearly_789';
+    process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'] = 'price_enterprise_monthly_000';
+    process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'] = 'price_enterprise_yearly_000';
   });
 
   afterEach(() => {
@@ -210,10 +210,10 @@ describe('Price Tier Mapping', () => {
 
       expect(status.totalMapped).toBeGreaterThan(0);
       expect(status.tiers).toBeDefined();
-      expect(status.tiers.hobby).toBeDefined();
-      expect(status.tiers.pro).toBeDefined();
-      expect(status.tiers.max).toBeDefined();
-      expect(status.tiers.enterprise).toBeDefined();
+      expect(status.tiers['hobby']).toBeDefined();
+      expect(status.tiers['pro']).toBeDefined();
+      expect(status.tiers['max']).toBeDefined();
+      expect(status.tiers['enterprise']).toBeDefined();
     });
 
     it('should group price IDs by tier', async () => {
@@ -221,14 +221,14 @@ describe('Price Tier Mapping', () => {
 
       const status = getMappingStatus();
 
-      expect(status.tiers.hobby.length).toBeGreaterThanOrEqual(2); // monthly + yearly
-      expect(status.tiers.pro.length).toBeGreaterThanOrEqual(2);
+      expect(status.tiers['hobby']!.length).toBeGreaterThanOrEqual(2); // monthly + yearly
+      expect(status.tiers['pro']!.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('PRICE_ID_OVERRIDES', () => {
     it('should support overrides via environment variable', async () => {
-      process.env.PRICE_ID_OVERRIDES = 'custom_price_1,hobby:custom_price_2,enterprise';
+      process.env['PRICE_ID_OVERRIDES'] = 'custom_price_1,hobby:custom_price_2,enterprise';
 
       vi.resetModules();
       const { getPlanTierFromPriceId } = await import('@/lib/price-tier-mapping');
@@ -238,7 +238,7 @@ describe('Price Tier Mapping', () => {
     });
 
     it('should handle malformed overrides gracefully', async () => {
-      process.env.PRICE_ID_OVERRIDES = 'invalid:format:here::';
+      process.env['PRICE_ID_OVERRIDES'] = 'invalid:format:here::';
 
       vi.resetModules();
       const { getPlanTierFromPriceId } = await import('@/lib/price-tier-mapping');
