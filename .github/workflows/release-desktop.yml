@@ -26,7 +26,7 @@ on:
         default: stable
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   RUST_VERSION: '1.90.0'
@@ -40,6 +40,8 @@ jobs:
   prepare-release:
     name: Prepare Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release_id: ${{ steps.create-release.outputs.release_id }}
       version: ${{ steps.get-version.outputs.version }}
@@ -177,8 +179,9 @@ jobs:
   # Validate - Lint, type check, and test before build
   # ==========================================================================
   validate:
+    needs: [prepare-release]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -196,7 +199,7 @@ jobs:
       - name: Lint
         run: pnpm lint
       - name: Type check
-        run: pnpm typecheck
+        run: pnpm typecheck:all
       - name: Test
         run: pnpm test
 
@@ -207,6 +210,8 @@ jobs:
     name: Build macOS
     needs: [prepare-release, validate]
     runs-on: macos-latest
+    permissions:
+      contents: write
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -323,6 +328,8 @@ jobs:
     name: Build Windows
     needs: [prepare-release, validate]
     runs-on: windows-latest
+    permissions:
+      contents: write
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -392,6 +399,8 @@ jobs:
     name: Build Linux
     needs: [prepare-release, validate]
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -498,6 +507,10 @@ jobs:
         with:
           path: artifacts
 
+      - name: Mask sensitive secrets
+        run: |
+          echo "::add-mask::${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+
       - name: Update release database
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -586,6 +599,8 @@ jobs:
     name: Publish Release
     needs: [prepare-release, build-macos, build-windows, build-linux, update-database]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Publish release
         uses: actions/github-script@v7
@@ -615,6 +630,8 @@ jobs:
     needs: [prepare-release, build-macos, build-windows, build-linux]
     if: failure()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Delete draft release
         uses: actions/github-script@v7

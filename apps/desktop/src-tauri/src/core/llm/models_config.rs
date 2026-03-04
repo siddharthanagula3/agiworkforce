@@ -181,7 +181,13 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .providers
         .get(provider.as_string())
         .and_then(|p| p.default_model.as_deref())
-        .unwrap_or("gpt-5-nano")
+        .unwrap_or_else(|| {
+            debug_assert!(
+                CONFIG.models.contains_key("gpt-5-nano"),
+                "Fallback model 'gpt-5-nano' not found in models.json"
+            );
+            "gpt-5-nano"
+        })
 }
 
 /// Model for a specific task type (snake_case task name).
@@ -280,4 +286,118 @@ pub fn model_supports_gemini_thinking(model_id: &str) -> bool {
 /// Return all model entries from the catalog.
 pub fn get_all_model_entries() -> &'static HashMap<String, ModelEntry> {
     &CONFIG.models
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::llm::Provider;
+
+    #[test]
+    fn config_singleton_loads_without_panic() {
+        let cfg = config();
+        assert!(!cfg.models.is_empty(), "models map must not be empty");
+        assert!(!cfg.providers.is_empty(), "providers map must not be empty");
+    }
+
+    #[test]
+    fn get_default_model_returns_non_empty_for_all_providers() {
+        for provider in [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::Google,
+            Provider::Ollama,
+            Provider::Perplexity,
+            Provider::XAI,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Moonshot,
+            Provider::Zhipu,
+            Provider::ManagedCloud,
+            Provider::Mistral,
+        ] {
+            let model = get_default_model(&provider);
+            assert!(!model.is_empty(), "{:?}.default_model must not be empty", provider);
+        }
+    }
+
+    #[test]
+    fn get_token_multiplier_returns_positive_for_all_providers() {
+        for provider in [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::Google,
+            Provider::Ollama,
+            Provider::Perplexity,
+            Provider::XAI,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Moonshot,
+            Provider::Zhipu,
+            Provider::ManagedCloud,
+            Provider::Mistral,
+        ] {
+            let mult = get_token_multiplier(&provider);
+            assert!(mult > 0.0, "{:?} token multiplier must be positive, got {}", provider, mult);
+        }
+    }
+
+    #[test]
+    fn get_canonicalized_id_returns_original_for_unknown_model() {
+        let unknown = "totally-unknown-model-xyz";
+        assert_eq!(get_canonicalized_id(unknown), unknown);
+    }
+
+    #[test]
+    fn get_provider_for_model_returns_some_for_known_prefix() {
+        // gpt- prefix maps to OpenAI
+        let provider = get_provider_for_model("gpt-5.2");
+        assert!(provider.is_some(), "gpt-5.2 should resolve to a provider");
+        assert_eq!(provider.unwrap(), Provider::OpenAI);
+    }
+
+    #[test]
+    fn get_provider_for_model_returns_none_for_unknown() {
+        let provider = get_provider_for_model("completely-unknown-xyz-model");
+        assert!(provider.is_none(), "unknown models should return None");
+    }
+
+    #[test]
+    fn model_uses_responses_api_for_gpt5_models() {
+        assert!(model_uses_responses_api("gpt-5.2"));
+        assert!(model_uses_responses_api("gpt-5-nano"));
+        assert!(!model_uses_responses_api("claude-opus-4-6"));
+        assert!(!model_uses_responses_api("gemini-2.5-pro"));
+    }
+
+    #[test]
+    fn model_supports_gemini_thinking_for_pro_models() {
+        assert!(model_supports_gemini_thinking("gemini-2.5-pro"));
+        assert!(!model_supports_gemini_thinking("gemini-2.0-flash"));
+        assert!(!model_supports_gemini_thinking("claude-opus-4-6"));
+    }
+
+    #[test]
+    fn get_all_model_entries_non_empty() {
+        let models = get_all_model_entries();
+        assert!(!models.is_empty(), "model entries must not be empty");
+        // Spot-check a well-known model exists
+        assert!(models.contains_key("claude-opus-4-6") || models.contains_key("claude-sonnet-4-6"),
+            "At least one claude model must be in the catalog");
+    }
+
+    #[test]
+    fn get_pricing_returns_non_zero_for_known_model() {
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4-6");
+        assert!(
+            pricing.input_per_million > 0.0 || pricing.output_per_million > 0.0,
+            "claude-opus-4-6 pricing must be non-zero"
+        );
+    }
+
+    #[test]
+    fn get_sse_delimiter_returns_valid_bytes() {
+        let delim = get_sse_delimiter(&Provider::Anthropic);
+        assert!(!delim.is_empty(), "SSE delimiter must not be empty");
+    }
 }

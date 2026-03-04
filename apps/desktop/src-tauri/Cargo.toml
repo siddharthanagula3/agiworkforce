@@ -19,7 +19,7 @@ unused_mut = "deny"
 dead_code = "deny"
 unused_attributes = "deny"
 unused_qualifications = "allow"  
-unused_results = "allow"  
+unused_results = "warn"
 
 [dependencies]
 
