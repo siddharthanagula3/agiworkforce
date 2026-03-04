@@ -23,6 +23,8 @@ export class SecurityManager {
   // ========================================
 
   private encryptionKey: CryptoKey | null = null;
+  private static _syncEncryptWarnShown = false;
+  private static _syncDecryptWarnShown = false;
   private static readonly ENCRYPTION_SALT = 'agiagent-security-salt-v1';
   private static readonly KEY_ITERATIONS = 100000;
 
@@ -101,14 +103,14 @@ export class SecurityManager {
     // Create a 32-byte key by repeating/truncating the source
     const key = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
-      key[i] = keyBytes[i % keyBytes.length];
+      key[i] = keyBytes[i % keyBytes.length]!;
     }
 
     // Mix the key with a simple hash-like transformation
     for (let round = 0; round < 4; round++) {
       for (let i = 0; i < 32; i++) {
-        key[i] = (key[i] ^ key[(i + 7) % 32] ^ key[(i + 13) % 32]) & 0xff;
-        key[i] = ((key[i] << 3) | (key[i] >> 5)) & 0xff;
+        key[i] = (key[i]! ^ key[(i + 7) % 32]! ^ key[(i + 13) % 32]!) & 0xff;
+        key[i] = ((key[i]! << 3) | (key[i]! >> 5)) & 0xff;
       }
     }
 
@@ -116,9 +118,10 @@ export class SecurityManager {
   }
 
   /**
+   * @deprecated UNSAFE: Uses reversible XOR stream cipher with a deterministic key.
+   * Do NOT use for new code. Use `encryptAsync()` with AES-GCM instead.
+   *
    * Synchronously encrypt a plaintext string.
-   * Uses a stream cipher approach for synchronous encryption.
-   * For stronger encryption, use encryptAsync() with AES-GCM.
    *
    * @param plaintext - The string to encrypt
    * @returns Base64-encoded encrypted data
@@ -126,6 +129,13 @@ export class SecurityManager {
   encrypt(plaintext: string): string {
     if (!plaintext) {
       return '';
+    }
+
+    if (!SecurityManager._syncEncryptWarnShown) {
+      SecurityManager._syncEncryptWarnShown = true;
+      console.warn(
+        '[SecurityManager] encrypt() uses an insecure XOR cipher. Migrate to encryptAsync() for AES-GCM.',
+      );
     }
 
     try {
@@ -137,11 +147,10 @@ export class SecurityManager {
       const nonce = new Uint8Array(16);
       if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
         window.crypto.getRandomValues(nonce);
+      } else if (typeof globalThis !== 'undefined' && 'crypto' in globalThis) {
+        (globalThis as any).crypto.getRandomValues(nonce);
       } else {
-        // Fallback for non-browser environments
-        for (let i = 0; i < 16; i++) {
-          nonce[i] = Math.floor(Math.random() * 256);
-        }
+        throw new Error('No cryptographically secure random number generator available');
       }
 
       // Encrypt using XOR with key stream derived from key + nonce
@@ -149,8 +158,8 @@ export class SecurityManager {
       for (let i = 0; i < data.length; i++) {
         // Generate key stream byte from key, nonce, and position
         const keyByte =
-          key[i % 32] ^ nonce[i % 16] ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]) % 32];
-        encrypted[i] = data[i] ^ keyByte;
+          key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
+        encrypted[i] = data[i]! ^ keyByte;
       }
 
       // Combine nonce + encrypted data
@@ -167,9 +176,11 @@ export class SecurityManager {
   }
 
   /**
+   * @deprecated UNSAFE: Uses reversible XOR stream cipher with a deterministic key.
+   * Do NOT use for new code. Use `decryptAsync()` with AES-GCM instead.
+   *
    * Synchronously decrypt an encrypted string.
    * Expects data encrypted with the encrypt() method.
-   * For stronger encryption, use decryptAsync() with AES-GCM.
    *
    * @param encryptedData - Base64-encoded encrypted data
    * @returns Decrypted plaintext string
@@ -177,6 +188,13 @@ export class SecurityManager {
   decrypt(encryptedData: string): string {
     if (!encryptedData) {
       return '';
+    }
+
+    if (!SecurityManager._syncDecryptWarnShown) {
+      SecurityManager._syncDecryptWarnShown = true;
+      console.warn(
+        '[SecurityManager] decrypt() uses an insecure XOR cipher. Migrate to decryptAsync() for AES-GCM.',
+      );
     }
 
     try {
@@ -194,8 +212,8 @@ export class SecurityManager {
       for (let i = 0; i < encrypted.length; i++) {
         // Generate the same key stream byte
         const keyByte =
-          key[i % 32] ^ nonce[i % 16] ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]) % 32];
-        decrypted[i] = encrypted[i] ^ keyByte;
+          key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
+        decrypted[i] = encrypted[i]! ^ keyByte;
       }
 
       // Decode the result
@@ -520,14 +538,17 @@ export class SecurityManager {
 
   // Generate secure random string
   static generateSecureId(length: number = 32): string {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
       const array = new Uint8Array(length);
       window.crypto.getRandomValues(array);
       return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    } else if (typeof globalThis !== 'undefined' && 'crypto' in globalThis) {
+      const array = new Uint8Array(length);
+      (globalThis as any).crypto.getRandomValues(array);
+      return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
 
-    // Fallback for older browsers
-    return Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    throw new Error('No cryptographically secure random number generator available');
   }
 
   // Hash sensitive data (client-side hashing for non-security-critical use)
@@ -625,11 +646,19 @@ export class SecurityManager {
       // Get existing requests for this key
       const keyRequests = requests.get(key) || [];
 
-      // Filter out requests outside the time window
+      // Filter out requests outside the time window; always update the stored
+      // list to prevent unbounded accumulation of expired timestamps.
       const validRequests = keyRequests.filter((time) => time > windowStart);
 
       // Check if limit exceeded
       if (validRequests.length >= maxRequests) {
+        // Persist the filtered list (removes expired timestamps) to prevent
+        // unbounded memory growth; delete the key entirely if no valid requests.
+        if (validRequests.length > 0) {
+          requests.set(key, validRequests);
+        } else {
+          requests.delete(key);
+        }
         return false;
       }
 
@@ -649,7 +678,9 @@ export class SecurityManager {
 export class CSPManager {
   private static policies: Record<string, string[]> = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'"],
+    // WARNING: 'unsafe-inline' in script-src weakens XSS protection.
+    // TODO: Replace with nonce-based CSP when all inline scripts are identified.
+    'script-src': ["'self'", "'unsafe-inline'"], // FIXME: Remove unsafe-inline
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'https:'],
     'font-src': ["'self'", 'https:'],
@@ -705,35 +736,39 @@ export class CSPManager {
 
 export class SecureStorage {
   private static readonly ENCRYPTION_KEY_NAME = 'agi_secure_key';
+  /** In-memory cache for the non-extractable CryptoKey handle. */
+  private static cachedKey: CryptoKey | null = null;
 
-  // Generate or retrieve encryption key
+  // Generate or retrieve encryption key.
+  // The CryptoKey is non-extractable and held in memory only.
+  // localStorage stores a key-ID sentinel so we know a key was generated,
+  // but never the raw key bytes.
   private static async getEncryptionKey(): Promise<CryptoKey | null> {
     if (typeof window === 'undefined' || !window.crypto?.subtle) {
       return null;
     }
 
+    // Return in-memory cached key if available
+    if (this.cachedKey) {
+      return this.cachedKey;
+    }
+
     try {
-      // Try to import existing key
-      const keyData = localStorage.getItem(this.ENCRYPTION_KEY_NAME);
-      if (keyData) {
-        const keyBuffer = Uint8Array.from(atob(keyData), (c) => c.charCodeAt(0));
-        return await window.crypto.subtle.importKey('raw', keyBuffer, { name: 'AES-GCM' }, true, [
-          'encrypt',
-          'decrypt',
-        ]);
-      }
+      // Check if we previously had a key (sentinel in localStorage).
+      // Because the key is non-extractable we cannot restore it from storage;
+      // we must generate a fresh one each session.
+      // Generate new non-extractable key
+      const key = await window.crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        false, // non-extractable — raw bytes never leave WebCrypto
+        ['encrypt', 'decrypt'],
+      );
 
-      // Generate new key
-      const key = await window.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
-        'encrypt',
-        'decrypt',
-      ]);
+      // Store a sentinel so other code can check if encryption is initialised.
+      // No raw key material is persisted.
+      localStorage.setItem(this.ENCRYPTION_KEY_NAME, 'key-handle-active');
 
-      // Export and store key
-      const keyBuffer = await window.crypto.subtle.exportKey('raw', key);
-      const keyString = btoa(String.fromCharCode(...new Uint8Array(keyBuffer)));
-      localStorage.setItem(this.ENCRYPTION_KEY_NAME, keyString);
-
+      this.cachedKey = key;
       return key;
     } catch (error) {
       console.error('Encryption key generation failed:', error);
@@ -746,9 +781,10 @@ export class SecureStorage {
     try {
       const encryptionKey = await this.getEncryptionKey();
       if (!encryptionKey) {
-        // Fallback to regular localStorage
-        localStorage.setItem(key, JSON.stringify(value));
-        return true;
+        console.warn(
+          '[SecureStorage] Encryption unavailable — refusing to store data in plaintext',
+        );
+        return false;
       }
 
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
