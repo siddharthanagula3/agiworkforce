@@ -78,25 +78,6 @@ declare module '@radix-ui/react-navigation-menu' {
   >;
 }
 
-declare module '@radix-ui/react-radio-group' {
-  import * as React from 'react';
-  type BaseProps = React.HTMLAttributes<HTMLDivElement> & { className?: string; asChild?: boolean };
-  export const Root: React.ForwardRefExoticComponent<
-    BaseProps & {
-      value?: string;
-      onValueChange?: (v: string) => void;
-      defaultValue?: string;
-      disabled?: boolean;
-    } & React.RefAttributes<HTMLDivElement>
-  >;
-  export const Item: React.ForwardRefExoticComponent<
-    BaseProps & { value: string; disabled?: boolean } & React.RefAttributes<HTMLButtonElement>
-  >;
-  export const Indicator: React.ForwardRefExoticComponent<
-    BaseProps & React.RefAttributes<HTMLSpanElement>
-  >;
-}
-
 declare module '@radix-ui/react-toggle' {
   import * as React from 'react';
   type BaseProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
