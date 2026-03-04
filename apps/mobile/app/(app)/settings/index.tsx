@@ -15,7 +15,7 @@ function SettingRow({
   value,
   onPress,
 }: {
-  icon: React.ComponentType<{ size: number; color: string }>;
+  icon: React.ComponentType<{ size?: number | string | null; color?: string }>;
   label: string;
   value?: string;
   onPress?: () => void;
