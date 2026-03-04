@@ -15,6 +15,8 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
+import { useAgentStore } from './agentStore';
+import { useChatStore } from './chatStore';
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
 
@@ -858,3 +860,190 @@ export const selectRunningToolStreams = (state: ToolState) =>
 
 // Re-export ContextItem type
 export type { ContextItem };
+
+/**
+ * Payload for `tool:event` Tauri events emitted by the agentic loop.
+ * Mirrors the Rust `ToolEvent` enum serialized with `serde(tag = "type", rename_all = "snake_case")`.
+ */
+export interface ToolEventPayload {
+  type: 'started' | 'progress' | 'completed';
+  id: string;
+  conversation_id: number;
+  message_id: string;
+  tool_name?: string;
+  display_name?: string;
+  display_args?: string;
+  iteration?: number;
+  stdout_chunk?: string;
+  progress_pct?: number;
+  success?: boolean;
+  duration_ms?: number;
+  result_preview?: string;
+  error?: string;
+}
+
+/** Payload for `agentic:loop-started` event */
+interface AgenticLoopStartedPayload {
+  conversation_id: number;
+  max_iterations: number;
+}
+
+/** Payload for `agentic:loop-status` event */
+interface AgenticLoopStatusPayload {
+  conversation_id: number;
+  iteration: number;
+  max_iterations: number;
+}
+
+/** Payload for `agentic:loop-ended` event */
+interface AgenticLoopEndedPayload {
+  conversation_id: number;
+  iterations_used: number;
+}
+
+let toolEventListenerInitialized = false;
+
+/**
+ * Initializes the Tauri event listeners for tool events and agentic loop lifecycle.
+ * - `tool:event` — updates toolStore streams, chatStore timeline, and agentStore action trail
+ * - `agentic:loop-started` — sets agenticLoopStatus to active
+ * - `agentic:loop-status` — updates current iteration count
+ * - `agentic:loop-ended` — clears agenticLoopStatus
+ *
+ * Guards against double-initialization. Safe to call multiple times.
+ */
+export async function initializeToolEventListener(): Promise<void> {
+  if (toolEventListenerInitialized || !isTauri) {
+    return;
+  }
+
+  toolEventListenerInitialized = true;
+
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+
+    // --- tool:event ---
+    await listen<ToolEventPayload>('tool:event', (event) => {
+      const payload = event.payload;
+      const toolId = payload.id;
+      const messageId = payload.message_id;
+      const displayName = payload.display_name ?? payload.tool_name ?? 'Tool';
+      const displayArgs = payload.display_args ?? '';
+
+      if (payload.type === 'started') {
+        // Update tool stream in toolStore
+        useToolStore.getState().updateToolStream(toolId, {
+          tool_id: toolId,
+          tool_name: payload.tool_name ?? displayName,
+          status: 'running',
+          progress: 0,
+          startedAt: new Date(),
+        });
+
+        // Add entry to chat timeline
+        useChatStore.getState().addToolTimelineEntry(messageId, {
+          id: toolId,
+          displayName,
+          displayArgs,
+          status: 'running',
+        });
+
+        // Push to agent action trail
+        useAgentStore.getState().addActionTrailEntry({
+          type: 'running',
+          message: displayArgs ? `${displayName}: ${displayArgs}` : displayName,
+          metadata: {
+            messageId,
+            toolEventId: toolId,
+            toolName: payload.tool_name,
+            iteration: payload.iteration,
+          },
+        });
+      } else if (payload.type === 'progress') {
+        // Update tool stream with stdout chunk and progress
+        useToolStore.getState().updateToolStream(toolId, {
+          ...(payload.stdout_chunk !== undefined
+            ? { outputChunks: [payload.stdout_chunk], outputBuffer: payload.stdout_chunk }
+            : {}),
+          ...(payload.progress_pct !== undefined ? { progress: payload.progress_pct } : {}),
+        });
+      } else if (payload.type === 'completed') {
+        const status = payload.success === false ? 'error' : 'completed';
+
+        // Update tool stream
+        useToolStore.getState().updateToolStream(toolId, {
+          status,
+          completedAt: new Date(),
+          duration_ms: payload.duration_ms,
+          ...(payload.result_preview !== undefined ? { result: payload.result_preview } : {}),
+          ...(payload.error !== undefined ? { error: payload.error } : {}),
+        });
+
+        // Schedule removal of the tool stream after 5 seconds
+        setTimeout(() => {
+          useToolStore.getState().removeToolStream(toolId);
+        }, 5000);
+
+        // Update chat timeline entry
+        useChatStore.getState().updateToolTimelineEntry(messageId, toolId, {
+          status,
+          durationMs: payload.duration_ms,
+          ...(payload.error !== undefined ? { error: payload.error } : {}),
+        });
+
+        // Push completion to agent action trail
+        useAgentStore.getState().addActionTrailEntry({
+          type: status === 'error' ? 'error' : 'completed',
+          message:
+            status === 'error'
+              ? `${displayName} failed${payload.error ? `: ${payload.error}` : ''}`
+              : `${displayName} completed${payload.duration_ms !== undefined ? ` (${payload.duration_ms}ms)` : ''}`,
+          fadeAfter: 3000,
+          metadata: {
+            messageId,
+            toolEventId: toolId,
+            duration_ms: payload.duration_ms,
+          },
+        });
+      }
+    });
+
+    // --- agentic:loop-started ---
+    await listen<AgenticLoopStartedPayload>('agentic:loop-started', (event) => {
+      const { conversation_id, max_iterations } = event.payload;
+      useChatStore.getState().setAgenticLoopStatus({
+        active: true,
+        conversationId: conversation_id,
+        iteration: 0,
+        maxIterations: max_iterations,
+      });
+    });
+
+    // --- agentic:loop-status ---
+    await listen<AgenticLoopStatusPayload>('agentic:loop-status', (event) => {
+      const { conversation_id, iteration, max_iterations } = event.payload;
+      useChatStore.getState().setAgenticLoopStatus({
+        active: true,
+        conversationId: conversation_id,
+        iteration,
+        maxIterations: max_iterations,
+      });
+    });
+
+    // --- agentic:loop-ended ---
+    await listen<AgenticLoopEndedPayload>('agentic:loop-ended', (_event) => {
+      useChatStore.getState().setAgenticLoopStatus(null);
+    });
+
+    // --- agentic:message-consumed ---
+    await listen<{ pending_message: { id: string } }>('agentic:message-consumed', (event) => {
+      const pendingId = event.payload?.pending_message?.id;
+      if (pendingId) {
+        useChatStore.getState().removePendingMessage(pendingId);
+      }
+    });
+  } catch (error) {
+    toolEventListenerInitialized = false;
+    console.error('[ToolStore] Failed to initialize tool event listener:', error);
+  }
+}

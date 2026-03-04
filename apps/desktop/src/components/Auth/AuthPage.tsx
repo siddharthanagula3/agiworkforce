@@ -322,19 +322,10 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             transition={{ delay: 0.8 }}
             className="mt-12 pt-8 border-t border-white/20"
           >
-            <p className="text-sm text-white/60 mb-3">Trusted by thousands of professionals</p>
-            <div className="flex items-center gap-4">
-              {}
-              <div className="flex -space-x-2">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/30"
-                  />
-                ))}
-              </div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <span className="text-sm text-white/80">
-                Join 10,000+ users automating their work
+                Currently in beta — free to use during early access
               </span>
             </div>
           </motion.div>
