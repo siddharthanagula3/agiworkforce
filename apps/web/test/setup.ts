@@ -10,6 +10,21 @@ afterEach(() => {
   cleanup();
 });
 
+// Polyfill pointer capture APIs not implemented in jsdom.
+// Required by Radix UI components (Toast, Dialog, etc.) that call
+// target.hasPointerCapture() / setPointerCapture() on pointer events.
+if (typeof HTMLElement !== 'undefined') {
+  if (!HTMLElement.prototype.hasPointerCapture) {
+    HTMLElement.prototype.hasPointerCapture = () => false;
+  }
+  if (!HTMLElement.prototype.setPointerCapture) {
+    HTMLElement.prototype.setPointerCapture = () => {};
+  }
+  if (!HTMLElement.prototype.releasePointerCapture) {
+    HTMLElement.prototype.releasePointerCapture = () => {};
+  }
+}
+
 // Mock environment variables
 process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
 process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
