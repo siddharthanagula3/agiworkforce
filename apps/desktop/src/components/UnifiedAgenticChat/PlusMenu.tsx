@@ -14,6 +14,7 @@ interface PlusMenuProps {
   conversationId?: number;
   webSearchEnabled: boolean;
   onToggleWebSearch: () => void;
+  visionSupported?: boolean;
 }
 
 export function PlusMenu({
@@ -23,6 +24,7 @@ export function PlusMenu({
   conversationId,
   webSearchEnabled,
   onToggleWebSearch,
+  visionSupported = true,
 }: PlusMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -83,25 +85,32 @@ export function PlusMenu({
             onAttachClick();
             setIsOpen(false);
           }}
+          title={!visionSupported ? 'Images will not be processed by the current model' : undefined}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
         >
-          <Paperclip className="h-4 w-4 shrink-0" />
-          <span>Add files or photos</span>
+          <Paperclip className={cn('h-4 w-4 shrink-0', !visionSupported && 'text-white/40')} />
+          <span>{visionSupported ? 'Add files or photos' : 'Add files'}</span>
+          {!visionSupported && <span className="ml-auto text-xs text-amber-400/80">No vision</span>}
         </button>
 
         {/* Paste screenshot */}
-        <ScreenCaptureButton
-          conversationId={conversationId}
-          onCaptureComplete={(result) => {
-            onScreenCapture?.(result);
-            setIsOpen(false);
-          }}
-          variant="ghost"
-          size="default"
-          mode="quick"
-          suppressToasts
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors justify-start h-auto font-normal"
-        />
+        <div title={!visionSupported ? "Selected model doesn't support images" : undefined}>
+          <ScreenCaptureButton
+            conversationId={conversationId}
+            onCaptureComplete={(result) => {
+              onScreenCapture?.(result);
+              setIsOpen(false);
+            }}
+            variant="ghost"
+            size="default"
+            mode="quick"
+            suppressToasts
+            className={cn(
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors justify-start h-auto font-normal',
+              !visionSupported && 'opacity-40 pointer-events-none',
+            )}
+          />
+        </div>
 
         {/* Select folder */}
         <button

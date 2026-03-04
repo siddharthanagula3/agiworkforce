@@ -1269,6 +1269,8 @@ pub fn run() {
             crate::sys::commands::llm_check_provider_status,
             crate::sys::commands::llm_get_usage_stats,
             crate::sys::commands::router_suggestions,
+            crate::sys::commands::get_model_capabilities,
+            crate::sys::commands::clear_model_capability_cache,
 
 
             crate::sys::commands::cache_get_stats,
