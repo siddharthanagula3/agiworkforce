@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Alert } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -119,7 +119,7 @@ export function PlatformSetupSheet({ sheetRef, platform, onConnect }: PlatformSe
 
   return (
     <BottomSheet
-      ref={sheetRef}
+      ref={sheetRef as React.RefObject<BottomSheet>}
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
