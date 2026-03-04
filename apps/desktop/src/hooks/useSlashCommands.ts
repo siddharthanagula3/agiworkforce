@@ -5,18 +5,10 @@
  * for the chat input system.
  */
 
+import type { SlashCommandName } from '../stores/chat/types';
+
 export interface ParsedSlashCommand {
-  command:
-    | 'browser'
-    | 'terminal'
-    | 'code'
-    | 'database'
-    | 'undo'
-    | 'compact'
-    | 'pdf'
-    | 'word'
-    | 'excel'
-    | 'imagine';
+  command: SlashCommandName;
   args: string;
   rawInput: string;
 }
@@ -32,14 +24,31 @@ const VALID_COMMANDS = [
   'word',
   'excel',
   'imagine',
+  'swarm',
+  'vision',
+  'skills',
+  'memory',
+  'recall',
+  'agents',
+  'git',
+  'schedule',
+  'voice',
+  'think',
+  'docs',
+  'record',
+  'metrics',
+  'marketplace',
+  'desktop',
+  'ocr',
+  'notify',
+  'lsp',
+  'enhance',
+  'migrate',
+  'message',
+  'settings',
 ] as const;
 
 export function useSlashCommands() {
-  /**
-   * Parse a string input to detect and extract slash command
-   * @param input - The raw user input string
-   * @returns ParsedSlashCommand object if valid slash command, null otherwise
-   */
   const parseSlashCommand = (input: string): ParsedSlashCommand | null => {
     if (!input.startsWith('/')) {
       return null;
@@ -65,11 +74,6 @@ export function useSlashCommands() {
     };
   };
 
-  /**
-   * Check if input string is a valid slash command prefix
-   * @param input - The raw user input string
-   * @returns true if input starts with / and contains valid command prefix
-   */
   const isSlashCommandInput = (input: string): boolean => {
     if (!input.startsWith('/')) {
       return false;
@@ -82,11 +86,9 @@ export function useSlashCommands() {
 
     const [, command] = match;
     if (!command) {
-      // Just "/" without any command yet
       return true;
     }
 
-    // Check if this could be a valid command prefix
     return VALID_COMMANDS.some((cmd) => cmd.startsWith(command.toLowerCase()));
   };
 

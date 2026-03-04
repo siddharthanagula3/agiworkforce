@@ -75,6 +75,29 @@ import {
   executeDatabaseCommand,
   executeUndoCommand,
   executeImagineCommand,
+  executeSwarmCommand,
+  executeVisionCommand,
+  executeSkillsCommand,
+  executeMemoryCommand,
+  executeRecallCommand,
+  executeAgentsCommand,
+  executeGitCommand,
+  executeScheduleCommand,
+  executeVoiceCommand,
+  executeThinkCommand,
+  executeDocsCommand,
+  executeRecordCommand,
+  executeMetricsCommand,
+  executeMarketplaceCommand,
+  executeDesktopCommand,
+  executeOCRCommand,
+  executeNotifyCommand,
+  executeLSPCommand,
+  executeEnhanceCommand,
+  executeMigrateCommand,
+  executeMessageCommand,
+  executeSettingsCommand,
+  executeCompactCommand,
 } from '../../handlers/slashCommandHandlers';
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
@@ -2211,6 +2234,87 @@ export const UnifiedAgenticChat: React.FC<{
           case 'imagine':
             panel = await executeImagineCommand(slashCommand.args);
             break;
+          case 'swarm':
+            panel = await executeSwarmCommand(slashCommand.args);
+            break;
+          case 'vision':
+            panel = await executeVisionCommand(slashCommand.args);
+            break;
+          case 'skills':
+            panel = await executeSkillsCommand(slashCommand.args);
+            break;
+          case 'memory':
+            panel = await executeMemoryCommand(slashCommand.args);
+            break;
+          case 'recall':
+            panel = await executeRecallCommand(slashCommand.args);
+            break;
+          case 'agents':
+            panel = await executeAgentsCommand(slashCommand.args);
+            break;
+          case 'git':
+            panel = await executeGitCommand(slashCommand.args);
+            break;
+          case 'schedule':
+            panel = await executeScheduleCommand(slashCommand.args);
+            break;
+          case 'voice':
+            panel = await executeVoiceCommand(slashCommand.args);
+            break;
+          case 'think':
+            panel = await executeThinkCommand(slashCommand.args);
+            break;
+          case 'pdf':
+          case 'word':
+          case 'excel':
+          case 'docs':
+            panel = await executeDocsCommand(
+              slashCommand.command === 'docs'
+                ? slashCommand.args
+                : `${slashCommand.command} ${slashCommand.args}`,
+            );
+            break;
+          case 'record':
+            panel = await executeRecordCommand(slashCommand.args);
+            break;
+          case 'metrics':
+            panel = await executeMetricsCommand();
+            break;
+          case 'marketplace':
+            panel = await executeMarketplaceCommand(slashCommand.args);
+            break;
+          case 'desktop':
+            panel = await executeDesktopCommand();
+            useUnifiedChatStore.getState().openSidecar('computer-use');
+            break;
+          case 'ocr':
+            panel = await executeOCRCommand(slashCommand.args);
+            break;
+          case 'notify':
+            panel = await executeNotifyCommand(slashCommand.args);
+            break;
+          case 'lsp':
+            panel = await executeLSPCommand(slashCommand.args);
+            break;
+          case 'enhance':
+            panel = await executeEnhanceCommand(slashCommand.args);
+            break;
+          case 'migrate':
+            panel = await executeMigrateCommand();
+            break;
+          case 'message':
+            panel = await executeMessageCommand(slashCommand.args);
+            break;
+          case 'settings':
+            panel = await executeSettingsCommand(slashCommand.args);
+            break;
+          case 'compact': {
+            const activeConvId = useUnifiedChatStore.getState().activeConversationId;
+            const compactDbId = activeConvId ? (uuidToDbId(activeConvId) ?? null) : null;
+            const compactUserId = supabaseAuth.getUser()?.id ?? null;
+            panel = await executeCompactCommand(slashCommand.args, compactDbId, compactUserId);
+            break;
+          }
           default:
             throw new Error(`Unknown command: ${slashCommand.command}`);
         }
