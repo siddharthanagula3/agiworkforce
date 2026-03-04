@@ -12,7 +12,7 @@
 import { listen, isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
 import React, { useEffect, useRef, useCallback } from 'react';
-import { EyeOff } from 'lucide-react';
+import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -26,6 +26,12 @@ import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
+import {
+  useChatStore,
+  selectAgenticLoopStatus,
+  selectPendingMessages,
+} from '../../stores/chat/chatStore';
+import type { PendingUserMessage } from '../../stores/chat/types';
 import { useBillingStore } from '../../stores/auth';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useMemoryStore, buildMemoryContext } from '../../stores/memoryStore';
@@ -64,6 +70,65 @@ import {
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
 const AGENT_THINKING_ACTION_SOURCE = 'agent:thinking';
+
+/**
+ * Status bar shown above the chat input when the agentic loop is running.
+ * Communicates current iteration progress and hints that the user can queue a follow-up.
+ */
+const AgenticLoopStatusBar: React.FC = () => {
+  const agenticLoopStatus = useChatStore(selectAgenticLoopStatus);
+
+  if (!agenticLoopStatus?.active) {
+    return null;
+  }
+
+  const { iteration, maxIterations } = agenticLoopStatus;
+  const stepLabel = maxIterations > 0 ? `step ${iteration}/${maxIterations}` : `step ${iteration}`;
+
+  return (
+    <div
+      className="flex items-center gap-2 px-4 py-2 bg-violet-950/40 border-t border-violet-500/20 text-xs text-violet-300"
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-3.5 w-3.5 text-violet-500 animate-spin shrink-0" aria-hidden="true" />
+      <span>
+        Agent working ({stepLabel}){' '}
+        <span className="text-violet-400/70">— type to queue a follow-up</span>
+      </span>
+    </div>
+  );
+};
+
+/**
+ * Renders queued/pending messages as dimmed bubbles above the input.
+ * These messages are waiting to be consumed after the current agentic loop finishes.
+ */
+const PendingMessagesBubbles: React.FC = () => {
+  const pendingMessages = useChatStore(selectPendingMessages);
+
+  if (!pendingMessages || pendingMessages.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 px-4 py-2 border-t border-white/5"
+      aria-label="Queued messages"
+    >
+      {pendingMessages.map((msg: PendingUserMessage) => (
+        <div
+          key={msg.id}
+          className="self-end max-w-[80%] px-3 py-2 rounded-2xl rounded-br-md bg-violet-900/20 border border-violet-500/15 text-xs text-violet-300/50 italic truncate"
+          title={msg.content}
+          aria-label={`Queued message: ${msg.content}`}
+        >
+          {msg.content}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const normalizeToolNameForUi = (toolName: string): string => {
   if (toolName.startsWith('__server__')) {
@@ -2149,6 +2214,34 @@ export const UnifiedAgenticChat: React.FC<{
       return;
     }
 
+    // When the agentic loop is active, queue the message as a pending follow-up
+    // instead of interrupting the ongoing loop with a new chat_send_message call.
+    const agenticStatus = useChatStore.getState().agenticLoopStatus;
+    if (agenticStatus?.active) {
+      const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+      const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
+      try {
+        const pendingMsg = await ipcInvoke<PendingUserMessage>('chat_add_pending_message', {
+          request: {
+            content,
+            conversation_id: conversationDbId,
+          },
+        });
+        useChatStore.getState().addPendingMessage(pendingMsg);
+        console.log('[UnifiedAgenticChat] Message queued for agentic loop:', pendingMsg.id);
+      } catch (error) {
+        console.error('[UnifiedAgenticChat] Failed to queue message:', error);
+        const errorMessage = getSimpleErrorMessage(error);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to queue message',
+          description: errorMessage,
+          duration: 4000,
+        });
+      }
+      return;
+    }
+
     const editingMessageId = useUnifiedChatStore.getState().editingMessageId;
     if (editingMessageId) {
       const currentMessages = useUnifiedChatStore.getState().messages;
@@ -2733,6 +2826,10 @@ export const UnifiedAgenticChat: React.FC<{
                   }}
                 />
               </SectionErrorBoundary>
+              {/* Pending queued messages — dimmed bubbles shown when agentic loop is active */}
+              <PendingMessagesBubbles />
+              {/* Status bar: shown while agentic loop is running, hidden otherwise */}
+              <AgenticLoopStatusBar />
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
           ) : activeView === 'projects' ? (
