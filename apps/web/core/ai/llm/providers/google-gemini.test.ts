@@ -65,8 +65,8 @@ describe('GoogleProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('gemini-2.0-flash');
-      expect(config.maxTokens).toBe(4000);
+      expect(config.model).toBe('gemini-2.5-pro');
+      expect(config.maxTokens).toBe(4096);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
     });
@@ -99,7 +99,7 @@ describe('GoogleProvider', () => {
 
       expect(config.model).toBe('gemini-3-pro-preview');
       expect(config.temperature).toBe(0.9);
-      expect(config.maxTokens).toBe(4000); // Unchanged
+      expect(config.maxTokens).toBe(4096); // Unchanged
     });
 
     it('should return configuration copy to prevent mutation', () => {
@@ -172,7 +172,7 @@ describe('GoogleProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('gemini-2.0-flash');
+      expect(response.model).toBe('gemini-2.5-pro');
     });
 
     it('should handle response with candidates format', async () => {
@@ -372,8 +372,8 @@ describe('GoogleProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('gemini-2.0-flash');
-      expect(requestBody.max_tokens).toBe(4000);
+      expect(requestBody.model).toBe('gemini-2.5-pro');
+      expect(requestBody.max_tokens).toBe(4096);
       expect(requestBody.temperature).toBe(0.7);
     });
   });

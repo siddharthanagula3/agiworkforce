@@ -62,7 +62,7 @@ describe('Chat Completion Handler', () => {
         messages: [{ role: 'user', content: 'Hello, how are you?' }],
         model: 'gpt-4o',
         temperature: undefined,
-        max_tokens: undefined,
+        maxTokens: undefined,
         stream: false,
       });
     });
@@ -134,7 +134,7 @@ describe('Chat Completion Handler', () => {
         messages: expect.any(Array),
         model: 'gpt-4o',
         temperature: 0.5,
-        max_tokens: 1000,
+        maxTokens: 1000,
         stream: true,
       });
     });
