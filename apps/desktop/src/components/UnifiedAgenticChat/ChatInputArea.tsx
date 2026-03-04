@@ -51,6 +51,7 @@ import { ModelSelectorButton } from './ModelSelectorButton';
 import { PlusMenu } from './PlusMenu';
 import { SendButton } from './SendButton';
 import { SkillMentionPicker, MentionSkill } from './SkillMentionPicker';
+import { FileMentionPicker, MentionFile } from './FileMentionPicker';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceRecordingStatus } from './VoiceRecordingStatus';
@@ -135,6 +136,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // @mention skill picker state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
+  // @file: mention picker state
+  const [fileMentionQuery, setFileMentionQuery] = useState<string | null>(null);
+
   // Voice transcription state
   // AUDIT-VOICE-043 fix: Renamed to preferWhisperCloud for clarity (true = Whisper Cloud, false = Web Speech)
   const [preferWhisperCloud, setPreferWhisperCloud] = useState(false);
@@ -162,6 +166,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Store selectors
   const activeContext = useUnifiedChatStore((state) => state.activeContext ?? []);
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
+  const addContextItem = useUnifiedChatStore((state) => state.addContextItem);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const messages = useUnifiedChatStore((state) => state.messages);
@@ -681,12 +686,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       promptCompletion.clear();
     }
 
-    // Detect @mention
-    const mentionMatch = value.match(/@([\w-]*)$/);
-    if (mentionMatch && !isSlashInput) {
-      setMentionQuery(mentionMatch[1] ?? null);
-    } else {
+    // Detect @mention — differentiate @file: from skill mentions
+    const fileMentionMatch = value.match(/@file:([\w./\\-]*)$/);
+    if (fileMentionMatch && !isSlashInput) {
+      setFileMentionQuery(fileMentionMatch[1] ?? '');
       setMentionQuery(null);
+    } else {
+      setFileMentionQuery(null);
+      const mentionMatch = value.match(/@([\w-]*)$/);
+      if (mentionMatch && !isSlashInput) {
+        setMentionQuery(mentionMatch[1] ?? null);
+      } else {
+        setMentionQuery(null);
+      }
     }
   };
 
@@ -1045,6 +1057,50 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     [content, setDraftContent],
   );
 
+  // @file: mention selection handler
+  const handleFileMentionSelect = useCallback(
+    async (file: MentionFile) => {
+      // Replace the @file:query text with @filename
+      const newContent = content.replace(/@file:[\w./\\-]*$/, `@${file.name} `);
+      setContent(newContent);
+      setDraftContent(newContent);
+      setFileMentionQuery(null);
+      textareaRef.current?.focus();
+
+      try {
+        // Read file content
+        const result = await invoke<{ content: string; language?: string }>('file_read', {
+          path: file.path,
+        });
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+        addContextItem({
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          path: file.path,
+          content: result.content,
+          language: result.language ?? ext,
+          size: file.size,
+          icon: '📄',
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        console.error('[ChatInputArea] Failed to read file for context:', err);
+        // Add context item without content so user can see it was attached
+        addContextItem({
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          path: file.path,
+          size: file.size,
+          icon: '📄',
+          timestamp: new Date(),
+        });
+      }
+    },
+    [content, setDraftContent, addContextItem],
+  );
+
   return (
     <>
       {/* Drag overlay */}
@@ -1194,11 +1250,20 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             />
 
             {/* @mention skill picker */}
-            {mentionQuery !== null && !showSlashAutocomplete && (
+            {mentionQuery !== null && fileMentionQuery === null && !showSlashAutocomplete && (
               <SkillMentionPicker
                 query={mentionQuery}
                 onSelect={handleSkillMentionSelect}
                 onClose={() => setMentionQuery(null)}
+              />
+            )}
+
+            {/* @file: mention picker */}
+            {fileMentionQuery !== null && !showSlashAutocomplete && (
+              <FileMentionPicker
+                query={fileMentionQuery}
+                onSelect={handleFileMentionSelect}
+                onClose={() => setFileMentionQuery(null)}
               />
             )}
 

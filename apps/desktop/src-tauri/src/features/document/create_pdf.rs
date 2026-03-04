@@ -45,6 +45,17 @@ pub enum PdfContent {
     },
 }
 
+/// A flattened, renderable line ready to be placed on the page.
+struct RenderLine {
+    text: String,
+    font_size: f32,
+    bold: bool,
+    /// Vertical space consumed after rendering this line (mm).
+    advance: f32,
+    /// If true, force a new page before rendering this line.
+    force_new_page: bool,
+}
+
 pub struct PdfDocumentCreator;
 
 impl PdfDocumentCreator {
@@ -66,15 +77,14 @@ impl PdfDocumentCreator {
         }
 
         let (page_width, page_height) = match config.page_size.as_deref() {
-            Some("Letter") => (Mm(215.9), Mm(279.4)),
-            Some("Legal") => (Mm(215.9), Mm(355.6)),
-            _ => (Mm(210.0), Mm(297.0)),
+            Some("Letter") => (215.9_f32, 279.4_f32),
+            Some("Legal") => (215.9_f32, 355.6_f32),
+            _ => (210.0_f32, 297.0_f32),
         };
 
         let title = config.title.as_deref().unwrap_or("Document");
-        let (doc, page1, layer1) = PdfDocument::new(title, page_width, page_height, "Layer 1");
-
-        let current_layer = doc.get_page(page1).get_layer(layer1);
+        let (doc, page1, layer1) =
+            PdfDocument::new(title, Mm(page_width), Mm(page_height), "Layer 1");
 
         let font = doc
             .add_builtin_font(BuiltinFont::Helvetica)
@@ -83,28 +93,31 @@ impl PdfDocumentCreator {
             .add_builtin_font(BuiltinFont::HelveticaBold)
             .map_err(|e| Error::Generic(format!("Failed to add bold font: {}", e)))?;
 
-        let mut current_y = page_height - Mm(20.0);
-        let margin_left = Mm(20.0);
-        let _margin_right = Mm(20.0);
+        const MARGIN_TOP: f32 = 20.0;
+        const MARGIN_BOTTOM: f32 = 20.0;
+        const MARGIN_LEFT: f32 = 20.0;
+        // approximate characters per line at 12pt on an A4 page
+        const CHARS_PER_LINE: usize = 100;
+
+        // Flatten all content blocks into renderable lines
+        let mut lines: Vec<RenderLine> = Vec::new();
 
         for content in contents {
             match content {
                 PdfContent::Heading { level, text } => {
-                    let font_size = match level {
-                        1 => 20,
-                        2 => 16,
-                        3 => 14,
-                        _ => 12,
+                    let font_size: f32 = match level {
+                        1 => 20.0,
+                        2 => 16.0,
+                        3 => 14.0,
+                        _ => 12.0,
                     };
-
-                    current_layer.use_text(
-                        &text,
-                        font_size as f32,
-                        margin_left,
-                        current_y,
-                        &font_bold,
-                    );
-                    current_y -= Mm(font_size as f32 * 0.5);
+                    lines.push(RenderLine {
+                        text,
+                        font_size,
+                        bold: true,
+                        advance: font_size * 0.5 + 3.0,
+                        force_new_page: false,
+                    });
                 }
 
                 PdfContent::Paragraph {
@@ -114,57 +127,131 @@ impl PdfDocumentCreator {
                     font_size,
                     alignment: _,
                 } => {
-                    let size = font_size.unwrap_or(12);
-                    let selected_font = if bold.unwrap_or(false) {
-                        &font_bold
-                    } else {
-                        &font
-                    };
+                    let size = font_size.unwrap_or(12) as f32;
+                    let is_bold = bold.unwrap_or(false);
+                    let line_advance = size * 0.5 + 2.0;
 
-                    current_layer.use_text(
-                        &text,
-                        size as f32,
-                        margin_left,
-                        current_y,
-                        selected_font,
-                    );
-                    current_y -= Mm(size as f32 * 0.5);
+                    // Word-wrap long text into individual render lines
+                    let words: Vec<&str> = text.split_whitespace().collect();
+                    let mut current = String::new();
+                    for word in &words {
+                        if current.len() + word.len() + 1 > CHARS_PER_LINE && !current.is_empty() {
+                            lines.push(RenderLine {
+                                text: current.clone(),
+                                font_size: size,
+                                bold: is_bold,
+                                advance: line_advance,
+                                force_new_page: false,
+                            });
+                            current.clear();
+                        }
+                        if !current.is_empty() {
+                            current.push(' ');
+                        }
+                        current.push_str(word);
+                    }
+                    if !current.is_empty() {
+                        lines.push(RenderLine {
+                            text: current,
+                            font_size: size,
+                            bold: is_bold,
+                            advance: line_advance,
+                            force_new_page: false,
+                        });
+                    }
+                    // Blank spacing after paragraph
+                    lines.push(RenderLine {
+                        text: String::new(),
+                        font_size: size,
+                        bold: false,
+                        advance: 3.0,
+                        force_new_page: false,
+                    });
                 }
 
                 PdfContent::BulletList { items } => {
                     for item in items {
-                        let bullet_text = format!("• {}", item);
-                        current_layer.use_text(&bullet_text, 12.0, margin_left, current_y, &font);
-                        current_y -= Mm(6.0);
+                        lines.push(RenderLine {
+                            text: format!("• {}", item),
+                            font_size: 12.0,
+                            bold: false,
+                            advance: 6.0,
+                            force_new_page: false,
+                        });
                     }
+                    lines.push(RenderLine {
+                        text: String::new(),
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 3.0,
+                        force_new_page: false,
+                    });
                 }
 
                 PdfContent::NumberedList { items } => {
                     for (idx, item) in items.iter().enumerate() {
-                        let numbered_text = format!("{}. {}", idx + 1, item);
-                        current_layer.use_text(&numbered_text, 12.0, margin_left, current_y, &font);
-                        current_y -= Mm(6.0);
+                        lines.push(RenderLine {
+                            text: format!("{}. {}", idx + 1, item),
+                            font_size: 12.0,
+                            bold: false,
+                            advance: 6.0,
+                            force_new_page: false,
+                        });
                     }
+                    lines.push(RenderLine {
+                        text: String::new(),
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 3.0,
+                        force_new_page: false,
+                    });
                 }
 
                 PdfContent::Table { headers, rows } => {
                     let header_text = headers.join(" | ");
-                    current_layer.use_text(&header_text, 12.0, margin_left, current_y, &font_bold);
-                    current_y -= Mm(6.0);
-
                     let separator = "-".repeat(header_text.len().min(80));
-                    current_layer.use_text(&separator, 12.0, margin_left, current_y, &font);
-                    current_y -= Mm(6.0);
-
+                    lines.push(RenderLine {
+                        text: header_text,
+                        font_size: 12.0,
+                        bold: true,
+                        advance: 6.0,
+                        force_new_page: false,
+                    });
+                    lines.push(RenderLine {
+                        text: separator,
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 6.0,
+                        force_new_page: false,
+                    });
                     for row in rows {
-                        let row_text = row.join(" | ");
-                        current_layer.use_text(&row_text, 12.0, margin_left, current_y, &font);
-                        current_y -= Mm(6.0);
+                        lines.push(RenderLine {
+                            text: row.join(" | "),
+                            font_size: 12.0,
+                            bold: false,
+                            advance: 6.0,
+                            force_new_page: false,
+                        });
                     }
+                    lines.push(RenderLine {
+                        text: String::new(),
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 3.0,
+                        force_new_page: false,
+                    });
                 }
 
                 PdfContent::PageBreak => {
-                    current_y -= Mm(20.0);
+                    // Mark the next real line with force_new_page; add a
+                    // sentinel here so we can mark the *following* push.
+                    lines.push(RenderLine {
+                        text: String::new(),
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 0.0,
+                        force_new_page: true,
+                    });
                 }
 
                 PdfContent::Image {
@@ -172,15 +259,50 @@ impl PdfDocumentCreator {
                     width: _,
                     height: _,
                 } => {
-                    let placeholder = format!("[Image: {}]", path);
-                    current_layer.use_text(&placeholder, 12.0, margin_left, current_y, &font);
-                    current_y -= Mm(6.0);
+                    lines.push(RenderLine {
+                        text: format!("[Image: {}]", path),
+                        font_size: 12.0,
+                        bold: false,
+                        advance: 6.0,
+                        force_new_page: false,
+                    });
                 }
             }
+        }
 
-            if current_y < Mm(20.0) {
-                current_y = page_height - Mm(20.0);
+        // Render lines onto pages, adding new pages as needed
+        let mut current_layer = doc.get_page(page1).get_layer(layer1);
+        let mut current_y: f32 = page_height - MARGIN_TOP;
+
+        for line in &lines {
+            // Handle explicit page break
+            if line.force_new_page {
+                let (new_page, new_layer) =
+                    doc.add_page(Mm(page_width), Mm(page_height), "Layer 1");
+                current_layer = doc.get_page(new_page).get_layer(new_layer);
+                current_y = page_height - MARGIN_TOP;
+                continue;
             }
+
+            // Automatic page break when content reaches the bottom margin
+            if current_y < MARGIN_BOTTOM && line.advance > 0.0 {
+                let (new_page, new_layer) =
+                    doc.add_page(Mm(page_width), Mm(page_height), "Layer 1");
+                current_layer = doc.get_page(new_page).get_layer(new_layer);
+                current_y = page_height - MARGIN_TOP;
+            }
+
+            if !line.text.is_empty() {
+                let selected_font = if line.bold { &font_bold } else { &font };
+                current_layer.use_text(
+                    &line.text,
+                    line.font_size,
+                    Mm(MARGIN_LEFT),
+                    Mm(current_y),
+                    selected_font,
+                );
+            }
+            current_y -= line.advance;
         }
 
         let file = File::create(output_path)
@@ -286,6 +408,22 @@ mod tests {
         ];
 
         let result = creator.create(output_path_str, config, contents);
+        assert!(result.is_ok());
+        assert!(output_path.exists());
+    }
+
+    #[test]
+    fn test_pagination_many_lines() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("paginated.pdf");
+        let output_path_str = output_path.to_str().unwrap();
+
+        let creator = PdfDocumentCreator::new();
+        // Generate enough paragraphs to overflow a single page
+        let paragraphs: Vec<String> = (0..60)
+            .map(|i| format!("Line {} of content to test pagination across multiple pages.", i))
+            .collect();
+        let result = creator.create_simple(output_path_str, Some("Pagination Test".to_string()), None, paragraphs);
         assert!(result.is_ok());
         assert!(output_path.exists());
     }

@@ -27,6 +27,7 @@ import type {
   InlinePanel,
   InlinePanelContent,
   MessageReaction,
+  BranchSummary,
 } from './types';
 
 // Re-export types for backwards compatibility
@@ -46,6 +47,7 @@ export type {
   InlinePanel,
   InlinePanelContent,
   SlashCommandMetadata,
+  BranchSummary,
 } from './types';
 
 /**
@@ -370,6 +372,20 @@ export interface ChatState {
   // Actions - Agentic loop status
   setAgenticLoopStatus: (status: ChatState['agenticLoopStatus']) => void;
 
+  // Branch state
+  activeBranchId: string;
+  branches: BranchSummary[];
+
+  // Actions - Branching
+  loadBranches: (conversationId: number) => Promise<void>;
+  switchBranch: (conversationId: number, branchId: string) => Promise<void>;
+  forkAndRegenerate: (
+    conversationId: number,
+    messageId: number,
+    newContent: string,
+  ) => Promise<void>;
+  deleteBranch: (conversationId: number, branchId: string) => Promise<void>;
+
   // Actions - Clear/export
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
@@ -411,6 +427,8 @@ export const useChatStore = create<ChatState>()(
           selectedMessage: null,
           toolTimelineByMessage: {},
           agenticLoopStatus: null,
+          activeBranchId: 'main',
+          branches: [] as BranchSummary[],
 
           // Conversation management
           ensureActiveConversation: () =>
@@ -1010,33 +1028,37 @@ export const useChatStore = create<ChatState>()(
               'chat/editMessage',
             ),
 
-          editAndRegenerateFromMessage: (messageId, newContent) =>
+          editAndRegenerateFromMessage: (messageId, newContent) => {
+            // Delegate to forkAndRegenerate when a conversation DB ID is available
+            const state = get();
+            const convoId = state.activeConversationId;
+            const dbId = convoId ? uuidToDbId(convoId) : undefined;
+            const msgDbId = parseInt(messageId, 10);
+
+            if (dbId && !isNaN(msgDbId)) {
+              void get().forkAndRegenerate(dbId, msgDbId, newContent);
+              return;
+            }
+
+            // Fallback: local truncation for conversations not yet persisted to DB
             set(
-              (state) => {
-                const messageIndex = state.messages.findIndex((m) => m.id === messageId);
+              (s) => {
+                const messageIndex = s.messages.findIndex((m) => m.id === messageId);
                 if (messageIndex === -1) return;
 
-                const msg = state.messages[messageIndex];
+                const msg = s.messages[messageIndex];
                 if (!msg || msg.role !== 'user') return;
 
                 if (!msg.metadata?.originalContent) {
-                  msg.metadata = {
-                    ...msg.metadata,
-                    originalContent: msg.content,
-                  };
+                  msg.metadata = { ...msg.metadata, originalContent: msg.content };
                 }
                 msg.content = newContent;
-                msg.metadata = {
-                  ...msg.metadata,
-                  edited: true,
-                  editedAt: new Date(),
-                };
+                msg.metadata = { ...msg.metadata, edited: true, editedAt: new Date() };
+                s.messages = s.messages.slice(0, messageIndex + 1);
 
-                state.messages = state.messages.slice(0, messageIndex + 1);
-
-                const convoId = state.activeConversationId;
-                if (convoId && state.messagesByConversation[convoId]) {
-                  const convoMsgs = state.messagesByConversation[convoId]!;
+                const activeConvoId = s.activeConversationId;
+                if (activeConvoId && s.messagesByConversation[activeConvoId]) {
+                  const convoMsgs = s.messagesByConversation[activeConvoId]!;
                   const convoMsgIndex = convoMsgs.findIndex((m) => m.id === messageId);
                   if (convoMsgIndex !== -1) {
                     const convoMsg = convoMsgs[convoMsgIndex];
@@ -1054,13 +1076,14 @@ export const useChatStore = create<ChatState>()(
                         editedAt: new Date(),
                       };
                     }
-                    state.messagesByConversation[convoId] = convoMsgs.slice(0, convoMsgIndex + 1);
+                    s.messagesByConversation[activeConvoId] = convoMsgs.slice(0, convoMsgIndex + 1);
                   }
                 }
               },
               undefined,
               'chat/editAndRegenerateFromMessage',
-            ),
+            );
+          },
 
           getMessagesAfter: (messageId) => {
             const state = get();
@@ -1526,6 +1549,98 @@ export const useChatStore = create<ChatState>()(
               'chat/setAgenticLoopStatus',
             ),
 
+          // Branching
+          loadBranches: async (conversationId: number) => {
+            try {
+              const branches = await invoke<BranchSummary[]>('conversation_list_branches', {
+                conversationId,
+              });
+              set(
+                (state) => {
+                  state.branches = branches;
+                },
+                undefined,
+                'chat/loadBranches',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to load branches:', error);
+            }
+          },
+
+          switchBranch: async (conversationId: number, branchId: string) => {
+            try {
+              const messages = await invoke<BackendMessage[]>('conversation_switch_branch', {
+                conversationId,
+                branchId,
+              });
+              const enhanced = messages.map(convertBackendMessage);
+              set(
+                (state) => {
+                  state.activeBranchId = branchId;
+                  state.messages = enhanced;
+                  const convoId = state.activeConversationId;
+                  if (convoId) {
+                    state.messagesByConversation[convoId] = enhanced;
+                  }
+                },
+                undefined,
+                'chat/switchBranch',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to switch branch:', error);
+            }
+          },
+
+          forkAndRegenerate: async (
+            conversationId: number,
+            messageId: number,
+            _newContent: string,
+          ) => {
+            try {
+              const branchName = `Edit at message ${messageId}`;
+              const result = await invoke<{ branch: BranchSummary; messages: BackendMessage[] }>(
+                'conversation_fork',
+                { conversationId, messageId, branchName },
+              );
+
+              const enhanced = result.messages.map(convertBackendMessage);
+
+              set(
+                (state) => {
+                  state.branches = [...state.branches, result.branch];
+                  state.activeBranchId = result.branch.id;
+                  state.messages = enhanced;
+                  const convoId = state.activeConversationId;
+                  if (convoId) {
+                    state.messagesByConversation[convoId] = enhanced;
+                  }
+                },
+                undefined,
+                'chat/forkAndRegenerate',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to fork conversation:', error);
+            }
+          },
+
+          deleteBranch: async (conversationId: number, branchId: string) => {
+            try {
+              await invoke('conversation_delete_branch', { conversationId, branchId });
+              set(
+                (state) => {
+                  state.branches = state.branches.filter((b) => b.id !== branchId);
+                  if (state.activeBranchId === branchId) {
+                    state.activeBranchId = 'main';
+                  }
+                },
+                undefined,
+                'chat/deleteBranch',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to delete branch:', error);
+            }
+          },
+
           // Clear/export
           clearHistory: () => {
             set(
@@ -1602,6 +1717,8 @@ export const useChatStore = create<ChatState>()(
                 state.selectedMessage = null;
                 state.toolTimelineByMessage = {};
                 state.agenticLoopStatus = null;
+                state.activeBranchId = 'main';
+                state.branches = [];
               },
               undefined,
               'chat/resetOnLogout',

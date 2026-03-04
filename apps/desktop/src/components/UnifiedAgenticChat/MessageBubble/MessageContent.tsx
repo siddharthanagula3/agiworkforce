@@ -6,7 +6,7 @@
  */
 
 import 'katex/dist/katex.min.css';
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
@@ -17,8 +17,21 @@ import { EnhancedMessage } from '../../../stores/unifiedChatStore';
 import { parseCitations } from '../CitationBadge';
 import { SourcesFooter } from '../SourcesFooter';
 import { CodeBlock } from '../Visualizations/CodeBlock';
+import { InlineCodeOutput, CodeExecutionResult } from '../InlineCodeOutput';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useCanvasStore } from '../../../stores/canvasStore';
+import { invoke } from '../../../lib/tauri-mock';
+
+const EXECUTABLE_LANGUAGES = new Set([
+  'python',
+  'javascript',
+  'typescript',
+  'bash',
+  'sh',
+  'ruby',
+  'perl',
+  'r',
+]);
 
 /**
  * Strip raw tool-result JSON code blocks from assistant message content.
@@ -75,6 +88,47 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
   const { createArtifact, openPanel } = useCanvasStore();
 
+  // Map from code-block index → execution result
+  const [codeResults, setCodeResults] = useState<Map<number, CodeExecutionResult>>(new Map());
+  // Map from code-block index → running state
+  const [runningBlocks, setRunningBlocks] = useState<Set<number>>(new Set());
+
+  const handleRunCode = useCallback(async (language: string, code: string, blockIndex: number) => {
+    setRunningBlocks((prev) => new Set(prev).add(blockIndex));
+    // Clear any previous result so the panel shows immediately in loading state
+    setCodeResults((prev) => {
+      const next = new Map(prev);
+      next.delete(blockIndex);
+      return next;
+    });
+    try {
+      const result = await invoke<CodeExecutionResult>('execute_code', { language, code });
+      setCodeResults((prev) => new Map(prev).set(blockIndex, result));
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Code execution failed: ${errMsg}`);
+      setCodeResults((prev) =>
+        new Map(prev).set(blockIndex, {
+          success: false,
+          stdout: '',
+          stderr: errMsg,
+          output: '',
+          error: errMsg,
+          exit_code: 1,
+          execution_time_ms: 0,
+          language,
+          timed_out: false,
+        }),
+      );
+    } finally {
+      setRunningBlocks((prev) => {
+        const next = new Set(prev);
+        next.delete(blockIndex);
+        return next;
+      });
+    }
+  }, []);
+
   const applyCitations = (children: React.ReactNode) =>
     React.Children.map(children, (child) =>
       typeof child === 'string' ? parseCitations(child) : child,
@@ -105,45 +159,89 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
           children={isUser ? message.content : stripToolResultJsonBlocks(message.content)}
           components={{
             code(props) {
+              // blockIndex is captured per-render via a closure counter at component scope.
+              // ReactMarkdown calls this component once per code fence in document order,
+              // so we track the index with a ref-like counter on the props object.
               const { inline, className, children, ...rest } =
-                props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
+                props as React.HTMLAttributes<HTMLElement> & {
+                  inline?: boolean;
+                  'data-block-index'?: number;
+                };
               const match = /language-(\w+)/.exec(className || '');
-              const language = match ? match[1] : 'text';
+              const language: string = match?.[1] ?? 'text';
               const code = String(children).replace(/\n$/, '');
               const isBlockCode = inline !== true;
+              // Use a stable key from code content + language as block index substitute
+              const blockKey = `${language}:${code.length}:${code.slice(0, 40)}`;
 
               // In compact mode, hide ALL code blocks from assistant messages (not user messages)
               if (compactMode && isBlockCode && !isUser) {
                 return null; // Hide all code blocks in compact mode for assistant
               }
 
-              return isBlockCode ? (
-                <div className="relative group/codeblock">
-                  <CodeBlock
-                    code={code}
-                    language={language || 'text'}
-                    showLineNumbers={true}
-                    enableCopy={true}
-                  />
-                  {/* Open in Canvas button — shown on hover for assistant messages */}
-                  {!isUser && (
-                    <button
-                      type="button"
-                      onClick={() => handleOpenInCanvas(code, language || 'text')}
-                      className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-teal-500/20 text-teal-400 border border-teal-500/30 opacity-0 group-hover/codeblock:opacity-100 transition-opacity hover:bg-teal-500/30"
-                    >
-                      <Code2 className="h-3 w-3" />
-                      Open in Canvas
-                    </button>
+              if (!isBlockCode) {
+                return (
+                  <code
+                    className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
+                    {...rest}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+
+              const canRun = !isUser && EXECUTABLE_LANGUAGES.has(language.toLowerCase());
+              // Use a numeric index derived from blockKey for Map keying
+              const blockIndex = Array.from(blockKey).reduce(
+                (acc, ch) => acc + ch.charCodeAt(0),
+                0,
+              );
+              const executionResult = codeResults.get(blockIndex);
+              const isRunning = runningBlocks.has(blockIndex);
+
+              return (
+                <>
+                  <div className="relative group/codeblock">
+                    <CodeBlock
+                      code={code}
+                      language={language || 'text'}
+                      showLineNumbers={true}
+                      enableCopy={true}
+                      enableRun={canRun}
+                      onRun={canRun ? () => handleRunCode(language, code, blockIndex) : undefined}
+                    />
+                    {/* Open in Canvas button — shown on hover for assistant messages */}
+                    {!isUser && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInCanvas(code, language || 'text')}
+                        className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-teal-500/20 text-teal-400 border border-teal-500/30 opacity-0 group-hover/codeblock:opacity-100 transition-opacity hover:bg-teal-500/30"
+                      >
+                        <Code2 className="h-3 w-3" />
+                        Open in Canvas
+                      </button>
+                    )}
+                  </div>
+                  {(isRunning || executionResult) && (
+                    <InlineCodeOutput
+                      result={
+                        executionResult ?? {
+                          success: false,
+                          stdout: '',
+                          stderr: '',
+                          output: '',
+                          error: null,
+                          exit_code: 0,
+                          execution_time_ms: 0,
+                          language,
+                          timed_out: false,
+                        }
+                      }
+                      isRunning={isRunning}
+                      onRerun={canRun ? () => handleRunCode(language, code, blockIndex) : undefined}
+                    />
                   )}
-                </div>
-              ) : (
-                <code
-                  className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
-                  {...rest}
-                >
-                  {children}
-                </code>
+                </>
               );
             },
             table({ children }) {

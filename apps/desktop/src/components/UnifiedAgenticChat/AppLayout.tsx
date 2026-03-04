@@ -9,7 +9,6 @@ import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
 import { ArtifactPanel } from '../Artifacts/ArtifactPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
-import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
@@ -33,7 +32,6 @@ const ARTIFACT_PANEL_MIN_WIDTH = 280;
 const ARTIFACT_PANEL_MAX_WIDTH = 900;
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const shortcutsDialogOpen = useSettingsDialogStore((s) => s.shortcutsOpen);
   const setShortcutsDialogOpen = useCallback((open: boolean) => {
@@ -194,11 +192,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
 
-      if (isMeta && e.key === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         setSidebarCollapsed(!sidebarCollapsed);
@@ -224,7 +217,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     handleNewChat,
-    setCommandPaletteOpen,
     setSidebarCollapsed,
     sidebarCollapsed,
     setShortcutsDialogOpen,
@@ -306,7 +298,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Dialogs */}
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
-      <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       <KeyboardShortcutsDialog
         isOpen={shortcutsDialogOpen}
         onClose={() => setShortcutsDialogOpen(false)}
