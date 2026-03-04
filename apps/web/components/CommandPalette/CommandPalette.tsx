@@ -114,8 +114,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   // Group the filtered commands
   const groups = filtered.reduce<Record<string, CommandOption[]>>((acc, cmd) => {
-    acc[cmd.group] = acc[cmd.group] || [];
-    acc[cmd.group].push(cmd);
+    const existing = acc[cmd.group] || [];
+    existing.push(cmd);
+    acc[cmd.group] = existing;
     return acc;
   }, {});
 

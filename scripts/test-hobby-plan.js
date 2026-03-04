@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 (async () => {
   console.log('\n========================================');
   console.log('AGI Workforce - Comprehensive Test Suite');
-  console.log('Account: agiautomationllc@gmail.com');
+  console.log('Account: (from TEST_EMAIL env var)');
   console.log('Plan: HOBBY (Just Upgraded)');
   console.log('========================================\n');
 
@@ -19,8 +19,11 @@ const { chromium } = require('playwright');
   try {
     browser = await chromium.launch({ headless: false, slowMo: 500 });
     const page = await browser.newPage();
-    const email = 'agiautomationllc@gmail.com';
-    const password = 'JYOD*b9urbyAPLVU';
+    const email = process.env.TEST_EMAIL;
+    const password = process.env.TEST_PASSWORD;
+    if (!email || !password) {
+      throw new Error('TEST_EMAIL and TEST_PASSWORD environment variables are required');
+    }
 
     // Capture console logs
     const consoleLogs = [];

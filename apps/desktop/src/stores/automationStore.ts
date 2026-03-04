@@ -55,6 +55,7 @@ interface AutomationState {
 
   isRecording: boolean;
   currentRecording: RecordingSession | null;
+  pendingActions: RecordedAction[];
   recordings: Recording[];
 
   scripts: AutomationScript[];
@@ -136,6 +137,7 @@ export const useAutomationStore = create<AutomationState>()(
 
         isRecording: false,
         currentRecording: null,
+        pendingActions: [],
         recordings: [],
 
         scripts: [],
@@ -310,6 +312,7 @@ export const useAutomationStore = create<AutomationState>()(
               lastOcr: null,
               isRecording: false,
               currentRecording: null,
+              pendingActions: [],
               recordings: [],
               scripts: [],
               selectedScript: null,
@@ -343,6 +346,9 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         saveRecordingAsScript: async () => {
+          console.warn(
+            'automationStore.saveRecordingAsScript: not implemented, use automation API directly',
+          );
           return null;
         },
 
@@ -365,15 +371,26 @@ export const useAutomationStore = create<AutomationState>()(
           }
         },
 
-        saveScript: async () => {},
+        saveScript: async () => {
+          console.warn('automationStore.saveScript: not implemented, use automation API directly');
+          return;
+        },
 
-        deleteScript: async () => {},
+        deleteScript: async () => {
+          console.warn(
+            'automationStore.deleteScript: not implemented, use automation API directly',
+          );
+          return;
+        },
 
         selectScript: (script) => {
           set({ selectedScript: script }, undefined, 'automation/selectScript');
         },
 
         executeScript: async () => {
+          console.warn(
+            'automationStore.executeScript: not implemented, use automation API directly',
+          );
           return null;
         },
 
@@ -401,7 +418,12 @@ export const useAutomationStore = create<AutomationState>()(
           );
         },
 
-        inspectElementAt: async () => {},
+        inspectElementAt: async () => {
+          console.warn(
+            'automationStore.inspectElementAt: not implemented, use automation API directly',
+          );
+          return;
+        },
 
         handleRecordingStarted: (session) => {
           const recordingSession: RecordingSession = {
@@ -431,15 +453,15 @@ export const useAutomationStore = create<AutomationState>()(
           );
         },
 
-        handleActionRecorded: (_action) => {
+        handleActionRecorded: (action) => {
           set(
             (state) => {
               if (!state.currentRecording) {
                 console.warn('[AutomationStore] Action recorded but no active recording session');
-                return state;
+                return;
               }
 
-              return state;
+              state.pendingActions.push(action);
             },
             undefined,
             'automation/handleActionRecorded',

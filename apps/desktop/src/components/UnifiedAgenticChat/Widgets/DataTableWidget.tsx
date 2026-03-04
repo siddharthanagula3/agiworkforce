@@ -310,6 +310,7 @@ export const DataTableWidget = memo(DataTableWidgetComponent);
 WidgetRegistry.register({
   type: 'data-table',
   displayName: 'Data Table',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- widget registration: props vary by API
   component: DataTableWidget as React.ComponentType<any>,
   icon: Table,
 });

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import { toast } from 'sonner';
 import { invoke } from '../lib/tauri-mock';
 
 export interface AgentTask {
@@ -139,7 +140,10 @@ export const useAgentTaskStore = create<AgentTaskState>()(
             const localOnly = existingTasks.filter((t) => !backendIds.has(t.id));
 
             set({ tasks: [...updatedTasks, ...localOnly], loading: false });
-          } catch {
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('[AgentTaskStore] Failed to fetch tasks:', err);
+            toast.error('Failed to load agent tasks: ' + msg);
             set({ loading: false });
           }
         },
@@ -185,14 +189,19 @@ export const useAgentTaskStore = create<AgentTaskState>()(
         },
 
         cancelTask: async (taskId) => {
-          await invoke('agi_cancel_goal', { goalId: taskId });
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? { ...t, status: 'cancelled' as const, completedAt: new Date().toISOString() }
-                : t,
-            ),
-          }));
+          try {
+            await invoke('agi_cancel_goal', { goalId: taskId });
+            set((state) => ({
+              tasks: state.tasks.map((t) =>
+                t.id === taskId
+                  ? { ...t, status: 'cancelled' as const, completedAt: new Date().toISOString() }
+                  : t,
+              ),
+            }));
+          } catch (error) {
+            toast.error('Failed to cancel task');
+            console.error('[AgentTaskStore] cancelTask error:', error);
+          }
         },
 
         fetchInsights: async (taskId) => {
@@ -215,7 +224,12 @@ export const useAgentTaskStore = create<AgentTaskState>()(
           }
         },
       }),
-      { name: 'agiworkforce-agent-tasks' },
+      {
+        name: 'agiworkforce-agent-tasks',
+        partialize: (state) => ({
+          tasks: state.tasks.filter((t) => !t.id.startsWith('parallel_')),
+        }),
+      },
     ),
     { name: 'AgentTaskStore' },
   ),

@@ -22,7 +22,7 @@ const CATEGORIES = ['General', 'Coding', 'Research', 'Writing', 'Preferences'] a
 interface AddMemorySheetProps {
   /** Ref to control open/close from parent */
 
-  sheetRef: any;
+  sheetRef: React.RefObject<BottomSheet | null>;
   /** If provided, pre-populate fields for editing */
   editingMemory: MemoryEntry | null;
   /** Called when the user saves a new memory */

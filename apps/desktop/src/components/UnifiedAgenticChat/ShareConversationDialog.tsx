@@ -1,14 +1,15 @@
 /**
- * ShareConversationDialog
+ * ExportConversationDialog
  *
- * A modal dialog that generates and displays a shareable URL for a conversation.
- * Follows the same pattern as ShareArtifactDialog for design consistency.
+ * A modal dialog that exports a conversation as Markdown.
+ * Offers "Copy as Markdown" (clipboard) and "Save as File" (disk) actions.
  */
 
 import { useCallback, useState } from 'react';
-import { Check, Copy, Link2, X } from 'lucide-react';
+import { Check, ClipboardCopy, Download, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '../../lib/utils';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Button } from '../ui/Button';
 import { invoke } from '../../lib/tauri-mock';
 
@@ -26,40 +27,53 @@ export function ShareConversationDialog({
   onClose,
 }: ShareConversationDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const generateLink = useCallback(async () => {
+  const exportMarkdown = useCallback(async () => {
+    const result = await invoke<string>('conversation_export', {
+      conversationId,
+      format: 'markdown',
+    });
+    return result;
+  }, [conversationId]);
+
+  const handleCopyMarkdown = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
-    setShareUrl(null);
     try {
-      // TODO: conversation_share command needs to be added to the Rust backend.
-      // See docs/rust-fixes-needed.md for the spec.
-      const result = await invoke<{ url: string }>('conversation_share', {
-        conversationId,
-      });
-      setShareUrl(result.url);
+      const markdown = await exportMarkdown();
+      await navigator.clipboard.writeText(markdown);
+      setCopied(true);
+      toast.success('Conversation copied as Markdown');
+      setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('Failed to generate share link');
-      toast.error('Failed to generate share link');
+      toast.error('Failed to export conversation');
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId]);
+  }, [exportMarkdown]);
 
-  const handleCopy = useCallback(async () => {
-    if (!shareUrl) return;
+  const handleSaveFile = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      toast.success('Link copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      const markdown = await exportMarkdown();
+      const safeName = conversationTitle
+        .replace(/[^a-zA-Z0-9 _-]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 60);
+      const filePath = await save({
+        defaultPath: `${safeName || 'conversation'}.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      });
+      if (filePath) {
+        await writeTextFile(filePath, markdown);
+        toast.success('Conversation saved to file');
+      }
     } catch {
-      toast.error('Failed to copy link');
+      toast.error('Failed to save conversation');
+    } finally {
+      setIsLoading(false);
     }
-  }, [shareUrl]);
+  }, [exportMarkdown, conversationTitle]);
 
   if (!isOpen) return null;
 
@@ -83,82 +97,42 @@ export function ShareConversationDialog({
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-500/10">
-            <Link2 className="h-5 w-5 text-teal-500" />
+            <FileText className="h-5 w-5 text-teal-500" />
           </div>
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Share Conversation
+              Export Conversation
             </h2>
-            <p className="text-xs text-zinc-500 truncate max-w-[280px]">
-              {conversationTitle}
-            </p>
+            <p className="text-xs text-zinc-500 truncate max-w-[280px]">{conversationTitle}</p>
           </div>
         </div>
 
-        {/* URL field or generate button */}
-        <div className="mb-4">
-          {!shareUrl && !error ? (
-            <Button
-              onClick={generateLink}
-              disabled={isLoading}
-              className="w-full"
-            >
-              {isLoading ? 'Generating...' : 'Generate Share Link'}
-            </Button>
-          ) : (
-            <>
-              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
-                Shareable link
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={error ? 'Error generating link' : (shareUrl ?? '')}
-                  className={cn(
-                    'flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700',
-                    'bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300',
-                    'focus:outline-none focus:ring-2 focus:ring-teal-500/50',
-                    'truncate',
-                    error && 'border-red-300 dark:border-red-700 text-red-500',
-                  )}
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={handleCopy}
-                  disabled={isLoading || !shareUrl}
-                  title="Copy link"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </div>
-              {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-            </>
-          )}
+        {/* Export actions */}
+        <div className="flex flex-col gap-3 mb-4">
+          <Button onClick={handleCopyMarkdown} disabled={isLoading} className="w-full gap-2">
+            {copied ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <ClipboardCopy className="h-4 w-4" />
+            )}
+            {copied ? 'Copied!' : 'Copy as Markdown'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleSaveFile}
+            disabled={isLoading}
+            className="w-full gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Save as File
+          </Button>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
+        {/* Close action */}
+        <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
             Close
           </Button>
-          {shareUrl && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleCopy}
-              disabled={isLoading || !shareUrl}
-              className="text-xs gap-1.5"
-            >
-              <Copy className="h-3 w-3" />
-              Copy link
-            </Button>
-          )}
         </div>
       </div>
     </div>

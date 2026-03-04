@@ -102,7 +102,7 @@ export interface TeamActivity {
   action: ActivityType;
   resourceType: string | null;
   resourceId: string | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   timestamp: number;
 }
 

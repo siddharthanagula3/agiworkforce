@@ -57,11 +57,11 @@ describe('Global Settings Store', () => {
     it('should have default feature flags', () => {
       const state = useAppStore.getState();
 
-      expect(state.features.betaFeatures).toBe(false);
-      expect(state.features.advancedAnalytics).toBe(true);
-      expect(state.features.experimentalUI).toBe(false);
-      expect(state.features.voiceMode).toBe(true);
-      expect(state.features.realTimeCollab).toBe(false);
+      expect(state.features['betaFeatures']).toBe(false);
+      expect(state.features['advancedAnalytics']).toBe(true);
+      expect(state.features['experimentalUI']).toBe(false);
+      expect(state.features['voiceMode']).toBe(true);
+      expect(state.features['realTimeCollab']).toBe(false);
     });
   });
 
@@ -307,7 +307,7 @@ describe('Global Settings Store', () => {
       expect(state.error).toBeNull();
       expect(state.sessionId).toBeNull();
       expect(state.settings.theme).toBe('system');
-      expect(state.features.betaFeatures).toBe(false);
+      expect(state.features['betaFeatures']).toBe(false);
     });
   });
 
@@ -345,7 +345,7 @@ describe('Global Settings Store', () => {
       const state = useAppStore.getState();
       expect(state.settings.theme).toBe('dark');
       expect(state.settings.language).toBe('fr');
-      expect(state.features.betaFeatures).toBe(true);
+      expect(state.features['betaFeatures']).toBe(true);
     });
   });
 });

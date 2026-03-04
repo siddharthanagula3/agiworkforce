@@ -50,7 +50,7 @@ async function cleanupAllStores(): Promise<void> {
     const chatState = useChatStore.getState();
     if (typeof chatState.clearHistory === 'function') {
       chatState.clearHistory();
-    } else if (typeof (chatState as unknown as Record<string, unknown>).reset === 'function') {
+    } else if (typeof (chatState as unknown as Record<string, unknown>)['reset'] === 'function') {
       (chatState as unknown as Record<string, unknown> & { reset: () => void }).reset();
     } else {
       logger.auth('Warning: Chat store has no clearHistory or reset method');
@@ -191,34 +191,48 @@ export const useAuthStore = create<AuthState>()(
         if (_initializingPromise) return _initializingPromise;
 
         _initializingPromise = (async () => {
-        logger.auth('Initializing auth state...');
-        set({ isLoading: true });
+          logger.auth('Initializing auth state...');
+          set({ isLoading: true });
 
-        try {
-          const timeoutPromise = new Promise<AuthResponse>((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  user: null,
-                  error: 'Auth initialization timeout',
-                }),
-              5000,
-            ),
-          );
+          try {
+            const timeoutPromise = new Promise<AuthResponse>((resolve) =>
+              setTimeout(
+                () =>
+                  resolve({
+                    user: null,
+                    error: 'Auth initialization timeout',
+                  }),
+                5000,
+              ),
+            );
 
-          const result = await Promise.race([authService.getCurrentUser(), timeoutPromise]);
+            const result = await Promise.race([authService.getCurrentUser(), timeoutPromise]);
 
-          if (!result) {
-            logger.debug('Initialization skipped: empty auth response');
-            set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
-            return;
-          }
+            if (!result) {
+              logger.debug('Initialization skipped: empty auth response');
+              set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+              return;
+            }
 
-          const { user, error } = result;
+            const { user, error } = result;
 
-          if (error) {
-            logger.debug('No existing session:', error);
-            // Clear any invalid auth data from localStorage
+            if (error) {
+              logger.debug('No existing session:', error);
+              // Clear any invalid auth data from localStorage
+              try {
+                localStorage.removeItem('supabase.auth.token');
+                localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
+              } catch (_e) {
+                logger.debug('Could not clear localStorage');
+              }
+              set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+            } else {
+              logger.auth('Restored user session:', user?.email);
+              set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
+            }
+          } catch (error) {
+            logger.error('Initialization error:', error);
+            // Clear any invalid auth data
             try {
               localStorage.removeItem('supabase.auth.token');
               localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
@@ -226,21 +240,7 @@ export const useAuthStore = create<AuthState>()(
               logger.debug('Could not clear localStorage');
             }
             set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
-          } else {
-            logger.auth('Restored user session:', user?.email);
-            set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
           }
-        } catch (error) {
-          logger.error('Initialization error:', error);
-          // Clear any invalid auth data
-          try {
-            localStorage.removeItem('supabase.auth.token');
-            localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
-          } catch (_e) {
-            logger.debug('Could not clear localStorage');
-          }
-          set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
-        }
         })().finally(() => {
           _initializingPromise = null;
         });

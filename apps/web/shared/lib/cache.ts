@@ -244,7 +244,7 @@ class IndexedDBBackend implements CacheStorage {
     }
   }
 
-  async set<T = unknown>(key: string, entry: CacheEntry<T>): Promise<void> {
+  async set<T = unknown>(_key: string, entry: CacheEntry<T>): Promise<void> {
     try {
       const db = await this.ensureDB();
       const transaction = db.transaction([this.storeName], 'readwrite');

@@ -708,7 +708,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 meta.summary || message.content || 'Agent performed an action.',
                 kind,
                 { messageId: message.id, ...meta },
-                meta.toolRationale as any,
+                meta.toolRationale,
               );
             }
 
@@ -719,7 +719,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 meta.preview || 'Command finished. View output for details.',
                 'terminal',
                 { command: meta.command, messageId: message.id },
-                meta.toolRationale as any,
+                meta.toolRationale,
               );
             }
 

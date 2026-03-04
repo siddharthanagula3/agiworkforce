@@ -51,7 +51,6 @@ export interface RealtimeService {
 
 class RealtimeServiceImpl implements RealtimeService {
   private channels: Map<string, RealtimeChannel> = new Map();
-  private userId: string | null = null;
   private callbacks: RealtimeCallbacks = {};
   private connectionState: ConnectionStatus = {
     connected: false,
@@ -157,7 +156,6 @@ class RealtimeServiceImpl implements RealtimeService {
    * Sets up subscriptions for jobs, agents, and notifications
    */
   async initializeRealtime(userId: string, callbacks: RealtimeCallbacks): Promise<void> {
-    this.userId = userId;
     this.callbacks = callbacks;
 
     try {
@@ -225,7 +223,7 @@ class RealtimeServiceImpl implements RealtimeService {
     // Clear all pending reconnect timeouts first
     this.clearReconnectTimeouts();
     this.disconnect();
-    this.userId = null;
+
     this.callbacks = {};
     this.reconnectAttempts = 0;
   }
