@@ -169,7 +169,7 @@ describe('CSRF', () => {
         headers: { cookie: 'session-id=my-session-123' },
       });
 
-      const sessionId = getSessionIdFromRequest(request);
+      const sessionId = await getSessionIdFromRequest(request);
       expect(sessionId).toBe('my-session-123');
     });
 
@@ -180,8 +180,8 @@ describe('CSRF', () => {
         headers: { cookie: 'sb-test-auth-token=some-token-value' },
       });
 
-      const sessionId = getSessionIdFromRequest(request);
-      expect(sessionId).toMatch(/^session-[a-f0-9]+$/);
+      const sessionId = await getSessionIdFromRequest(request);
+      expect(sessionId).toMatch(/^anon-/);
     });
 
     it('should generate anonymous session ID when no cookies', async () => {
@@ -189,7 +189,7 @@ describe('CSRF', () => {
 
       const request = new Request('https://example.com');
 
-      const sessionId = getSessionIdFromRequest(request);
+      const sessionId = await getSessionIdFromRequest(request);
       expect(sessionId).toMatch(/^anon-/);
     });
 
@@ -200,7 +200,7 @@ describe('CSRF', () => {
         headers: { cookie: 'session-id=explicit-session;sb-test-auth-token=supabase-token' },
       });
 
-      const sessionId = getSessionIdFromRequest(request);
+      const sessionId = await getSessionIdFromRequest(request);
       expect(sessionId).toBe('explicit-session');
     });
   });

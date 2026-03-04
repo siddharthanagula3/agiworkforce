@@ -5,6 +5,12 @@ import { POST } from '@/app/api/agents/execute/route';
 // Mock server-only module
 vi.mock('server-only', () => ({}));
 
+// Mock fs so loadEmployeeSystemPrompt returns a fake prompt for any employeeId
+vi.mock('fs', () => ({
+  existsSync: vi.fn(() => true),
+  readFileSync: vi.fn(() => 'You are a helpful AI assistant.'),
+}));
+
 // Mock rate limiting — pass through by default
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
@@ -227,7 +233,10 @@ describe('POST /api/agents/execute', () => {
       credits_used_cents: 100,
     });
 
-    const request = makeRequest({ message: 'Write me a long essay' }, FAKE_BEARER);
+    const request = makeRequest(
+      { message: 'Write me a long essay', employeeId: 'test-employee' },
+      FAKE_BEARER,
+    );
     const response = await POST(request);
 
     expect(response.status).toBe(403);
@@ -239,7 +248,10 @@ describe('POST /api/agents/execute', () => {
   it('should return 400 when provider is not configured', async () => {
     mockCreateProvider.mockReturnValueOnce(null); // provider not configured
 
-    const request = makeRequest({ message: 'Hello', provider: 'unknown-provider' }, FAKE_BEARER);
+    const request = makeRequest(
+      { message: 'Hello', provider: 'unknown-provider', employeeId: 'test-employee' },
+      FAKE_BEARER,
+    );
     const response = await POST(request);
 
     expect(response.status).toBe(400);
@@ -274,6 +286,7 @@ describe('POST /api/agents/execute', () => {
     const request = makeRequest(
       {
         message: 'How are you?',
+        employeeId: 'test-employee',
         systemPrompt: 'You are a helpful assistant.',
         conversationHistory,
         model: 'claude-haiku-4.5',
@@ -298,7 +311,7 @@ describe('POST /api/agents/execute', () => {
   });
 
   it('should use default model when model is not specified', async () => {
-    const request = makeRequest({ message: 'Hello' }, FAKE_BEARER);
+    const request = makeRequest({ message: 'Hello', employeeId: 'test-employee' }, FAKE_BEARER);
     const response = await POST(request);
 
     expect(response.status).toBe(200);
@@ -310,7 +323,7 @@ describe('POST /api/agents/execute', () => {
   it('should return 500 when LLM provider throws an error', async () => {
     mockStreamRequest.mockRejectedValueOnce(new Error('Provider upstream error'));
 
-    const request = makeRequest({ message: 'Hello' }, FAKE_BEARER);
+    const request = makeRequest({ message: 'Hello', employeeId: 'test-employee' }, FAKE_BEARER);
     const response = await POST(request);
 
     expect(response.status).toBe(500);

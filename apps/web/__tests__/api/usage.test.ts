@@ -244,9 +244,9 @@ describe('GET /api/usage', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
 
-    // Should fall back to subscription period dates
-    expect(data.period_start).toEqual(MOCK_SUBSCRIPTION.current_period_start);
-    expect(data.period_end).toEqual(MOCK_SUBSCRIPTION.current_period_end);
+    // Should fall back to subscription period dates (serialized to ISO string in JSON)
+    expect(data.period_start).toBe(MOCK_SUBSCRIPTION.current_period_start.toISOString());
+    expect(data.period_end).toBe(MOCK_SUBSCRIPTION.current_period_end.toISOString());
   });
 
   it('should return free plan and zero credits when balance and subscription are null', async () => {
