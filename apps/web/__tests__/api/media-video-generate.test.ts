@@ -538,7 +538,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(data.error.code).toBe('INTERNAL_ERROR');
     });
 
     it('should return 500 when Runway returns no task ID', async () => {
@@ -551,7 +551,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(data.error.code).toBe('INTERNAL_ERROR');
     });
 
     it('should return 503 when Google Veo returns 401', async () => {
