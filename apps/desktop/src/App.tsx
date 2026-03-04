@@ -34,10 +34,9 @@ import ErrorToastContainer from './components/Errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
-import { useAuthStore } from './stores/auth';
-import { useAccountStore } from './stores/accountStore';
+import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
-import useErrorStore from './stores/errorStore';
+import useErrorStore from './stores/ui';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
 
 const VisualizationLayer = lazy(() =>
@@ -643,7 +642,7 @@ const App = () => {
     // Force sync account data after store hydration is complete
     let cancelled = false;
     (async () => {
-      const { useAccountStore, waitForHydration } = await import('./stores/accountStore');
+      const { useAccountStore, waitForHydration } = await import('./stores/auth');
       const { supabaseAuth } = await import('./services/supabaseAuth');
 
       // Wait for store hydration from localStorage before syncing

@@ -22,7 +22,7 @@ import {
 } from '../../constants/llm';
 import type { SubscriptionTier } from '../../constants/planModels';
 import { cn } from '../../lib/utils';
-import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
+import { useAccountStore, selectIsTierLoading } from '../../stores/auth';
 import { useModelStore, selectLastRoutingDecision } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
@@ -520,18 +520,26 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
           return (
             <div
-              className={cn(
-                'rounded-lg px-2 py-1.5',
-                isDisabled && 'opacity-50',
-              )}
-              title={isDisabled ? 'This model does not support Thinking Mode' : 'Set thinking budget'}
+              className={cn('rounded-lg px-2 py-1.5', isDisabled && 'opacity-50')}
+              title={
+                isDisabled ? 'This model does not support Thinking Mode' : 'Set thinking budget'
+              }
             >
               <div className="flex items-center gap-2 mb-1.5">
-                <Brain size={12} className={thinkingModeEnabled ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'} />
-                <span className={cn(
-                  'text-[10px] font-medium',
-                  thinkingModeEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400',
-                )}>
+                <Brain
+                  size={12}
+                  className={
+                    thinkingModeEnabled ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'
+                  }
+                />
+                <span
+                  className={cn(
+                    'text-[10px] font-medium',
+                    thinkingModeEnabled
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-gray-500 dark:text-gray-400',
+                  )}
+                >
                   Think
                 </span>
               </div>

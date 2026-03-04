@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { checkSubscriptionGate, getUpgradeMessage } from '../../utils/subscriptionGate';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';
 import { supabaseAuth } from '../../services/supabaseAuth';
 

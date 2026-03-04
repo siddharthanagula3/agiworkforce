@@ -1,5 +1,5 @@
 import { invoke } from '../lib/tauri-mock';
-import type { AppError } from '../stores/errorStore';
+import type { AppError } from '../stores/ui';
 
 interface SystemInfo {
   platform: string;

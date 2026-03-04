@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import { invoke } from '../../../lib/tauri-mock';
 import { formatErrorForChat } from '../../../lib/friendlyErrors';
 import { getSimpleErrorMessage } from '../../../lib/errorMessages';
-import { useAccountStore } from '../../../stores/accountStore';
+import { useAccountStore } from '../../../stores/auth';
 import { useBillingStore } from '../../../stores/auth';
 import {
   Attachment,
