@@ -1,3 +1,4 @@
+pub mod background_manager;
 pub mod cache_manager;
 pub mod capability_detection;
 pub mod cost_calculator;

@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, Sparkles, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import { useModelStore } from '../../stores/modelStore';
 import {
   MODEL_PRESETS,

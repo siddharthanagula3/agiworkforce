@@ -146,7 +146,7 @@ impl ScheduledJob {
 
 /// The proactive scheduler that manages scheduled jobs
 pub struct ProactiveScheduler {
-    jobs: RwLock<HashMap<String, ScheduledJob>>,
+    pub(crate) jobs: RwLock<HashMap<String, ScheduledJob>>,
 }
 
 impl ProactiveScheduler {
@@ -433,6 +433,133 @@ pub async fn scheduler_get_next_runs(
         .into_iter()
         .map(|(job_id, next_run)| NextRunEntry { job_id, next_run })
         .collect())
+}
+
+/// Toggle a scheduled job between active and paused states
+///
+/// If the job is active, it will be paused. If paused, it will be resumed.
+///
+/// # Arguments
+/// * `id` - The unique identifier of the job to toggle
+///
+/// # Returns
+/// `true` if the job was found and toggled, `false` otherwise
+#[command]
+pub async fn scheduler_toggle_job(
+    id: String,
+    state: State<'_, SchedulerState>,
+) -> Result<bool> {
+    // Check current status and toggle accordingly
+    let current_status = {
+        let job = state.scheduler.get_job(&id)?;
+        match job {
+            Some(j) => j.status,
+            None => return Err(Error::Generic(format!("Job not found: {}", id))),
+        }
+    };
+
+    match current_status {
+        JobStatus::Active => state.scheduler.pause_job(&id),
+        JobStatus::Paused => state.scheduler.resume_job(&id),
+        other => Err(Error::Generic(format!(
+            "Cannot toggle job in {:?} state. Only active or paused jobs can be toggled.",
+            other
+        ))),
+    }
+}
+
+/// Immediately trigger a scheduled job to run
+///
+/// Marks the job as having run and updates run count and timestamps.
+/// The actual execution is recorded but the job action itself is not
+/// executed here — this allows the frontend to track the run.
+///
+/// # Arguments
+/// * `id` - The unique identifier of the job to run
+///
+/// # Returns
+/// `true` if the job was found and marked as run
+#[command]
+pub async fn scheduler_run_job_now(
+    id: String,
+    state: State<'_, SchedulerState>,
+) -> Result<bool> {
+    state.scheduler.mark_job_run(&id, true)
+}
+
+/// Partial update payload for a scheduled job
+///
+/// All fields are optional — only provided fields will be applied.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScheduledJobUpdate {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub schedule: Option<serde_json::Value>,
+    pub status: Option<String>,
+    pub prompt: Option<String>,
+}
+
+/// Update a scheduled job with partial changes
+///
+/// # Arguments
+/// * `id` - The unique identifier of the job to update
+/// * `updates` - A partial object with fields to update
+///
+/// # Returns
+/// `true` if the job was found and updated
+#[command]
+pub async fn scheduler_update_job(
+    id: String,
+    updates: ScheduledJobUpdate,
+    state: State<'_, SchedulerState>,
+) -> Result<bool> {
+    let mut jobs = state
+        .scheduler
+        .jobs
+        .write()
+        .map_err(|e| Error::Generic(format!("Failed to acquire write lock: {}", e)))?;
+
+    if let Some(job) = jobs.get_mut(&id) {
+        if let Some(name) = updates.name {
+            job.name = name;
+        }
+        if let Some(description) = updates.description {
+            job.description = Some(description);
+        }
+        if let Some(status_str) = updates.status {
+            match status_str.as_str() {
+                "active" => job.status = JobStatus::Active,
+                "paused" => job.status = JobStatus::Paused,
+                "completed" => job.status = JobStatus::Completed,
+                "failed" => job.status = JobStatus::Failed,
+                _ => {
+                    return Err(Error::Generic(format!(
+                        "Invalid status: {}. Valid options: active, paused, completed, failed",
+                        status_str
+                    )))
+                }
+            }
+        }
+        if let Some(schedule_val) = updates.schedule {
+            // The frontend may send a schedule object with cron_expression or interval.
+            // Extract the cron expression if present, otherwise keep the existing one.
+            if let Some(cron) = schedule_val.get("cronExpression").and_then(|v| v.as_str()) {
+                // Validate the cron expression before applying
+                let _parsed = Schedule::from_str(cron)
+                    .map_err(|e| Error::Generic(format!("Invalid cron expression: {}", e)))?;
+                job.schedule = cron.to_string();
+                job.next_run = job.calculate_next_run();
+            }
+        }
+        if let Some(prompt) = updates.prompt {
+            // Store the prompt in action_data
+            job.action_data["prompt"] = serde_json::Value::String(prompt);
+        }
+        job.updated_at = Utc::now();
+        Ok(true)
+    } else {
+        Err(Error::Generic(format!("Job not found: {}", id)))
+    }
 }
 
 /// Parse action type string to SchedulerActionType enum

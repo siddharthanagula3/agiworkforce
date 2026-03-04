@@ -120,6 +120,9 @@ pub enum SecurityError {
 
     #[error("Insecure protocol: {0}")]
     InsecureProtocol(String),
+
+    #[error("Capability disabled: {0}")]
+    CapabilityDisabled(String),
 }
 
 pub struct ToolExecutionGuard {

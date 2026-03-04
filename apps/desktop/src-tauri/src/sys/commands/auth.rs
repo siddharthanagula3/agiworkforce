@@ -132,6 +132,48 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+/// Extract the user ID (`sub` claim) from the current session JWT.
+/// Returns `"default"` if no session is stored (single-user desktop fallback).
+pub fn get_session_user_id(state: &SessionState) -> Result<String, String> {
+    let store = state.0.read().map_err(|e| e.to_string())?;
+    let token = match store.as_ref() {
+        Some(t) => t.clone(),
+        None => return Ok("default".to_string()),
+    };
+
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Ok("default".to_string());
+    }
+
+    // Decode the payload (segment 1) from base64url
+    let std_b64: String = parts[1]
+        .chars()
+        .map(|c| match c {
+            '-' => '+',
+            '_' => '/',
+            other => other,
+        })
+        .collect();
+
+    let padded = match std_b64.len() % 4 {
+        2 => format!("{}==", std_b64),
+        3 => format!("{}=", std_b64),
+        _ => std_b64,
+    };
+
+    let decoded_bytes = base64_decode(&padded).unwrap_or_default();
+    let payload_str = String::from_utf8(decoded_bytes).unwrap_or_default();
+
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
+
+    match payload.get("sub").and_then(|v| v.as_str()) {
+        Some(sub) if !sub.is_empty() => Ok(sub.to_string()),
+        _ => Ok("default".to_string()),
+    }
+}
+
 #[command]
 pub async fn auth_store_session(
     session: String,

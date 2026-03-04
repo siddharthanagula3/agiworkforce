@@ -2,7 +2,6 @@ import { Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { invoke } from '../../../lib/tauri-mock';
-import { useAuthStore } from '../../../stores/auth';
 
 interface PeriodStats {
   total_time_saved_hours: number;
@@ -38,13 +37,10 @@ const RealtimeROIDashboardComponent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange>('today');
-  const userId = useAuthStore((state) => state.getCurrentUserId());
 
   const loadStats = React.useCallback(async () => {
     try {
-      const result = await invoke<RealtimeStats>('get_realtime_stats', {
-        userId,
-      });
+      const result = await invoke<RealtimeStats>('get_realtime_stats');
       setStats(result);
       setError(null);
     } catch (err) {
@@ -52,7 +48,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     loadStats();
