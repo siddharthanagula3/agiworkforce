@@ -36,6 +36,27 @@ vi.mock('@shared/lib/supabase-client', () => ({
   },
 }));
 
+vi.mock('@features/vibe/services/vibe-file-system', () => {
+  class FileSystemException extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'FileSystemException';
+    }
+  }
+  return {
+    vibeFileSystem: {
+      readFile: vi.fn(() => {
+        throw new FileSystemException('File not found');
+      }),
+      createFile: vi.fn((path: string, content: string) => ({ path, content, type: 'file' })),
+      updateFile: vi.fn((path: string, content: string) => ({ path, content, type: 'file' })),
+      getStats: vi.fn(() => ({ totalFiles: 0, totalSize: 0, openFiles: 0 })),
+      getFileTree: vi.fn(() => []),
+    },
+    FileSystemException,
+  };
+});
+
 // Mock crypto.randomUUID
 vi.stubGlobal('crypto', {
   randomUUID: () => `test-uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
