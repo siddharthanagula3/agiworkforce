@@ -127,9 +127,12 @@ Entry point: `main.rs` calls `lib.rs::run()` which sets up Tauri with all plugin
 React 19 SPA with Vite, using react-router-dom for routing:
 
 - **`components/`** — 60+ component directories (Agent, Chat, Settings, Voice, Vision, Terminal, etc.)
+  - `UnifiedAgenticChat/ToolLabel.tsx` — Renders individual tool execution with status (running/completed/error), duration, and icon mapping
+  - `UnifiedAgenticChat/ToolTimeline.tsx` — Collapsible timeline of tool executions during agentic loop, auto-expands while tools are running
 - **`stores/`** — 40+ Zustand stores with Immer and Persist middleware. Key stores:
   - `settingsStore.ts` — App configuration (persist v10 migration)
   - `unifiedChatStore.ts` — Chat state management
+  - `chat/toolStore.ts` — Tool execution tracking; listens on `tool:event` Tauri channel to build timeline of executed tools
   - `mcpStore.ts` / `mcpbStore.ts` — MCP connections
   - `modelStore.ts` — Model selection and configuration
 - **`services/`** — API services, analytics, Stripe, Supabase auth, caching
@@ -160,8 +163,14 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 ## Key Technical Details
 
-- **Tool Events** (sys/commands/chat/tool_events.rs): Structured `ToolEvent` emission to frontend during tool execution. Each event carries `ToolEvent::Started`, `ToolEvent::Progress`, `ToolEvent::Completed` with metadata (tool_name, display_name, display_args, result_preview). Display name mapping converts raw MCP tool names to Claude Code-style labels via pattern matching: `Read(path)`, `Write(path)`, `Bash(cmd)`, `WebSearch(query)`, `Edit(path:lines)`, `Git(cmd)`, etc.
-- **Local LLM Capability Detection** (core/llm/capability_detection.rs): Ollama capability detection via `/api/show` endpoint. Probes model template for tool-calling support tokens and checks model family against known tool-capable families (llama3.1+, qwen2.5+, mistral, etc.). Results cached in memory to avoid repeated network calls. Includes fallback to model name heuristics when /api/show is unreachable.
+- **Tool Events** (sys/commands/chat/tool_events.rs + packages/types/src/tool-events.ts): Structured `ToolEvent` emission via `tool:event` Tauri channel during tool execution. Each event carries `ToolEvent::Started`, `ToolEvent::Progress`, `ToolEvent::Completed` with metadata (tool_name, display_name, display_args, result_preview, duration_ms). Display name mapping converts raw MCP tool names to Claude Code-style labels via pattern matching: `Read(path)`, `Write(path)`, `Bash(cmd)`, `WebSearch(query)`, `Edit(path:lines)`, `Git(cmd)`, etc. Frontend listens and builds timeline in `chat/toolStore.ts`, rendered by `ToolLabel.tsx` + `ToolTimeline.tsx`.
+- **Agentic Loop Events**: Frontend subscribes to lifecycle events emitted by the agentic loop executor:
+  - `agentic:loop-started` — Agentic loop iteration began
+  - `agentic:loop-status` — Current iteration count, tools executed, elapsed time, cost snapshot
+  - `agentic:loop-ended` — Loop completed; includes reason (max_iterations, max_cost, no_tool_calls, error)
+  - `agentic:message-consumed` — User queued message was consumed by the loop
+- **Local LLM Capability Detection** (core/llm/capability_detection.rs): Ollama capability detection via `/api/show` endpoint. Probes model template for tool-calling support tokens and checks model family against known tool-capable families (llama3.1+, qwen2.5+, mistral, etc.). Results cached per session to avoid repeated network calls. Includes fallback to model name heuristics when /api/show is unreachable. Prevents tool injection on non-tool-capable models.
+- **Prompt Tool Injection** (planned for Phase 2): Fallback for non-tool-capable local LLMs — converts tool definitions into formatted prompt instructions, allowing models like Mistral 7B to respond with pseudo-tool calls that are parsed and executed server-side.
 - **State Management Pattern** (lib.rs): Uses degraded state constructors for optional features — `MemoryState::degraded()`, `MasterPasswordState::degraded()`, `ProjectMemoryState::degraded()`, `McpExtensionsState::degraded()`, `EmbeddingServiceState::degraded()`, `AppState::degraded()`. Allows graceful fallback if initialization fails. However, some commands (embedding\_\*) have type mismatches and may panic if state is not properly managed.
 - **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalog lives in both `src/constants/llm.ts` (frontend) and `provider_adapter.rs` (Rust) — these must stay in sync.
 - **Streaming**: SSE parsing via `sse_parser.rs`. Uses dual HTTP clients (one with streaming timeout disabled).
