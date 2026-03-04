@@ -27,6 +27,18 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         code: '💻',
         database: '🗄️',
         image: '🎨',
+        swarm: '🐝',
+        artifact: '📦',
+        skill: '🎯',
+        vision: '👁️',
+        memory: '🧠',
+        voice: '🎙️',
+        agent: '🤖',
+        git: '📁',
+        schedule: '📅',
+        lsp: '🔍',
+        marketplace: '🛒',
+        generic: '📋',
       };
       return icons[type];
     };
@@ -38,6 +50,18 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         code: 'Code',
         database: 'Query Results',
         image: 'Generated Image',
+        swarm: 'Swarm Execution',
+        artifact: 'Artifact',
+        skill: 'Skill',
+        vision: 'Vision',
+        memory: 'Memory',
+        voice: 'Voice',
+        agent: 'Agents',
+        git: 'Git',
+        schedule: 'Schedule',
+        lsp: 'LSP',
+        marketplace: 'Marketplace',
+        generic: 'Result',
       };
       return titles[type];
     };

@@ -98,7 +98,21 @@ export type SidecarMode =
   | 'diff'
   | 'canvas'
   | 'data'
-  | 'extension';
+  | 'extension'
+  | 'git'
+  | 'database'
+  | 'filesystem'
+  | 'vision'
+  | 'computer-use'
+  | 'swarm'
+  | 'scheduler'
+  | 'documents'
+  | 'automation'
+  | 'marketplace'
+  | 'messaging'
+  | 'productivity'
+  | 'cloud'
+  | 'governance';
 
 export interface SidecarState {
   isOpen: boolean;

@@ -141,29 +141,72 @@ export interface InlinePanelContent {
     latencyMs?: number;
     error?: string;
   };
+  /** Generic data payload for inline tool results (swarm, skill, memory, vision, etc.) */
+  data?: Record<string, unknown>;
 }
 
 export interface InlinePanel {
   id: string;
-  type: 'terminal' | 'browser' | 'code' | 'database' | 'image';
+  type:
+    | 'terminal'
+    | 'browser'
+    | 'code'
+    | 'database'
+    | 'image'
+    | 'swarm'
+    | 'artifact'
+    | 'skill'
+    | 'vision'
+    | 'memory'
+    | 'voice'
+    | 'agent'
+    | 'git'
+    | 'schedule'
+    | 'lsp'
+    | 'marketplace'
+    | 'generic';
   content: InlinePanelContent;
   isCollapsed: boolean;
   timestamp: Date;
   metadata?: Record<string, unknown>;
 }
 
+export type SlashCommandName =
+  | 'browser'
+  | 'terminal'
+  | 'code'
+  | 'database'
+  | 'undo'
+  | 'compact'
+  | 'pdf'
+  | 'word'
+  | 'excel'
+  | 'imagine'
+  | 'swarm'
+  | 'vision'
+  | 'skills'
+  | 'memory'
+  | 'recall'
+  | 'agents'
+  | 'git'
+  | 'schedule'
+  | 'voice'
+  | 'think'
+  | 'docs'
+  | 'record'
+  | 'metrics'
+  | 'marketplace'
+  | 'desktop'
+  | 'ocr'
+  | 'notify'
+  | 'lsp'
+  | 'enhance'
+  | 'migrate'
+  | 'message'
+  | 'settings';
+
 export interface SlashCommandMetadata {
-  command:
-    | 'browser'
-    | 'terminal'
-    | 'code'
-    | 'database'
-    | 'undo'
-    | 'compact'
-    | 'pdf'
-    | 'word'
-    | 'excel'
-    | 'imagine';
+  command: SlashCommandName;
   args: string;
   rawInput: string;
 }
