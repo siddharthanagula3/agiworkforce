@@ -167,10 +167,10 @@ class WebContainerManager {
       try {
         // Dynamic import to avoid bundle size impact when not used
         // @webcontainer/api is optional — gracefully handle missing package
-        const webContainerModule = await import(
-          /* webpackIgnore: true */
-          '@webcontainer/api'
-        ).catch(() => null);
+
+        const webContainerModule = await import(/* @vite-ignore */ '@webcontainer/api').catch(
+          () => null,
+        );
         if (!webContainerModule) {
           throw new Error('WebContainer API not available');
         }
