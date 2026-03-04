@@ -72,7 +72,7 @@ impl BackgroundManager {
         _webhook_url: Option<String>,
         _webhook_secret: Option<String>,
     ) -> Result<BackgroundSubmitResult, crate::sys::error::Error> {
-        let id = format!("bg_{}", uuid::Uuid::new_v4().to_string().replace("-", "")[..12].to_string());
+        let id = format!("bg_{}", &uuid::Uuid::new_v4().to_string().replace("-", "")[..12]);
         let bg_request = BackgroundRequest {
             id: id.clone(),
             status: BackgroundStatus::Queued,
