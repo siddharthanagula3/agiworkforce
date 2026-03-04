@@ -2,82 +2,77 @@ pub mod indexer;
 
 pub use indexer::{CodebaseIndexer, IndexStats, Symbol, SymbolKind};
 
-use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
-pub struct CodebaseService {
-    indexer: Arc<Mutex<CodebaseIndexer>>,
+/// Wrapper around `CodebaseIndexer` for Tauri managed state.
+///
+/// Uses `Option<CodebaseIndexer>` so we can provide a degraded state
+/// when initialization fails, matching the codebase pattern for graceful fallback.
+pub struct CodebaseServiceState {
+    indexer: Option<Arc<CodebaseIndexer>>,
 }
 
-impl CodebaseService {
-    pub fn new(workspace_root: PathBuf) -> Result<Self> {
-        let indexer = CodebaseIndexer::new(workspace_root)?;
+impl CodebaseServiceState {
+    /// Initialize the service with a workspace root.
+    /// The underlying `CodebaseIndexer` opens a tokio-rusqlite connection.
+    pub async fn new(workspace_root: PathBuf) -> Result<Self, String> {
+        let indexer = CodebaseIndexer::new(workspace_root).await?;
         Ok(Self {
-            indexer: Arc::new(Mutex::new(indexer)),
+            indexer: Some(Arc::new(indexer)),
         })
     }
 
-    pub fn indexer(&self) -> Arc<Mutex<CodebaseIndexer>> {
-        self.indexer.clone()
+    /// Create a degraded state that returns clear errors to the frontend
+    /// instead of panicking on state retrieval.
+    pub fn new_degraded() -> Self {
+        Self { indexer: None }
+    }
+
+    fn get_indexer(&self) -> Result<&Arc<CodebaseIndexer>, String> {
+        self.indexer.as_ref().ok_or_else(|| {
+            "Codebase indexer is not available. It may have failed to initialize.".to_string()
+        })
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tauri commands
+// ---------------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn index_workspace_file(
     file_path: String,
-    codebase_service: tauri::State<'_, Arc<Mutex<CodebaseService>>>,
+    state: tauri::State<'_, CodebaseServiceState>,
 ) -> Result<Vec<Symbol>, String> {
-    let service = codebase_service.lock().await;
-    let indexer = service.indexer();
-    let indexer_guard = indexer.lock().await;
-
+    let indexer = state.get_indexer()?;
     let path = PathBuf::from(&file_path);
-    indexer_guard
-        .index_file(&path)
-        .await
-        .map_err(|e| format!("Failed to index file: {}", e))
+    indexer.index_file(&path).await
 }
 
 #[tauri::command]
 pub async fn search_symbols(
     query: String,
     limit: Option<usize>,
-    codebase_service: tauri::State<'_, Arc<Mutex<CodebaseService>>>,
+    state: tauri::State<'_, CodebaseServiceState>,
 ) -> Result<Vec<Symbol>, String> {
-    let service = codebase_service.lock().await;
-    let indexer = service.indexer();
-    let indexer_guard = indexer.lock().await;
-
-    indexer_guard
-        .search_symbols(&query, limit.unwrap_or(50))
-        .map_err(|e| format!("Failed to search symbols: {}", e))
+    let indexer = state.get_indexer()?;
+    indexer.search_symbols(&query, limit.unwrap_or(50)).await
 }
 
 #[tauri::command]
 pub async fn get_file_symbols(
     file_path: String,
-    codebase_service: tauri::State<'_, Arc<Mutex<CodebaseService>>>,
+    state: tauri::State<'_, CodebaseServiceState>,
 ) -> Result<Vec<Symbol>, String> {
-    let service = codebase_service.lock().await;
-    let indexer = service.indexer();
-    let indexer_guard = indexer.lock().await;
-
-    indexer_guard
-        .get_file_symbols(&file_path)
-        .map_err(|e| format!("Failed to get file symbols: {}", e))
+    let indexer = state.get_indexer()?;
+    indexer.get_file_symbols(&file_path).await
 }
 
 #[tauri::command]
 pub async fn get_index_stats(
-    codebase_service: tauri::State<'_, Arc<Mutex<CodebaseService>>>,
+    state: tauri::State<'_, CodebaseServiceState>,
 ) -> Result<IndexStats, String> {
-    let service = codebase_service.lock().await;
-    let indexer = service.indexer();
-    let indexer_guard = indexer.lock().await;
-
-    indexer_guard
-        .get_stats()
-        .map_err(|e| format!("Failed to get stats: {}", e))
+    let indexer = state.get_indexer()?;
+    indexer.get_stats().await
 }
