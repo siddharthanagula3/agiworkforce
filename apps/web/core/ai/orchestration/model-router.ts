@@ -472,8 +472,8 @@ export class ModelRouter {
         AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.2') ||
         AVAILABLE_MODELS[0];
       return {
-        provider: fallback?.provider,
-        model: fallback?.model,
+        provider: fallback?.provider ?? 'anthropic',
+        model: fallback?.model ?? 'claude-sonnet-4-5-20250929',
         reason: `No specialized model found for "${category}". Using general-purpose model.`,
         confidence: 0.5,
         alternatives: [],
@@ -488,8 +488,8 @@ export class ModelRouter {
     }));
 
     return {
-      provider: primary?.provider,
-      model: primary?.model,
+      provider: primary?.provider ?? 'anthropic',
+      model: primary?.model ?? 'claude-sonnet-4-5-20250929',
       reason: this.getRecommendationReason(category, primary!),
       confidence: 0.85,
       alternatives,
@@ -544,7 +544,7 @@ export class ModelRouter {
    */
   getDefaultModel(): ModelInfo {
     return (
-      AVAILABLE_MODELS.find((m) => m.model === 'claude-sonnet-4-5-20250929') || AVAILABLE_MODELS[0]
+      AVAILABLE_MODELS.find((m) => m.model === 'claude-sonnet-4-5-20250929') || AVAILABLE_MODELS[0]!
     );
   }
 

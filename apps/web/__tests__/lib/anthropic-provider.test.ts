@@ -255,7 +255,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(body.system).toBe('You are helpful.');
       const systemInMessages = body.messages.some((m: { role: string }) => m.role === 'system');
       expect(systemInMessages).toBe(false);
@@ -280,7 +280,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(Array.isArray(body.system)).toBe(true);
       expect(body.system[0]).toMatchObject({
         type: 'text',
@@ -299,7 +299,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       const lastMsg = body.messages[body.messages.length - 1];
       expect(Array.isArray(lastMsg.content)).toBe(true);
       expect(lastMsg.content[0]).toMatchObject({
@@ -321,7 +321,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       // system should be a plain string, not an array
       expect(typeof body.system).toBe('string');
     });
@@ -393,7 +393,7 @@ describe('AnthropicProvider', () => {
 
       await provider.streamRequest(baseRequest({ stream: true }));
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(body.stream).toBe(true);
     });
   });
@@ -426,7 +426,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       // The tool message should be inside a role:"user" message
       const toolResultMessage = body.messages.find(
         (m: { role: string; content: unknown }) => m.role === 'user' && Array.isArray(m.content),
@@ -464,7 +464,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       const assistantMsg = body.messages.find((m: { role: string }) => m.role === 'assistant');
       expect(assistantMsg).toBeDefined();
       const toolUseBlock = (
@@ -499,7 +499,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       const toolResultMsg = body.messages.find(
         (m: { role: string; content: unknown[] }) => m.role === 'user' && Array.isArray(m.content),
       );
@@ -521,7 +521,7 @@ describe('AnthropicProvider', () => {
         }),
       );
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       // Only the non-empty message should appear
       expect(body.messages).toHaveLength(1);
       expect((body.messages[0] as { content: string }).content).toBe('Hello');
@@ -548,7 +548,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendRequest(baseRequest({ tools: [anthropicTool] }));
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(body.tools[0]).toEqual(anthropicTool);
     });
 
@@ -570,7 +570,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendRequest(baseRequest({ tools: [openAiTool] }));
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(body.tools[0]).toEqual({
         name: 'get_weather',
         description: 'Get weather for a location',
@@ -597,7 +597,7 @@ describe('AnthropicProvider', () => {
 
       await provider.sendRequest(baseRequest({ tools: [bareTool] }));
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
       expect(body.tools[0].input_schema).toEqual({
         type: 'object',
         properties: {},

@@ -228,7 +228,9 @@ export const useVibeChatStore = create<VibeChatState>()(
         // This catches most duplicates without needing to enter the Immer transaction
 
         type MessageWithSender = VibeMessage & { sender?: string };
-        if (isDuplicateMessage((message as MessageWithSender).sender || message.role, message.content)) {
+        if (
+          isDuplicateMessage((message as MessageWithSender).sender || message.role, message.content)
+        ) {
           return; // Skip duplicate
         }
 
@@ -238,7 +240,8 @@ export const useVibeChatStore = create<VibeChatState>()(
           // This handles edge cases where fingerprint cache might have been cleared
           const recentDuplicate = state.messages.find(
             (m) =>
-              ((m as MessageWithSender).sender || m.role) === ((message as MessageWithSender).sender || message.role) &&
+              ((m as MessageWithSender).sender || m.role) ===
+                ((message as MessageWithSender).sender || message.role) &&
               m.content === message.content &&
               Date.now() - new Date(m.timestamp).getTime() < DEDUP_CONFIG.TIME_WINDOW_MS,
           );
@@ -270,8 +273,9 @@ export const useVibeChatStore = create<VibeChatState>()(
         set((state) => {
           const messageIndex = state.messages.findIndex((m) => m.id === messageId);
           if (messageIndex !== -1) {
-            state.messages[messageIndex] = {
-              ...state.messages[messageIndex],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (state.messages as any)[messageIndex] = {
+              ...state.messages[messageIndex]!,
               ...updates,
             };
           }

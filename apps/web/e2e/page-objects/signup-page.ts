@@ -27,7 +27,7 @@ export class SignupPage extends BasePage {
   /**
    * Navigate to the signup page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/signup');
   }
 

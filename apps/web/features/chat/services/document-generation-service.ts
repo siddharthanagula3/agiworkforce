@@ -145,7 +145,8 @@ export async function generateDocument(
     // Extract title from content (first # heading)
     const titleMatch = response.content.match(/^#\s+(.+)$/m);
     const title = titleMatch
-      ? titleMatch[1]
+      ? (titleMatch[1] ??
+        `${request.type.charAt(0).toUpperCase() + request.type.slice(1)} Document`)
       : `${request.type.charAt(0).toUpperCase() + request.type.slice(1)} Document`;
 
     // Calculate word count

@@ -93,10 +93,7 @@ import { POST, OPTIONS } from '@/app/api/media/video/generate/route';
 // ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/video/generate';
 
-function makeAuthedRequest(
-  body: unknown,
-  extraHeaders: Record<string, string> = {},
-): NextRequest {
+function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
   return new NextRequest(BASE_URL, {
     method: 'POST',
     headers: {
@@ -135,16 +132,16 @@ describe('POST /api/media/video/generate', () => {
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
 
     // Set env vars
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
-    process.env.RUNWAY_API_KEY = 'test-runway-key';
-    delete process.env.GOOGLE_API_KEY;
+    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
+    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
+    process.env['RUNWAY_API_KEY'] = 'test-runway-key';
+    delete process.env['GOOGLE_API_KEY'];
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.RUNWAY_API_KEY;
-    delete process.env.GOOGLE_API_KEY;
+    delete process.env['RUNWAY_API_KEY'];
+    delete process.env['GOOGLE_API_KEY'];
   });
 
   // =========================================================================
@@ -214,7 +211,7 @@ describe('POST /api/media/video/generate', () => {
       mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(401);
     });
@@ -389,9 +386,7 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 400 when resolution is invalid', async () => {
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a sunset', resolution: '480p' }),
-      );
+      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', resolution: '480p' }));
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -404,8 +399,8 @@ describe('POST /api/media/video/generate', () => {
   // =========================================================================
   describe('Provider configuration', () => {
     it('should return 503 when neither RUNWAY_API_KEY nor GOOGLE_API_KEY is set', async () => {
-      delete process.env.RUNWAY_API_KEY;
-      delete process.env.GOOGLE_API_KEY;
+      delete process.env['RUNWAY_API_KEY'];
+      delete process.env['GOOGLE_API_KEY'];
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -473,8 +468,8 @@ describe('POST /api/media/video/generate', () => {
   // =========================================================================
   describe('Success — Google Veo provider', () => {
     beforeEach(() => {
-      delete process.env.RUNWAY_API_KEY;
-      process.env.GOOGLE_API_KEY = 'test-google-key';
+      delete process.env['RUNWAY_API_KEY'];
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
     });
 
     it('should return 200 with task_id when Google Veo operation is created', async () => {
@@ -560,8 +555,8 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 503 when Google Veo returns 401', async () => {
-      process.env.GOOGLE_API_KEY = 'test-google-key';
-      delete process.env.RUNWAY_API_KEY;
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+      delete process.env['RUNWAY_API_KEY'];
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -571,14 +566,14 @@ describe('POST /api/media/video/generate', () => {
       });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'google' }));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(503);
     });
 
     it('should return 400 when Google Veo flags prompt as unsafe', async () => {
-      process.env.GOOGLE_API_KEY = 'test-google-key';
-      delete process.env.RUNWAY_API_KEY;
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+      delete process.env['RUNWAY_API_KEY'];
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -599,7 +594,7 @@ describe('POST /api/media/video/generate', () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(500);
     });

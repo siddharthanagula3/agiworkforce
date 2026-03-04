@@ -17,9 +17,9 @@ export default async function DiagnosePage() {
 
   const checks = {
     env: {
-      STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
-      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      STRIPE_SECRET_KEY: !!process.env['STRIPE_SECRET_KEY'],
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env['SUPABASE_SERVICE_ROLE_KEY'],
+      NEXT_PUBLIC_SUPABASE_URL: !!process.env['NEXT_PUBLIC_SUPABASE_URL'],
     },
     user: {
       id: session.user.id,
@@ -42,10 +42,10 @@ export default async function DiagnosePage() {
 
   // Check Supabase Service Role
   try {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (process.env['NEXT_PUBLIC_SUPABASE_URL'] && process.env['SUPABASE_SERVICE_ROLE_KEY']) {
       const content = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        process.env['NEXT_PUBLIC_SUPABASE_URL'],
+        process.env['SUPABASE_SERVICE_ROLE_KEY'],
       );
       // Try a basic read
       const { error } = await content
@@ -58,9 +58,9 @@ export default async function DiagnosePage() {
   }
 
   // Check Stripe
-  if (process.env.STRIPE_SECRET_KEY) {
+  if (process.env['STRIPE_SECRET_KEY']) {
     try {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      const stripe = new Stripe(process.env['STRIPE_SECRET_KEY'], {
         apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
       });
       checks.stripe.connected = true;
@@ -71,14 +71,14 @@ export default async function DiagnosePage() {
 
         if (customers.data.length > 0) {
           const subs = await stripe.subscriptions.list({
-            customer: customers.data[0].id,
+            customer: customers.data[0]!.id,
             status: 'active',
           });
           checks.stripe.activeSubscriptions = subs.data.length;
           checks.stripe.data = subs.data.map((s) => ({
             id: s.id,
             status: s.status,
-            plan_tier_meta: s.metadata?.plan_tier,
+            plan_tier_meta: s.metadata?.['plan_tier'],
             price_id: s.items.data[0]?.price.id,
           }));
         }

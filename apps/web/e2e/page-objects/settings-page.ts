@@ -12,7 +12,7 @@ export class SettingsPage extends BasePage {
   // Account card - using more specific selectors
   private readonly accountCard =
     '.bg-zinc-900:has-text("Account"):has-text("Manage your personal details")';
-  private readonly emailLabel = 'label:has-text("Email")';
+  // private readonly emailLabel = 'label:has-text("Email")';
   private readonly emailValue = 'label:has-text("Email") + p';
 
   // Billing card - using more specific selectors
@@ -27,7 +27,7 @@ export class SettingsPage extends BasePage {
   /**
    * Navigate to the settings page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/dashboard/settings');
   }
 

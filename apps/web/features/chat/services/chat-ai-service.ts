@@ -314,7 +314,7 @@ export class ChatAIService {
       allowMultiple: false,
     });
 
-    return results.length > 0 ? results[0] : null;
+    return results.length > 0 ? (results[0] ?? null) : null;
   }
 
   /**

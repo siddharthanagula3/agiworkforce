@@ -111,7 +111,7 @@ function TimelineStep({
             {isFailed ? (
               <ToolErrorDisplay
                 error={step.result.error || 'Unknown error'}
-                toolName={step.tool_call.tool_name}
+                toolName={step.tool_call.tool_name ?? ''}
                 parameters={step.tool_call.parameters}
                 retryable={true}
                 onRetry={() => onRetryTool?.(step.tool_call.id)}

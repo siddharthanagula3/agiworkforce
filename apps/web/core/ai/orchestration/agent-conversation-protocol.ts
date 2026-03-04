@@ -416,16 +416,16 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
     const lastAgentMessage = [...state.messages].reverse().find((m) => m.role === 'agent');
 
     if (!lastAgentMessage) {
-      return state.participants[0];
+      return state.participants[0] ?? null;
     }
 
     const lastEmployeeName = lastAgentMessage.employeeName;
     const currentIndex = state.participants.findIndex((p) => p.name === lastEmployeeName);
 
-    if (currentIndex === -1) return state.participants[0]!;
+    if (currentIndex === -1) return state.participants[0] ?? null;
 
     const nextIndex = (currentIndex + 1) % state.participants.length;
-    return state.participants[nextIndex];
+    return state.participants[nextIndex] ?? null;
   }
 
   /**

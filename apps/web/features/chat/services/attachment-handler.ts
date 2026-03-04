@@ -326,7 +326,7 @@ export class AttachmentHandler {
       .createSignedUrl(filePath, 3600);
 
     return {
-      name: file?.name,
+      name: file?.name ?? '',
       size: file?.metadata?.['size'] || 0,
       type: file?.metadata?.['mimetype'] || 'application/octet-stream',
       url: urlData?.signedUrl || '',

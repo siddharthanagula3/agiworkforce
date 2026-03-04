@@ -64,7 +64,7 @@ describe('SecurityMonitoringService', () => {
       const events = await SecurityMonitoringService.getRecentEvents();
 
       expect(events).toHaveLength(2);
-      expect(events[0].event_type).toBe('auth_failed');
+      expect(events[0]!.event_type).toBe('auth_failed');
     });
 
     it('should filter by severity when provided', async () => {
@@ -89,7 +89,7 @@ describe('SecurityMonitoringService', () => {
       const events = await SecurityMonitoringService.getRecentEvents(100, 'critical');
 
       expect(events).toHaveLength(1);
-      expect(events[0].severity).toBe('critical');
+      expect(events[0]!.severity).toBe('critical');
     });
 
     it('should handle empty results', async () => {
@@ -234,10 +234,10 @@ describe('SecurityMonitoringService', () => {
       const topIps = await SecurityMonitoringService.getTopIpAddresses(24, 10);
 
       expect(topIps).toHaveLength(3);
-      expect(topIps[0].ip_address).toBe('1.2.3.4');
-      expect(topIps[0].event_count).toBe(3);
-      expect(topIps[1].ip_address).toBe('5.6.7.8');
-      expect(topIps[1].event_count).toBe(2);
+      expect(topIps[0]!.ip_address).toBe('1.2.3.4');
+      expect(topIps[0]!.event_count).toBe(3);
+      expect(topIps[1]!.ip_address).toBe('5.6.7.8');
+      expect(topIps[1]!.event_count).toBe(2);
     });
 
     it('should respect limit parameter', async () => {
@@ -280,7 +280,7 @@ describe('SecurityMonitoringService', () => {
       const events = await SecurityMonitoringService.getEventsByUser('user-123');
 
       expect(events).toHaveLength(1);
-      expect(events[0].user_id).toBe('user-123');
+      expect(events[0]!.user_id).toBe('user-123');
     });
   });
 

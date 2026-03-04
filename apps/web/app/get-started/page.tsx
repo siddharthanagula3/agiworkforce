@@ -66,6 +66,7 @@ export default function GetStartedPage() {
 
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [autoDownloadAttempted, downloadInfo]);
 
   const handleManualDownload = () => {
