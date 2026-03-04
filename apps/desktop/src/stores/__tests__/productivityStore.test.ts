@@ -8,6 +8,16 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+// Override the global sonner mock to provide toast sub-methods used by productivityStore
+vi.mock('sonner', () => {
+  const toastFn = vi.fn();
+  toastFn.success = vi.fn();
+  toastFn.error = vi.fn();
+  toastFn.info = vi.fn();
+  toastFn.warning = vi.fn();
+  return { toast: toastFn };
+});
+
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
