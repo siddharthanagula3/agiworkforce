@@ -244,6 +244,8 @@ impl ContextCompactor {
                 model: None,
                 created_at: chrono::Utc::now(),
                 user_id: messages[0].user_id.clone(),
+                parent_message_id: None,
+                branch_id: Some("main".to_string()),
             };
             compacted.push(summary_msg);
         }
