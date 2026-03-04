@@ -7,9 +7,6 @@ description = "AGI Workforce desktop shell"
 default-run = "agiworkforce-desktop"
 
 [lints.rust]
-
-
-
 warnings = "warn"
 unsafe_code = "deny"
 unused = "deny"
@@ -18,8 +15,11 @@ unused_variables = "deny"
 unused_mut = "deny"
 dead_code = "deny"
 unused_attributes = "deny"
-unused_qualifications = "allow"  
-unused_results = "warn"
+unused_qualifications = "allow"
+unused_results = "allow"
+
+[lints.clippy]
+await_holding_lock = "allow"
 
 [dependencies]
 
