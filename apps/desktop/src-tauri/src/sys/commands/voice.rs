@@ -1698,14 +1698,14 @@ pub async fn voice_start_barge_in_monitoring(
                 Ok(handle) => {
                     barge_in.handle = Some(handle);
                     tracing::debug!("Barge-in monitoring started");
-                    return Ok(true);
+                    Ok(true)
                 }
                 Err(e) => {
-                    return Err(format!("Failed to start barge-in monitoring: {}", e));
+                    Err(format!("Failed to start barge-in monitoring: {}", e))
                 }
             }
         } else {
-            return Err("Barge-in detector not initialized".to_string());
+            Err("Barge-in detector not initialized".to_string())
         }
     }
 
