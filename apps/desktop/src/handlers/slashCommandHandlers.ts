@@ -786,3 +786,1336 @@ export async function executeUndoCommand(args: string): Promise<InlinePanel> {
 
   return panel;
 }
+
+// ---------------------------------------------------------------------------
+// New slash command handlers (swarm, vision, skills, memory, recall, agents,
+// git, schedule, voice, think, docs, record, metrics, marketplace, desktop,
+// ocr, notify, lsp, enhance, migrate, message, settings)
+// ---------------------------------------------------------------------------
+
+/**
+ * Launches a swarm of parallel agents to achieve a high-level goal.
+ * Handles the /swarm slash command for multi-agent task execution.
+ *
+ * @param goal - The high-level goal for the swarm to accomplish
+ * @returns An InlinePanel with swarm execution status and results
+ *
+ * @example
+ * const panel = await executeSwarmCommand('Refactor all components to use hooks');
+ * // panel.content.data contains swarm status and agent results
+ */
+export async function executeSwarmCommand(goal: string): Promise<InlinePanel> {
+  const panelId = `swarm-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'swarm',
+    content: {
+      data: { goal, status: 'running' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const response = await invoke<Record<string, unknown>>('swarm_execute_goal', { goal });
+
+    panel.content.data = { goal, ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      goal,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Captures or analyzes an image using computer vision.
+ * Handles the /vision slash command for screen capture and image analysis.
+ *
+ * @param args - Empty to capture the screen, or a file path to analyze a specific image
+ * @returns An InlinePanel with vision analysis results
+ *
+ * @example
+ * // Capture and analyze the current screen
+ * const panel = await executeVisionCommand('');
+ *
+ * // Analyze a specific image file
+ * const panel = await executeVisionCommand('/path/to/image.png');
+ */
+export async function executeVisionCommand(args: string): Promise<InlinePanel> {
+  const panelId = `vision-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'vision',
+    content: {
+      data: { status: 'running' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    let response: Record<string, unknown>;
+
+    if (!args.trim()) {
+      response = await invoke<Record<string, unknown>>('vision_capture_screen');
+    } else {
+      response = await invoke<Record<string, unknown>>('vision_analyze_image', {
+        path: args.trim(),
+      });
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Lists all available AI skills or retrieves details for a specific skill.
+ * Handles the /skills slash command for skill discovery and inspection.
+ *
+ * @param args - Empty to list all skills, or a skill name to get its details
+ * @returns An InlinePanel with the skill list or individual skill data
+ *
+ * @example
+ * // List all available skills
+ * const panel = await executeSkillsCommand('');
+ *
+ * // Get details for a specific skill
+ * const panel = await executeSkillsCommand('code-review');
+ */
+export async function executeSkillsCommand(args: string): Promise<InlinePanel> {
+  const panelId = `skill-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'skill',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    let response: Record<string, unknown>;
+
+    if (!args.trim()) {
+      response = await invoke<Record<string, unknown>>('skill_list');
+    } else {
+      response = await invoke<Record<string, unknown>>('skill_get', { name: args.trim() });
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Searches, saves, or retrieves entries from the project memory store.
+ * Handles the /memory slash command for persistent context management.
+ *
+ * @param args - "search <query>", "save <context>", or empty to retrieve all contexts
+ * @returns An InlinePanel with the matching or stored memory entries
+ *
+ * @example
+ * const panel = await executeMemoryCommand('search authentication');
+ * const panel = await executeMemoryCommand('save User prefers TypeScript strict mode');
+ * const panel = await executeMemoryCommand('');
+ */
+export async function executeMemoryCommand(args: string): Promise<InlinePanel> {
+  const panelId = `memory-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'memory',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+
+    if (trimmed.toLowerCase().startsWith('search ')) {
+      const query = trimmed.slice('search '.length).trim();
+      response = await invoke<Record<string, unknown>>('project_memory_search', { query });
+    } else if (trimmed.toLowerCase().startsWith('save ')) {
+      const context = trimmed.slice('save '.length).trim();
+      response = await invoke<Record<string, unknown>>('project_memory_add_context', { context });
+    } else {
+      response = await invoke<Record<string, unknown>>('project_memory_get_all_contexts');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Searches chat history for memories related to a given topic.
+ * Handles the /recall slash command for retrieving past context.
+ *
+ * @param topic - The topic or keywords to search for in memory
+ * @returns An InlinePanel with up to 5 matching memory entries
+ *
+ * @example
+ * const panel = await executeRecallCommand('database schema decisions');
+ */
+export async function executeRecallCommand(topic: string): Promise<InlinePanel> {
+  const panelId = `memory-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'memory',
+    content: {
+      data: { topic, status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const response = await invoke<Record<string, unknown>>('chat_memory_search', {
+      query: topic,
+      limit: 5,
+    });
+
+    panel.content.data = { topic, ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      topic,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Lists background agents or pushes a new goal to a background agent.
+ * Handles the /agents slash command for background agent management.
+ *
+ * @param args - "push <goal>" to start an agent, or empty to list active agents
+ * @returns An InlinePanel with agent list or newly started agent data
+ *
+ * @example
+ * const panel = await executeAgentsCommand('push Monitor logs and alert on errors');
+ * const panel = await executeAgentsCommand('');
+ */
+export async function executeAgentsCommand(args: string): Promise<InlinePanel> {
+  const panelId = `agent-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'agent',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+
+    if (trimmed.toLowerCase().startsWith('push ')) {
+      const goal = trimmed.slice('push '.length).trim();
+      response = await invoke<Record<string, unknown>>('background_agent_start', { goal });
+    } else {
+      response = await invoke<Record<string, unknown>>('background_agent_list');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Runs git operations (status, diff, commit, log) via the Tauri backend.
+ * Handles the /git slash command for repository management in chat.
+ *
+ * @param args - "status", "diff", "commit <msg>", "log", or empty (defaults to status)
+ * @returns An InlinePanel with the git command output
+ *
+ * @example
+ * const panel = await executeGitCommand('status');
+ * const panel = await executeGitCommand('commit fix: resolve typo in README');
+ * const panel = await executeGitCommand('log');
+ */
+export async function executeGitCommand(args: string): Promise<InlinePanel> {
+  const panelId = `git-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'git',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim().toLowerCase();
+    let response: Record<string, unknown>;
+
+    if (trimmed === 'diff') {
+      response = await invoke<Record<string, unknown>>('git_diff');
+    } else if (trimmed.startsWith('commit ')) {
+      const msg = args.trim().slice('commit '.length).trim();
+      response = await invoke<Record<string, unknown>>('git_create_commit', { message: msg });
+    } else if (trimmed === 'log') {
+      response = await invoke<Record<string, unknown>>('git_get_log');
+    } else {
+      // Default: "status" or empty
+      response = await invoke<Record<string, unknown>>('git_get_status');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Lists or creates scheduled tasks via the proactive scheduler.
+ * Handles the /schedule slash command for task automation.
+ *
+ * @param args - Empty to list current tasks, or a description to create a new task
+ * @returns An InlinePanel with the task list or the newly created task
+ *
+ * @example
+ * const panel = await executeScheduleCommand('');
+ * const panel = await executeScheduleCommand('Run daily test suite at 9 AM');
+ */
+export async function executeScheduleCommand(args: string): Promise<InlinePanel> {
+  const panelId = `schedule-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'schedule',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    let response: Record<string, unknown>;
+
+    if (!args.trim()) {
+      response = await invoke<Record<string, unknown>>('scheduler_list_tasks');
+    } else {
+      response = await invoke<Record<string, unknown>>('scheduler_create_task', {
+        description: args.trim(),
+      });
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Synthesizes speech from text or starts voice input recording.
+ * Handles the /voice slash command for audio interactions.
+ *
+ * @param args - "tts <text>" to synthesize speech, or empty to start voice input
+ * @returns An InlinePanel with voice synthesis or recording status
+ *
+ * @example
+ * const panel = await executeVoiceCommand('tts Hello, how can I help you today?');
+ * const panel = await executeVoiceCommand('');
+ */
+export async function executeVoiceCommand(args: string): Promise<InlinePanel> {
+  const panelId = `voice-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'voice',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+
+    if (trimmed.toLowerCase().startsWith('tts ')) {
+      const text = trimmed.slice('tts '.length).trim();
+      response = await invoke<Record<string, unknown>>('voice_synthesize', { text });
+    } else {
+      // No args — trigger voice input recording
+      response = await invoke<Record<string, unknown>>('speech_start_recording');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Toggles extended thinking mode or sets a thinking token budget.
+ * Handles the /think slash command for controlling reasoning depth.
+ *
+ * @param args - "budget <n>" to set the token budget, or empty to toggle extended thinking
+ * @returns An InlinePanel (terminal style) with the updated thinking configuration
+ *
+ * @example
+ * const panel = await executeThinkCommand('budget 10000');
+ * const panel = await executeThinkCommand('');
+ */
+export async function executeThinkCommand(args: string): Promise<InlinePanel> {
+  const panelId = `think-${crypto.randomUUID()}`;
+  const command = `/think ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Updating thinking configuration...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmed = args.trim().toLowerCase();
+    let result: string;
+
+    if (trimmed.startsWith('budget ')) {
+      const budgetStr = trimmed.slice('budget '.length).trim();
+      const budget = parseInt(budgetStr, 10);
+
+      if (isNaN(budget) || budget < 0) {
+        throw new Error(`Invalid budget value: "${budgetStr}". Must be a non-negative integer.`);
+      }
+
+      await invoke<void>('settings_v2_set', {
+        key: 'thinking_budget',
+        value: String(budget),
+      });
+
+      result = `Thinking budget set to ${budget.toLocaleString()} tokens.`;
+    } else {
+      // Toggle extended thinking on/off
+      const currentRaw = await invoke<string | boolean>('settings_v2_get', {
+        key: 'extended_thinking',
+      });
+
+      const current =
+        typeof currentRaw === 'boolean' ? currentRaw : String(currentRaw).toLowerCase() === 'true';
+      const next = !current;
+
+      await invoke<void>('settings_v2_set', {
+        key: 'extended_thinking',
+        value: String(next),
+      });
+
+      result = `Extended thinking ${next ? 'enabled' : 'disabled'}.`;
+    }
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: result,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Generates a document (PDF, DOCX, or XLSX) from the current conversation context.
+ * Handles the /docs slash command for document export.
+ *
+ * @param args - The content or filename; format is detected from extension (.pdf/.docx/.xlsx)
+ * @returns An InlinePanel (terminal style) with the generated document path
+ *
+ * @example
+ * const panel = await executeDocsCommand('report.pdf');
+ * const panel = await executeDocsCommand('summary.docx');
+ * const panel = await executeDocsCommand('data.xlsx');
+ */
+export async function executeDocsCommand(args: string): Promise<InlinePanel> {
+  const panelId = `docs-${crypto.randomUUID()}`;
+  const command = `/docs ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Generating document...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmedArgs = args.trim().toLowerCase();
+    let response: Record<string, unknown>;
+    let format: string;
+
+    if (trimmedArgs.endsWith('.docx') || trimmedArgs.includes('docx')) {
+      response = await invoke<Record<string, unknown>>('document_create_docx', {
+        content: args.trim(),
+      });
+      format = 'DOCX';
+    } else if (trimmedArgs.endsWith('.xlsx') || trimmedArgs.includes('xlsx')) {
+      response = await invoke<Record<string, unknown>>('document_create_xlsx', {
+        content: args.trim(),
+      });
+      format = 'XLSX';
+    } else {
+      // Default: PDF
+      response = await invoke<Record<string, unknown>>('document_create_pdf', {
+        content: args.trim(),
+      });
+      format = 'PDF';
+    }
+
+    const duration = Date.now() - startTime;
+    const outputPath = (response['path'] as string | undefined) ?? 'document';
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: `${format} generated successfully.\nOutput: ${outputPath}`,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: `Document generation failed: ${error instanceof Error ? error.message : String(error)}`,
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Starts or stops desktop automation recording.
+ * Handles the /record slash command for capturing UI action sequences.
+ *
+ * @param args - "stop" to end the current recording, or empty to start a new one
+ * @returns An InlinePanel (terminal style) with the recording status
+ *
+ * @example
+ * const panel = await executeRecordCommand('');    // start
+ * const panel = await executeRecordCommand('stop'); // stop
+ */
+export async function executeRecordCommand(args: string): Promise<InlinePanel> {
+  const panelId = `record-${crypto.randomUUID()}`;
+  const command = `/record ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Processing recording request...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmed = args.trim().toLowerCase();
+    let response: Record<string, unknown>;
+    let resultText: string;
+
+    if (trimmed === 'stop') {
+      response = await invoke<Record<string, unknown>>('automation_stop_recording');
+      resultText =
+        `Recording stopped.\n${(response['message'] as string | undefined) ?? ''}`.trim();
+    } else {
+      response = await invoke<Record<string, unknown>>('automation_start_recording');
+      resultText =
+        `Recording started.\n${(response['message'] as string | undefined) ?? ''}`.trim();
+    }
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: resultText,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Fetches aggregated usage metrics (tokens, cost, requests) from the backend.
+ * Handles the /metrics slash command for monitoring resource consumption.
+ *
+ * @returns An InlinePanel (terminal style) with formatted usage statistics
+ *
+ * @example
+ * const panel = await executeMetricsCommand();
+ * // panel.content.terminal.stdout contains formatted usage stats
+ */
+export async function executeMetricsCommand(): Promise<InlinePanel> {
+  const panelId = `metrics-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command: '/metrics',
+        status: 'running',
+        stdout: 'Fetching usage metrics...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const response = await invoke<Record<string, unknown>>('metrics_get_usage');
+    const duration = Date.now() - startTime;
+
+    const lines: string[] = ['=== Usage Metrics ===', ''];
+
+    for (const [key, value] of Object.entries(response)) {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      lines.push(`${label}: ${String(value)}`);
+    }
+
+    panel.content.terminal = {
+      command: '/metrics',
+      status: 'success',
+      stdout: lines.join('\n'),
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command: '/metrics',
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Browses or installs workflow templates from the AGI Workforce marketplace.
+ * Handles the /marketplace slash command for workflow discovery and installation.
+ *
+ * @param args - "install <id>" to install a workflow, or empty to list featured workflows
+ * @returns An InlinePanel with marketplace listings or installation result
+ *
+ * @example
+ * const panel = await executeMarketplaceCommand('');
+ * const panel = await executeMarketplaceCommand('install daily-standup-bot');
+ */
+export async function executeMarketplaceCommand(args: string): Promise<InlinePanel> {
+  const panelId = `marketplace-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'marketplace',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+
+    if (trimmed.toLowerCase().startsWith('install ')) {
+      const workflowId = trimmed.slice('install '.length).trim();
+      response = await invoke<Record<string, unknown>>('marketplace_install_workflow', {
+        id: workflowId,
+      });
+    } else {
+      response = await invoke<Record<string, unknown>>('marketplace_list_featured');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Opens the computer-use (desktop automation) sidecar panel.
+ * Handles the /desktop slash command for autonomous desktop control.
+ *
+ * @returns An InlinePanel (terminal style) indicating the sidecar is opening
+ *
+ * @example
+ * const panel = await executeDesktopCommand();
+ */
+export async function executeDesktopCommand(): Promise<InlinePanel> {
+  const panelId = `desktop-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command: '/desktop',
+        status: 'success',
+        stdout: 'Opening computer use panel...',
+        stderr: undefined,
+        exitCode: 0,
+        duration: 0,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'success',
+    },
+  };
+
+  return panel;
+}
+
+/**
+ * Captures the screen and extracts text using OCR.
+ * Handles the /ocr slash command for text recognition from screen or image.
+ *
+ * @param args - An optional file path; when empty the full screen is captured
+ * @returns An InlinePanel with the extracted text from the OCR operation
+ *
+ * @example
+ * const panel = await executeOCRCommand('');
+ * // panel.content.data.text contains extracted text
+ */
+export async function executeOCRCommand(args: string): Promise<InlinePanel> {
+  const panelId = `vision-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'vision',
+    content: {
+      data: { status: 'running' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const response = await invoke<Record<string, unknown>>('ocr_capture_and_extract', {
+      path: args.trim() || null,
+    });
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Lists recent notifications or clears them all.
+ * Handles the /notify slash command for notification management.
+ *
+ * @param args - "clear" to dismiss all notifications, or empty to list recent ones
+ * @returns An InlinePanel (terminal style) with notification data
+ *
+ * @example
+ * const panel = await executeNotifyCommand('');
+ * const panel = await executeNotifyCommand('clear');
+ */
+export async function executeNotifyCommand(args: string): Promise<InlinePanel> {
+  const panelId = `notify-${crypto.randomUUID()}`;
+  const command = `/notify ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Processing notification request...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmed = args.trim().toLowerCase();
+    let response: Record<string, unknown>;
+    let resultText: string;
+
+    if (trimmed === 'clear') {
+      response = await invoke<Record<string, unknown>>('notification_clear_all');
+      resultText =
+        `All notifications cleared.\n${(response['message'] as string | undefined) ?? ''}`.trim();
+    } else {
+      response = await invoke<Record<string, unknown>>('notification_list_recent');
+      const items = response['notifications'] as unknown[] | undefined;
+
+      if (Array.isArray(items) && items.length > 0) {
+        resultText = `Recent notifications (${items.length}):\n\n${items.map((n) => String(n)).join('\n')}`;
+      } else {
+        resultText = 'No recent notifications.';
+      }
+    }
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: resultText,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Queries the Language Server Protocol for symbol search or diagnostics.
+ * Handles the /lsp slash command for IDE-like code intelligence in chat.
+ *
+ * @param args - "symbols <query>" to search symbols, or "diagnostics" to list errors/warnings
+ * @returns An InlinePanel with LSP query results
+ *
+ * @example
+ * const panel = await executeLSPCommand('symbols InlinePanel');
+ * const panel = await executeLSPCommand('diagnostics');
+ */
+export async function executeLSPCommand(args: string): Promise<InlinePanel> {
+  const panelId = `lsp-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'lsp',
+    content: {
+      data: { status: 'loading' },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'loading',
+    },
+  };
+
+  try {
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+
+    if (trimmed.toLowerCase().startsWith('symbols ')) {
+      const query = trimmed.slice('symbols '.length).trim();
+      response = await invoke<Record<string, unknown>>('lsp_search_symbols', { query });
+    } else {
+      // "diagnostics" subcommand, or default when no recognised subcommand
+      response = await invoke<Record<string, unknown>>('lsp_get_diagnostics');
+    }
+
+    panel.content.data = { ...response };
+    panel.metadata = { status: 'success' };
+  } catch (error) {
+    panel.content.data = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Enhances a prompt using AI rewriting for better clarity and specificity.
+ * Handles the /enhance slash command for improving the last user message.
+ *
+ * @param lastMessage - The raw prompt text to enhance
+ * @returns An InlinePanel (terminal style) with the enhanced prompt text
+ *
+ * @example
+ * const panel = await executeEnhanceCommand('make a login form');
+ * // panel.content.terminal.stdout contains the improved prompt
+ */
+export async function executeEnhanceCommand(lastMessage: string): Promise<InlinePanel> {
+  const panelId = `enhance-${crypto.randomUUID()}`;
+  const command = '/enhance';
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Enhancing prompt...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const response = await invoke<Record<string, unknown>>('prompt_enhance_prompt', {
+      prompt: lastMessage,
+    });
+
+    const duration = Date.now() - startTime;
+    const enhanced =
+      (response['enhanced_prompt'] as string | undefined) ??
+      String(Object.values(response)[0] ?? '');
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: `Enhanced prompt:\n\n${enhanced}`,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Opens the data migration wizard sidecar.
+ * Handles the /migrate slash command to guide users through schema migration flows.
+ *
+ * @returns An InlinePanel (terminal style) indicating the wizard is opening
+ *
+ * @example
+ * const panel = await executeMigrateCommand();
+ */
+export async function executeMigrateCommand(): Promise<InlinePanel> {
+  const panelId = `migrate-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command: '/migrate',
+        status: 'success',
+        stdout: 'Opening migration wizard...',
+        stderr: undefined,
+        exitCode: 0,
+        duration: 0,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'success',
+    },
+  };
+
+  return panel;
+}
+
+/**
+ * Sends a message via Slack (to a channel) or email (to an address).
+ * Handles the /message slash command for cross-platform messaging.
+ *
+ * @param args - "slack #channel <text>" or "email user@example.com <text>"
+ * @returns An InlinePanel (terminal style) with the delivery status
+ *
+ * @example
+ * const panel = await executeMessageCommand('slack #general Hello team!');
+ * const panel = await executeMessageCommand('email alice@example.com Subject line here');
+ */
+export async function executeMessageCommand(args: string): Promise<InlinePanel> {
+  const panelId = `message-${crypto.randomUUID()}`;
+  const command = `/message ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Sending message...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmed = args.trim();
+    let response: Record<string, unknown>;
+    let resultText: string;
+
+    const slackMatch = /^slack\s+(#[\w-]+)\s+(.+)$/i.exec(trimmed);
+    const emailMatch = /^email\s+([\w.+-]+@[\w.-]+\.\w+)\s+(.+)$/i.exec(trimmed);
+
+    if (slackMatch) {
+      const [, channel, text] = slackMatch;
+      response = await invoke<Record<string, unknown>>('slack_send_message', { channel, text });
+      resultText =
+        `Message sent to ${channel ?? 'channel'}.\n${(response['message'] as string | undefined) ?? ''}`.trim();
+    } else if (emailMatch) {
+      const [, to, subject] = emailMatch;
+      response = await invoke<Record<string, unknown>>('email_send_message', { to, subject });
+      resultText =
+        `Email sent to ${to ?? 'recipient'}.\n${(response['message'] as string | undefined) ?? ''}`.trim();
+    } else {
+      throw new Error(
+        'Invalid format. Use "slack #channel <text>" or "email user@example.com <text>".',
+      );
+    }
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: resultText,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
+
+/**
+ * Updates a single settings key-value pair in the application configuration.
+ * Handles the /settings slash command for in-chat configuration changes.
+ *
+ * @param args - A string in the form "key value" (first token is the key, rest is the value)
+ * @returns An InlinePanel (terminal style) confirming the settings update
+ *
+ * @example
+ * const panel = await executeSettingsCommand('theme dark');
+ * const panel = await executeSettingsCommand('max_tokens 4096');
+ */
+export async function executeSettingsCommand(args: string): Promise<InlinePanel> {
+  const panelId = `settings-${crypto.randomUUID()}`;
+  const command = `/settings ${args}`.trim();
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command,
+        status: 'running',
+        stdout: 'Updating settings...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmed = args.trim();
+
+    if (!trimmed) {
+      throw new Error('Usage: /settings <key> <value>');
+    }
+
+    const spaceIdx = trimmed.indexOf(' ');
+
+    if (spaceIdx === -1) {
+      throw new Error('Usage: /settings <key> <value>  (value is required)');
+    }
+
+    const key = trimmed.slice(0, spaceIdx).trim();
+    const value = trimmed.slice(spaceIdx + 1).trim();
+
+    await invoke<void>('settings_v2_set', { key, value });
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command,
+      status: 'success',
+      stdout: `Setting updated: ${key} = ${value}`,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = { status: 'success', duration };
+  } catch (error) {
+    panel.content.terminal = {
+      command,
+      status: 'error',
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      exitCode: 1,
+    };
+
+    panel.metadata = { status: 'error' };
+  }
+
+  return panel;
+}
