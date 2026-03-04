@@ -27,13 +27,44 @@ pub struct EmbeddingService {
 }
 
 impl EmbeddingService {
+    /// Create a degraded EmbeddingService using temp paths and skipping async init.
+    /// Commands will function but may return errors on actual embedding operations.
+    pub fn new_degraded() -> Result<Self> {
+        let config = EmbeddingConfig::default();
+        let generator = EmbeddingGenerator::new_degraded(config)?;
+        let temp_dir = std::env::temp_dir().join("agiworkforce_embeddings_degraded");
+        std::fs::create_dir_all(&temp_dir)?;
+        let db_path = temp_dir.join("embeddings_degraded.db");
+        let cache_path = db_path.with_file_name("embedding_cache_degraded.db");
+
+        let similarity = SimilaritySearch::new(db_path)?;
+        let cache = EmbeddingCache::new(cache_path)?;
+
+        let generator_arc = Arc::new(Mutex::new(generator));
+        let similarity_arc = Arc::new(Mutex::new(similarity));
+
+        let indexer = IncrementalIndexer::new(
+            temp_dir,
+            generator_arc.clone(),
+            similarity_arc.clone(),
+        );
+
+        Ok(Self {
+            generator: generator_arc,
+            similarity: similarity_arc,
+            cache: Arc::new(Mutex::new(cache)),
+            indexer: Arc::new(Mutex::new(indexer)),
+        })
+    }
+
     pub async fn new(workspace_root: PathBuf, config: EmbeddingConfig) -> Result<Self> {
         let generator = EmbeddingGenerator::new(config).await?;
         let db_path = workspace_root.join(".agi").join("embeddings.db");
         std::fs::create_dir_all(db_path.parent().unwrap())?;
+        let cache_path = db_path.with_file_name("embedding_cache.db");
 
-        let similarity = SimilaritySearch::new(db_path.clone())?;
-        let cache = EmbeddingCache::new(db_path)?;
+        let similarity = SimilaritySearch::new(db_path)?;
+        let cache = EmbeddingCache::new(cache_path)?;
 
         let generator_arc = Arc::new(Mutex::new(generator));
         let similarity_arc = Arc::new(Mutex::new(similarity));

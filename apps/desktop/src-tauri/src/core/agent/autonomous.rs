@@ -249,13 +249,15 @@ impl AutonomousAgent {
 
                     // Emit an event so the frontend knows a task needs approval.
                     if let Some(ref handle) = self.app_handle {
-                        let _ = handle.emit(
+                        if let Err(e) = handle.emit(
                             "agent:task_approval_required",
                             json!({
                                 "task_id": task_id,
                                 "description": task.description,
                             }),
-                        );
+                        ) {
+                            tracing::warn!("Failed to emit agent:task_approval_required: {}", e);
+                        }
                     }
 
                     // Spawn a background future that awaits the user decision
@@ -341,11 +343,11 @@ impl AutonomousAgent {
             }
         }
 
-        // Push task_id to running_tasks BEFORE spawning to avoid a race where
-        // execute_task could finish before the push.
-        self.running_tasks.lock().push(task_id.clone());
-
         let agent_clone = self.clone_for_task()?;
+
+        // Push task_id to running_tasks AFTER clone_for_task succeeds to avoid
+        // leaking a slot if clone_for_task fails.
+        self.running_tasks.lock().push(task_id.clone());
         let task_id_clone = task_id;
         tokio::spawn(async move {
             if let Err(e) = agent_clone.execute_task(task_id_clone.clone()).await {
@@ -389,17 +391,17 @@ impl AutonomousAgent {
 
             // BUG-02 fix: emit step-started event to frontend
             if let Some(ref handle) = self.app_handle {
-                handle
-                    .emit(
-                        "agent:step-started",
-                        json!({
-                            "taskId": task.id,
-                            "step": step.description,
-                            "stepIndex": step_index,
-                            "totalSteps": total_steps
-                        }),
-                    )
-                    .ok();
+                if let Err(e) = handle.emit(
+                    "agent:step-started",
+                    json!({
+                        "taskId": task.id,
+                        "step": step.description,
+                        "stepIndex": step_index,
+                        "totalSteps": total_steps
+                    }),
+                ) {
+                    tracing::warn!("Failed to emit agent:step-started: {}", e);
+                }
             }
 
             {
@@ -424,17 +426,17 @@ impl AutonomousAgent {
                         );
                         // BUG-02 fix: emit step-completed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle
-                                .emit(
-                                    "agent:step-completed",
-                                    json!({
-                                        "taskId": task.id,
-                                        "step": step.description,
-                                        "result": result.result.as_deref().unwrap_or(""),
-                                        "stepIndex": step_index
-                                    }),
-                                )
-                                .ok();
+                            if let Err(e) = handle.emit(
+                                "agent:step-completed",
+                                json!({
+                                    "taskId": task.id,
+                                    "step": step.description,
+                                    "result": result.result.as_deref().unwrap_or(""),
+                                    "stepIndex": step_index
+                                }),
+                            ) {
+                                tracing::warn!("Failed to emit agent:step-completed: {}", e);
+                            }
                         }
                         completed_summaries.push(format!("{}: {}", step.id, step.description));
                         step_succeeded = true;
@@ -451,18 +453,18 @@ impl AutonomousAgent {
                         tracing::warn!("[Agent] Step {} failed: {}", step.id, error_msg);
                         // BUG-02 fix: emit step-failed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle
-                                .emit(
-                                    "agent:step-failed",
-                                    json!({
-                                        "taskId": task.id,
-                                        "step": step.description,
-                                        "error": error_msg,
-                                        "attempt": attempt,
-                                        "retrying": will_retry
-                                    }),
-                                )
-                                .ok();
+                            if let Err(e) = handle.emit(
+                                "agent:step-failed",
+                                json!({
+                                    "taskId": task.id,
+                                    "step": step.description,
+                                    "error": error_msg,
+                                    "attempt": attempt,
+                                    "retrying": will_retry
+                                }),
+                            ) {
+                                tracing::warn!("Failed to emit agent:step-failed: {}", e);
+                            }
                         }
                         if will_retry {
                             task.retry_count += 1;
@@ -530,18 +532,18 @@ impl AutonomousAgent {
                         tracing::error!("[Agent] Step {} error: {}", step.id, error_msg);
                         // BUG-02 fix: emit step-failed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle
-                                .emit(
-                                    "agent:step-failed",
-                                    json!({
-                                        "taskId": task.id,
-                                        "step": step.description,
-                                        "error": error_msg,
-                                        "attempt": attempt,
-                                        "retrying": will_retry
-                                    }),
-                                )
-                                .ok();
+                            if let Err(e) = handle.emit(
+                                "agent:step-failed",
+                                json!({
+                                    "taskId": task.id,
+                                    "step": step.description,
+                                    "error": error_msg,
+                                    "attempt": attempt,
+                                    "retrying": will_retry
+                                }),
+                            ) {
+                                tracing::warn!("Failed to emit agent:step-failed: {}", e);
+                            }
                         }
                         if will_retry {
                             task.retry_count += 1;
@@ -660,38 +662,52 @@ impl AutonomousAgent {
 
         // BUG-02 fix: emit task-completed or task-failed event to frontend
         if let Some(ref handle) = self.app_handle {
-            match &task.status {
+            let emit_result = match &task.status {
                 TaskStatus::Completed => {
-                    handle
-                        .emit(
-                            "agent:task-completed",
-                            json!({
-                                "taskId": task.id,
-                                "success": true,
-                                "stepsCompleted": completed_count
-                            }),
-                        )
-                        .ok();
+                    handle.emit(
+                        "agent:task-completed",
+                        json!({
+                            "taskId": task.id,
+                            "success": true,
+                            "stepsCompleted": completed_count
+                        }),
+                    )
                 }
                 TaskStatus::Failed(error_message) => {
-                    handle
-                        .emit(
-                            "agent:task-failed",
-                            json!({
-                                "taskId": task.id,
-                                "error": error_message
-                            }),
-                        )
-                        .ok();
+                    handle.emit(
+                        "agent:task-failed",
+                        json!({
+                            "taskId": task.id,
+                            "error": error_message
+                        }),
+                    )
                 }
-                _ => {}
+                _ => Ok(()),
+            };
+            if let Err(e) = emit_result {
+                tracing::warn!("Failed to emit agent task status event: {}", e);
             }
         }
 
         {
             let mut queue = self.task_queue.lock();
             if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                *t = task.clone();
+                // TOCTOU guard: only write back if the in-queue task's status
+                // hasn't been mutated concurrently (e.g. by an approval handler).
+                // If someone else changed the status while we were executing,
+                // preserve their update instead of blindly overwriting.
+                let status_unchanged =
+                    std::mem::discriminant(&t.status) == std::mem::discriminant(&TaskStatus::Executing)
+                    || std::mem::discriminant(&t.status) == std::mem::discriminant(&TaskStatus::Planning);
+                if status_unchanged {
+                    *t = task.clone();
+                } else {
+                    tracing::info!(
+                        "[Agent] Task {} status was concurrently changed to {:?}, skipping write-back",
+                        task_id,
+                        t.status
+                    );
+                }
             }
         }
 

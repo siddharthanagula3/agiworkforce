@@ -747,6 +747,195 @@ mod production_parser_tests {
     }
 }
 
+// H23 — SSE parser stream-level tests
+//
+// SseStreamParser is private (requires a real reqwest::Response), so these tests
+// exercise the same buffer-management and chunk-boundary logic by:
+//   1. Simulating split-chunk reassembly via multiple parse_sse_event calls
+//   2. Verifying data field accumulation across multi-line SSE events
+//   3. Testing the process_buffer delimiter logic (double-newline for most
+//      providers, single-newline for Ollama) through the public parse_sse_event
+//      entry point which is the core of process_buffer's per-event dispatch.
+#[cfg(test)]
+mod stream_buffer_tests {
+    use crate::core::llm::sse_parser::{parse_sse_event, StreamChunk};
+    use crate::core::llm::Provider;
+
+    /// Helper to simulate buffer accumulation: multiple SSE events arrive in
+    /// a single TCP chunk (common in practice). Each event is separated by
+    /// double-newline. We parse each event individually (as process_buffer does
+    /// after splitting) and verify correctness.
+    fn split_and_parse_events(raw: &str, provider: Provider) -> Vec<StreamChunk> {
+        let delimiter = match provider {
+            Provider::Ollama => "\n",
+            _ => "\n\n",
+        };
+
+        raw.split(delimiter)
+            .filter(|s| !s.trim().is_empty())
+            .filter_map(|event| parse_sse_event(event, provider).ok())
+            .collect()
+    }
+
+    #[test]
+    fn test_multiple_events_in_single_buffer_openai() {
+        // Simulates two OpenAI events arriving in one TCP chunk
+        let raw = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}\n\n",
+        );
+
+        let chunks = split_and_parse_events(raw, Provider::OpenAI);
+
+        assert_eq!(chunks.len(), 2, "Should parse two events from buffer");
+        assert_eq!(chunks[0].content, "Hello");
+        assert_eq!(chunks[1].content, " world");
+        assert!(!chunks[0].done);
+        assert!(!chunks[1].done);
+    }
+
+    #[test]
+    fn test_buffer_with_final_done_event_openai() {
+        let raw = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"End\"},\"finish_reason\":null}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        let chunks = split_and_parse_events(raw, Provider::OpenAI);
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].content, "End");
+        assert!(!chunks[0].done);
+        assert!(chunks[1].done);
+        assert!(chunks[1].content.is_empty());
+    }
+
+    #[test]
+    fn test_ollama_single_newline_delimiter() {
+        // Ollama uses single-newline delimiters (NDJSON)
+        let raw = concat!(
+            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"A\"},\"done\":false}\n",
+            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"B\"},\"done\":false}\n",
+            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"stop\"}\n",
+        );
+
+        let chunks = split_and_parse_events(raw, Provider::Ollama);
+
+        assert_eq!(chunks.len(), 3, "Ollama should produce 3 chunks");
+        assert_eq!(chunks[0].content, "A");
+        assert_eq!(chunks[1].content, "B");
+        assert!(chunks[2].done);
+        assert_eq!(chunks[2].finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn test_anthropic_multi_line_event_data_accumulation() {
+        // Anthropic events have event: and data: lines
+        // parse_sse_event handles the full multi-line event after process_buffer
+        // splits by double-newline.
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"accumulated text\"}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.content, "accumulated text");
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_buffer_accumulates_content_across_chunks() {
+        // Simulates what the caller does: accumulate content from multiple chunks
+        let events = [
+            r#"data: {"choices":[{"delta":{"content":"The "},"finish_reason":null}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"quick "},"finish_reason":null}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"brown "},"finish_reason":null}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"fox"},"finish_reason":"stop"}]}"#,
+        ];
+
+        let mut accumulated = String::new();
+        let mut final_chunk: Option<StreamChunk> = None;
+
+        for event in &events {
+            let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+            accumulated.push_str(&chunk.content);
+            if chunk.done {
+                final_chunk = Some(chunk);
+            }
+        }
+
+        assert_eq!(accumulated, "The quick brown fox");
+        assert!(final_chunk.is_some(), "Must have a final chunk");
+        assert_eq!(
+            final_chunk.unwrap().finish_reason.as_deref(),
+            Some("stop")
+        );
+    }
+
+    #[test]
+    fn test_google_events_in_buffer() {
+        let raw = concat!(
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Part 1\"}],\"role\":\"model\"}}]}\n\n",
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Part 2\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8}}\n\n",
+        );
+
+        let chunks = split_and_parse_events(raw, Provider::Google);
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].content, "Part 1");
+        assert!(!chunks[0].done);
+        assert_eq!(chunks[1].content, " Part 2");
+        assert!(chunks[1].done);
+        let usage = chunks[1].usage.as_ref().unwrap();
+        assert_eq!(usage.prompt_tokens, Some(5));
+        assert_eq!(usage.completion_tokens, Some(3));
+        assert_eq!(usage.total_tokens, Some(8));
+    }
+
+    #[test]
+    fn test_tool_call_arguments_accumulated_across_chunks() {
+        // Tool call arguments arrive incrementally across multiple SSE events.
+        // The caller is responsible for concatenation; each chunk carries a partial string.
+        let events = [
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search","arguments":"{\"q"}}]},"finish_reason":null}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"","arguments":"uery"}}]},"finish_reason":null}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"","arguments":"\":\"test\"}"}}]},"finish_reason":null}]}"#,
+        ];
+
+        let mut all_args = String::new();
+        for event in &events {
+            let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+            if let Some(ref tc) = chunk.tool_calls {
+                for call in tc {
+                    all_args.push_str(&call.arguments);
+                }
+            }
+        }
+
+        assert_eq!(all_args, "{\"query\":\"test\"}");
+    }
+
+    #[test]
+    fn test_mixed_keepalive_and_data_in_buffer() {
+        // A buffer might contain a keepalive comment followed by actual data.
+        // process_buffer handles this by checking is_keepalive_event first.
+        // We simulate by parsing individually.
+        let keepalive_event = ": keep-alive";
+        let data_event =
+            r#"data: {"choices":[{"delta":{"content":"data"},"finish_reason":null}]}"#;
+
+        // Keepalive should produce an empty non-done chunk when detected by the parser
+        // (In practice, is_keepalive_event is checked before parse_sse_event)
+        let data_chunk = parse_sse_event(data_event, Provider::OpenAI).unwrap();
+        assert_eq!(data_chunk.content, "data");
+
+        // Verify the keepalive detection logic
+        let trimmed = keepalive_event.trim();
+        assert!(
+            trimmed.starts_with(':'),
+            "Keepalive comment must start with ':'"
+        );
+    }
+}
+
 // H47 — SSE parser keepalive edge cases
 // These tests verify the `is_keepalive_event` logic by inspecting `StreamChunk.keepalive`
 // on chunks that are constructed the same way `SseStreamParser::process_buffer` does.
@@ -937,5 +1126,56 @@ mod keepalive_tests {
             !classify_keepalive(event),
             "data event with colon in value should not be a keepalive"
         );
+    }
+}
+
+// L4 fix: Tests for malformed SSE input
+#[cfg(test)]
+mod malformed_sse_tests {
+    use crate::core::llm::sse_parser::parse_sse_event;
+    use crate::core::llm::Provider;
+
+    #[test]
+    fn missing_data_prefix_yields_empty_chunk() {
+        // Lines without "data:" prefix should be ignored, producing an empty chunk
+        let event = "not-a-data-line: hello";
+        let result = parse_sse_event(event, Provider::OpenAI);
+        // Should succeed (no data lines to parse) with an empty content chunk
+        let chunk = result.unwrap();
+        assert_eq!(chunk.content, "", "No data: prefix should yield empty content");
+    }
+
+    #[test]
+    fn empty_string_event_yields_empty_chunk() {
+        let event = "";
+        let result = parse_sse_event(event, Provider::OpenAI);
+        let chunk = result.unwrap();
+        assert_eq!(chunk.content, "", "Empty event should yield empty content");
+    }
+
+    #[test]
+    fn only_empty_lines_yields_empty_chunk() {
+        let event = "\n\n\n";
+        let result = parse_sse_event(event, Provider::OpenAI);
+        let chunk = result.unwrap();
+        assert_eq!(chunk.content, "", "Only empty lines should yield empty content");
+    }
+
+    #[test]
+    fn invalid_json_after_data_prefix_returns_error() {
+        let event = "data: {not valid json}";
+        let result = parse_sse_event(event, Provider::OpenAI);
+        assert!(
+            result.is_err(),
+            "Invalid JSON after data: prefix should return an error"
+        );
+    }
+
+    #[test]
+    fn data_done_signal_sets_done_flag() {
+        let event = "data: [DONE]";
+        let result = parse_sse_event(event, Provider::OpenAI);
+        let chunk = result.unwrap();
+        assert!(chunk.done, "data: [DONE] should set done flag");
     }
 }

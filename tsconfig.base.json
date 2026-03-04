@@ -50,7 +50,6 @@
     /* Path Mappings */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["apps/desktop/src/*"],
       "@types/*": ["packages/types/src/*"],
       "@utils/*": ["packages/utils/src/*"],
       "@agiworkforce/utils": ["packages/utils/src/index.ts"],

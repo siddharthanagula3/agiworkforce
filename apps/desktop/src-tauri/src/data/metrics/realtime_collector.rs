@@ -447,6 +447,114 @@ impl RealtimeMetricsCollector {
         Ok(employees)
     }
 
+    /// Get daily breakdown of metrics for a date range (Unix timestamps).
+    pub fn get_daily_breakdown(
+        &self,
+        user_id: &str,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> SqliteResult<Vec<DailyBreakdownRow>> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT
+                date(timestamp, 'unixepoch') AS day,
+                SUM(time_saved_minutes) AS total_minutes,
+                SUM(cost_saved_usd) AS total_cost,
+                COUNT(*) AS run_count
+            FROM realtime_metrics
+            WHERE user_id = ?1 AND timestamp >= ?2 AND timestamp < ?3
+            GROUP BY day
+            ORDER BY day ASC",
+        )?;
+
+        let rows = stmt
+            .query_map(rusqlite::params![user_id, start_ts, end_ts], |row| {
+                Ok(DailyBreakdownRow {
+                    date: row.get(0)?,
+                    time_saved_minutes: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                    cost_saved_usd: row.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
+                    automations_run: row.get::<_, i64>(3)? as u64,
+                })
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
+
+        Ok(rows)
+    }
+
+    /// Get weekly breakdown of metrics for a date range (Unix timestamps).
+    /// Each row represents one ISO week (Monday start).
+    pub fn get_weekly_breakdown(
+        &self,
+        user_id: &str,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> SqliteResult<Vec<WeeklyBreakdownRow>> {
+        let conn = self.connection()?;
+        // strftime('%W') gives the week number (00-53, Monday as first day).
+        // We group by year-week to handle year boundaries.
+        let mut stmt = conn.prepare(
+            "SELECT
+                strftime('%Y-%W', timestamp, 'unixepoch') AS year_week,
+                MIN(date(timestamp, 'unixepoch')) AS week_start,
+                MAX(date(timestamp, 'unixepoch')) AS week_end,
+                SUM(time_saved_minutes) AS total_minutes,
+                SUM(cost_saved_usd) AS total_cost,
+                COUNT(*) AS run_count
+            FROM realtime_metrics
+            WHERE user_id = ?1 AND timestamp >= ?2 AND timestamp < ?3
+            GROUP BY year_week
+            ORDER BY year_week ASC",
+        )?;
+
+        let rows = stmt
+            .query_map(rusqlite::params![user_id, start_ts, end_ts], |row| {
+                Ok(WeeklyBreakdownRow {
+                    week_start: row.get(1)?,
+                    week_end: row.get(2)?,
+                    time_saved_minutes: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    cost_saved_usd: row.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
+                    automations_run: row.get::<_, i64>(5)? as u64,
+                })
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
+
+        Ok(rows)
+    }
+
+    /// Get monthly breakdown of metrics for a date range (Unix timestamps).
+    pub fn get_monthly_breakdown(
+        &self,
+        user_id: &str,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> SqliteResult<Vec<MonthlyBreakdownRow>> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT
+                strftime('%Y-%m', timestamp, 'unixepoch') AS month,
+                SUM(time_saved_minutes) AS total_minutes,
+                SUM(cost_saved_usd) AS total_cost,
+                COUNT(*) AS run_count
+            FROM realtime_metrics
+            WHERE user_id = ?1 AND timestamp >= ?2 AND timestamp < ?3
+            GROUP BY month
+            ORDER BY month ASC",
+        )?;
+
+        let rows = stmt
+            .query_map(rusqlite::params![user_id, start_ts, end_ts], |row| {
+                Ok(MonthlyBreakdownRow {
+                    month: row.get(0)?,
+                    time_saved_minutes: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                    cost_saved_usd: row.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
+                    automations_run: row.get::<_, i64>(3)? as u64,
+                })
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
+
+        Ok(rows)
+    }
+
     // AUDIT-004-003: Added pagination with limit and offset parameters
     // Previously loaded all metrics without bounds; now supports pagination
     pub async fn get_metrics_history(
@@ -517,4 +625,32 @@ impl RealtimeMetricsCollector {
 
         Ok(metrics)
     }
+}
+
+/// Raw daily breakdown row from the database.
+#[derive(Debug, Clone)]
+pub struct DailyBreakdownRow {
+    pub date: String,
+    pub time_saved_minutes: i64,
+    pub cost_saved_usd: f64,
+    pub automations_run: u64,
+}
+
+/// Raw weekly breakdown row from the database.
+#[derive(Debug, Clone)]
+pub struct WeeklyBreakdownRow {
+    pub week_start: String,
+    pub week_end: String,
+    pub time_saved_minutes: i64,
+    pub cost_saved_usd: f64,
+    pub automations_run: u64,
+}
+
+/// Raw monthly breakdown row from the database.
+#[derive(Debug, Clone)]
+pub struct MonthlyBreakdownRow {
+    pub month: String,
+    pub time_saved_minutes: i64,
+    pub cost_saved_usd: f64,
+    pub automations_run: u64,
 }

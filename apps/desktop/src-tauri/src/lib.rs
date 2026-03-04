@@ -18,6 +18,7 @@ use crate::sys::commands::{
     mcp_extensions::McpExtensionsState,
     project_memory::ProjectMemoryState,
     research::ResearchState,
+    auth::SessionState,
     security::AuthManagerState,
     skills::SkillsState,
     tool_confirmation::ToolConfirmationState,
@@ -231,6 +232,10 @@ pub fn run() {
             app.manage(AuthManagerState(auth_manager));
             tracing::info!("AuthManager initialized");
 
+            // Session state for JWT storage (replaces process-global static)
+            app.manage(SessionState::new());
+            tracing::info!("SessionState initialized");
+
             // Master Password state for SECSYS-001 security enhancement
             match MasterPasswordState::new(db_conn_arc.clone()) {
                 Ok(master_password_state) => {
@@ -239,6 +244,7 @@ pub fn run() {
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize MasterPasswordState: {}. Master password features will be unavailable.", e);
+                    app.manage(MasterPasswordState::new_degraded());
                 }
             }
 
@@ -402,6 +408,7 @@ pub fn run() {
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize memory manager: {}. Memory features may be degraded.", e);
+                    app.manage(MemoryState::new_degraded());
                 }
             }
 
@@ -415,7 +422,8 @@ pub fn run() {
                     tracing::info!("Project memory manager initialized");
                 }
                 Err(e) => {
-                tracing::warn!("Failed to initialize project memory manager: {}. Project memory features may be degraded.", e);
+                    tracing::warn!("Failed to initialize project memory manager: {}. Project memory features may be degraded.", e);
+                    app.manage(ProjectMemoryState::new_degraded());
                 }
             }
 
@@ -485,13 +493,14 @@ pub fn run() {
             // MCP Extensions state for desktop extension management
             let mcp_state_ref: tauri::State<McpState> = app.state();
             let mcp_client = mcp_state_ref.client.clone();
-            match McpExtensionsState::new(db_conn_arc.clone(), mcp_client) {
+            match McpExtensionsState::new(db_conn_arc.clone(), mcp_client.clone()) {
                 Ok(extensions_state) => {
                     app.manage(extensions_state);
                     tracing::info!("MCP Extensions state initialized");
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize MCP Extensions: {}. Extension features may be degraded.", e);
+                    app.manage(McpExtensionsState::new_degraded(mcp_client));
                 }
             }
 
@@ -674,13 +683,26 @@ pub fn run() {
                 ).map_err(|e| anyhow::anyhow!("Failed to open database for presence: {}", e))?,
             ));
             let presence_manager = Arc::new(crate::integrations::realtime::PresenceManager::new(presence_db));
-            let websocket_port = 8787;
+            // Allow overriding the WebSocket port via environment variable for custom deployments
+            let websocket_port: u16 = std::env::var("AGI_REALTIME_PORT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8787);
 
             // Generate secure token for realtime auth
             let realtime_token = uuid::Uuid::new_v4().to_string();
             // Write token to file for Native Host to read
             if let Err(e) = std::fs::write(app_data_dir.join(".ipc_token"), &realtime_token) {
                 tracing::error!("Failed to write .ipc_token: {}", e);
+            }
+            // Restrict .ipc_token to owner-only read/write (0600)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(
+                    app_data_dir.join(".ipc_token"),
+                    std::fs::Permissions::from_mode(0o600),
+                );
             }
 
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
@@ -729,7 +751,15 @@ pub fn run() {
                     app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(embedding_service))));
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to initialize embedding service: {}", e);
+                    tracing::warn!("Failed to initialize embedding service: {}. Embedding features may be degraded.", e);
+                    match crate::core::embeddings::EmbeddingService::new_degraded() {
+                        Ok(degraded) => {
+                            app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(degraded))));
+                        }
+                        Err(e2) => {
+                            tracing::error!("Failed to create degraded embedding service: {}. Embedding commands will panic if invoked.", e2);
+                        }
+                    }
                 }
             }
 
@@ -766,8 +796,14 @@ pub fn run() {
             app.manage(TaskManagerState(task_manager));
 
 
-            if let Ok(state) = AppState::load(app.handle()) {
-                app.manage(state);
+            match AppState::load(app.handle()) {
+                Ok(state) => {
+                    app.manage(state);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load AppState: {}. Using default window state.", e);
+                    app.manage(AppState::default());
+                }
             }
 
 
@@ -952,7 +988,7 @@ pub fn run() {
             crate::sys::commands::chat::clear_local_database,
             crate::sys::commands::search_chat_history,
             crate::sys::commands::search_chat_history_semantic,
-            crate::sys::commands::conversation_share,
+            crate::sys::commands::conversation_export,
 
 
             crate::sys::commands::checkpoint_create,
@@ -1357,7 +1393,6 @@ pub fn run() {
             crate::sys::commands::ollama_pull_model,
             crate::sys::commands::ollama_delete_model,
 
-            crate::sys::commands::vision_send_message,
             crate::sys::commands::vision_analyze_screenshot,
             crate::sys::commands::vision_extract_text,
             crate::sys::commands::vision_compare_images,

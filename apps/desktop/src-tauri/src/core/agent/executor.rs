@@ -366,7 +366,7 @@ impl TaskExecutor {
     }
 
     /// BUG-01 fix: validate a read path — must exist and must not be a protected system dir.
-    fn validate_file_path(path: &str) -> Result<std::path::PathBuf> {
+    pub(crate) fn validate_file_path(path: &str) -> Result<std::path::PathBuf> {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
         }
@@ -379,7 +379,7 @@ impl TaskExecutor {
     /// BUG-01 fix: validate a write path — file may not exist yet, so we
     /// canonicalize the longest existing ancestor to defeat symlink bypasses,
     /// then re-append the non-existent tail before checking blocked prefixes.
-    fn validate_write_path(path: &str) -> Result<std::path::PathBuf> {
+    pub(crate) fn validate_write_path(path: &str) -> Result<std::path::PathBuf> {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
         }

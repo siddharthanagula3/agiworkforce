@@ -9,7 +9,7 @@
 
 export async function register() {
   // Only run on server-side (Node.js runtime)
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
+  if (process.env['NEXT_RUNTIME'] === 'nodejs') {
     // Import validation module (dynamic import to avoid bundling in edge runtime)
     const { validateEnvironmentOrThrow } = await import('./lib/validate-env');
 

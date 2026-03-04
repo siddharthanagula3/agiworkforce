@@ -43,6 +43,7 @@ jobs:
   build-appstore:
     needs: validate
     runs-on: macos-latest
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -160,6 +161,9 @@ jobs:
             --wait
 
       - name: Upload PKG to App Store Connect
+        # TODO: Replace xcrun altool with App Store Connect API — altool was
+        # removed in Xcode 15+ (ITMS-90732). Use `xcrun notarytool` for
+        # notarization and the App Store Connect API for uploads.
         if: startsWith(github.ref, 'refs/tags/appstore-v')
         working-directory: apps/desktop
         env:
@@ -167,11 +171,22 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           VERSION="${{ github.event.inputs.version || '1.0.6' }}"
-          xcrun altool --upload-app \
-            --file "AGI-Workforce-$VERSION.pkg" \
-            --type macos \
-            --username "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+          # Prefer xcrun notarytool submit if available (Xcode 15+), fall back to altool
+          if xcrun notarytool --help > /dev/null 2>&1; then
+            echo "Using notarytool for upload (Xcode 15+)"
+            xcrun notarytool submit "AGI-Workforce-$VERSION.pkg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+              --wait
+          else
+            echo "Falling back to altool (deprecated)"
+            xcrun altool --upload-app \
+              --file "AGI-Workforce-$VERSION.pkg" \
+              --type macos \
+              --username "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD"
+          fi
 
       - name: Upload PKG Artifact
         uses: actions/upload-artifact@v4

@@ -13,6 +13,7 @@ use crate::features::speech::{
 use crate::features::speech::{BargeInDetector, SharedVad};
 use crate::sys::account::{get_access_token, get_api_base_url};
 use crate::sys::commands::settings_v2::SettingsServiceState;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -105,6 +106,26 @@ impl Default for LocalPiperState {
     }
 }
 
+/// Holds state for an active cpal audio recording session.
+///
+/// Uses `std::sync::Mutex` because `cpal::Stream` is not `Send` -- the stream
+/// itself lives on a dedicated OS thread and we only store it here so it is not
+/// dropped prematurely. The `stop_flag` + `samples` are shared with the audio
+/// callback via `Arc`.
+pub struct AudioRecordingState {
+    /// When set to `true`, the audio callback stops pushing samples.
+    pub stop_flag: Arc<std::sync::atomic::AtomicBool>,
+    /// Accumulated f32 mono samples at the device's native sample rate.
+    pub samples: Arc<std::sync::Mutex<Vec<f32>>>,
+    /// The sample rate reported by the input device (needed for WAV encoding).
+    pub sample_rate: u32,
+    /// Number of channels reported by the input device.
+    pub channels: u16,
+    /// Join handle for the dedicated OS thread that owns the cpal::Stream.
+    /// We keep this so the stream stays alive until we join the thread.
+    pub thread_handle: Option<std::thread::JoinHandle<()>>,
+}
+
 pub struct VoiceState {
     pub settings: Arc<Mutex<VoiceSettings>>,
     pub client: Client,
@@ -120,6 +141,9 @@ pub struct VoiceState {
     pub local_whisper: Arc<RwLock<LocalWhisperState>>,
     /// Local Piper TTS state
     pub local_piper: Arc<RwLock<LocalPiperState>>,
+    /// Active Wispr Flow recording session (if any).
+    /// Uses `std::sync::Mutex` because cpal::Stream is not Send.
+    pub recording: Arc<std::sync::Mutex<Option<AudioRecordingState>>>,
 }
 
 impl VoiceState {
@@ -141,6 +165,7 @@ impl VoiceState {
             vad: Arc::new(RwLock::new(None)),
             local_whisper: Arc::new(RwLock::new(LocalWhisperState::default())),
             local_piper: Arc::new(RwLock::new(LocalPiperState::default())),
+            recording: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -217,6 +242,12 @@ pub async fn voice_transcribe_blob(
         format,
         provider
     );
+
+    // Validate format is a safe file extension
+    let format_re = regex::Regex::new(r"^[a-z0-9]{1,10}$").expect("format regex");
+    if !format_re.is_match(&format) {
+        return Err(format!("Invalid audio format: {}", format));
+    }
 
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join(format!("voice_{}.{}", uuid::Uuid::new_v4(), format));
@@ -1859,7 +1890,7 @@ pub async fn voice_tts_is_playing(
 }
 
 // =============================================================================
-// Wispr Flow Speech Recording / Transcription Stubs
+// Wispr Flow Speech Recording / Transcription
 // =============================================================================
 
 /// Result of a speech-to-text transcription via Wispr Flow dictation
@@ -1870,34 +1901,328 @@ pub struct SpeechTranscriptResult {
     pub language: String,
 }
 
+/// Encode f32 mono samples into a WAV byte buffer (PCM 16-bit, mono).
+///
+/// This is a minimal inline WAV encoder so we avoid adding the `hound` crate.
+fn encode_wav(samples: &[f32], sample_rate: u32) -> Vec<u8> {
+    let num_samples = samples.len() as u32;
+    let bits_per_sample: u16 = 16;
+    let num_channels: u16 = 1;
+    let byte_rate = sample_rate * u32::from(num_channels) * u32::from(bits_per_sample) / 8;
+    let block_align = num_channels * bits_per_sample / 8;
+    let data_size = num_samples * u32::from(bits_per_sample) / 8;
+    let file_size = 36 + data_size; // 44-byte header minus 8 for RIFF+size
+
+    let mut buf = Vec::with_capacity(44 + data_size as usize);
+
+    // RIFF header
+    buf.extend_from_slice(b"RIFF");
+    buf.extend_from_slice(&file_size.to_le_bytes());
+    buf.extend_from_slice(b"WAVE");
+
+    // fmt sub-chunk
+    buf.extend_from_slice(b"fmt ");
+    buf.extend_from_slice(&16u32.to_le_bytes()); // sub-chunk size
+    buf.extend_from_slice(&1u16.to_le_bytes()); // PCM format
+    buf.extend_from_slice(&num_channels.to_le_bytes());
+    buf.extend_from_slice(&sample_rate.to_le_bytes());
+    buf.extend_from_slice(&byte_rate.to_le_bytes());
+    buf.extend_from_slice(&block_align.to_le_bytes());
+    buf.extend_from_slice(&bits_per_sample.to_le_bytes());
+
+    // data sub-chunk
+    buf.extend_from_slice(b"data");
+    buf.extend_from_slice(&data_size.to_le_bytes());
+
+    for &sample in samples {
+        let clamped = sample.clamp(-1.0, 1.0);
+        let i16_val = (clamped * 32767.0) as i16;
+        buf.extend_from_slice(&i16_val.to_le_bytes());
+    }
+
+    buf
+}
+
+/// Resample audio from `src_rate` to `target_rate` using simple linear interpolation.
+/// Returns the original samples unchanged if rates already match.
+fn resample_linear(samples: &[f32], src_rate: u32, target_rate: u32) -> Vec<f32> {
+    if src_rate == target_rate || samples.is_empty() {
+        return samples.to_vec();
+    }
+    let ratio = src_rate as f64 / target_rate as f64;
+    let out_len = ((samples.len() as f64) / ratio).ceil() as usize;
+    let mut out = Vec::with_capacity(out_len);
+    for i in 0..out_len {
+        let src_idx = i as f64 * ratio;
+        let idx0 = src_idx.floor() as usize;
+        let idx1 = (idx0 + 1).min(samples.len() - 1);
+        let frac = (src_idx - idx0 as f64) as f32;
+        out.push(samples[idx0] * (1.0 - frac) + samples[idx1] * frac);
+    }
+    out
+}
+
 /// Start audio recording for Wispr Flow dictation.
-/// Called when the user holds the voice hotkey.
-/// Emits `voice:recording:started` event so the frontend overlay appears.
+///
+/// Opens the system default input device via cpal, spawns a dedicated OS thread
+/// (because `cpal::Stream` is not `Send`), and begins collecting mono f32 samples
+/// into a shared buffer.  Emits `voice:recording:started` so the frontend overlay
+/// appears.
 #[tauri::command]
 pub async fn speech_start_recording(
     _provider: String,
     app_handle: AppHandle,
+    state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<(), String> {
+    let voice_state = state.lock().await;
+
+    // Check if a recording is already in progress
+    {
+        let guard = voice_state
+            .recording
+            .lock()
+            .map_err(|e| format!("Recording lock poisoned: {}", e))?;
+        if guard.is_some() {
+            return Err("A recording session is already in progress".to_string());
+        }
+    }
+
+    // Query default input device on the current thread to get config,
+    // then spawn a dedicated OS thread for the stream.
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or_else(|| "No default audio input device found".to_string())?;
+
+    let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
+    tracing::info!("[wispr] Using audio input device: {}", device_name);
+
+    let supported_config = device
+        .default_input_config()
+        .map_err(|e| format!("Failed to get input device config: {}", e))?;
+
+    let sample_rate = supported_config.sample_rate().0;
+    let channels = supported_config.channels();
+    tracing::info!(
+        "[wispr] Audio config: {} Hz, {} channel(s)",
+        sample_rate,
+        channels
+    );
+
+    let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let samples: Arc<std::sync::Mutex<Vec<f32>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    let stop_flag_stream = stop_flag.clone();
+    let stop_flag_poll = stop_flag.clone();
+    let samples_cb = samples.clone();
+    let ch = channels as usize;
+
+    // Spawn a dedicated OS thread for the cpal stream (not Send).
+    let config_for_stream: cpal::StreamConfig = supported_config.into();
+    let thread_handle = std::thread::spawn(move || {
+        let stream_result = device.build_input_stream(
+            &config_for_stream,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                if stop_flag_stream.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                // Convert to mono if multi-channel
+                let mono: Vec<f32> = if ch > 1 {
+                    data.chunks(ch)
+                        .map(|chunk| chunk.iter().sum::<f32>() / ch as f32)
+                        .collect()
+                } else {
+                    data.to_vec()
+                };
+                if let Ok(mut buf) = samples_cb.lock() {
+                    buf.extend_from_slice(&mono);
+                }
+            },
+            |err| {
+                tracing::error!("[wispr] Audio stream error: {}", err);
+            },
+            None,
+        );
+
+        match stream_result {
+            Ok(stream) => {
+                if let Err(e) = stream.play() {
+                    tracing::error!("[wispr] Failed to start audio stream: {}", e);
+                    return;
+                }
+                tracing::info!("[wispr] Audio recording stream started");
+                // Keep the thread (and hence the stream) alive until stop_flag is set.
+                // Poll at 50 ms intervals.
+                while !stop_flag_poll.load(std::sync::atomic::Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                // Stream is dropped here when thread exits, stopping capture.
+                tracing::info!("[wispr] Audio recording stream stopped");
+            }
+            Err(e) => {
+                tracing::error!("[wispr] Failed to build input stream: {}", e);
+            }
+        }
+    });
+
+    // Wait briefly (up to ~200ms) for stream to begin capturing, so the caller
+    // doesn't get Ok before the thread has actually started. This is best-effort.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Store the recording state
+    {
+        let mut guard = voice_state
+            .recording
+            .lock()
+            .map_err(|e| format!("Recording lock poisoned: {}", e))?;
+
+        // Use the same stop_flag reference. Note: stop_flag_cb was moved into the
+        // thread closure, but we cloned stop_flag before that move.
+        *guard = Some(AudioRecordingState {
+            stop_flag: stop_flag.clone(),
+            samples: samples.clone(),
+            sample_rate,
+            channels,
+            thread_handle: Some(thread_handle),
+        });
+    }
+
     let _ = app_handle.emit("voice:recording:started", &_provider);
-    // TODO: In future sprint, wire to features/speech/ptt or features/speech/vad
+    tracing::info!("[wispr] Recording session started (provider={})", _provider);
     Ok(())
 }
 
 /// Stop recording and return transcription.
-/// Called when the user releases the voice hotkey.
-/// Emits `voice:recording:stopped` event so the frontend shows "Transcribing..."
+///
+/// Sets the stop flag, joins the recording thread, encodes the captured audio
+/// to WAV, writes a temp file, and routes through the existing transcription
+/// backend (cloud or local Whisper depending on provider).
+/// Emits `voice:recording:stopped` so the frontend shows "Transcribing..."
 #[tauri::command]
 pub async fn speech_stop_and_transcribe(
     _provider: String,
     language: String,
     app_handle: AppHandle,
+    state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<SpeechTranscriptResult, String> {
     let _ = app_handle.emit("voice:recording:stopped", ());
-    // TODO: In future sprint, call features/speech/local_stt for local_whisper
-    // or features/speech/deepgram for cloud transcription
-    Ok(SpeechTranscriptResult {
-        text: String::new(),
-        confidence: 1.0,
-        language,
-    })
+
+    let voice_state = state.lock().await;
+
+    // Extract the recording state
+    let recording = {
+        let mut guard = voice_state
+            .recording
+            .lock()
+            .map_err(|e| format!("Recording lock poisoned: {}", e))?;
+        guard.take()
+    };
+
+    let recording = recording.ok_or_else(|| "No active recording session to stop".to_string())?;
+
+    // Signal the recording thread to stop
+    recording
+        .stop_flag
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    // Join the recording thread (give it up to 2 seconds)
+    if let Some(handle) = recording.thread_handle {
+        let _ = handle.join();
+    }
+
+    // Extract collected samples
+    let raw_samples = recording
+        .samples
+        .lock()
+        .map_err(|e| format!("Samples lock poisoned: {}", e))?
+        .clone();
+
+    if raw_samples.is_empty() {
+        return Err("No audio data was captured. Check microphone permissions.".to_string());
+    }
+
+    let duration_secs = raw_samples.len() as f32 / recording.sample_rate as f32;
+    tracing::info!(
+        "[wispr] Captured {} samples ({:.1}s at {} Hz)",
+        raw_samples.len(),
+        duration_secs,
+        recording.sample_rate
+    );
+
+    // Resample to 16 kHz for transcription (Whisper expects 16 kHz)
+    let target_rate = 16000u32;
+    let resampled = resample_linear(&raw_samples, recording.sample_rate, target_rate);
+
+    // Encode to WAV
+    let wav_bytes = encode_wav(&resampled, target_rate);
+
+    // Write to temp file
+    let temp_dir = std::env::temp_dir();
+    let temp_file = temp_dir.join(format!("wispr_{}.wav", uuid::Uuid::new_v4()));
+    std::fs::write(&temp_file, &wav_bytes)
+        .map_err(|e| format!("Failed to write temp WAV file: {}", e))?;
+
+    tracing::info!(
+        "[wispr] WAV written to {:?} ({} bytes)",
+        temp_file,
+        wav_bytes.len()
+    );
+
+    // Route through existing transcription backend
+    let settings = voice_state.settings.lock().await;
+    let effective_provider = match _provider.as_str() {
+        "local" | "local_whisper" => VoiceProvider::Local,
+        "cloud" | "managed_cloud" | "managedcloud" | "" => VoiceProvider::Cloud,
+        _ => settings.provider.clone(),
+    };
+    let effective_settings = VoiceSettings {
+        provider: effective_provider.clone(),
+        model: settings.model.clone(),
+        language: if language.is_empty() {
+            settings.language.clone()
+        } else {
+            Some(language.clone())
+        },
+    };
+    drop(settings);
+
+    let transcription = match effective_provider {
+        VoiceProvider::Cloud => {
+            transcribe_with_cloud(&temp_file, &effective_settings, &voice_state.client).await
+        }
+        VoiceProvider::Local => {
+            let local_whisper = voice_state.local_whisper.read().await;
+            transcribe_with_local_whisper(
+                &temp_file,
+                &local_whisper,
+                effective_settings.language.clone(),
+            )
+            .await
+        }
+        VoiceProvider::WebSpeech => {
+            Err("Web Speech API cannot be used for backend transcription".to_string())
+        }
+    };
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_file);
+
+    match transcription {
+        Ok(vt) => {
+            tracing::info!(
+                "[wispr] Transcription complete: {} chars",
+                vt.text.len()
+            );
+            let _ = app_handle.emit("voice:transcription:complete", &vt);
+            Ok(SpeechTranscriptResult {
+                text: vt.text,
+                confidence: vt.confidence.unwrap_or(1.0),
+                language: vt.language.unwrap_or(language),
+            })
+        }
+        Err(e) => {
+            tracing::error!("[wispr] Transcription failed: {}", e);
+            Err(format!("Transcription failed: {}", e))
+        }
+    }
 }
