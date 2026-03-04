@@ -6,7 +6,8 @@
  */
 
 import { invoke, listen } from '../lib/tauri-mock';
-import { InlinePanel, useUnifiedChatStore } from '../stores/unifiedChatStore';
+import type { InlinePanel } from '../stores/chat/types';
+import { useChatStore } from '../stores/chat/chatStore';
 
 /**
  * Executes a shell command and returns results in an inline panel.
@@ -23,7 +24,7 @@ export async function executeTerminalCommand(
   command: string,
   messageId?: string,
 ): Promise<InlinePanel> {
-  const panelId = `terminal-${Date.now()}`;
+  const panelId = `terminal-${crypto.randomUUID()}`;
   const streamId = panelId;
 
   const panel: InlinePanel = {
@@ -95,7 +96,7 @@ export async function executeTerminalCommand(
   let stderrBuffer = panel.content.terminal?.stderr ?? '';
 
   const updatePanel = (updates: Partial<InlinePanel['content']>) => {
-    useUnifiedChatStore.getState().updateInlinePanel(messageId, panelId, updates);
+    useChatStore.getState().updateInlinePanel(messageId, panelId, updates);
   };
 
   const outputEvent = `terminal-output-${streamId}`;
@@ -189,7 +190,7 @@ export async function executeTerminalCommand(
  * // panel.content.browser.screenshot contains base64 screenshot
  */
 export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
-  const panelId = `browser-${Date.now()}`;
+  const panelId = `browser-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -217,7 +218,7 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
     });
 
     // Navigate to the URL
-    await invoke<void>('browser_navigate', { url });
+    await invoke<void>('browser_navigate', { browserId, url });
 
     // Get page title
     const title = await invoke<string>('browser_get_title', {});
@@ -264,7 +265,7 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
  * // panel.content.code.language will be 'typescript'
  */
 export async function executeCodeCommand(filePath: string): Promise<InlinePanel> {
-  const panelId = `code-${Date.now()}`;
+  const panelId = `code-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -355,7 +356,7 @@ export async function executeCodeCommand(filePath: string): Promise<InlinePanel>
  * // panel.content.database.results.rows contains the query results
  */
 export async function executeDatabaseCommand(query: string): Promise<InlinePanel> {
-  const panelId = `database-${Date.now()}`;
+  const panelId = `database-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -436,7 +437,7 @@ export async function executeCompactCommand(
   conversationId: number | null,
   userId: string | null,
 ): Promise<InlinePanel> {
-  const panelId = `compact-${Date.now()}`;
+  const panelId = `compact-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -563,7 +564,7 @@ export async function executeCompactCommand(
  * // panel.content.image.urls contains the generated image URLs
  */
 export async function executeImagineCommand(prompt: string): Promise<InlinePanel> {
-  const panelId = `image-${Date.now()}`;
+  const panelId = `image-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -662,7 +663,7 @@ export async function executeImagineCommand(prompt: string): Promise<InlinePanel
  * const panel = await executeUndoCommand('change-uuid-123');
  */
 export async function executeUndoCommand(args: string): Promise<InlinePanel> {
-  const panelId = `undo-${Date.now()}`;
+  const panelId = `undo-${crypto.randomUUID()}`;
 
   const panel: InlinePanel = {
     id: panelId,

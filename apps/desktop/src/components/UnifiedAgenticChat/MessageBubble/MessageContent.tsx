@@ -89,26 +89,34 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   const { createArtifact, openPanel } = useCanvasStore();
 
   // Map from code-block index → execution result
-  const [codeResults, setCodeResults] = useState<Map<number, CodeExecutionResult>>(new Map());
-  // Map from code-block index → running state
-  const [runningBlocks, setRunningBlocks] = useState<Set<number>>(new Set());
+  const [codeResults, setCodeResults] = useState<Map<string, CodeExecutionResult>>(new Map());
+  // Map from code-block key → running state
+  const [runningBlocks, setRunningBlocks] = useState<Set<string>>(new Set());
+  const isMountedRef = React.useRef(true);
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  const handleRunCode = useCallback(async (language: string, code: string, blockIndex: number) => {
-    setRunningBlocks((prev) => new Set(prev).add(blockIndex));
+  const handleRunCode = useCallback(async (language: string, code: string, blockKey: string) => {
+    setRunningBlocks((prev) => new Set(prev).add(blockKey));
     // Clear any previous result so the panel shows immediately in loading state
     setCodeResults((prev) => {
       const next = new Map(prev);
-      next.delete(blockIndex);
+      next.delete(blockKey);
       return next;
     });
     try {
       const result = await invoke<CodeExecutionResult>('execute_code', { language, code });
-      setCodeResults((prev) => new Map(prev).set(blockIndex, result));
+      if (!isMountedRef.current) return;
+      setCodeResults((prev) => new Map(prev).set(blockKey, result));
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       toast.error(`Code execution failed: ${errMsg}`);
       setCodeResults((prev) =>
-        new Map(prev).set(blockIndex, {
+        new Map(prev).set(blockKey, {
           success: false,
           stdout: '',
           stderr: errMsg,
@@ -123,7 +131,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
     } finally {
       setRunningBlocks((prev) => {
         const next = new Set(prev);
-        next.delete(blockIndex);
+        next.delete(blockKey);
         return next;
       });
     }
@@ -159,13 +167,9 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
           children={isUser ? message.content : stripToolResultJsonBlocks(message.content)}
           components={{
             code(props) {
-              // blockIndex is captured per-render via a closure counter at component scope.
-              // ReactMarkdown calls this component once per code fence in document order,
-              // so we track the index with a ref-like counter on the props object.
               const { inline, className, children, ...rest } =
                 props as React.HTMLAttributes<HTMLElement> & {
                   inline?: boolean;
-                  'data-block-index'?: number;
                 };
               const match = /language-(\w+)/.exec(className || '');
               const language: string = match?.[1] ?? 'text';
@@ -191,13 +195,8 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               }
 
               const canRun = !isUser && EXECUTABLE_LANGUAGES.has(language.toLowerCase());
-              // Use a numeric index derived from blockKey for Map keying
-              const blockIndex = Array.from(blockKey).reduce(
-                (acc, ch) => acc + ch.charCodeAt(0),
-                0,
-              );
-              const executionResult = codeResults.get(blockIndex);
-              const isRunning = runningBlocks.has(blockIndex);
+              const executionResult = codeResults.get(blockKey);
+              const isRunning = runningBlocks.has(blockKey);
 
               return (
                 <>
@@ -208,7 +207,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
                       showLineNumbers={true}
                       enableCopy={true}
                       enableRun={canRun}
-                      onRun={canRun ? () => handleRunCode(language, code, blockIndex) : undefined}
+                      onRun={canRun ? () => handleRunCode(language, code, blockKey) : undefined}
                     />
                     {/* Open in Canvas button — shown on hover for assistant messages */}
                     {!isUser && (
@@ -238,7 +237,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
                         }
                       }
                       isRunning={isRunning}
-                      onRerun={canRun ? () => handleRunCode(language, code, blockIndex) : undefined}
+                      onRerun={canRun ? () => handleRunCode(language, code, blockKey) : undefined}
                     />
                   )}
                 </>

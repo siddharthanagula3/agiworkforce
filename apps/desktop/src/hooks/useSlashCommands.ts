@@ -21,20 +21,20 @@ export interface ParsedSlashCommand {
   rawInput: string;
 }
 
-export function useSlashCommands() {
-  const VALID_COMMANDS = [
-    'browser',
-    'terminal',
-    'code',
-    'database',
-    'undo',
-    'compact',
-    'pdf',
-    'word',
-    'excel',
-    'imagine',
-  ];
+const VALID_COMMANDS = [
+  'browser',
+  'terminal',
+  'code',
+  'database',
+  'undo',
+  'compact',
+  'pdf',
+  'word',
+  'excel',
+  'imagine',
+] as const;
 
+export function useSlashCommands() {
   /**
    * Parse a string input to detect and extract slash command
    * @param input - The raw user input string
@@ -54,7 +54,7 @@ export function useSlashCommands() {
     const args = match[2] || '';
     const lowerCommand = command.toLowerCase();
 
-    if (!VALID_COMMANDS.includes(lowerCommand)) {
+    if (!(VALID_COMMANDS as readonly string[]).includes(lowerCommand)) {
       return null;
     }
 
@@ -75,7 +75,7 @@ export function useSlashCommands() {
       return false;
     }
 
-    const match = input.match(/^\/(\w*)$/);
+    const match = input.match(/^\/(\w*)/);
     if (!match) {
       return false;
     }
