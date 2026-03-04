@@ -31,11 +31,15 @@ function createChainMock(terminal: Record<string, unknown> = {}) {
   return chain;
 }
 
+// vi.hoisted() ensures these are initialized before vi.mock() factories run
+const { mockFrom, mockGetSession, mockChannel, mockRemoveChannel } = vi.hoisted(() => ({
+  mockFrom: vi.fn(),
+  mockGetSession: vi.fn(),
+  mockChannel: vi.fn(),
+  mockRemoveChannel: vi.fn(),
+}));
+
 let mockChain = createChainMock();
-const mockFrom = vi.fn(() => mockChain);
-const mockGetSession = vi.fn();
-const mockChannel = vi.fn();
-const mockRemoveChannel = vi.fn();
 
 vi.mock('@shared/lib/supabase-client', () => ({
   supabase: {

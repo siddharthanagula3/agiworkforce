@@ -8,7 +8,7 @@ import { join } from 'path';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
@@ -290,6 +290,8 @@ async function handler(request: NextRequest) {
       },
     });
   } catch (error) {
+    // Re-throw AppErrors (400 BAD_REQUEST, 403 FORBIDDEN, etc.) with their original status
+    if (isAppError(error)) throw error;
     logger.error({ userId, employeeId, error }, 'Agent execution failed');
     throw createError.internal('Agent execution failed');
   }
