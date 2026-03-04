@@ -135,6 +135,14 @@ impl ManagedCloudProvider {
             || m.contains("haiku")
     }
 
+    /// Returns true for Perplexity / Sonar models, which do not support
+    /// function calling.  Sending `tools` or `tool_choice` to Perplexity
+    /// results in an HTTP 400 error.
+    fn is_perplexity_model(model: &str) -> bool {
+        let m = model.to_lowercase();
+        m.contains("perplexity") || m.contains("sonar")
+    }
+
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Self::with_config(HttpClientConfig::default())
     }
@@ -263,6 +271,15 @@ impl ManagedCloudProvider {
             } else {
                 transformed["tools"] =
                     serde_json::json!(Self::transform_tools_to_openai_format(tools));
+            }
+        }
+
+        // Perplexity / Sonar models do not support function calling.
+        // Strip tools and tool_choice to avoid HTTP 400 errors from the API.
+        if Self::is_perplexity_model(&canonical_model) {
+            if let Some(obj) = transformed.as_object_mut() {
+                obj.remove("tools");
+                obj.remove("tool_choice");
             }
         }
 

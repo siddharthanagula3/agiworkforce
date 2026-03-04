@@ -350,4 +350,17 @@ export interface ToolLabelEntry {
    * Sourced from `ToolEventCompleted.error`.
    */
   error?: string;
+
+  /**
+   * Optional parallel group identifier.
+   *
+   * When the Rust agentic loop emits multiple `ToolEvent::Started` events for
+   * tool calls that are dispatched concurrently (e.g., reading several files at
+   * once), it may set this field to the same non-empty string on all of them.
+   * The `ToolTimeline` component uses this to render those entries inside a
+   * shared visual group, mirroring the Claude Code "parallel reads" treatment.
+   *
+   * `undefined` (absent) means the tool was dispatched independently.
+   */
+  parallelGroup?: string;
 }
