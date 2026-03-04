@@ -216,23 +216,23 @@ mod tests {
     #[test]
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
-        // gpt-5: $1.25/M input, $10.00/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5", 1_000_000, 1_000_000);
+        // gpt-5.2: $1.75/M input, $14.00/M output
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.2", 1_000_000, 1_000_000);
         assert!(
-            (cost - 11.25).abs() < 1e-9,
-            "Expected $11.25 for gpt-5 1M+1M tokens, got ${}",
+            (cost - 15.75).abs() < 1e-9,
+            "Expected $15.75 for gpt-5.2 1M+1M tokens, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_openai_gpt4o_mini_cost() {
+    fn test_openai_gpt5_nano_cost() {
         let calc = CostCalculator::new();
-        // gpt-4o-mini: $0.15/M input, $0.60/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-4o-mini", 1_000_000, 0);
+        // gpt-5-nano: $0.05/M input, $0.40/M output
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5-nano", 1_000_000, 0);
         assert!(
-            (cost - 0.15).abs() < 1e-9,
-            "Expected $0.15 for gpt-4o-mini 1M input only, got ${}",
+            (cost - 0.05).abs() < 1e-9,
+            "Expected $0.05 for gpt-5-nano 1M input only, got ${}",
             cost
         );
     }
@@ -240,11 +240,11 @@ mod tests {
     #[test]
     fn test_google_gemini_flash_cost() {
         let calc = CostCalculator::new();
-        // gemini-2.0-flash: $0.10/M input, $0.40/M output
-        let cost = calc.calculate(Provider::Google, "gemini-2.0-flash", 1_000_000, 1_000_000);
+        // gemini-3-flash-preview: $0.50/M input, $3.00/M output
+        let cost = calc.calculate(Provider::Google, "gemini-3-flash-preview", 1_000_000, 1_000_000);
         assert!(
-            (cost - 0.50).abs() < 1e-9,
-            "Expected $0.50 for gemini-2.0-flash 1M+1M tokens, got ${}",
+            (cost - 3.50).abs() < 1e-9,
+            "Expected $3.50 for gemini-3-flash-preview 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -386,11 +386,11 @@ mod tests {
     #[test]
     fn test_moonshot_kimi_cost() {
         let calc = CostCalculator::new();
-        // kimi-k2.5: $0.80/M input, $3.50/M output
+        // kimi-k2.5: $0.60/M input, $3.00/M output
         let cost = calc.calculate(Provider::Moonshot, "kimi-k2.5", 1_000_000, 1_000_000);
         assert!(
-            (cost - 4.30).abs() < 1e-9,
-            "Expected $4.30 for kimi-k2.5 1M+1M tokens, got ${}",
+            (cost - 3.60).abs() < 1e-9,
+            "Expected $3.60 for kimi-k2.5 1M+1M tokens, got ${}",
             cost
         );
     }
