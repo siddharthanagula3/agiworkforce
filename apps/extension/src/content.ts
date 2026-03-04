@@ -12,6 +12,20 @@ import type {
   GetFormsResponse,
   FormInfo,
   RunPageAction,
+  ConnectionStatusChangedMessage,
+  ClickMessage,
+  DoubleClickMessage,
+  RightClickMessage,
+  TypeMessage,
+  GetTextMessage,
+  GetAttributeMessage,
+  SetAttributeMessage,
+  WaitForSelectorMessage,
+  ExecuteScriptMessage,
+  FillFormMessage,
+  SubmitFormMessage,
+  RunPageActionsMessage,
+  AutoFillJobApplicationMessage,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
 import { runPlatformJobAutofill } from './jobAutofill';
@@ -97,47 +111,49 @@ function handleMessage(
  * Async message handler
  */
 async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionResponse> {
-  const messageType = (message as unknown as Record<string, unknown>)['type'];
+  const messageType = message.type;
   logger.debug('Processing message', { type: messageType });
 
   switch (messageType) {
     case 'TAB_READY':
       return { success: true, ready: true } as ExtensionResponse;
 
-    case 'CONNECTION_STATUS_CHANGED':
-      automationState.connectionStatus = (message as any).connected ? 'connected' : 'disconnected';
+    case 'CONNECTION_STATUS_CHANGED': {
+      const statusMsg = message as ConnectionStatusChangedMessage;
+      automationState.connectionStatus = statusMsg.connected ? 'connected' : 'disconnected';
       updateIndicatorStatus();
-      if ((message as any).connected) {
+      if (statusMsg.connected) {
         void syncPageContext('connection_restored');
       }
       return { success: true } as ExtensionResponse;
+    }
 
     case 'CLICK':
-      return handleClick(message as any);
+      return handleClick(message as ClickMessage);
 
     case 'DOUBLE_CLICK':
-      return handleDoubleClick(message as any);
+      return handleDoubleClick(message as DoubleClickMessage);
 
     case 'RIGHT_CLICK':
-      return handleRightClick(message as any);
+      return handleRightClick(message as RightClickMessage);
 
     case 'TYPE':
-      return handleType(message as any);
+      return handleType(message as TypeMessage);
 
     case 'GET_TEXT':
-      return handleGetText(message as any);
+      return handleGetText(message as GetTextMessage);
 
     case 'GET_ATTRIBUTE':
-      return handleGetAttribute(message as any);
+      return handleGetAttribute(message as GetAttributeMessage);
 
     case 'SET_ATTRIBUTE':
-      return handleSetAttribute(message as any);
+      return handleSetAttribute(message as SetAttributeMessage);
 
     case 'WAIT_FOR_SELECTOR':
-      return handleWaitForSelector(message as any);
+      return handleWaitForSelector(message as WaitForSelectorMessage);
 
     case 'EXECUTE_SCRIPT':
-      return handleExecuteScript(message as any);
+      return handleExecuteScript(message as ExecuteScriptMessage);
 
     case 'GET_PAGE_INFO':
       return handleGetPageInfo();
@@ -146,18 +162,18 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleGetForms();
 
     case 'FILL_FORM':
-      return handleFillForm(message as any);
+      return handleFillForm(message as FillFormMessage);
 
     case 'SUBMIT_FORM':
-      return handleSubmitForm(message as any);
+      return handleSubmitForm(message as SubmitFormMessage);
     case 'CAPTURE_ELEMENT':
       return handleCaptureElement();
     case 'GET_ELEMENT_INFO':
       return handleGetElementInfo();
     case 'RUN_PAGE_ACTIONS':
-      return handleRunPageActions(message as any);
+      return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
-      return handleAutoFillJobApplication(message as any);
+      return handleAutoFillJobApplication(message as AutoFillJobApplicationMessage);
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
@@ -370,10 +386,7 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
   }
 }
 
-async function handleRunPageActions(message: {
-  taskId?: string;
-  actions?: RunPageAction[];
-}): Promise<ExtensionResponse> {
+async function handleRunPageActions(message: RunPageActionsMessage): Promise<ExtensionResponse> {
   const taskId = message.taskId || `task_${Date.now()}`;
   const actions = Array.isArray(message.actions) ? message.actions : [];
   const startedAt = Date.now();
@@ -499,7 +512,7 @@ function handleGetElementInfo(): ExtensionResponse {
 /**
  * Click element handler
  */
-async function handleClick(message: any): Promise<ClickResponse> {
+async function handleClick(message: ClickMessage): Promise<ClickResponse> {
   try {
     const { selector, options = {} } = message;
 
@@ -538,7 +551,7 @@ async function handleClick(message: any): Promise<ClickResponse> {
 /**
  * Double click element handler
  */
-async function handleDoubleClick(message: any): Promise<ExtensionResponse> {
+async function handleDoubleClick(message: DoubleClickMessage): Promise<ExtensionResponse> {
   try {
     const { selector, options = {} } = message;
 
@@ -572,7 +585,7 @@ async function handleDoubleClick(message: any): Promise<ExtensionResponse> {
 /**
  * Right click element handler
  */
-async function handleRightClick(message: any): Promise<ExtensionResponse> {
+async function handleRightClick(message: RightClickMessage): Promise<ExtensionResponse> {
   try {
     const { selector, options = {} } = message;
 
@@ -607,7 +620,7 @@ async function handleRightClick(message: any): Promise<ExtensionResponse> {
 /**
  * Type text into element handler
  */
-async function handleType(message: any): Promise<ExtensionResponse> {
+async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, text, options = {} } = message;
 
@@ -672,7 +685,7 @@ async function handleType(message: any): Promise<ExtensionResponse> {
 /**
  * Get text content handler
  */
-async function handleGetText(message: any): Promise<ExtensionResponse> {
+async function handleGetText(message: GetTextMessage): Promise<ExtensionResponse> {
   try {
     const { selector } = message;
 
@@ -692,7 +705,7 @@ async function handleGetText(message: any): Promise<ExtensionResponse> {
 /**
  * Get element attribute handler
  */
-async function handleGetAttribute(message: any): Promise<ExtensionResponse> {
+async function handleGetAttribute(message: GetAttributeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, attribute } = message;
 
@@ -780,7 +793,7 @@ function isAttributeAllowed(attribute: string, element: Element): boolean {
 /**
  * Set element attribute handler
  */
-async function handleSetAttribute(message: any): Promise<ExtensionResponse> {
+async function handleSetAttribute(message: SetAttributeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, attribute, value } = message;
 
@@ -808,7 +821,7 @@ async function handleSetAttribute(message: any): Promise<ExtensionResponse> {
 /**
  * Wait for selector handler
  */
-async function handleWaitForSelector(message: any): Promise<ExtensionResponse> {
+async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<ExtensionResponse> {
   try {
     const { selector, timeout = 5000, options = {} } = message;
 
@@ -828,35 +841,39 @@ async function handleWaitForSelector(message: any): Promise<ExtensionResponse> {
  * Allowlisted script operations that can be executed via handleExecuteScript.
  * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
  */
-const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: any[]) => unknown> = {
-  scrollTo: (...args: any[]) => window.scrollTo(args[0] ?? 0, args[1] ?? 0),
-  scrollBy: (...args: any[]) => window.scrollBy(args[0] ?? 0, args[1] ?? 0),
-  scrollIntoView: (...args: any[]) => {
-    const el = document.querySelector(args[0]);
-    el?.scrollIntoView(args[1] ?? { behavior: 'smooth', block: 'center' });
+const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown> = {
+  scrollTo: (...args: unknown[]) =>
+    window.scrollTo((args[0] as number) ?? 0, (args[1] as number) ?? 0),
+  scrollBy: (...args: unknown[]) =>
+    window.scrollBy((args[0] as number) ?? 0, (args[1] as number) ?? 0),
+  scrollIntoView: (...args: unknown[]) => {
+    const el = document.querySelector(args[0] as string);
+    el?.scrollIntoView(
+      (args[1] as ScrollIntoViewOptions) ?? { behavior: 'smooth', block: 'center' },
+    );
     return !!el;
   },
   getScrollPosition: () => ({ x: window.scrollX, y: window.scrollY }),
   getViewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
-  getComputedStyle: (...args: any[]) => {
-    const el = document.querySelector(args[0]);
+  getComputedStyle: (...args: unknown[]) => {
+    const el = document.querySelector(args[0] as string);
     if (!el) return null;
     const style = window.getComputedStyle(el);
-    return args[1] ? style.getPropertyValue(args[1]) : null;
+    return args[1] ? style.getPropertyValue(args[1] as string) : null;
   },
-  getBoundingRect: (...args: any[]) => {
-    const el = document.querySelector(args[0]);
+  getBoundingRect: (...args: unknown[]) => {
+    const el = document.querySelector(args[0] as string);
     if (!el) return null;
     const rect = el.getBoundingClientRect();
     return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
   },
-  focusElement: (...args: any[]) => {
-    const el = document.querySelector(args[0]) as HTMLElement | null;
+  focusElement: (...args: unknown[]) => {
+    const el = document.querySelector(args[0] as string) as HTMLElement | null;
     el?.focus();
     return !!el;
   },
-  blurElement: (...args: any[]) => {
-    const el = document.querySelector(args[0]) as HTMLElement | null;
+  blurElement: (...args: unknown[]) => {
+    const el = document.querySelector(args[0] as string) as HTMLElement | null;
     el?.blur();
     return !!el;
   },
@@ -866,7 +883,7 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: any[]) => unknown> = {
  * Execute script handler.
  * SECURITY: Only allowlisted operations are supported. Arbitrary script execution is blocked.
  */
-async function handleExecuteScript(message: any): Promise<ExtensionResponse> {
+async function handleExecuteScript(message: ExecuteScriptMessage): Promise<ExtensionResponse> {
   try {
     const { script, args = [] } = message;
 
@@ -953,7 +970,7 @@ function handleGetForms(): GetFormsResponse {
 /**
  * Fill form handler
  */
-async function handleFillForm(message: any): Promise<ExtensionResponse> {
+async function handleFillForm(message: FillFormMessage): Promise<ExtensionResponse> {
   try {
     const { formSelector, data, options = {} } = message;
 
@@ -983,10 +1000,9 @@ async function handleFillForm(message: any): Promise<ExtensionResponse> {
   }
 }
 
-async function handleAutoFillJobApplication(message: {
-  profile?: Record<string, unknown>;
-  options?: Record<string, unknown>;
-}): Promise<ExtensionResponse> {
+async function handleAutoFillJobApplication(
+  message: AutoFillJobApplicationMessage,
+): Promise<ExtensionResponse> {
   const profile = message.profile ?? {};
   const options = message.options ?? {};
   const response = await runPlatformJobAutofill(profile, options);
@@ -996,7 +1012,7 @@ async function handleAutoFillJobApplication(message: {
 /**
  * Submit form handler
  */
-async function handleSubmitForm(message: any): Promise<ExtensionResponse> {
+async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionResponse> {
   try {
     const { formSelector } = message;
 
@@ -1021,7 +1037,8 @@ async function checkConnectionStatus(): Promise<void> {
       type: 'GET_CONNECTION_STATUS',
     });
 
-    automationState.connectionStatus = (response as any).nativeConnected
+    const statusResponse = response as { nativeConnected?: boolean };
+    automationState.connectionStatus = statusResponse.nativeConnected
       ? 'connected'
       : 'disconnected';
     updateIndicatorStatus();
@@ -1151,12 +1168,30 @@ function injectFloatingOverlay(): void {
  */
 // [H9 fix] Allowlist of known message types — prevents unknown type strings from being processed
 const VALID_MESSAGE_TYPES = new Set([
-  'CAPTURE_SCREENSHOT', 'CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'TYPE',
-  'GET_TEXT', 'GET_ATTRIBUTE', 'SET_ATTRIBUTE', 'WAIT_FOR_SELECTOR',
-  'EXECUTE_SCRIPT', 'GET_PAGE_INFO', 'GET_FORMS', 'FILL_FORM', 'SUBMIT_FORM',
-  'CAPTURE_ELEMENT', 'GET_ELEMENT_INFO', 'RUN_PAGE_ACTIONS', 'AUTO_FILL_JOB_APPLICATION',
-  'GET_CONNECTION_STATUS', 'CONNECTION_STATUS_CHANGED', 'TAB_READY', 'SYNC_PAGE_CONTEXT',
-  'queue_message', 'open_side_panel',
+  'CAPTURE_SCREENSHOT',
+  'CLICK',
+  'DOUBLE_CLICK',
+  'RIGHT_CLICK',
+  'TYPE',
+  'GET_TEXT',
+  'GET_ATTRIBUTE',
+  'SET_ATTRIBUTE',
+  'WAIT_FOR_SELECTOR',
+  'EXECUTE_SCRIPT',
+  'GET_PAGE_INFO',
+  'GET_FORMS',
+  'FILL_FORM',
+  'SUBMIT_FORM',
+  'CAPTURE_ELEMENT',
+  'GET_ELEMENT_INFO',
+  'RUN_PAGE_ACTIONS',
+  'AUTO_FILL_JOB_APPLICATION',
+  'GET_CONNECTION_STATUS',
+  'CONNECTION_STATUS_CHANGED',
+  'TAB_READY',
+  'SYNC_PAGE_CONTEXT',
+  'queue_message',
+  'open_side_panel',
 ]);
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

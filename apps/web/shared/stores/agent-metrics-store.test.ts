@@ -58,8 +58,8 @@ describe('Agent Metrics Store', () => {
       expect(state.totalSessions).toBe(1);
       expect(state.activeSessions).toBe(1);
       expect(state.currentSessions).toHaveLength(1);
-      expect(state.currentSessions[0].isActive).toBe(true);
-      expect(state.currentSessions[0].status).toBe('in_progress');
+      expect(state.currentSessions[0]!.isActive).toBe(true);
+      expect(state.currentSessions[0]!.status).toBe('in_progress');
     });
 
     it('should update session', () => {
@@ -296,8 +296,8 @@ describe('Agent Metrics Store', () => {
 
       const state = useAgentMetricsStore.getState();
       expect(state.recentActivity).toHaveLength(1);
-      expect(state.recentActivity[0].type).toBe('session_start');
-      expect(state.recentActivity[0].message).toBe('Started new session');
+      expect(state.recentActivity[0]!.type).toBe('session_start');
+      expect(state.recentActivity[0]!.message).toBe('Started new session');
     });
 
     it('should limit recent activity to 50 items', () => {
@@ -325,7 +325,7 @@ describe('Agent Metrics Store', () => {
       });
 
       const state = useAgentMetricsStore.getState();
-      expect(state.recentActivity[0].agentName).toBe('code-reviewer');
+      expect(state.recentActivity[0]!.agentName).toBe('code-reviewer');
     });
   });
 

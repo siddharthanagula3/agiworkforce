@@ -1,47 +1,87 @@
-// STUB FILE FOR WEB PORT COMPILATION
+/**
+ * Chat types for the web app
+ * These mirror the desktop app's chat types but are standalone for web usage
+ */
+
+export type ArtifactType =
+  | 'code'
+  | 'markdown'
+  | 'html'
+  | 'svg'
+  | 'mermaid'
+  | 'json'
+  | 'csv'
+  | 'image'
+  | 'video';
+
+export interface Artifact {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  content: string;
+  language?: string;
+  mimeType?: string;
+  url?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ToolCallData {
+  id: string;
+  type: string;
+  name: string;
+  parameters: Record<string, unknown>;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: unknown;
+  error?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
+export interface ToolResultData {
+  toolCallId: string;
+  content: unknown;
+  isError?: boolean;
+  errorMessage?: string;
+}
+
+export interface ToolApprovalRequest {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  description: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  requiredPermissions?: string[];
+  createdAt: Date;
+}
+
+export interface ResearchTask {
+  id: string;
+  query: string;
+  status: 'pending' | 'searching' | 'analyzing' | 'completed' | 'failed';
+  sources: ResearchSource[];
+  summary?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface ResearchSource {
+  id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  relevanceScore: number;
+  fetchedAt: Date;
+}
+
+export interface ChatMessageMetadata {
+  model?: string;
+  tokensUsed?: number;
+  cost?: number;
+  processingTime?: number;
+  temperature?: number;
+}
+
 export const _stub = true;
-export default {} as any;
-export const useAuth = () => ({ user: null });
-export const useAccountStore = () => ({}) as any;
-export const useModelStore = () => ({}) as any;
-export const useProjectStore = () => ({}) as any;
-export const useMemoryStore = () => ({}) as any;
-export const useArtifactStore = () => ({}) as any;
-export const useExecutionStore = () => ({}) as any;
-export const useTerminalStore = () => ({}) as any;
-export const useBrowserStore = () => ({}) as any;
-export const useMcpStore = () => ({}) as any;
-export const useUpdaterStore = () => ({}) as any;
-export const useUsageStore = () => ({}) as any;
-export const useCloudStore = () => ({}) as any;
-export const useAutomationStore = () => ({}) as any;
-export const useErrorStore = () => ({}) as any;
-export const useSchedulerStore = () => ({}) as any;
-export const useMediaGenerationStore = () => ({}) as any;
-export const useCustomInstructionsStore = () => ({}) as any;
-export const useCodeStore = () => ({}) as any;
-export const useSettingsStore = () => ({}) as any;
-export const useBillingUsageStore = () => ({}) as any;
-
-// General dummy exports (covers many cases)
-export const invoke = async () => ({}) as any;
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
-
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
-
-export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
-export type Artifact = any;
-export type ToolCallData = any;
-export type ToolResultData = any;
-export type ToolApprovalRequest = any;
-export type ResearchTask = any;
+export default {};

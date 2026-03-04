@@ -14,7 +14,7 @@ import { colors } from '@/lib/theme';
 import type { MessagingPlatform } from '@/stores/messagingStore';
 
 interface PlatformSetupSheetProps {
-  sheetRef: any;
+  sheetRef: React.RefObject<BottomSheet | null>;
   platform: MessagingPlatform | null;
   onConnect: (config: Record<string, string>) => Promise<void>;
 }

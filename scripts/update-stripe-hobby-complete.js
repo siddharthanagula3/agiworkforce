@@ -28,7 +28,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 
 async function updateHobbyPlan() {
   try {
-    const productId = 'prod_StUbhCc9Y4aVwP';
+    const productId = process.env.STRIPE_PRODUCT_HOBBY_ID;
+    if (!productId) {
+      console.error('❌ STRIPE_PRODUCT_HOBBY_ID environment variable is required');
+      process.exit(1);
+    }
 
     console.log('🔄 Step 1: Updating Stripe product...');
 

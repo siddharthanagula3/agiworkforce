@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 
@@ -43,4 +44,4 @@ export const DiffViewer = () => null;
 export const handleSlashCommand = () => {};
 // ... will add more if tsc complains
 
-export const CanvasWorkspace = (_props: any) => null;
+export const CanvasWorkspace = (_props: Record<string, unknown>) => null;

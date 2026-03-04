@@ -151,6 +151,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('../lib/tauri-mock', async () => {
   const core = await import('@tauri-apps/api/core');
   return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test setup: core module re-export
     invoke: (core as any).invoke,
     isTauri: false,
     isTauriContext: () => false,
@@ -249,6 +250,7 @@ vi.mock('sonner', () => ({
   toast: vi.fn(),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test setup: mock canvas getContext
 (HTMLCanvasElement.prototype as any).getContext = vi.fn(() => ({
   fillRect: vi.fn(),
   clearRect: vi.fn(),

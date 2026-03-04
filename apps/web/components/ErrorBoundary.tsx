@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;
@@ -29,14 +30,14 @@ export const isTauri = false;
 export const countTokens = () => 0;
 export const getTokenPercentage = () => 0;
 
-export const BrowserVisualization = (_props?: any) => null;
-export const MonacoEditor = (_props?: any) => null;
-export const TerminalPanel = (_props?: any) => null;
-export const MemoryPanel = (_props?: any) => null;
-export const ScreenCaptureButton = (_props?: any) => null;
+export const BrowserVisualization = (_props?: Record<string, unknown>) => null;
+export const MonacoEditor = (_props?: Record<string, unknown>) => null;
+export const TerminalPanel = (_props?: Record<string, unknown>) => null;
+export const MemoryPanel = (_props?: Record<string, unknown>) => null;
+export const ScreenCaptureButton = (_props?: Record<string, unknown>) => null;
 export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = (_props?: any) => null;
-export const DiffViewer = (_props?: any) => null;
+export const TimeoutWarningDialog = (_props?: Record<string, unknown>) => null;
+export const DiffViewer = (_props?: Record<string, unknown>) => null;
 
 export const handleSlashCommand = () => {};
 // ... will add more if tsc complains

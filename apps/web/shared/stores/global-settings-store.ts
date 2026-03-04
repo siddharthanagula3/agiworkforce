@@ -114,9 +114,11 @@ const INITIAL_STATE: AppState = {
     voiceMode: true,
     realTimeCollab: false,
   },
-  version: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
-  buildNumber: process.env.NEXT_PUBLIC_BUILD_NUMBER || 'dev',
-  environment: (process.env.NODE_ENV === 'production' ? 'production' : 'development') as AppEnvironment,
+  version: process.env['NEXT_PUBLIC_APP_VERSION'] || '1.0.0',
+  buildNumber: process.env['NEXT_PUBLIC_BUILD_NUMBER'] || 'dev',
+  environment: (process.env.NODE_ENV === 'production'
+    ? 'production'
+    : 'development') as AppEnvironment,
 };
 
 // SECURITY FIX: Only enable devtools in development/staging, not production

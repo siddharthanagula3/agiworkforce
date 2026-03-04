@@ -40,6 +40,14 @@ interface PageContextSnapshot {
   error?: string;
 }
 
+interface NativeMessageEnvelope {
+  id: string;
+  type: string;
+  success?: boolean;
+  error?: string;
+  data?: unknown;
+}
+
 interface NativeResponseEnvelope {
   success?: boolean;
   data?: unknown;
@@ -85,6 +93,7 @@ const lastPageContextSyncByTab = new Map<number, { fingerprint: string; at: numb
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
+const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
 const MAX_CONTEXT_HTML_CHARS = 100_000;
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
@@ -213,17 +222,19 @@ function connectToNativeHost(): void {
 
     void (async () => {
       try {
-        const connectResult = await sendNativeRequest({
+        const connectResult = (await sendNativeRequest({
           type: 'connect',
           extension_id: chrome.runtime.id,
-        });
-        if (!(connectResult as any)?.success) {
-          throw new Error((connectResult as any)?.error ?? 'Native connect handshake failed');
+        })) as unknown as NativeResponseEnvelope;
+        if (!connectResult?.success) {
+          throw new Error(connectResult?.error ?? 'Native connect handshake failed');
         }
 
-        const pingResult = await sendNativeRequest({ type: 'ping' });
-        if (!(pingResult as any)?.success) {
-          throw new Error((pingResult as any)?.error ?? 'Native ping failed');
+        const pingResult = (await sendNativeRequest({
+          type: 'ping',
+        })) as unknown as NativeResponseEnvelope;
+        if (!pingResult?.success) {
+          throw new Error(pingResult?.error ?? 'Native ping failed');
         }
 
         nativeReconnectAttempt = 0;
@@ -263,7 +274,7 @@ function connectToNativeHost(): void {
 }
 
 function createRequestId(): string {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  return `${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
 function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
@@ -305,7 +316,7 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
 /**
  * Handle messages from the native host
  */
-function handleNativeMessage(message: any): void {
+function handleNativeMessage(message: NativeMessageEnvelope): void {
   logger.debug('Received native message', message);
 
   if (message && message.id && pendingRequests.has(message.id)) {
@@ -317,7 +328,7 @@ function handleNativeMessage(message: any): void {
       if (message.success === false) {
         reject(new Error(message.error ?? 'Native request failed'));
       } else {
-        resolve(message as ExtensionResponse);
+        resolve(message as unknown as ExtensionResponse);
       }
     }
   }
@@ -453,7 +464,8 @@ async function handleMessageAsync(
         return { success: false, error: 'No tab ID for page context sync' } as ExtensionResponse;
       }
 
-      const messageContext = (message as any).context as Record<string, unknown> | undefined;
+      const messageContext = (message as ExtensionMessage & { context?: Record<string, unknown> })
+        .context;
       return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
     }
 
@@ -515,10 +527,14 @@ async function handleMessageAsync(
       }
 
       try {
-        const options = {
-          format: (message as any).format ?? 'png',
-          quality: (message as any).quality ?? 90,
-        } as chrome.tabs.CaptureVisibleTabOptions;
+        const screenshotMsg = message as ExtensionMessage & {
+          format?: 'png' | 'jpeg';
+          quality?: number;
+        };
+        const options: chrome.tabs.CaptureVisibleTabOptions = {
+          format: screenshotMsg.format ?? 'png',
+          quality: screenshotMsg.quality ?? 90,
+        };
         const canvas =
           resolvedWindowId !== undefined
             ? await chrome.tabs.captureVisibleTab(resolvedWindowId, options)
@@ -676,7 +692,10 @@ async function forwardToContentScript(
   message: ExtensionMessage,
 ): Promise<ExtensionResponse> {
   try {
-    const response = await withTimeout(chrome.tabs.sendMessage(tabId, message), 30000);
+    const response = await withTimeout(
+      chrome.tabs.sendMessage(tabId, message),
+      CONTENT_SCRIPT_FORWARD_TIMEOUT_MS,
+    );
     return response as ExtensionResponse;
   } catch (error) {
     logger.error('Failed to forward message to content script', error);
@@ -699,9 +718,11 @@ async function checkDesktopConnection(): Promise<void> {
 
   if (state.nativePort && state.isNativeConnected) {
     try {
-      const ping = await sendNativeRequest({ type: 'ping' });
-      if (!(ping as any)?.success) {
-        throw new Error((ping as any)?.error ?? 'Native ping failed');
+      const ping = (await sendNativeRequest({
+        type: 'ping',
+      })) as unknown as NativeResponseEnvelope;
+      if (!ping?.success) {
+        throw new Error(ping?.error ?? 'Native ping failed');
       }
       if (state.connectionStatus !== 'connected') {
         state.connectionStatus = 'connected';
@@ -868,12 +889,19 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    await chrome.tabs.captureVisibleTab(tab.windowId, {
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
       format: 'png',
       quality: 90,
     });
 
-    logger.info('Page captured', { tabId: tab.id });
+    await sendNativeMessage({
+      type: 'page_capture',
+      dataUrl,
+      tabId: tab.id,
+      timestamp: Date.now(),
+    });
+
+    logger.info('Page captured and forwarded', { tabId: tab.id });
 
     // Increment action count
     const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
@@ -902,7 +930,6 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   const msg = message as Record<string, unknown>;
   return typeof msg['type'] === 'string';
 }
-
 
 // Initialize on service worker start
 initialize();

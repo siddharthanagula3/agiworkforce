@@ -88,7 +88,7 @@ export const useChatState = () => {
     (tabId: string) => {
       updateState((prev) => {
         const updatedTabs = prev.tabs.filter((t) => t.id !== tabId);
-        const newActiveTabId = updatedTabs.length > 0 ? updatedTabs[0].id : null;
+        const newActiveTabId = updatedTabs.length > 0 ? updatedTabs[0]!.id : null;
 
         return {
           ...prev,
@@ -192,6 +192,7 @@ export const useChatState = () => {
       }, 5000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [state.error, clearError]);
 
   // Show error toasts

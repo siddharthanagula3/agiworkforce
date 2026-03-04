@@ -55,9 +55,9 @@ describe('Company Hub Store', () => {
       expect(sessionId).toBeDefined();
       expect(state.activeSessionId).toBe(sessionId);
       expect(state.sessions[sessionId]).toBeDefined();
-      expect(state.sessions[sessionId].userId).toBe('user-123');
-      expect(state.sessions[sessionId].taskDescription).toBe('Build a login system');
-      expect(state.sessions[sessionId].status).toBe('planning');
+      expect(state.sessions[sessionId]!.userId).toBe('user-123');
+      expect(state.sessions[sessionId]!.taskDescription).toBe('Build a login system');
+      expect(state.sessions[sessionId]!.status).toBe('planning');
     });
 
     it('should set active session', () => {
@@ -79,7 +79,7 @@ describe('Company Hub Store', () => {
       updateSessionStatus(sessionId, 'executing');
 
       const state = useCompanyHubStore.getState();
-      expect(state.sessions[sessionId].status).toBe('executing');
+      expect(state.sessions[sessionId]!.status).toBe('executing');
     });
 
     it('should complete session', () => {
@@ -91,8 +91,8 @@ describe('Company Hub Store', () => {
       completeSession(sessionId);
 
       const state = useCompanyHubStore.getState();
-      expect(state.sessions[sessionId].status).toBe('completed');
-      expect(state.sessions[sessionId].completedAt).toBeDefined();
+      expect(state.sessions[sessionId]!.status).toBe('completed');
+      expect(state.sessions[sessionId]!.completedAt).toBeDefined();
       expect(state.isOrchestrating).toBe(false);
     });
   });
@@ -139,7 +139,7 @@ describe('Company Hub Store', () => {
       });
 
       const state = useCompanyHubStore.getState();
-      expect(state.assignedAgents['agent-1'].status).toBe('working');
+      expect(state.assignedAgents['agent-1']!.status).toBe('working');
     });
 
     it('should remove agent', () => {
@@ -265,7 +265,7 @@ describe('Company Hub Store', () => {
       });
 
       const state = useCompanyHubStore.getState();
-      expect(state.tokenUsage['claude-3-sonnet'].totalTokens).toBe(450);
+      expect(state.tokenUsage['claude-3-sonnet']!.totalTokens).toBe(450);
       expect(state.sessionTokens).toBe(450);
       expect(state.sessionCost).toBeCloseTo(0.03);
     });
@@ -277,7 +277,7 @@ describe('Company Hub Store', () => {
 
       const state = useCompanyHubStore.getState();
       expect(state.tokenUsage['gpt-4']).toBeDefined();
-      expect(state.tokenUsage['gpt-4'].totalTokens).toBe(1000);
+      expect(state.tokenUsage['gpt-4']!.totalTokens).toBe(1000);
       expect(state.sessionTokens).toBe(1000);
     });
 
@@ -309,9 +309,9 @@ describe('Company Hub Store', () => {
 
       const state = useCompanyHubStore.getState();
       expect(state.messages).toHaveLength(1);
-      expect(state.messages[0].content).toBe('Hello, please help me');
-      expect(state.messages[0].id).toBeDefined();
-      expect(state.messages[0].timestamp).toBeDefined();
+      expect(state.messages[0]!.content).toBe('Hello, please help me');
+      expect(state.messages[0]!.id).toBeDefined();
+      expect(state.messages[0]!.timestamp).toBeDefined();
     });
 
     it('should clear messages', () => {
@@ -371,12 +371,12 @@ describe('Company Hub Store', () => {
         taskDescription: 'Task',
       });
 
-      const requestId = useCompanyHubStore.getState().upsellQueue[0].id;
+      const requestId = useCompanyHubStore.getState().upsellQueue[0]!.id;
       resolveUpsell(requestId, 'approved');
 
       const state = useCompanyHubStore.getState();
-      expect(state.upsellQueue[0].isResolved).toBe(true);
-      expect(state.upsellQueue[0].userResponse).toBe('approved');
+      expect(state.upsellQueue[0]!.isResolved).toBe(true);
+      expect(state.upsellQueue[0]!.userResponse).toBe('approved');
       expect(state.pendingUpsell).toBeNull();
       expect(state.isPaused).toBe(false);
     });
@@ -394,11 +394,11 @@ describe('Company Hub Store', () => {
         taskDescription: 'Task',
       });
 
-      const requestId = useCompanyHubStore.getState().upsellQueue[0].id;
+      const requestId = useCompanyHubStore.getState().upsellQueue[0]!.id;
       resolveUpsell(requestId, 'denied');
 
       const state = useCompanyHubStore.getState();
-      expect(state.upsellQueue[0].userResponse).toBe('denied');
+      expect(state.upsellQueue[0]!.userResponse).toBe('denied');
     });
 
     it('should set pending upsell', () => {
@@ -439,7 +439,7 @@ describe('Company Hub Store', () => {
       expect(state.isOrchestrating).toBe(true);
       expect(state.isPaused).toBe(false);
       expect(state.error).toBeNull();
-      expect(state.sessions[state.activeSessionId!].status).toBe('executing');
+      expect(state.sessions[state.activeSessionId!]!.status).toBe('executing');
     });
 
     it('should pause orchestration', () => {
@@ -452,7 +452,7 @@ describe('Company Hub Store', () => {
 
       const state = useCompanyHubStore.getState();
       expect(state.isPaused).toBe(true);
-      expect(state.sessions[state.activeSessionId!].status).toBe('paused');
+      expect(state.sessions[state.activeSessionId!]!.status).toBe('paused');
     });
 
     it('should resume orchestration', () => {
@@ -466,7 +466,7 @@ describe('Company Hub Store', () => {
 
       const state = useCompanyHubStore.getState();
       expect(state.isPaused).toBe(false);
-      expect(state.sessions[state.activeSessionId!].status).toBe('executing');
+      expect(state.sessions[state.activeSessionId!]!.status).toBe('executing');
     });
 
     it('should stop orchestration', () => {
@@ -480,7 +480,7 @@ describe('Company Hub Store', () => {
       const state = useCompanyHubStore.getState();
       expect(state.isOrchestrating).toBe(false);
       expect(state.isPaused).toBe(false);
-      expect(state.sessions[state.activeSessionId!].status).toBe('completed');
+      expect(state.sessions[state.activeSessionId!]!.status).toBe('completed');
     });
   });
 
@@ -495,7 +495,7 @@ describe('Company Hub Store', () => {
       const state = useCompanyHubStore.getState();
       expect(state.error).toBe('Something went wrong');
       expect(state.isOrchestrating).toBe(false);
-      expect(state.sessions[state.activeSessionId!].status).toBe('failed');
+      expect(state.sessions[state.activeSessionId!]!.status).toBe('failed');
     });
 
     it('should clear error', () => {

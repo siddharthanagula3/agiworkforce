@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- dynamic tool result parsing */
 /**
  * MessageBubble Component
  *

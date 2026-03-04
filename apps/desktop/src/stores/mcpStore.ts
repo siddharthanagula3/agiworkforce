@@ -267,7 +267,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       searchTools: async (query: string) => {
-        set({ searchQuery: query }, undefined, 'mcp/setSearchQuery');
+        set({ searchQuery: query }, undefined, 'mcp/searchTools/start');
         if (!query.trim()) {
           await get().refreshTools();
           return;

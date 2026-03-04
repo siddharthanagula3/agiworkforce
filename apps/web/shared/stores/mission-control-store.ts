@@ -355,7 +355,7 @@ export const useMissionStore = create<MissionState>()(
               // Check if employee has any log entries
               if (employee.log.length > 0) {
                 // Get the timestamp from the last log entry
-                const lastEntry = employee.log[employee.log.length - 1];
+                const lastEntry = employee.log[employee.log.length - 1]!;
                 const lastLogTime = lastEntry.timestamp.getTime();
                 // If no recent activity, mark for removal
                 if (lastLogTime < oneHourAgo) {

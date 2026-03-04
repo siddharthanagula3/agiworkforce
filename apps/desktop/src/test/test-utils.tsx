@@ -26,9 +26,11 @@ export function createMockInvokeResponse<T>(data: T): MockInstance<() => Promise
 }
 
 export function createMockEventListener() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event data can be anything
   const listeners = new Map<string, Set<(data: any) => void>>();
 
   return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event handler
     listen: vi.fn((event: string, handler: (data: any) => void) => {
       if (!listeners.has(event)) {
         listeners.set(event, new Set());
@@ -38,6 +40,7 @@ export function createMockEventListener() {
         listeners.get(event)?.delete(handler);
       });
     }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event data
     emit: vi.fn((event: string, data: any) => {
       listeners.get(event)?.forEach((handler) => handler(data));
       return Promise.resolve();

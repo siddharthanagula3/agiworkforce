@@ -166,7 +166,13 @@ async function handler(request: NextRequest) {
   messages.push({ role: 'system', content: canonicalPrompt });
 
   if (conversationHistory) {
-    messages.push(...conversationHistory);
+    // H16: Prevent prompt injection via system-role entries in conversation history.
+    // Remap any system-role messages to user-role so callers cannot override
+    // the canonical system prompt loaded from the filesystem.
+    const sanitizedHistory = conversationHistory.map((m) =>
+      m.role === 'system' ? { ...m, role: 'user' as const } : m,
+    );
+    messages.push(...sanitizedHistory);
   }
 
   // If caller provided a systemPrompt, append it as additional user context (not system override)

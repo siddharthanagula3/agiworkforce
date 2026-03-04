@@ -3,7 +3,7 @@
  * Handles avatar loading with automatic fallback when DiceBear API fails
  */
 
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { getFallbackForDiceBear, isDiceBearUrl } from '@shared/utils/avatar-utils';
 

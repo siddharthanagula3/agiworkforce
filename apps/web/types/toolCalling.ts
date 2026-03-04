@@ -1,6 +1,7 @@
-// STUB FILE FOR WEB PORT COMPILATION
-export const _stub = true;
-export default {} as any;
+/**
+ * Tool calling types for the web app
+ * Provides proper type definitions for tool execution UI
+ */
 
 export interface DiffData {
   file_path?: string;
@@ -18,50 +19,94 @@ export interface DiffData {
     }>;
   }>;
 }
-export const useAuth = () => ({ user: null });
-export const useAccountStore = () => ({});
-export const useModelStore = () => ({});
-export const useProjectStore = () => ({});
-export const useMemoryStore = () => ({});
-export const useArtifactStore = () => ({});
-export const useExecutionStore = () => ({});
-export const useTerminalStore = () => ({});
-export const useBrowserStore = () => ({});
-export const useMcpStore = () => ({});
-export const useUpdaterStore = () => ({});
-export const useUsageStore = () => ({});
-export const useCloudStore = () => ({});
-export const useAutomationStore = () => ({});
-export const useErrorStore = () => ({});
-export const useSchedulerStore = () => ({});
-export const useMediaGenerationStore = () => ({});
-export const useCustomInstructionsStore = () => ({});
-export const useCodeStore = () => ({});
-export const useSettingsStore = () => ({});
-export const useBillingUsageStore = () => ({});
 
-// General dummy exports (covers many cases)
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
+export interface ToolArtifact {
+  data?: string;
+  mime_type?: string;
+  url?: string;
+  name?: string;
+  size?: number;
+  [key: string]: unknown;
+}
 
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
+export interface TableColumn {
+  key: string;
+  label: string;
+  type?: 'string' | 'number' | 'date' | 'boolean';
+}
 
-export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
+export interface TableData {
+  columns: TableColumn[];
+  rows: Record<string, unknown>[];
+  page_size?: number;
+}
 
-export type ToolArtifact = any;
-export type TableData = any;
-export type ToolApprovalRequestPayload = any;
-export type ToolCallUI = any;
-export type ToolExecutionWorkflow = any;
-export type ToolExecutionStep = any;
-export type ToolResultUI = any;
+export interface ToolApprovalRequestPayload {
+  id: string;
+  toolName: string;
+  toolCallId: string;
+  parameters: Record<string, unknown>;
+  description?: string;
+  riskLevel?: 'low' | 'medium' | 'high';
+  requiredPermissions?: string[];
+  createdAt?: Date | string;
+}
+
+export interface ToolCallUI {
+  id: string;
+  type: string;
+  name: string;
+  parameters: Record<string, unknown>;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'approved' | 'rejected';
+  result?: unknown;
+  error?: string;
+  startedAt?: Date | string;
+  completedAt?: Date | string;
+  duration?: number;
+  requiresApproval?: boolean;
+}
+
+export interface ToolExecutionStep {
+  id: string;
+  toolCallId: string;
+  stepNumber: number;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  input?: Record<string, unknown>;
+  output?: unknown;
+  error?: string;
+  startedAt?: Date | string;
+  completedAt?: Date | string;
+}
+
+export interface ToolExecutionWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  steps: ToolExecutionStep[];
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
+  startedAt?: Date | string;
+  completedAt?: Date | string;
+  totalSteps: number;
+  completedSteps: number;
+}
+
+export interface ToolResultContent {
+  type: 'text' | 'image' | 'table' | 'diff' | 'code' | 'json';
+  content: string | TableData | DiffData | ToolArtifact;
+  language?: string;
+  mimeType?: string;
+}
+
+export interface ToolResultUI {
+  toolCallId: string;
+  toolName: string;
+  success: boolean;
+  contents: ToolResultContent[];
+  error?: string;
+  duration?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export const _stub = true;
+export default {};

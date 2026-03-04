@@ -78,7 +78,7 @@ export const AnimatedAvatar: React.FC<AnimatedAvatarProps> = ({
     // Extract initials from alt text
     const words = alt.trim().split(/\s+/);
     if (words.length >= 2) {
-      return `${words[0][0]}${words[1][0]}`.toUpperCase();
+      return `${words[0]![0]}${words[1]![0]}`.toUpperCase();
     }
     // For single word or short text, take first 2 characters
     return alt.trim().slice(0, 2).toUpperCase();

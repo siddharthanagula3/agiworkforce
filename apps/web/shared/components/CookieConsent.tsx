@@ -36,6 +36,7 @@ export const CookieConsent = () => {
       const timer = setTimeout(() => setShowBanner(true), 1000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, []);
 
   const savePreferences = (prefs: CookiePreferences) => {

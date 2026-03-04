@@ -98,7 +98,7 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const { data, error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+          const { data, error } = await supabase
             .from('hired_employees')
             .upsert(
               {
@@ -118,7 +118,7 @@ export const useWorkforceStore = create<WorkforceState>()(
           }
 
           if (data) {
-            const hired = data as unknown as HiredEmployee;
+            const hired = data as HiredEmployee;
             // Add to local state (real-time subscription might also do this, but better to be responsive)
             const exists = get().hiredEmployees.some(
               (emp) => emp.employee_id === params.employee_id,
@@ -272,7 +272,7 @@ export const setupWorkforceSubscription = () => {
             break;
           case 'DELETE':
             if (oldRecord) {
-              useWorkforceStore.getState().removeHiredEmployee(oldRecord.employee_id);
+              useWorkforceStore.getState().removeHiredEmployee(oldRecord['employee_id']);
             }
             break;
         }

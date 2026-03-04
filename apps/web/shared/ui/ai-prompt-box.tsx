@@ -424,7 +424,7 @@ export const PromptInputBox = React.forwardRef(
         e.stopPropagation();
         const droppedFiles = Array.from(e.dataTransfer.files);
         const imageFiles = droppedFiles.filter((file) => isImageFile(file));
-        if (imageFiles.length > 0) processFile(imageFiles[0]);
+        if (imageFiles.length > 0) processFile(imageFiles[0]!);
       },
       [isImageFile, processFile],
     );
@@ -442,8 +442,8 @@ export const PromptInputBox = React.forwardRef(
         const items = e.clipboardData?.items;
         if (!items) return;
         for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf('image') !== -1) {
-            const file = items[i].getAsFile();
+          if (items[i]!.type.indexOf('image') !== -1) {
+            const file = items[i]!.getAsFile();
             if (file) {
               e.preventDefault();
               processFile(file);
@@ -509,11 +509,11 @@ export const PromptInputBox = React.forwardRef(
                   {file.type.startsWith('image/') && filePreviews[file.name] && (
                     <div
                       className="relative h-16 w-16 cursor-pointer overflow-hidden rounded-xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                      onClick={() => openImageModal(filePreviews[file.name])}
+                      onClick={() => openImageModal(filePreviews[file.name]!)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          openImageModal(filePreviews[file.name]);
+                          openImageModal(filePreviews[file.name]!);
                         }
                       }}
                       role="button"
@@ -521,7 +521,7 @@ export const PromptInputBox = React.forwardRef(
                       aria-label={`Preview ${file.name}`}
                     >
                       <Image
-                        src={filePreviews[file.name]}
+                        src={filePreviews[file.name]!}
                         alt={file.name}
                         fill
                         className="object-cover"
@@ -590,7 +590,7 @@ export const PromptInputBox = React.forwardRef(
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files && e.target.files.length > 0)
-                        processFile(e.target.files[0]);
+                        processFile(e.target.files[0]!);
                       if (e.target) e.target.value = '';
                     }}
                     accept="image/*"

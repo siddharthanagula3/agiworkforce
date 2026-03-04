@@ -255,17 +255,17 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'extension_disable':
       throw new Error('Extension management requires the desktop application');
 
-    // Scheduler commands
-    case 'scheduler_list_tasks':
+    // Scheduler commands (job-based naming to match Rust backend)
+    case 'scheduler_list_jobs':
       return [] as T;
 
-    case 'scheduler_create_task':
+    case 'scheduler_add_job':
       return `sched_mock_${Date.now()}` as T;
 
-    case 'scheduler_update_task':
-    case 'scheduler_delete_task':
-    case 'scheduler_toggle_task':
-    case 'scheduler_run_now':
+    case 'scheduler_update_job':
+    case 'scheduler_remove_job':
+    case 'scheduler_toggle_job':
+    case 'scheduler_run_job_now':
       return undefined as T;
 
     // Background task commands

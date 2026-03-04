@@ -2,7 +2,6 @@
  * Unified Billing & Usage Store
  *
  * Consolidates billing/usage tracking functionality from:
- * - costStore.ts - Token costs and analytics
  * - usageStore.ts - Usage tracking (automations, API calls, storage, tokens)
  * - tokenBudgetStore.ts - Budget enforcement and alerts
  * - analyticsStore.ts - Analytics events and ROI reporting
@@ -110,8 +109,8 @@ interface BillingUsageState {
   // --- Usage State ---
   usageStats: UsageStats | null;
   usageStatsLoading: boolean;
-  usagePeriodStart: number;
-  usagePeriodEnd: number;
+  usagePeriodStartSec: number;
+  usagePeriodEndSec: number;
   showAutomationWarning: boolean;
   showApiCallWarning: boolean;
   showStorageWarning: boolean;
@@ -240,8 +239,8 @@ function calculatePeriodEnd(periodStart: number, period: BudgetPeriod): number {
       start.setHours(0, 0, 0, 0);
       break;
     case 'monthly':
-      start.setMonth(start.getMonth() + 1);
       start.setDate(1);
+      start.setMonth(start.getMonth() + 1);
       start.setHours(0, 0, 0, 0);
       break;
     case 'per-conversation':
@@ -285,8 +284,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           // Usage State
           usageStats: null,
           usageStatsLoading: false,
-          usagePeriodStart: Math.floor(Date.now() / 1000),
-          usagePeriodEnd: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+          usagePeriodStartSec: Math.floor(Date.now() / 1000),
+          usagePeriodEndSec: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
           showAutomationWarning: false,
           showApiCallWarning: false,
           showStorageWarning: false,
@@ -433,8 +432,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
               set({
                 usageStats: stats,
-                usagePeriodStart: periodStart,
-                usagePeriodEnd: periodEnd,
+                usagePeriodStartSec: periodStart,
+                usagePeriodEndSec: periodEnd,
                 usageStatsLoading: false,
                 showAutomationWarning: shouldShowUsageWarning(
                   'automations',
@@ -465,19 +464,19 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           refreshUsage: async () => {
-            const { usagePeriodStart, usagePeriodEnd } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec } = get();
             const { stripeCustomer: customer } = useBillingStore.getState();
 
             if (!customer) {
               throw new Error('No customer found');
             }
 
-            await get().fetchUsage(customer.id, usagePeriodStart, usagePeriodEnd);
+            await get().fetchUsage(customer.id, usagePeriodStartSec, usagePeriodEndSec);
           },
 
           trackAutomation: async () => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -488,8 +487,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'automation_execution',
                 1,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -510,7 +509,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackApiCall: async (count = 1) => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -521,8 +520,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'api_call',
                 count,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -543,7 +542,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackStorage: async (sizeInMb: number) => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -554,8 +553,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'storage_mb',
                 sizeInMb,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -576,7 +575,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackLLMTokens: async (tokens: number) => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -587,8 +586,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'llm_tokens',
                 tokens,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -609,7 +608,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackLLMUsageDetailed: async ({ modelId, provider, inputTokens, outputTokens }) => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -633,33 +632,39 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
               await StripeService.trackLLMUsage(
                 customer.id,
                 event,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
                 const totalTokens = inputTokens + outputTokens;
-                const modelUsage = [...(usageStats.model_usage || [])];
-
-                const existingModel = modelUsage.find((m) => m.model_id === modelId);
-                if (existingModel) {
-                  existingModel.input_tokens += inputTokens;
-                  existingModel.output_tokens += outputTokens;
-                  existingModel.total_tokens += totalTokens;
-                  existingModel.cost_usd += totalCost;
-                  existingModel.request_count += 1;
-                } else {
-                  modelUsage.push({
-                    model_id: modelId,
-                    model_name: modelMeta?.name || modelId,
-                    provider,
-                    input_tokens: inputTokens,
-                    output_tokens: outputTokens,
-                    total_tokens: totalTokens,
-                    cost_usd: totalCost,
-                    request_count: 1,
-                  });
-                }
+                const existing = (usageStats.model_usage || []).find((m) => m.model_id === modelId);
+                const modelUsage = existing
+                  ? (usageStats.model_usage || []).map((m) =>
+                      m.model_id === modelId
+                        ? {
+                            ...m,
+                            input_tokens: m.input_tokens + inputTokens,
+                            output_tokens: m.output_tokens + outputTokens,
+                            total_tokens: m.total_tokens + totalTokens,
+                            cost_usd: m.cost_usd + totalCost,
+                            request_count: m.request_count + 1,
+                          }
+                        : m,
+                    )
+                  : [
+                      ...(usageStats.model_usage || []),
+                      {
+                        model_id: modelId,
+                        model_name: modelMeta?.name || modelId,
+                        provider,
+                        input_tokens: inputTokens,
+                        output_tokens: outputTokens,
+                        total_tokens: totalTokens,
+                        cost_usd: totalCost,
+                        request_count: 1,
+                      },
+                    ];
 
                 set({
                   usageStats: {
@@ -681,7 +686,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackBrowserSession: async () => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -692,8 +697,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'browser_session',
                 1,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -714,7 +719,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           trackMCPToolCall: async () => {
             const { stripeCustomer: customer } = useBillingStore.getState();
-            const { usagePeriodStart, usagePeriodEnd, usageStats } = get();
+            const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
             if (!customer) {
               throw new Error('No customer found');
@@ -725,8 +730,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 customer.id,
                 'mcp_tool_call',
                 1,
-                usagePeriodStart,
-                usagePeriodEnd,
+                usagePeriodStartSec,
+                usagePeriodEndSec,
               );
 
               if (usageStats) {
@@ -749,7 +754,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { usageStats } = get();
             const { stripeSubscription: subscription } = useBillingStore.getState();
 
-            if (!usageStats) return false;
+            if (!usageStats) return true;
 
             const limitCheck = checkUsageLimit(
               'automations',
@@ -763,7 +768,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { usageStats } = get();
             const { stripeSubscription: subscription } = useBillingStore.getState();
 
-            if (!usageStats) return false;
+            if (!usageStats) return true;
 
             const limitCheck = checkUsageLimit('apiCalls', usageStats.api_calls_made, subscription);
             return limitCheck.withinLimit;
@@ -773,7 +778,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { usageStats } = get();
             const { stripeSubscription: subscription } = useBillingStore.getState();
 
-            if (!usageStats) return false;
+            if (!usageStats) return true;
 
             const totalStorage = usageStats.storage_used_mb + additionalMb;
             const limitCheck = checkUsageLimit('storage', totalStorage, subscription);
@@ -827,7 +832,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           setUsagePeriod: (start: number, end: number) => {
-            set({ usagePeriodStart: start, usagePeriodEnd: end });
+            set({ usagePeriodStartSec: start, usagePeriodEndSec: end });
           },
 
           setUsageError: (error) => set({ usageError: error }),
@@ -1470,8 +1475,8 @@ export function initializeUsageStore(): () => void {
 
     if (subscription && subscription.current_period_start && subscription.current_period_end) {
       if (
-        subscription.current_period_start !== billingUsageStore.usagePeriodStart ||
-        subscription.current_period_end !== billingUsageStore.usagePeriodEnd
+        subscription.current_period_start !== billingUsageStore.usagePeriodStartSec ||
+        subscription.current_period_end !== billingUsageStore.usagePeriodEndSec
       ) {
         billingUsageStore.setUsagePeriod(
           subscription.current_period_start,
