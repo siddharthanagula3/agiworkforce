@@ -382,7 +382,7 @@ mod tests {
         let models = get_all_model_entries();
         assert!(!models.is_empty(), "model entries must not be empty");
         // Spot-check a well-known model exists
-        assert!(models.contains_key("claude-opus-4-6") || models.contains_key("claude-sonnet-4-6"),
+        assert!(models.contains_key("claude-opus-4.6") || models.contains_key("claude-sonnet-4.6"),
             "At least one claude model must be in the catalog");
     }
 
