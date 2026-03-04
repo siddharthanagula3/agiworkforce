@@ -83,12 +83,6 @@ const AccessibilityAudit: React.FC<AccessibilityAuditProps> = ({ onClose }) => {
     return 'text-red-600';
   };
 
-  const _getScoreBadgeVariant = (score: number) => {
-    if (score >= 90) return 'default';
-    if (score >= 70) return 'secondary';
-    return 'destructive';
-  };
-
   const downloadReport = () => {
     if (!auditResults) return;
 

@@ -63,9 +63,9 @@ describe('Artifact Store', () => {
 
       const artifacts = getMessageArtifacts(messageId);
       expect(artifacts).toHaveLength(3);
-      expect(artifacts[0].title).toBe('First');
-      expect(artifacts[1].title).toBe('Second');
-      expect(artifacts[2].title).toBe('Third');
+      expect(artifacts[0]!.title).toBe('First');
+      expect(artifacts[1]!.title).toBe('Second');
+      expect(artifacts[2]!.title).toBe('Third');
     });
 
     it('should add artifacts to different messages', () => {
@@ -76,8 +76,8 @@ describe('Artifact Store', () => {
 
       expect(getMessageArtifacts('msg-1')).toHaveLength(1);
       expect(getMessageArtifacts('msg-2')).toHaveLength(1);
-      expect(getMessageArtifacts('msg-1')[0].title).toBe('Msg1 Artifact');
-      expect(getMessageArtifacts('msg-2')[0].title).toBe('Msg2 Artifact');
+      expect(getMessageArtifacts('msg-1')[0]!.title).toBe('Msg1 Artifact');
+      expect(getMessageArtifacts('msg-2')[0]!.title).toBe('Msg2 Artifact');
     });
   });
 
@@ -94,8 +94,8 @@ describe('Artifact Store', () => {
       });
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].title).toBe('Updated Title');
-      expect(artifacts[0].content).toBe('Updated content');
+      expect(artifacts[0]!.title).toBe('Updated Title');
+      expect(artifacts[0]!.content).toBe('Updated content');
     });
 
     it('should handle updating non-existent artifact', () => {
@@ -135,8 +135,8 @@ describe('Artifact Store', () => {
       });
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].versions).toHaveLength(1);
-      expect(artifacts[0].versions![0].content).toBe('Version 1 content');
+      expect(artifacts[0]!.versions).toHaveLength(1);
+      expect(artifacts[0]!.versions![0]!.content).toBe('Version 1 content');
     });
 
     it('should add multiple versions', () => {
@@ -163,8 +163,8 @@ describe('Artifact Store', () => {
       });
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].versions).toHaveLength(3);
-      expect(artifacts[0].currentVersion).toBe(2); // Latest version
+      expect(artifacts[0]!.versions).toHaveLength(3);
+      expect(artifacts[0]!.currentVersion).toBe(2); // Latest version
     });
 
     it('should set current version', () => {
@@ -194,8 +194,8 @@ describe('Artifact Store', () => {
       setCurrentVersion(messageId, artifact.id, 1);
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].currentVersion).toBe(1);
-      expect(artifacts[0].content).toBe('Version 1');
+      expect(artifacts[0]!.currentVersion).toBe(1);
+      expect(artifacts[0]!.content).toBe('Version 1');
     });
 
     it('should handle invalid version index', () => {
@@ -216,7 +216,7 @@ describe('Artifact Store', () => {
 
       // Should not change
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].currentVersion).toBe(0);
+      expect(artifacts[0]!.currentVersion).toBe(0);
     });
 
     it('should handle negative version index', () => {
@@ -236,7 +236,7 @@ describe('Artifact Store', () => {
 
       // Should not change
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].currentVersion).toBe(0);
+      expect(artifacts[0]!.currentVersion).toBe(0);
     });
   });
 
@@ -400,8 +400,8 @@ describe('Artifact Store', () => {
       });
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].versions).toBeDefined();
-      expect(artifacts[0].versions).toHaveLength(1);
+      expect(artifacts[0]!.versions).toBeDefined();
+      expect(artifacts[0]!.versions).toHaveLength(1);
     });
 
     it('should handle concurrent operations', async () => {
@@ -422,9 +422,9 @@ describe('Artifact Store', () => {
       updateArtifact(messageId, artifact.id, { language: 'typescript' });
 
       const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0].title).toBe('Updated');
-      expect(artifacts[0].language).toBe('typescript');
-      expect(artifacts[0].versions).toHaveLength(1);
+      expect(artifacts[0]!.title).toBe('Updated');
+      expect(artifacts[0]!.language).toBe('typescript');
+      expect(artifacts[0]!.versions).toHaveLength(1);
     });
   });
 });

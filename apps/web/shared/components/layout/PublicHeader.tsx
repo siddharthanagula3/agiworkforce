@@ -27,7 +27,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 const PublicHeader: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const _pathname = usePathname();
+  usePathname(); // subscribe to pathname changes for re-renders
   const router = useRouter();
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const { user } = useAuthStore();

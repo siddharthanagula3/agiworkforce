@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- test mocks: partial state objects cast to store type */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkSubscriptionGate, canUseAPIKeys, getUpgradeMessage } from '../subscriptionGate';
 import { supabaseAuth } from '../../services/supabaseAuth';

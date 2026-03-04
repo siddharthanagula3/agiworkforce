@@ -13,6 +13,7 @@
  */
 
 import { getSupabase, getCurrentSession, getCurrentUser } from '../lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ---------------------------------------------------------------------------
 // Public constant — change here to update all generated share URLs.
@@ -157,10 +158,10 @@ async function trySupabaseShare(
     }
 
     // The `shared_artifacts` table may not yet exist in the remote schema, so
-    // we use `any` here and rely on the outer try/catch to handle table-not-
-    // found errors gracefully.
+    // we cast to untyped SupabaseClient and rely on the outer try/catch to
+    // handle table-not-found errors gracefully.
 
-    const { data, error } = await (client as any)
+    const { data, error } = await (client as unknown as SupabaseClient)
       .from('shared_artifacts')
       .insert({
         user_id: userId,
@@ -305,7 +306,7 @@ async function getSharedArtifactFromSupabase(shareId: string): Promise<SharedArt
   try {
     const client = getSupabase();
 
-    const { data, error } = await (client as any)
+    const { data, error } = await (client as unknown as SupabaseClient)
       .from('shared_artifacts')
       .select('id, title, artifact_type, content, language, created_at, expires_at, view_count')
       .eq('id', shareId)
@@ -336,7 +337,7 @@ async function getSharedArtifactFromSupabase(shareId: string): Promise<SharedArt
     }
 
     // Increment view count fire-and-forget — do not block the caller.
-    void (client as any)
+    void (client as unknown as SupabaseClient)
       .from('shared_artifacts')
       .update({ view_count: row.view_count + 1 })
       .eq('id', shareId)
@@ -393,7 +394,7 @@ export async function revokeShare(shareId: string): Promise<boolean> {
     // The WHERE clause on user_id means RLS will also enforce ownership even
     // if the server-side policy is not yet configured.
 
-    const { error } = await (client as any)
+    const { error } = await (client as unknown as SupabaseClient)
       .from('shared_artifacts')
       .delete()
       .eq('id', shareId)

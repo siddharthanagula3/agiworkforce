@@ -4,10 +4,13 @@
 
 import type { ExtensionConfig, RateLimitState } from './types';
 
-// Configuration
+/** Default WebSocket port — must match AGI_REALTIME_PORT env var in the Rust backend (default: 8787) */
+const DEFAULT_DESKTOP_PORT = 8787;
+
+// Configuration — port can be overridden via extension settings (popup → Advanced)
 export const DEFAULT_CONFIG: ExtensionConfig = {
-  desktopAppPort: 8787,
-  desktopAppUrl: 'http://localhost:8787',
+  desktopAppPort: DEFAULT_DESKTOP_PORT,
+  desktopAppUrl: `http://localhost:${DEFAULT_DESKTOP_PORT}`,
   enableLogging: true,
   maxRetries: 3,
   retryDelayMs: 1000,

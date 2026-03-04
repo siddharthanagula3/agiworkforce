@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and event handlers use untyped state access */
 /**
  * Unified Agentic Chat
  *
@@ -1969,7 +1970,7 @@ export const UnifiedAgenticChat: React.FC<{
   const modelForMessage = selectedModel ?? fallbackModelForProvider ?? undefined;
 
   useEffect(() => {
-    void loadOverview().catch((err: any) =>
+    void loadOverview().catch((err: unknown) =>
       console.error('[UnifiedAgenticChat] Failed to load cost overview', err),
     );
   }, [loadOverview]);

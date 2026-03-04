@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
 
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
@@ -35,7 +36,7 @@ export const MonacoEditor = () => null;
 export const TerminalPanel = () => null;
 export const MemoryPanel = () => null;
 export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({children}: any) => children;
+export const ErrorBoundary = ({ children }: any) => children;
 export const TimeoutWarningDialog = () => null;
 export const DiffViewer = () => null;
 

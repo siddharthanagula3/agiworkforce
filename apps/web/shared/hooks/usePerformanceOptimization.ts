@@ -107,7 +107,6 @@ export const useThrottle = <T extends (...args: unknown[]) => void>(
  */
 export const useMemoizedValue = <T>(factory: () => T, deps: React.DependencyList): T => {
   const factoryRef = useRef(factory);
-  const _depsLength = deps.length;
 
   // Keep factory ref up to date via useEffect to avoid ref access during render
   useEffect(() => {
@@ -119,7 +118,9 @@ export const useMemoizedValue = <T>(factory: () => T, deps: React.DependencyList
     const result = factoryRef.current();
     const endTime = performance.now();
 
-    monitoringService.trackPerformance({ memoizedCalculation: endTime - startTime } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
+    monitoringService.trackPerformance({
+      memoizedCalculation: endTime - startTime,
+    } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,7 +151,9 @@ export const useLazyComponent = <T extends React.ComponentType<unknown>>(
         setComponent(() => module.default);
         setLoading(false);
 
-        monitoringService.trackPerformance({ lazyComponentLoad: endTime - startTime } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
+        monitoringService.trackPerformance({
+          lazyComponentLoad: endTime - startTime,
+        } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
       })
       .catch((err) => {
         if (!isMountedRef.current) return; // Prevent setState after unmount
@@ -248,7 +251,9 @@ export const useOptimizedImage = (
       const endTime = performance.now();
       setLoaded(true);
 
-      monitoringService.trackPerformance({ imageOptimization: endTime - startTime } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
+      monitoringService.trackPerformance({
+        imageOptimization: endTime - startTime,
+      } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
     };
 
     img.onerror = () => {
@@ -325,7 +330,9 @@ export const useComponentPerformance = (componentName: string) => {
     if (renderTime > 16) {
       // Log slow renders (> 16ms)
 
-      monitoringService.trackPerformance({ slowRender: renderTime } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
+      monitoringService.trackPerformance({ slowRender: renderTime } as unknown as Parameters<
+        (typeof monitoringService)['trackPerformance']
+      >[0]);
     }
 
     trackRender();

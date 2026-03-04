@@ -49,7 +49,7 @@ const queryCache = new QueryCache({
     logger.error(`[QueryError] ${query.queryKey.join('/')}:`, error);
 
     // Get custom error message from query meta, or use default
-    const errorMessage = (query.meta?.errorMessage as string) || getErrorMessage(error);
+    const errorMessage = (query.meta?.['errorMessage'] as string) || getErrorMessage(error);
 
     // Don't show toast for background refetch errors when we have cached data
     if (query.state.data !== undefined) {
@@ -73,7 +73,7 @@ const mutationCache = new MutationCache({
     logger.error(`[MutationError] ${mutation.options.mutationKey?.join('/') || 'unknown'}:`, error);
 
     // Get custom error message from mutation meta, or use default
-    const errorMessage = (mutation.meta?.errorMessage as string) || getErrorMessage(error);
+    const errorMessage = (mutation.meta?.['errorMessage'] as string) || getErrorMessage(error);
 
     // Show toast notification - mutations already have their own onError handlers
     // so we only show a generic error if no handler exists
@@ -344,7 +344,7 @@ export const apiFetch = async <T = unknown>(
   url: string,
   options: RequestInit = {},
 ): Promise<APIResponse<T>> => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+  const baseUrl = process.env['NEXT_PUBLIC_API_URL'] || '/api';
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
   // Get auth token from localStorage (client-side only)

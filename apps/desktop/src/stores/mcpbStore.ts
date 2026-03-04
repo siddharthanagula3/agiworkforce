@@ -55,6 +55,7 @@ interface McpbState {
   updateBundle: (bundleId: string) => Promise<void>;
   clearError: () => void;
   setInstallProgress: (progress: BundleInstallProgress | null) => void;
+  resetOnLogout: () => void;
 }
 
 export const useMcpbStore = create<McpbState>()(
@@ -205,6 +206,21 @@ export const useMcpbStore = create<McpbState>()(
 
       setInstallProgress: (progress: BundleInstallProgress | null) => {
         set({ installProgress: progress });
+      },
+
+      resetOnLogout: () => {
+        set({
+          bundles: [],
+          installedBundles: [],
+          featuredBundles: [],
+          categories: [],
+          selectedCategory: null,
+          searchQuery: '',
+          isLoading: false,
+          isInstalling: false,
+          installProgress: null,
+          error: null,
+        });
       },
     })),
     { name: 'McpbStore', enabled: import.meta.env.DEV },

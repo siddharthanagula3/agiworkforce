@@ -1,48 +1,72 @@
-// STUB FILE FOR WEB PORT COMPILATION
+/**
+ * Media generation types for the web app
+ * Types for image and video generation providers and options
+ */
+
+export type ImageProviderId =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'stability'
+  | 'replicate'
+  | 'fal'
+  | 'ideogram'
+  | 'black-forest-labs';
+
+export type ImageQualityId = 'standard' | 'hd' | 'ultra';
+
+export type ImageSizeId =
+  | '256x256'
+  | '512x512'
+  | '1024x1024'
+  | '1024x1792'
+  | '1792x1024'
+  | '1280x720'
+  | '1920x1080';
+
+export type VideoResolutionId = '480p' | '720p' | '1080p' | '4k';
+
+export interface ImageGenerationRequest {
+  prompt: string;
+  provider: ImageProviderId;
+  model?: string;
+  quality?: ImageQualityId;
+  size?: ImageSizeId;
+  negativePrompt?: string;
+  numImages?: number;
+  seed?: number;
+}
+
+export interface VideoGenerationRequest {
+  prompt: string;
+  provider: string;
+  model?: string;
+  resolution?: VideoResolutionId;
+  duration?: number;
+  fps?: number;
+  negativePrompt?: string;
+}
+
+export interface GeneratedMedia {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  thumbnailUrl?: string;
+  prompt: string;
+  provider: string;
+  model?: string;
+  width?: number;
+  height?: number;
+  size?: number;
+  mimeType?: string;
+  createdAt: Date;
+}
+
+export interface MediaGenerationError {
+  code: string;
+  message: string;
+  provider?: string;
+}
+
 export const _stub = true;
-export default {} as any;
-export const useAuth = () => ({ user: null });
-export const useAccountStore = () => ({});
-export const useModelStore = () => ({});
-export const useProjectStore = () => ({});
-export const useMemoryStore = () => ({});
-export const useArtifactStore = () => ({});
-export const useExecutionStore = () => ({});
-export const useTerminalStore = () => ({});
-export const useBrowserStore = () => ({});
-export const useMcpStore = () => ({});
-export const useUpdaterStore = () => ({});
-export const useUsageStore = () => ({});
-export const useCloudStore = () => ({});
-export const useAutomationStore = () => ({});
-export const useErrorStore = () => ({});
-export const useSchedulerStore = () => ({});
-export const useMediaGenerationStore = () => ({});
-export const useCustomInstructionsStore = () => ({});
-export const useCodeStore = () => ({});
-export const useSettingsStore = () => ({});
-export const useBillingUsageStore = () => ({});
-
-// General dummy exports (covers many cases)
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
-
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
-
-export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
-
-// Missing named exports from types/media stub
-export type ImageProviderId = string;
-export type ImageQualityId = string;
-export type ImageSizeId = string;
-export type VideoResolutionId = string;
+export default {};

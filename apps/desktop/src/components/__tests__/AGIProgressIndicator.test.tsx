@@ -9,6 +9,7 @@ import { ProgressIndicator } from '../AGI/ProgressIndicator';
  * event handlers registered via `listen` and invoking them directly.
  */
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event payload can be anything
 type EventHandler = (event: { payload: any }) => void;
 
 let eventHandlers: Record<string, EventHandler>;
@@ -18,12 +19,14 @@ beforeEach(() => {
   eventHandlers = {};
 
   // Capture event handlers so we can fire them in tests
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event handler
   vi.mocked(listen).mockImplementation((eventName: string, handler: any) => {
     eventHandlers[eventName] = handler;
     return Promise.resolve(() => {});
   });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event payload
 function emitEvent(eventName: string, payload: any) {
   const handler = eventHandlers[eventName];
   if (handler) {

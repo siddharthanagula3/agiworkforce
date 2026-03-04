@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and string parsing callbacks */
 import { invoke } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
 import {

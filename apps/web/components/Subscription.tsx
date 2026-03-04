@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;
@@ -42,5 +43,5 @@ export const handleSlashCommand = () => {};
 // ... will add more if tsc complains
 
 // Missing named exports
-export const SubscriptionLockDialog = (_props?: any) => null;
-export const SubscriptionGate = (_props?: any) => null;
+export const SubscriptionLockDialog = (_props?: Record<string, unknown>) => null;
+export const SubscriptionGate = (_props?: Record<string, unknown>) => null;

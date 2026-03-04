@@ -131,7 +131,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
 
       // If we have images and the model explicitly doesn't support vision
-      if (hasImages && metadata && metadata.capabilities?.vision === false) {
+      if (hasImages && metadata && metadata.capabilities?.['vision'] === false) {
         const isSimple = useSimpleModeStore.getState().mode === 'simple';
         onError?.(
           isSimple
@@ -211,7 +211,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
       // Check vision capability for pasted images
       const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
-      if (metadata && metadata.capabilities?.vision === false) {
+      if (metadata && metadata.capabilities?.['vision'] === false) {
         event.preventDefault();
         const isSimple = useSimpleModeStore.getState().mode === 'simple';
         onError?.(

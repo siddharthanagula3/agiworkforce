@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- widget registry requires polymorphic component types */
 /**
  * WidgetRegistry
  *
@@ -166,7 +167,7 @@ class WidgetRegistryImpl {
     this.widgets.set(definition.type, registered);
     this.notifyListeners();
 
-    if (process.env.DEV) {
+    if (process.env['DEV']) {
       console.log(`[WidgetRegistry] Registered widget: ${definition.type}`);
     }
   }

@@ -505,6 +505,7 @@ export const ChartWidget = memo(ChartWidgetComponent);
 WidgetRegistry.register({
   type: 'chart',
   displayName: 'Chart',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- widget registration: props vary by API
   component: ChartWidget as React.ComponentType<any>,
   icon: BarChart2,
 });
