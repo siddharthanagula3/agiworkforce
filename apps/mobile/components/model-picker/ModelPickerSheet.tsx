@@ -17,7 +17,7 @@ import { colors } from '@/lib/theme';
 interface ModelPickerSheetProps {
   /** Ref forwarded so the parent can open/close the sheet. */
 
-  sheetRef: any;
+  sheetRef: React.RefObject<BottomSheet | null>;
 }
 
 export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {

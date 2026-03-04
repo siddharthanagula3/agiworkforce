@@ -224,6 +224,7 @@ export const ConfirmationWidget = memo(ConfirmationWidgetComponent);
 WidgetRegistry.register({
   type: 'confirmation',
   displayName: 'Confirmation',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- widget registration: props vary by API
   component: ConfirmationWidget as React.ComponentType<any>,
   icon: HelpCircle,
 });

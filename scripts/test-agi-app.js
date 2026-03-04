@@ -23,7 +23,12 @@ const { chromium } = require('playwright');
 
     if (loginEmail) {
       console.log('\n2. Signing in with test account...');
-      await page.fill('input[type="email"]', 'siddhartha@gmail.com');
+      const testEmail = process.env.TEST_EMAIL;
+      const testPassword = process.env.TEST_PASSWORD;
+      if (!testEmail || !testPassword) {
+        throw new Error('TEST_EMAIL and TEST_PASSWORD environment variables are required');
+      }
+      await page.fill('input[type="email"]', testEmail);
       console.log('   ✓ Email entered');
 
       // Wait a moment
@@ -32,8 +37,7 @@ const { chromium } = require('playwright');
       // Check for password field
       const passwordInput = await page.$('input[type="password"]');
       if (passwordInput) {
-        const password = process.env.TEST_PASSWORD || 'password123';
-        await page.fill('input[type="password"]', password);
+        await page.fill('input[type="password"]', testPassword);
         console.log('   ✓ Password entered');
       }
 

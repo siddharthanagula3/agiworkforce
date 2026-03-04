@@ -3,7 +3,7 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 import { storageFallback } from '../lib/storageFallback';
 
-type VoiceMode = 'idle' | 'listening' | 'transcribing' | 'processing';
+type VoiceMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 
 export type PostProcessingMode = 'ai' | 'basic' | 'none';
 
@@ -80,6 +80,8 @@ interface TranscriptResult {
 interface VoiceInputState {
   mode: VoiceMode;
   transcript: string;
+  /** Cleaned transcript held in 'preview' mode before insertion into the composer */
+  pendingTranscript: string;
   /** When true the last transcript was a voice command, not dictation to append */
   lastTranscriptIsCommand: boolean;
   error: string | null;
@@ -102,6 +104,8 @@ interface VoiceInputState {
   // Actions
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
+  /** Commit the pending preview transcript to the composer and return to idle */
+  confirmTranscript: () => void;
   setHotkey: (hotkey: VoiceInputState['hotkey']) => void;
   setProvider: (provider: VoiceInputState['provider']) => void;
   setLanguage: (language: string) => void;
@@ -124,6 +128,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
       (set, get) => ({
         mode: 'idle',
         transcript: '',
+        pendingTranscript: '',
         lastTranscriptIsCommand: false,
         error: null,
         hotkey: 'option',
@@ -245,8 +250,8 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             const { text: cleanText, isCommand } = await processTranscript(rawText);
 
             set({
-              mode: 'idle',
-              transcript: cleanText,
+              mode: 'preview',
+              pendingTranscript: cleanText,
               lastTranscriptIsCommand: isCommand,
               _recorder: null,
               _mediaStream: null,
@@ -263,6 +268,16 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _startAborted: false,
             });
           }
+        },
+
+        confirmTranscript: () => {
+          const { pendingTranscript, lastTranscriptIsCommand } = get();
+          set({
+            mode: 'idle',
+            transcript: pendingTranscript,
+            pendingTranscript: '',
+            lastTranscriptIsCommand,
+          });
         },
 
         processTranscript: async (rawTranscript: string): Promise<TranscriptResult> => {
@@ -336,7 +351,8 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
         setProvider: (provider) => set({ provider }),
         setLanguage: (language) => set({ language }),
         setPostProcessingMode: (mode) => set({ postProcessingMode: mode }),
-        clearTranscript: () => set({ transcript: '', lastTranscriptIsCommand: false }),
+        clearTranscript: () =>
+          set({ transcript: '', pendingTranscript: '', lastTranscriptIsCommand: false }),
       }),
       {
         name: 'agiworkforce-voice-input',

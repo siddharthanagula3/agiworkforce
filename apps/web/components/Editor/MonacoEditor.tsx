@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;
@@ -30,7 +31,7 @@ export const countTokens = () => 0;
 export const getTokenPercentage = () => 0;
 
 export const BrowserVisualization = () => null;
-export const MonacoEditor = (_props?: any) => null;
+export const MonacoEditor = (_props?: Record<string, unknown>) => null;
 export const TerminalPanel = () => null;
 export const MemoryPanel = () => null;
 export const ScreenCaptureButton = () => null;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and media job types are dynamic */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image as ImageIcon,

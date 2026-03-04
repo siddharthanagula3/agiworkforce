@@ -1,43 +1,145 @@
+/**
+ * MCP (Model Context Protocol) types for the web app
+ * Mirrors the desktop app's MCP types for type safety
+ */
 
-// STUB FILE FOR WEB PORT COMPILATION
-export const _stub = true;
-export default {} as any;
-export const useAuth = () => ({ user: null });
-export const useAccountStore = () => ({});
-export const useModelStore = () => ({});
-export const useProjectStore = () => ({});
-export const useMemoryStore = () => ({});
-export const useArtifactStore = () => ({});
-export const useExecutionStore = () => ({});
-export const useTerminalStore = () => ({});
-export const useBrowserStore = () => ({});
-export const useMcpStore = () => ({});
-export const useUpdaterStore = () => ({});
-export const useUsageStore = () => ({});
-export const useCloudStore = () => ({});
-export const useAutomationStore = () => ({});
-export const useErrorStore = () => ({});
-export const useSchedulerStore = () => ({});
-export const useMediaGenerationStore = () => ({});
-export const useCustomInstructionsStore = () => ({});
-export const useCodeStore = () => ({});
-export const useSettingsStore = () => ({});
-export const useBillingUsageStore = () => ({});
+export interface McpServerInfo {
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+  tool_count: number;
+  command?: string;
+}
 
-// General dummy exports (covers many cases)
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
+export interface McpToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  server: string;
+  parameters?: string[];
+}
 
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({children}: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
+export interface McpServersConfig {
+  mcpServers: Record<string, McpServerConfig>;
+}
 
-export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
+export interface McpServerConfig {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface McpToolResult {
+  success: boolean;
+  data: unknown;
+  error?: string;
+}
+
+export interface McpToolParameter {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+  default?: unknown;
+}
+
+export interface McpToolDefinition {
+  id: string;
+  name: string;
+  description: string;
+  parameters: McpToolParameter[];
+  server: string;
+}
+
+export interface McpStats {
+  serverName: string;
+  toolCount: number;
+  connected: boolean;
+}
+
+export interface McpCredential {
+  serverName: string;
+  key: string;
+  value: string;
+}
+
+export enum McpToolExecutionStatus {
+  Pending = 'pending',
+  Running = 'running',
+  Success = 'success',
+  Failed = 'failed',
+}
+
+export interface McpToolExecutionEvent {
+  toolId: string;
+  status: McpToolExecutionStatus;
+  result?: unknown;
+  error?: string;
+  timestamp: number;
+}
+
+export enum McpServerStatus {
+  Disconnected = 'disconnected',
+  Connecting = 'connecting',
+  Connected = 'connected',
+  Error = 'error',
+}
+
+export interface McpServerConnectionEvent {
+  serverName: string;
+  status: McpServerStatus;
+  error?: string;
+  timestamp: number;
+}
+
+export enum McpErrorType {
+  ServerNotFound = 'server_not_found',
+  ToolNotFound = 'tool_not_found',
+  ExecutionFailed = 'execution_failed',
+  ConfigurationError = 'configuration_error',
+  ConnectionFailed = 'connection_failed',
+  CredentialError = 'credential_error',
+}
+
+export interface McpError {
+  type: McpErrorType;
+  message: string;
+  serverName?: string;
+  toolId?: string;
+  details?: unknown;
+}
+
+export type McpEventType =
+  | 'mcp:connection_changed'
+  | 'mcp:tools_updated'
+  | 'mcp:tool_execution_started'
+  | 'mcp:tool_execution_completed'
+  | 'mcp:system_initialized'
+  | 'mcp:configuration_updated';
+
+export type McpOAuthProvider = 'github' | 'google_drive' | 'slack';
+
+export interface McpOAuthStartResponse {
+  authUrl: string;
+  state: string;
+}
+
+export interface McpOAuthTokenResponse {
+  provider: string;
+  connected: boolean;
+  expiresAt: number | null;
+}
+
+export interface McpOAuthUserInfo {
+  id: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+export interface McpOAuthConnectionStatus {
+  connected: boolean;
+  userInfo: McpOAuthUserInfo | null;
+  expiresAt: number | null;
+}

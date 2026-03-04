@@ -6,14 +6,19 @@ import TitleBar from '../TitleBar';
 
 vi.mock('framer-motion', () => ({
   motion: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion proxy
     header: ({ children, ...props }: any) => <header {...props}>{children}</header>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion proxy
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion proxy
     h1: ({ children, ...props }: any) => <h1 {...props}>{children}</h1>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion proxy
     p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
   },
 }));
 
 const renderTitleBar = (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: partial window state
   state: any,
   actions: WindowActions,
   onOpenCommandPalette: () => void,

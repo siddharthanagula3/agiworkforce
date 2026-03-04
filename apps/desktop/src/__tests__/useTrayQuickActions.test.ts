@@ -3,9 +3,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useTrayQuickActions } from '../hooks/useTrayQuickActions';
 
 type EventCallback<T> = (event: { payload: T }) => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event callbacks with varying payloads
 const listeners: Record<string, EventCallback<any>> = {};
 
 vi.mock('../lib/tauri-mock', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: event callback
   listen: vi.fn((event: string, handler: EventCallback<any>) => {
     listeners[event] = handler;
     return Promise.resolve(() => {

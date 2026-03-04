@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { enableMapSet } from 'immer';
 import { useUnifiedChatStore } from '../unifiedChatStore';
+import { useUIStore } from '../ui';
 
 // Enable Immer's MapSet plugin for Map/Set support in stores
 enableMapSet();
@@ -133,6 +134,19 @@ describe('unifiedChatStore', () => {
     setSidecarWidth(500);
     state = useUnifiedChatStore.getState();
     expect(state.sidecarWidth).toBe(500);
+  });
+
+  it('should route setState({sidecarSection}) to the UI/sidecar sub-store (C7)', () => {
+    // Use the unified setState proxy to set sidecarSection
+    useUnifiedChatStore.setState({ sidecarSection: 'files' });
+
+    // Verify it was routed to the sidecar sub-store (useUIStore / useSidecarStore)
+    const sidecarState = useUIStore.getState();
+    expect(sidecarState.sidecarSection).toBe('files');
+
+    // Also verify it's reflected through getState()
+    const unified = useUnifiedChatStore.getState();
+    expect(unified.sidecarSection).toBe('files');
   });
 
   it('should clear history', () => {

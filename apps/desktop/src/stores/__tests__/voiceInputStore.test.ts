@@ -94,6 +94,7 @@ describe('voiceInputStore', () => {
     useVoiceInputStore.setState({
       mode: 'idle',
       transcript: '',
+      pendingTranscript: '',
       lastTranscriptIsCommand: false,
       error: null,
       hotkey: 'option',
@@ -392,7 +393,7 @@ describe('voiceInputStore', () => {
       expect(state._startAborted).toBe(true);
     });
 
-    it('stops recorder, transcribes audio, and sets transcript', async () => {
+    it('stops recorder, transcribes audio, and enters preview mode with pendingTranscript', async () => {
       const mockStream = createMockStream();
       const recorderInstance = createMockMediaRecorder();
       installMediaMocks(mockStream, recorderInstance);
@@ -417,12 +418,23 @@ describe('voiceInputStore', () => {
       const { stopListening } = useVoiceInputStore.getState();
       await stopListening();
 
-      const state = useVoiceInputStore.getState();
-      expect(state.mode).toBe('idle');
-      expect(state.transcript).toBe('hello world');
-      expect(state._recorder).toBeNull();
-      expect(state._mediaStream).toBeNull();
-      expect(state._audioChunks).toEqual([]);
+      // After stopListening the store should be in 'preview' mode with pendingTranscript set
+      const stateAfterStop = useVoiceInputStore.getState();
+      expect(stateAfterStop.mode).toBe('preview');
+      expect(stateAfterStop.pendingTranscript).toBe('hello world');
+      expect(stateAfterStop.transcript).toBe('');
+      expect(stateAfterStop._recorder).toBeNull();
+      expect(stateAfterStop._mediaStream).toBeNull();
+      expect(stateAfterStop._audioChunks).toEqual([]);
+
+      // confirmTranscript moves pendingTranscript → transcript and returns to idle
+      const { confirmTranscript } = useVoiceInputStore.getState();
+      confirmTranscript();
+
+      const stateAfterConfirm = useVoiceInputStore.getState();
+      expect(stateAfterConfirm.mode).toBe('idle');
+      expect(stateAfterConfirm.transcript).toBe('hello world');
+      expect(stateAfterConfirm.pendingTranscript).toBe('');
     });
 
     it('calls voice_transcribe_blob with correct arguments', async () => {
@@ -555,6 +567,7 @@ describe('voiceInputStore', () => {
       await stopListening();
 
       // Verify stream tracks were stopped (releases microphone)
+      // Note: the store is in 'preview' mode at this point — track stop happens before preview
       const track = mockStream.getTracks()[0]!;
       expect(track.stop).toHaveBeenCalled();
     });
@@ -579,9 +592,17 @@ describe('voiceInputStore', () => {
       const { stopListening } = useVoiceInputStore.getState();
       await stopListening();
 
-      const state = useVoiceInputStore.getState();
-      expect(state.transcript).toBe('make this more formal');
-      expect(state.lastTranscriptIsCommand).toBe(true);
+      // After stopListening, command flag is set and pendingTranscript holds the text
+      const previewState = useVoiceInputStore.getState();
+      expect(previewState.mode).toBe('preview');
+      expect(previewState.pendingTranscript).toBe('make this more formal');
+      expect(previewState.lastTranscriptIsCommand).toBe(true);
+
+      // After confirmTranscript the text moves into transcript
+      previewState.confirmTranscript();
+      const confirmedState = useVoiceInputStore.getState();
+      expect(confirmedState.transcript).toBe('make this more formal');
+      expect(confirmedState.lastTranscriptIsCommand).toBe(true);
     });
   });
 

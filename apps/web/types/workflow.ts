@@ -1,43 +1,234 @@
+/**
+ * Workflow types for the web app
+ * Mirrors the desktop app's workflow types for type safety
+ */
 
-// STUB FILE FOR WEB PORT COMPILATION
-export const _stub = true;
-export default {} as any;
-export const useAuth = () => ({ user: null });
-export const useAccountStore = () => ({});
-export const useModelStore = () => ({});
-export const useProjectStore = () => ({});
-export const useMemoryStore = () => ({});
-export const useArtifactStore = () => ({});
-export const useExecutionStore = () => ({});
-export const useTerminalStore = () => ({});
-export const useBrowserStore = () => ({});
-export const useMcpStore = () => ({});
-export const useUpdaterStore = () => ({});
-export const useUsageStore = () => ({});
-export const useCloudStore = () => ({});
-export const useAutomationStore = () => ({});
-export const useErrorStore = () => ({});
-export const useSchedulerStore = () => ({});
-export const useMediaGenerationStore = () => ({});
-export const useCustomInstructionsStore = () => ({});
-export const useCodeStore = () => ({});
-export const useSettingsStore = () => ({});
-export const useBillingUsageStore = () => ({});
+export interface WorkflowDefinition {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  triggers: WorkflowTrigger[];
+  metadata: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+}
 
-// General dummy exports (covers many cases)
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
+export type WorkflowNode =
+  | AgentNode
+  | DecisionNode
+  | LoopNode
+  | ParallelNode
+  | WaitNode
+  | ScriptNode
+  | ToolNode;
 
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({children}: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
+export interface NodePosition {
+  x: number;
+  y: number;
+}
 
-export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
+export interface AgentNode {
+  type: 'agent';
+  id: string;
+  position: NodePosition;
+  data: AgentNodeData;
+}
+
+export interface AgentNodeData {
+  label: string;
+  agent_template_id?: string;
+  agent_name?: string;
+  input_mapping: Record<string, string>;
+  output_mapping: Record<string, string>;
+  config: Record<string, unknown>;
+}
+
+export interface DecisionNode {
+  type: 'decision';
+  id: string;
+  position: NodePosition;
+  data: DecisionNodeData;
+}
+
+export interface DecisionNodeData {
+  label: string;
+  condition: string;
+  condition_type: ConditionType;
+  true_path?: string;
+  false_path?: string;
+}
+
+export type ConditionType = 'expression' | 'output_contains' | 'output_equals' | 'custom';
+
+export interface LoopNode {
+  type: 'loop';
+  id: string;
+  position: NodePosition;
+  data: LoopNodeData;
+}
+
+export interface LoopNodeData {
+  label: string;
+  loop_type: LoopType;
+  iterations?: number;
+  condition?: string;
+  collection?: string;
+  item_variable: string;
+}
+
+export type LoopType = 'count' | 'condition' | 'for_each';
+
+export interface ParallelNode {
+  type: 'parallel';
+  id: string;
+  position: NodePosition;
+  data: ParallelNodeData;
+}
+
+export interface ParallelNodeData {
+  label: string;
+  branches: string[];
+  wait_for_all: boolean;
+  timeout_seconds?: number;
+}
+
+export interface WaitNode {
+  type: 'wait';
+  id: string;
+  position: NodePosition;
+  data: WaitNodeData;
+}
+
+export interface WaitNodeData {
+  label: string;
+  wait_type: WaitType;
+  duration_seconds?: number;
+  until_time?: number;
+  condition?: string;
+}
+
+export type WaitType = 'duration' | 'until_time' | 'condition';
+
+export interface ScriptNode {
+  type: 'script';
+  id: string;
+  position: NodePosition;
+  data: ScriptNodeData;
+}
+
+export interface ScriptNodeData {
+  label: string;
+  language: ScriptLanguage;
+  code: string;
+  timeout_seconds?: number;
+}
+
+export type ScriptLanguage = 'javascript' | 'python' | 'bash';
+
+export interface ToolNode {
+  type: 'tool';
+  id: string;
+  position: NodePosition;
+  data: ToolNodeData;
+}
+
+export interface ToolNodeData {
+  label: string;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  timeout_seconds?: number;
+}
+
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  source_handle?: string;
+  target_handle?: string;
+  condition?: string;
+  label?: string;
+}
+
+export type WorkflowTrigger = ManualTrigger | ScheduledTrigger | EventTrigger | WebhookTrigger;
+
+export interface ManualTrigger {
+  type: 'manual';
+}
+
+export interface ScheduledTrigger {
+  type: 'scheduled';
+  cron: string;
+  timezone?: string;
+}
+
+export interface EventTrigger {
+  type: 'event';
+  event_type: string;
+  filter?: Record<string, unknown>;
+}
+
+export interface WebhookTrigger {
+  type: 'webhook';
+  url: string;
+  method: string;
+  auth_token?: string;
+}
+
+export type WorkflowStatus =
+  | 'pending'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface WorkflowExecution {
+  id: string;
+  workflow_id: string;
+  status: WorkflowStatus;
+  current_node_id?: string;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  error?: string;
+  started_at?: number;
+  completed_at?: number;
+}
+
+export interface WorkflowLogData {
+  message?: string;
+  error?: string;
+  output?: unknown;
+  duration_ms?: number;
+}
+
+export interface WorkflowExecutionLog {
+  id: string;
+  execution_id: string;
+  node_id: string;
+  event_type: LogEventType;
+  data?: WorkflowLogData;
+  timestamp: number;
+}
+
+export type LogEventType = 'started' | 'completed' | 'failed' | 'skipped';
+
+export interface ScheduledWorkflow {
+  workflow_id: string;
+  workflow_name: string;
+  trigger_type: string;
+  cron_expression?: string;
+  next_execution?: number;
+  last_execution?: number;
+  enabled: boolean;
+}
+
+export interface NodeLibraryItem {
+  type: string;
+  label: string;
+  description: string;
+  icon: string;
+  category: 'control' | 'action' | 'integration';
+}

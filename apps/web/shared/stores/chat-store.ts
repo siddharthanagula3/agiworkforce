@@ -231,14 +231,15 @@ export interface ChatActions {
 export interface ChatStore extends ChatState, ChatActions {}
 
 const DEFAULT_MODELS: ChatModel[] = [
+  // OpenAI
   {
-    id: 'gpt-4',
-    name: 'GPT-4',
+    id: 'gpt-4o',
+    name: 'GPT-4o',
     provider: 'OpenAI',
-    description: 'Most capable model for complex reasoning',
-    maxTokens: 8192,
-    costPer1KTokens: 0.03,
-    features: ['text', 'code', 'analysis'],
+    description: 'Most capable GPT model for complex tasks',
+    maxTokens: 128000,
+    costPer1KTokens: 0.005,
+    features: ['text', 'code', 'analysis', 'vision'],
     tier: 'pro',
     enabled: true,
   },
@@ -247,21 +248,112 @@ const DEFAULT_MODELS: ChatModel[] = [
     name: 'GPT-4o Mini',
     provider: 'OpenAI',
     description: 'Fast and efficient for most tasks',
-    maxTokens: 16384,
+    maxTokens: 128000,
     costPer1KTokens: 0.00015,
     features: ['text', 'code'],
     tier: 'free',
     enabled: true,
   },
   {
-    id: 'claude-3',
-    name: 'Claude-3',
-    provider: 'Anthropic',
-    description: 'Excellent at reasoning and analysis',
-    maxTokens: 100000,
+    id: 'o1',
+    name: 'o1',
+    provider: 'OpenAI',
+    description: 'Advanced reasoning model for complex problems',
+    maxTokens: 200000,
     costPer1KTokens: 0.015,
-    features: ['text', 'code', 'analysis', 'long-context'],
+    features: ['text', 'code', 'analysis', 'reasoning'],
+    tier: 'premium',
+    enabled: true,
+  },
+  {
+    id: 'o3-mini',
+    name: 'o3 Mini',
+    provider: 'OpenAI',
+    description: 'Fast reasoning model for STEM tasks',
+    maxTokens: 200000,
+    costPer1KTokens: 0.0011,
+    features: ['text', 'code', 'reasoning'],
     tier: 'pro',
+    enabled: true,
+  },
+  // Anthropic
+  {
+    id: 'claude-opus-4-5',
+    name: 'Claude Opus 4.5',
+    provider: 'Anthropic',
+    description: 'Most intelligent Claude model',
+    maxTokens: 200000,
+    costPer1KTokens: 0.015,
+    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
+    tier: 'premium',
+    enabled: true,
+  },
+  {
+    id: 'claude-sonnet-4-5',
+    name: 'Claude Sonnet 4.5',
+    provider: 'Anthropic',
+    description: 'Balanced intelligence and speed',
+    maxTokens: 200000,
+    costPer1KTokens: 0.003,
+    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
+    tier: 'pro',
+    enabled: true,
+  },
+  {
+    id: 'claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
+    provider: 'Anthropic',
+    description: 'Fastest Claude model for everyday tasks',
+    maxTokens: 200000,
+    costPer1KTokens: 0.00025,
+    features: ['text', 'code'],
+    tier: 'free',
+    enabled: true,
+  },
+  // Google
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    provider: 'Google',
+    description: 'Most advanced Gemini model with long context',
+    maxTokens: 1000000,
+    costPer1KTokens: 0.00125,
+    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
+    tier: 'pro',
+    enabled: true,
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    provider: 'Google',
+    description: 'Fast multimodal model with 1M context',
+    maxTokens: 1000000,
+    costPer1KTokens: 0.0001,
+    features: ['text', 'code', 'vision'],
+    tier: 'free',
+    enabled: true,
+  },
+  // DeepSeek
+  {
+    id: 'deepseek-reasoner',
+    name: 'DeepSeek R1',
+    provider: 'DeepSeek',
+    description: 'Reasoning model rivaling top competitors',
+    maxTokens: 64000,
+    costPer1KTokens: 0.00055,
+    features: ['text', 'code', 'reasoning'],
+    tier: 'pro',
+    enabled: true,
+  },
+  {
+    id: 'deepseek-chat',
+    name: 'DeepSeek V3',
+    provider: 'DeepSeek',
+    description: 'Cost-effective general chat model',
+    maxTokens: 64000,
+    costPer1KTokens: 0.00027,
+    features: ['text', 'code'],
+    tier: 'free',
     enabled: true,
   },
 ];
@@ -449,10 +541,7 @@ export const useChatStore = create<ChatStore>()(
             for (const conversation of Object.values(state.conversations)) {
               const messageIndex = conversation.messages.findIndex((m) => m.id === messageId);
               if (messageIndex !== -1) {
-                conversation.messages[messageIndex] = {
-                  ...conversation.messages[messageIndex],
-                  ...updates,
-                };
+                Object.assign(conversation.messages[messageIndex]!, updates);
                 conversation.metadata.updatedAt = new Date();
                 break;
               }
@@ -482,8 +571,9 @@ export const useChatStore = create<ChatStore>()(
               if (message) {
                 if (!message.reactions) message.reactions = [];
 
+                const PLACEHOLDER_USER_ID = 'current-user'; // TODO: Wire to authentication store
                 const existingReaction = message.reactions.find(
-                  (r) => r.type === reactionType && r.userId === 'current-user',
+                  (r) => r.type === reactionType && r.userId === PLACEHOLDER_USER_ID,
                 );
 
                 if (existingReaction) {
@@ -493,7 +583,7 @@ export const useChatStore = create<ChatStore>()(
                   // Add new reaction
                   message.reactions.push({
                     type: reactionType,
-                    userId: 'current-user',
+                    userId: PLACEHOLDER_USER_ID,
                     timestamp: new Date(),
                   });
                 }
@@ -533,8 +623,9 @@ export const useChatStore = create<ChatStore>()(
               isStreaming: true,
             });
 
-            // Simulate streaming response
-            const fullResponse = `Thank you for your message: "${content}". This is a simulated AI response that demonstrates the streaming functionality. The response includes various features like token counting, cost calculation, and processing time tracking.`;
+            // TODO: Replace with real AI API call
+            // This is a development placeholder — NOT a production implementation.
+            const fullResponse = `[Development Mode] This is a placeholder response. The AI API integration is pending. Your message: "${content}"`;
 
             let currentContent = '';
             const words = fullResponse.split(' ');
@@ -627,6 +718,7 @@ export const useChatStore = create<ChatStore>()(
           }
 
           const assistantMessage = targetConversation.messages[assistantMessageIndex];
+          if (!assistantMessage) return;
 
           // Ensure it's an assistant message
           if (assistantMessage.role !== 'assistant') {
@@ -639,8 +731,9 @@ export const useChatStore = create<ChatStore>()(
           // Find the preceding user message
           let userMessage: Message | null = null;
           for (let i = assistantMessageIndex - 1; i >= 0; i--) {
-            if (targetConversation.messages[i].role === 'user') {
-              userMessage = targetConversation.messages[i];
+            const msg = targetConversation.messages[i];
+            if (msg?.role === 'user') {
+              userMessage = msg;
               break;
             }
           }
@@ -921,7 +1014,12 @@ export const useChatStore = create<ChatStore>()(
             const checkpoint = state.checkpointHistory.find((cp) => cp.id === checkpointId);
             if (checkpoint) {
               state.currentCheckpoint = checkpointId;
-              // Additional logic to restore conversation state would go here
+              // TODO: Checkpoint restoration is incomplete - messages field needed
+              // The checkpoint type should capture a messages snapshot on save,
+              // and restoreCheckpoint should restore messages from that snapshot.
+              console.warn(
+                'restoreCheckpoint: only updates currentCheckpoint ID. Message restoration not yet implemented.',
+              );
             }
           }),
       })),

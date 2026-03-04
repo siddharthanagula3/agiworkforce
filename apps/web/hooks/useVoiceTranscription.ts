@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- stub hook with placeholder types */
 // Stub for desktop voice transcription hook
 export function useVoiceTranscription(_opts?: any) {
   return {

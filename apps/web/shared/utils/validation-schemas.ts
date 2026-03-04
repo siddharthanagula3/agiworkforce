@@ -7,7 +7,6 @@ import { z } from 'zod';
 // COMMON VALIDATION PATTERNS
 // ===================================
 
-const _emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const passwordMinLength = 8;
 const urlRegex = /^https?:\/\/.+/;
 

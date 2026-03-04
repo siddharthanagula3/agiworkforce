@@ -84,6 +84,23 @@ export { dbIdToUuid, uuidToDbId } from './chat/chatStore';
 export { initializeAgentStatusListener, applyAgentStatusSnapshot };
 
 /**
+ * Shared clear/reset logic used by both the hook and getState() forms.
+ * Extracted to avoid duplicating the same store-reset calls in two places.
+ */
+function combinedClearHistory(): void {
+  useChatStore.getState().clearHistory();
+  useAgentStore.getState().clearActionTrail();
+  useToolStore.getState().clearToolHistory();
+}
+
+function combinedResetOnLogout(): void {
+  useChatStore.getState().resetOnLogout();
+  useAgentStore.getState().resetOnLogout();
+  useToolStore.getState().resetOnLogout();
+  useSidecarStore.getState().resetOnLogout();
+}
+
+/**
  * Unified Chat State interface - combines all store states
  * @deprecated Use individual stores instead
  */
@@ -294,18 +311,13 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
 
   // Create combined clearHistory action
   const clearHistory = useCallback(() => {
-    chatState.clearHistory();
-    agentState.clearActionTrail();
-    toolState.clearToolHistory();
-  }, [chatState, agentState, toolState]);
+    combinedClearHistory();
+  }, []);
 
   // Create combined resetOnLogout action
   const resetOnLogout = useCallback(() => {
-    chatState.resetOnLogout();
-    agentState.resetOnLogout();
-    toolState.resetOnLogout();
-    sidecarState.resetOnLogout();
-  }, [chatState, agentState, toolState, sidecarState]);
+    combinedResetOnLogout();
+  }, []);
 
   // Combine all state into unified state object
   const unifiedState = useMemo<UnifiedChatState>(
@@ -605,17 +617,8 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     closeSidecar: sidecarState.closeSidecar,
     getSuggestedSidecarMode: sidecarState.getSuggestedSidecarMode,
     // Combined actions
-    clearHistory: () => {
-      chatState.clearHistory();
-      agentState.clearActionTrail();
-      toolState.clearToolHistory();
-    },
-    resetOnLogout: () => {
-      chatState.resetOnLogout();
-      agentState.resetOnLogout();
-      toolState.resetOnLogout();
-      sidecarState.resetOnLogout();
-    },
+    clearHistory: combinedClearHistory,
+    resetOnLogout: combinedResetOnLogout,
   };
 };
 
@@ -723,33 +726,39 @@ useUnifiedChatStore.setState = (
 };
 
 // Subscribe to all stores
+// Each sub-store listener captures its own prevState via closure to avoid
+// a shared-variable race where concurrent store updates read stale state.
 useUnifiedChatStore.subscribe = (
   listener: (state: UnifiedChatState, prevState: UnifiedChatState) => void,
 ) => {
-  let prevState = useUnifiedChatStore.getState();
+  const getCombined = useUnifiedChatStore.getState;
 
+  let chatPrevState = getCombined();
   const unsubscribeChat = useChatStore.subscribe(() => {
-    const nextState = useUnifiedChatStore.getState();
-    listener(nextState as UnifiedChatState, prevState as UnifiedChatState);
-    prevState = nextState;
+    const prev = chatPrevState;
+    chatPrevState = getCombined();
+    listener(chatPrevState as UnifiedChatState, prev as UnifiedChatState);
   });
 
+  let agentPrevState = getCombined();
   const unsubscribeAgent = useAgentStore.subscribe(() => {
-    const nextState = useUnifiedChatStore.getState();
-    listener(nextState as UnifiedChatState, prevState as UnifiedChatState);
-    prevState = nextState;
+    const prev = agentPrevState;
+    agentPrevState = getCombined();
+    listener(agentPrevState as UnifiedChatState, prev as UnifiedChatState);
   });
 
+  let toolPrevState = getCombined();
   const unsubscribeTool = useToolStore.subscribe(() => {
-    const nextState = useUnifiedChatStore.getState();
-    listener(nextState as UnifiedChatState, prevState as UnifiedChatState);
-    prevState = nextState;
+    const prev = toolPrevState;
+    toolPrevState = getCombined();
+    listener(toolPrevState as UnifiedChatState, prev as UnifiedChatState);
   });
 
+  let sidecarPrevState = getCombined();
   const unsubscribeSidecar = useSidecarStore.subscribe(() => {
-    const nextState = useUnifiedChatStore.getState();
-    listener(nextState as UnifiedChatState, prevState as UnifiedChatState);
-    prevState = nextState;
+    const prev = sidecarPrevState;
+    sidecarPrevState = getCombined();
+    listener(sidecarPrevState as UnifiedChatState, prev as UnifiedChatState);
   });
 
   return () => {

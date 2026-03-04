@@ -3,7 +3,7 @@
  * Handles popup UI interactions and state management
  */
 
-import type { PopupState } from './types';
+import type { PopupState, ConnectionStatusResponse, CaptureScreenshotResponse } from './types';
 import { logger, storageUtils, sleep as _sleep } from './utils';
 
 // UI feedback durations
@@ -82,7 +82,7 @@ async function updateStatus(): Promise<void> {
       type: 'GET_CONNECTION_STATUS',
     });
 
-    const isConnected = (result as any).nativeConnected ?? false;
+    const isConnected = (result as ConnectionStatusResponse).nativeConnected ?? false;
     popupState.isConnected = isConnected;
 
     const statusCard = document.getElementById('statusCard') as HTMLElement | null;
@@ -175,8 +175,8 @@ async function updateStats(): Promise<void> {
     }
 
     // Update action count
-    const stats = await storageUtils.getItem('stats', { actionCount: 0 });
-    const actionCount = (stats as any)?.actionCount ?? 0;
+    const stats = await storageUtils.getItem<{ actionCount: number }>('stats', { actionCount: 0 });
+    const actionCount = stats?.actionCount ?? 0;
     popupState.actionCount = actionCount;
 
     const actionCountEl = document.getElementById('actionCount') as HTMLElement | null;
@@ -234,7 +234,7 @@ async function handleCapturePage(): Promise<void> {
       quality: 90,
     });
 
-    const result = response as any;
+    const result = response as CaptureScreenshotResponse;
 
     if (result.success) {
       button.textContent = 'Captured!';

@@ -21,7 +21,10 @@ const generatePassword = () => {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     const password = generatePassword();
-    const email = 'agiautomationllc@gmail.com';
+    const email = process.env.TEST_EMAIL;
+    if (!email) {
+      throw new Error('TEST_EMAIL environment variable is required');
+    }
 
     console.log('1. Navigating to app...');
     await page.goto('http://localhost:5173', { waitUntil: 'domcontentloaded' });

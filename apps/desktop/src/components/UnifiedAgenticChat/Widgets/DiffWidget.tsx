@@ -75,6 +75,7 @@ export const DiffWidget = memo(DiffWidgetComponent);
 WidgetRegistry.register({
   type: 'diff-viewer',
   displayName: 'Diff Viewer',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- widget registration: props vary by API
   component: DiffWidget as React.ComponentType<any>,
   icon: FileDiff,
 });
