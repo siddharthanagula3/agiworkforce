@@ -1031,6 +1031,7 @@ async fn execute_tool_calls_batch(
                 display_name: display_info.display_name.clone(),
                 display_args: display_info.display_args.clone(),
                 iteration,
+                parallel_group: None,
             },
         );
 

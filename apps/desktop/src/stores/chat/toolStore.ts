@@ -880,6 +880,8 @@ export interface ToolEventPayload {
   duration_ms?: number;
   result_preview?: string;
   error?: string;
+  /** Optional parallel group identifier for grouping concurrent tool executions. */
+  parallel_group?: string;
 }
 
 /** Payload for `agentic:loop-started` event */
@@ -917,8 +919,7 @@ export async function initializeToolEventListener(): Promise<void> {
     return;
   }
 
-  toolEventListenerInitialized = true;
-
+  // Set flag after all listeners are registered (not before) to avoid partial init
   try {
     const { listen } = await import('@tauri-apps/api/event');
 
@@ -946,6 +947,9 @@ export async function initializeToolEventListener(): Promise<void> {
           displayName,
           displayArgs,
           status: 'running',
+          ...(payload.parallel_group !== undefined
+            ? { parallelGroup: payload.parallel_group }
+            : {}),
         });
 
         // Push to agent action trail
@@ -1042,8 +1046,10 @@ export async function initializeToolEventListener(): Promise<void> {
         useChatStore.getState().removePendingMessage(pendingId);
       }
     });
+
+    // All listeners registered successfully — mark as initialized
+    toolEventListenerInitialized = true;
   } catch (error) {
-    toolEventListenerInitialized = false;
     console.error('[ToolStore] Failed to initialize tool event listener:', error);
   }
 }
