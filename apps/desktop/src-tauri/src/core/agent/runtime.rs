@@ -20,9 +20,14 @@ pub enum TaskPriority {
     Critical = 3,
 }
 
+/// Status of a task within the AgentRuntime execution pipeline.
+///
+/// NOTE: This is distinct from `super::TaskStatus` which is used by the
+/// autonomous agent's step-based execution. This type models the higher-level
+/// runtime task lifecycle (queue -> run -> complete/fail/cancel).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskStatus {
+pub enum RuntimeTaskStatus {
     Queued,
     Running,
     Completed,
@@ -107,14 +112,19 @@ pub enum TimelineEvent {
     },
 }
 
+/// A task within the AgentRuntime execution pipeline.
+///
+/// NOTE: This is distinct from `super::Task` which is used by the autonomous
+/// agent. This type models higher-level runtime tasks with priority, dependencies,
+/// and chrono-based timestamps for persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
+pub struct RuntimeTask {
     pub id: String,
     pub description: String,
     pub goal: String,
     pub priority: TaskPriority,
     pub dependencies: Vec<String>,
-    pub status: TaskStatus,
+    pub status: RuntimeTaskStatus,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -123,7 +133,7 @@ pub struct Task {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-impl Task {
+impl RuntimeTask {
     pub fn new(description: String, goal: String, priority: TaskPriority) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -131,7 +141,7 @@ impl Task {
             goal,
             priority,
             dependencies: Vec::new(),
-            status: TaskStatus::Queued,
+            status: RuntimeTaskStatus::Queued,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
@@ -143,11 +153,11 @@ impl Task {
 }
 
 pub struct AgentRuntime {
-    task_queue: Arc<RwLock<VecDeque<Task>>>,
+    task_queue: Arc<RwLock<VecDeque<RuntimeTask>>>,
 
-    active_tasks: Arc<RwLock<HashMap<String, Task>>>,
+    active_tasks: Arc<RwLock<HashMap<String, RuntimeTask>>>,
 
-    completed_tasks: Arc<RwLock<Vec<Task>>>,
+    completed_tasks: Arc<RwLock<Vec<RuntimeTask>>>,
 
     agi_core: Option<Arc<AGICore>>,
 
@@ -200,8 +210,8 @@ impl AgentRuntime {
         *self.auto_approve.read()
     }
 
-    pub fn queue_task(&self, mut task: Task) -> Result<String> {
-        task.status = TaskStatus::Queued;
+    pub fn queue_task(&self, mut task: RuntimeTask) -> Result<String> {
+        task.status = RuntimeTaskStatus::Queued;
         let task_id = task.id.clone();
 
         let mut queue = self.task_queue.write();
@@ -229,7 +239,7 @@ impl AgentRuntime {
         Ok(task_id)
     }
 
-    pub fn get_next_task(&self) -> Option<Task> {
+    pub fn get_next_task(&self) -> Option<RuntimeTask> {
         let mut queue = self.task_queue.write();
         let completed = self.completed_tasks.read();
 
@@ -237,15 +247,15 @@ impl AgentRuntime {
             task.dependencies.iter().all(|dep_id| {
                 completed
                     .iter()
-                    .any(|t| t.id == *dep_id && t.status == TaskStatus::Completed)
+                    .any(|t| t.id == *dep_id && t.status == RuntimeTaskStatus::Completed)
             })
         });
 
         pos.and_then(|i| queue.remove(i))
     }
 
-    pub async fn execute_task(&self, mut task: Task) -> Result<serde_json::Value> {
-        task.status = TaskStatus::Running;
+    pub async fn execute_task(&self, mut task: RuntimeTask) -> Result<serde_json::Value> {
+        task.status = RuntimeTaskStatus::Running;
         task.started_at = Some(Utc::now());
         let task_id = task.id.clone();
 
@@ -313,7 +323,7 @@ impl AgentRuntime {
 
             match result {
                 Ok(value) => {
-                    task.status = TaskStatus::Completed;
+                    task.status = RuntimeTaskStatus::Completed;
                     task.completed_at = Some(Utc::now());
                     task.result = Some(value.clone());
 
@@ -345,7 +355,7 @@ impl AgentRuntime {
                             .as_ref()
                             .map(|e| e.to_string())
                             .unwrap_or_else(|| "Unknown error".to_string());
-                        task.status = TaskStatus::Failed;
+                        task.status = RuntimeTaskStatus::Failed;
                         task.completed_at = Some(Utc::now());
                         task.error = Some(error_msg.clone());
 
@@ -376,7 +386,7 @@ impl AgentRuntime {
         Err(anyhow!("Task execution failed after retries"))
     }
 
-    async fn analyze_error_and_suggest_fix(&self, task: &Task, error: &str) -> Option<String> {
+    async fn analyze_error_and_suggest_fix(&self, task: &RuntimeTask, error: &str) -> Option<String> {
         tracing::info!("[AgentRuntime] Analyzing error with LLM: {}", error);
 
         if let Some(_agi_core) = &self.agi_core {
@@ -449,7 +459,7 @@ Do not repeat the error message."#,
         Some(suggestion.to_string())
     }
 
-    async fn execute_via_agi(&self, agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_via_agi(&self, agi: &Arc<AGICore>, task: &RuntimeTask) -> Result<serde_json::Value> {
         tracing::info!("[AgentRuntime] Executing task via AGI Core: {}", task.id);
 
         let goal = crate::core::agi::Goal {
@@ -488,7 +498,7 @@ Do not repeat the error message."#,
     async fn execute_with_retry_fallback(
         &self,
         agi: &Arc<AGICore>,
-        task: &Task,
+        task: &RuntimeTask,
     ) -> Result<serde_json::Value> {
         let priority = match task.priority {
             TaskPriority::Low => crate::core::agi::Priority::Low,
@@ -581,7 +591,7 @@ Do not repeat the error message."#,
         }
     }
 
-    async fn execute_standalone(&self, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_standalone(&self, task: &RuntimeTask) -> Result<serde_json::Value> {
         let description_lower = task.description.to_lowercase();
         let is_code_task = description_lower.contains("create")
             || description_lower.contains("write")
@@ -603,7 +613,7 @@ Do not repeat the error message."#,
         self.execute_with_mcp_tools(task).await
     }
 
-    async fn execute_code_task(&self, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_code_task(&self, task: &RuntimeTask) -> Result<serde_json::Value> {
         self.emit_reasoning(
             &task.id,
             format!(
@@ -656,7 +666,7 @@ Do not repeat the error message."#,
         }))
     }
 
-    async fn execute_with_mcp_tools(&self, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_with_mcp_tools(&self, task: &RuntimeTask) -> Result<serde_json::Value> {
         let tools = self.mcp_registry.get_all_tool_definitions();
 
         self.emit_reasoning(
@@ -753,7 +763,7 @@ Do not repeat the error message."#,
         let mut queue = self.task_queue.write();
         if let Some(pos) = queue.iter().position(|t| t.id == task_id) {
             let mut task = queue.remove(pos).unwrap();
-            task.status = TaskStatus::Cancelled;
+            task.status = RuntimeTaskStatus::Cancelled;
             task.error = Some(reason.clone());
             task.completed_at = Some(Utc::now());
 
@@ -769,7 +779,7 @@ Do not repeat the error message."#,
 
         let mut active = self.active_tasks.write();
         if let Some(mut task) = active.remove(task_id) {
-            task.status = TaskStatus::Cancelled;
+            task.status = RuntimeTaskStatus::Cancelled;
             task.error = Some(reason.clone());
             task.completed_at = Some(Utc::now());
 
@@ -786,7 +796,7 @@ Do not repeat the error message."#,
         Err(anyhow!("Task not found: {}", task_id))
     }
 
-    pub fn get_task_status(&self, task_id: &str) -> Option<Task> {
+    pub fn get_task_status(&self, task_id: &str) -> Option<RuntimeTask> {
         if let Some(task) = self.active_tasks.read().get(task_id) {
             return Some(task.clone());
         }
@@ -802,7 +812,7 @@ Do not repeat the error message."#,
             .cloned()
     }
 
-    pub fn get_all_tasks(&self) -> Vec<Task> {
+    pub fn get_all_tasks(&self) -> Vec<RuntimeTask> {
         let mut tasks = Vec::new();
 
         tasks.extend(self.task_queue.read().iter().cloned());

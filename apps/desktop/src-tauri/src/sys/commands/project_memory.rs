@@ -72,6 +72,16 @@ impl ProjectMemoryState {
             manager: Arc::new(RwLock::new(manager)),
         })
     }
+
+    /// Create a degraded ProjectMemoryState backed by an in-memory database.
+    /// Commands will function but data will not persist across restarts.
+    pub fn new_degraded() -> Self {
+        let manager = ProjectMemoryManager::new(":memory:")
+            .expect("in-memory ProjectMemoryManager should never fail to construct");
+        Self {
+            manager: Arc::new(RwLock::new(manager)),
+        }
+    }
 }
 
 // =============================================================================

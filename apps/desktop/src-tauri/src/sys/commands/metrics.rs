@@ -1,9 +1,10 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::data::metrics::{
     AutomationRun, BenchmarkComparison, Comparison, EmployeePerformance, MetricsComparison,
-    MetricsSnapshot, PeriodComparison, PeriodStats, RealtimeMetricsCollector, RealtimeStats,
+    MetricsSnapshot, PeriodComparison, RealtimeMetricsCollector, RealtimeStats,
 };
 
 pub struct MetricsCollectorState(pub std::sync::Arc<RealtimeMetricsCollector>);
@@ -12,7 +13,7 @@ pub struct MetricsComparisonState(pub std::sync::Arc<MetricsComparison>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordAutomationRequest {
-    pub user_id: String,
+    pub user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     pub employee_id: Option<String>,
     pub automation_name: String,
     pub estimated_manual_time_ms: u64,
@@ -24,7 +25,7 @@ pub struct RecordAutomationRequest {
 
 #[tauri::command]
 pub async fn get_realtime_stats(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<RealtimeStats, String> {
     collector.0.get_realtime_stats(&user_id)
@@ -58,7 +59,7 @@ pub async fn record_automation_metrics(
 
 #[tauri::command]
 pub async fn get_metrics_history(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     days: i64,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MetricsSnapshot>, String> {
@@ -75,7 +76,7 @@ pub async fn compare_to_manual(
 
 #[tauri::command]
 pub async fn compare_to_previous_period(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     days: i64,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<PeriodComparison, String> {
@@ -87,7 +88,7 @@ pub async fn compare_to_previous_period(
 
 #[tauri::command]
 pub async fn compare_to_industry_benchmark(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     role: String,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<BenchmarkComparison, String> {
@@ -99,7 +100,7 @@ pub async fn compare_to_industry_benchmark(
 
 #[tauri::command]
 pub async fn get_milestones(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MilestoneData>, String> {
     let db_conn = collector.0.db_conn();
@@ -136,6 +137,7 @@ pub async fn get_milestones(
 #[tauri::command]
 pub async fn share_milestone(
     milestone_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<(), String> {
     let db_conn = collector.0.db_conn();
@@ -143,9 +145,22 @@ pub async fn share_milestone(
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
+    // Verify milestone belongs to the requesting user before updating (BOLA prevention)
+    let owner_check: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM user_milestones WHERE id = ?1 AND user_id = ?2)",
+            rusqlite::params![&milestone_id, &user_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Failed to verify milestone ownership: {}", e))?;
+
+    if !owner_check {
+        return Err("Milestone not found or not owned by current user".to_string());
+    }
+
     conn.execute(
-        "UPDATE user_milestones SET shared = 1 WHERE id = ?1",
-        [&milestone_id],
+        "UPDATE user_milestones SET shared = 1 WHERE id = ?1 AND user_id = ?2",
+        rusqlite::params![&milestone_id, &user_id],
     )
     .map_err(|e| format!("Failed to share milestone: {}", e))?;
 
@@ -372,24 +387,6 @@ pub struct ActivityItem {
     pub status: Option<String>,
 }
 
-fn map_period_stats_to_day_stats(period: &PeriodStats) -> DayStats {
-    let top_emp = period.top_employees.first();
-    DayStats {
-        total_time_saved_hours: period.total_time_saved_hours,
-        total_cost_saved_usd: period.total_cost_saved_usd,
-        automations_run: period.total_automations_run,
-        avg_quality_score: period.avg_time_saved_per_run,
-        change_from_yesterday: 0.0, // Default, would need previous period data
-        // Avoid writing a specific employee name into metrics/log-oriented payloads.
-        top_employee: if top_emp.is_some() {
-            "redacted".to_string()
-        } else {
-            String::new()
-        },
-        top_employee_time_saved: 0.0,
-    }
-}
-
 fn map_employees(employees: &[EmployeePerformance]) -> Vec<TopEmployeeData> {
     employees
         .iter()
@@ -406,61 +403,213 @@ fn map_employees(employees: &[EmployeePerformance]) -> Vec<TopEmployeeData> {
 
 #[tauri::command]
 pub async fn get_today_stats(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<DayStats, String> {
     let stats = collector.0.get_realtime_stats(&user_id)?;
-    Ok(map_period_stats_to_day_stats(&stats.today))
+
+    // Calculate change from yesterday using daily breakdown
+    let now = Utc::now().timestamp();
+    let two_days_ago = now - (2 * 24 * 60 * 60);
+    let one_day_ago = now - (24 * 60 * 60);
+
+    let yesterday_rows = collector
+        .0
+        .get_daily_breakdown(&user_id, two_days_ago, one_day_ago)
+        .unwrap_or_default();
+    let yesterday_minutes: f64 = yesterday_rows
+        .iter()
+        .map(|r| r.time_saved_minutes as f64)
+        .sum();
+    let today_minutes = stats.today.total_time_saved_hours * 60.0;
+
+    let change_from_yesterday = if yesterday_minutes > 0.0 {
+        ((today_minutes - yesterday_minutes) / yesterday_minutes) * 100.0
+    } else if today_minutes > 0.0 {
+        100.0
+    } else {
+        0.0
+    };
+
+    let top_emp = stats.today.top_employees.first();
+    Ok(DayStats {
+        total_time_saved_hours: stats.today.total_time_saved_hours,
+        total_cost_saved_usd: stats.today.total_cost_saved_usd,
+        automations_run: stats.today.total_automations_run,
+        avg_quality_score: stats.today.avg_time_saved_per_run,
+        change_from_yesterday,
+        top_employee: if top_emp.is_some() {
+            "redacted".to_string()
+        } else {
+            String::new()
+        },
+        top_employee_time_saved: top_emp.map(|e| e.total_time_saved_hours).unwrap_or(0.0),
+    })
 }
 
 #[tauri::command]
 pub async fn get_week_stats(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<WeekStats, String> {
     let stats = collector.0.get_realtime_stats(&user_id)?;
+
+    let now = Utc::now().timestamp();
+    let seven_days_ago = now - (7 * 24 * 60 * 60);
+    let fourteen_days_ago = now - (14 * 24 * 60 * 60);
+
+    // Daily breakdown for the last 7 days
+    let daily_rows = collector
+        .0
+        .get_daily_breakdown(&user_id, seven_days_ago, now)
+        .map_err(|e| format!("Failed to get daily breakdown: {}", e))?;
+
+    let daily_breakdown: Vec<DailyBreakdown> = daily_rows
+        .iter()
+        .map(|r| DailyBreakdown {
+            date: r.date.clone(),
+            time_saved_hours: r.time_saved_minutes as f64 / 60.0,
+            cost_saved_usd: r.cost_saved_usd,
+            automations_run: r.automations_run,
+        })
+        .collect();
+
+    // Calculate change from last week by comparing the previous 7-day period
+    let prev_week = collector
+        .0
+        .get_daily_breakdown(&user_id, fourteen_days_ago, seven_days_ago)
+        .map_err(|e| format!("Failed to get previous week breakdown: {}", e))?;
+    let prev_time: f64 = prev_week.iter().map(|r| r.time_saved_minutes as f64).sum();
+    let curr_time: f64 = daily_rows.iter().map(|r| r.time_saved_minutes as f64).sum();
+    let change_from_last_week = if prev_time > 0.0 {
+        ((curr_time - prev_time) / prev_time) * 100.0
+    } else if curr_time > 0.0 {
+        100.0
+    } else {
+        0.0
+    };
+
     Ok(WeekStats {
         total_time_saved_hours: stats.this_week.total_time_saved_hours,
         total_cost_saved_usd: stats.this_week.total_cost_saved_usd,
         automations_run: stats.this_week.total_automations_run,
         avg_quality_score: stats.this_week.avg_time_saved_per_run,
-        change_from_last_week: 0.0,
+        change_from_last_week,
         top_employees: map_employees(&stats.this_week.top_employees),
-        daily_breakdown: vec![], // Would need daily aggregation
+        daily_breakdown,
     })
 }
 
 #[tauri::command]
 pub async fn get_month_stats(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<MonthStats, String> {
     let stats = collector.0.get_realtime_stats(&user_id)?;
+
+    let now = Utc::now().timestamp();
+    let thirty_days_ago = now - (30 * 24 * 60 * 60);
+    let sixty_days_ago = now - (60 * 24 * 60 * 60);
+
+    // Weekly breakdown for the last 30 days
+    let weekly_rows = collector
+        .0
+        .get_weekly_breakdown(&user_id, thirty_days_ago, now)
+        .map_err(|e| format!("Failed to get weekly breakdown: {}", e))?;
+
+    let weekly_breakdown: Vec<WeeklyBreakdown> = weekly_rows
+        .iter()
+        .map(|r| WeeklyBreakdown {
+            week_start: r.week_start.clone(),
+            week_end: r.week_end.clone(),
+            time_saved_hours: r.time_saved_minutes as f64 / 60.0,
+            cost_saved_usd: r.cost_saved_usd,
+            automations_run: r.automations_run,
+        })
+        .collect();
+
+    // Calculate change from last month
+    let prev_month_rows = collector
+        .0
+        .get_weekly_breakdown(&user_id, sixty_days_ago, thirty_days_ago)
+        .map_err(|e| format!("Failed to get previous month breakdown: {}", e))?;
+    let prev_time: f64 = prev_month_rows
+        .iter()
+        .map(|r| r.time_saved_minutes as f64)
+        .sum();
+    let curr_time: f64 = weekly_rows
+        .iter()
+        .map(|r| r.time_saved_minutes as f64)
+        .sum();
+    let change_from_last_month = if prev_time > 0.0 {
+        ((curr_time - prev_time) / prev_time) * 100.0
+    } else if curr_time > 0.0 {
+        100.0
+    } else {
+        0.0
+    };
+
     Ok(MonthStats {
         total_time_saved_hours: stats.this_month.total_time_saved_hours,
         total_cost_saved_usd: stats.this_month.total_cost_saved_usd,
         automations_run: stats.this_month.total_automations_run,
         avg_quality_score: stats.this_month.avg_time_saved_per_run,
-        change_from_last_month: 0.0,
+        change_from_last_month,
         top_employees: map_employees(&stats.this_month.top_employees),
-        weekly_breakdown: vec![], // Would need weekly aggregation
+        weekly_breakdown,
     })
 }
 
 #[tauri::command]
 pub async fn get_all_time_stats(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<AllTimeStats, String> {
     let stats = collector.0.get_realtime_stats(&user_id)?;
+
+    // Monthly trend: go back ~2 years (730 days) to cover all meaningful history
+    let now = Utc::now().timestamp();
+    let two_years_ago = now - (730 * 24 * 60 * 60);
+
+    let monthly_rows = collector
+        .0
+        .get_monthly_breakdown(&user_id, two_years_ago, now)
+        .map_err(|e| format!("Failed to get monthly breakdown: {}", e))?;
+
+    let monthly_trend: Vec<MonthlyTrend> = monthly_rows
+        .iter()
+        .map(|r| MonthlyTrend {
+            month: r.month.clone(),
+            time_saved_hours: r.time_saved_minutes as f64 / 60.0,
+            cost_saved_usd: r.cost_saved_usd,
+            automations_run: r.automations_run,
+        })
+        .collect();
+
+    // Count milestones from the database
+    let milestones_achieved = {
+        let db_conn = collector.0.db_conn();
+        let conn = db_conn
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM user_milestones WHERE user_id = ?1",
+                rusqlite::params![&user_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Failed to count milestones: {}", e))?;
+        count as u64
+    };
+
     Ok(AllTimeStats {
         total_time_saved_hours: stats.all_time.total_time_saved_hours,
         total_cost_saved_usd: stats.all_time.total_cost_saved_usd,
         automations_run: stats.all_time.total_automations_run,
         avg_quality_score: stats.all_time.avg_time_saved_per_run,
-        milestones_achieved: 0, // Would need milestone query
+        milestones_achieved,
         top_employees: map_employees(&stats.all_time.top_employees),
-        monthly_trend: vec![], // Would need monthly aggregation
+        monthly_trend,
     })
 }
 
@@ -490,7 +639,7 @@ pub async fn get_manual_vs_automated_comparison(
 
 #[tauri::command]
 pub async fn get_period_comparison(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     period: String,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<PeriodComparisonData, String> {
@@ -520,7 +669,7 @@ pub async fn get_period_comparison(
 
 #[tauri::command]
 pub async fn get_benchmark_comparison(
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     role: String,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<BenchmarkComparisonData, String> {
@@ -574,7 +723,7 @@ pub struct ExportOptions {
 #[tauri::command]
 pub async fn export_roi_report(
     options: ExportOptions,
-    user_id: String,
+    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<String, String> {
     // Get the stats to include in the report

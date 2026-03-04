@@ -15,6 +15,7 @@ lerna-debug.log*
 .eslintcache
 .node_repl_history
 *.tgz
+*.backup
 
 # --- Logs ---
 logs/

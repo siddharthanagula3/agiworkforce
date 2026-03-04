@@ -984,6 +984,141 @@ mod tests {
         assert_eq!(input[1]["source"]["detail"], "low");
     }
 
+    // M21 — deepseek-reasoner canonicalization test
+    // Verifies that "deepseek-r1" is canonicalized to "deepseek-reasoner" by the
+    // DeepSeek adapter, which delegates to OpenAI format after canonicalization.
+    #[test]
+    fn test_deepseek_adapter_canonicalizes_r1_to_reasoner() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::DeepSeek);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Explain quantum entanglement".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "deepseek-r1".to_string(),
+            temperature: Some(0.5),
+            max_tokens: Some(1000),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok(), "DeepSeek adapter should successfully adapt the request");
+
+        let adapted = result.unwrap();
+        assert_eq!(
+            adapted["model"], "deepseek-reasoner",
+            "deepseek-r1 must be canonicalized to deepseek-reasoner"
+        );
+    }
+
+    #[test]
+    fn test_deepseek_adapter_canonicalizes_r1_zero_to_reasoner() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::DeepSeek);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Solve this math problem".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "deepseek-r1-zero".to_string(),
+            temperature: None,
+            max_tokens: Some(500),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(
+            adapted["model"], "deepseek-reasoner",
+            "deepseek-r1-zero must be canonicalized to deepseek-reasoner"
+        );
+    }
+
+    #[test]
+    fn test_deepseek_adapter_passthrough_non_r1_models() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::DeepSeek);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "deepseek-chat".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(
+            adapted["model"], "deepseek-chat",
+            "Non-R1 model IDs must pass through unchanged"
+        );
+    }
+
     #[test]
     fn test_image_token_calculation() {
         use crate::core::llm::ImageDetail;

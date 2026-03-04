@@ -157,7 +157,7 @@ impl SimilaritySearch {
             });
         }
 
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
 
         results.truncate(limit);
 
@@ -238,7 +238,7 @@ impl SimilaritySearch {
             });
         }
 
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
 
         results.truncate(limit);
 

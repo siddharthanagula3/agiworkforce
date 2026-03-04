@@ -2,6 +2,19 @@
 //!
 //! These commands expose the ProactiveScheduler to the frontend,
 //! allowing users to schedule automated tasks with cron expressions.
+//!
+//! TODO(H14): This module defines its own `ScheduledJob`, `ProactiveScheduler`,
+//! and related types that duplicate `core::scheduler::types::ScheduledJob` and
+//! `core::scheduler::proactive::ProactiveScheduler`. The two type hierarchies
+//! are structurally incompatible (this one uses flat cron strings + action_type
+//! enum, while core uses `JobSchedule`/`JobAction` tagged enums with richer
+//! features like interval scheduling, callbacks, and execution history).
+//!
+//! The long-term plan is to:
+//! 1. Migrate these Tauri commands to delegate to `core::scheduler::ProactiveScheduler`.
+//! 2. Add adapter logic to convert the frontend's flat cron+action_type format
+//!    into `core::scheduler::types::JobSchedule` / `JobAction`.
+//! 3. Remove the duplicate types from this module.
 
 use std::collections::HashMap;
 use std::sync::Arc;
