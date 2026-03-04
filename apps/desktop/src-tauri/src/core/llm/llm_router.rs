@@ -1184,11 +1184,7 @@ impl LLMRouter {
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    if is_rate_limit_error(&err_str) {
-                        all_rate_limited = true;
-                    } else {
-                        all_rate_limited = false;
-                    }
+                    all_rate_limited = is_rate_limit_error(&err_str);
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
@@ -2117,11 +2113,7 @@ impl LLMRouter {
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    if is_rate_limit_error(&err_str) {
-                        all_rate_limited = true;
-                    } else {
-                        all_rate_limited = false;
-                    }
+                    all_rate_limited = is_rate_limit_error(&err_str);
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
