@@ -349,7 +349,10 @@ impl McpToolRegistry {
         crate::core::llm::ToolDefinition {
             // HIGH-004 fix: Use helper for safe tool ID creation
             name: create_safe_tool_id(server_name, &mcp_tool.name),
-            description: mcp_tool.description.clone().unwrap_or_default(),
+            description: mcp_tool
+                .description
+                .clone()
+                .unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
             parameters: mcp_tool.input_schema.clone(),
         }
     }
@@ -368,7 +371,7 @@ impl McpToolRegistry {
             "function": {
                 // HIGH-004 fix: Use helper for safe tool ID creation
                 "name": create_safe_tool_id(server_name, &mcp_tool.name),
-                "description": mcp_tool.description.clone().unwrap_or_default(),
+                "description": mcp_tool.description.clone().unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
                 "parameters": mcp_tool.input_schema
             }
         })

@@ -24,6 +24,8 @@ export interface ToolLabelEntry {
   status: 'running' | 'completed' | 'error';
   durationMs?: number;
   error?: string;
+  /** Optional group identifier for visually grouping parallel tool executions. */
+  parallelGroup?: string;
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
