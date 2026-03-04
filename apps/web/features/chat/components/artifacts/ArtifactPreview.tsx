@@ -196,7 +196,7 @@ export function ArtifactPreview({
   <body>${content}</body>
 </html>`;
     }
-  }, [artifact.content, artifact.currentVersion, artifact.versions, artifact.type]);
+  }, [artifact]);
 
   // Update iframe content when artifact changes
   useEffect(() => {

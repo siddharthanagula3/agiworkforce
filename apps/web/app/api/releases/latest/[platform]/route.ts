@@ -263,7 +263,11 @@ async function handleGetLatestRelease(
 
   // Get channel from query params (default: stable)
   const url = new URL(request.url);
-  const channel = url.searchParams.get('channel') || 'stable';
+  const VALID_CHANNELS = ['stable', 'beta'] as const;
+  const rawChannel = url.searchParams.get('channel') || 'stable';
+  const channel = VALID_CHANNELS.includes(rawChannel as (typeof VALID_CHANNELS)[number])
+    ? rawChannel
+    : 'stable';
 
   // Try database first
   let release = await getReleaseFromDatabase(validPlatform, channel);

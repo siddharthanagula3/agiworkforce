@@ -116,8 +116,8 @@ async function verifyCustomModel(
       return chatResp.ok
         ? { connected: true, latencyMs: Date.now() - start }
         : { connected: false, error: chatResp.statusText || `HTTP ${chatResp.status}` };
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw e;
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') throw e;
       return { connected: false, error: e instanceof Error ? e.message : 'Connection failed' };
     }
   } catch (e) {
@@ -436,7 +436,12 @@ export function CustomModelsSettings() {
     addCustomModel = () => {},
     updateCustomModel = () => {},
     removeCustomModel = () => {},
-  } = useSettingsStore() as any;
+  } = useSettingsStore() as {
+    customModels?: CustomModelConfig[];
+    addCustomModel?: (config: CustomModelConfig) => void;
+    updateCustomModel?: (id: string, config: CustomModelConfig) => void;
+    removeCustomModel?: (id: string) => void;
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CustomModelConfig | null>(null);
 
@@ -490,7 +495,7 @@ export function CustomModelsSettings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {customModels.map((model: any) => (
+          {customModels.map((model: CustomModelConfig) => (
             <div
               key={model.id}
               className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 flex items-center gap-4 transition-colors hover:bg-zinc-900"
