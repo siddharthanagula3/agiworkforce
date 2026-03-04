@@ -19,7 +19,7 @@ export {
   initializeAgentStatusListener,
   applyAgentStatusSnapshot,
 } from './agentStore';
-export { useToolStore } from './toolStore';
+export { useToolStore, initializeToolEventListener } from './toolStore';
 
 // Sidecar store is now part of unified UI store, re-exported for backwards compatibility
 export { useUIStore as useSidecarStore } from '../ui';
@@ -74,7 +74,10 @@ export type {
   ApprovalRequest,
   ToolStreamStateEntry,
   ToolState,
+  ToolEventPayload,
 } from './toolStore';
+
+export type { ToolLabelEntry } from './chatStore';
 export type {
   SidecarSection,
   SidecarMode,
@@ -104,6 +107,8 @@ export {
   selectActiveConversation,
   selectNonArchivedConversations,
   selectPinnedConversations,
+  selectToolTimelineByMessage,
+  selectAgenticLoopStatus,
   dbIdToUuid,
   uuidToDbId,
 } from './chatStore';

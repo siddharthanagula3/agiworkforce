@@ -14,10 +14,12 @@ use tauri::{Emitter, Manager, State};
 use tracing::{debug, error, info, warn};
 
 pub mod memory_handler;
+pub mod tool_events;
 pub mod tools;
 pub mod types;
 pub use types::*;
 
+use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
 use once_cell::sync::Lazy;
 
 // === Named constants for previously-hardcoded values ===
@@ -53,8 +55,6 @@ const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 180;
 const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 15;
 /// Fast metadata follow-ups should have a bounded but realistic retry budget.
 const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 45;
-/// Limit fallback fan-out to avoid very long "thinking" states.
-const FOLLOWUP_MAX_CANDIDATES: usize = 2;
 /// Hard upper bound for a streaming tool loop.
 /// 600s (10 minutes) to accommodate multi-step agentic workflows with
 /// image/video generation and reasoning model follow-ups.
@@ -726,6 +726,238 @@ fn normalize_tool_calls(
         .collect()
 }
 
+/// Result of consuming an SSE stream via [`consume_llm_stream`].
+///
+/// Contains all accumulated data from the stream: tool call deltas merged by index,
+/// the approximate token count, optional provider usage/credits metadata, the finish
+/// reason string, and whether the user triggered a generation stop.
+struct ConsumeStreamResult {
+    /// Merged tool calls extracted from streaming deltas, sorted by index.
+    /// Empty if the model produced only text content.
+    tool_calls: Vec<crate::core::llm::sse_parser::StreamingToolCall>,
+    /// Approximate output token count (incremented once per non-keepalive chunk).
+    token_count: u32,
+    /// Provider-reported token usage, typically present only in the final chunk.
+    usage: Option<crate::core::llm::sse_parser::TokenUsage>,
+    /// Billing credits information, if returned by the provider.
+    credits: Option<crate::core::llm::CreditsInfo>,
+    /// The finish reason from the last chunk (e.g. "stop", "tool_calls", "length").
+    finish_reason: Option<String>,
+    /// `true` when the user stopped generation mid-stream.
+    was_stopped: bool,
+}
+
+/// Consume an SSE stream, emitting `chat:stream-chunk` events to the frontend
+/// and accumulating content + tool calls.
+///
+/// This is the single source of truth for reading a streaming LLM response.
+/// Both the initial streaming path and agentic-loop follow-up iterations
+/// call this helper to avoid duplicating the chunk-processing logic.
+///
+/// # Arguments
+/// * `stream` - The SSE stream from the LLM router.
+/// * `app_handle` - Tauri app handle for emitting events.
+/// * `conversation_id` - The conversation this stream belongs to.
+/// * `message_id` - Frontend message ID for event correlation.
+/// * `full_content` - Mutable reference to the accumulated response text.
+///   New chunks are appended here. The caller owns the buffer.
+/// * `idle_timeout_secs` - Maximum seconds to wait for the next chunk before
+///   considering the connection dead.
+async fn consume_llm_stream(
+    mut stream: std::pin::Pin<
+        Box<
+            dyn futures_util::Stream<
+                    Item = Result<
+                        crate::core::llm::sse_parser::StreamChunk,
+                        Box<dyn std::error::Error + Send + Sync>,
+                    >,
+                > + Send,
+        >,
+    >,
+    app_handle: &tauri::AppHandle,
+    conversation_id: i64,
+    message_id: &str,
+    full_content: &mut String,
+    idle_timeout_secs: u64,
+) -> Result<ConsumeStreamResult, String> {
+    use futures_util::StreamExt;
+    use std::collections::HashMap;
+
+    let mut token_count = 0u32;
+    let mut was_stopped = false;
+    let mut final_usage = None;
+    let mut final_credits = None;
+    let mut final_finish_reason: Option<String> = None;
+
+    // Accumulate tool calls from streaming chunks.
+    // Tool calls arrive in multiple chunks and must be merged by index.
+    let mut accumulated_tool_calls: HashMap<
+        usize,
+        crate::core::llm::sse_parser::StreamingToolCall,
+    > = HashMap::new();
+
+    let mut pending_notified = false;
+
+    loop {
+        let next_chunk = match tokio::time::timeout(
+            std::time::Duration::from_secs(idle_timeout_secs),
+            stream.next(),
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(_) => {
+                // The idle timeout fired -- no bytes (including keepalives) arrived
+                // for the configured duration. The provider connection is likely dead.
+                warn!(
+                    "[Chat] Stream idle timeout after {}s with no data from provider (conversation={})",
+                    idle_timeout_secs, conversation_id,
+                );
+                let user_message = if full_content.trim().is_empty() {
+                    "The model took too long to respond. Please try again.".to_string()
+                } else {
+                    "Response was interrupted because the connection went idle. The partial response is shown above.".to_string()
+                };
+                let _ = app_handle.emit(
+                    "chat:stream-error",
+                    serde_json::json!({
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "error": user_message
+                    }),
+                );
+                return Err(user_message);
+            }
+        };
+
+        let Some(chunk_result) = next_chunk else {
+            break;
+        };
+
+        if should_stop_for_conversation(conversation_id) {
+            info!("[Chat] Generation stopped by user");
+            was_stopped = true;
+            break;
+        }
+
+        // Check for pending user messages during streaming
+        if has_pending_messages() && !pending_notified {
+            let pending = peek_pending_messages();
+            info!(
+                "[Chat] {} pending message(s) detected during streaming",
+                pending.len()
+            );
+            let _ = app_handle.emit(
+                "chat:pending-context-available",
+                serde_json::json!({
+                    "pending_messages": pending,
+                    "current_phase": "streaming",
+                    "count": pending.len()
+                }),
+            );
+            pending_notified = true;
+        }
+
+        match chunk_result {
+            Ok(chunk) => {
+                // Keepalive chunks carry no content -- skip content processing.
+                if chunk.keepalive {
+                    continue;
+                }
+
+                full_content.push_str(&chunk.content);
+                token_count += 1;
+
+                // Track finish reason (important for detecting tool_calls)
+                if let Some(ref finish) = chunk.finish_reason {
+                    final_finish_reason = Some(finish.clone());
+                }
+
+                // Accumulate tool calls from this chunk
+                if let Some(ref tool_calls) = chunk.tool_calls {
+                    for tc in tool_calls {
+                        let entry = accumulated_tool_calls
+                            .entry(tc.index)
+                            .or_insert_with(|| {
+                                crate::core::llm::sse_parser::StreamingToolCall {
+                                    index: tc.index,
+                                    id: String::new(),
+                                    name: String::new(),
+                                    arguments: String::new(),
+                                }
+                            });
+
+                        // Merge: ID and name only appear in first chunk
+                        if !tc.id.is_empty() {
+                            entry.id = tc.id.clone();
+                        }
+                        if !tc.name.is_empty() {
+                            entry.name = tc.name.clone();
+                        }
+                        // Arguments are streamed across multiple chunks
+                        entry.arguments.push_str(&tc.arguments);
+                    }
+                }
+
+                if let Some(usage) = chunk.usage {
+                    final_usage = Some(usage);
+                }
+                if let Some(credits) = chunk.credits {
+                    final_credits = Some(credits);
+                }
+
+                let _ = app_handle.emit(
+                    "chat:stream-chunk",
+                    serde_json::json!({
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "delta": chunk.content,
+                        "content": full_content.clone(),
+                        "has_pending_messages": has_pending_messages()
+                    }),
+                );
+            }
+            Err(e) => {
+                info!("[Chat] Stream error: {e}");
+                let _ = app_handle.emit(
+                    "chat:stream-error",
+                    serde_json::json!({
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "error": e.to_string()
+                    }),
+                );
+                return Err(e.to_string());
+            }
+        }
+    }
+
+    // Convert accumulated tool calls to a sorted Vec with normalized IDs/names
+    let mut tool_calls_vec: Vec<_> = accumulated_tool_calls.into_iter().collect();
+    tool_calls_vec.sort_by_key(|(idx, _)| *idx);
+    let tool_calls: Vec<_> = tool_calls_vec
+        .into_iter()
+        .map(|(idx, mut tc)| {
+            if tc.id.trim().is_empty() {
+                tc.id = format!("stream_tool_call_{}", idx);
+            }
+            if tc.name.trim().is_empty() {
+                tc.name = "unknown_tool".to_string();
+            }
+            tc
+        })
+        .collect();
+
+    Ok(ConsumeStreamResult {
+        tool_calls,
+        token_count,
+        usage: final_usage,
+        credits: final_credits,
+        finish_reason: final_finish_reason,
+        was_stopped,
+    })
+}
+
 /// Execute a batch of tool calls, emitting events for each tool execution and result.
 ///
 /// Server-side tools (prefixed with `__server__`) are skipped with a result event emitted.
@@ -737,6 +969,7 @@ async fn execute_tool_calls_batch(
     frontend_message_id: &str,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    iteration: usize,
 ) -> (Vec<tools::ChatToolResult>, Vec<String>) {
     let mut tool_results = Vec::new();
     let mut tool_failure_summaries = Vec::new();
@@ -783,6 +1016,24 @@ async fn execute_tool_calls_batch(
             }),
         );
 
+        // Emit structured ToolEvent::Started for frontend tool timeline
+        let display_info = get_tool_display_info(&tc.name, &tc.arguments);
+        let tool_exec_id = format!("{}_{}", tc.id, uuid::Uuid::new_v4().as_simple());
+        let tool_started_at = std::time::Instant::now();
+
+        emit_tool_event(
+            app_handle,
+            &ToolEvent::Started {
+                id: tool_exec_id.clone(),
+                conversation_id,
+                message_id: frontend_message_id.to_string(),
+                tool_name: tc.name.clone(),
+                display_name: display_info.display_name.clone(),
+                display_args: display_info.display_args.clone(),
+                iteration,
+            },
+        );
+
         // Execute the tool
         tracing::info!(
             "[Chat] Starting tool execution: {} with id={}",
@@ -800,6 +1051,8 @@ async fn execute_tool_calls_batch(
         )
         .await;
 
+        let tool_duration_ms = tool_started_at.elapsed().as_millis() as u64;
+
         let (success, result_content) = match result {
             Ok(content) => {
                 info!("[Chat] Tool {} succeeded", tc.name);
@@ -810,6 +1063,24 @@ async fn execute_tool_calls_batch(
                 (false, format!("Error: {}", e))
             }
         };
+
+        // Emit structured ToolEvent::Completed for frontend tool timeline
+        emit_tool_event(
+            app_handle,
+            &ToolEvent::Completed {
+                id: tool_exec_id,
+                conversation_id,
+                message_id: frontend_message_id.to_string(),
+                success,
+                duration_ms: tool_duration_ms,
+                result_preview: Some(result_content.chars().take(200).collect()),
+                error: if success {
+                    None
+                } else {
+                    Some(result_content.clone())
+                },
+            },
+        );
 
         if !success {
             let mut summary = result_content.replace('\n', " ");
@@ -2812,7 +3083,6 @@ pub async fn chat_send_message(
         token_counter::TokenCounter,
         ChatMessage, LLMRequest, Provider,
     };
-    use futures_util::StreamExt;
 
     let provider_enum = request
         .provider_override
@@ -3864,189 +4134,50 @@ pub async fn chat_send_message(
                 .send_message_streaming(&llm_request_clone, &preferences_clone)
                 .await
             {
-                Ok(mut stream) => {
+                Ok(stream) => {
                     let mut full_content = String::new();
-                    let mut token_count = 0u32;
-                    let mut was_stopped = false;
-                    let mut final_usage = None;
-                    let mut final_credits = None;
-                    let mut final_finish_reason: Option<String> = None;
 
-                    // Accumulate tool calls from streaming chunks
-                    // Tool calls arrive in multiple chunks and must be merged by index
-                    use std::collections::HashMap;
-                    let mut accumulated_tool_calls: HashMap<
-                        usize,
-                        crate::core::llm::sse_parser::StreamingToolCall,
-                    > = HashMap::new();
+                    // Consume the initial SSE stream via the shared helper.
+                    let stream_result = consume_llm_stream(
+                        stream,
+                        &app_handle_clone,
+                        conversation_id_clone,
+                        &frontend_message_id_clone,
+                        &mut full_content,
+                        STREAM_CHUNK_IDLE_TIMEOUT_SECS,
+                    )
+                    .await;
 
-                    let mut pending_notified = false;
-                    loop {
-                        let next_chunk = match tokio::time::timeout(
-                            std::time::Duration::from_secs(STREAM_CHUNK_IDLE_TIMEOUT_SECS),
-                            stream.next(),
-                        )
-                        .await
-                        {
-                            Ok(value) => value,
-                            Err(_) => {
-                                // The idle timeout fired -- no bytes (including keepalives)
-                                // arrived for STREAM_CHUNK_IDLE_TIMEOUT_SECS.  This means
-                                // the provider connection is likely dead.
-                                warn!(
-                                    "[Chat] Stream idle timeout after {}s with no data from provider (conversation={})",
-                                    STREAM_CHUNK_IDLE_TIMEOUT_SECS,
-                                    conversation_id_clone,
-                                );
-                                // User-friendly message -- never surface raw timeout strings
-                                let user_message = if full_content.trim().is_empty() {
-                                    "The model took too long to respond. Please try again."
-                                        .to_string()
-                                } else {
-                                    "Response was interrupted because the connection went idle. The partial response is shown above."
-                                        .to_string()
-                                };
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-error",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "error": user_message
-                                    }),
-                                );
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-end",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "content": full_content.clone(),
-                                        "error": true,
-                                        "has_pending_messages": has_pending_messages()
-                                    }),
-                                );
-                                return;
-                            }
-                        };
-
-                        let Some(chunk_result) = next_chunk else {
-                            break;
-                        };
-
-                        if should_stop_for_conversation(conversation_id_clone) {
-                            info!("[Chat] Generation stopped by user");
-                            was_stopped = true;
-                            break;
-                        }
-
-                        // Check for pending user messages during streaming
-                        if has_pending_messages() && !pending_notified {
-                            let pending = peek_pending_messages();
-                            info!(
-                                "[Chat] {} pending message(s) detected during streaming",
-                                pending.len()
-                            );
+                    let stream_data = match stream_result {
+                        Ok(data) => data,
+                        Err(_) => {
+                            // consume_llm_stream already emitted stream-error;
+                            // emit stream-end so the frontend can clean up loading state.
                             let _ = app_handle_clone.emit(
-                                "chat:pending-context-available",
+                                "chat:stream-end",
                                 serde_json::json!({
-                                    "pending_messages": pending,
-                                    "current_phase": "streaming",
-                                    "count": pending.len()
+                                    "conversation_id": conversation_id_clone,
+                                    "message_id": frontend_message_id_clone,
+                                    "content": full_content.clone(),
+                                    "error": true,
+                                    "has_pending_messages": has_pending_messages()
                                 }),
                             );
-                            pending_notified = true;
+                            return;
                         }
+                    };
 
-                        match chunk_result {
-                            Ok(chunk) => {
-                                // Keepalive chunks carry no content -- they exist only
-                                // to reset the idle timeout above.  Skip all content
-                                // processing and do not emit events to the frontend.
-                                if chunk.keepalive {
-                                    continue;
-                                }
-
-                                full_content.push_str(&chunk.content);
-                                token_count += 1;
-
-                                // Track finish reason (important for detecting tool_calls)
-                                if let Some(ref finish) = chunk.finish_reason {
-                                    final_finish_reason = Some(finish.clone());
-                                }
-
-                                // Accumulate tool calls from this chunk
-                                if let Some(ref tool_calls) = chunk.tool_calls {
-                                    for tc in tool_calls {
-                                        let entry = accumulated_tool_calls
-                                            .entry(tc.index)
-                                            .or_insert_with(|| {
-                                                crate::core::llm::sse_parser::StreamingToolCall {
-                                                    index: tc.index,
-                                                    id: String::new(),
-                                                    name: String::new(),
-                                                    arguments: String::new(),
-                                                }
-                                            });
-
-                                        // Merge: ID and name only appear in first chunk
-                                        if !tc.id.is_empty() {
-                                            entry.id = tc.id.clone();
-                                        }
-                                        if !tc.name.is_empty() {
-                                            entry.name = tc.name.clone();
-                                        }
-                                        // Arguments are streamed across multiple chunks
-                                        entry.arguments.push_str(&tc.arguments);
-                                    }
-                                }
-
-                                if let Some(usage) = chunk.usage {
-                                    final_usage = Some(usage);
-                                }
-                                if let Some(credits) = chunk.credits {
-                                    final_credits = Some(credits);
-                                }
-
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-chunk",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "delta": chunk.content,
-                                        "content": full_content.clone(),
-                                        "has_pending_messages": has_pending_messages()
-                                    }),
-                                );
-                            }
-                            Err(e) => {
-                                info!("[Chat] Stream error: {e}");
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-error",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "error": e.to_string()
-                                    }),
-                                );
-                                // Emit stream-end after error so frontend can cleanup loading state
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-end",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "content": full_content.clone(),
-                                        "error": true,
-                                        "has_pending_messages": has_pending_messages()
-                                    }),
-                                );
-                                return;
-                            }
-                        }
-                    }
+                    let mut token_count = stream_data.token_count;
+                    let mut final_usage = stream_data.usage;
+                    let mut final_credits = stream_data.credits;
+                    let final_finish_reason = stream_data.finish_reason.clone();
+                    let was_stopped = stream_data.was_stopped;
+                    let tool_calls = stream_data.tool_calls;
 
                     // Execute tool calls whenever we actually received streamed tool deltas.
                     // Some OpenAI-compatible providers omit finish_reason=tool_calls even when
                     // tool calls are present in streamed chunks.
-                    let has_tool_calls = !accumulated_tool_calls.is_empty();
+                    let has_tool_calls = !tool_calls.is_empty();
                     let mut tool_failure_summaries: Vec<String> = Vec::new();
 
                     if has_tool_calls && !was_stopped {
@@ -4058,25 +4189,8 @@ pub async fn chat_send_message(
                         }
                         info!(
                             "[Chat] Streaming completed with {} tool call(s) - executing tools",
-                            accumulated_tool_calls.len()
+                            tool_calls.len()
                         );
-
-                        // Convert accumulated tool calls to sorted Vec
-                        let mut tool_calls_vec: Vec<_> =
-                            accumulated_tool_calls.into_iter().collect();
-                        tool_calls_vec.sort_by_key(|(idx, _)| *idx);
-                        let tool_calls: Vec<_> = tool_calls_vec
-                            .into_iter()
-                            .map(|(idx, mut tc)| {
-                                if tc.id.trim().is_empty() {
-                                    tc.id = format!("stream_tool_call_{}", idx);
-                                }
-                                if tc.name.trim().is_empty() {
-                                    tc.name = "unknown_tool".to_string();
-                                }
-                                tc
-                            })
-                            .collect();
 
                         // Emit tool calls event
                         let _ = app_handle_clone.emit(
@@ -4097,6 +4211,7 @@ pub async fn chat_send_message(
                             &frontend_message_id_clone,
                             project_folder_clone.clone(),
                             conversation_mode_clone.clone(),
+                            0,
                         )
                         .await;
                         tool_failure_summaries.extend(batch_failures);
@@ -4134,6 +4249,16 @@ pub async fn chat_send_message(
                                 );
                             let streaming_tool_loop_started = std::time::Instant::now();
 
+                            // Task 13: Emit loop lifecycle start event
+                            let _ = app_handle_clone.emit(
+                                "agentic:loop-started",
+                                serde_json::json!({
+                                    "conversation_id": conversation_id_clone,
+                                    "message_id": frontend_message_id_clone,
+                                    "max_iterations": max_streaming_tool_iterations,
+                                }),
+                            );
+
                             loop {
                                 streaming_tool_iteration += 1;
                                 let loop_max_secs =
@@ -4167,6 +4292,16 @@ pub async fn chat_send_message(
                                             "status": "timeout_reached"
                                         }),
                                     );
+                                    // Task 13: Emit loop lifecycle end event
+                                    let _ = app_handle_clone.emit(
+                                        "agentic:loop-ended",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "iterations_used": streaming_tool_iteration,
+                                            "reason": "timeout",
+                                        }),
+                                    );
                                     break;
                                 }
                                 if streaming_tool_iteration > max_streaming_tool_iterations {
@@ -4183,8 +4318,31 @@ pub async fn chat_send_message(
                                             "status": "limit_reached"
                                         }),
                                     );
+                                    // Task 13: Emit loop lifecycle end event
+                                    let _ = app_handle_clone.emit(
+                                        "agentic:loop-ended",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "iterations_used": streaming_tool_iteration - 1,
+                                            "reason": "limit_reached",
+                                        }),
+                                    );
                                     break;
                                 }
+
+                                // Task 13: Emit per-iteration loop status
+                                let _ = app_handle_clone.emit(
+                                    "agentic:loop-status",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "iteration": streaming_tool_iteration,
+                                        "max_iterations": max_streaming_tool_iterations,
+                                        "status": "executing",
+                                        "has_pending_messages": has_pending_messages_for_conversation(conversation_id_clone),
+                                    }),
+                                );
 
                                 // Emit agent progress event so the UI can show iteration state
                                 let _ = app_handle_clone.emit(
@@ -4229,6 +4387,31 @@ pub async fn chat_send_message(
                                     });
                                 }
 
+                                // Task 3: Check for queued follow-up messages from the user
+                                // and inject them into the conversation before the next LLM call.
+                                // Use atomic pop (single lock) to avoid check-then-act race.
+                                if let Some(pending) = pop_pending_message_for_conversation(conversation_id_clone) {
+                                    info!(
+                                        "[Chat] Injecting pending user message into agentic loop: {}...",
+                                        pending.content.chars().take(50).collect::<String>()
+                                    );
+                                    followup_messages.push(crate::core::llm::ChatMessage {
+                                        role: "user".to_string(),
+                                        content: pending.content.clone(),
+                                        tool_calls: None,
+                                        tool_call_id: None,
+                                        multimodal_content: None,
+                                    });
+                                    let _ = app_handle_clone.emit(
+                                        "agentic:message-consumed",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "pending_message": pending,
+                                        }),
+                                    );
+                                }
+
                                 // BUG-06: compact followup_messages to prevent unbounded
                                 // context growth across streaming tool loop iterations.
                                 const TOOL_LOOP_COMPACT_THRESHOLD: usize = 20;
@@ -4255,9 +4438,9 @@ pub async fn chat_send_message(
                                                 .push(format!("[{}]: {}", msg.role, preview));
                                         }
                                         let summary_msg = crate::core::llm::ChatMessage {
-                                            role: "system".to_string(),
+                                            role: "user".to_string(),
                                             content: format!(
-                                                "[Compacted {} tool-loop messages]\n{}",
+                                                "[Context Summary — compacted {} earlier tool-loop messages]\n{}",
                                                 compacted_count,
                                                 summary_parts.join("\n")
                                             ),
@@ -4283,27 +4466,21 @@ pub async fn chat_send_message(
                                     }
                                 }
 
-                                // Send follow-up request to LLM (non-streaming for tool loop)
+                                // Send follow-up request to LLM with streaming enabled
+                                // so users see tokens arrive in real-time during multi-turn tool use.
                                 let followup_request = crate::core::llm::LLMRequest {
                                     messages: followup_messages,
                                     model: model_clone.clone(),
                                     temperature: Some(DEFAULT_TEMPERATURE),
                                     max_tokens: Some(DEFAULT_MAX_TOKENS),
-                                    stream: false,
+                                    stream: true,
                                     tools: llm_request_clone.tools.clone(),
                                     tool_choice: llm_request_clone.tool_choice.clone(),
                                     thinking_mode: llm_request_clone.thinking_mode,
+                                    thinking: llm_request_clone.thinking.clone(),
                                     ..Default::default()
                                 };
 
-                                let candidates = router
-                                    .candidates(&followup_request, &preferences_clone)
-                                    .into_iter()
-                                    .take(FOLLOWUP_MAX_CANDIDATES)
-                                    .collect::<Vec<_>>();
-
-                                let mut followup_outcome = None;
-                                let followup_budget_started = tokio::time::Instant::now();
                                 let followup_total_timeout_secs =
                                     resolve_followup_total_timeout_secs(only_fast_metadata_tools);
                                 let followup_invoke_timeout_secs =
@@ -4311,200 +4488,212 @@ pub async fn chat_send_message(
                                         only_fast_metadata_tools,
                                         has_media_tools,
                                     );
-                                for candidate in candidates {
-                                    let elapsed = followup_budget_started.elapsed();
-                                    let total_budget =
-                                        std::time::Duration::from_secs(followup_total_timeout_secs);
-                                    if elapsed >= total_budget {
+
+                                // Attempt to open a streaming connection with retry/fallback.
+                                let followup_stream_result = tokio::time::timeout(
+                                    std::time::Duration::from_secs(followup_total_timeout_secs),
+                                    router.send_message_streaming(
+                                        &followup_request,
+                                        &preferences_clone,
+                                    ),
+                                )
+                                .await;
+
+                                let followup_stream = match followup_stream_result {
+                                    Ok(Ok(s)) => Some(s),
+                                    Ok(Err(e)) => {
                                         warn!(
-                                            "[Chat] Follow-up total timeout reached after {}s",
+                                            "[Chat] Follow-up streaming request failed: {}",
+                                            e
+                                        );
+                                        None
+                                    }
+                                    Err(_) => {
+                                        warn!(
+                                            "[Chat] Follow-up streaming request timed out after {}s",
                                             followup_total_timeout_secs
                                         );
-                                        break;
+                                        None
                                     }
+                                };
 
-                                    let remaining_budget = total_budget
-                                        .checked_sub(elapsed)
-                                        .unwrap_or_else(|| std::time::Duration::from_secs(0));
-                                    let candidate_timeout =
-                                        remaining_budget.min(std::time::Duration::from_secs(
-                                            followup_invoke_timeout_secs,
-                                        ));
-                                    if candidate_timeout.is_zero() {
-                                        warn!("[Chat] Follow-up candidate budget exhausted");
-                                        break;
-                                    }
-
-                                    match tokio::time::timeout(
-                                        candidate_timeout,
-                                        router.invoke_candidate(&candidate, &followup_request),
-                                    )
-                                    .await
-                                    {
-                                        Ok(Ok(outcome)) => {
-                                            followup_outcome = Some(outcome);
-                                            break;
-                                        }
-                                        Ok(Err(e)) => {
-                                            warn!(
-                                                "[Chat] Follow-up candidate {} failed: {}",
-                                                candidate.model, e
-                                            );
-                                            continue;
-                                        }
-                                        Err(_) => {
-                                            warn!(
-                                                "[Chat] Follow-up candidate {} timed out after {}s",
-                                                candidate.model, followup_invoke_timeout_secs
-                                            );
-                                            continue;
-                                        }
-                                    }
-                                }
-
-                                match followup_outcome {
-                                    Some(outcome) => {
+                                match followup_stream {
+                                    Some(stream) => {
+                                        // Separate the follow-up content with a blank line.
                                         full_content.push_str("\n\n");
-                                        full_content.push_str(&outcome.response.content);
-                                        token_count += outcome.response.tokens.unwrap_or(0);
-
-                                        // Stream the response content to frontend
                                         let _ = app_handle_clone.emit(
                                             "chat:stream-chunk",
                                             serde_json::json!({
                                                 "conversation_id": conversation_id_clone,
                                                 "message_id": frontend_message_id_clone,
-                                                "delta": outcome.response.content,
+                                                "delta": "\n\n",
                                                 "content": full_content.clone(),
                                                 "has_pending_messages": has_pending_messages()
                                             }),
                                         );
 
-                                        if let Some(credits) = outcome.response.credits {
-                                            final_credits = Some(credits);
-                                        }
+                                        // Consume the follow-up stream through the same helper
+                                        // used for the initial request, so users see tokens in
+                                        // real-time during agentic loop iterations.
+                                        let followup_consume = consume_llm_stream(
+                                            stream,
+                                            &app_handle_clone,
+                                            conversation_id_clone,
+                                            &frontend_message_id_clone,
+                                            &mut full_content,
+                                            followup_invoke_timeout_secs,
+                                        )
+                                        .await;
 
-                                        // ── Handle pause_turn stop reason ────────
-                                        // Anthropic may pause a long-running turn; we
-                                        // just continue by feeding the response back.
-                                        if outcome.response.finish_reason.as_deref()
-                                            == Some("pause_turn")
-                                        {
-                                            info!(
-                                                "[Chat] Received pause_turn, continuing conversation"
-                                            );
-                                            // Reset tool calls for the continuation
-                                            current_tool_calls = Vec::new();
-                                            current_tool_results = Vec::new();
-                                            continue;
-                                        }
+                                        match followup_consume {
+                                            Ok(followup_data) => {
+                                                token_count += followup_data.token_count;
 
-                                        // Check if the follow-up response also has tool calls
-                                        if let Some(ref new_tool_calls) =
-                                            outcome.response.tool_calls
-                                        {
-                                            if !new_tool_calls.is_empty() {
-                                                info!(
-                                                    "[Chat] Follow-up response has {} more tool call(s) (iteration {})",
-                                                    new_tool_calls.len(),
-                                                    streaming_tool_iteration
-                                                );
+                                                if let Some(credits) = followup_data.credits {
+                                                    final_credits = Some(credits);
+                                                }
+                                                if let Some(usage) = followup_data.usage {
+                                                    final_usage = Some(usage);
+                                                }
 
-                                                // AUDIT-STREAM-072 fix: Normalize tool call IDs
-                                                let normalized_tool_calls = normalize_tool_calls(
-                                                    new_tool_calls,
-                                                    &format!(
-                                                        "followup_tool_call_{}",
+                                                // ── Handle pause_turn stop reason ────────
+                                                // Anthropic may pause a long-running turn; we
+                                                // just continue by feeding the response back.
+                                                if followup_data.finish_reason.as_deref()
+                                                    == Some("pause_turn")
+                                                {
+                                                    info!(
+                                                        "[Chat] Received pause_turn, continuing conversation"
+                                                    );
+                                                    current_tool_calls = Vec::new();
+                                                    current_tool_results = Vec::new();
+                                                    continue;
+                                                }
+
+                                                // Check if the follow-up response also has tool calls
+                                                let new_tool_calls = followup_data.tool_calls;
+                                                if !new_tool_calls.is_empty() {
+                                                    info!(
+                                                        "[Chat] Follow-up streaming response has {} more tool call(s) (iteration {})",
+                                                        new_tool_calls.len(),
                                                         streaming_tool_iteration
-                                                    ),
-                                                );
+                                                    );
 
-                                                // Emit tool calls event with normalized IDs
-                                                let _ = app_handle_clone.emit(
-                                                    "chat:tool-calls",
-                                                    serde_json::json!({
-                                                        "conversation_id": conversation_id_clone,
-                                                        "message_id": frontend_message_id_clone,
-                                                        "tool_calls": normalized_tool_calls,
-                                                        "streaming": true,
-                                                        "iteration": streaming_tool_iteration
-                                                    }),
-                                                );
-
-                                                // Execute the new tool calls
-                                                let (new_results, batch_failures) =
-                                                    execute_tool_calls_batch(
-                                                        &normalized_tool_calls,
-                                                        &app_handle_clone,
-                                                        conversation_id_clone,
-                                                        &frontend_message_id_clone,
-                                                        project_folder_clone.clone(),
-                                                        conversation_mode_clone.clone(),
-                                                    )
-                                                    .await;
-                                                tool_failure_summaries.extend(batch_failures);
-
-                                                // Reconstruct streaming tool calls for the next iteration
-                                                let new_streaming_tcs: Vec<_> = normalized_tool_calls
-                                                    .iter()
-                                                    .enumerate()
-                                                    .filter(|(_, tc)| !tc.name.starts_with("__server__"))
-                                                    .map(|(idx, tc)| {
-                                                        crate::core::llm::sse_parser::StreamingToolCall {
-                                                            index: idx,
-                                                            id: tc.id.clone(),
-                                                            name: tc.name.clone(),
-                                                            arguments: tc.arguments.clone(),
-                                                        }
-                                                    })
-                                                    .collect();
-
-                                                if did_fast_metadata_batch_fail(&new_results) {
-                                                    let fallback =
-                                                        build_fast_metadata_failure_message(
-                                                            &tool_failure_summaries,
-                                                        );
-                                                    full_content.push_str("\n\n");
-                                                    full_content.push_str(&fallback);
+                                                    // Emit tool calls event
                                                     let _ = app_handle_clone.emit(
-                                                        "chat:stream-chunk",
+                                                        "chat:tool-calls",
                                                         serde_json::json!({
                                                             "conversation_id": conversation_id_clone,
                                                             "message_id": frontend_message_id_clone,
-                                                            "delta": fallback,
-                                                            "content": full_content.clone(),
-                                                            "has_pending_messages": has_pending_messages()
+                                                            "tool_calls": new_tool_calls,
+                                                            "streaming": true,
+                                                            "iteration": streaming_tool_iteration
                                                         }),
                                                     );
-                                                    break;
+
+                                                    // Execute the new tool calls
+                                                    let (new_results, batch_failures) =
+                                                        execute_tool_calls_batch(
+                                                            &new_tool_calls,
+                                                            &app_handle_clone,
+                                                            conversation_id_clone,
+                                                            &frontend_message_id_clone,
+                                                            project_folder_clone.clone(),
+                                                            conversation_mode_clone.clone(),
+                                                            streaming_tool_iteration,
+                                                        )
+                                                        .await;
+                                                    tool_failure_summaries.extend(batch_failures);
+
+                                                    if did_fast_metadata_batch_fail(&new_results) {
+                                                        let fallback =
+                                                            build_fast_metadata_failure_message(
+                                                                &tool_failure_summaries,
+                                                            );
+                                                        full_content.push_str("\n\n");
+                                                        full_content.push_str(&fallback);
+                                                        let _ = app_handle_clone.emit(
+                                                            "chat:stream-chunk",
+                                                            serde_json::json!({
+                                                                "conversation_id": conversation_id_clone,
+                                                                "message_id": frontend_message_id_clone,
+                                                                "delta": fallback,
+                                                                "content": full_content.clone(),
+                                                                "has_pending_messages": has_pending_messages()
+                                                            }),
+                                                        );
+                                                        // Task 13: Emit loop lifecycle end event
+                                                        let _ = app_handle_clone.emit(
+                                                            "agentic:loop-ended",
+                                                            serde_json::json!({
+                                                                "conversation_id": conversation_id_clone,
+                                                                "message_id": frontend_message_id_clone,
+                                                                "iterations_used": streaming_tool_iteration,
+                                                                "reason": "fast_metadata_failed",
+                                                            }),
+                                                        );
+                                                        break;
+                                                    }
+
+                                                    if !new_results.is_empty() {
+                                                        // Continue the loop with the new tool results.
+                                                        // Tool calls from consume_llm_stream are already
+                                                        // StreamingToolCall values with normalized IDs,
+                                                        // so use them directly.
+                                                        current_tool_calls = new_tool_calls;
+                                                        current_tool_results = new_results;
+                                                        has_media_tools =
+                                                            current_tool_results.iter().any(|r| {
+                                                                is_media_generation_tool(&r.tool_name)
+                                                            });
+                                                        only_fast_metadata_tools =
+                                                            is_fast_metadata_batch(
+                                                                &current_tool_results,
+                                                            );
+                                                        max_streaming_tool_iterations =
+                                                            resolve_streaming_tool_loop_max_iterations(
+                                                                only_fast_metadata_tools,
+                                                            );
+                                                        continue;
+                                                    }
                                                 }
 
-                                                if !new_results.is_empty() {
-                                                    // Continue the loop with the new tool results
-                                                    current_tool_calls = new_streaming_tcs;
-                                                    current_tool_results = new_results;
-                                                    has_media_tools =
-                                                        current_tool_results.iter().any(|r| {
-                                                            is_media_generation_tool(&r.tool_name)
-                                                        });
-                                                    only_fast_metadata_tools =
-                                                        is_fast_metadata_batch(
-                                                            &current_tool_results,
-                                                        );
-                                                    max_streaming_tool_iterations =
-                                                        resolve_streaming_tool_loop_max_iterations(
-                                                            only_fast_metadata_tools,
-                                                        );
-                                                    continue;
-                                                }
+                                                // No more tool calls or all were server-side -- done
+                                                // Task 13: Emit loop lifecycle end event
+                                                let _ = app_handle_clone.emit(
+                                                    "agentic:loop-ended",
+                                                    serde_json::json!({
+                                                        "conversation_id": conversation_id_clone,
+                                                        "message_id": frontend_message_id_clone,
+                                                        "iterations_used": streaming_tool_iteration,
+                                                        "reason": "completed",
+                                                    }),
+                                                );
+                                                break;
+                                            }
+                                            Err(e) => {
+                                                // Stream consumption failed (timeout or provider error).
+                                                // consume_llm_stream already emitted stream-error.
+                                                warn!(
+                                                    "[Chat] Follow-up stream consumption failed: {}",
+                                                    e
+                                                );
+                                                // Task 13: Emit loop lifecycle end event
+                                                let _ = app_handle_clone.emit(
+                                                    "agentic:loop-ended",
+                                                    serde_json::json!({
+                                                        "conversation_id": conversation_id_clone,
+                                                        "message_id": frontend_message_id_clone,
+                                                        "iterations_used": streaming_tool_iteration,
+                                                        "reason": "stream_error",
+                                                    }),
+                                                );
+                                                break;
                                             }
                                         }
-
-                                        // No more tool calls or all were server-side – we're done
-                                        break;
                                     }
                                     None => {
-                                        error!("[Chat] All follow-up candidates failed");
+                                        error!("[Chat] All follow-up streaming candidates failed");
                                         let fallback_delta = {
                                             let successful_tool_outputs = current_tool_results
                                                 .iter()
@@ -4545,6 +4734,16 @@ pub async fn chat_send_message(
                                                 "delta": fallback_delta,
                                                 "content": full_content.clone(),
                                                 "has_pending_messages": has_pending_messages()
+                                            }),
+                                        );
+                                        // Task 13: Emit loop lifecycle end event
+                                        let _ = app_handle_clone.emit(
+                                            "agentic:loop-ended",
+                                            serde_json::json!({
+                                                "conversation_id": conversation_id_clone,
+                                                "message_id": frontend_message_id_clone,
+                                                "iterations_used": streaming_tool_iteration,
+                                                "reason": "candidates_failed",
                                             }),
                                         );
                                         break;
@@ -5128,6 +5327,7 @@ Please confirm the tool permissions or try a different approach.",
                         &frontend_msg_id,
                         request.project_folder.clone(),
                         request.conversation_mode.clone(),
+                        0,
                     )
                     .await;
 
@@ -5505,9 +5705,15 @@ pub async fn chat_add_pending_message(
     };
 
     {
+        const MAX_PENDING_QUEUE_SIZE: usize = 20;
         let mut queue = PENDING_MESSAGES
             .lock()
             .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
+        if queue.len() >= MAX_PENDING_QUEUE_SIZE {
+            return Err(format!(
+                "Pending message queue is full (max {MAX_PENDING_QUEUE_SIZE} messages). Please wait for the agent to process current messages."
+            ));
+        }
         queue.push(pending_msg.clone());
         info!(
             "[Chat] Added pending message (queue size: {}): {}...",
@@ -5640,6 +5846,19 @@ pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<Pendi
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Pop the first pending message for a specific conversation (used by agentic loop).
+pub fn pop_pending_message_for_conversation(conversation_id: i64) -> Option<PendingUserMessage> {
+    PENDING_MESSAGES
+        .lock()
+        .ok()
+        .and_then(|mut q| {
+            let idx = q
+                .iter()
+                .position(|m| m.conversation_id == Some(conversation_id))?;
+            Some(q.remove(idx))
+        })
 }
 
 // ============================================================================
