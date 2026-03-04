@@ -1,7 +1,7 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ToolTimeline.tsx
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Wrench } from 'lucide-react';
+import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
 import { ToolLabel, type ToolLabelEntry } from './ToolLabel';
 import { cn } from '../../lib/utils';
 
@@ -10,17 +10,47 @@ interface ToolTimelineProps {
   className?: string;
 }
 
+/** A rendered group: either a single standalone entry or a set of parallel entries. */
+interface EntryGroup {
+  /** Non-undefined means all entries share this parallel group key. */
+  parallelGroup?: string;
+  entries: ToolLabelEntry[];
+}
+
 export function ToolTimeline({ entries, className }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasRunning = entries.some((e) => e.status === 'running');
 
-  // Auto-expand while tools are running
+  // Auto-expand while tools are running, but preserve user's manual expansion
   const isOpen = hasRunning || isExpanded;
-
-  if (entries.length === 0) return null;
 
   const totalDuration = entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
   const errorCount = entries.filter((e) => e.status === 'error').length;
+
+  // Group consecutive entries that share the same parallelGroup value.
+  // Entries without a parallelGroup are always their own single-item group.
+  const groupedEntries = useMemo<EntryGroup[]>(() => {
+    const groups: EntryGroup[] = [];
+    let currentGroup: EntryGroup | null = null;
+
+    for (const entry of entries) {
+      if (entry.parallelGroup && currentGroup?.parallelGroup === entry.parallelGroup) {
+        // Continue the current parallel group.
+        currentGroup.entries.push(entry);
+      } else {
+        // Start a new group (parallel or standalone).
+        currentGroup = {
+          parallelGroup: entry.parallelGroup,
+          entries: [entry],
+        };
+        groups.push(currentGroup);
+      }
+    }
+
+    return groups;
+  }, [entries]);
+
+  if (entries.length === 0) return null;
 
   return (
     <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
@@ -66,9 +96,31 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
             className="overflow-hidden"
           >
             <div className="px-3 pb-2 space-y-0.5 border-t border-border/20">
-              {entries.map((entry) => (
-                <ToolLabel key={entry.id} entry={entry} />
-              ))}
+              {groupedEntries.map((group) => {
+                const isParallelGroup =
+                  group.parallelGroup !== undefined && group.entries.length > 1;
+
+                if (isParallelGroup) {
+                  return (
+                    <div
+                      key={group.parallelGroup}
+                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-0.5"
+                    >
+                      {/* Parallel chip */}
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
+                        <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                      </div>
+                      {group.entries.map((entry) => (
+                        <ToolLabel key={entry.id} entry={entry} />
+                      ))}
+                    </div>
+                  );
+                }
+
+                // Single standalone entry (parallelGroup absent, or only one entry in group).
+                return group.entries.map((entry) => <ToolLabel key={entry.id} entry={entry} />);
+              })}
             </div>
           </motion.div>
         )}
