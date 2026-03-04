@@ -9,7 +9,15 @@
  * Integration tests should be run in a browser environment.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Mock @webcontainer/api which is not installed (requires browser env)
+vi.mock('@webcontainer/api', () => ({
+  WebContainer: {
+    boot: vi.fn().mockRejectedValue(new Error('@webcontainer/api not available in test env')),
+  },
+}));
+
 import { CodeExecutionService } from './code-execution-service';
 
 describe('CodeExecutionService', () => {
