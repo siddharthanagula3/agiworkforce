@@ -592,6 +592,12 @@ impl SandboxManager {
     pub fn new() -> Result<Self> {
         let base_path = std::env::temp_dir().join("agi_sandboxes");
         std::fs::create_dir_all(&base_path)?;
+        // Restrict directory permissions to owner only (rwx------)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&base_path, std::fs::Permissions::from_mode(0o700))?;
+        }
 
         Ok(Self {
             active_sandboxes: Arc::new(Mutex::new(Vec::new())),
