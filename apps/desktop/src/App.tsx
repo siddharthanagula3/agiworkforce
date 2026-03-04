@@ -8,7 +8,11 @@ import CommandPalette, { type CommandOption } from './components/Layout/CommandP
 import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
-import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
+import {
+  initializeAgentStatusListener,
+  initializeToolEventListener,
+  useUnifiedChatStore,
+} from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import {
   TimeoutWarningDialog,
@@ -173,6 +177,7 @@ const DesktopShell = () => {
     trackAction('app_loaded');
 
     void initializeAgentStatusListener();
+    void initializeToolEventListener();
 
     void (async () => {
       // Wait for settings store hydration from localStorage before loading from backend

@@ -23,3 +23,6 @@ export * from './errors';
 
 // Custom model configuration types
 export * from './customModel';
+
+// Tool event types for the agentic chat pipeline (matches Rust ToolEvent enum)
+export * from './tool-events';
