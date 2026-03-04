@@ -286,7 +286,7 @@ describe('Button Component', () => {
       await user.click(screen.getByRole('button'));
 
       expect(handleClick).toHaveBeenCalledWith(expect.any(Object));
-      expect(handleClick.mock.calls[0][0].type).toBe('click');
+      expect(handleClick.mock.calls[0]![0]!.type).toBe('click');
     });
   });
 

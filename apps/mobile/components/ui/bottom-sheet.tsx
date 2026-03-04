@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useMemo } from 'react';
 import GorhomBottomSheet, {
   BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
   type BottomSheetProps as GorhomProps,
 } from '@gorhom/bottom-sheet';
 import { colors } from '@/lib/theme';
@@ -15,7 +16,7 @@ export const BottomSheet = forwardRef<GorhomBottomSheet, BottomSheetProps>(
     const snapPoints = useMemo(() => snapPointsProp ?? ['50%', '90%'], [snapPointsProp]);
 
     const renderBackdrop = useCallback(
-      (backdropProps: any) => (
+      (backdropProps: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
           {...backdropProps}
           disappearsOnIndex={-1}

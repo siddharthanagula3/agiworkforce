@@ -1,5 +1,5 @@
 import { FileJson, Globe, History, Key, Plus, Save, Send, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useApiStore, type ApiRequest } from '../../stores/apiStore';
@@ -59,19 +59,37 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
   const [authValue, setAuthValue] = useState('');
   const [authPlacement, setAuthPlacement] = useState<'header' | 'query'>('header');
 
-  useEffect(() => {
-    const newHeaders = { ...currentRequest.headers };
+  // Use a ref to track the previous auth-derived header value to avoid infinite loops.
+  // The effect only calls setCurrentRequest when the computed auth header actually changes,
+  // preventing the object identity of currentRequest.headers from re-triggering the effect.
+  const prevAuthHeaderRef = useRef<string>('');
 
+  useEffect(() => {
+    let authHeaderKey = '';
+    let authHeaderValue = '';
+
+    if (authType === 'bearer' && authToken) {
+      authHeaderKey = 'Authorization';
+      authHeaderValue = `Bearer ${authToken}`;
+    } else if (authType === 'basic' && (authUsername || authPassword)) {
+      const basic = btoa(`${authUsername}:${authPassword}`);
+      authHeaderKey = 'Authorization';
+      authHeaderValue = `Basic ${basic}`;
+    } else if (authType === 'apikey' && authKey && authValue && authPlacement === 'header') {
+      authHeaderKey = authKey;
+      authHeaderValue = authValue;
+    }
+
+    const serialized = `${authHeaderKey}:${authHeaderValue}`;
+    if (serialized === prevAuthHeaderRef.current) return;
+    prevAuthHeaderRef.current = serialized;
+
+    const newHeaders = { ...currentRequest.headers };
     delete newHeaders['Authorization'];
     if (authKey) delete newHeaders[authKey];
 
-    if (authType === 'bearer' && authToken) {
-      newHeaders['Authorization'] = `Bearer ${authToken}`;
-    } else if (authType === 'basic' && (authUsername || authPassword)) {
-      const basic = btoa(`${authUsername}:${authPassword}`);
-      newHeaders['Authorization'] = `Basic ${basic}`;
-    } else if (authType === 'apikey' && authKey && authValue && authPlacement === 'header') {
-      newHeaders[authKey] = authValue;
+    if (authHeaderKey && authHeaderValue) {
+      newHeaders[authHeaderKey] = authHeaderValue;
     }
 
     setCurrentRequest({ headers: newHeaders });

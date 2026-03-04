@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 

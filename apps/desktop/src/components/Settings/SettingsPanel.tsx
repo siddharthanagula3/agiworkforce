@@ -53,6 +53,7 @@ import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
+import { OAuthCredentialsPanel } from './OAuthCredentialsPanel';
 import { VoiceSettings } from './VoiceSettings';
 import { MemoryPanel } from '../Memory/MemoryPanel';
 
@@ -591,7 +592,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   )}
 
                   {/* Connectors Tab */}
-                  {activeTab === 'connectors' && <ConnectorsGallery />}
+                  {activeTab === 'connectors' && (
+                    <>
+                      <ConnectorsGallery />
+                      <div className="pt-6 border-t border-border">
+                        <OAuthCredentialsPanel />
+                      </div>
+                    </>
+                  )}
 
                   {/* API Keys Tab */}
                   {activeTab === 'api-keys' && (

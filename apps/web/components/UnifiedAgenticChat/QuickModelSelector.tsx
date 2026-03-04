@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and model metadata are dynamic */
 import {
   Brain,
   Check,
@@ -445,22 +446,22 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                         <span className="truncate">{model.name}</span>
                         {/* Capability badges */}
                         <span className="flex items-center gap-0.5 shrink-0">
-                          {model.capabilities?.tools && (
+                          {model.capabilities?.['tools'] && (
                             <span aria-label="Tool use">
                               <Wand2 size={10} className="text-blue-500 dark:text-blue-400" />
                             </span>
                           )}
-                          {model.capabilities?.thinking && (
+                          {model.capabilities?.['thinking'] && (
                             <span aria-label="Extended thinking">
                               <Brain size={10} className="text-purple-500 dark:text-purple-400" />
                             </span>
                           )}
-                          {model.capabilities?.vision && (
+                          {model.capabilities?.['vision'] && (
                             <span aria-label="Vision">
                               <Sparkles size={10} className="text-amber-500 dark:text-amber-400" />
                             </span>
                           )}
-                          {model.capabilities?.search && (
+                          {model.capabilities?.['search'] && (
                             <span aria-label="Web search">
                               <Search size={10} className="text-green-500 dark:text-green-400" />
                             </span>
@@ -491,7 +492,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
         {(() => {
           const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
-          const supportsThinking = currentMetadata?.capabilities?.thinking ?? false;
+          const supportsThinking = currentMetadata?.capabilities?.['thinking'] ?? false;
           const smartVariantId = selectedModel ? THINKING_MODEL_VARIANTS[selectedModel] : undefined;
           const smartVariantName = smartVariantId ? getModelMetadata(smartVariantId)?.name : null;
 

@@ -39,8 +39,8 @@ export function clearUser(): void {
 /* ---------- breadcrumbs ---------- */
 
 export function addBreadcrumb(
-  message: string,
-  category: 'ui.click' | 'navigation' | 'api' | 'user' | 'state' | 'error',
+  _message: string,
+  _category: 'ui.click' | 'navigation' | 'api' | 'user' | 'state' | 'error',
   _data?: Record<string, unknown>,
   _level: SeverityLevel = 'info',
 ): void {

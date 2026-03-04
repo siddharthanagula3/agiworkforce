@@ -227,17 +227,19 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.lastUpdate = new Date();
 
             // Update session
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
+            if (state.activeSessionId) {
               const session = state.sessions[state.activeSessionId];
-              const existingIndex = session.assignedAgents.findIndex(
-                (a) => a.agentId === agent.agentId,
-              );
-              if (existingIndex >= 0) {
-                session.assignedAgents[existingIndex] = agent;
-              } else {
-                session.assignedAgents.push(agent);
+              if (session) {
+                const existingIndex = session.assignedAgents.findIndex(
+                  (a) => a.agentId === agent.agentId,
+                );
+                if (existingIndex >= 0) {
+                  session.assignedAgents[existingIndex] = agent;
+                } else {
+                  session.assignedAgents.push(agent);
+                }
+                session.updatedAt = new Date();
               }
-              session.updatedAt = new Date();
             }
           });
         },
@@ -261,13 +263,15 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
               state.assignedAgents[agentId] = updatedAgent as (typeof state.assignedAgents)[string];
 
               // Also update in session's assignedAgents for consistency
-              if (state.activeSessionId && state.sessions[state.activeSessionId]) {
+              if (state.activeSessionId) {
                 const session = state.sessions[state.activeSessionId];
-                const sessionAgentIndex = session.assignedAgents.findIndex(
-                  (a) => a.agentId === agentId,
-                );
-                if (sessionAgentIndex >= 0) {
-                  session.assignedAgents[sessionAgentIndex] = updatedAgent as AgentAssignment;
+                if (session) {
+                  const sessionAgentIndex = session.assignedAgents.findIndex(
+                    (a) => a.agentId === agentId,
+                  );
+                  if (sessionAgentIndex >= 0) {
+                    session.assignedAgents[sessionAgentIndex] = updatedAgent as AgentAssignment;
+                  }
                 }
               }
 
@@ -295,10 +299,14 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.lastUpdate = new Date();
 
             // Update session
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
+            if (state.activeSessionId) {
               const session = state.sessions[state.activeSessionId];
-              session.assignedAgents = session.assignedAgents.filter((a) => a.agentId !== agentId);
-              session.updatedAt = new Date();
+              if (session) {
+                session.assignedAgents = session.assignedAgents.filter(
+                  (a) => a.agentId !== agentId,
+                );
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -310,9 +318,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.lastUpdate = new Date();
 
             // Update session
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-              state.sessions[state.activeSessionId].assignedAgents = [];
-              state.sessions[state.activeSessionId].updatedAt = new Date();
+            if (state.activeSessionId) {
+              const session = state.sessions[state.activeSessionId];
+              if (session) {
+                session.assignedAgents = [];
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -443,9 +454,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.error = null;
             state.lastUpdate = new Date();
 
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-              state.sessions[state.activeSessionId].status = 'executing';
-              state.sessions[state.activeSessionId].updatedAt = new Date();
+            if (state.activeSessionId) {
+              const session = state.sessions[state.activeSessionId];
+              if (session) {
+                session.status = 'executing';
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -455,9 +469,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.isPaused = true;
             state.lastUpdate = new Date();
 
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-              state.sessions[state.activeSessionId].status = 'paused';
-              state.sessions[state.activeSessionId].updatedAt = new Date();
+            if (state.activeSessionId) {
+              const session = state.sessions[state.activeSessionId];
+              if (session) {
+                session.status = 'paused';
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -467,9 +484,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.isPaused = false;
             state.lastUpdate = new Date();
 
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-              state.sessions[state.activeSessionId].status = 'executing';
-              state.sessions[state.activeSessionId].updatedAt = new Date();
+            if (state.activeSessionId) {
+              const session = state.sessions[state.activeSessionId];
+              if (session) {
+                session.status = 'executing';
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -480,10 +500,13 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.isPaused = false;
             state.lastUpdate = new Date();
 
-            if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-              state.sessions[state.activeSessionId].status = 'completed';
-              state.sessions[state.activeSessionId].completedAt = new Date();
-              state.sessions[state.activeSessionId].updatedAt = new Date();
+            if (state.activeSessionId) {
+              const session = state.sessions[state.activeSessionId];
+              if (session) {
+                session.status = 'completed';
+                session.completedAt = new Date();
+                session.updatedAt = new Date();
+              }
             }
           });
         },
@@ -494,9 +517,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.error = error;
             if (error) {
               state.isOrchestrating = false;
-              if (state.activeSessionId && state.sessions[state.activeSessionId]) {
-                state.sessions[state.activeSessionId].status = 'failed';
-                state.sessions[state.activeSessionId].updatedAt = new Date();
+              if (state.activeSessionId) {
+                const session = state.sessions[state.activeSessionId];
+                if (session) {
+                  session.status = 'failed';
+                  session.updatedAt = new Date();
+                }
               }
             }
           });

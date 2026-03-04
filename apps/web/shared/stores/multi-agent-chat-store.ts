@@ -599,10 +599,7 @@ export const useMultiAgentChatStore = create<MultiAgentChatStore>()(
             for (const conversation of Object.values(state.conversations)) {
               const messageIndex = conversation.messages.findIndex((m) => m.id === messageId);
               if (messageIndex !== -1) {
-                conversation.messages[messageIndex] = {
-                  ...conversation.messages[messageIndex],
-                  ...updates,
-                };
+                Object.assign(conversation.messages[messageIndex]!, updates);
                 conversation.updatedAt = new Date();
                 break;
               }
@@ -682,7 +679,7 @@ export const useMultiAgentChatStore = create<MultiAgentChatStore>()(
               const existingIndex = indicators.findIndex((i) => i.participantId === participantId);
 
               if (existingIndex >= 0) {
-                indicators[existingIndex].startedAt = new Date();
+                indicators[existingIndex]!.startedAt = new Date();
               } else {
                 indicators.push({
                   participantId,

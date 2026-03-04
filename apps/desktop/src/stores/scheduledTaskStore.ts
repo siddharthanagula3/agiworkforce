@@ -7,7 +7,7 @@ export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
 
 export interface TaskSchedule {
   type: 'once' | 'recurring';
-  runAt?: number;          // Unix timestamp (ms) for 'once'
+  runAt?: number; // Unix timestamp (ms) for 'once'
   interval?: TaskInterval;
   cronExpression?: string; // for 'custom' interval
   timezone?: string;
@@ -28,7 +28,10 @@ export interface ScheduledTask {
   createdAt: number;
 }
 
-type CreateTaskInput = Omit<ScheduledTask, 'id' | 'createdAt' | 'runCount' | 'lastRunAt' | 'nextRunAt' | 'lastOutput'>;
+type CreateTaskInput = Omit<
+  ScheduledTask,
+  'id' | 'createdAt' | 'runCount' | 'lastRunAt' | 'nextRunAt' | 'lastOutput'
+>;
 
 interface ScheduledTaskState {
   tasks: ScheduledTask[];
@@ -60,8 +63,10 @@ function computeNextRunAt(schedule: TaskSchedule): number | null {
       return now + 24 * 60 * 60 * 1000;
     case 'weekly':
       return now + 7 * 24 * 60 * 60 * 1000;
-    case 'monthly':
-      return now + 30 * 24 * 60 * 60 * 1000;
+    case 'monthly': {
+      const APPROX_DAYS_PER_MONTH = 30;
+      return now + APPROX_DAYS_PER_MONTH * 24 * 60 * 60 * 1000;
+    }
     default:
       return null;
   }
@@ -97,7 +102,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
         fetchTasks: async () => {
           set({ isLoading: true });
           try {
-            const tasks = await invoke<ScheduledTask[]>('scheduler_list_tasks');
+            const tasks = await invoke<ScheduledTask[]>('scheduler_list_jobs');
             set({ tasks, isLoading: false });
           } catch {
             // Tauri command not available — fall back to localStorage
@@ -119,7 +124,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
           };
 
           try {
-            const id = await invoke<string>('scheduler_create_task', {
+            const id = await invoke<string>('scheduler_add_job', {
               name: input.name,
               prompt: input.prompt,
               schedule: input.schedule,
@@ -142,7 +147,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
 
         updateTask: async (id, updates) => {
           try {
-            await invoke('scheduler_update_task', { id, updates });
+            await invoke('scheduler_update_job', { id, updates });
           } catch {
             // Fallback: update locally only
           }
@@ -153,9 +158,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
                     ...t,
                     ...updates,
                     nextRunAt:
-                      updates.schedule != null
-                        ? computeNextRunAt(updates.schedule)
-                        : t.nextRunAt,
+                      updates.schedule != null ? computeNextRunAt(updates.schedule) : t.nextRunAt,
                   }
                 : t,
             );
@@ -166,7 +169,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
 
         deleteTask: async (id) => {
           try {
-            await invoke('scheduler_delete_task', { id });
+            await invoke('scheduler_remove_job', { id });
           } catch {
             // Fallback: delete locally
           }
@@ -184,14 +187,12 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
           const newStatus: TaskStatus = task.status === 'active' ? 'paused' : 'active';
 
           try {
-            await invoke('scheduler_toggle_task', { id });
+            await invoke('scheduler_toggle_job', { id });
           } catch {
             // Fallback: toggle locally
           }
           set((state) => {
-            const tasks = state.tasks.map((t) =>
-              t.id === id ? { ...t, status: newStatus } : t,
-            );
+            const tasks = state.tasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t));
             persistToStorage(tasks);
             return { tasks };
           });
@@ -199,7 +200,7 @@ export const useScheduledTaskStore = create<ScheduledTaskState>()(
 
         runNow: async (id) => {
           try {
-            await invoke('scheduler_run_now', { id });
+            await invoke('scheduler_run_job_now', { id });
           } catch {
             // Fallback: record local run attempt
           }

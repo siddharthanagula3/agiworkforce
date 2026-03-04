@@ -409,8 +409,8 @@ export function initializeAuthOrchestrator(): () => void {
 
     if (subscription && subscription.current_period_start && subscription.current_period_end) {
       if (
-        subscription.current_period_start !== billingUsageStore.usagePeriodStart ||
-        subscription.current_period_end !== billingUsageStore.usagePeriodEnd
+        subscription.current_period_start !== billingUsageStore.usagePeriodStartSec ||
+        subscription.current_period_end !== billingUsageStore.usagePeriodEndSec
       ) {
         billingUsageStore.setUsagePeriod(
           subscription.current_period_start,

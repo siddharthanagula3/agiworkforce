@@ -609,7 +609,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               toolStatus === 'failed' || toolStatus === 'failure' || toolStatus === 'error';
 
             if ((isCompleted || isFailed) && toolState) {
-              let resultData: any;
+              let resultData: unknown;
               let success = false;
 
               if ('status' in toolState) {

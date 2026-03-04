@@ -12,4 +12,5 @@ export type Provider =
   | 'managed_cloud'
   | 'black-forest-labs'
   | 'suno'
-  | 'udio';
+  | 'udio'
+  | 'mistral';

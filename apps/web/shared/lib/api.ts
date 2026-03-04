@@ -18,7 +18,7 @@ export interface APIConfig {
 }
 
 const DEFAULT_CONFIG: APIConfig = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  baseURL: process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001/api',
   timeout: 30000, // 30 seconds
   retries: 3,
   retryDelay: 1000, // 1 second
@@ -77,7 +77,7 @@ export class APIClient {
 
     const token = this.getToken();
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     return headers;
