@@ -1,3 +1,5 @@
+/* eslint-disable no-control-regex -- intentional: security detection patterns use control chars */
+
 /**
  * Prompt Injection Detection Service
  *
@@ -940,18 +942,20 @@ export async function logInjectionAttempt(
     // Store in database for security analysis and audit trail
     // Note: Uses analytics_events table which should exist with proper RLS
 
-    const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient).from('analytics_events').insert({
-      user_id: userId,
-      event_type: 'security_incident',
-      event_data: {
-        incident_type: 'prompt_injection',
-        risk_level: detection.riskLevel,
-        detected_patterns: detection.detectedPatterns,
-        input_preview: input.substring(0, 500),
-        confidence: detection.confidence,
-      },
-      created_at: new Date().toISOString(),
-    });
+    const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+      .from('analytics_events')
+      .insert({
+        user_id: userId,
+        event_type: 'security_incident',
+        event_data: {
+          incident_type: 'prompt_injection',
+          risk_level: detection.riskLevel,
+          detected_patterns: detection.detectedPatterns,
+          input_preview: input.substring(0, 500),
+          confidence: detection.confidence,
+        },
+        created_at: new Date().toISOString(),
+      });
 
     if (error) {
       // Don't throw - logging failure shouldn't block the user

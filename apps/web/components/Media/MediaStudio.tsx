@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Image, Video, Sparkles, Loader2, Settings2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
+import { Card, CardContent, CardHeader } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { Textarea } from '@shared/ui/textarea';
@@ -101,7 +101,6 @@ export function MediaStudio() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <Image className="w-4 h-4" aria-hidden="true" />
               Image
             </button>

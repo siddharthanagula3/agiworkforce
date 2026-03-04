@@ -40,7 +40,7 @@ export interface CheckpointContextEntry {
   timestamp_ms: number;
   entry_type: string;
   description: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 /// Constraint definition for task goals

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ComponentType } from 'react';
 import { useBrowserStore, type BrowserAction, type ActionType } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -25,7 +25,7 @@ interface BrowserActionLogProps {
   onActionClick?: (action: BrowserAction) => void;
 }
 
-const ACTION_ICONS: Record<ActionType, any> = {
+const ACTION_ICONS: Record<ActionType, ComponentType<{ className?: string }>> = {
   navigate: Navigation,
   click: MousePointer,
   type: Keyboard,
