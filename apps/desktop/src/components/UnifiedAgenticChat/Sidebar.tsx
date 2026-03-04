@@ -3,7 +3,6 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
-  Bell,
   BookOpen,
   Calendar,
   ChevronDown,
@@ -11,24 +10,19 @@ import {
   ChevronRight,
   Clock,
   Coins,
-  Database,
   Download,
   FileText,
   FolderOpen,
-  GitBranch,
   HelpCircle,
   Layers,
   Link2,
-  Mail,
   MessageSquare,
-  Monitor as MonitorIcon,
   Pin,
   PinOff,
   Plus,
   Search,
   Sparkles,
   Trash2,
-  Users,
   Wand2,
   X,
   Zap,
@@ -933,24 +927,6 @@ export function Sidebar({
               Deep Research
             </button>
 
-            <button
-              onClick={() => {
-                const { setActiveView: setView } = useChatStore.getState();
-                setView('computer-use');
-              }}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'computer-use'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-400/20 text-purple-400">
-                <MonitorIcon className="w-3.5 h-3.5" />
-              </span>
-              Computer Use
-            </button>
-
             {canAccessMediaLab && (
               <button
                 onClick={() => onToggleMediaLab?.()}
@@ -976,111 +952,6 @@ export function Sidebar({
                 <Layers className="w-3.5 h-3.5" />
               </span>
               Projects
-            </button>
-
-            <button
-              onClick={() => setActiveView('calendar')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'calendar'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-rose-400/20 text-rose-400">
-                <Calendar className="w-3.5 h-3.5" />
-              </span>
-              Calendar
-            </button>
-
-            <button
-              onClick={() => setActiveView('email')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'email'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-sky-400/20 text-sky-400">
-                <Mail className="w-3.5 h-3.5" />
-              </span>
-              Email
-            </button>
-
-            <button
-              onClick={() => setActiveView('analytics')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'analytics'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-emerald-400/20 text-emerald-400">
-                <BarChart3 className="w-3.5 h-3.5" />
-              </span>
-              Analytics
-            </button>
-
-            <button
-              onClick={() => setActiveView('teams')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'teams'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-indigo-400/20 text-indigo-400">
-                <Users className="w-3.5 h-3.5" />
-              </span>
-              Teams
-            </button>
-
-            <button
-              onClick={() => setActiveView('notifications')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'notifications'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-400/20 text-orange-400">
-                <Bell className="w-3.5 h-3.5" />
-              </span>
-              Notifications
-            </button>
-
-            <button
-              onClick={() => setActiveView('workflows')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'workflows'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
-                <GitBranch className="w-3.5 h-3.5" />
-              </span>
-              Workflows
-            </button>
-
-            <button
-              onClick={() => setActiveView('knowledge-base')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'knowledge-base'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-yellow-400/20 text-yellow-400">
-                <Database className="w-3.5 h-3.5" />
-              </span>
-              Knowledge Base
             </button>
 
             <button

@@ -47,15 +47,6 @@ import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { CanvasWorkspace } from '../Canvas';
-import { ComputerUseMonitor } from '../ComputerUse/ComputerUseMonitor';
-import { MobileCompanionWorkspace } from '../Mobile/MobileCompanionWorkspace';
-import { CalendarWorkspace } from '../Calendar/CalendarWorkspace';
-import { EmailWorkspace } from '../Communications/EmailWorkspace';
-import { UsageDashboard } from '../Analytics/UsageDashboard';
-import { TeamDashboard } from '../Teams/TeamDashboard';
-import { NotificationCenter } from '../Notifications/NotificationCenter';
-import { WorkflowPanel } from '../Workflows/WorkflowPanel';
-import { KnowledgeBaseViewer } from '../KnowledgeBaseViewer';
 import { InteractiveHelp } from '../Help/InteractiveHelp';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
@@ -2975,38 +2966,6 @@ export const UnifiedAgenticChat: React.FC<{
           ) : activeView === 'artifacts' ? (
             <div className="flex-1 p-4">
               <CanvasWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'computer-use' ? (
-            <ComputerUseMonitor />
-          ) : activeView === 'mobile-companion' ? (
-            <MobileCompanionWorkspace />
-          ) : activeView === 'calendar' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <CalendarWorkspace />
-            </div>
-          ) : activeView === 'email' ? (
-            <div className="flex-1 overflow-auto">
-              <EmailWorkspace />
-            </div>
-          ) : activeView === 'analytics' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <UsageDashboard />
-            </div>
-          ) : activeView === 'teams' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <TeamDashboard />
-            </div>
-          ) : activeView === 'notifications' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <NotificationCenter />
-            </div>
-          ) : activeView === 'workflows' ? (
-            <div className="flex-1 overflow-auto">
-              <WorkflowPanel />
-            </div>
-          ) : activeView === 'knowledge-base' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <KnowledgeBaseViewer />
             </div>
           ) : activeView === 'help' ? (
             <div className="flex-1 overflow-auto p-4">
