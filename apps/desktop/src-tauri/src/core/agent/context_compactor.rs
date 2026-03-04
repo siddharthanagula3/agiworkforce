@@ -83,13 +83,13 @@ impl ContextCompactor {
             .sum();
 
         let keep_count = self.config.keep_recent.min(messages.len());
-        let (recent_messages, old_messages) = messages.split_at(messages.len() - keep_count);
+        let (old_messages, recent_messages) = messages.split_at(messages.len() - keep_count);
 
         if old_messages.is_empty() {
             return Ok(None);
         }
 
-        let _old_tokens: usize = old_messages
+        let old_tokens: usize = old_messages
             .iter()
             .map(|m| m.tokens.unwrap_or(0) as usize)
             .sum();
@@ -97,6 +97,12 @@ impl ContextCompactor {
         let summary = self.generate_summary(old_messages).await?;
 
         let summary_tokens = self.estimate_tokens(&summary);
+
+        // Short-circuit: if the summary is larger than the original messages,
+        // compaction is counterproductive — skip it.
+        if summary_tokens >= old_tokens {
+            return Ok(None);
+        }
         let recent_tokens: usize = recent_messages
             .iter()
             .map(|m| m.tokens.unwrap_or(0) as usize)
@@ -113,8 +119,8 @@ impl ContextCompactor {
     }
 
     pub async fn generate_summary(&self, messages: &[Message]) -> Result<String> {
-        if let Some(ref router) = self.llm_router {
-            self.generate_summary_with_llm(router, messages).await
+        if self.llm_router.is_some() {
+            self.generate_summary_with_llm(messages).await
         } else {
             Ok(self.generate_summary_heuristic(messages))
         }
@@ -122,7 +128,6 @@ impl ContextCompactor {
 
     async fn generate_summary_with_llm(
         &self,
-        _router: &Arc<LLMRouter>,
         messages: &[Message],
     ) -> Result<String> {
         let mut conversation_text = String::new();
@@ -138,7 +143,8 @@ impl ContextCompactor {
 
         for msg in messages {
             let truncated_content = if msg.content.len() > 1000 {
-                format!("{}... [truncated]", &msg.content[..1000])
+                let truncated: String = msg.content.chars().take(250).collect();
+                format!("{}... [truncated]", truncated)
             } else {
                 msg.content.clone()
             };
@@ -222,7 +228,7 @@ impl ContextCompactor {
 
     pub fn get_compacted_messages(&self, messages: &[Message], summary: &str) -> Vec<Message> {
         let keep_count = self.config.keep_recent.min(messages.len());
-        let (recent_messages, _old_messages) = messages.split_at(messages.len() - keep_count);
+        let (_old_messages, recent_messages) = messages.split_at(messages.len() - keep_count);
 
         let mut compacted = Vec::new();
 

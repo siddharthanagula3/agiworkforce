@@ -72,6 +72,7 @@ mod tests {
             (Provider::Moonshot, "moonshot"),
             (Provider::Zhipu, "zhipu"),
             (Provider::ManagedCloud, "managed_cloud"),
+            (Provider::Mistral, "mistral"),
         ];
         for &(provider, name) in all_providers {
             router.set_provider(
@@ -211,6 +212,7 @@ mod tests {
     #[test]
     fn test_provider_from_string_roundtrip_via_as_string() {
         // as_string() output should be accepted back by from_string()
+        // M15 fix: Include Provider::ManagedCloud in the round-trip test
         let providers = [
             Provider::OpenAI,
             Provider::Anthropic,
@@ -222,6 +224,7 @@ mod tests {
             Provider::Qwen,
             Provider::Moonshot,
             Provider::Zhipu,
+            Provider::ManagedCloud,
         ];
         for p in providers {
             let s = p.as_string();
@@ -969,9 +972,9 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing/research -> Google (Gemini Flash)
+        // hobby + writing/research -> Google (Gemini Pro)
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash-preview");
+        assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
     // --- Intelligent routing: selected_model -> provider inference ---
@@ -1160,9 +1163,9 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing -> Google (Flash), large context doesn't change hobby routing
+        // hobby + writing -> Google (Pro), large context doesn't change hobby routing
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash-preview");
+        assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
     #[test]

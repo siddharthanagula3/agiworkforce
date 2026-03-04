@@ -94,20 +94,20 @@ mod tests {
     fn test_estimate_image_tokens_high_detail_512x512() {
         // 512×512: shortest side = 512, scale to 768 → 768×768
         // tiles: ceil(768/512) × ceil(768/512) = 2×2 = 4
-        // total: 170 + 85*4 = 510
+        // total: 170 + 170*4 = 850
         assert_eq!(
             TokenCounter::estimate_image_tokens(512, 512, ImageDetail::High),
-            510
+            850
         );
     }
 
     #[test]
     fn test_estimate_image_tokens_high_detail_1024x1024() {
         // 1024×1024 → scale shortest (1024) to 768 → 768×768
-        // tiles: 2×2 = 4 → 170 + 340 = 510
+        // tiles: 2×2 = 4 → 170 + 170*4 = 850
         assert_eq!(
             TokenCounter::estimate_image_tokens(1024, 1024, ImageDetail::High),
-            510
+            850
         );
     }
 
@@ -115,10 +115,10 @@ mod tests {
     fn test_estimate_image_tokens_high_detail_4000x3000() {
         // 4000×3000 → scale shortest (3000) to 768 → 1024×768
         // 1024 < 2048, so no second scale.  tiles: ceil(1024/512)×ceil(768/512) = 2×2 = 4
-        // total: 170 + 85*4 = 510
+        // total: 170 + 170*4 = 850
         assert_eq!(
             TokenCounter::estimate_image_tokens(4000, 3000, ImageDetail::High),
-            510
+            850
         );
     }
 
@@ -127,7 +127,7 @@ mod tests {
         // Zero dimensions → conservative default (2×2 tiles = 4)
         assert_eq!(
             TokenCounter::estimate_image_tokens(0, 0, ImageDetail::High),
-            170 + 85 * 4 // 510
+            170 + 170 * 4 // 850
         );
     }
 
@@ -374,6 +374,7 @@ mod tests {
             Provider::Moonshot,
             Provider::Zhipu,
             Provider::ManagedCloud,
+            Provider::Mistral,
         ];
 
         for provider in providers {
