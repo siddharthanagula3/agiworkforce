@@ -293,6 +293,42 @@ pub async fn execute_terminal_command(
     })
 }
 
+/// Simplified terminal execution command used by canvasStore code execution.
+///
+/// Accepts a command string and optional working directory, returning
+/// stdout, stderr, and exit_code with snake_case serialization to match
+/// frontend expectations.
+#[derive(serde::Serialize)]
+pub struct TerminalExecuteResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
+
+#[tauri::command]
+pub async fn terminal_execute(
+    app: AppHandle,
+    command: String,
+    working_dir: Option<String>,
+) -> Result<TerminalExecuteResult, String> {
+    let result = execute_terminal_command(
+        app,
+        command,
+        working_dir,
+        None, // shell — use default
+        None, // stream_id
+        None, // emit_events
+        None, // timeout_ms
+    )
+    .await?;
+
+    Ok(TerminalExecuteResult {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exit_code: result.exit_code.unwrap_or(-1),
+    })
+}
+
 #[tauri::command]
 pub async fn terminal_detect_shells() -> Result<Vec<ShellInfo>, String> {
     tracing::info!("Detecting available shells");

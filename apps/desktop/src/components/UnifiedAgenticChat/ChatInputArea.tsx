@@ -21,7 +21,7 @@ import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
 import { useVoiceInputStore } from '../../stores/voiceInputStore';
 import { cn } from '../../lib/utils';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import { useModelStore } from '../../stores/modelStore';
 import {
   FocusMode,

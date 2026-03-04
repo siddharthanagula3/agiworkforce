@@ -35,13 +35,11 @@ const COMMAND_TIMEOUTS: Record<string, number> = {
 
   execute_command: 120000,
 
-  get_settings: 5000,
   get_onboarding_status: 5000,
 };
 
 const RETRYABLE_COMMANDS = new Set([
   'auth_refresh_token',
-  'get_settings',
   'get_onboarding_status',
   'analytics_get_session_id',
   'analytics_flush_events',

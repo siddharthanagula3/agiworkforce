@@ -560,6 +560,10 @@ pub fn run() {
             app.manage(ToolConfirmationState::new());
             tracing::info!("Tool confirmation state initialized");
 
+            // Capability state for frontend feature toggles enforcement
+            app.manage(crate::sys::commands::capabilities::CapabilityState::new());
+            tracing::info!("Capability state initialized");
+
             // Artifact state for live previews and versioned artifacts
             app.manage(crate::sys::commands::artifacts::ArtifactState::new());
             tracing::info!("Artifact state initialized");
@@ -647,6 +651,8 @@ pub fn run() {
                     .context("Failed to initialize codebase cache")?;
             app.manage(crate::sys::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
 
+            // Background LLM queue state
+            app.manage(crate::sys::commands::background_llm::BackgroundLLMState::new(4));
 
             app.manage(BillingStateWrapper::new());
 
@@ -1012,6 +1018,13 @@ pub fn run() {
             crate::sys::commands::agi_checkpoint_cleanup,
             crate::sys::commands::agi_checkpoint_init,
 
+            // AGI Task Control (pause/resume/abort running tasks)
+            crate::sys::commands::agi_pause_task,
+            crate::sys::commands::agi_resume_task,
+            crate::sys::commands::agi_abort_task,
+            crate::sys::commands::agi_extend_timeout,
+            crate::sys::commands::agi_get_timeout_status,
+
 
             crate::sys::commands::cloud_connect,
             crate::sys::commands::cloud_complete_oauth,
@@ -1273,6 +1286,8 @@ pub fn run() {
             crate::sys::commands::llm_get_available_models,
             crate::sys::commands::llm_check_provider_status,
             crate::sys::commands::llm_get_usage_stats,
+            crate::sys::commands::llm_get_ollama_models,
+            crate::sys::commands::llm_list_ollama_models,
             crate::sys::commands::router_suggestions,
             crate::sys::commands::get_model_capabilities,
             crate::sys::commands::clear_model_capability_cache,
@@ -1312,6 +1327,11 @@ pub fn run() {
             crate::sys::commands::get_indexing_progress,
             crate::sys::commands::on_file_changed,
             crate::sys::commands::on_file_deleted,
+
+            // NOTE: core::codebase commands (index_workspace_file, search_symbols,
+            // get_file_symbols, get_index_stats) are not registered because
+            // CodebaseIndexer holds a rusqlite Connection which is not Send-safe
+            // across async boundaries. These need to be refactored first.
 
 
             crate::sys::commands::settings_load,
@@ -1435,6 +1455,7 @@ pub fn run() {
             crate::sys::commands::file_open_with_default_app,
             crate::sys::commands::undo_file_operation,
             crate::sys::commands::execute_terminal_command,
+            crate::sys::commands::terminal_execute,
             crate::sys::commands::dir_create,
             crate::sys::commands::dir_list,
             crate::sys::commands::dir_delete,
@@ -1784,6 +1805,25 @@ pub fn run() {
             // Wispr Flow speech recording stubs
             crate::sys::commands::voice::speech_start_recording,
             crate::sys::commands::voice::speech_stop_and_transcribe,
+            // Voice TTS extras
+            crate::sys::commands::voice::voice_tts_stop,
+            crate::sys::commands::voice::voice_tts_is_playing,
+            crate::sys::commands::voice::voice_tts_speak_with_barge_in,
+            // Deepgram streaming
+            crate::sys::commands::voice::voice_deepgram_configure,
+            crate::sys::commands::voice::voice_deepgram_send_audio,
+            crate::sys::commands::voice::voice_deepgram_status,
+            crate::sys::commands::voice::voice_start_deepgram_stream,
+            crate::sys::commands::voice::voice_stop_deepgram_stream,
+            // Barge-in (interrupt TTS)
+            crate::sys::commands::voice::voice_configure_barge_in,
+            crate::sys::commands::voice::voice_enable_barge_in,
+            crate::sys::commands::voice::voice_get_barge_in_status,
+            crate::sys::commands::voice::voice_set_barge_in_sensitivity,
+            crate::sys::commands::voice::voice_start_barge_in_monitoring,
+            crate::sys::commands::voice::voice_stop_barge_in_monitoring,
+            // Audio conversion
+            crate::sys::commands::voice::voice_convert_audio_to_pcm,
 
             // Canvas (Visual Canvas / A2UI)
             crate::sys::commands::canvas::canvas_create,
@@ -1837,6 +1877,9 @@ pub fn run() {
             crate::sys::commands::scheduler_resume_job,
             crate::sys::commands::scheduler_get_job,
             crate::sys::commands::scheduler_get_next_runs,
+            crate::sys::commands::scheduler_toggle_job,
+            crate::sys::commands::scheduler_run_job_now,
+            crate::sys::commands::scheduler_update_job,
 
             // Research (multi-source investigation with citations)
             crate::sys::commands::research_start,
@@ -1906,6 +1949,7 @@ pub fn run() {
             crate::sys::commands::start_first_run_experience,
             crate::sys::commands::has_completed_first_run,
             crate::sys::commands::update_first_run_step,
+            crate::sys::commands::run_instant_demo,
 
             crate::sys::billing::billing_initialize,
             crate::sys::billing::stripe_create_customer,
@@ -2093,6 +2137,14 @@ pub fn run() {
             crate::sys::commands::background_task_cancel,
             crate::sys::commands::background_task_status,
 
+            // Background LLM (queue-based LLM processing)
+            crate::sys::commands::bg_llm_submit,
+            crate::sys::commands::bg_llm_get_status,
+            crate::sys::commands::bg_llm_cancel,
+            crate::sys::commands::bg_llm_process_queue,
+            crate::sys::commands::bg_llm_get_statistics,
+            crate::sys::commands::bg_llm_cleanup,
+            crate::sys::commands::bg_llm_verify_webhook,
 
             crate::sys::commands::hooks_initialize,
             crate::sys::commands::hooks_list,
@@ -2346,6 +2398,11 @@ pub fn run() {
 
             // Code execution (sandboxed)
             crate::sys::commands::execute_code,
+
+            // Capability enforcement (frontend feature toggles → backend)
+            crate::sys::commands::capabilities::sync_capabilities,
+            crate::sys::commands::capabilities::get_capabilities,
+            crate::sys::commands::capabilities::check_capability,
         ])
         .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())

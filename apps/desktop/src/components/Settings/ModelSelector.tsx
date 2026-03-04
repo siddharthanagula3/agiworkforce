@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, X, Filter, Star, Clock, Grid, List } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore } from '../../stores/auth';
 import { ModelCard } from './ModelCard';
 import {
   getAllModels,

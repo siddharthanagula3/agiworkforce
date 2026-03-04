@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ErrorToastContainer, useErrorToast } from '../components/Errors/ErrorToast';
-import useErrorStore from '../stores/errorStore';
+import useErrorStore from '../stores/ui';
 
 describe('ErrorToast', () => {
   beforeEach(() => {
@@ -36,9 +36,7 @@ describe('ErrorToast', () => {
       });
 
       // The component shows the pre-defined message (not the raw error.message)
-      expect(
-        screen.getByText(/Unable to connect to the server/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Unable to connect to the server/i)).toBeInTheDocument();
     });
 
     it('should dismiss toast when X button is clicked', async () => {
