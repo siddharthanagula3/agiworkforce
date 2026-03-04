@@ -67,7 +67,7 @@ export function parseCodeBlocks(markdown: string): CodeBlock[] {
     codeBlocks.push({
       language: language || 'plaintext',
       filePath: filePath || undefined,
-      content: content?.trim(),
+      content: content?.trim() ?? '',
     });
   }
 

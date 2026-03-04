@@ -870,7 +870,7 @@ export const useUIStore = create<UIState>()(
             if (newMode === 'simple') {
               // Dynamically import to avoid circular dependency
               Promise.all([import('./modelStore'), import('./accountStore')]).then(
-                ([{ useModelStore }, { useAccountStore }]) => {
+                ([{ useModelStore: _useModelStore }, { useAccountStore: _useAccountStore }]) => {
                   const modelStore = {} as any;
 
                   const accountStore = {} as any;

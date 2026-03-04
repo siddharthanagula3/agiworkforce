@@ -13,7 +13,7 @@ describe('CSRF', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    process.env.CSRF_SECRET = 'test-csrf-secret-key-12345';
+    process.env['CSRF_SECRET'] = 'test-csrf-secret-key-12345';
   });
 
   afterEach(() => {
@@ -30,8 +30,8 @@ describe('CSRF', () => {
       const parts = token.split(':');
       expect(parts).toHaveLength(3);
       expect(parts[0]).toBe(sessionId);
-      expect(parseInt(parts[1], 10)).not.toBeNaN();
-      expect(parts[2]).toHaveLength(64); // SHA-256 hex
+      expect(parseInt(parts[1]!, 10)).not.toBeNaN();
+      expect(parts[2]!).toHaveLength(64); // SHA-256 hex
     });
 
     it('should generate different tokens for different sessions', async () => {
@@ -48,14 +48,14 @@ describe('CSRF', () => {
       const now = Date.now();
 
       const token = generateCsrfToken('session-123');
-      const timestamp = parseInt(token.split(':')[1], 10);
+      const timestamp = parseInt(token.split(':')[1]!, 10);
 
       // Timestamp should be within 1 second of now
       expect(Math.abs(timestamp - now)).toBeLessThan(1000);
     });
 
     it('should throw error when CSRF_SECRET is not set', async () => {
-      delete process.env.CSRF_SECRET;
+      delete process.env['CSRF_SECRET'];
       vi.resetModules();
 
       const { generateCsrfToken, resetCsrfCache } = await import('@/lib/csrf');
@@ -135,7 +135,7 @@ describe('CSRF', () => {
 
       const token = generateCsrfToken(sessionId);
       const parts = token.split(':');
-      const tamperedToken = `${parts[0]}:${parts[1]}:tampered${parts[2].slice(8)}`;
+      const tamperedToken = `${parts[0]}:${parts[1]}:tampered${parts[2]!.slice(8)}`;
 
       const isValid = verifyCsrfToken(tamperedToken, sessionId);
 

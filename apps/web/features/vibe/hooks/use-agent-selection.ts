@@ -120,7 +120,7 @@ export function useAgentSelection(): UseAgentSelectionReturn {
       const confidence = Math.min(bestMatch!.score / 100, 1);
 
       return {
-        employee: bestMatch?.employee,
+        employee: bestMatch?.employee ?? employees[0]!,
         confidence,
         reasoning: `Keyword match based on: ${bestMatch?.employee.description}`,
       };
@@ -168,8 +168,8 @@ export function useAgentSelection(): UseAgentSelectionReturn {
       const bestMatch = matches[0];
 
       return {
-        employee: bestMatch?.employee,
-        confidence: bestMatch?.score,
+        employee: bestMatch?.employee ?? employees[0]!,
+        confidence: bestMatch?.score ?? 0,
         reasoning: `Semantic match based on description similarity`,
       };
     },
@@ -329,12 +329,12 @@ export function useAgentSelection(): UseAgentSelectionReturn {
         }
 
         // Fallback: Use first available employee or best keyword match
-        const fallbackAgent = keywordResult?.employee || employees[0];
+        const fallbackAgent: AIEmployee | null = keywordResult?.employee || employees[0] || null;
         setSelectedAgent(fallbackAgent!);
         setPrimaryAgent(fallbackAgent!);
         setRoutingResult({
           mode: 'single',
-          primaryAgent: fallbackAgent,
+          primaryAgent: fallbackAgent ?? undefined,
           confidence: 0.5,
           reasoning: 'Fallback to default agent',
         });

@@ -9,12 +9,12 @@ export class PricingPage extends BasePage {
   // Billing interval toggle
   private readonly billingToggle = 'button[class*="rounded-full"][class*="bg-blue-600"]';
   private readonly monthlyLabel = 'span:has-text("Monthly")';
-  private readonly annualLabel = 'span:has-text("Yearly")';
+  // private readonly annualLabel = 'span:has-text("Yearly")';
 
   // Plan cards - using CSS selectors to match h2 text
-  private readonly hobbyPlanCard = 'h2:has-text("Hobby")';
-  private readonly proPlanCard = 'h2:has-text("Pro"):not(:has-text("Power"))';
-  private readonly maxPlanCard = 'h2:has-text("Max")';
+  // private readonly hobbyPlanCard = 'h2:has-text("Hobby")';
+  // private readonly proPlanCard = 'h2:has-text("Pro"):not(:has-text("Power"))';
+  // private readonly maxPlanCard = 'h2:has-text("Max")';
 
   // Button selectors - using locator chain to find within closest div context
   // These will be used with Playwright's filter/first methods in the page object
@@ -26,7 +26,7 @@ export class PricingPage extends BasePage {
     'button:has-text(/^Upgrade|^Current Plan$|^Manage Subscription$/)';
 
   // Grid container for all plan cards
-  private readonly plansGrid = 'div[class*="grid-cols"]';
+  // private readonly plansGrid = 'div[class*="grid-cols"]';
 
   private readonly currentPlanBadge = 'button:has-text("Current Plan")';
   private readonly manageButton = 'button:has-text("Manage Subscription")';
@@ -39,7 +39,7 @@ export class PricingPage extends BasePage {
   // Plan badges
   private readonly launchOfferBadge = 'div:has-text("Limited Time Launch Offer")';
   private readonly recommendedBadge = 'div:has-text("Recommended")';
-  private readonly powerUserBadge = 'div:has-text("Power User")';
+  // private readonly powerUserBadge = 'div:has-text("Power User")';
 
   constructor(page: Page) {
     super(page);
@@ -48,7 +48,7 @@ export class PricingPage extends BasePage {
   /**
    * Navigate to the pricing page
    */
-  async goto(): Promise<void> {
+  override async goto(): Promise<void> {
     await super.goto('/pricing');
   }
 

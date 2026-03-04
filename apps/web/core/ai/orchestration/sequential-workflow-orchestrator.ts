@@ -310,7 +310,7 @@ export class SequentialWorkflowOrchestrator {
     let previousHandoffData: Record<string, unknown> = request.context || {};
 
     for (let i = 0; i < workflow.steps.length; i++) {
-      const step = workflow.steps[i];
+      const step = workflow.steps[i]!;
       const stepExecution = execution.steps[i];
 
       // Check if workflow is paused
@@ -331,8 +331,8 @@ export class SequentialWorkflowOrchestrator {
       // Find employee
       const employee = this.employees.find(
         (e) =>
-          e.name.toLowerCase() === step.employeeName.toLowerCase() ||
-          e.name.toLowerCase().includes(step.employeeId.toLowerCase()),
+          e.name.toLowerCase() === (step.employeeName?.toLowerCase() ?? '') ||
+          e.name.toLowerCase().includes(step.employeeId?.toLowerCase() ?? ''),
       );
 
       if (!employee) {
@@ -460,8 +460,8 @@ export class SequentialWorkflowOrchestrator {
           const nextStep = workflow.steps[i + 1];
           const nextEmployee = this.employees.find(
             (e) =>
-              e.name.toLowerCase() === nextStep.employeeName.toLowerCase() ||
-              e.name.toLowerCase().includes(nextStep.employeeId.toLowerCase()),
+              e.name.toLowerCase() === (nextStep?.employeeName?.toLowerCase() ?? '') ||
+              e.name.toLowerCase().includes(nextStep?.employeeId?.toLowerCase() ?? ''),
           );
 
           if (nextEmployee) {

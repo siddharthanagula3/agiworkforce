@@ -457,7 +457,7 @@ export class AgentSelector {
 
     // Return the best alternative
     const best = evaluations.sort((a, b) => b.score - a.score)[0];
-    return best?.agent;
+    return best?.agent ?? 'claude-code';
   }
 
   /**

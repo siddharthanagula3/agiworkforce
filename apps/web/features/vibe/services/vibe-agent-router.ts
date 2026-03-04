@@ -110,7 +110,7 @@ export class VibeAgentRouter {
     const normalizedMessage = userMessage.toLowerCase();
 
     let bestMatch: AgentMatch = {
-      employee: hiredEmployees[0],
+      employee: hiredEmployees[0]!,
       confidence: 0,
       reasoning: 'No match found',
       matched_keywords: [],
@@ -263,7 +263,7 @@ Respond in JSON format:
       }
 
       return {
-        employee: hiredEmployees[employeeIndex],
+        employee: hiredEmployees[employeeIndex]!,
         confidence: result.confidence,
         reasoning: result.reasoning,
       };
@@ -272,7 +272,7 @@ Respond in JSON format:
 
       // Fallback to first employee with low confidence
       return {
-        employee: hiredEmployees[0],
+        employee: hiredEmployees[0]!,
         confidence: 0.5,
         reasoning: 'Fallback to default employee due to routing error',
       };
@@ -330,7 +330,7 @@ Respond in JSON format:
     });
 
     // Fallback to first employee if no supervisor found
-    return supervisor || hiredEmployees[0];
+    return supervisor || hiredEmployees[0]!;
   }
 
   /**
@@ -408,7 +408,7 @@ Respond in JSON format:
           taskIdMap.set(task.description, taskId);
 
           const assignedEmployee =
-            hiredEmployees.find((emp) => emp.name === task.assigned_to) || hiredEmployees[0];
+            hiredEmployees.find((emp) => emp.name === task.assigned_to) || hiredEmployees[0]!;
 
           tasks.push({
             id: taskId,
@@ -442,7 +442,7 @@ Respond in JSON format:
         {
           id: `task-${Date.now()}`,
           description: userMessage,
-          assigned_to: hiredEmployees[0],
+          assigned_to: hiredEmployees[0]!,
           dependencies: [],
           priority: 'high',
         },

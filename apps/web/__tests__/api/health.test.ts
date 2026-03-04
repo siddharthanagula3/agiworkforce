@@ -51,10 +51,10 @@ describe('Health Check API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Set required env vars
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
-    process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
+    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
+    process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
   });
 
   afterEach(() => {
@@ -109,7 +109,7 @@ describe('Health Check API', () => {
 
     it('should return unhealthy status when Stripe check fails', async () => {
       // Remove Stripe key to trigger unhealthy status
-      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env['STRIPE_SECRET_KEY'];
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -124,8 +124,8 @@ describe('Health Check API', () => {
 
     it('should return unhealthy status when environment variables are missing', async () => {
       // Remove required env vars
-      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      delete process.env['NEXT_PUBLIC_SUPABASE_URL'];
+      delete process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -177,7 +177,7 @@ describe('Health Check API', () => {
     });
 
     it('should handle missing Stripe key gracefully', async () => {
-      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env['STRIPE_SECRET_KEY'];
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -191,8 +191,8 @@ describe('Health Check API', () => {
     });
 
     it('should handle missing Supabase credentials gracefully', async () => {
-      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      delete process.env['NEXT_PUBLIC_SUPABASE_URL'];
+      delete process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',

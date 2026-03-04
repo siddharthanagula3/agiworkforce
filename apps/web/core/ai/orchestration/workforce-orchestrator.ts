@@ -1160,14 +1160,14 @@ Query: "Help me learn Python" → Answer: "expert-tutor"
       // Fallback: if no match, select first employee
       if (selectedEmployees.length === 0 && this.employees.length > 0) {
         logger.warn('[Workforce Orchestrator] Auto-select failed, using default employee');
-        return [this.employees[0]];
+        return [this.employees[0]!];
       }
 
       return selectedEmployees;
     } catch (error) {
       logger.error('[Workforce Orchestrator] Auto-select failed:', error);
       // Fallback to first employee
-      return this.employees.length > 0 ? [this.employees[0]] : [];
+      return this.employees.length > 0 ? [this.employees[0]!] : [];
     }
   }
 

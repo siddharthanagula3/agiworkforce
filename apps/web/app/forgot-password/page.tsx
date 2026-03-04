@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
     const supabase = getSupabaseClient();
 
     // Use environment variable for production URL to ensure correct redirect
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL'] || window.location.origin;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${appUrl}/auth/update-password`,
     });

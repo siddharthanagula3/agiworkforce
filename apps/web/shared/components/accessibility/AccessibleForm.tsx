@@ -48,7 +48,8 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
       }
 
       // Call original onSubmit handler
-      onSubmit?.(event as React.FormEvent<HTMLFormElement>);
+      // @ts-expect-error - React FormEvent vs SubmitEvent type mismatch
+      onSubmit?.(event);
     };
 
     return (
