@@ -239,6 +239,17 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'save_api_key':
       return undefined as T;
 
+    // Model capabilities command
+    case 'get_model_capabilities':
+      return {
+        supports_tools: true,
+        supports_vision: false,
+        supports_streaming: true,
+        supports_thinking: false,
+        context_length: 4096,
+        tool_mode: 'none',
+      } as T;
+
     // MCP Extension commands
     case 'extension_list':
       return [] as T;

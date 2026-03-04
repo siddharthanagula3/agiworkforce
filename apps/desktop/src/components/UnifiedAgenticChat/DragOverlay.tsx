@@ -11,9 +11,11 @@ import { Paperclip } from 'lucide-react';
 export interface DragOverlayProps {
   /** Whether the overlay is visible */
   isVisible: boolean;
+  /** Whether the current model supports vision/images */
+  visionSupported?: boolean;
 }
 
-export const DragOverlay: React.FC<DragOverlayProps> = ({ isVisible }) => {
+export const DragOverlay: React.FC<DragOverlayProps> = ({ isVisible, visionSupported = true }) => {
   return (
     <AnimatePresence>
       {isVisible && (
@@ -49,7 +51,16 @@ export const DragOverlay: React.FC<DragOverlayProps> = ({ isVisible }) => {
               </div>
               <div className="text-center">
                 <p className="text-2xl font-semibold text-white mb-2">Drop files here</p>
-                <p className="text-sm text-zinc-400">Images, documents, and more</p>
+                {visionSupported ? (
+                  <p className="text-sm text-zinc-400">Images, documents, and more</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-400">Documents and files accepted</p>
+                    <p className="mt-1 text-sm text-amber-400">
+                      Images not supported by current model
+                    </p>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>
