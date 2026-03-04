@@ -6,6 +6,7 @@ import {
   type User,
   type Session,
 } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 import {
   getSupabase,
   type Profile,
@@ -23,7 +24,7 @@ import { isTauri } from '../lib/tauri-mock';
 // LocalStorage Cache for Resilience Against Cold Starts
 // ============================================================================
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
-const AUTH_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours - reduced from 7 days for security
+const AUTH_CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes - limits exposure window after token revocation
 
 interface CachedAuthData<T> {
   data: T;
@@ -308,7 +309,9 @@ class SupabaseAuthService {
                 console.log('[Auth] Refreshed tokens synced to Rust backend');
               }
             } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
               console.warn('[Auth] Failed to sync refreshed tokens to Rust backend:', error);
+              toast.error('Auth sync failed: ' + msg);
             }
           })();
         }
@@ -421,7 +424,9 @@ class SupabaseAuthService {
           console.log('[Auth] Tokens synced to Rust backend on sign-in');
         }
       } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         console.warn('[Auth] Failed to sync tokens to Rust backend on sign-in:', error);
+        toast.error('Auth sync failed: ' + msg);
       }
     }
 
@@ -630,7 +635,8 @@ class SupabaseAuthService {
           this.subscriptionChangeDebounceTimer = setTimeout(async () => {
             this.subscriptionChangeDebounceTimer = null;
             try {
-              const newSubscription = await this.fetchSubscription(userId);
+              const currentSession = this.currentState.session;
+              const newSubscription = await this.fetchSubscription(userId, currentSession);
               this.updateState({ subscription: newSubscription });
             } catch (error) {
               console.error('[Auth] Error fetching subscription after change:', error);

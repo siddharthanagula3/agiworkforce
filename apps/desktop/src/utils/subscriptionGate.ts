@@ -43,11 +43,14 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
 
   let isGracePeriod = false;
   if (status === 'past_due' && subscription.current_period_end) {
-    const now = Math.floor(Date.now() / 1000);
-    const endDate = new Date(subscription.current_period_end).getTime() / 1000;
-    const gracePeriodEnd = endDate + GRACE_PERIOD_DAYS * 24 * 60 * 60;
-    if (now < gracePeriodEnd) {
-      isGracePeriod = true;
+    const parsedEnd = new Date(subscription.current_period_end);
+    if (!isNaN(parsedEnd.getTime())) {
+      const now = Math.floor(Date.now() / 1000);
+      const endDate = parsedEnd.getTime() / 1000;
+      const gracePeriodEnd = endDate + GRACE_PERIOD_DAYS * 24 * 60 * 60;
+      if (now < gracePeriodEnd) {
+        isGracePeriod = true;
+      }
     }
   }
 
