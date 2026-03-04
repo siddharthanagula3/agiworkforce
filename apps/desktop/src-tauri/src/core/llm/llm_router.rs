@@ -47,7 +47,7 @@ impl Default for RetryConfig {
 /// Primary enforcement is in `AutonomousAgent` (`max_session_cost` from config, default $50).
 /// This constant guards direct `route_with_retry()` callers (chat commands, background tasks)
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
-const SESSION_COST_SAFETY_CAP: f64 = 50.0;
+pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
 /// Determines if an error is retryable (transient) or permanent
 fn is_retryable_error(error: &str) -> bool {
@@ -300,6 +300,11 @@ impl LLMRouter {
                         reason,
                     };
                 }
+                tracing::warn!(
+                    selected_model = %selected_model,
+                    inferred_provider = ?provider,
+                    "Intelligent routing selection cannot be honored: provider not configured, falling back to legacy routing"
+                );
                 // Provider not available, fall through to legacy routing with intelligent context
             }
         }
@@ -393,7 +398,7 @@ impl LLMRouter {
         if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {
             task_category = TaskCategory::Complex;
             reason = format!(
-                "{} Large context (~{} tokens) detected - upgrading to GPT-4o.",
+                "{} Large context (~{} tokens) detected - upgrading to latest OpenAI model.",
                 reason, context.token_estimate
             );
         }
@@ -539,68 +544,11 @@ impl LLMRouter {
         }
     }
 
-    /// Infer provider from model name for intelligent routing
+    /// Infer provider from model name for intelligent routing.
+    /// Delegates to the single-source-of-truth model catalog.
     pub(crate) fn infer_provider_from_model(&self, model: &str) -> Provider {
-        let model_lower = model.to_lowercase();
-
-        // OpenAI models
-        if model_lower.starts_with("gpt-")
-            || model_lower.starts_with("o1")
-            || model_lower.starts_with("o3")
-            || model_lower.starts_with("dall-e")
-            || model_lower.starts_with("tts-")
-            || model_lower.starts_with("whisper")
-        {
-            return Provider::OpenAI;
-        }
-
-        // Anthropic models
-        if model_lower.starts_with("claude") {
-            return Provider::Anthropic;
-        }
-
-        // Google models
-        if model_lower.starts_with("gemini") || model_lower.starts_with("imagen") {
-            return Provider::Google;
-        }
-
-        // DeepSeek models
-        if model_lower.starts_with("deepseek") {
-            return Provider::DeepSeek;
-        }
-
-        // xAI models
-        if model_lower.starts_with("grok") {
-            return Provider::XAI;
-        }
-
-        // Perplexity models
-        if model_lower.starts_with("sonar") {
-            return Provider::Perplexity;
-        }
-
-        // Qwen models
-        if model_lower.starts_with("qwen") || model_lower.starts_with("qwen3") {
-            return Provider::Qwen;
-        }
-
-        // Moonshot/Kimi models
-        if model_lower.starts_with("kimi") || model_lower.starts_with("moonshot") {
-            return Provider::Moonshot;
-        }
-
-        // ZhipuAI/GLM models
-        if model_lower.starts_with("glm") {
-            return Provider::Zhipu;
-        }
-
-        // Flux models (via ManagedCloud)
-        if model_lower.starts_with("flux") {
-            return Provider::ManagedCloud;
-        }
-
-        // Default to ManagedCloud for unknown models
-        Provider::ManagedCloud
+        crate::core::llm::models_config::get_provider_for_model(model)
+            .unwrap_or(Provider::ManagedCloud)
     }
 
     fn prepare_context_suggestion(
@@ -628,6 +576,7 @@ impl LLMRouter {
             Provider::Qwen,
             Provider::Moonshot,
             Provider::Zhipu,
+            Provider::Mistral,
             Provider::XAI,
         ];
 
@@ -1063,22 +1012,17 @@ impl LLMRouter {
             cost: total_cost,
         };
 
-        // Accumulate cost for session-level cost cap enforcement
-        let new_session_total = {
-            let mut cost = self.cumulative_cost.lock();
-            *cost += outcome.cost;
-            *cost
-        };
-
-        // Defense-in-depth: hard-stop if the session cost safety cap is exceeded.
+        // Defense-in-depth: hard-stop if the session cost safety cap would be exceeded.
         // AutonomousAgent enforces configurable caps; this catches all other callers.
-        if new_session_total > SESSION_COST_SAFETY_CAP {
-            return Err(anyhow!(
-                "Session cost safety cap exceeded: ${:.4} > ${:.2} limit. \
-                 Reset the router to continue.",
-                new_session_total,
-                SESSION_COST_SAFETY_CAP
-            ));
+        // Check BEFORE accumulating so we never exceed the cap.
+        {
+            let mut cost = self.cumulative_cost.lock();
+            if *cost + outcome.cost > SESSION_COST_SAFETY_CAP {
+                return Err(anyhow!(
+                    "Session cost safety cap exceeded. Reset the router to continue."
+                ));
+            }
+            *cost += outcome.cost;
         }
 
         Ok(outcome)
@@ -1198,7 +1142,8 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
-        let mut all_rate_limited = true;
+        let mut all_rate_limited = false;
+        let mut any_attempted = false;
         let mut candidates_skipped_rate_limit: usize = 0;
 
         for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
@@ -1223,6 +1168,8 @@ impl LLMRouter {
                 "Attempting LLM request"
             );
 
+            any_attempted = true;
+
             match self.invoke_with_retry(candidate, request, &config).await {
                 Ok(outcome) => {
                     if idx > 0 {
@@ -1237,7 +1184,9 @@ impl LLMRouter {
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    if !is_rate_limit_error(&err_str) {
+                    if is_rate_limit_error(&err_str) {
+                        all_rate_limited = true;
+                    } else {
                         all_rate_limited = false;
                     }
                     tracing::warn!(
@@ -1251,8 +1200,8 @@ impl LLMRouter {
             }
         }
 
-        // User-friendly message when every provider hit 429
-        if all_rate_limited && last_error.is_some() {
+        // User-friendly message when every attempted provider hit 429
+        if all_rate_limited && any_attempted && last_error.is_some() {
             return Err(anyhow!(
                 "All AI providers are currently busy. Please try again in a moment."
             ));
@@ -1895,6 +1844,11 @@ impl LLMRouter {
                 TaskCategory::Complex => "sonar-deep-research".to_string(),
                 TaskCategory::Creative => "sonar-pro".to_string(),
             },
+            Provider::Mistral => match task {
+                TaskCategory::Simple => "mistral-medium-3".to_string(),
+                TaskCategory::Complex => "mistral-large-3".to_string(),
+                TaskCategory::Creative => "mistral-large-3".to_string(),
+            },
             Provider::ManagedCloud => match task {
                 TaskCategory::Simple => "gpt-5-nano".to_string(),
                 TaskCategory::Complex => "gpt-5.2".to_string(),
@@ -1938,7 +1892,7 @@ impl LLMRouter {
             RoutingStrategy::AutoPremium => {
                 // Premium: Always best models, switch based on context window needs
                 if token_count < 16000 {
-                    "claude-sonnet-4-5".to_string() // $3/$15 per 1M - excellent coding
+                    "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent coding
                 } else {
                     "claude-opus-4-6".to_string() // $5/$25 per 1M - best for heavy lifting
                 }
@@ -2118,7 +2072,8 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
-        let mut all_rate_limited = true;
+        let mut all_rate_limited = false;
+        let mut any_attempted = false;
         let mut candidates_skipped_rate_limit: usize = 0;
 
         for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
@@ -2143,6 +2098,8 @@ impl LLMRouter {
                 "Attempting streaming LLM request"
             );
 
+            any_attempted = true;
+
             match self
                 .invoke_streaming_with_retry(candidate, request, &config)
                 .await
@@ -2160,7 +2117,9 @@ impl LLMRouter {
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    if !is_rate_limit_error(&err_str) {
+                    if is_rate_limit_error(&err_str) {
+                        all_rate_limited = true;
+                    } else {
                         all_rate_limited = false;
                     }
                     tracing::warn!(
@@ -2174,8 +2133,8 @@ impl LLMRouter {
             }
         }
 
-        // User-friendly message when every provider hit 429
-        if all_rate_limited && last_error.is_some() {
+        // User-friendly message when every attempted provider hit 429
+        if all_rate_limited && any_attempted && last_error.is_some() {
             return Err(anyhow!(
                 "All AI providers are currently busy. Please try again in a moment."
             ));
