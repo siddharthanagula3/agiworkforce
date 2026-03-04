@@ -83,8 +83,9 @@ describe('Token Enforcement Service', () => {
     const mockRpc = vi.mocked(supabase.rpc) as unknown as ReturnType<typeof vi.fn>;
 
     it('should allow request when user has sufficient balance', async () => {
+      // get_credit_balance returns scalar balance in cents
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 10000 }],
+        data: 10000,
         error: null,
       });
 
@@ -97,8 +98,9 @@ describe('Token Enforcement Service', () => {
     });
 
     it('should deny request when user has insufficient balance', async () => {
+      // get_credit_balance returns scalar balance in cents
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 500 }],
+        data: 500,
         error: null,
       });
 
@@ -111,6 +113,7 @@ describe('Token Enforcement Service', () => {
     });
 
     it('should deny request when balance fetch fails', async () => {
+      // RPC fails
       mockRpc.mockResolvedValueOnce({
         data: null,
         error: {
@@ -122,20 +125,8 @@ describe('Token Enforcement Service', () => {
         },
       } as unknown);
 
-      // Also need to mock the fallback query
+      // Fallback: token_credits table also fails
       const mockFrom = vi.mocked(supabase.from);
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Mock user plan lookup (also fails)
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -155,7 +146,7 @@ describe('Token Enforcement Service', () => {
 
     it('should handle exact balance equal to estimated cost', async () => {
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 1000 }],
+        data: 1000,
         error: null,
       });
 
@@ -168,7 +159,7 @@ describe('Token Enforcement Service', () => {
 
     it('should handle zero balance', async () => {
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 0 }],
+        data: 0,
         error: null,
       });
 
@@ -185,15 +176,16 @@ describe('Token Enforcement Service', () => {
     const mockFrom = vi.mocked(supabase.from);
 
     it('should return balance from RPC when available', async () => {
+      // get_credit_balance returns scalar (number), not an array
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 5000 }],
+        data: 5000,
         error: null,
       });
 
       const balance = await getUserTokenBalance(mockUserId);
 
       expect(balance).toBe(5000);
-      expect(mockRpc).toHaveBeenCalledWith('get_or_create_token_balance', {
+      expect(mockRpc).toHaveBeenCalledWith('get_credit_balance', {
         p_user_id: mockUserId,
       });
     });
@@ -204,11 +196,12 @@ describe('Token Enforcement Service', () => {
         error: { message: 'RPC not available', code: '500' } as unknown,
       });
 
+      // Fallback: token_credits table with credits_remaining_cents field
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { current_balance: 3000 },
+              data: { credits_remaining_cents: 3000 },
               error: null,
             }),
           }),
@@ -220,13 +213,13 @@ describe('Token Enforcement Service', () => {
       expect(balance).toBe(3000);
     });
 
-    it('should return default free tier balance when no record exists', async () => {
+    it('should return null when no credit record exists (fail closed)', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
         error: { message: 'RPC not available', code: '500' } as unknown,
       });
 
-      // Balance lookup fails
+      // token_credits returns no record (data: null, error: null)
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -238,48 +231,25 @@ describe('Token Enforcement Service', () => {
         }),
       } as unknown as ReturnType<typeof supabase.from>);
 
-      // User plan lookup returns free tier
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'free' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
       const balance = await getUserTokenBalance(mockUserId);
 
-      expect(balance).toBe(1000000); // 1M for free tier
+      // Security: fail closed — no record means denial
+      expect(balance).toBeNull();
     });
 
-    it('should return default pro tier balance when user is pro', async () => {
+    it('should return null when token_credits query has a database error', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
         error: { message: 'RPC not available', code: '500' } as unknown,
       });
 
-      // Balance lookup fails
+      // token_credits returns database error
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockResolvedValue({
               data: null,
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // User plan lookup returns pro tier
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'pro' },
-              error: null,
+              error: { message: 'Database error' },
             }),
           }),
         }),
@@ -287,7 +257,8 @@ describe('Token Enforcement Service', () => {
 
       const balance = await getUserTokenBalance(mockUserId);
 
-      expect(balance).toBe(10000000); // 10M for pro tier
+      // Security: fail closed on database errors
+      expect(balance).toBeNull();
     });
 
     it('should return null when all lookups fail (fail closed)', async () => {
@@ -307,17 +278,6 @@ describe('Token Enforcement Service', () => {
         }),
       } as unknown as ReturnType<typeof supabase.from>);
 
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'User not found' },
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
       const balance = await getUserTokenBalance(mockUserId);
 
       // Security: fail closed - return null instead of default balance
@@ -325,8 +285,9 @@ describe('Token Enforcement Service', () => {
     });
 
     it('should ensure balance is never negative', async () => {
+      // get_credit_balance returns negative scalar
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: -100 }],
+        data: -100,
         error: null,
       });
 
@@ -349,9 +310,15 @@ describe('Token Enforcement Service', () => {
     };
     const mockRpc = vi.mocked(supabase.rpc) as unknown as ReturnType<typeof vi.fn>;
 
-    it('should successfully deduct tokens', async () => {
+    it('should successfully deduct tokens via deduct_credits', async () => {
+      // First RPC call: deduct_credits succeeds (no error)
       mockRpc.mockResolvedValueOnce({
-        data: 9850, // New balance after deduction
+        data: null,
+        error: null,
+      });
+      // Second RPC call: get_credit_balance returns new balance
+      mockRpc.mockResolvedValueOnce({
+        data: 9850,
         error: null,
       });
 
@@ -359,15 +326,24 @@ describe('Token Enforcement Service', () => {
 
       expect(result.success).toBe(true);
       expect(result.newBalance).toBe(9850);
-      expect(mockRpc).toHaveBeenCalledWith('deduct_user_tokens', {
-        p_user_id: mockUserId,
-        p_tokens: 150,
-        p_provider: 'anthropic',
-        p_model: 'claude-3-5-sonnet-20241022',
-      });
+      expect(mockRpc).toHaveBeenCalledWith(
+        'deduct_credits',
+        expect.objectContaining({
+          p_user_id: mockUserId,
+          p_amount_cents: 150,
+          p_description: 'anthropic/claude-3-5-sonnet-20241022 usage',
+          p_metadata: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
+        }),
+      );
     });
 
     it('should handle deduction failure', async () => {
+      // First RPC: deduct_credits fails
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Insufficient balance', code: 'P0001' },
+      });
+      // Second RPC: deduct_user_tokens (legacy fallback) also fails
       mockRpc.mockResolvedValueOnce({
         data: null,
         error: { message: 'Insufficient balance', code: 'P0001' },
@@ -520,9 +496,9 @@ describe('Token Enforcement Service', () => {
         }),
       } as unknown as ReturnType<typeof supabase.from>);
 
-      // Token sufficiency check
+      // Token sufficiency check: get_credit_balance returns scalar
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 10000 }],
+        data: 10000,
         error: null,
       });
 
@@ -578,9 +554,9 @@ describe('Token Enforcement Service', () => {
         }),
       } as unknown as ReturnType<typeof supabase.from>);
 
-      // Token sufficiency check - insufficient balance
+      // Token sufficiency check - insufficient balance (scalar)
       mockRpc.mockResolvedValueOnce({
-        data: [{ current_balance: 500 }],
+        data: 500,
         error: null,
       });
 
