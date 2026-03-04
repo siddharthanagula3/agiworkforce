@@ -1,5 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle, Info, X, RefreshCw } from 'lucide-react';
-import useErrorStore, { type AppError, type ErrorSeverity } from '../../stores/errorStore';
+import useErrorStore, { type AppError, type ErrorSeverity } from '../../stores/ui';
 import { getErrorMessage } from '../../constants/errorMessages';
 
 const severityConfig: Record<

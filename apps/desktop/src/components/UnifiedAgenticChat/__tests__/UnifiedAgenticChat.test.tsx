@@ -451,69 +451,6 @@ vi.mock('../../../stores/auth', () => {
   };
 });
 
-// Mock accountStore (re-exports from auth)
-vi.mock('../../../stores/accountStore', () => {
-  const mockAuthState = {
-    user: { id: 'test-user-id', email: 'test@example.com' },
-    session: { access_token: 'test-token' },
-    isLoading: false,
-    isAuthenticated: true,
-    account: {
-      id: 'test-user-id',
-      email: 'test@example.com',
-      displayName: 'Test User',
-      avatar: null,
-      plan: 'pro',
-      planDisplayName: 'Pro',
-      subscriptionStatus: 'active',
-      subscriptionFetchStatus: 'succeeded',
-      currentPeriodEnd: null,
-      stripeCustomerId: null,
-      credits: { remaining_cents: 10000 },
-    },
-    plan: 'pro',
-    planDisplayName: 'Pro',
-    subscriptionStatus: 'active',
-    subscriptionFetchStatus: 'succeeded',
-    credits: { remaining_cents: 10000 },
-    updateCredits: vi.fn(),
-    fetchSubscription: vi.fn().mockResolvedValue({}),
-    fetchCredits: vi.fn().mockResolvedValue({}),
-    signOut: vi.fn().mockResolvedValue({}),
-  };
-
-  const useAccountStore = vi.fn((selector?: (s: typeof mockAuthState) => unknown) => {
-    if (typeof selector === 'function') {
-      return selector(mockAuthState);
-    }
-    return mockAuthState;
-  });
-
-  (useAccountStore as unknown as { getState: () => typeof mockAuthState }).getState = () =>
-    mockAuthState;
-
-  return {
-    useAccountStore,
-    selectAccount: (state: typeof mockAuthState) => state.account,
-    selectPlan: (state: typeof mockAuthState) => state.plan,
-    selectPlanDisplayName: (state: typeof mockAuthState) => state.planDisplayName,
-    selectSubscriptionFetchStatus: (state: typeof mockAuthState) => state.subscriptionFetchStatus,
-    selectIsAuthenticated: (state: typeof mockAuthState) => state.isAuthenticated,
-    selectIsPro: () => true,
-    selectIsEnterprise: () => false,
-    selectDisplayName: (state: typeof mockAuthState) => state.account?.displayName,
-    selectEmail: (state: typeof mockAuthState) => state.account?.email,
-    selectAvatar: (state: typeof mockAuthState) => state.account?.avatar,
-    selectFeatureFlags: () => ({}),
-    selectIsTierLoading: () => false,
-    initializeAccountStore: vi.fn(),
-    cleanupAccountStore: vi.fn(),
-    waitForHydration: vi.fn().mockResolvedValue(undefined),
-    hasFeature: vi.fn(() => false),
-    getPlanDescription: vi.fn(() => 'Pro plan'),
-  };
-});
-
 // Mock simpleModeStore
 vi.mock('../../../stores/simpleModeStore', () => ({
   useSimpleModeStore: {

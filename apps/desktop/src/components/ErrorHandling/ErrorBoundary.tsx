@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCw, Home, Copy, Send } from 'lucide-react';
-import useErrorStore from '../../stores/errorStore';
+import useErrorStore from '../../stores/ui';
 import { errorReportingService } from '../../services/errorReporting';
 
 interface Props {

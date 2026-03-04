@@ -6,6 +6,7 @@ use crate::data::metrics::{
     AutomationRun, BenchmarkComparison, Comparison, EmployeePerformance, MetricsComparison,
     MetricsSnapshot, PeriodComparison, RealtimeMetricsCollector, RealtimeStats,
 };
+use crate::sys::commands::auth::{get_session_user_id, SessionState};
 
 pub struct MetricsCollectorState(pub std::sync::Arc<RealtimeMetricsCollector>);
 
@@ -13,7 +14,6 @@ pub struct MetricsComparisonState(pub std::sync::Arc<MetricsComparison>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordAutomationRequest {
-    pub user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     pub employee_id: Option<String>,
     pub automation_name: String,
     pub estimated_manual_time_ms: u64,
@@ -25,19 +25,22 @@ pub struct RecordAutomationRequest {
 
 #[tauri::command]
 pub async fn get_realtime_stats(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<RealtimeStats, String> {
+    let user_id = get_session_user_id(&session)?;
     collector.0.get_realtime_stats(&user_id)
 }
 
 #[tauri::command]
 pub async fn record_automation_metrics(
     request: RecordAutomationRequest,
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<MetricsSnapshot, String> {
+    let user_id = get_session_user_id(&session)?;
     let mut run = AutomationRun::new(
-        request.user_id,
+        user_id,
         request.employee_id,
         request.automation_name,
         request.estimated_manual_time_ms,
@@ -59,10 +62,11 @@ pub async fn record_automation_metrics(
 
 #[tauri::command]
 pub async fn get_metrics_history(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     days: i64,
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MetricsSnapshot>, String> {
+    let user_id = get_session_user_id(&session)?;
     collector.0.get_metrics_history(&user_id, days).await
 }
 
@@ -76,10 +80,11 @@ pub async fn compare_to_manual(
 
 #[tauri::command]
 pub async fn compare_to_previous_period(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     days: i64,
+    session: State<'_, SessionState>,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<PeriodComparison, String> {
+    let user_id = get_session_user_id(&session)?;
     comparison
         .0
         .compare_to_previous_period(&user_id, days)
@@ -88,10 +93,11 @@ pub async fn compare_to_previous_period(
 
 #[tauri::command]
 pub async fn compare_to_industry_benchmark(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     role: String,
+    session: State<'_, SessionState>,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<BenchmarkComparison, String> {
+    let user_id = get_session_user_id(&session)?;
     comparison
         .0
         .compare_to_industry_benchmark(&user_id, &role)
@@ -100,9 +106,10 @@ pub async fn compare_to_industry_benchmark(
 
 #[tauri::command]
 pub async fn get_milestones(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MilestoneData>, String> {
+    let user_id = get_session_user_id(&session)?;
     let db_conn = collector.0.db_conn();
     let conn = db_conn
         .lock()
@@ -137,9 +144,10 @@ pub async fn get_milestones(
 #[tauri::command]
 pub async fn share_milestone(
     milestone_id: String,
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<(), String> {
+    let user_id = get_session_user_id(&session)?;
     let db_conn = collector.0.db_conn();
     let conn = db_conn
         .lock()
@@ -403,9 +411,10 @@ fn map_employees(employees: &[EmployeePerformance]) -> Vec<TopEmployeeData> {
 
 #[tauri::command]
 pub async fn get_today_stats(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<DayStats, String> {
+    let user_id = get_session_user_id(&session)?;
     let stats = collector.0.get_realtime_stats(&user_id)?;
 
     // Calculate change from yesterday using daily breakdown
@@ -449,9 +458,10 @@ pub async fn get_today_stats(
 
 #[tauri::command]
 pub async fn get_week_stats(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<WeekStats, String> {
+    let user_id = get_session_user_id(&session)?;
     let stats = collector.0.get_realtime_stats(&user_id)?;
 
     let now = Utc::now().timestamp();
@@ -502,9 +512,10 @@ pub async fn get_week_stats(
 
 #[tauri::command]
 pub async fn get_month_stats(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<MonthStats, String> {
+    let user_id = get_session_user_id(&session)?;
     let stats = collector.0.get_realtime_stats(&user_id)?;
 
     let now = Utc::now().timestamp();
@@ -562,9 +573,10 @@ pub async fn get_month_stats(
 
 #[tauri::command]
 pub async fn get_all_time_stats(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<AllTimeStats, String> {
+    let user_id = get_session_user_id(&session)?;
     let stats = collector.0.get_realtime_stats(&user_id)?;
 
     // Monthly trend: go back ~2 years (730 days) to cover all meaningful history
@@ -639,10 +651,11 @@ pub async fn get_manual_vs_automated_comparison(
 
 #[tauri::command]
 pub async fn get_period_comparison(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     period: String,
+    session: State<'_, SessionState>,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<PeriodComparisonData, String> {
+    let user_id = get_session_user_id(&session)?;
     let days = match period.as_str() {
         "week" => 7,
         "month" => 30,
@@ -669,10 +682,11 @@ pub async fn get_period_comparison(
 
 #[tauri::command]
 pub async fn get_benchmark_comparison(
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
     role: String,
+    session: State<'_, SessionState>,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<BenchmarkComparisonData, String> {
+    let user_id = get_session_user_id(&session)?;
     let comp = comparison
         .0
         .compare_to_industry_benchmark(&user_id, &role)
@@ -694,7 +708,6 @@ pub async fn get_benchmark_comparison(
 
 #[tauri::command]
 pub async fn get_recent_activity(
-    _user_id: String,
     _limit: u32,
 ) -> Result<Vec<ActivityItem>, String> {
     // Return empty for now - would need activity tracking system
@@ -723,9 +736,10 @@ pub struct ExportOptions {
 #[tauri::command]
 pub async fn export_roi_report(
     options: ExportOptions,
-    user_id: String, // TODO: Replace caller-supplied user_id with SessionState lookup
+    session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
     // Get the stats to include in the report
     let stats = collector.0.get_realtime_stats(&user_id)?;
 

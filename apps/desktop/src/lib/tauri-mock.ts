@@ -29,10 +29,17 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'request_automation_permission':
     case 'set_auto_approve_all':
+    case 'sync_capabilities':
       return undefined as T;
 
     case 'get_auto_approve_all':
       return false as T;
+
+    case 'get_capabilities':
+      return {} as T;
+
+    case 'check_capability':
+      return true as T;
 
     // Master password commands
     case 'master_password_get_status':
@@ -62,9 +69,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_installed_templates':
     case 'get_user_workflows':
     case 'get_user_teams':
-    case 'get_conversations':
     case 'chat_get_conversations':
-    case 'get_messages':
     case 'chat_get_messages':
     case 'orchestrator_list_agents':
     case 'project_list':
@@ -106,11 +111,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'project_get_settings':
       return {} as T;
 
-    case 'get_settings':
-      return {
-        theme: 'dark',
-      } as T;
-
     case 'chat_get_conversation_stats':
       return {
         message_count: 0,
@@ -118,7 +118,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         total_cost: 0,
       } as T;
 
-    case 'create_conversation':
     case 'chat_create_conversation':
       return {
         id: 0,
@@ -130,7 +129,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         updated_at: new Date().toISOString(),
       } as T;
 
-    case 'send_message':
     case 'chat_send_message':
       throw new Error('Chat functionality requires the desktop application');
 

@@ -288,6 +288,13 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setFeature',
           );
+          // Sync capability toggles to the Rust backend for enforcement
+          const updated = { ...get().features, [key]: enabled };
+          if (isTauriContext()) {
+            invoke('sync_capabilities', { capabilities: updated }).catch((err: unknown) => {
+              console.warn('[Settings] Failed to sync capabilities to backend:', err);
+            });
+          }
         },
 
         addCustomModel: (config: CustomModelConfig) => {
@@ -1083,6 +1090,14 @@ export const useSettingsStore = create<SettingsState>()(
           if (state) {
             state.setHasHydrated(true);
             console.log('[SettingsStore] Rehydration complete');
+            // Sync capability toggles to backend on startup
+            if (isTauriContext() && state.features && Object.keys(state.features).length > 0) {
+              invoke('sync_capabilities', { capabilities: state.features }).catch(
+                (err: unknown) => {
+                  console.warn('[Settings] Failed to sync capabilities on rehydration:', err);
+                },
+              );
+            }
           }
         },
       },
