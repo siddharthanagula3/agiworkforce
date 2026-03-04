@@ -35,7 +35,7 @@ declare module 'react' {
 
   // Fix #2: Make refs optional in Component to allow React 19 class components
   // (which don't declare refs) to be used in React 18 JSX contexts.
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type, @typescript-eslint/no-explicit-any -- matching React's existing Component<P,S,SS> interface signature
   interface Component<P = {}, S = {}, SS = any> {
     refs?: { [key: string]: ReactInstance };
   }

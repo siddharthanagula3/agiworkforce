@@ -442,30 +442,31 @@ export default [
     },
   },
 
-  // Web app: stub/ported components use `any` intentionally — suppress at root level
+  // Web app: stub/ported components use `any` intentionally — warn at root level
   // (apps/web has its own eslint.config.mjs with eslint-config-next for full linting)
   {
     files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 
-  // Desktop app: complex UI components use `any` in edge cases — suppress at root level
-  // (apps/desktop has its own tsconfig with stricter settings for local development)
+  // Web app unified stubs: intentionally use `any` for desktop-parity stubs
   {
-    files: ['apps/desktop/src/**/*.ts', 'apps/desktop/src/**/*.tsx'],
+    files: ['apps/web/stores/unified/**/*.ts', 'apps/web/stores/unified/**/*.tsx'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'off', // intentional stub files
     },
   },
 
-  // Mobile app: React Native stubs and store adapters use `any` intentionally — suppress at root level
+  // Desktop app: `any` is now enforced (warn from base config applies)
+  // (apps/desktop has its own tsconfig with stricter settings for local development)
+
+  // Mobile app: `any` is now enforced (warn from base config applies)
   {
     files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
