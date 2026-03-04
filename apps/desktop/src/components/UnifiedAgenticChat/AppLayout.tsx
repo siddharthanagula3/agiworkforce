@@ -376,6 +376,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <button
               type="button"
               onClick={() => setActiveRightPanel(null)}
+              aria-label="Close panel"
               className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

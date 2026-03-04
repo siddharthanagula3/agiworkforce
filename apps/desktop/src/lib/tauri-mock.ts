@@ -395,6 +395,17 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'conversation_delete_branch':
       return undefined as T;
 
+    case 'conversation_export_pdf':
+      return (args?.['outputPath'] ?? '/tmp/mock-conversation.pdf') as T;
+
+    case 'media_generate_image':
+      return {
+        images: [{ url: 'https://placehold.co/512x512?text=Mock+Image' }],
+        provider: 'mock',
+        model: 'mock-model',
+        latencyMs: 100,
+      } as T;
+
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);

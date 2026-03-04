@@ -251,3 +251,6 @@ export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'computer-use' | 'm
  * - 'manual': Agent asks for permission before dangerous actions
  */
 export type ConversationMode = 'auto' | 'manual';
+
+/** Default branch ID for conversations — the primary/trunk branch. */
+export const DEFAULT_BRANCH_ID = 'main' as const;
