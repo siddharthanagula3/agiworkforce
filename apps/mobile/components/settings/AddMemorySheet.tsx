@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -87,7 +87,7 @@ export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: Ad
 
   return (
     <BottomSheet
-      ref={sheetRef}
+      ref={sheetRef as React.RefObject<BottomSheet>}
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -102,7 +102,7 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
 
   return (
     <BottomSheet
-      ref={sheetRef}
+      ref={sheetRef as React.RefObject<BottomSheet>}
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
