@@ -222,7 +222,14 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNewChat, setCommandPaletteOpen, setSidebarCollapsed, sidebarCollapsed]);
+  }, [
+    handleNewChat,
+    setCommandPaletteOpen,
+    setSidebarCollapsed,
+    sidebarCollapsed,
+    setShortcutsDialogOpen,
+    shortcutsDialogOpen,
+  ]);
 
   return (
     <div

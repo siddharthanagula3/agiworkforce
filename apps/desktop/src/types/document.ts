@@ -29,7 +29,7 @@ export interface WordDocumentConfig {
 
 export interface ExcelSheet {
   name: string;
-  rows: Array<Record<string, any>>;
+  rows: Array<Record<string, unknown>>;
 }
 
 export interface ExcelDocumentConfig {
