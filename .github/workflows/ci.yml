@@ -119,6 +119,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: check
     timeout-minutes: 30
+    env:
+      # Keep deterministic-mock E2E independent of repository secrets.
+      VITE_SUPABASE_URL: https://test.supabase.co
+      VITE_SUPABASE_ANON_KEY: test-anon-key
     steps:
       - uses: actions/checkout@v6
 
