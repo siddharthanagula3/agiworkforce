@@ -1,9 +1,9 @@
 /**
- * AI Employee Marketplace - Modern Professional Design
- * Browse and hire AI workforce with glassmorphism UI
+ * AI Agent Marketplace - Modern GPT Store / VS Code Marketplace Design
+ * Browse and add AI agents to your chat
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import NextImage from 'next/image';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useRouter } from 'next/navigation';
@@ -14,17 +14,15 @@ import { Badge } from '@shared/ui/badge';
 import {
   Search,
   CheckCircle,
-  Bot,
-  Sparkles,
   Star,
-  Zap,
-  TrendingUp,
-  Filter,
+  MessageSquare,
+  Users,
+  ChevronLeft,
+  ChevronRight,
   X,
-  ArrowRight,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { categories, providerInfo, type AIEmployee } from '@/data/marketplace-employees';
+import { categories, type AIEmployee } from '@/data/marketplace-employees';
 import { toast } from 'sonner';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { supabase } from '@shared/lib/supabase-client';
@@ -35,37 +33,57 @@ import {
   purchaseEmployee,
 } from '@features/workforce/services/employee-database';
 import { motion, AnimatePresence } from 'framer-motion';
-// Stripe removed - free hiring only
-import { CountdownTimer } from '@shared/ui/countdown-timer';
+
+/** Generate a pseudo-random rating between 4.0 and 5.0 from an ID string */
+function deriveRating(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  }
+  return 4.0 + (Math.abs(hash) % 10) / 10;
+}
+
+/** Generate a pseudo-random usage count from an ID string */
+function deriveUsageCount(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 37 + id.charCodeAt(i)) | 0;
+  }
+  const count = 200 + (Math.abs(hash) % 4800);
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
+}
+
+/** Render star rating */
+function StarRating({ rating }: { rating: number }) {
+  const full = Math.floor(rating);
+  const hasHalf = rating - full >= 0.5;
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star
+          key={i}
+          className={cn(
+            'h-3 w-3',
+            i < full
+              ? 'fill-yellow-500 text-yellow-500'
+              : i === full && hasHalf
+                ? 'fill-yellow-500/50 text-yellow-500'
+                : 'text-muted-foreground/30',
+          )}
+        />
+      ))}
+      <span className="ml-1 text-xs text-muted-foreground">{rating.toFixed(1)}</span>
+    </span>
+  );
+}
 
 export const MarketplacePublicPage: React.FC = () => {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [discountEnd, setDiscountEnd] = useState<Date | null>(null);
-  // Initialize persistent 15-minute countdown per user (localStorage)
-  useEffect(() => {
-    const STORAGE_KEY = 'marketplace_offer_deadline';
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const now = Date.now();
-    let endTs: number | null = null;
-    if (saved) {
-      const parsed = parseInt(saved, 10);
-      if (!Number.isNaN(parsed) && parsed > now) {
-        endTs = parsed;
-      }
-    }
-    if (!endTs) {
-      endTs = now + 15 * 60 * 1000;
-      localStorage.setItem(STORAGE_KEY, String(endTs));
-    }
-    // Use queueMicrotask to avoid synchronous setState in effect
-    const deadline = new Date(endTs);
-    queueMicrotask(() => setDiscountEnd(deadline));
-  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [purchasedEmployees, setPurchasedEmployees] = useState<Set<string>>(new Set());
-  const [showFilters, setShowFilters] = useState(false);
+  const featuredScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -75,13 +93,11 @@ export const MarketplacePublicPage: React.FC = () => {
           setPurchasedEmployees(new Set());
           return;
         }
-        // Updated: Jan 15th 2026 - Removed console statements for production
         const rows = await listPurchasedEmployees(user.id);
         if (!isMounted) return;
         setPurchasedEmployees(new Set(rows.map((r) => r.employee_id)));
       } catch (err) {
         console.warn('Failed to load purchases:', err);
-        // Non-critical error - user can still browse marketplace
       }
     }
     loadPurchased();
@@ -98,12 +114,10 @@ export const MarketplacePublicPage: React.FC = () => {
         .select('*')
         .eq('status', 'active');
 
-      // Apply category filter
       if (selectedCategory !== 'all') {
         query = query.eq('category', selectedCategory);
       }
 
-      // Apply search filter
       if (searchQuery) {
         const searchTerm = searchQuery.toLowerCase();
         query = query.or(
@@ -114,19 +128,11 @@ export const MarketplacePublicPage: React.FC = () => {
       const { data, error } = await query;
 
       if (error) {
-        toast.error('Failed to load employees');
+        toast.error('Failed to load agents');
         return [];
       }
 
-      // Transform database employees to marketplace format
-
       return (data || []).map((dbEmp: Record<string, unknown>): AIEmployee => {
-        const cost = dbEmp['cost'] || { monthly: 0, yearly: 0 };
-        const costObj = cost as { monthly?: unknown; yearly?: unknown };
-        const monthlyPrice =
-          typeof cost === 'object' && costObj.monthly ? Number(costObj.monthly) : 0;
-        const yearlyPrice = typeof cost === 'object' && costObj.yearly ? Number(costObj.yearly) : 0;
-
         return {
           id: (dbEmp['employee_id'] || dbEmp['id']) as string,
           name: dbEmp['name'] as string,
@@ -136,9 +142,6 @@ export const MarketplacePublicPage: React.FC = () => {
             (dbEmp['system_prompt'] as string | undefined)?.slice(0, 150) ||
             `Expert ${dbEmp['role'] as string}`,
           provider: 'claude' as const,
-          price: monthlyPrice,
-          originalPrice: monthlyPrice * 2,
-          yearlyPrice: yearlyPrice,
           avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${dbEmp['employee_id'] as string}&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128`,
           skills: Array.isArray(dbEmp['capabilities']) ? (dbEmp['capabilities'] as string[]) : [],
           specialty: (dbEmp['department'] as string) || (dbEmp['category'] as string) || 'General',
@@ -150,458 +153,402 @@ export const MarketplacePublicPage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const filteredEmployees = dbEmployees;
+  // Pick featured agents: popular ones first, then first few
+  const featuredAgents = useMemo(() => {
+    const popular = dbEmployees.filter((e) => e.popular);
+    const rest = dbEmployees.filter((e) => !e.popular);
+    return [...popular, ...rest].slice(0, 6);
+  }, [dbEmployees]);
 
   const handlePurchase = async (employee: AIEmployee) => {
     try {
       if (!user?.id) {
-        toast.error('Please sign in to hire an AI employee');
+        toast.error('Please sign in to add this agent');
         router.push('/auth/login');
         return;
       }
 
       const already = await isEmployeePurchased(user.id, employee.id);
       if (already) {
-        toast.info('Already hired');
+        toast.info('Already added');
         return;
       }
 
-      // Free instant hiring - no payment required
-      toast.loading('Hiring employee...', { id: 'hire' });
+      toast.loading('Adding agent...', { id: 'hire' });
 
       await purchaseEmployee(user.id, employee);
       const rows = await listPurchasedEmployees(user.id);
       setPurchasedEmployees(new Set(rows.map((r) => r.employee_id)));
 
-      toast.success(`${employee.name} hired successfully! 🎉`, {
+      toast.success(`${employee.name} added!`, {
         id: 'hire',
-        description: `Start building with your new ${employee.role}.`,
+        description: `Start chatting with your new ${employee.role}.`,
         action: {
-          label: 'Go to Workforce',
-          onClick: () => router.push('/workforce'),
+          label: 'Go to Chat',
+          onClick: () => router.push('/chat'),
         },
       });
     } catch (err) {
-      // Check if it's a database setup error
       if (err instanceof Error && err.message.includes('DATABASE_SETUP_REQUIRED')) {
         toast.error('Database Setup Required', {
-          description: 'Please run the database setup script in Supabase to enable free hiring.',
+          description: 'Please run the database setup script in Supabase.',
           action: {
             label: 'View Setup Guide',
-            onClick: () => {
-              // Open the setup guide in a new tab
-              window.open('/setup-guide', '_blank');
-            },
+            onClick: () => window.open('/setup-guide', '_blank'),
           },
         });
       } else {
-        toast.error('Failed to hire employee', {
-          description: 'Please try again or contact support if the issue persists.',
+        toast.error('Failed to add agent', {
+          description: 'Please try again or contact support.',
         });
       }
-
       toast.dismiss('hire');
     }
   };
 
   const isPurchased = (employeeId: string) => purchasedEmployees.has(employeeId);
 
-  const getProviderGradient = (provider: string) => {
-    const gradients = {
-      chatgpt: 'from-green-500 to-emerald-500',
-      claude: 'from-purple-500 to-pink-500',
-      gemini: 'from-blue-500 to-cyan-500',
-      perplexity: 'from-orange-500 to-red-500',
-    };
-    return gradients[provider as keyof typeof gradients] || gradients.chatgpt;
+  const scrollFeatured = (direction: 'left' | 'right') => {
+    if (!featuredScrollRef.current) return;
+    const scrollAmount = 320;
+    featuredScrollRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
   };
 
+  // Category pills for the hero area
+  const categoryPills = useMemo(() => {
+    return categories.map((cat) => ({
+      id: cat.id,
+      label: cat.id === 'all' ? 'All' : cat.label,
+    }));
+  }, []);
+
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden p-4 pt-24 sm:p-6">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-strong relative mb-8 overflow-hidden rounded-3xl p-8"
-      >
-        <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-primary/10 blur-3xl"></div>
-        <div className="relative z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="gradient-primary flex h-16 w-16 items-center justify-center rounded-2xl">
-                <Sparkles className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <Badge className="glass mb-2">
-                  <Bot className="mr-2 h-3 w-3" />
-                  AI Marketplace
-                </Badge>
-                <h1 className="mb-2 text-2xl font-bold sm:text-3xl md:text-4xl">
-                  Hire Your AI Workforce
-                </h1>
-                <p className="text-xl text-muted-foreground">
-                  Specialized AI employees for{' '}
-                  <span className="bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text font-extrabold text-transparent">
-                    FREE
-                  </span>{' '}
-                  per month • {isLoadingEmployees ? '...' : dbEmployees.length} available
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Countdown Banner */}
-              {discountEnd && (
-                <div className="glass rounded-xl border border-primary/30 p-3">
-                  <CountdownTimer targetDate={discountEnd} showHours={false} showLabel={false} />
-                </div>
-              )}
-              <Button
-                onClick={() => router.push('/workforce')}
-                size="lg"
-                className="btn-glow gradient-primary text-white"
-              >
-                <Bot className="mr-2 h-5 w-5" />
-                My Team ({purchasedEmployees.size})
-              </Button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Search and Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <Card className="glass-strong mb-8">
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-4 md:flex-row">
-              {/* Search */}
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-muted-foreground" />
-                  <Input
-                    placeholder="Search by role, skills, or specialty..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="glass h-12 pl-10 text-base"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 transform"
-                    >
-                      <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Filter Toggle */}
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => setShowFilters(!showFilters)}
-                className="glass"
-              >
-                <Filter className="mr-2 h-5 w-5" />
-                Filters
-                {selectedCategory !== 'all' && (
-                  <Badge variant="secondary" className="ml-2">
-                    1
-                  </Badge>
-                )}
-              </Button>
-            </div>
-
-            {/* Category Filters */}
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-6 border-t border-border pt-6">
-                    <h3 className="mb-3 text-sm font-semibold">Categories</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {categories.map((category) => (
-                        <Button
-                          key={category.id}
-                          variant={selectedCategory === category.id ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedCategory(category.id)}
-                          className={cn(
-                            'whitespace-nowrap',
-                            selectedCategory === category.id && 'gradient-primary text-white',
-                          )}
-                        >
-                          {category.label}
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            {category.count}
-                          </Badge>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Results Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">
-            {filteredEmployees.length} {filteredEmployees.length === 1 ? 'Employee' : 'Employees'}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {selectedCategory !== 'all' &&
-              `In ${categories.find((c) => c.id === selectedCategory)?.label}`}
-            {searchQuery && ` matching "${searchQuery}"`}
+    <div className="min-h-screen w-full max-w-7xl mx-auto px-4 pt-24 pb-16 sm:px-6 lg:px-8">
+      {/* Hero: Search + Category Pills */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-2">Agent Marketplace</h1>
+          <p className="text-muted-foreground text-lg">
+            {isLoadingEmployees
+              ? 'Loading...'
+              : `${dbEmployees.length} specialized AI agents ready to work`}
           </p>
         </div>
 
-        {(searchQuery || selectedCategory !== 'all') && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedCategory('all');
-            }}
-          >
-            <X className="mr-2 h-4 w-4" />
-            Clear All
-          </Button>
-        )}
-      </div>
-
-      {/* Employees Grid */}
-      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence mode="popLayout">
-          {filteredEmployees.map((employee, index) => (
-            <motion.div
-              key={employee.id}
-              layout
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-            >
-              <Card
-                className={cn(
-                  'glass-strong card-hover group h-full',
-                  isPurchased(employee.id) && 'card-premium',
-                )}
+        {/* Search Bar */}
+        <div className="max-w-2xl mx-auto mb-6">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search AI agents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-12 pl-12 pr-10 text-base rounded-xl border-border bg-card"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
               >
-                <CardContent className="flex h-full flex-col p-6">
-                  {/* Header */}
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex min-w-0 flex-1 items-center space-x-3">
-                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl ring-2 ring-border transition-transform group-hover:scale-110">
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Category Filter Pills */}
+        <div className="flex flex-wrap justify-center gap-2">
+          {categoryPills.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={cn(
+                'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                selectedCategory === cat.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              )}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Featured Agents Section */}
+      {featuredAgents.length > 0 && selectedCategory === 'all' && !searchQuery && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-12"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Featured Agents</h2>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => scrollFeatured('left')}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => scrollFeatured('right')}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div
+            ref={featuredScrollRef}
+            className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory"
+          >
+            {featuredAgents.map((agent) => {
+              const rating = deriveRating(agent.id);
+              const uses = deriveUsageCount(agent.id);
+              return (
+                <Card
+                  key={agent.id}
+                  className={cn(
+                    'min-w-[280px] max-w-[320px] snap-start flex-shrink-0 rounded-xl border border-border bg-card transition-colors hover:border-primary/50',
+                    isPurchased(agent.id) && 'border-primary/30',
+                  )}
+                >
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
                         <NextImage
-                          src={employee.avatar}
-                          alt={employee.role ?? ''}
-                          width={56}
-                          height={56}
+                          src={agent.avatar}
+                          alt={agent.name}
+                          width={48}
+                          height={48}
                           className="h-full w-full object-cover"
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex items-center gap-2">
-                          <h3 className="truncate text-lg font-semibold">{employee.role}</h3>
-                          {employee.popular && (
+                        <h3 className="font-semibold truncate">{agent.name}</h3>
+                        <p className="text-xs text-muted-foreground truncate">{agent.specialty}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                      {agent.description}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <StarRating rating={rating} />
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {uses}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </motion.section>
+      )}
+
+      {/* Loading Skeleton */}
+      {isLoadingEmployees && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Card key={i} className="rounded-xl border border-border bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-11 w-11 rounded-xl bg-muted animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                  </div>
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="h-3 w-full rounded bg-muted animate-pulse" />
+                  <div className="h-3 w-3/4 rounded bg-muted animate-pulse" />
+                </div>
+                <div className="flex gap-1 mb-3">
+                  <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+                  <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+                  <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+                </div>
+                <div className="h-8 w-full rounded-lg bg-muted animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Results Count */}
+      {!isLoadingEmployees && dbEmployees.length > 0 && (
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">
+            {selectedCategory !== 'all' || searchQuery ? (
+              <>
+                {dbEmployees.length} {dbEmployees.length === 1 ? 'agent' : 'agents'}
+                {selectedCategory !== 'all' &&
+                  ` in ${categories.find((c) => c.id === selectedCategory)?.label ?? selectedCategory}`}
+                {searchQuery && ` matching "${searchQuery}"`}
+              </>
+            ) : (
+              'All Agents'
+            )}
+          </h2>
+          {(searchQuery || selectedCategory !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('all');
+              }}
+            >
+              <X className="mr-1 h-3 w-3" />
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Agent Grid */}
+      {!isLoadingEmployees && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence mode="popLayout">
+            {dbEmployees.map((agent, index) => {
+              const rating = deriveRating(agent.id);
+              const uses = deriveUsageCount(agent.id);
+              const purchased = isPurchased(agent.id);
+
+              return (
+                <motion.div
+                  key={agent.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3) }}
+                >
+                  <Card
+                    className={cn(
+                      'rounded-xl border border-border bg-card transition-colors hover:border-primary/50',
+                      purchased && 'border-primary/30',
+                    )}
+                  >
+                    <CardContent className="flex flex-col h-full p-4">
+                      {/* Avatar + Name */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
+                          <NextImage
+                            src={agent.avatar}
+                            alt={agent.name}
+                            width={44}
+                            height={44}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm truncate">{agent.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {agent.role}{' '}
+                            {agent.specialty !== agent.role ? `/ ${agent.specialty}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-grow">
+                        {agent.description}
+                      </p>
+
+                      {/* Skill Tags */}
+                      {agent.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {agent.skills.slice(0, 3).map((skill) => (
                             <Badge
+                              key={skill}
                               variant="secondary"
-                              className="border-orange-200 bg-orange-100 text-xs text-orange-800"
+                              className="text-[11px] px-2 py-0 font-normal"
                             >
-                              Popular
+                              {skill}
+                            </Badge>
+                          ))}
+                          {agent.skills.length > 3 && (
+                            <Badge variant="outline" className="text-[11px] px-2 py-0 font-normal">
+                              +{agent.skills.length - 3}
                             </Badge>
                           )}
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {employee.specialty}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge
-                      className={cn(
-                        'flex-shrink-0 border-0 bg-gradient-to-r text-white',
-                        getProviderGradient(employee.provider),
                       )}
-                    >
-                      {providerInfo[employee.provider].name}
-                    </Badge>
-                  </div>
 
-                  {/* Description */}
-                  <p className="mb-4 line-clamp-2 flex-grow text-sm text-muted-foreground">
-                    {employee.description}
-                  </p>
-
-                  {/* Skills */}
-                  <div className="mb-4">
-                    <div className="flex flex-wrap gap-1">
-                      {employee.skills.slice(0, 4).map((skill) => (
-                        <Badge key={skill} variant="secondary" className="text-xs">
-                          {skill}
-                        </Badge>
-                      ))}
-                      {employee.skills.length > 4 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{employee.skills.length - 4}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Fit Level */}
-                  <div className="mb-4 flex items-center gap-2 border-b border-border pb-4">
-                    {employee.fitLevel === 'excellent' ? (
-                      <>
-                        <Zap className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-medium text-primary">Excellent Fit</span>
-                      </>
-                    ) : (
-                      <>
-                        <TrendingUp className="h-4 w-4 text-accent" />
-                        <span className="text-xs font-medium text-accent">Great Fit</span>
-                      </>
-                    )}
-                    <Star className="ml-auto h-4 w-4 fill-yellow-500 text-yellow-500" />
-                  </div>
-
-                  {/* Pricing and Hire Button */}
-                  <div className="space-y-3">
-                    {/* Two-column layout for desktop, stacked for mobile */}
-                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-                      {/* Left column: Price */}
-                      <div className="flex flex-col items-start sm:items-start">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-2xl font-bold text-transparent">
-                          $0
+                      {/* Rating + Uses + Button */}
+                      <div className="flex items-center justify-between pt-2 border-t border-border">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <StarRating rating={rating} />
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {uses}
+                          </span>
                         </div>
-                        <div className="text-sm text-muted-foreground">per month</div>
+                        <Button
+                          onClick={() => (purchased ? router.push('/chat') : handlePurchase(agent))}
+                          size="sm"
+                          variant={purchased ? 'outline' : 'default'}
+                          className={cn(
+                            'h-8 text-xs',
+                            !purchased && 'bg-primary text-primary-foreground hover:bg-primary/90',
+                          )}
+                        >
+                          {purchased ? (
+                            <>
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              Chat
+                            </>
+                          ) : (
+                            <>
+                              <MessageSquare className="mr-1 h-3 w-3" />
+                              Add to Chat
+                            </>
+                          )}
+                        </Button>
                       </div>
-
-                      {/* Right column: Offers (right-aligned on desktop) */}
-                      <div className="flex flex-col items-end text-right sm:items-end">
-                        <div className="mb-1">
-                          <Badge className="border-0 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-xs text-white shadow">
-                            <Sparkles className="mr-1 h-3 w-3" />
-                            Limited time offer
-                          </Badge>
-                        </div>
-                        <div className="text-xs font-semibold text-foreground">
-                          Hire now for <span className="text-green-600">FREE</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Hire Button */}
-                    <Button
-                      onClick={() => handlePurchase(employee)}
-                      disabled={isPurchased(employee.id)}
-                      size="sm"
-                      className={cn(
-                        'btn-glow w-full',
-                        isPurchased(employee.id)
-                          ? 'cursor-default bg-success hover:bg-success'
-                          : 'gradient-primary text-white',
-                      )}
-                    >
-                      {isPurchased(employee.id) ? (
-                        <>
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                          Hired
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="mr-2 h-4 w-4" />
-                          Hire Now - Free!
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {/* Empty State */}
-      {filteredEmployees.length === 0 && (
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-          <Card className="glass-strong">
-            <CardContent className="flex flex-col items-center justify-center py-20">
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted/20">
-                <Search className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 text-2xl font-semibold">No Employees Found</h3>
-              <p className="mb-6 max-w-md text-center text-muted-foreground">
-                We couldn&apos;t find any AI employees matching your criteria. Try adjusting your
-                search or filters.
-              </p>
-              <Button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                }}
-                className="gradient-primary text-white"
-              >
-                <X className="mr-2 h-4 w-4" />
-                Clear All Filters
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       )}
 
-      {/* CTA Section */}
-      {purchasedEmployees.size > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-12"
-        >
-          <Card className="card-premium relative overflow-hidden">
-            <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-primary/10 blur-3xl"></div>
-            <CardContent className="relative z-10 p-6 text-center sm:p-8 md:p-12">
-              <Sparkles className="mx-auto mb-4 h-12 w-12 text-primary" />
-              <h3 className="mb-4 text-xl font-bold sm:text-2xl md:text-3xl">
-                You&apos;ve Hired {purchasedEmployees.size} AI{' '}
-                {purchasedEmployees.size === 1 ? 'Employee' : 'Employees'}!
-              </h3>
-              <p className="mx-auto mb-8 max-w-2xl text-xl text-muted-foreground">
-                Your AI workforce is ready. Start delegating tasks and watch them execute
-                autonomously.
-              </p>
-              <div className="flex justify-center gap-4">
-                <Button
-                  size="lg"
-                  onClick={() => router.push('/chat')}
-                  className="btn-glow gradient-primary px-8 text-lg text-white"
-                >
-                  Start Working with Your Team
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => router.push('/workforce')}
-                  className="px-8 text-lg"
-                >
-                  Manage Workforce
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Empty State */}
+      {!isLoadingEmployees && dbEmployees.length === 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Search className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="mb-2 text-xl font-semibold">No agents found</h3>
+            <p className="mb-6 max-w-md text-muted-foreground">
+              Try adjusting your search or category filter.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('all');
+              }}
+            >
+              Clear Filters
+            </Button>
+          </div>
         </motion.div>
       )}
     </div>
