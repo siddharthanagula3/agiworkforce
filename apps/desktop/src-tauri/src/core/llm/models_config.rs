@@ -20,8 +20,10 @@ use super::Provider;
 /// The raw JSON string, embedded at compile time.
 /// Path is relative to this .rs file:
 ///   src-tauri/src/core/llm/models_config.rs  ->  ../../../../src/constants/models.json
-const MODELS_JSON: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/constants/models.json"));
+const MODELS_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../src/constants/models.json"
+));
 
 /// Global singleton for the loaded models config.
 pub static CONFIG: LazyLock<ModelsConfig> = LazyLock::new(|| {
@@ -271,9 +273,7 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 
 /// Whether a model uses the OpenAI Responses API (vs Chat Completions).
 pub fn model_uses_responses_api(model_id: &str) -> bool {
-    model_id.starts_with("gpt-5")
-        || model_id.starts_with("o3")
-        || model_id.starts_with("o4")
+    model_id.starts_with("gpt-5") || model_id.starts_with("o3") || model_id.starts_with("o4")
 }
 
 /// Whether a model supports Gemini-style thinking_config.
@@ -317,7 +317,11 @@ mod tests {
             Provider::Mistral,
         ] {
             let model = get_default_model(&provider);
-            assert!(!model.is_empty(), "{:?}.default_model must not be empty", provider);
+            assert!(
+                !model.is_empty(),
+                "{:?}.default_model must not be empty",
+                provider
+            );
         }
     }
 
@@ -338,7 +342,12 @@ mod tests {
             Provider::Mistral,
         ] {
             let mult = get_token_multiplier(&provider);
-            assert!(mult > 0.0, "{:?} token multiplier must be positive, got {}", provider, mult);
+            assert!(
+                mult > 0.0,
+                "{:?} token multiplier must be positive, got {}",
+                provider,
+                mult
+            );
         }
     }
 
@@ -382,8 +391,10 @@ mod tests {
         let models = get_all_model_entries();
         assert!(!models.is_empty(), "model entries must not be empty");
         // Spot-check a well-known model exists
-        assert!(models.contains_key("claude-opus-4.6") || models.contains_key("claude-sonnet-4.6"),
-            "At least one claude model must be in the catalog");
+        assert!(
+            models.contains_key("claude-opus-4.6") || models.contains_key("claude-sonnet-4.6"),
+            "At least one claude model must be in the catalog"
+        );
     }
 
     #[test]

@@ -81,7 +81,7 @@ impl SyncManager {
                 )
                 .await
                 {
-                    eprintln!("Auto-sync error: {}", e);
+                    tracing::error!("Auto-sync error: {}", e);
                 }
 
                 *is_syncing.write().await = false;

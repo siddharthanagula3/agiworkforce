@@ -16,6 +16,8 @@ export function Input({ label, error, className = '', ...props }: InputProps) {
         } text-white placeholder:text-white/30 ${className}`}
         placeholderTextColor="rgba(255,255,255,0.3)"
         selectionColor="#21808d"
+        accessibilityLabel={label}
+        accessibilityHint={error ? `Error: ${error}` : undefined}
         {...props}
       />
       {error && <Text className="text-xs text-red-400">{error}</Text>}

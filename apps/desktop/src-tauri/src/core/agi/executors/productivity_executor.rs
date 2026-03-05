@@ -37,7 +37,7 @@ use std::path::PathBuf;
 /// # Example
 ///
 /// ```ignore
-/// let executor = ProductivityExecutor::new();
+/// let executor = ProductivityExecutor::default();
 /// let mut params = HashMap::new();
 /// params.insert("provider".to_string(), json!("notion"));
 /// params.insert("title".to_string(), json!("Review quarterly report"));
@@ -697,9 +697,9 @@ mod tests {
                 crate::automation::AutomationService::new()
                     .expect("Failed to create AutomationService for tests"),
             ),
-            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
-            tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
-            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
+            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::default())),
+            tool_cache: Arc::new(crate::data::cache::ToolResultCache::default()),
+            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::default()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_productivity_executor_tool_names() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let names = executor.tool_names();
 
         assert!(names.contains(&"productivity_create_task"));
@@ -745,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_productivity_executor_description() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let desc = executor.description();
 
         assert!(!desc.is_empty());
@@ -825,7 +825,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_create_task_missing_provider() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -845,7 +845,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_create_task_missing_title() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -865,7 +865,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_create_task_invalid_provider() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -885,7 +885,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_create_task_no_app_handle() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context(); // Has no app_handle
         let exec_context = create_test_execution_context();
 
@@ -906,7 +906,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_document_read_missing_path() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -925,7 +925,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_document_read_no_app_handle() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -945,7 +945,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_document_search_missing_path() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -965,7 +965,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_document_search_missing_query() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -985,7 +985,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_unknown_tool() {
-        let executor = ProductivityExecutor::new();
+        let executor = ProductivityExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 

@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import { invoke } from '../../../lib/tauri-mock';
 import { formatErrorForChat } from '../../../lib/friendlyErrors';
 import { getSimpleErrorMessage } from '../../../lib/errorMessages';
+import { isAutoModel } from '../../../lib/modelCapabilities';
 import { useAccountStore } from '../../../stores/auth';
 import { useBillingStore } from '../../../stores/auth';
 import {
@@ -122,7 +123,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
       const currentAbortSignal = sendAbortControllerRef.current.signal;
 
       // Check for Auto Mode restrictions
-      if (selectedModel === 'auto') {
+      if (isAutoModel(selectedModel)) {
         const { account } = useAccountStore.getState();
         const plan = account?.plan || 'free';
         const hasAccess = ['hobby', 'pro', 'max', 'enterprise'].includes(plan);

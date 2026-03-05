@@ -70,12 +70,6 @@ pub struct NotionPage {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-struct NotionRichText {
-    plain_text: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct NotionListResponse<T> {
     results: Vec<T>,
     has_more: bool,

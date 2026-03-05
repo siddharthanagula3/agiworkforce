@@ -4,8 +4,6 @@
  * Updated: Jan 6th 2026 - Migrated to @google/genai SDK
  */
 
-// @ts-expect-error -- @google/genai types may not be installed
-import { GoogleGenAI } from '@google/genai';
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
@@ -235,23 +233,17 @@ export class GoogleProvider {
   }
 
   /**
-   * Stream a message from Gemini
+   * Stream a message from Gemini via authenticated Netlify proxy.
    *
-   * SECURITY NOTE: Direct streaming is disabled. All LLM API calls must go through
-   * authenticated Netlify proxy functions to keep API keys secure on the server side.
-   *
-   * TODO: To enable streaming in the future:
-   * 1. Implement Server-Sent Events (SSE) in /.netlify/functions/llm-proxies/google-proxy
-   * 2. Update this method to consume the SSE stream from the proxy
-   * 3. Remove the DIRECT_API_DISABLED error below
-   *
-   * Reference implementation for @google/genai SDK streaming is preserved in comments
-   * at the bottom of this method for when proxy-based streaming is implemented.
+   * SECURITY: All API calls go through the proxy to keep keys server-side.
+   * Currently uses non-streaming proxy request and simulates streaming by
+   * yielding the full response. When the proxy gains SSE support, this
+   * method can be updated to consume a real event stream.
    */
   async *streamMessage(
-    _messages: GoogleMessage[],
-    _sessionId?: string,
-    _userId?: string,
+    messages: GoogleMessage[],
+    sessionId?: string,
+    userId?: string,
   ): AsyncGenerator<{
     content: string;
     done: boolean;
@@ -261,53 +253,90 @@ export class GoogleProvider {
       total_tokens?: number;
     };
   }> {
-    // Required yield* to satisfy ESLint require-yield; delegates to empty iterable (no values emitted)
-    yield* [];
-    // SECURITY: Direct API calls are disabled - use Netlify proxy instead
-    throw new GoogleError(
-      'Direct Google streaming is disabled for security. Use /.netlify/functions/llm-proxies/google-proxy instead.',
-      'DIRECT_API_DISABLED',
-    );
+    try {
+      const proxyUrl = '/.netlify/functions/llm-proxies/google-proxy';
 
-    /*
-     * TODO: Future proxy-based streaming implementation
-     * When SSE streaming is added to the Netlify proxy, replace the throw above with:
-     *
-     * const proxyUrl = '/.netlify/functions/llm-proxies/google-proxy';
-     * const authToken = await getAuthToken();
-     * if (!authToken) {
-     *   throw new GoogleError('User not authenticated.', 'NOT_AUTHENTICATED');
-     * }
-     *
-     * const response = await fetch(proxyUrl, {
-     *   method: 'POST',
-     *   headers: {
-     *     'Content-Type': 'application/json',
-     *     Authorization: `Bearer ${authToken}`,
-     *     Accept: 'text/event-stream',
-     *   },
-     *   body: JSON.stringify({
-     *     messages: this.convertMessagesToGemini(messages),
-     *     model: this.config.model,
-     *     max_tokens: this.config.maxTokens,
-     *     temperature: this.config.temperature,
-     *     stream: true,
-     *   }),
-     * });
-     *
-     * // Process SSE stream from proxy...
-     *
-     * Reference: @google/genai SDK direct streaming pattern:
-     * const stream = await this.client.models.generateContentStream({
-     *   model: this.config.model,
-     *   contents: prompt,
-     *   config: { maxOutputTokens: this.config.maxTokens, temperature: this.config.temperature },
-     * });
-     * for await (const chunk of stream) {
-     *   const chunkText = chunk.text;
-     *   if (chunkText) yield { content: chunkText, done: false };
-     * }
-     */
+      const authToken = await getAuthToken();
+      if (!authToken) {
+        throw new GoogleError(
+          'User not authenticated. Please log in to use AI features.',
+          'NOT_AUTHENTICATED',
+        );
+      }
+
+      const geminiMessages = this.convertMessagesToGemini(messages);
+
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          messages: geminiMessages,
+          model: this.config.model,
+          max_tokens: this.config.maxTokens,
+          temperature: this.config.temperature,
+          system: this.config.systemPrompt,
+          stream: false, // Proxy doesn't support SSE yet
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new GoogleError(
+          errorData.error || `HTTP error! status: ${response.status}`,
+          `HTTP_${response.status}`,
+          response.status === 429 || response.status === 503,
+        );
+      }
+
+      const data = await response.json();
+      const fullContent = data.content || data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const usage = data.usage || data.usageMetadata;
+
+      // Yield full response (simulated streaming)
+      yield { content: fullContent, done: false };
+      yield {
+        content: '',
+        done: true,
+        usage: usage
+          ? {
+              prompt_tokens: usage.promptTokenCount || usage.prompt_tokens || 0,
+              completion_tokens: usage.candidatesTokenCount || usage.completion_tokens || 0,
+              total_tokens: usage.totalTokenCount || usage.total_tokens || 0,
+            }
+          : undefined,
+      };
+
+      // Save to database
+      if (sessionId && userId) {
+        await this.saveMessageToDatabase({
+          sessionId,
+          userId,
+          role: 'assistant',
+          content: fullContent,
+          metadata: {
+            provider: 'google',
+            model: this.config.model,
+            usage,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (error) {
+      logger.error('[Google Provider] Streaming error:', error);
+
+      if (error instanceof GoogleError) {
+        throw error;
+      }
+
+      throw new GoogleError(
+        `Google streaming failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'STREAMING_FAILED',
+        true,
+      );
+    }
   }
 
   /**

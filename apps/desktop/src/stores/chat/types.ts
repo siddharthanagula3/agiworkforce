@@ -171,7 +171,7 @@ export interface InlinePanel {
   metadata?: Record<string, unknown>;
 }
 
-export type SlashCommandName =
+export type BuiltInSlashCommandName =
   | 'browser'
   | 'terminal'
   | 'code'
@@ -205,10 +205,16 @@ export type SlashCommandName =
   | 'message'
   | 'settings';
 
+export type SlashCommandName = BuiltInSlashCommandName | (string & {});
+
+export type SlashCommandSource = 'builtin' | 'project-command';
+
 export interface SlashCommandMetadata {
   command: SlashCommandName;
   args: string;
   rawInput: string;
+  source?: SlashCommandSource;
+  commandPath?: string;
 }
 
 export interface EnhancedMessage {

@@ -28,6 +28,8 @@ pub struct DefaultModels {
 #[serde(rename_all = "camelCase")]
 pub struct WindowPreferences {
     pub theme: String,
+    #[serde(default = "default_language")]
+    pub language: String,
     pub startup_position: String,
     pub dock_on_startup: Option<String>,
 }
@@ -43,6 +45,10 @@ pub struct ChatPreferences {
     pub always_use_agent_mode: bool,
     #[serde(default = "default_compact_mode")]
     pub compact_mode: bool,
+    #[serde(default)]
+    pub auto_approve_tools: bool,
+    #[serde(default = "default_auto_inject_skills")]
+    pub auto_inject_skills: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -60,11 +66,28 @@ pub struct ExecutionPreferences {
     pub enable_timeout_warnings: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalHotkeyPreferences {
+    #[serde(default = "default_global_hotkey_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_global_hotkey_combo")]
+    pub combo: String,
+}
+
 fn default_prompt_completion_enabled() -> bool {
     true
 }
 
+fn default_language() -> String {
+    "en".to_string()
+}
+
 fn default_compact_mode() -> bool {
+    true
+}
+
+fn default_auto_inject_skills() -> bool {
     true
 }
 
@@ -86,6 +109,14 @@ fn default_auto_resume_on_restart() -> bool {
 
 fn default_enable_timeout_warnings() -> bool {
     true
+}
+
+fn default_global_hotkey_enabled() -> bool {
+    true
+}
+
+fn default_global_hotkey_combo() -> String {
+    "CommandOrControl+Shift+Space".to_string()
 }
 
 fn default_allowed_directories() -> Vec<String> {
@@ -113,11 +144,22 @@ pub struct Settings {
     pub chat_preferences: Option<ChatPreferences>,
     #[serde(default)]
     pub execution_preferences: Option<ExecutionPreferences>,
+    #[serde(default = "default_global_hotkey_preferences")]
+    pub global_hotkey_preferences: GlobalHotkeyPreferences,
 
     #[serde(default)]
     pub allowed_directories: Vec<String>,
     #[serde(default)]
+    pub custom_models: Vec<serde_json::Value>,
+    #[serde(default)]
     pub feature_flags: std::collections::HashMap<String, bool>,
+}
+
+fn default_global_hotkey_preferences() -> GlobalHotkeyPreferences {
+    GlobalHotkeyPreferences {
+        enabled: default_global_hotkey_enabled(),
+        combo: default_global_hotkey_combo(),
+    }
 }
 
 pub struct SettingsState {
@@ -156,6 +198,7 @@ impl SettingsState {
                 },
                 window_preferences: WindowPreferences {
                     theme: "system".to_string(),
+                    language: default_language(),
                     startup_position: "center".to_string(),
                     dock_on_startup: None,
                 },
@@ -164,6 +207,8 @@ impl SettingsState {
                     show_timestamps: false,
                     always_use_agent_mode: false,
                     compact_mode: true,
+                    auto_approve_tools: false,
+                    auto_inject_skills: true,
                 }),
                 execution_preferences: Some(ExecutionPreferences {
                     max_timeout_minutes: default_max_timeout_minutes(),
@@ -172,7 +217,9 @@ impl SettingsState {
                     auto_resume_on_restart: default_auto_resume_on_restart(),
                     enable_timeout_warnings: default_enable_timeout_warnings(),
                 }),
+                global_hotkey_preferences: default_global_hotkey_preferences(),
                 allowed_directories: default_allowed_directories(),
+                custom_models: Vec::new(),
                 feature_flags: std::collections::HashMap::new(),
             })),
         }
@@ -212,6 +259,20 @@ pub async fn settings_save(
     tokio::fs::write(&settings_path, json)
         .await
         .map_err(|e| format!("Failed to write settings file: {}", e))?;
+
+    if let Some(shortcuts_state) =
+        app_handle.try_state::<Arc<Mutex<crate::sys::commands::shortcuts::ShortcutsState>>>()
+    {
+        crate::sys::commands::shortcuts::apply_quick_query_hotkey_preferences(
+            &app_handle,
+            &shortcuts_state,
+            crate::sys::commands::shortcuts::QuickQueryHotkeyPreferences {
+                enabled: settings.global_hotkey_preferences.enabled,
+                combo: settings.global_hotkey_preferences.combo.clone(),
+            },
+        )
+        .await?;
+    }
 
     tracing::info!("Settings persisted to {:?}", settings_path);
     Ok(())

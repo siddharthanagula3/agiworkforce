@@ -11,7 +11,7 @@
 //! - Progress events during installation
 //! - Persistent metadata storage
 
-use crate::core::mcp::{McpServerConfig, McpServersConfig};
+use crate::core::mcp::McpServerConfig;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -2444,13 +2444,7 @@ pub async fn mcpb_install_bundle(
     };
 
     // Save config (outside the lock)
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-
-    config_clone
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+    mcp_state.persist_config_snapshot(&config_clone).await?;
 
     emit_install_progress(
         &app,
@@ -2526,13 +2520,7 @@ pub async fn mcpb_uninstall_bundle(
     };
 
     // Save config (outside the lock)
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-
-    config_clone
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+    mcp_state.persist_config_snapshot(&config_clone).await?;
 
     // Optionally uninstall npm package (commented out to avoid breaking other uses)
     // if let Some(ref npm_package) = metadata.npm_package {
@@ -2715,13 +2703,7 @@ pub async fn mcpb_update_bundle(
     };
 
     // Save config (outside the lock)
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-
-    config_clone
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+    mcp_state.persist_config_snapshot(&config_clone).await?;
 
     // Update metadata
     {

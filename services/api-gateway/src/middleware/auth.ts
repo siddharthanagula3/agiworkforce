@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { authenticatedUserSchema, type AuthenticatedUser } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -84,7 +85,7 @@ export async function authenticateToken(
         setCachedAccountStatus(userId, freshStatus);
         accountStatus = freshStatus;
       } catch (killSwitchError) {
-        console.error('Kill switch DB check failed — failing closed:', killSwitchError);
+        logger.error({ error: killSwitchError }, 'Kill switch DB check failed — failing closed');
         res.status(503).json({
           error: 'Service temporarily unavailable. Please try again shortly.',
           code: 'AUTH_CHECK_UNAVAILABLE',

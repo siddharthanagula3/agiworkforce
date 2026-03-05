@@ -30,6 +30,7 @@ pub struct ResolvedConflict {
 }
 
 pub struct ConflictResolver {
+    /// Whether to automatically resolve conflicts (reserved for sync configuration)
     #[allow(dead_code)]
     auto_resolve: bool,
 }

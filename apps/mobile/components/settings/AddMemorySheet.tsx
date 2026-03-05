@@ -113,6 +113,8 @@ export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: Ad
           selectionColor={colors.teal}
           autoCorrect={false}
           maxLength={10_000}
+          accessibilityLabel="Memory content"
+          accessibilityHint="Enter what the AI should remember"
         />
       </View>
 
@@ -134,6 +136,9 @@ export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: Ad
                   className={`px-3 py-1.5 rounded-full border ${
                     isSelected ? 'border-teal-500/50 bg-teal-500/15' : 'border-white/10 bg-white/5'
                   }`}
+                  accessibilityLabel={`Category: ${cat}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
                 >
                   <Text
                     className={`text-xs font-medium ${

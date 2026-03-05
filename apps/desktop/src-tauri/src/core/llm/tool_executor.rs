@@ -5,9 +5,6 @@ use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::commands::undo::UndoState;
-#[allow(unused_imports)]
-use crate::sys::security::tool_guard::SecurityError;
-#[allow(unused_imports)]
 use crate::sys::security::ToolSafetyTier;
 use crate::ui::events::tool_stream::{
     emit_tool_completed, emit_tool_error, emit_tool_output_chunk, emit_tool_progress,
@@ -32,7 +29,6 @@ use tokio::time::{timeout, Duration as TokioDuration};
 use uuid::Uuid;
 
 /// Default timeout for tool confirmation dialogs (in seconds)
-#[allow(dead_code)]
 const TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 const MCP_TOOL_TIMEOUT_MS: u64 = 120_000; // 120s: MCP tool calls may involve remote APIs, I/O, and browser/runtime startup
 const FILE_LIST_TIMEOUT_MS: u64 = 30_000; // Increased from 10s: large dirs and network filesystems
@@ -2141,8 +2137,12 @@ impl ToolExecutor {
         // If a user disables a capability (e.g. "fileOperations"), all tools
         // mapped to that capability are blocked before any further checks.
         if let Some(app_handle) = &self.app_handle {
-            if let Some(cap_state) = app_handle.try_state::<crate::sys::commands::capabilities::CapabilityState>() {
-                if let Some(capability) = crate::sys::commands::capabilities::tool_to_capability(&tool_call.name) {
+            if let Some(cap_state) =
+                app_handle.try_state::<crate::sys::commands::capabilities::CapabilityState>()
+            {
+                if let Some(capability) =
+                    crate::sys::commands::capabilities::tool_to_capability(&tool_call.name)
+                {
                     if !cap_state.is_enabled(capability).await {
                         let msg = format!(
                             "Capability '{}' is disabled in Settings. Enable it in Features & Privacy to use this tool.",
@@ -2150,7 +2150,8 @@ impl ToolExecutor {
                         );
                         tracing::warn!(
                             "[ToolExecutor] Blocked tool '{}': capability '{}' is disabled",
-                            tool_call.name, capability
+                            tool_call.name,
+                            capability
                         );
                         self.emit_tool_action(
                             &action_id,
@@ -2186,57 +2187,53 @@ impl ToolExecutor {
         }
 
         // Enforce tool policy validation (allowed tools, parameters, and path rules)
+        // For MCP tools, dynamically register them in ToolGuard before validation
+        // so they go through rate limiting and parameter security checks.
         if let Some(app_handle) = &self.app_handle {
             if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
+                if is_mcp_tool {
+                    confirmation_state
+                        .tool_guard()
+                        .register_mcp_tool(&tool_call.name);
+                }
                 if let Err(e) = confirmation_state
                     .tool_guard()
                     .validate_tool_call(&tool_call.name, &metadata_snapshot)
                     .await
                 {
-                    // MCP tools are dynamic and may not be pre-declared in ToolGuard.
-                    // Don't block execution solely because the tool name isn't in the static map.
-                    let is_unknown_mcp_tool =
-                        is_mcp_tool && matches!(&e, SecurityError::UnauthorizedTool(_));
-                    if is_unknown_mcp_tool {
-                        tracing::warn!(
-                            "[ToolExecutor] MCP tool '{}' is not declared in ToolGuard; allowing dynamic execution",
-                            tool_call.name
-                        );
-                    } else {
-                        self.emit_tool_action(
+                    self.emit_tool_action(
+                        &action_id,
+                        &tool_call.name,
+                        "blocked",
+                        &metadata_snapshot,
+                        Some(e.to_string()),
+                    );
+                    self.emit_tool_metrics(
+                        &action_id,
+                        &tool_call.name,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+
+                    if let Some(app_handle) = &self.app_handle {
+                        emit_tool_error(
+                            app_handle,
                             &action_id,
-                            &tool_call.name,
-                            "blocked",
-                            &metadata_snapshot,
-                            Some(e.to_string()),
-                        );
-                        self.emit_tool_metrics(
-                            &action_id,
-                            &tool_call.name,
+                            &e.to_string(),
                             start_time.elapsed().as_millis() as u64,
                             false,
                         );
-
-                        if let Some(app_handle) = &self.app_handle {
-                            emit_tool_error(
-                                app_handle,
-                                &action_id,
-                                &e.to_string(),
-                                start_time.elapsed().as_millis() as u64,
-                                false,
-                            );
-                        }
-
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!({ "policy_blocked": true }),
-                            error: Some(e.to_string()),
-                            metadata: HashMap::from([
-                                ("requires_confirmation".to_string(), json!(true)),
-                                ("tool_name".to_string(), json!(tool_call.name)),
-                            ]),
-                        });
                     }
+
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "policy_blocked": true }),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([
+                            ("requires_confirmation".to_string(), json!(true)),
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                        ]),
+                    });
                 }
             }
         }
@@ -4942,9 +4939,6 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::sys::commands::email::{email_send, SendEmailRequest};
-            #[allow(unused_imports)]
-            use tauri::Manager;
-
             let account_id = args
                 .get("account_id")
                 .and_then(|v| v.as_i64())

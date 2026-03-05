@@ -14,7 +14,11 @@ fn truncate_output(s: String, max_bytes: usize) -> String {
     while end > 0 && !s.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}...\n[truncated — output exceeded {} bytes]", &s[..end], max_bytes)
+    format!(
+        "{}...\n[truncated — output exceeded {} bytes]",
+        &s[..end],
+        max_bytes
+    )
 }
 
 /// Result returned to the frontend from code execution
@@ -44,7 +48,8 @@ pub async fn execute_code(
     allow_network: Option<bool>,
     files: Option<HashMap<String, String>>,
 ) -> Result<CodeExecutionResponse, String> {
-    let manager = SandboxManager::new().map_err(|e| format!("Failed to initialize sandbox: {e}"))?;
+    let manager =
+        SandboxManager::new().map_err(|e| format!("Failed to initialize sandbox: {e}"))?;
 
     let config = ExecutionConfig {
         language: language.clone(),

@@ -677,12 +677,23 @@ export class SecurityManager {
 // Content Security Policy (CSP) Helper
 // ========================================
 
+/**
+ * CSP helper for programmatic policy construction.
+ *
+ * The authoritative per-request CSP is set by middleware.ts via `buildCspWithNonce()`.
+ * This class is provided for contexts that need to build a CSP string outside of
+ * middleware (e.g., meta-tag fallback in non-Next.js environments).
+ *
+ * script-src uses a per-request nonce instead of 'unsafe-inline'.
+ * style-src keeps 'unsafe-inline' because Tailwind, Radix UI, and inline style
+ * attributes require it — migrating to nonce-based styles is tracked separately.
+ */
 export class CSPManager {
+  private static nonce: string | null = null;
+
   private static policies: Record<string, string[]> = {
     'default-src': ["'self'"],
-    // WARNING: 'unsafe-inline' in script-src weakens XSS protection.
-    // TODO: Replace with nonce-based CSP when all inline scripts are identified.
-    'script-src': ["'self'", "'unsafe-inline'"], // FIXME: Remove unsafe-inline
+    'script-src': ["'self'"],
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'https:'],
     'font-src': ["'self'", 'https:'],
@@ -692,7 +703,16 @@ export class CSPManager {
     'frame-ancestors': ["'none'"],
     'base-uri': ["'self'"],
     'form-action': ["'self'"],
+    'upgrade-insecure-requests': [],
   };
+
+  /**
+   * Set the nonce for the current request. Must be called before generateCSPString()
+   * to include the nonce in script-src.
+   */
+  static setNonce(nonce: string): void {
+    this.nonce = nonce;
+  }
 
   static addSource(directive: string, source: string): void {
     if (!this.policies[directive]) {
@@ -711,7 +731,18 @@ export class CSPManager {
 
   static generateCSPString(): string {
     return Object.entries(this.policies)
-      .map(([directive, sources]) => `${directive} ${sources.join(' ')}`)
+      .map(([directive, sources]) => {
+        // Inject nonce into script-src when available
+        const allSources =
+          directive === 'script-src' && this.nonce
+            ? [...sources, `'nonce-${this.nonce}'`]
+            : sources;
+
+        if (allSources.length === 0) {
+          return directive;
+        }
+        return `${directive} ${allSources.join(' ')}`;
+      })
       .join('; ');
   }
 

@@ -473,20 +473,21 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
  * Admin blacklist endpoint
  * Manually blacklist an IP address
  */
+const adminBlacklistSchema = z.object({
+  ip: z.string().min(1, 'IP address required'),
+  reason: z.string().min(1, 'Reason required'),
+  durationMs: z.number().int().positive().optional(),
+});
+
 app.post('/admin/blacklist', adminLimiter, adminAuthMiddleware, (req, res) => {
-  const { ip, reason, durationMs } = req.body as {
-    ip?: string;
-    reason?: string;
-    durationMs?: number;
-  };
-
-  if (!ip || typeof ip !== 'string') {
-    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'IP address required' });
+  const parseResult = adminBlacklistSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res
+      .status(400)
+      .json({ error: 'INVALID_REQUEST', message: z.treeifyError(parseResult.error) });
   }
 
-  if (!reason || typeof reason !== 'string') {
-    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Reason required' });
-  }
+  const { ip, reason, durationMs } = parseResult.data;
 
   wsRateLimiter.blacklistIp(ip, reason, durationMs);
   logger.warn({ ip, reason, durationMs }, 'IP manually blacklisted via admin endpoint');

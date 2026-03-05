@@ -16,10 +16,7 @@ interface ConnectedBadgeProps {
   status: ConnectionStatus;
 }
 
-const statusConfig: Record<
-  ConnectionStatus,
-  { color: string; label: string }
-> = {
+const statusConfig: Record<ConnectionStatus, { color: string; label: string }> = {
   connected: { color: colors.agentSuccess, label: 'Connected' },
   disconnected: { color: colors.textMuted, label: 'Not Connected' },
   error: { color: colors.agentError, label: 'Error' },
@@ -32,18 +29,12 @@ export function ConnectedBadge({ status }: ConnectedBadgeProps) {
   useEffect(() => {
     if (status === 'connected') {
       opacity.value = withRepeat(
-        withSequence(
-          withTiming(0.3, { duration: 1000 }),
-          withTiming(1, { duration: 1000 }),
-        ),
+        withSequence(withTiming(0.3, { duration: 1000 }), withTiming(1, { duration: 1000 })),
         -1,
         true,
       );
       scale.value = withRepeat(
-        withSequence(
-          withTiming(1.3, { duration: 1000 }),
-          withTiming(1, { duration: 1000 }),
-        ),
+        withSequence(withTiming(1.3, { duration: 1000 }), withTiming(1, { duration: 1000 })),
         -1,
         true,
       );
@@ -61,7 +52,7 @@ export function ConnectedBadge({ status }: ConnectedBadgeProps) {
   const { color, label } = statusConfig[status];
 
   return (
-    <View className="flex-row items-center gap-1.5">
+    <View className="flex-row items-center gap-1.5" accessibilityLabel={`Status: ${label}`}>
       <Animated.View
         style={[
           {
@@ -73,10 +64,7 @@ export function ConnectedBadge({ status }: ConnectedBadgeProps) {
           pulseStyle,
         ]}
       />
-      <Text
-        className="text-xs font-medium"
-        style={{ color }}
-      >
+      <Text className="text-xs font-medium" style={{ color }}>
         {label}
       </Text>
     </View>

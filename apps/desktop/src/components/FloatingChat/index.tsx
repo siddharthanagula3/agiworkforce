@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../../lib/tauri-mock';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useAuthStore } from '../../stores/auth';
+import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
 import { Send, X, Maximize2, Loader2 } from 'lucide-react';
 
@@ -19,6 +20,7 @@ export const FloatingChat = () => {
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
 
   // Initialize conversation on mount - run once, ensureActiveConversation is stable
   useEffect(() => {
@@ -51,14 +53,19 @@ export const FloatingChat = () => {
           content: trimmed,
         });
 
+        if (!userId) {
+          throw new Error('No authenticated user is available for floating chat');
+        }
+
         // Send to backend
         await invoke('chat_send_message', {
           request: {
             content: trimmed,
+            userId,
             attachments: [],
-            context_items: [],
-            include_context: false,
-            conversation_id: activeConversationId,
+            conversation_id: activeConversationId ? uuidToDbId(activeConversationId) : null,
+            stream: true,
+            enableTools: true,
           },
         });
       } catch (error) {
@@ -71,7 +78,7 @@ export const FloatingChat = () => {
         setIsSending(false);
       }
     },
-    [input, isStreaming, isSending, addMessage, activeConversationId],
+    [input, isStreaming, isSending, addMessage, activeConversationId, userId],
   );
 
   const handleKeyDown = useCallback(

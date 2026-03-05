@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- dynamic artifact data structure */
 /**
  * ToolResultCard Component
  *
@@ -30,7 +29,7 @@ import { DiffViewer } from './DiffViewer';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
-import type { ToolResultUI, TableData, DiffData } from '@/types/toolCalling';
+import type { ToolResultUI, ToolArtifact, TableData, DiffData } from '@/types/toolCalling';
 import { sanitizeMarkdownHtml } from '@/utils/security';
 
 interface ToolResultCardProps {
@@ -103,9 +102,9 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
         if (result.artifacts && result.artifacts.length > 0) {
           return (
             <div className="space-y-2">
-              {result.artifacts.map((artifact: any) => (
+              {result.artifacts.map((artifact: ToolArtifact, idx: number) => (
                 <ImagePreview
-                  key={artifact.id}
+                  key={idx}
                   artifact={artifact}
                   maxHeight="400px"
                   ocrText={result.metadata?.['ocr_text'] as string | undefined}
@@ -260,9 +259,9 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
                 Artifacts ({result.artifacts.length})
               </div>
               <div className="space-y-1 text-xs">
-                {result.artifacts.map((artifact: any) => (
+                {result.artifacts.map((artifact: ToolArtifact) => (
                   <div
-                    key={artifact.id}
+                    key={artifact.name}
                     className="flex items-center gap-2 p-2 bg-muted/30 rounded"
                   >
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />

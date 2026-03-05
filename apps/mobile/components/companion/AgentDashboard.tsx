@@ -198,7 +198,12 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
 
   return (
     <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
-      <Pressable onPress={onPress}>
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={`Agent: ${agent.name}, status: ${agent.status}`}
+        accessibilityRole="button"
+        accessibilityHint="Tap to select agent"
+      >
         <Card
           variant={isSelected ? 'elevated' : 'default'}
           className={isSelected ? 'border border-teal-500/30' : ''}
@@ -245,6 +250,8 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
                 <Pressable
                   onPress={() => handleCommand('pause')}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 active:bg-white/10"
+                  accessibilityLabel="Pause agent"
+                  accessibilityRole="button"
                 >
                   <Pause size={12} color={colors.agentWarning} />
                   <Text className="text-xs text-amber-400">Pause</Text>
@@ -253,6 +260,8 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
               <Pressable
                 onPress={() => handleCommand('cancel')}
                 className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 active:bg-white/10"
+                accessibilityLabel="Cancel agent"
+                accessibilityRole="button"
               >
                 <Square size={12} color={colors.agentError} />
                 <Text className="text-xs text-red-400">Cancel</Text>

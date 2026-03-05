@@ -67,6 +67,7 @@ function FooterItem({ icon, label, onPress }: FooterItemProps) {
         backgroundColor: pressed ? 'rgba(255,255,255,0.05)' : 'transparent',
       })}
       accessibilityRole="button"
+      accessibilityLabel={label}
     >
       {icon}
       <Text style={{ fontSize: 14, color: colors.textSecondary }}>{label}</Text>

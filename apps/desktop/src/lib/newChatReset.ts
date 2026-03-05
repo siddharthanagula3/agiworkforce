@@ -2,6 +2,7 @@ import { useAgentStore } from '../stores/chat/agentStore';
 import { useChatStore } from '../stores/chat/chatStore';
 import { useToolStore } from '../stores/chat/toolStore';
 import { isTauri, invoke } from '@tauri-apps/api/core';
+import { toast } from 'sonner';
 
 const NEW_CHAT_ABORT_EVENT = 'chat:new-conversation';
 
@@ -32,26 +33,36 @@ export async function resetInFlightChatState(): Promise<void> {
     (stream) => stream.status === 'running',
   );
 
-  // Cancel each running tool via backend first
-  for (const stream of runningTools) {
-    try {
-      if (await isTauri()) {
-        await invoke('cancel_tool_execution', { tool_id: stream.tool_id });
-      }
-    } catch (error) {
-      console.warn('[newChatReset] Failed to cancel tool:', stream.tool_id, error);
-    }
-    // Update local state
-    toolStore.cancelToolExecution(stream.tool_id);
-  }
+  const inDesktop = await isTauri();
+  const cancellationResults = inDesktop
+    ? await Promise.allSettled(
+        runningTools.map(async (stream) => {
+          await toolStore.cancelToolExecution(stream.tool_id);
+          return stream.tool_id;
+        }),
+      )
+    : [];
 
-  // Also stop any ongoing generation on the backend
-  if (await isTauri()) {
+  const failedTools = cancellationResults
+    .map((result, index) => (result.status === 'rejected' ? runningTools[index]?.tool_id : null))
+    .filter((toolId): toolId is string => Boolean(toolId));
+
+  let stopGenerationFailed = false;
+  if (inDesktop) {
     try {
       await invoke('chat_stop_generation');
     } catch (error) {
+      stopGenerationFailed = true;
       console.warn('[newChatReset] Failed to stop generation:', error);
     }
+  }
+
+  if (failedTools.length > 0 || stopGenerationFailed) {
+    toast.error(
+      failedTools.length > 0
+        ? `Cleanup incomplete. Failed to cancel ${failedTools.length} running tool${failedTools.length === 1 ? '' : 's'}.`
+        : 'Cleanup incomplete. Failed to stop the current response cleanly.',
+    );
   }
 
   toolStore.clearToolStreams();

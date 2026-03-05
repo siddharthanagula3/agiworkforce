@@ -29,6 +29,9 @@ function SingleCard({ mode, isSelected, onSelect }: AutoModeCardProps) {
           ? 'border-teal-500 bg-teal-500/10'
           : 'border-white/8 bg-surface-elevated active:bg-white/5'
       }`}
+      accessibilityLabel={`${mode.name}: ${mode.description}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
     >
       <Icon size={18} color={isSelected ? colors.teal : colors.textMuted} />
       <Text className={`text-xs font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>

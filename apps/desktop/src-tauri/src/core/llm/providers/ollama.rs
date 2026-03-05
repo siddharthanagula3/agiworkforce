@@ -300,8 +300,7 @@ impl LLMProvider for OllamaProvider {
                     request.model,
                 );
                 // Strip tool-call blocks from the content so the user sees clean text
-                response_content =
-                    prompt_tool_injection::strip_tool_call_blocks(&response_content);
+                response_content = prompt_tool_injection::strip_tool_call_blocks(&response_content);
                 Some(parsed)
             } else {
                 None
@@ -320,8 +319,7 @@ impl LLMProvider for OllamaProvider {
                                 if a.is_string() {
                                     a.as_str().unwrap_or("{}").to_string()
                                 } else {
-                                    serde_json::to_string(a)
-                                        .unwrap_or_else(|_| "{}".to_string())
+                                    serde_json::to_string(a).unwrap_or_else(|_| "{}".to_string())
                                 }
                             })
                             .unwrap_or_else(|| "{}".to_string());
@@ -573,9 +571,8 @@ impl Stream for PromptToolInjectionStream {
 
                         // Clean tool-call blocks from the content so downstream
                         // consumers see clean conversational text.
-                        let cleaned = prompt_tool_injection::strip_tool_call_blocks(
-                            &self.accumulated_text,
-                        );
+                        let cleaned =
+                            prompt_tool_injection::strip_tool_call_blocks(&self.accumulated_text);
                         chunk.content = cleaned;
                     }
                 }

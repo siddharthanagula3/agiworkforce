@@ -287,17 +287,14 @@ pub async fn voice_transcribe_blob(
                     .service
                     .lock()
                     .map_err(|e| format!("Failed to lock settings service: {}", e))?;
-                svc.get_api_key("openai")
-                    .unwrap_or_else(|e| {
-                        tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
-                        String::new()
-                    })
+                svc.get_api_key("openai").unwrap_or_else(|e| {
+                    tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
+                    String::new()
+                })
             };
 
             if api_key.is_empty() {
-                tracing::debug!(
-                    "[voice] No OpenAI key in settings, falling back to managed cloud"
-                );
+                tracing::debug!("[voice] No OpenAI key in settings, falling back to managed cloud");
                 transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
             } else {
                 transcribe_with_openai_direct(
@@ -318,12 +315,8 @@ pub async fn voice_transcribe_blob(
                 }
                 VoiceProvider::Local => {
                     let local_whisper = voice_state.local_whisper.read().await;
-                    transcribe_with_local_whisper(
-                        &temp_file,
-                        &local_whisper,
-                        overridden.language,
-                    )
-                    .await
+                    transcribe_with_local_whisper(&temp_file, &local_whisper, overridden.language)
+                        .await
                 }
             }
         }
@@ -1656,7 +1649,7 @@ pub async fn voice_configure_barge_in(
 #[tauri::command]
 pub async fn voice_start_barge_in_monitoring(
     state: State<'_, Arc<Mutex<VoiceState>>>,
-    #[allow(unused_variables)] app_handle: AppHandle,
+    app_handle: AppHandle,
 ) -> Result<bool, String> {
     let voice_state = state.lock().await;
     let mut barge_in = voice_state.barge_in.write().await;
@@ -1700,9 +1693,7 @@ pub async fn voice_start_barge_in_monitoring(
                     tracing::debug!("Barge-in monitoring started");
                     Ok(true)
                 }
-                Err(e) => {
-                    Err(format!("Failed to start barge-in monitoring: {}", e))
-                }
+                Err(e) => Err(format!("Failed to start barge-in monitoring: {}", e)),
             }
         } else {
             Err("Barge-in detector not initialized".to_string())
@@ -2209,10 +2200,7 @@ pub async fn speech_stop_and_transcribe(
 
     match transcription {
         Ok(vt) => {
-            tracing::info!(
-                "[wispr] Transcription complete: {} chars",
-                vt.text.len()
-            );
+            tracing::info!("[wispr] Transcription complete: {} chars", vt.text.len());
             let _ = app_handle.emit("voice:transcription:complete", &vt);
             Ok(SpeechTranscriptResult {
                 text: vt.text,

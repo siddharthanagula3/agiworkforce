@@ -17,7 +17,7 @@ export * from './Alert';
 export * from './AlertDialog';
 export * from './Badge';
 export * from './Button';
-export * from './card';
+export * from './Card';
 export * from './Checkbox';
 export * from './Collapsible';
 export * from './Dialog';

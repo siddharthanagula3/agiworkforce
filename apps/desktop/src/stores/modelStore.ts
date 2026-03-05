@@ -24,7 +24,12 @@ import {
 } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
-import { getModelForRequest, isManualSelection, type TaskType } from '../lib/modelRouter';
+import {
+  getModelForRequest,
+  getModelForRequestAsync,
+  isManualSelection,
+  type TaskType,
+} from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
@@ -163,6 +168,22 @@ interface ModelState {
    * @returns The model ID to use and routing decision details
    */
   getRoutedModel: (message: string, hasImages?: boolean) => RoutingDecision;
+
+  /**
+   * Async version of getRoutedModel that uses LLM classification for Pro+ tiers.
+   * When the selected auto mode is balanced or premium and local classification
+   * has low confidence, this sends a lightweight classify request to a fast model
+   * for more accurate task type detection.
+   *
+   * @param message - The user's message content
+   * @param hasImages - Whether the message includes images
+   * @param llmClassify - Callback to classify via a fast LLM (e.g. Gemini Flash)
+   */
+  getRoutedModelAsync: (
+    message: string,
+    hasImages?: boolean,
+    llmClassify?: (prompt: string) => Promise<string>,
+  ) => Promise<RoutingDecision>;
 
   /**
    * Check if current selection is a manual model selection (bypasses routing)
@@ -581,15 +602,43 @@ export const useModelStore = create<ModelState>()(
           // Use the model router to determine the actual model
           const routingResult = getModelForRequest(effectiveModel, message, hasImages);
 
-          // Task type defaults to 'general' — the routing reason string format is
-          // inconsistent across code paths (task preferences, complexity-based, benchmark-based)
-          // so regex extraction is unreliable. The actual routing decision already used the
-          // correct task type internally; this field is only for UI display.
-          const taskType: TaskType = 'general';
+          const decision: RoutingDecision = {
+            routedModelId: routingResult.modelId,
+            taskType: routingResult.taskType,
+            reason: routingResult.reason,
+            wasRouted: routingResult.wasRouted,
+            timestamp: Date.now(),
+          };
+
+          return decision;
+        },
+
+        getRoutedModelAsync: async (
+          message: string,
+          hasImages: boolean = false,
+          llmClassify?: (prompt: string) => Promise<string>,
+        ): Promise<RoutingDecision> => {
+          const { selectedModel } = get();
+          const currentPlan = (() => {
+            try {
+              return useAccountStore.getState()?.account?.plan ?? 'hobby';
+            } catch {
+              return 'hobby' as const;
+            }
+          })();
+
+          const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
+
+          const routingResult = await getModelForRequestAsync(
+            effectiveModel,
+            message,
+            hasImages,
+            llmClassify,
+          );
 
           const decision: RoutingDecision = {
             routedModelId: routingResult.modelId,
-            taskType,
+            taskType: routingResult.taskType,
             reason: routingResult.reason,
             wasRouted: routingResult.wasRouted,
             timestamp: Date.now(),

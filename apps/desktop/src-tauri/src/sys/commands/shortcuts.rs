@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut as GlobalShortcut, ShortcutState};
@@ -19,6 +20,13 @@ pub struct Shortcut {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub shortcuts: Vec<Shortcut>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickQueryHotkeyPreferences {
+    pub enabled: bool,
+    pub combo: String,
 }
 
 pub struct ShortcutsState {
@@ -115,6 +123,93 @@ impl Default for ShortcutsState {
     }
 }
 
+fn default_quick_query_hotkey_preferences() -> QuickQueryHotkeyPreferences {
+    QuickQueryHotkeyPreferences {
+        enabled: true,
+        combo: "CommandOrControl+Shift+Space".to_string(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredShortcutSettings {
+    #[serde(default)]
+    global_hotkey_preferences: Option<QuickQueryHotkeyPreferences>,
+}
+
+fn load_quick_query_hotkey_preferences_from_disk(
+    app: &AppHandle,
+) -> Result<QuickQueryHotkeyPreferences, String> {
+    let settings_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("settings.json");
+
+    if !settings_path.exists() {
+        return Ok(default_quick_query_hotkey_preferences());
+    }
+
+    let raw = fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Failed to read settings file {:?}: {}", settings_path, e))?;
+    let parsed: StoredShortcutSettings = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse settings file {:?}: {}", settings_path, e))?;
+
+    Ok(parsed
+        .global_hotkey_preferences
+        .unwrap_or_else(default_quick_query_hotkey_preferences))
+}
+
+pub async fn apply_quick_query_hotkey_preferences(
+    app: &AppHandle,
+    shortcuts_state: &Arc<Mutex<ShortcutsState>>,
+    preferences: QuickQueryHotkeyPreferences,
+) -> Result<Shortcut, String> {
+    let shortcuts_state = shortcuts_state.lock().await;
+    let mut shortcuts = shortcuts_state.shortcuts.lock().await;
+    let mut registered = shortcuts_state.registered_keys.lock().await;
+
+    let shortcut = shortcuts
+        .entry("toggle_window".to_string())
+        .or_insert_with(|| Shortcut {
+            id: "toggle_window".to_string(),
+            key: preferences.combo.clone(),
+            description: "Quick Query — ask anything from any app".to_string(),
+            action: "quick_query".to_string(),
+            enabled: preferences.enabled,
+            is_global: true,
+        });
+
+    let previous_key = shortcut.key.clone();
+    let previous_enabled = shortcut.enabled;
+
+    if shortcut.is_global && previous_enabled {
+        let _ = unregister_global_shortcut(app, &previous_key);
+        registered.retain(|key| key != &previous_key);
+    }
+
+    shortcut.key = preferences.combo.clone();
+    shortcut.enabled = preferences.enabled;
+    shortcut.action = "quick_query".to_string();
+    shortcut.is_global = true;
+
+    if shortcut.enabled {
+        register_global_shortcut(app, &shortcut.key, shortcut.action.clone())?;
+        if !registered.contains(&shortcut.key) {
+            registered.push(shortcut.key.clone());
+        }
+    }
+
+    let updated = shortcut.clone();
+    drop(registered);
+    drop(shortcuts);
+
+    app.emit("shortcut_updated", &updated)
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
+
+    Ok(updated)
+}
+
 /// Register a global shortcut with the system
 fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Result<(), String> {
     let shortcut: GlobalShortcut = key
@@ -202,7 +297,22 @@ pub fn init_global_shortcuts(app: &AppHandle) -> Result<(), String> {
     tracing::info!("Initializing global shortcuts...");
 
     let defaults = ShortcutsState::with_defaults();
-    let shortcuts = defaults.shortcuts.blocking_lock();
+    let mut shortcuts = defaults.shortcuts.blocking_lock();
+
+    match load_quick_query_hotkey_preferences_from_disk(app) {
+        Ok(preferences) => {
+            if let Some(shortcut) = shortcuts.get_mut("toggle_window") {
+                shortcut.key = preferences.combo;
+                shortcut.enabled = preferences.enabled;
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to load Quick Query hotkey preferences from disk: {}",
+                error
+            );
+        }
+    }
 
     for shortcut in shortcuts.values() {
         if shortcut.enabled && shortcut.is_global {
@@ -416,6 +526,15 @@ pub async fn shortcuts_get_defaults() -> Result<Vec<Shortcut>, String> {
     let defaults = ShortcutsState::with_defaults();
     let shortcuts = defaults.shortcuts.blocking_lock();
     Ok(shortcuts.values().cloned().collect())
+}
+
+#[tauri::command]
+pub async fn shortcuts_apply_quick_query_preferences(
+    preferences: QuickQueryHotkeyPreferences,
+    app: AppHandle,
+    state: State<'_, Arc<Mutex<ShortcutsState>>>,
+) -> Result<Shortcut, String> {
+    apply_quick_query_hotkey_preferences(&app, &state, preferences).await
 }
 
 /// Command to register global shortcuts from frontend

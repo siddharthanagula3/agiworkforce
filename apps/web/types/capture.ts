@@ -23,6 +23,3 @@ export interface CaptureOptions {
     height: number;
   };
 }
-
-export const _stub = true;
-export default {};

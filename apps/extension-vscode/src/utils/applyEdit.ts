@@ -40,6 +40,9 @@ export async function applyLlmEdit(
   selection: vscode.Selection,
   llmResponse: string,
   commandLabel: string,
+  options?: {
+    autoApply?: boolean;
+  },
 ): Promise<void> {
   const lang = editor.document.languageId;
   const codeBlock = extractCodeBlock(llmResponse, lang);
@@ -47,6 +50,20 @@ export async function applyLlmEdit(
   if (codeBlock === undefined || selection.isEmpty) {
     // No applicable code block — open new tab
     await openInNewTab(llmResponse, commandLabel);
+    return;
+  }
+
+  if (options?.autoApply === true) {
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(editor.document.uri, selection, codeBlock);
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+      vscode.window.showWarningMessage(
+        'AGI Workforce: Could not auto-apply edit — document may have changed.',
+      );
+      await openInNewTab(llmResponse, commandLabel);
+      return;
+    }
     return;
   }
 

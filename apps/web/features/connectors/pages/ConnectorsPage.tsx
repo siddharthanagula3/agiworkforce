@@ -1,7 +1,16 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, Check, MoreHorizontal, Zap, Lock, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  Search,
+  Plus,
+  Check,
+  MoreHorizontal,
+  Zap,
+  Lock,
+  ExternalLink,
+  Loader2,
+} from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
@@ -9,7 +18,15 @@ import { cn } from '@shared/lib/utils';
 
 // ─── Connector Data ────────────────────────────────────────────────────────────
 
-type ConnectorCategory = 'Productivity' | 'Developer' | 'CRM' | 'Marketing' | 'Finance' | 'Social' | 'AI' | 'Exclusive';
+type ConnectorCategory =
+  | 'Productivity'
+  | 'Developer'
+  | 'CRM'
+  | 'Marketing'
+  | 'Finance'
+  | 'Social'
+  | 'AI'
+  | 'Exclusive';
 type AuthType = 'oauth' | 'api_key' | 'connection_string' | 'pat';
 type Phase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -451,6 +468,7 @@ const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
 interface ConnectorCardProps {
   connector: Connector;
   connected: boolean;
+  mutating: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
 }
@@ -458,6 +476,7 @@ interface ConnectorCardProps {
 const ConnectorCard: React.FC<ConnectorCardProps> = ({
   connector,
   connected,
+  mutating,
   onConnect,
   onDisconnect,
 }) => {
@@ -485,7 +504,10 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
       {/* Coming Soon overlay */}
       {isComingSoon && (
         <div className="absolute right-3 top-3">
-          <Badge variant="outline" className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+          >
             Phase {connector.phase}
           </Badge>
         </div>
@@ -517,7 +539,11 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
         {connected ? (
           <>
             <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              {mutating ? (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              )}
               <span className="text-xs font-medium text-emerald-400">Connected</span>
             </div>
             <div className="flex items-center gap-1">
@@ -533,6 +559,7 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                 onClick={onDisconnect}
+                disabled={mutating}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
@@ -558,8 +585,11 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 : 'bg-primary text-primary-foreground hover:bg-primary/90',
             )}
             onClick={onConnect}
+            disabled={mutating}
           >
-            {connector.exclusive ? (
+            {mutating ? (
+              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+            ) : connector.exclusive ? (
               <>
                 <Zap className="mr-1.5 h-3 w-3" />
                 Enable
@@ -582,9 +612,36 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
 export function ConnectorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
-  // TODO: Persist connected connector state to Supabase (e.g. a `user_connectors` table keyed by
-  // user_id + connector_id). For now this is session-only; connections reset on page reload.
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+
+  // Fetch connected connectors from Supabase on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchConnectors() {
+      try {
+        const res = await fetch('/api/connectors');
+        if (!res.ok) {
+          // User may not be authenticated — degrade gracefully to empty set
+          setLoading(false);
+          return;
+        }
+        const json = (await res.json()) as { connectors: Array<{ connectorId: string }> };
+        if (!cancelled) {
+          setConnectedIds(new Set(json.connectors.map((c) => c.connectorId)));
+        }
+      } catch {
+        // Network error — degrade gracefully
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void fetchConnectors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredConnectors = useMemo(() => {
     return CONNECTORS.filter((c) => {
@@ -600,19 +657,72 @@ export function ConnectorsPage() {
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
 
-  const handleConnect = (id: string) => {
-    // TODO: Replace with real OAuth flow or API key dialog, then persist to Supabase `user_connectors`.
-    // Currently updates local state only (resets on reload).
-    setConnectedIds((prev) => new Set([...prev, id]));
-  };
+  const handleConnect = useCallback(async (id: string) => {
+    const connector = CONNECTORS.find((c) => c.id === id);
+    if (!connector) return;
 
-  const handleDisconnect = (id: string) => {
+    // Optimistic update
+    setConnectedIds((prev) => new Set([...prev, id]));
+    setMutatingIds((prev) => new Set([...prev, id]));
+
+    try {
+      const res = await fetch('/api/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectorId: id, authType: connector.authType }),
+      });
+      if (!res.ok) {
+        // Revert optimistic update on failure
+        setConnectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    } catch {
+      // Revert on network error
+      setConnectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } finally {
+      setMutatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, []);
+
+  const handleDisconnect = useCallback(async (id: string) => {
+    // Optimistic update
     setConnectedIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
     });
-  };
+    setMutatingIds((prev) => new Set([...prev, id]));
+
+    try {
+      const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setConnectedIds((prev) => new Set([...prev, id]));
+      }
+    } catch {
+      // Revert on network error
+      setConnectedIds((prev) => new Set([...prev, id]));
+    } finally {
+      setMutatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, []);
 
   return (
     <div className="min-h-full bg-background">
@@ -669,6 +779,13 @@ export function ConnectorsPage() {
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-6">
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
         {/* Connected Section */}
         {connectedConnectors.length > 0 && (
           <section className="mb-8">
@@ -684,8 +801,9 @@ export function ConnectorsPage() {
                   key={connector.id}
                   connector={connector}
                   connected={true}
-                  onConnect={() => handleConnect(connector.id)}
-                  onDisconnect={() => handleDisconnect(connector.id)}
+                  mutating={mutatingIds.has(connector.id)}
+                  onConnect={() => void handleConnect(connector.id)}
+                  onDisconnect={() => void handleDisconnect(connector.id)}
                 />
               ))}
             </div>
@@ -698,7 +816,9 @@ export function ConnectorsPage() {
             <div className="mb-3 flex items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">
                 Available
-                {activeCategory === 'All' || activeCategory === 'Exclusive' ? '' : ` — ${activeCategory}`}
+                {activeCategory === 'All' || activeCategory === 'Exclusive'
+                  ? ''
+                  : ` — ${activeCategory}`}
                 <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                   ({availableConnectors.length})
                 </span>
@@ -710,8 +830,9 @@ export function ConnectorsPage() {
                   key={connector.id}
                   connector={connector}
                   connected={false}
-                  onConnect={() => handleConnect(connector.id)}
-                  onDisconnect={() => handleDisconnect(connector.id)}
+                  mutating={mutatingIds.has(connector.id)}
+                  onConnect={() => void handleConnect(connector.id)}
+                  onDisconnect={() => void handleDisconnect(connector.id)}
                 />
               ))}
             </div>
@@ -741,12 +862,23 @@ export function ConnectorsPage() {
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-foreground">105+ Connectors Planned</h3>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  We&apos;re rolling out connectors in phases — from core productivity tools to AI models,
-                  marketing platforms, and enterprise apps. Phase 1 (10 core connectors) ships first,
-                  followed by CRM, marketing, finance, and social in subsequent phases.
+                  We&apos;re rolling out connectors in phases — from core productivity tools to AI
+                  models, marketing platforms, and enterprise apps. Phase 1 (10 core connectors)
+                  ships first, followed by CRM, marketing, finance, and social in subsequent phases.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {['Airtable', 'Trello', 'ClickUp', 'Pipedrive', 'Twilio', 'SendGrid', 'Ahrefs', 'QuickBooks', 'Dropbox', 'Figma'].map((name) => (
+                  {[
+                    'Airtable',
+                    'Trello',
+                    'ClickUp',
+                    'Pipedrive',
+                    'Twilio',
+                    'SendGrid',
+                    'Ahrefs',
+                    'QuickBooks',
+                    'Dropbox',
+                    'Figma',
+                  ].map((name) => (
                     <Badge
                       key={name}
                       variant="outline"

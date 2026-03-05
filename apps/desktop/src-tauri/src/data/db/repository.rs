@@ -271,11 +271,7 @@ pub fn list_branches(conn: &Connection, conversation_id: i64) -> Result<Vec<Conv
 }
 
 /// Deletes a branch and all its messages. Refuses to delete 'main'.
-pub fn delete_branch(
-    conn: &Connection,
-    conversation_id: i64,
-    branch_id: &str,
-) -> Result<()> {
+pub fn delete_branch(conn: &Connection, conversation_id: i64, branch_id: &str) -> Result<()> {
     if branch_id == DEFAULT_BRANCH_ID {
         return Err(rusqlite::Error::InvalidParameterName(
             "Cannot delete the 'main' branch".to_string(),

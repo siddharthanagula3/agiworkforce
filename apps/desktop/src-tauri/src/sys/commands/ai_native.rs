@@ -16,8 +16,8 @@ pub async fn ai_analyze_project(
 ) -> Result<String, String> {
     let router = llm_state.router.read().await;
 
-    let canonical = std::fs::canonicalize(&project_root)
-        .map_err(|e| format!("Invalid project path: {}", e))?;
+    let canonical =
+        std::fs::canonicalize(&project_root).map_err(|e| format!("Invalid project path: {}", e))?;
     let canonical_str = canonical.to_string_lossy();
 
     // Only allow paths within home directory or /tmp

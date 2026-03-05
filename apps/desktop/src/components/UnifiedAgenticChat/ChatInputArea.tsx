@@ -37,7 +37,9 @@ import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
+import { useChatStore } from '../../stores/chat/chatStore';
 import { useModelCapabilities } from '../../hooks/useModelCapabilities';
+import { isAutoModel } from '../../lib/modelCapabilities';
 
 // Sub-components
 import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
@@ -152,6 +154,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const userModifiedContentRef = useRef(false);
   const pendingAutoSendIdsRef = useRef<Set<string>>(new Set());
+  const attachmentRevisionRef = useRef(0);
+  const failedAutoSendIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize hooks
   const { isSlashCommandInput } = useSlashCommands();
@@ -180,6 +184,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const pendingMessages = useUnifiedChatStore((state) => state.pendingMessages);
   const addPendingMessage = useUnifiedChatStore((state) => state.addPendingMessage);
   const activeConversationUuid = useUnifiedChatStore((state) => state.activeConversationId);
+  const agenticLoopStatus = useChatStore((state) => state.agenticLoopStatus);
 
   const sidecarOpen = useUnifiedChatStore((state) => state.sidecar.isOpen);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
@@ -215,7 +220,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Drag and drop
   const { isDragging } = useDragAndDrop({
     onFilesAdded: handleFilesAdded,
-    enabled: enableAttachments,
+    enabled:
+      enableAttachments &&
+      !disabled &&
+      !isSending &&
+      !isProcessingAttachments &&
+      !isLoading &&
+      !isStreaming,
   });
 
   // Memoize the suggestion change handler
@@ -359,10 +370,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Get autocomplete suggestions
   const autocompleteResult = getAutocomplete(content, slashAutocompleteIndex);
+  const activeConversationDbId = useMemo(
+    () => (activeConversationUuid ? uuidToDbId(activeConversationUuid) : null),
+    [activeConversationUuid],
+  );
+  const isAgenticLoopQueueMode =
+    !!agenticLoopStatus?.active &&
+    (agenticLoopStatus.conversationId == null ||
+      activeConversationDbId == null ||
+      agenticLoopStatus.conversationId === activeConversationDbId);
 
   // Derived state
   const isInputDisabled = disabled || isSending;
-  const isQueueMode = isLoading || isStreaming;
+  const isSendDisabled = isInputDisabled || isProcessingAttachments;
+  const isQueueMode = isLoading || isStreaming || isAgenticLoopQueueMode;
+  const isAttachmentInteractionDisabled = isSendDisabled || isQueueMode;
   const isEmptyState = messages.length === 0;
   const showFocusModeButtons = !isSimpleMode && isEmptyState;
   const showStopButton = (isStreaming || isLoading) && onStopGeneration;
@@ -372,7 +394,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Model display name
   const modelDisplayName = useMemo(() => {
     if (isSimpleMode) {
-      if (selectedModel?.startsWith('auto') || selectedModel === 'auto' || !selectedModel) {
+      if (isAutoModel(selectedModel) || !selectedModel) {
         return 'Auto';
       }
       const metadata = getModelMetadata(selectedModel);
@@ -382,15 +404,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       return 'AI';
     }
 
-    return selectedModel?.startsWith('auto')
+    return isAutoModel(selectedModel)
       ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Economy)')
-      : selectedModel === 'auto'
-        ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Economy)')
-        : selectedModel
-          ? (getModelMetadata(selectedModel)?.name ??
-            availableModels.find((m) => m.id === selectedModel)?.name ??
-            selectedModel)
-          : 'GPT-5.1 Instant';
+      : selectedModel
+        ? (getModelMetadata(selectedModel)?.name ??
+          availableModels.find((m) => m.id === selectedModel)?.name ??
+          selectedModel)
+        : 'GPT-5.1 Instant';
   }, [selectedModel, isSimpleMode, availableModels]);
 
   // Credit usage calculations
@@ -407,6 +427,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const showCreditUsage = monthlyLimit > 0;
   const creditPercentage = showCreditUsage ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
   const isLowBalance = showCreditUsage && monthlyLimit - monthlyCost < monthlyLimit * 0.1;
+
+  useEffect(() => {
+    attachmentRevisionRef.current += 1;
+  }, [attachments]);
 
   // AUDIT-005-015 fix: Use ref to track current content to avoid stale closure
   // The content in deps was causing the effect to re-run unnecessarily and
@@ -431,7 +455,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleToggleAgentMode = useCallback(() => {
     const next = !agentModeEnabled;
     if (next) {
-      if (!capabilities?.supportsTools) {
+      if (capabilities && !capabilities.supportsTools) {
         toast.warning(
           "Selected model doesn't support tools. Agent mode requires a tool-capable model.",
         );
@@ -462,12 +486,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const sendPendingMessage = useCallback(
     async (pendingMessage: PendingUserMessage): Promise<boolean> => {
-      const activeConversationDbId = activeConversationUuid
-        ? uuidToDbId(activeConversationUuid)
-        : undefined;
       const targetConversationId = pendingMessage.conversation_id ?? activeConversationDbId;
+      const canSendWithoutDbConversation =
+        pendingMessage.conversation_id == null && activeConversationDbId != null;
 
-      if (!targetConversationId || targetConversationId !== activeConversationDbId) {
+      if (
+        !canSendWithoutDbConversation &&
+        (!targetConversationId || targetConversationId !== activeConversationDbId)
+      ) {
         console.log(
           '[ChatInputArea] Skipping pending auto-send for inactive conversation:',
           pendingMessage.id,
@@ -511,12 +537,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         // Clear local pending state first so UI is never stale
         useUnifiedChatStore.getState().removePendingMessage(pendingMessage.id);
+        failedAutoSendIdsRef.current.delete(pendingMessage.id);
 
         // Then clean up backend state (best-effort)
-        if (isTauri) {
+        if (isTauri && targetConversationId != null) {
           try {
             await invoke<PendingUserMessage | null>('chat_pop_pending_message', {
-              request: { conversation_id: targetConversationId },
+              request: {
+                conversation_id: targetConversationId,
+                pending_message_id: pendingMessage.id,
+              },
             });
           } catch (backendErr) {
             console.warn(
@@ -530,6 +560,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         return true;
       } catch (err) {
         console.error('[ChatInputArea] Failed to auto-send pending message:', err);
+        toast.error(getSimpleErrorMessage(err) || 'Failed to send queued message');
+        failedAutoSendIdsRef.current.add(pendingMessage.id);
         return false;
       } finally {
         pendingAutoSendIdsRef.current.delete(pendingMessage.id);
@@ -538,7 +570,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     },
     [
       onSend,
-      activeConversationUuid,
+      activeConversationDbId,
       isSending,
       disabled,
       isQueueMode,
@@ -558,6 +590,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       if (!pendingMessage) {
         return;
       }
+      failedAutoSendIdsRef.current.delete(pendingMessage.id);
 
       console.log(
         '[ChatInputArea] Auto-sending pending message:',
@@ -577,11 +610,20 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       return;
     }
 
+    // Clean up retry suppression entries for messages that no longer exist.
+    const activePendingIds = new Set(pendingMessages.map((msg) => msg.id));
+    failedAutoSendIdsRef.current.forEach((id) => {
+      if (!activePendingIds.has(id)) {
+        failedAutoSendIdsRef.current.delete(id);
+      }
+    });
+
     const activeConversationDbId = uuidToDbId(activeConversationUuid);
     const nextPendingMessage = pendingMessages.find((pendingMessage) => {
       const pendingConversationId = pendingMessage.conversation_id ?? activeConversationDbId;
       return (
         pendingConversationId === activeConversationDbId &&
+        !failedAutoSendIdsRef.current.has(pendingMessage.id) &&
         !pendingAutoSendIdsRef.current.has(pendingMessage.id)
       );
     });
@@ -704,7 +746,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Screen capture handler - converts captured image to attachment
   const handleScreenCapture = useCallback(
-    async (result: CaptureResult) => {
+    async (result: CaptureResult): Promise<Attachment | null> => {
       try {
         // Read the captured image file and convert to base64
         const imageBytes = await invoke<number[]>('plugin:fs|read_file', {
@@ -738,20 +780,22 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           size: uint8Array.length,
         };
 
-        // Add to attachments
-        setAttachments([...attachments, attachment]);
+        // Add to UI attachment list while also returning a local value for immediate send.
+        setAttachments((current) => [...current, attachment]);
         console.log('[ChatInputArea] Screenshot attached:', attachment.name);
+        return attachment;
       } catch (error) {
         console.error('[ChatInputArea] Failed to process screenshot:', error);
         setSubmitError('Failed to attach screenshot. Please try again.');
+        return null;
       }
     },
-    [attachments, setAttachments],
+    [setAttachments],
   );
 
   // Detect "what's on my screen?" patterns and auto-capture
   const detectAndCaptureScreen = useCallback(
-    async (messageContent: string): Promise<boolean> => {
+    async (messageContent: string): Promise<Attachment | null> => {
       // Pattern matching for screen-related queries
       const screenPatterns = [
         /what'?s on (my|the) screen/i,
@@ -783,16 +827,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             conversation_id: conversationDbId,
           });
 
-          await handleScreenCapture(result);
-          return true;
+          return await handleScreenCapture(result);
         } catch (error) {
           console.error('[ChatInputArea] Auto-capture failed:', error);
           // Don't block message send on capture failure
-          return false;
+          return null;
         }
       }
 
-      return false;
+      return null;
     },
     [handleScreenCapture],
   );
@@ -801,14 +844,24 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!content.trim() || isInputDisabled || isSending) return;
+    if (isProcessingAttachments) {
+      setSubmitError('Please wait for attachments to finish processing.');
+      return;
+    }
+    if (isSendDisabled) return;
 
     const messageContent = content.trim();
+    const existingAttachments = attachments;
 
-    // Check for screen query patterns and auto-capture if detected
-    await detectAndCaptureScreen(messageContent);
-
-    // Queue mode handling
+    // Queue mode handling (do not run auto-capture/tooling in queue mode).
     if (isQueueMode) {
+      if (existingAttachments.length > 0) {
+        setSubmitError(
+          'Queued messages do not support attachments yet. Remove attachments or disable queue mode.',
+        );
+        return;
+      }
+
       // AUDIT-STREAM-062 fix: Pass active conversation ID when queueing
       const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
       const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
@@ -823,6 +876,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         addPendingMessage(pendingMsg);
         setContent('');
         setDraftContent('');
+        setSubmitError(null);
 
         console.log('[ChatInputArea] Message queued:', pendingMsg.id);
       } catch (error) {
@@ -831,6 +885,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       }
       return;
     }
+
+    // Check for screen query patterns and auto-capture if detected
+    const capturedAttachment = await detectAndCaptureScreen(messageContent);
+    const effectiveAttachments = capturedAttachment
+      ? [...existingAttachments, capturedAttachment]
+      : existingAttachments;
 
     // Abort any in-flight request
     if (sendAbortControllerRef.current) {
@@ -850,7 +910,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const currentAbortSignal = sendAbortControllerRef.current.signal;
 
     // Check for Auto Mode restrictions
-    if (selectedModel === 'auto') {
+    if (isAutoModel(selectedModel)) {
       const { account } = useAccountStore.getState();
       const plan = account?.plan || 'free';
       const hasAccess = ['hobby', 'pro', 'max', 'enterprise'].includes(plan);
@@ -878,7 +938,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
 
     // Validate vision attachments against model capabilities
-    const hasImageAttachments = attachments.some(
+    const hasImageAttachments = effectiveAttachments.some(
       (a) => a.type === 'image' || a.type === 'screenshot',
     );
     if (hasImageAttachments && capabilities && !capabilities.supportsVision) {
@@ -889,12 +949,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     setIsSending(true);
     setSubmitError(null);
-    const messageAttachments = attachments.length > 0 ? attachments : undefined;
+    const messageAttachments = effectiveAttachments.length > 0 ? effectiveAttachments : undefined;
+    const preSendAttachmentRevision = attachmentRevisionRef.current;
 
     userModifiedContentRef.current = false;
     setContent('');
     setDraftContent('');
     clearAttachments();
+
+    const restoreAttachmentsIfSafe = () => {
+      if (!messageAttachments) {
+        return;
+      }
+      // Guard against clobbering user attachment edits that occurred after send started.
+      if (attachmentRevisionRef.current <= preSendAttachmentRevision + 1) {
+        setAttachments(messageAttachments);
+      } else {
+        console.info('[ChatInputArea] Skipping attachment restore due to newer edits');
+      }
+    };
 
     try {
       if (currentAbortSignal.aborted) {
@@ -913,7 +986,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         if (creditBalance_cents !== null && creditBalance_cents <= 0) {
           setContent(messageContent);
           setDraftContent(messageContent);
-          if (messageAttachments) setAttachments(messageAttachments);
+          restoreAttachmentsIfSafe();
           setSubmitError(
             'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
           );
@@ -925,7 +998,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         if (dailyLimit_cents && dailyUsage_cents && dailyUsage_cents >= dailyLimit_cents) {
           setContent(messageContent);
           setDraftContent(messageContent);
-          if (messageAttachments) setAttachments(messageAttachments);
+          restoreAttachmentsIfSafe();
           setSubmitError('Daily credit limit reached. Credits will reset at midnight UTC.');
           setIsSending(false);
           sendAbortControllerRef.current = null;
@@ -956,7 +1029,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       if (!currentAbortSignal.aborted) {
         setContent(messageContent);
         setDraftContent(messageContent);
-        if (messageAttachments) setAttachments(messageAttachments);
+        restoreAttachmentsIfSafe();
         setSubmitError(getSimpleErrorMessage(error));
         console.error('[ChatInputArea] Send failed:', error);
       }
@@ -1023,13 +1096,39 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // File select handler
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isAttachmentInteractionDisabled) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (isQueueMode) {
+        setSubmitError('Attachments are disabled while a response is in progress.');
+      }
+      return;
+    }
     const files = Array.from(event.target.files || []);
     handleFilesAdded(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleAttachmentRemove = useCallback(
+    (id: string) => {
+      if (isSending) {
+        return;
+      }
+      removeAttachment(id);
+    },
+    [isSending, removeAttachment],
+  );
+
   // Paste handler
   const handlePaste = (event: React.ClipboardEvent) => {
+    if (isAttachmentInteractionDisabled) {
+      const hasFileItems = Array.from(event.clipboardData.items).some(
+        (item) => item.kind === 'file',
+      );
+      if (isQueueMode && hasFileItems) {
+        setSubmitError('Attachments are disabled while a response is in progress.');
+      }
+      return;
+    }
     handleAttachmentPaste(event);
   };
 
@@ -1197,8 +1296,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           {/* Attachments preview */}
           <AttachmentPreview
             attachments={attachments}
-            onRemove={removeAttachment}
+            onRemove={handleAttachmentRemove}
             visionSupported={visionSupported}
+            disableRemove={isSending}
           />
 
           {/* Error display */}
@@ -1310,13 +1410,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             <div className="flex items-center gap-1">
               <PlusMenu
-                disabled={disabled}
+                disabled={isAttachmentInteractionDisabled}
                 onAttachClick={() => fileInputRef.current?.click()}
                 onScreenCapture={handleScreenCapture}
-                conversationId={(() => {
-                  const activeId = useUnifiedChatStore.getState().activeConversationId;
-                  return activeId ? uuidToDbId(activeId) : undefined;
-                })()}
+                conversationId={activeConversationDbId ?? undefined}
                 webSearchEnabled={webSearchEnabled}
                 onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
                 visionSupported={visionSupported}
@@ -1415,7 +1512,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 showStopButton={!!showStopButton}
                 isSending={isSending}
                 isQueueMode={isQueueMode}
-                disabled={isInputDisabled}
+                disabled={isSendDisabled}
                 hasContent={!!content.trim()}
                 isSimpleMode={isSimpleMode}
                 onSend={() => handleSubmit()}
