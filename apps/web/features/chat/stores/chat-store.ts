@@ -83,6 +83,9 @@ function getGreetingTime(): string {
 // Store
 // ============================================================================
 
+// Guard against rapid duplicate session creation (e.g., double-click on "New Chat")
+let lastSessionCreatedAt = 0;
+
 export const useChatStore = create<ChatState & ChatActions>()(
   persist(
     immer((set, get) => ({
@@ -96,13 +99,21 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       // Actions
       createSession: (userId?: string) => {
+        const now = Date.now();
+        // Prevent duplicate session creation within 1 second (e.g., rapid "New Chat" clicks)
+        if (now - lastSessionCreatedAt < 1000) {
+          const state = get();
+          if (state.activeSessionId) return state.activeSessionId;
+        }
+        lastSessionCreatedAt = now;
+
         const id = generateId();
-        const now = new Date();
+        const nowDate = new Date();
         const session: ChatSession = {
           id,
           title: 'New Chat',
-          createdAt: now,
-          updatedAt: now,
+          createdAt: nowDate,
+          updatedAt: nowDate,
           preview: '',
           messageCount: 0,
           userId,

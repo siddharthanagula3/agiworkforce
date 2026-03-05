@@ -249,9 +249,11 @@ export const DashboardHomePage: React.FC = () => {
   // Real: credit balance from Supabase token_credits table
   const [tokenCredits, setTokenCredits] = useState<TokenCreditsRow | null>(null);
 
-  // TODO: tokensUsed (aggregate of web_messages.input_tokens + output_tokens) and
-  //       sessionsThisWeek (count of web_conversations created in last 7 days) have no
-  //       dedicated summary table. Wire up when a usage-summary view or edge function is added.
+  // Real: aggregated token usage from web_messages
+  const [totalTokens, setTotalTokens] = useState<number>(0);
+
+  // Real: count of web_conversations created in last 7 days
+  const [weeklySessionCount, setWeeklySessionCount] = useState<number>(0);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
 
@@ -307,8 +309,47 @@ export const DashboardHomePage: React.FC = () => {
       }
     };
 
+    // Fetch total tokens used (aggregate input_tokens + output_tokens from web_messages)
+    const fetchTokens = async () => {
+      try {
+        const { data: tokenData } = await untypedClient
+          .from('web_messages')
+          .select('input_tokens, output_tokens')
+          .eq('user_id', user.id);
+
+        if (tokenData) {
+          const total = (tokenData as any[]).reduce(
+            (sum: number, msg: any) => sum + (msg.input_tokens || 0) + (msg.output_tokens || 0),
+            0,
+          );
+          setTotalTokens(total);
+        }
+      } catch {
+        // Table may not exist yet — silently fall back to 0
+      }
+    };
+
+    // Fetch sessions created in the last 7 days
+    const fetchWeeklySessions = async () => {
+      try {
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const { count } = await untypedClient
+          .from('web_conversations')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('created_at', weekAgo.toISOString());
+
+        setWeeklySessionCount(count || 0);
+      } catch {
+        // Table may not exist yet — silently fall back to 0
+      }
+    };
+
     fetchConversations();
     fetchCredits();
+    fetchTokens();
+    fetchWeeklySessions();
   }, [user, fetchHiredEmployees]);
 
   // Derive credit display values
@@ -338,11 +379,10 @@ export const DashboardHomePage: React.FC = () => {
       {/* Stats Cards Grid */}
       <section aria-label="Usage statistics">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* TODO: Wire tokensUsed to aggregate of web_messages.input_tokens+output_tokens */}
           <StatCard
             icon={Zap}
             label="Tokens Used"
-            value="—"
+            value={totalTokens > 0 ? totalTokens.toLocaleString() : '0'}
             accentColor="bg-amber-500/10 text-amber-400"
             glowColor="bg-amber-500/20"
           />
@@ -361,11 +401,10 @@ export const DashboardHomePage: React.FC = () => {
             accentColor="bg-blue-500/10 text-blue-400"
             glowColor="bg-blue-500/20"
           />
-          {/* TODO: Wire sessionsThisWeek to count of web_conversations in last 7 days */}
           <StatCard
             icon={TrendingUp}
             label="Sessions This Week"
-            value="—"
+            value={weeklySessionCount.toString()}
             accentColor="bg-purple-500/10 text-purple-400"
             glowColor="bg-purple-500/20"
           />
