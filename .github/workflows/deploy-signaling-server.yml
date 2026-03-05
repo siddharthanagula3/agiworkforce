@@ -86,6 +86,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
