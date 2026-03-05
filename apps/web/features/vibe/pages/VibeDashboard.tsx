@@ -3,12 +3,12 @@
  * VibeDashboard - Redesigned AI Development Agent Interface
  * Inspired by: Lovable.dev, Bolt.new, Replit.com, Emergent.sh
  *
- * Layout:
- * - Left (30%): Chat interface only
- * - Right (70%): Split into Code Editor (60%) + Live Preview (40%)
- * - Mobile: Stack vertically
+ * Layout (bolt.new style):
+ * - Left (~35%): Chat panel
+ * - Right (~65%): Workbench with tab switcher (Code / Preview) + collapsible terminal
+ * - Mobile: Tab-based switcher (Chat / Code / Preview)
  *
- * Updated: Nov 18th 2025 - Complete redesign
+ * Updated: Mar 4th 2026 - Bolt.new-style layout redesign
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -29,6 +29,7 @@ import { supabase } from '@shared/lib/supabase-client';
 import { useVibeRealtime, type VibeAgentActionRow } from '../hooks/use-vibe-realtime';
 import { VibeMessageService } from '../services/vibe-message-service';
 import { toast } from 'sonner';
+import { cn } from '@shared/lib/utils';
 import { PhaseTimeline } from '../components/redesign/PhaseTimeline';
 import { useVibeOrchestrator } from '../services/vibe-phase-orchestrator';
 import { TokenUsageDisplay } from '../components/TokenUsageDisplay';
@@ -188,6 +189,9 @@ const VibeDashboard: React.FC = () => {
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [vibeMode, setVibeMode] = useState<VibeMode>('build');
+  const [workbenchView, setWorkbenchView] = useState<'code' | 'preview'>('code');
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'code' | 'preview'>('chat');
 
   const messageIdsRef = useRef<Set<string>>(new Set());
   const workingStepsMapRef = useRef<Map<string, WorkingStep>>(new Map());
@@ -444,13 +448,13 @@ const VibeDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Content - 3 Panel Layout */}
+          {/* Main Content - Bolt.new Style Layout */}
           <div className="flex-1 overflow-hidden">
-            {/* Desktop Layout: Horizontal split */}
+            {/* Desktop Layout */}
             <div className="hidden h-full md:block">
               <PanelGroup orientation="horizontal">
-                {/* Left Panel - Chat (30%) */}
-                <Panel defaultSize={30} minSize={25} maxSize={40}>
+                {/* Left Panel - Chat */}
+                <Panel defaultSize={35} minSize={20} maxSize={50}>
                   <SimpleChatPanel
                     messages={messages}
                     isLoading={isLoading}
@@ -459,59 +463,92 @@ const VibeDashboard: React.FC = () => {
                   />
                 </Panel>
 
-                <PanelResizeHandle className="group relative w-1 bg-border transition-colors hover:bg-primary">
+                <PanelResizeHandle className="group relative w-1.5 bg-border/50 transition-colors hover:bg-primary/50">
                   <div className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                    <div className="rounded-sm border border-border bg-background p-1 shadow-lg">
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    <div className="rounded-sm border border-border bg-background p-0.5 shadow-lg">
+                      <GripVertical className="h-3 w-3 text-muted-foreground" />
                     </div>
                   </div>
                 </PanelResizeHandle>
 
-                {/* Right Panel - Code + Preview (70%) */}
-                <Panel defaultSize={70} minSize={60}>
-                  <PanelGroup orientation="vertical">
-                    {/* Code Editor (60%) */}
-                    <Panel defaultSize={60} minSize={40} maxSize={80}>
-                      <CodeEditorPanel />
-                    </Panel>
-
-                    <PanelResizeHandle className="group relative h-1 bg-border transition-colors hover:bg-primary">
-                      <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                        <div className="rounded-sm border border-border bg-background px-1 py-0.5 shadow-lg">
-                          <GripVertical className="h-4 w-4 rotate-90 text-muted-foreground" />
-                        </div>
+                {/* Right Panel - Workbench */}
+                <Panel defaultSize={65} minSize={50}>
+                  <div className="flex h-full flex-col">
+                    {/* View Switcher Bar */}
+                    <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        {(['code', 'preview'] as const).map((view) => (
+                          <button
+                            key={view}
+                            onClick={() => setWorkbenchView(view)}
+                            className={cn(
+                              'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                              workbenchView === view
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                            )}
+                          >
+                            {view === 'code' ? 'Code' : 'Preview'}
+                          </button>
+                        ))}
                       </div>
-                    </PanelResizeHandle>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowTerminal(!showTerminal)}
+                          className={cn(
+                            'rounded-md px-2 py-1 text-xs transition-colors',
+                            showTerminal
+                              ? 'bg-muted text-foreground'
+                              : 'text-muted-foreground hover:bg-muted',
+                          )}
+                        >
+                          Terminal
+                        </button>
+                      </div>
+                    </div>
 
-                    {/* Live Preview (40%) */}
-                    <Panel defaultSize={40} minSize={20} maxSize={60}>
-                      <LivePreviewPanel key={previewKey} />
-                    </Panel>
-                  </PanelGroup>
+                    {/* Workbench Content */}
+                    <div className="flex-1 overflow-hidden">
+                      {workbenchView === 'code' ? (
+                        <CodeEditorPanel />
+                      ) : (
+                        <LivePreviewPanel key={previewKey} />
+                      )}
+                    </div>
+                  </div>
                 </Panel>
               </PanelGroup>
             </div>
 
-            {/* Mobile Layout: Vertical stack */}
+            {/* Mobile Layout */}
             <div className="flex h-full flex-col md:hidden">
-              {/* Chat */}
-              <div className="flex-1 overflow-hidden border-b border-border">
-                <SimpleChatPanel
-                  messages={messages}
-                  isLoading={isLoading}
-                  onPromptSelect={handleSendMessage}
-                  showEmptyState={messages.length === 0}
-                />
+              <div className="flex border-b border-border bg-muted/20">
+                {(['chat', 'code', 'preview'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setMobileTab(tab)}
+                    className={cn(
+                      'flex-1 py-2 text-center text-xs font-medium transition-colors',
+                      mobileTab === tab
+                        ? 'border-b-2 border-primary text-foreground'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
               </div>
-
-              {/* Code Editor */}
-              <div className="flex-1 overflow-hidden border-b border-border">
-                <CodeEditorPanel />
-              </div>
-
-              {/* Preview */}
               <div className="flex-1 overflow-hidden">
-                <LivePreviewPanel key={previewKey} />
+                {mobileTab === 'chat' && (
+                  <SimpleChatPanel
+                    messages={messages}
+                    isLoading={isLoading}
+                    onPromptSelect={handleSendMessage}
+                    showEmptyState={messages.length === 0}
+                  />
+                )}
+                {mobileTab === 'code' && <CodeEditorPanel />}
+                {mobileTab === 'preview' && <LivePreviewPanel key={previewKey} />}
               </div>
             </div>
           </div>

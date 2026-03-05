@@ -25,6 +25,14 @@ interface EditorContext {
   workspaceName: string;
 }
 
+interface PromptOptions {
+  command?: string;
+  planModeEnabled: boolean;
+  planOnly: boolean;
+  mcpEnabled: boolean;
+  desktopBridgeEnabled: boolean;
+}
+
 function gatherEditorContext(): EditorContext {
   const editor = vscode.window.activeTextEditor;
   const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name ?? 'unknown workspace';
@@ -62,7 +70,8 @@ function gatherEditorContext(): EditorContext {
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
-function buildSystemPrompt(ctx: EditorContext, command?: string): string {
+function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): string {
+  const { command, planModeEnabled, planOnly, mcpEnabled, desktopBridgeEnabled } = options;
   const parts: string[] = [
     'You are AGI Workforce, a model-agnostic AI coding assistant integrated into VS Code.',
     'You are knowledgeable, concise, and produce production-ready code.',
@@ -113,7 +122,35 @@ function buildSystemPrompt(ctx: EditorContext, command?: string): string {
     );
   }
 
+  if (mcpEnabled) {
+    parts.push(
+      '\nMCP integration is enabled. Use MCP tools when the backend exposes them; if unavailable, state that clearly.',
+    );
+  }
+
+  if (desktopBridgeEnabled) {
+    parts.push(
+      '\nDesktop bridge integration is enabled. Prefer local tool context when available via the backend.',
+    );
+  }
+
+  if (planModeEnabled && planOnly) {
+    parts.push(
+      '\nPlan mode is enabled. Respond with a numbered plan only. Do not provide final code changes until the user explicitly says "proceed".',
+    );
+  } else if (planModeEnabled) {
+    parts.push(
+      '\nPlan mode is enabled and user confirmed execution. Execute the plan and clearly summarize what was applied.',
+    );
+  }
+
   return parts.join('\n');
+}
+
+function isExecutionConfirmation(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (normalized === '') return false;
+  return /^(yes|y|ok|okay|go|ship|do it|execute|run|continue|proceed)\b/.test(normalized);
 }
 
 // ─── vscode.lm fallback ───────────────────────────────────────────────────────
@@ -245,7 +282,19 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
     }
 
     const editorCtx = gatherEditorContext();
-    const systemPrompt = buildSystemPrompt(editorCtx, request.command);
+    const config = vscode.workspace.getConfiguration('agiWorkforce');
+    const planModeEnabled = config.get<boolean>('agent.planMode') ?? false;
+    const mcpEnabled = config.get<boolean>('mcp.enabled') ?? false;
+    const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
+    const planOnly = planModeEnabled && !isExecutionConfirmation(request.prompt);
+
+    const systemPrompt = buildSystemPrompt(editorCtx, {
+      command: request.command ?? '',
+      planModeEnabled,
+      planOnly,
+      mcpEnabled,
+      desktopBridgeEnabled,
+    });
     const userMessage = buildUserMessage(request, editorCtx);
 
     // Build message array: system + history + current user turn
@@ -255,10 +304,15 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
       { role: 'user', content: userMessage },
     ];
 
-    const config = vscode.workspace.getConfiguration('agiWorkforce');
     const fallbackEnabled = config.get<boolean>('fallbackToVscodeLm') ?? true;
 
     let usedFallback = false;
+
+    if (planOnly) {
+      stream.markdown(
+        '_Plan mode is enabled. Reply with "proceed" to run the plan after reviewing it._\n\n',
+      );
+    }
 
     try {
       await streamChatCompletion(
