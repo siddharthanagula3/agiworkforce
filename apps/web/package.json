@@ -19,6 +19,7 @@
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@anthropic-ai/sdk": "^0.78.0",
+    "@monaco-editor/react": "^4.7.0",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
