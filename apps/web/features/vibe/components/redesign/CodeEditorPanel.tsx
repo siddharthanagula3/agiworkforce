@@ -5,10 +5,10 @@
  * - Proper dialogs instead of browser prompt/confirm
  * - Clean file tree sidebar
  * - Tab-based file editing
- * - Agent-driven workspace (Monaco removed for web deployment)
+ * - Monaco editor for code editing
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -49,10 +49,7 @@ import { FileTreeView } from './FileTreeView';
 import { VibeTemplateSelector } from '../VibeTemplateSelector';
 import JSZip from 'jszip';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-
-/**
- * Agent-driven workspace placeholder (Monaco editor removed for web deployment)
- */
+import Editor from '@monaco-editor/react';
 
 interface OpenFile {
   path: string;
@@ -94,6 +91,10 @@ function CodeEditorPanelContent() {
     path: '',
     name: '',
   });
+
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(copyTimeoutRef.current), []);
 
   const refreshFileTree = useCallback(() => {
     setFileTree(vibeFileSystem.getFileTree());
@@ -186,7 +187,8 @@ function CodeEditorPanelContent() {
       await navigator.clipboard.writeText(currentFile.content);
       setCopied(true);
       toast.success('Code copied');
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -501,15 +503,39 @@ function CodeEditorPanelContent() {
           </div>
         )}
 
-        {/* Agent-driven workspace */}
+        {/* Code Editor */}
         {currentFilePath && currentFile ? (
-          <div className="flex-1 overflow-auto bg-muted/10 p-4">
-            <div className="mb-3 rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
-              Agent-driven workspace
-            </div>
-            <pre className="whitespace-pre-wrap break-words font-mono text-sm text-foreground/80">
-              <code>{currentFile.content}</code>
-            </pre>
+          <div className="flex-1 overflow-hidden">
+            <Editor
+              height="100%"
+              language={currentFile.language}
+              value={currentFile.content}
+              theme="vs-dark"
+              onChange={(value) => {
+                if (value !== undefined) {
+                  setOpenFiles((prev) => {
+                    const next = new Map(prev);
+                    const updated = next.get(currentFilePath);
+                    if (updated) {
+                      next.set(currentFilePath, { ...updated, content: value, isDirty: true });
+                    }
+                    return next;
+                  });
+                }
+              }}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                automaticLayout: true,
+                tabSize: 2,
+                renderWhitespace: 'selection',
+                bracketPairColorization: { enabled: true },
+                padding: { top: 8 },
+              }}
+            />
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center bg-muted/10">
