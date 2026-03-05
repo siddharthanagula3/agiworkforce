@@ -49,7 +49,7 @@ impl ShortcutsState {
             // Quick summon - like ChatGPT's Option+Space
             Shortcut {
                 id: "quick_summon".to_string(),
-                key: "Alt+Space".to_string(),
+                key: platform_default_quick_summon_combo().to_string(),
                 description: "Quick summon AGI Workforce from anywhere".to_string(),
                 action: "quick_summon".to_string(),
                 enabled: true,
@@ -65,7 +65,7 @@ impl ShortcutsState {
             },
             Shortcut {
                 id: "toggle_window".to_string(),
-                key: "CommandOrControl+Shift+Space".to_string(),
+                key: platform_default_quick_query_combo().to_string(),
                 description: "Quick Query — ask anything from any app".to_string(),
                 action: "quick_query".to_string(),
                 enabled: true,
@@ -123,10 +123,104 @@ impl Default for ShortcutsState {
     }
 }
 
+pub fn platform_default_quick_query_combo() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "Command+Shift+Space"
+    }
+    #[cfg(target_os = "windows")]
+    {
+        "Control+Shift+Space"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        "CommandOrControl+Shift+Space"
+    }
+}
+
+fn platform_default_quick_summon_combo() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        // Avoid clashing with the Windows system menu (Alt+Space).
+        "Control+Alt+Space"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "Alt+Space"
+    }
+}
+
+fn normalize_accelerator_token(token: &str) -> Option<String> {
+    let raw = token.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    let lower = raw.to_ascii_lowercase();
+    let normalized = match lower.as_str() {
+        // Generic primary-modifier aliases
+        "commandorcontrol" | "cmdorctrl" | "mod" | "primary" | "primarymodifier" => {
+            "CommandOrControl".to_string()
+        }
+        // Command aliases
+        "cmd" | "command" | "⌘" => {
+            #[cfg(target_os = "macos")]
+            {
+                "Command".to_string()
+            }
+            #[cfg(target_os = "windows")]
+            {
+                "Control".to_string()
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                "CommandOrControl".to_string()
+            }
+        }
+        // Control aliases
+        "ctrl" | "control" | "^" => "Control".to_string(),
+        // Alt/Option aliases
+        "alt" | "opt" | "option" | "⌥" => "Alt".to_string(),
+        // Meta/Win/Super aliases
+        "meta" | "win" | "windows" | "super" => {
+            #[cfg(target_os = "macos")]
+            {
+                "Command".to_string()
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                "Super".to_string()
+            }
+        }
+        // Common key aliases
+        "shift" => "Shift".to_string(),
+        "space" | "spacebar" => "Space".to_string(),
+        "esc" => "Escape".to_string(),
+        "return" => "Enter".to_string(),
+        _ => {
+            if raw.len() == 1 {
+                raw.to_ascii_uppercase()
+            } else {
+                raw.to_string()
+            }
+        }
+    };
+
+    Some(normalized)
+}
+
+pub fn normalize_accelerator_for_platform(combo: &str) -> String {
+    combo
+        .split('+')
+        .filter_map(normalize_accelerator_token)
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
 fn default_quick_query_hotkey_preferences() -> QuickQueryHotkeyPreferences {
     QuickQueryHotkeyPreferences {
         enabled: true,
-        combo: "CommandOrControl+Shift+Space".to_string(),
+        combo: platform_default_quick_query_combo().to_string(),
     }
 }
 
@@ -155,9 +249,15 @@ fn load_quick_query_hotkey_preferences_from_disk(
     let parsed: StoredShortcutSettings = serde_json::from_str(&raw)
         .map_err(|e| format!("Failed to parse settings file {:?}: {}", settings_path, e))?;
 
-    Ok(parsed
+    let mut prefs = parsed
         .global_hotkey_preferences
-        .unwrap_or_else(default_quick_query_hotkey_preferences))
+        .unwrap_or_else(default_quick_query_hotkey_preferences);
+    prefs.combo = normalize_accelerator_for_platform(&prefs.combo);
+    if prefs.combo.is_empty() {
+        prefs.combo = platform_default_quick_query_combo().to_string();
+    }
+
+    Ok(prefs)
 }
 
 pub async fn apply_quick_query_hotkey_preferences(
@@ -165,6 +265,13 @@ pub async fn apply_quick_query_hotkey_preferences(
     shortcuts_state: &Arc<Mutex<ShortcutsState>>,
     preferences: QuickQueryHotkeyPreferences,
 ) -> Result<Shortcut, String> {
+    let normalized_combo = normalize_accelerator_for_platform(&preferences.combo);
+    let resolved_combo = if normalized_combo.is_empty() {
+        platform_default_quick_query_combo().to_string()
+    } else {
+        normalized_combo
+    };
+
     let shortcuts_state = shortcuts_state.lock().await;
     let mut shortcuts = shortcuts_state.shortcuts.lock().await;
     let mut registered = shortcuts_state.registered_keys.lock().await;
@@ -173,7 +280,7 @@ pub async fn apply_quick_query_hotkey_preferences(
         .entry("toggle_window".to_string())
         .or_insert_with(|| Shortcut {
             id: "toggle_window".to_string(),
-            key: preferences.combo.clone(),
+            key: resolved_combo.clone(),
             description: "Quick Query — ask anything from any app".to_string(),
             action: "quick_query".to_string(),
             enabled: preferences.enabled,
@@ -188,7 +295,7 @@ pub async fn apply_quick_query_hotkey_preferences(
         registered.retain(|key| key != &previous_key);
     }
 
-    shortcut.key = preferences.combo.clone();
+    shortcut.key = resolved_combo;
     shortcut.enabled = preferences.enabled;
     shortcut.action = "quick_query".to_string();
     shortcut.is_global = true;
@@ -212,7 +319,12 @@ pub async fn apply_quick_query_hotkey_preferences(
 
 /// Register a global shortcut with the system
 fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Result<(), String> {
-    let shortcut: GlobalShortcut = key
+    let normalized_key = normalize_accelerator_for_platform(key);
+    if normalized_key.is_empty() {
+        return Err("Shortcut cannot be empty".to_string());
+    }
+
+    let shortcut: GlobalShortcut = normalized_key
         .parse()
         .map_err(|e| format!("Failed to parse shortcut '{}': {:?}", key, e))?;
 
@@ -270,7 +382,7 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
 
     tracing::info!(
         "Successfully registered global shortcut: {} -> {}",
-        key,
+        normalized_key,
         action
     );
     let _ = app_clone.emit("shortcut_registered", action);
@@ -280,7 +392,12 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
 
 /// Unregister a global shortcut
 fn unregister_global_shortcut(app: &AppHandle, key: &str) -> Result<(), String> {
-    let shortcut: GlobalShortcut = key
+    let normalized_key = normalize_accelerator_for_platform(key);
+    if normalized_key.is_empty() {
+        return Err("Shortcut cannot be empty".to_string());
+    }
+
+    let shortcut: GlobalShortcut = normalized_key
         .parse()
         .map_err(|e| format!("Failed to parse shortcut '{}': {:?}", key, e))?;
 
@@ -288,7 +405,10 @@ fn unregister_global_shortcut(app: &AppHandle, key: &str) -> Result<(), String> 
         .unregister(shortcut)
         .map_err(|e| format!("Failed to unregister global shortcut: {:?}", e))?;
 
-    tracing::info!("Successfully unregistered global shortcut: {}", key);
+    tracing::info!(
+        "Successfully unregistered global shortcut: {}",
+        normalized_key
+    );
     Ok(())
 }
 
@@ -337,6 +457,12 @@ pub async fn shortcuts_register(
     app: AppHandle,
     state: State<'_, Arc<Mutex<ShortcutsState>>>,
 ) -> Result<(), String> {
+    let mut shortcut = shortcut;
+    shortcut.key = normalize_accelerator_for_platform(&shortcut.key);
+    if shortcut.key.is_empty() {
+        return Err("Shortcut key cannot be empty".to_string());
+    }
+
     tracing::info!(
         "Registering shortcut: {} -> {} (global: {})",
         shortcut.key,
@@ -421,6 +547,11 @@ pub async fn shortcuts_update(
     let is_global = shortcut.is_global;
 
     if let Some(key) = new_key {
+        let normalized_key = normalize_accelerator_for_platform(&key);
+        if normalized_key.is_empty() {
+            return Err("Shortcut key cannot be empty".to_string());
+        }
+
         // Unregister old global shortcut if it was global
         if is_global && was_enabled {
             let _ = unregister_global_shortcut(&app, &old_key);
@@ -429,8 +560,8 @@ pub async fn shortcuts_update(
         let mut registered = shortcuts_state.registered_keys.lock().await;
         registered.retain(|k| k != &shortcut.key);
 
-        shortcut.key = key.clone();
-        registered.push(key);
+        shortcut.key = normalized_key.clone();
+        registered.push(normalized_key);
     }
 
     if let Some(en) = enabled {
@@ -514,10 +645,15 @@ pub async fn shortcuts_check_key(
     key: String,
     state: State<'_, Arc<Mutex<ShortcutsState>>>,
 ) -> Result<bool, String> {
+    let normalized_key = normalize_accelerator_for_platform(&key);
+    if normalized_key.is_empty() {
+        return Ok(false);
+    }
+
     let shortcuts_state = state.lock().await;
     let shortcuts = shortcuts_state.shortcuts.lock().await;
 
-    let is_registered = shortcuts.values().any(|s| s.key == key);
+    let is_registered = shortcuts.values().any(|s| s.key == normalized_key);
     Ok(is_registered)
 }
 
@@ -544,11 +680,51 @@ pub async fn shortcuts_register_global(
     action: String,
     app: AppHandle,
 ) -> Result<(), String> {
-    register_global_shortcut(&app, &key, action)
+    let normalized_key = normalize_accelerator_for_platform(&key);
+    register_global_shortcut(&app, &normalized_key, action)
 }
 
 /// Command to unregister global shortcuts from frontend
 #[tauri::command]
 pub async fn shortcuts_unregister_global(key: String, app: AppHandle) -> Result<(), String> {
-    unregister_global_shortcut(&app, &key)
+    let normalized_key = normalize_accelerator_for_platform(&key);
+    unregister_global_shortcut(&app, &normalized_key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expected_primary_modifier() -> &'static str {
+        #[cfg(target_os = "macos")]
+        {
+            "Command"
+        }
+        #[cfg(target_os = "windows")]
+        {
+            "Control"
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            "CommandOrControl"
+        }
+    }
+
+    #[test]
+    fn normalizes_common_aliases() {
+        let combo = normalize_accelerator_for_platform("cmd + shift + space");
+        assert_eq!(combo, format!("{}+Shift+Space", expected_primary_modifier()));
+    }
+
+    #[test]
+    fn normalizes_option_and_ctrl_aliases() {
+        let combo = normalize_accelerator_for_platform("opt+ctrl+v");
+        assert_eq!(combo, "Alt+Control+V");
+    }
+
+    #[test]
+    fn quick_query_default_is_platform_specific() {
+        let default_combo = default_quick_query_hotkey_preferences().combo;
+        assert_eq!(default_combo, platform_default_quick_query_combo());
+    }
 }

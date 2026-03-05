@@ -388,8 +388,8 @@ mod tests {
 
     #[test]
     fn test_execution_metrics_approaching_timeout() {
-        let metrics = ExecutionMetrics::new(Some(Duration::from_millis(50)));
-        std::thread::sleep(Duration::from_millis(40));
+        let mut metrics = ExecutionMetrics::new(Some(Duration::from_millis(500)));
+        metrics.start_time = Instant::now() - Duration::from_millis(450);
         assert!(metrics.approaching_timeout(100));
     }
 
