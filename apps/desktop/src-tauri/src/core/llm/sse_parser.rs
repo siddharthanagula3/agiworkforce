@@ -100,8 +100,7 @@ impl SseStreamParser {
     }
 
     fn process_buffer(&mut self) {
-        let delimiter: &[u8] =
-            crate::core::llm::models_config::get_sse_delimiter(&self.provider);
+        let delimiter: &[u8] = crate::core::llm::models_config::get_sse_delimiter(&self.provider);
 
         while let Some(event_end) = self
             .buffer

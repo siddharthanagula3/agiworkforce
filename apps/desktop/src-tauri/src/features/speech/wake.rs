@@ -79,7 +79,6 @@ pub struct WakeWordEvent {
 /// Internal state for speech detection
 #[cfg(feature = "vad")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 enum SpeechState {
     /// Waiting for speech to start
     Idle,

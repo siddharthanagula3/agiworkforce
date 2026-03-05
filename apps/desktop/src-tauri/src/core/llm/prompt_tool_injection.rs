@@ -49,8 +49,8 @@ pub fn build_tool_injection_prompt(tools: &[ToolDefinition]) -> String {
         section.push_str(&format!("**Description:** {}\n", tool.description));
 
         // Format parameters compactly
-        let params_str = serde_json::to_string_pretty(&tool.parameters)
-            .unwrap_or_else(|_| "{}".to_string());
+        let params_str =
+            serde_json::to_string_pretty(&tool.parameters).unwrap_or_else(|_| "{}".to_string());
         section.push_str(&format!(
             "**Parameters (JSON Schema):**\n```json\n{}\n```\n\n",
             params_str
@@ -60,9 +60,7 @@ pub fn build_tool_injection_prompt(tools: &[ToolDefinition]) -> String {
     section.push_str("## How to Call a Tool\n\n");
     section.push_str("When you want to call a tool, output a block in this exact format:\n\n");
     section.push_str("<tool_call>\n");
-    section.push_str(
-        "{\"name\": \"tool_name\", \"arguments\": {\"param1\": \"value1\"}}\n",
-    );
+    section.push_str("{\"name\": \"tool_name\", \"arguments\": {\"param1\": \"value1\"}}\n");
     section.push_str("</tool_call>\n\n");
     section.push_str(
         "You may include normal text before or after tool calls. \

@@ -126,7 +126,7 @@ pub enum SecurityError {
 }
 
 pub struct ToolExecutionGuard {
-    allowed_tools: HashMap<String, ToolPolicy>,
+    allowed_tools: std::sync::RwLock<HashMap<String, ToolPolicy>>,
     rate_limiters: Arc<Mutex<HashMap<String, RateLimiter>>>,
     allowed_paths: std::sync::RwLock<Vec<PathBuf>>,
     blocked_domains: Vec<String>,
@@ -1003,7 +1003,7 @@ impl ToolExecutionGuard {
         );
 
         Self {
-            allowed_tools,
+            allowed_tools: std::sync::RwLock::new(allowed_tools),
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
             allowed_paths: std::sync::RwLock::new(vec![
                 PathBuf::from("/tmp"),
@@ -1016,6 +1016,89 @@ impl ToolExecutionGuard {
                 "169.254.169.254".to_string(),
             ],
         }
+    }
+
+    /// Dynamically register an MCP tool so it passes ToolGuard validation.
+    /// MCP tools are assigned a default policy with Medium risk and rate-limited
+    /// to 20 calls/min. File/URL/command parameters are still validated by
+    /// `validate_mcp_tool_params` during `validate_tool_call`.
+    pub fn register_mcp_tool(&self, tool_name: &str) {
+        if let Ok(mut guard) = self.allowed_tools.write() {
+            if !guard.contains_key(tool_name) {
+                debug!("Registering dynamic MCP tool in ToolGuard: {}", tool_name);
+                guard.insert(
+                    tool_name.to_string(),
+                    ToolPolicy {
+                        max_rate_per_minute: 20,
+                        requires_approval: false,
+                        allowed_parameters: vec![], // MCP tools have dynamic params
+                        risk_level: RiskLevel::Medium,
+                    },
+                );
+            }
+        }
+    }
+
+    /// Validate security-sensitive parameters on MCP tool calls.
+    /// Inspects all parameter values for paths, URLs, and command strings
+    /// regardless of the specific MCP tool, since MCP tools are dynamic.
+    fn validate_mcp_tool_params(&self, parameters: &Value) -> std::result::Result<(), SecurityError> {
+        let obj = match parameters.as_object() {
+            Some(o) => o,
+            None => return Ok(()),
+        };
+
+        for (key, value) in obj {
+            let key_lower = key.to_lowercase();
+            let val_str = match value.as_str() {
+                Some(s) => s,
+                None => continue,
+            };
+
+            // Path parameters — validate for traversal, device paths, etc.
+            if key_lower.contains("path")
+                || key_lower.contains("file")
+                || key_lower.contains("dir")
+                || key_lower.contains("directory")
+                || key_lower.contains("folder")
+            {
+                self.validate_file_path(val_str)?;
+            }
+
+            // URL parameters — validate for blocked domains, SSRF, etc.
+            if key_lower.contains("url") || key_lower.contains("uri") || key_lower.contains("href")
+            {
+                self.validate_url(val_str)?;
+            }
+
+            // Command/code parameters — validate for injection
+            if key_lower == "command" || key_lower == "cmd" {
+                // Basic command injection checks (same patterns as validate_code)
+                let dangerous = [
+                    "rm -rf /", "mkfs", "dd if=", ":(){:|:&};:",
+                    "chmod -R 777 /", "curl | sh", "wget | sh",
+                ];
+                let val_lower = val_str.to_lowercase();
+                for pattern in &dangerous {
+                    if val_lower.contains(pattern) {
+                        return Err(SecurityError::CommandInjection(format!(
+                            "Dangerous command pattern detected in MCP tool parameter '{}': {}",
+                            key, pattern
+                        )));
+                    }
+                }
+            }
+
+            if key_lower == "code" || key_lower == "script" {
+                self.validate_code(val_str)?;
+            }
+
+            if key_lower == "query" || key_lower == "sql" {
+                self.validate_sql(val_str)?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Override the allowed paths for file operations.
@@ -1054,12 +1137,23 @@ impl ToolExecutionGuard {
             tool_name, parameters
         );
 
-        let policy = self
-            .allowed_tools
-            .get(tool_name)
-            .ok_or_else(|| SecurityError::UnauthorizedTool(tool_name.to_string()))?;
+        let policy = {
+            let guard = self.allowed_tools.read()
+                .map_err(|_| SecurityError::UnauthorizedTool("ToolGuard lock poisoned".to_string()))?;
+            guard
+                .get(tool_name)
+                .cloned()
+                .ok_or_else(|| SecurityError::UnauthorizedTool(tool_name.to_string()))?
+        };
 
-        self.check_rate_limit(tool_name, policy).await?;
+        self.check_rate_limit(tool_name, &policy).await?;
+
+        // MCP tools get generic parameter validation (path, URL, command, SQL checks)
+        if tool_name.starts_with("mcp__") {
+            self.validate_mcp_tool_params(parameters)?;
+            debug!("MCP tool call validation passed for: {}", tool_name);
+            return Ok(());
+        }
 
         match tool_name {
             "file_read" | "file_write" | "file_delete" | "file_list" => {
@@ -1453,7 +1547,11 @@ impl ToolExecutionGuard {
             }
 
             // Block IPv6 loopback (::1) and IPv6 link-local (fe80::)
-            if host == "::1" || host == "[::1]" || host.starts_with("fe80:") || host.starts_with("[fe80:") {
+            if host == "::1"
+                || host == "[::1]"
+                || host.starts_with("fe80:")
+                || host.starts_with("[fe80:")
+            {
                 warn!("IPv6 loopback/link-local address detected: {}", host);
                 return Err(SecurityError::BlockedDomain(host.to_string()));
             }
@@ -1512,9 +1610,18 @@ impl ToolExecutionGuard {
 
         // Destructive operations that must be blocked without explicit approval
         let destructive_operations = vec![
-            ("drop table", "DROP TABLE is not allowed without explicit approval"),
-            ("drop database", "DROP DATABASE is not allowed without explicit approval"),
-            ("truncate table", "TRUNCATE TABLE is not allowed without explicit approval"),
+            (
+                "drop table",
+                "DROP TABLE is not allowed without explicit approval",
+            ),
+            (
+                "drop database",
+                "DROP DATABASE is not allowed without explicit approval",
+            ),
+            (
+                "truncate table",
+                "TRUNCATE TABLE is not allowed without explicit approval",
+            ),
             ("grant ", "GRANT is not allowed without explicit approval"),
             ("revoke ", "REVOKE is not allowed without explicit approval"),
         ];
@@ -1536,17 +1643,15 @@ impl ToolExecutionGuard {
 
         // Non-SELECT write operations require approval via tool policy, but
         // warn here for audit trail
-        let write_operations = vec![
-            "update ",
-            "insert into",
-            "create table",
-            "alter table",
-        ];
+        let write_operations = vec!["update ", "insert into", "create table", "alter table"];
 
         if !is_select {
             for op in &write_operations {
                 if query_lower.contains(op) {
-                    warn!("Write SQL operation detected (requires tool-level approval): {}", op);
+                    warn!(
+                        "Write SQL operation detected (requires tool-level approval): {}",
+                        op
+                    );
                 }
             }
         }
@@ -1629,19 +1734,28 @@ impl ToolExecutionGuard {
     }
 
     pub fn get_risk_level(&self, tool_name: &str) -> Option<RiskLevel> {
-        self.allowed_tools.get(tool_name).map(|p| p.risk_level)
+        self.allowed_tools
+            .read()
+            .ok()
+            .and_then(|guard| guard.get(tool_name).map(|p| p.risk_level))
     }
 
     pub fn requires_approval(&self, tool_name: &str) -> bool {
         self.allowed_tools
-            .get(tool_name)
-            .map(|p| p.requires_approval)
+            .read()
+            .ok()
+            .and_then(|guard| guard.get(tool_name).map(|p| p.requires_approval))
             .unwrap_or(true)
     }
 
     /// Get the safety tier for a given tool based on its risk level and approval requirements
     pub fn get_safety_tier(&self, tool_name: &str) -> ToolSafetyTier {
-        match self.allowed_tools.get(tool_name) {
+        let policy = self
+            .allowed_tools
+            .read()
+            .ok()
+            .and_then(|guard| guard.get(tool_name).cloned());
+        match policy {
             Some(policy) => match policy.risk_level {
                 RiskLevel::Low => ToolSafetyTier::Safe,
                 RiskLevel::Medium => {
@@ -1862,10 +1976,7 @@ mod tests {
         // file_read is Low risk, requires_approval=false -> Safe
         assert_eq!(guard.get_safety_tier("file_read"), ToolSafetyTier::Safe);
         assert_eq!(guard.get_safety_tier("file_list"), ToolSafetyTier::Safe);
-        assert_eq!(
-            guard.get_safety_tier("ui_screenshot"),
-            ToolSafetyTier::Safe
-        );
+        assert_eq!(guard.get_safety_tier("ui_screenshot"), ToolSafetyTier::Safe);
     }
 
     #[test]
@@ -1942,10 +2053,14 @@ mod tests {
     fn test_create_confirmation_request_file_delete_is_reversible() {
         let guard = ToolExecutionGuard::new();
         let params = json!({"path": "/tmp/test.txt"});
-        let request = guard.create_confirmation_request("file_delete", &params, Some("Delete a file"));
+        let request =
+            guard.create_confirmation_request("file_delete", &params, Some("Delete a file"));
 
         assert_eq!(request.tool_name, "file_delete");
-        assert!(request.reversible, "file_delete should be marked as reversible");
+        assert!(
+            request.reversible,
+            "file_delete should be marked as reversible"
+        );
         assert!(
             request.undo_description.is_some(),
             "file_delete should have an undo_description"
@@ -1972,8 +2087,7 @@ mod tests {
         assert!(request.undo_description.is_some());
         assert_eq!(request.risk_level, RiskLevel::Medium);
         assert_eq!(
-            request.tool_description,
-            "No description available",
+            request.tool_description, "No description available",
             "Omitted description should use default"
         );
     }

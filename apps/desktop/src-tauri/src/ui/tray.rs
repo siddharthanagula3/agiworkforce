@@ -56,7 +56,7 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
 fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
     let id = event.id.0.as_ref();
     if let Err(err) = handle_menu_click(app, id) {
-        eprintln!("[tray] menu event error: {err:?}");
+        tracing::error!("[tray] menu event error: {err:?}");
     }
 }
 
@@ -72,16 +72,16 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: TrayIconEvent) {
             match window.is_visible() {
                 Ok(true) => {
                     if let Err(err) = window::hide_window(&window) {
-                        eprintln!("[tray] hide error: {err:?}");
+                        tracing::error!("[tray] hide error: {err:?}");
                     }
                 }
                 Ok(false) => {
                     if let Err(err) = window::show_window(&window) {
-                        eprintln!("[tray] show error: {err:?}");
+                        tracing::error!("[tray] show error: {err:?}");
                     }
                 }
                 Err(err) => {
-                    eprintln!("[tray] visibility check error: {err:?}");
+                    tracing::error!("[tray] visibility check error: {err:?}");
                 }
             }
         }

@@ -272,7 +272,7 @@ mod tests {
     fn test_provider_default_model_spot_checks() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-5.2");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4-6");
-        assert_eq!(Provider::Google.default_model(), "gemini-3-pro-preview");
+        assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
     }

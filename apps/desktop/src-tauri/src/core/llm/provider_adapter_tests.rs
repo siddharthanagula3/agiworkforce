@@ -804,9 +804,9 @@ mod tests {
         let google = ProviderAdapterFactory::create_adapter(Provider::Google);
         assert_eq!(google.provider_name(), "Google");
 
-        // Providers using OpenAI-compatible format
+        // Perplexity has its own adapter
         let perplexity = ProviderAdapterFactory::create_adapter(Provider::Perplexity);
-        assert_eq!(perplexity.provider_name(), "OpenAI");
+        assert_eq!(perplexity.provider_name(), "Perplexity");
 
         let xai = ProviderAdapterFactory::create_adapter(Provider::XAI);
         assert_eq!(xai.provider_name(), "OpenAI");
@@ -1022,7 +1022,10 @@ mod tests {
         };
 
         let result = adapter.adapt_request(&request);
-        assert!(result.is_ok(), "DeepSeek adapter should successfully adapt the request");
+        assert!(
+            result.is_ok(),
+            "DeepSeek adapter should successfully adapt the request"
+        );
 
         let adapted = result.unwrap();
         assert_eq!(

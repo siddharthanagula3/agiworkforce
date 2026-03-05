@@ -186,17 +186,13 @@ pub async fn auth_store_session(
 }
 
 #[command]
-pub async fn auth_retrieve_session(
-    state: State<'_, SessionState>,
-) -> Result<String, String> {
+pub async fn auth_retrieve_session(state: State<'_, SessionState>) -> Result<String, String> {
     let store = state.0.read().map_err(|e| e.to_string())?;
     store.clone().ok_or_else(|| "No session stored".to_string())
 }
 
 #[command]
-pub async fn auth_remove_session(
-    state: State<'_, SessionState>,
-) -> Result<(), String> {
+pub async fn auth_remove_session(state: State<'_, SessionState>) -> Result<(), String> {
     let mut store = state.0.write().map_err(|e| e.to_string())?;
     *store = None;
     Ok(())

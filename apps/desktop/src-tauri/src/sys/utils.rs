@@ -1,6 +1,16 @@
 use std::path::PathBuf;
 
+const APP_DATA_DIR_ENV: &str = "AGIWORKFORCE_APP_DATA_DIR";
+
 pub fn app_data_dir() -> anyhow::Result<PathBuf> {
+    if let Ok(dir_override) = std::env::var(APP_DATA_DIR_ENV) {
+        let dir = PathBuf::from(dir_override);
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir)?;
+        }
+        return Ok(dir);
+    }
+
     let dir = dirs::data_local_dir()
         .ok_or_else(|| anyhow::anyhow!("Failed to get local data directory"))?
         .join("agiworkforce");

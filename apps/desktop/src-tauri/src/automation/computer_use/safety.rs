@@ -332,20 +332,15 @@ impl ComputerUseSafetyLayer {
 
         SENSITIVE_WINDOW_TITLES.get_or_init(|| {
             vec![
-                Regex::new(r"(?i)password")
-                    .expect("sensitive window regex: password"),
-                Regex::new(r"(?i)credential")
-                    .expect("sensitive window regex: credential"),
-                Regex::new(r"(?i)keychain")
-                    .expect("sensitive window regex: keychain"),
+                Regex::new(r"(?i)password").expect("sensitive window regex: password"),
+                Regex::new(r"(?i)credential").expect("sensitive window regex: credential"),
+                Regex::new(r"(?i)keychain").expect("sensitive window regex: keychain"),
                 Regex::new(r"(?i)security\s+preferences")
                     .expect("sensitive window regex: security preferences"),
                 Regex::new(r"(?i)system\s+preferences")
                     .expect("sensitive window regex: system preferences"),
-                Regex::new(r"(?i)control\s+panel")
-                    .expect("sensitive window regex: control panel"),
-                Regex::new(r"(?i)task\s+manager")
-                    .expect("sensitive window regex: task manager"),
+                Regex::new(r"(?i)control\s+panel").expect("sensitive window regex: control panel"),
+                Regex::new(r"(?i)task\s+manager").expect("sensitive window regex: task manager"),
                 Regex::new(r"(?i)terminal|cmd\.exe|powershell")
                     .expect("sensitive window regex: terminal/cmd/powershell"),
             ]

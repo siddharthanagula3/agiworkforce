@@ -226,7 +226,9 @@ impl Default for PromptInjectionDetector {
 
 impl PromptInjectionDetector {
     pub fn new() -> Self {
-        Self { patterns: get_injection_patterns() }
+        Self {
+            patterns: get_injection_patterns(),
+        }
     }
 
     /// SECSYS-008 fix: Normalize Unicode lookalikes to detect evasion

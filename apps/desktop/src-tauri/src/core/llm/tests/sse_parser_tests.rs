@@ -864,10 +864,7 @@ mod stream_buffer_tests {
 
         assert_eq!(accumulated, "The quick brown fox");
         assert!(final_chunk.is_some(), "Must have a final chunk");
-        assert_eq!(
-            final_chunk.unwrap().finish_reason.as_deref(),
-            Some("stop")
-        );
+        assert_eq!(final_chunk.unwrap().finish_reason.as_deref(), Some("stop"));
     }
 
     #[test]
@@ -919,8 +916,7 @@ mod stream_buffer_tests {
         // process_buffer handles this by checking is_keepalive_event first.
         // We simulate by parsing individually.
         let keepalive_event = ": keep-alive";
-        let data_event =
-            r#"data: {"choices":[{"delta":{"content":"data"},"finish_reason":null}]}"#;
+        let data_event = r#"data: {"choices":[{"delta":{"content":"data"},"finish_reason":null}]}"#;
 
         // Keepalive should produce an empty non-done chunk when detected by the parser
         // (In practice, is_keepalive_event is checked before parse_sse_event)
@@ -1142,7 +1138,10 @@ mod malformed_sse_tests {
         let result = parse_sse_event(event, Provider::OpenAI);
         // Should succeed (no data lines to parse) with an empty content chunk
         let chunk = result.unwrap();
-        assert_eq!(chunk.content, "", "No data: prefix should yield empty content");
+        assert_eq!(
+            chunk.content, "",
+            "No data: prefix should yield empty content"
+        );
     }
 
     #[test]
@@ -1158,7 +1157,10 @@ mod malformed_sse_tests {
         let event = "\n\n\n";
         let result = parse_sse_event(event, Provider::OpenAI);
         let chunk = result.unwrap();
-        assert_eq!(chunk.content, "", "Only empty lines should yield empty content");
+        assert_eq!(
+            chunk.content, "",
+            "Only empty lines should yield empty content"
+        );
     }
 
     #[test]

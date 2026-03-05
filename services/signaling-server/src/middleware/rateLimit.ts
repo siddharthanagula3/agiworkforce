@@ -11,6 +11,7 @@
  */
 
 import type { IncomingMessage } from 'http';
+import { logger } from '../logger.js';
 
 // =============================================================================
 // Configuration (from environment variables with defaults)
@@ -137,7 +138,7 @@ export class WebSocketRateLimiter {
       expiresAt: Date.now() + durationMs,
       reason,
     });
-    console.warn(`[security] Blacklisted IP ${ip}: ${reason}`);
+    logger.warn({ ip, reason }, 'IP blacklisted');
   }
 
   /**
@@ -214,9 +215,7 @@ export class WebSocketRateLimiter {
 
       const retryAfter = Math.ceil((entry.windowStart + WS_RATE_LIMIT_WINDOW_MS - now) / 1000);
 
-      console.warn(
-        `[security] Rate limit exceeded for ${ip}: ${violationType} (violations: ${entry.violations})`,
-      );
+      logger.warn({ ip, violationType, violations: entry.violations }, 'Rate limit exceeded');
 
       return {
         allowed: false,

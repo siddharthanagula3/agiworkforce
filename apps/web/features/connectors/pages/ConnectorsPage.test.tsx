@@ -5,8 +5,8 @@
  * category tab switching, and connector count badges.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -74,6 +74,7 @@ vi.mock('lucide-react', () => {
     Zap: Icon,
     Lock: Icon,
     ExternalLink: Icon,
+    Loader2: Icon,
   };
 });
 
@@ -81,28 +82,50 @@ vi.mock('lucide-react', () => {
 
 import { ConnectorsPage } from './ConnectorsPage';
 
+// ─── Helper: render with resolved loading state ──────────────────────────────
+
+async function renderConnectorsPage() {
+  let result: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(<ConnectorsPage />);
+  });
+  return result!;
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('ConnectorsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock fetch to resolve the /api/connectors call with empty connectors
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ connectors: [] }),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   // 1. Renders without crashing
-  it('renders without crashing', () => {
-    const { container } = render(<ConnectorsPage />);
+  it('renders without crashing', async () => {
+    const { container } = await renderConnectorsPage();
     expect(container).toBeDefined();
   });
 
   // 2. Displays "Connectors" heading
-  it('displays the Connectors heading', () => {
-    render(<ConnectorsPage />);
+  it('displays the Connectors heading', async () => {
+    await renderConnectorsPage();
     expect(screen.getByText('Connectors')).toBeDefined();
   });
 
   // 3. Shows the page description
-  it('shows the page description', () => {
-    render(<ConnectorsPage />);
+  it('shows the page description', async () => {
+    await renderConnectorsPage();
     expect(
       screen.getByText(
         'Connect your tools and give your AI agents access to the apps you use every day.',
@@ -111,8 +134,8 @@ describe('ConnectorsPage', () => {
   });
 
   // 4. Shows connector count badges (connected + total)
-  it('shows connected and total count badges', () => {
-    render(<ConnectorsPage />);
+  it('shows connected and total count badges', async () => {
+    await renderConnectorsPage();
     // Default: 0 connected (connectors start unconnected)
     expect(screen.getByText('0 connected')).toBeDefined();
     // Total count badge: CONNECTORS.length
@@ -120,31 +143,33 @@ describe('ConnectorsPage', () => {
   });
 
   // 5. Shows "Connected" section header with count after connecting
-  it('shows the Connected section when connectors are connected', () => {
-    render(<ConnectorsPage />);
+  it('shows the Connected section when connectors are connected', async () => {
+    await renderConnectorsPage();
     // Connect a connector first
     const connectButtons = screen.getAllByText('Connect');
-    fireEvent.click(connectButtons[0]!);
+    await act(async () => {
+      fireEvent.click(connectButtons[0]!);
+    });
     // The "Connected (1)" heading should now be visible
     expect(screen.getByText(/Connected \(\d+\)/)).toBeDefined();
   });
 
   // 6. Shows "Available" section header
-  it('shows the Available section', () => {
-    render(<ConnectorsPage />);
+  it('shows the Available section', async () => {
+    await renderConnectorsPage();
     expect(screen.getByText(/Available/)).toBeDefined();
   });
 
   // 7. Shows search input placeholder
-  it('shows a search input with placeholder text', () => {
-    render(<ConnectorsPage />);
+  it('shows a search input with placeholder text', async () => {
+    await renderConnectorsPage();
     const input = screen.getByPlaceholderText('Search connectors...');
     expect(input).toBeDefined();
   });
 
   // 8. Search input filters connectors by name
-  it('filters connectors by search query (name match)', () => {
-    render(<ConnectorsPage />);
+  it('filters connectors by search query (name match)', async () => {
+    await renderConnectorsPage();
 
     const input = screen.getByPlaceholderText('Search connectors...');
     fireEvent.change(input, { target: { value: 'Github' } });
@@ -157,8 +182,8 @@ describe('ConnectorsPage', () => {
   });
 
   // 9. Search with no match shows empty state
-  it('shows empty state when no connectors match the search query', () => {
-    render(<ConnectorsPage />);
+  it('shows empty state when no connectors match the search query', async () => {
+    await renderConnectorsPage();
 
     const input = screen.getByPlaceholderText('Search connectors...');
     fireEvent.change(input, { target: { value: 'xyznonexistentconnector' } });
@@ -168,8 +193,8 @@ describe('ConnectorsPage', () => {
   });
 
   // 10. Category filter tabs are rendered
-  it('renders all category filter tabs', () => {
-    render(<ConnectorsPage />);
+  it('renders all category filter tabs', async () => {
+    await renderConnectorsPage();
 
     // These labels come from the CATEGORIES array in ConnectorsPage
     const expectedLabels = [
@@ -189,8 +214,8 @@ describe('ConnectorsPage', () => {
   });
 
   // 11. Clicking a category tab filters to that category
-  it('filters connectors when a category tab is clicked', () => {
-    render(<ConnectorsPage />);
+  it('filters connectors when a category tab is clicked', async () => {
+    await renderConnectorsPage();
 
     // Click the "Developer" category
     fireEvent.click(screen.getByText('Developer'));
@@ -203,8 +228,8 @@ describe('ConnectorsPage', () => {
   });
 
   // 12. Clicking "All" category tab shows all connectors
-  it('clicking All tab shows all connectors', () => {
-    render(<ConnectorsPage />);
+  it('clicking All tab shows all connectors', async () => {
+    await renderConnectorsPage();
 
     // First switch to Developer
     fireEvent.click(screen.getByText('Developer'));
@@ -217,28 +242,27 @@ describe('ConnectorsPage', () => {
   });
 
   // 13. Clicking Connect adds a connector to the connected section
-  it('connects a connector when Connect button is clicked', () => {
-    render(<ConnectorsPage />);
+  it('connects a connector when Connect button is clicked', async () => {
+    await renderConnectorsPage();
 
-    // Gmail starts as not connected — find its Connect button
-    // There may be multiple "Connect" buttons; find the one near Gmail text
     const connectButtons = screen.getAllByText('Connect');
-    // Click the first one (Gmail is the first unconnected phase-1 connector)
-    fireEvent.click(connectButtons[0]!);
+    await act(async () => {
+      fireEvent.click(connectButtons[0]!);
+    });
 
     // After connecting, the count badge should increase from 0 to 1
     expect(screen.getByText('1 connected')).toBeDefined();
   });
 
   // 14. Roadmap callout is visible in "All" category view
-  it('shows the 105+ Connectors Planned callout in All view', () => {
-    render(<ConnectorsPage />);
+  it('shows the 105+ Connectors Planned callout in All view', async () => {
+    await renderConnectorsPage();
     expect(screen.getByText('105+ Connectors Planned')).toBeDefined();
   });
 
   // 15. Roadmap callout is hidden when Exclusive category is active
-  it('hides the roadmap callout when Exclusive category is selected', () => {
-    render(<ConnectorsPage />);
+  it('hides the roadmap callout when Exclusive category is selected', async () => {
+    await renderConnectorsPage();
 
     // Find and click the Exclusive tab — it has the star emoji prefix
     const exclusiveTab = screen.getByText('⭐ AGI Exclusive');

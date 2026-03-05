@@ -69,14 +69,8 @@ function PulsingDot({ color }: { color: string }) {
 
   return (
     <View className="relative">
-      <View
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      <Animated.View
-        className="absolute -inset-0.5 rounded-full"
-        style={pulseStyle}
-      />
+      <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      <Animated.View className="absolute -inset-0.5 rounded-full" style={pulseStyle} />
     </View>
   );
 }
@@ -86,7 +80,10 @@ export function AgentStatusBadge({ status }: AgentStatusBadgeProps) {
   const Icon = config.icon;
 
   return (
-    <View className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${config.bgClass}`}>
+    <View
+      className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${config.bgClass}`}
+      accessibilityLabel={`Agent status: ${config.label}`}
+    >
       {status === 'running' ? (
         <PulsingDot color={config.color} />
       ) : (

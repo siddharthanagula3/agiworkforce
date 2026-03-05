@@ -159,6 +159,9 @@ export function RecurrencePicker({
                     ? 'bg-teal-500/20 border-teal-500'
                     : 'bg-surface-elevated border-white/10'
                 }`}
+                accessibilityLabel={`Recurrence: ${opt.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
               >
                 <Text
                   className={`text-xs font-medium ${selected ? 'text-teal-400' : 'text-white/60'}`}
@@ -185,6 +188,9 @@ export function RecurrencePicker({
                   className={`w-9 h-9 rounded-full items-center justify-center ${
                     selected ? 'bg-teal-500' : 'bg-surface-elevated'
                   }`}
+                  accessibilityLabel={`${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][idx]}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
                 >
                   <Text
                     className={`text-xs font-semibold ${selected ? 'text-white' : 'text-white/50'}`}
@@ -216,6 +222,9 @@ export function RecurrencePicker({
                   className={`w-9 h-9 rounded-lg items-center justify-center ${
                     selected ? 'bg-teal-500' : 'bg-surface-elevated'
                   }`}
+                  accessibilityLabel={`Day ${day}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
                 >
                   <Text
                     className={`text-xs font-medium ${selected ? 'text-white' : 'text-white/50'}`}
@@ -276,6 +285,9 @@ export function RecurrencePicker({
                     className={`h-9 items-center justify-center rounded-md mx-1 ${
                       selected ? 'bg-teal-500/20' : ''
                     }`}
+                    accessibilityLabel={`${h} hours`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                   >
                     <Text
                       className={`text-sm font-medium ${
@@ -311,6 +323,9 @@ export function RecurrencePicker({
                     className={`h-9 items-center justify-center rounded-md mx-1 ${
                       selected ? 'bg-teal-500/20' : ''
                     }`}
+                    accessibilityLabel={`${m} minutes`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                   >
                     <Text
                       className={`text-sm font-medium ${

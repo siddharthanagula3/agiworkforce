@@ -9,8 +9,8 @@ import React from 'react';
 import { Brain, ChevronDown, EyeOff, Sparkles, WrenchIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import { cn } from '../../lib/utils';
+import type { ResolvedCapabilities } from '../../lib/modelCapabilities';
 import { QuickModelSelector } from './QuickModelSelector';
-import type { ResolvedCapabilities } from '../../hooks/useModelCapabilities';
 
 export interface ModelSelectorButtonProps {
   /** Display name of the current model */

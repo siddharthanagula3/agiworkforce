@@ -11,7 +11,7 @@ use tiktoken_rs::{cl100k_base, CoreBPE};
 static TOKENIZER: LazyLock<Option<CoreBPE>> = LazyLock::new(|| match cl100k_base() {
     Ok(bpe) => Some(bpe),
     Err(e) => {
-        eprintln!("[token_counter] WARNING: failed to load cl100k_base tokenizer: {e}");
+        tracing::warn!("[token_counter] failed to load cl100k_base tokenizer: {e}");
         None
     }
 });
@@ -213,8 +213,7 @@ impl TokenCounter {
         messages: &[ChatMessage],
         completion: &str,
     ) -> (u32, u32) {
-        let multiplier =
-            crate::core::llm::models_config::get_token_multiplier(&provider);
+        let multiplier = crate::core::llm::models_config::get_token_multiplier(&provider);
         let (prompt_multiplier, completion_multiplier) = (multiplier, multiplier);
 
         let prompt_base = Self::estimate_prompt_tokens(messages) as f64;

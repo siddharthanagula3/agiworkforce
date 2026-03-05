@@ -22,8 +22,7 @@ mod tests {
         if let Some(home) = dirs::home_dir() {
             let ssh_path = home.join(".ssh");
             if ssh_path.exists() {
-                let result =
-                    TaskExecutor::validate_file_path(ssh_path.to_str().unwrap());
+                let result = TaskExecutor::validate_file_path(ssh_path.to_str().unwrap());
                 assert!(
                     result.is_err(),
                     "~/.ssh should be rejected as a protected user path"
@@ -37,8 +36,7 @@ mod tests {
         if let Some(home) = dirs::home_dir() {
             let gnupg_path = home.join(".gnupg");
             if gnupg_path.exists() {
-                let result =
-                    TaskExecutor::validate_file_path(gnupg_path.to_str().unwrap());
+                let result = TaskExecutor::validate_file_path(gnupg_path.to_str().unwrap());
                 assert!(
                     result.is_err(),
                     "~/.gnupg should be rejected as a protected user path"
@@ -72,7 +70,10 @@ mod tests {
     #[test]
     fn validate_write_path_null_byte_is_rejected() {
         let result = TaskExecutor::validate_write_path("/tmp/foo\0bar");
-        assert!(result.is_err(), "Null byte in write path should be rejected");
+        assert!(
+            result.is_err(),
+            "Null byte in write path should be rejected"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("null bytes"),

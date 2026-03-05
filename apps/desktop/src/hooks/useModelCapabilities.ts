@@ -1,17 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { getModelMetadata } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
+import { resolveKnownModelCapabilities, type ResolvedCapabilities } from '../lib/modelCapabilities';
+import { useSettingsStore } from '../stores/settingsStore';
 import type { Provider } from '../types/provider';
-
-export interface ResolvedCapabilities {
-  supportsVision: boolean;
-  supportsTools: boolean;
-  supportsStreaming: boolean;
-  supportsThinking: boolean;
-  contextLength: number;
-  /** "native" = model has built-in tool calling, "prompt_injection" = tools injected via system prompt, "none" = no tool support */
-  toolMode: 'native' | 'prompt_injection' | 'none';
-}
 
 interface UseModelCapabilitiesReturn {
   capabilities: ResolvedCapabilities | null;
@@ -19,15 +10,6 @@ interface UseModelCapabilitiesReturn {
   /** True when an Ollama model uses prompt injection for tools (less reliable than native) */
   isToolFallback: boolean;
 }
-
-const DEFAULT_CAPABILITIES: ResolvedCapabilities = {
-  supportsVision: true,
-  supportsTools: true,
-  supportsStreaming: true,
-  supportsThinking: false,
-  contextLength: 128000,
-  toolMode: 'native',
-};
 
 // Cache Ollama results to avoid repeated Tauri calls
 const ollamaCapabilityCache = new Map<string, ResolvedCapabilities>();
@@ -37,6 +19,7 @@ export function useModelCapabilities(
   provider: Provider | null,
   ollamaBaseUrl?: string,
 ): UseModelCapabilitiesReturn {
+  const customModels = useSettingsStore((state) => state.customModels);
   const [capabilities, setCapabilities] = useState<ResolvedCapabilities | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const requestIdRef = useRef(0);
@@ -47,22 +30,15 @@ export function useModelCapabilities(
       return;
     }
 
-    // For cloud models, use static metadata from models.json
+    const resolved = resolveKnownModelCapabilities(modelId, provider, customModels);
+    if (resolved) {
+      setCapabilities(resolved);
+      setIsLoading(false);
+      return;
+    }
+
     if (provider !== 'ollama') {
-      const metadata = getModelMetadata(modelId);
-      if (metadata) {
-        setCapabilities({
-          supportsVision: metadata.capabilities.vision,
-          supportsTools: metadata.capabilities.tools,
-          supportsStreaming: metadata.capabilities.streaming,
-          supportsThinking: metadata.capabilities.thinking,
-          contextLength: metadata.contextWindow,
-          toolMode: metadata.capabilities.tools ? 'native' : 'none',
-        });
-      } else {
-        // Unknown cloud model — assume full capabilities
-        setCapabilities(DEFAULT_CAPABILITIES);
-      }
+      setCapabilities(null);
       setIsLoading(false);
       return;
     }
@@ -101,6 +77,12 @@ export function useModelCapabilities(
           supportsThinking: result.supports_thinking,
           contextLength: result.context_length,
           toolMode: result.tool_mode as ResolvedCapabilities['toolMode'],
+          computerUse: result.supports_tools || result.tool_mode === 'prompt_injection',
+          search: false,
+          codeExecution: result.supports_tools || result.tool_mode === 'prompt_injection',
+          imageGen: false,
+          agentic: result.supports_tools || result.tool_mode === 'prompt_injection',
+          source: 'ollama-runtime',
         };
         ollamaCapabilityCache.set(cacheKey, resolved);
         setCapabilities(resolved);
@@ -116,6 +98,12 @@ export function useModelCapabilities(
           supportsThinking: false,
           contextLength: 4096,
           toolMode: 'none',
+          computerUse: false,
+          search: false,
+          codeExecution: false,
+          imageGen: false,
+          agentic: false,
+          source: 'unknown',
         });
       })
       .finally(() => {
@@ -123,7 +111,7 @@ export function useModelCapabilities(
           setIsLoading(false);
         }
       });
-  }, [modelId, provider, ollamaBaseUrl]);
+  }, [customModels, modelId, provider, ollamaBaseUrl]);
 
   return {
     capabilities,

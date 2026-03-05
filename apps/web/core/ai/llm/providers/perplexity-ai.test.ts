@@ -452,12 +452,12 @@ describe('PerplexityProvider', () => {
   describe('streamMessage', () => {
     const mockMessages: PerplexityMessage[] = [{ role: 'user', content: 'Hello' }];
 
-    it('should throw DIRECT_API_DISABLED error (direct API disabled)', async () => {
+    it('should throw STREAMING_FAILED error when fetch fails', async () => {
       const stream = provider.streamMessage(mockMessages);
 
       await expect(stream.next()).rejects.toThrow(PerplexityError);
       await expect(provider.streamMessage(mockMessages).next()).rejects.toMatchObject({
-        code: 'DIRECT_API_DISABLED',
+        code: 'STREAMING_FAILED',
       });
     });
   });

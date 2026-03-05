@@ -4,9 +4,8 @@
 //! It handles user responses to tool confirmation requests and manages pending confirmations.
 
 use crate::sys::security::tool_guard::RiskLevel;
-#[allow(unused_imports)]
 use crate::sys::security::{
-    ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard, ToolSafetyTier,
+    ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
 };
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -539,6 +538,7 @@ pub async fn request_confirmation_simple(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sys::security::tool_guard::ToolSafetyTier;
 
     #[test]
     fn test_tool_confirmation_state() {

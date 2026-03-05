@@ -15,12 +15,13 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { McpClient } from '../api/mcp';
-import type { McpServerInfo, McpToolInfo, McpServersConfig } from '../types/mcp';
+import type { McpConfigLocation, McpServerInfo, McpToolInfo, McpServersConfig } from '../types/mcp';
 
 interface McpState {
   servers: McpServerInfo[];
   tools: McpToolInfo[];
   config: McpServersConfig | null;
+  configLocation: McpConfigLocation | null;
   stats: Record<string, number>;
   isInitialized: boolean;
   isLoading: boolean;
@@ -41,6 +42,7 @@ interface McpState {
   // Configuration management - used by MCPWorkspace component
   loadConfig: () => Promise<void>;
   updateConfig: (config: McpServersConfig) => Promise<void>;
+  refreshConfigLocation: () => Promise<void>;
 
   // Credential management - used by MCPCredentialManager component
   storeCredential: (serverName: string, key: string, value: string) => Promise<void>;
@@ -67,6 +69,7 @@ export const useMcpStore = create<McpState>()(
       servers: [],
       tools: [],
       config: null,
+      configLocation: null,
       stats: {},
       isInitialized: false,
       isLoading: false,
@@ -82,6 +85,7 @@ export const useMcpStore = create<McpState>()(
           await get().refreshTools();
           await get().refreshStats();
           await get().loadConfig();
+          await get().refreshConfigLocation();
           set({ isInitialized: true, isLoading: false }, undefined, 'mcp/initialize/success');
         } catch (error) {
           set(
@@ -220,6 +224,7 @@ export const useMcpStore = create<McpState>()(
         try {
           const config = await McpClient.getConfig();
           set({ config, error: null }, undefined, 'mcp/loadConfig');
+          await get().refreshConfigLocation();
         } catch (error) {
           set(
             {
@@ -236,6 +241,7 @@ export const useMcpStore = create<McpState>()(
         try {
           await McpClient.updateConfig(config);
           set({ config, isLoading: false }, undefined, 'mcp/updateConfig/success');
+          await get().refreshConfigLocation();
           await get().refreshServers();
         } catch (error) {
           set(
@@ -262,6 +268,21 @@ export const useMcpStore = create<McpState>()(
             },
             undefined,
             'mcp/storeCredential/error',
+          );
+        }
+      },
+
+      refreshConfigLocation: async () => {
+        try {
+          const configLocation = await McpClient.getConfigLocation();
+          set({ configLocation, error: null }, undefined, 'mcp/refreshConfigLocation');
+        } catch (error) {
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to get MCP config location',
+            },
+            undefined,
+            'mcp/refreshConfigLocation/error',
           );
         }
       },
@@ -306,6 +327,7 @@ export const useMcpStore = create<McpState>()(
             servers: [],
             tools: [],
             config: null,
+            configLocation: null,
             stats: {},
             isInitialized: false,
             isLoading: false,
@@ -326,6 +348,7 @@ export const useMcpStore = create<McpState>()(
 export const selectMcpServers = (state: McpState) => state.servers;
 export const selectMcpTools = (state: McpState) => state.tools;
 export const selectMcpConfig = (state: McpState) => state.config;
+export const selectMcpConfigLocation = (state: McpState) => state.configLocation;
 export const selectMcpStats = (state: McpState) => state.stats;
 export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;

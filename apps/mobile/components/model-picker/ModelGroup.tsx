@@ -56,16 +56,16 @@ export function ModelGroup({
       <Pressable
         onPress={toggle}
         className="flex-row items-center justify-between px-4 py-3 active:bg-white/5"
+        accessibilityLabel={`${provider.name}, ${models.length} models`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
       >
         <View className="flex-row items-center gap-2.5">
           <View
             className="w-6 h-6 rounded-md items-center justify-center"
             style={{ backgroundColor: `${provider.color}20` }}
           >
-            <Text
-              className="text-[11px] font-bold"
-              style={{ color: provider.color }}
-            >
+            <Text className="text-[11px] font-bold" style={{ color: provider.color }}>
               {provider.name.charAt(0)}
             </Text>
           </View>

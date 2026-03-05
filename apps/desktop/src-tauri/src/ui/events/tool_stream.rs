@@ -1,4 +1,7 @@
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::LazyLock;
 use tauri::{AppHandle, Emitter};
 
 /// Tool stream event types for real-time progress updates during tool execution
@@ -87,6 +90,9 @@ pub struct ToolStreamEventPayload {
     pub agent_id: Option<String>,
 }
 
+static ACTIVE_TOOL_STREAMS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
 impl ToolStreamEvent {
     /// Get the tool_id from any event variant
     pub fn tool_id(&self) -> &str {
@@ -125,6 +131,18 @@ pub fn emit_tool_stream_event_with_context(
     session_id: Option<String>,
     agent_id: Option<String>,
 ) {
+    match &event {
+        ToolStreamEvent::Started { tool_id, .. } => {
+            ACTIVE_TOOL_STREAMS.lock().insert(tool_id.clone());
+        }
+        ToolStreamEvent::Completed { tool_id, .. }
+        | ToolStreamEvent::Error { tool_id, .. }
+        | ToolStreamEvent::Cancelled { tool_id, .. } => {
+            ACTIVE_TOOL_STREAMS.lock().remove(tool_id);
+        }
+        ToolStreamEvent::Progress { .. } | ToolStreamEvent::OutputChunk { .. } => {}
+    }
+
     let payload = ToolStreamEventPayload {
         event: event.clone(),
         timestamp: chrono::Utc::now().to_rfc3339(),
@@ -146,6 +164,10 @@ pub fn emit_tool_stream_event_with_context(
             event.tool_id()
         );
     }
+}
+
+pub fn is_tool_active(tool_id: &str) -> bool {
+    ACTIVE_TOOL_STREAMS.lock().contains(tool_id)
 }
 
 /// Helper to emit a started event
@@ -288,6 +310,7 @@ pub fn emit_tool_cancelled(
 pub struct ToolStreamContext<'a> {
     app_handle: &'a AppHandle,
     tool_id: String,
+    /// Tool name (reserved for future per-tool stream filtering)
     #[allow(dead_code)]
     tool_name: String,
     start_time: std::time::Instant,

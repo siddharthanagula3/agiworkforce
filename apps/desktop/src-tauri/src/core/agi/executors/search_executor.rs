@@ -58,8 +58,6 @@ impl SearchType {
 
     /// Get domain filters for this search type.
     ///
-    /// Note: Currently unused but kept for future implementation of domain-filtered searches.
-    #[allow(dead_code)]
     #[must_use]
     pub fn domain_filters(self) -> Vec<String> {
         match self {

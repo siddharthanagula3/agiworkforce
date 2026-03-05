@@ -149,6 +149,3 @@ export interface ToolResultUI {
   duration?: number;
   metadata?: Record<string, unknown>;
 }
-
-export const _stub = true;
-export default {};

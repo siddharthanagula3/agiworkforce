@@ -105,7 +105,6 @@ pub struct BargeInHandle {
 impl BargeInHandle {
     /// Create a new handle
     #[cfg(any(feature = "vad", test))]
-    #[allow(dead_code)]
     pub(crate) fn new(is_active: Arc<AtomicBool>) -> Self {
         Self {
             is_active,
@@ -135,16 +134,12 @@ impl BargeInHandle {
 pub struct BargeInDetector {
     #[cfg(feature = "vad")]
     vad: SharedVad,
-    #[allow(dead_code)]
     config: BargeInConfig,
     /// Flag indicating if detection is currently enabled globally
-    #[allow(dead_code)]
     enabled: Arc<AtomicBool>,
     /// Statistics: total barge-ins detected
-    #[allow(dead_code)]
     total_detections: Arc<AtomicU64>,
     /// Statistics: average detection latency (ms)
-    #[allow(dead_code)]
     avg_latency_ms: Arc<AtomicU64>,
 }
 

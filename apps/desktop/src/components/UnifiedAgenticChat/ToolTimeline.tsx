@@ -23,8 +23,6 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
 
   // Auto-expand while tools are running, but preserve user's manual expansion
   const isOpen = hasRunning || isExpanded;
-
-  const totalDuration = entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
   const errorCount = entries.filter((e) => e.status === 'error').length;
 
   // Group consecutive entries that share the same parallelGroup value.
@@ -49,6 +47,19 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
 
     return groups;
   }, [entries]);
+
+  const totalDuration = useMemo(
+    () =>
+      groupedEntries.reduce((sum, group) => {
+        const groupDuration =
+          group.parallelGroup !== undefined && group.entries.length > 1
+            ? Math.max(...group.entries.map((entry) => entry.durationMs ?? 0))
+            : group.entries.reduce((groupSum, entry) => groupSum + (entry.durationMs ?? 0), 0);
+
+        return sum + groupDuration;
+      }, 0),
+    [groupedEntries],
+  );
 
   if (entries.length === 0) return null;
 

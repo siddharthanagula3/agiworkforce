@@ -9,7 +9,10 @@
 //! - Tokens are stored in the settings_v2 database table
 //! - State parameter is used to prevent CSRF attacks
 
-use crate::core::mcp::{McpServerConfig, McpServersConfig};
+use crate::core::mcp::config::{
+    encrypt_oauth_token, open_mcp_settings_db, upsert_settings_v2_value,
+};
+use crate::core::mcp::{emit_mcp_event, McpEvent, McpServerConfig};
 use crate::sys::commands::mcp::McpState;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use aes_gcm::{
@@ -32,13 +35,13 @@ use tokio::sync::RwLock;
 
 /// How a connector authenticates for its MCP server
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 enum ConnectorCredentialSource {
     /// Uses OAuth token stored via mcp_oauth_tokens_{provider}
     OAuth { provider: &'static str },
     /// Uses API key stored via api_key_{connector_id}
     ApiKey,
-    /// No credentials needed
+    /// No credentials needed (reserved for public MCP servers)
+    #[allow(dead_code)]
     None,
 }
 
@@ -79,9 +82,7 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-gdrive"],
             env_keys: &[("GDRIVE_OAUTH_TOKEN", "Google Drive OAuth token")],
-            credential_source: ConnectorCredentialSource::OAuth {
-                provider: "google",
-            },
+            credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
         }),
         "figma" => Some(ConnectorMcpMapping {
             server_name: "connector-figma",
@@ -158,14 +159,18 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             command: "npx",
             args: &["-y", "@anthropic/mcp-server-outlook"],
             env_keys: &[("OUTLOOK_OAUTH_TOKEN", "Outlook OAuth token")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "microsoft" },
+            credential_source: ConnectorCredentialSource::OAuth {
+                provider: "microsoft",
+            },
         }),
         "jira" => Some(ConnectorMcpMapping {
             server_name: "connector-jira",
             command: "npx",
             args: &["-y", "@anthropic/mcp-server-jira"],
             env_keys: &[("JIRA_OAUTH_TOKEN", "Jira OAuth token")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "atlassian" },
+            credential_source: ConnectorCredentialSource::OAuth {
+                provider: "atlassian",
+            },
         }),
         _ => None,
     }
@@ -204,16 +209,17 @@ impl McpOAuthProvider {
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "github" => Some(McpOAuthProvider::GitHub),
-            "google" | "google_drive" | "googledrive" | "google-drive"
-            | "gmail" | "google_calendar" | "google_sheets" | "google_docs"
-            | "bigquery" | "google_analytics" => Some(McpOAuthProvider::Google),
+            "google" | "google_drive" | "googledrive" | "google-drive" | "gmail"
+            | "google_calendar" | "google_sheets" | "google_docs" | "bigquery"
+            | "google_analytics" => Some(McpOAuthProvider::Google),
             "slack" => Some(McpOAuthProvider::Slack),
             "notion" => Some(McpOAuthProvider::Notion),
             "figma" => Some(McpOAuthProvider::Figma),
-            "outlook" | "onedrive" | "microsoft_teams" | "microsoft"
-            | "sharepoint" | "dynamics_365" => Some(McpOAuthProvider::Microsoft),
-            "jira" | "confluence" | "atlassian" | "bitbucket"
-            | "trello" => Some(McpOAuthProvider::Atlassian),
+            "outlook" | "onedrive" | "microsoft_teams" | "microsoft" | "sharepoint"
+            | "dynamics_365" => Some(McpOAuthProvider::Microsoft),
+            "jira" | "confluence" | "atlassian" | "bitbucket" | "trello" => {
+                Some(McpOAuthProvider::Atlassian)
+            }
             _ => None,
         }
     }
@@ -226,7 +232,9 @@ impl McpOAuthProvider {
             McpOAuthProvider::Slack => "https://slack.com/oauth/v2/authorize",
             McpOAuthProvider::Notion => "https://api.notion.com/v1/oauth/authorize",
             McpOAuthProvider::Figma => "https://www.figma.com/oauth",
-            McpOAuthProvider::Microsoft => "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+            McpOAuthProvider::Microsoft => {
+                "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+            }
             McpOAuthProvider::Atlassian => "https://auth.atlassian.com/authorize",
         }
     }
@@ -239,7 +247,9 @@ impl McpOAuthProvider {
             McpOAuthProvider::Slack => "https://slack.com/api/oauth.v2.access",
             McpOAuthProvider::Notion => "https://api.notion.com/v1/oauth/token",
             McpOAuthProvider::Figma => "https://api.figma.com/v1/oauth/token",
-            McpOAuthProvider::Microsoft => "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            McpOAuthProvider::Microsoft => {
+                "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+            }
             McpOAuthProvider::Atlassian => "https://auth.atlassian.com/oauth/token",
         }
     }
@@ -256,7 +266,9 @@ impl McpOAuthProvider {
                 "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/drive.file",
                 "https://www.googleapis.com/auth/spreadsheets",
-                "openid", "email", "profile",
+                "openid",
+                "email",
+                "profile",
             ],
             McpOAuthProvider::Slack => {
                 vec!["channels:read", "chat:write", "users:read", "files:read"]
@@ -264,13 +276,19 @@ impl McpOAuthProvider {
             McpOAuthProvider::Notion => vec![],
             McpOAuthProvider::Figma => vec!["files:read"],
             McpOAuthProvider::Microsoft => vec![
-                "openid", "profile", "email", "offline_access",
-                "Mail.Read", "Mail.Send",
-                "Calendars.Read", "Calendars.ReadWrite",
+                "openid",
+                "profile",
+                "email",
+                "offline_access",
+                "Mail.Read",
+                "Mail.Send",
+                "Calendars.Read",
+                "Calendars.ReadWrite",
                 "Files.Read.All",
             ],
             McpOAuthProvider::Atlassian => vec![
-                "read:jira-work", "write:jira-work",
+                "read:jira-work",
+                "write:jira-work",
                 "read:confluence-content.all",
                 "offline_access",
             ],
@@ -547,30 +565,63 @@ fn decrypt_tokens(encrypted: &str) -> Result<StoredTokens, String> {
 // Database Operations
 // ============================================================================
 
-/// Get the database path
-fn get_db_path() -> Result<std::path::PathBuf, String> {
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    Ok(app_data.join("agiworkforce").join("agiworkforce.db"))
-}
-
 /// Store encrypted tokens in the database
 fn store_tokens(provider: McpOAuthProvider, tokens: &StoredTokens) -> Result<(), String> {
     let encrypted = encrypt_tokens(tokens)?;
-    let db_path = get_db_path()?;
-
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let key = format!("mcp_oauth_tokens_{}", provider.as_str());
-    let now = chrono::Utc::now().to_rfc3339();
+    upsert_settings_v2_value(&conn, &key, &encrypted, "security", true)
+        .map_err(|e| format!("Failed to store tokens: {}", e))?;
 
-    conn.execute(
-        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
-         VALUES (?1, ?2, 'mcp_oauth', 1, ?3, ?3)",
-        rusqlite::params![key, encrypted, now],
+    let access_token_key = format!("mcp_oauth_{}_access_token", provider.as_str());
+    let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider.as_str());
+    let expires_at_key = format!("mcp_oauth_{}_expires_at", provider.as_str());
+    let encrypted_access_token = encrypt_oauth_token(&tokens.access_token)
+        .ok_or_else(|| "Failed to encrypt OAuth access token".to_string())?;
+
+    upsert_settings_v2_value(
+        &conn,
+        &access_token_key,
+        &encrypted_access_token,
+        "security",
+        true,
     )
-    .map_err(|e| format!("Failed to store tokens: {}", e))?;
+    .map_err(|e| format!("Failed to store OAuth access token: {}", e))?;
+
+    if let Some(refresh_token) = &tokens.refresh_token {
+        let encrypted_refresh_token = encrypt_oauth_token(refresh_token)
+            .ok_or_else(|| "Failed to encrypt OAuth refresh token".to_string())?;
+        upsert_settings_v2_value(
+            &conn,
+            &refresh_token_key,
+            &encrypted_refresh_token,
+            "security",
+            true,
+        )
+        .map_err(|e| format!("Failed to store OAuth refresh token: {}", e))?;
+    } else {
+        let _ = conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![refresh_token_key],
+        );
+    }
+
+    if let Some(expires_at) = tokens.expires_at {
+        upsert_settings_v2_value(
+            &conn,
+            &expires_at_key,
+            &expires_at.to_string(),
+            "security",
+            false,
+        )
+        .map_err(|e| format!("Failed to store OAuth expiry: {}", e))?;
+    } else {
+        let _ = conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![expires_at_key],
+        );
+    }
 
     tracing::info!("OAuth tokens stored for provider: {}", provider.as_str());
     Ok(())
@@ -578,15 +629,12 @@ fn store_tokens(provider: McpOAuthProvider, tokens: &StoredTokens) -> Result<(),
 
 /// Retrieve encrypted tokens from the database
 fn retrieve_tokens(provider: McpOAuthProvider) -> Result<Option<StoredTokens>, String> {
-    let db_path = get_db_path()?;
-
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let key = format!("mcp_oauth_tokens_{}", provider.as_str());
 
     let result: Result<String, rusqlite::Error> = conn.query_row(
-        "SELECT value FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+        "SELECT value FROM settings_v2 WHERE key = ?1",
         rusqlite::params![key],
         |row| row.get(0),
     );
@@ -601,7 +649,7 @@ fn retrieve_tokens(provider: McpOAuthProvider) -> Result<Option<StoredTokens>, S
             if provider == McpOAuthProvider::Google {
                 let legacy_key = "mcp_oauth_tokens_google_drive";
                 let legacy_result: Result<String, rusqlite::Error> = conn.query_row(
-                    "SELECT value FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+                    "SELECT value FROM settings_v2 WHERE key = ?1",
                     rusqlite::params![legacy_key],
                     |row| row.get(0),
                 );
@@ -621,18 +669,28 @@ fn retrieve_tokens(provider: McpOAuthProvider) -> Result<Option<StoredTokens>, S
 
 /// Delete tokens from the database
 fn delete_tokens(provider: McpOAuthProvider) -> Result<(), String> {
-    let db_path = get_db_path()?;
-
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let key = format!("mcp_oauth_tokens_{}", provider.as_str());
+    let access_token_key = format!("mcp_oauth_{}_access_token", provider.as_str());
+    let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider.as_str());
+    let expires_at_key = format!("mcp_oauth_{}_expires_at", provider.as_str());
 
     conn.execute(
-        "DELETE FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+        "DELETE FROM settings_v2 WHERE key = ?1",
         rusqlite::params![key],
     )
     .map_err(|e| format!("Failed to delete tokens: {}", e))?;
+    let _ = conn.execute(
+        "DELETE FROM settings_v2 WHERE key IN (?1, ?2, ?3)",
+        rusqlite::params![access_token_key, refresh_token_key, expires_at_key],
+    );
+    if provider == McpOAuthProvider::Google {
+        let _ = conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params!["mcp_oauth_tokens_google_drive"],
+        );
+    }
 
     tracing::info!("OAuth tokens deleted for provider: {}", provider.as_str());
     Ok(())
@@ -670,9 +728,7 @@ fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, String)
 
 /// Get a stored credential for a provider
 fn get_stored_credential(provider: McpOAuthProvider, key: &str) -> Result<String, String> {
-    let db_path = get_db_path()?;
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let setting_key = format!("mcp_oauth_config_{}_{}", provider.as_str(), key);
 
@@ -826,18 +882,27 @@ pub async fn mcp_oauth_callback(
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-    // Retrieve and verify pending flow
+    // Validate and consume pending flow under one write lock to avoid replay races.
     let pending_flow = {
         let mut flows = state.pending_flows.write().await;
+        let flow = flows
+            .get(&callback_state)
+            .cloned()
+            .ok_or_else(|| "Invalid or expired OAuth state".to_string())?;
+
+        if flow.provider != oauth_provider {
+            return Err("Provider mismatch".to_string());
+        }
+
+        if McpOAuthState::now().saturating_sub(flow.created_at) >= 600 {
+            flows.remove(&callback_state);
+            return Err("OAuth state expired. Please start again.".to_string());
+        }
+
         flows
             .remove(&callback_state)
             .ok_or_else(|| "Invalid or expired OAuth state".to_string())?
     };
-
-    // Verify provider matches
-    if pending_flow.provider != oauth_provider {
-        return Err("Provider mismatch".to_string());
-    }
 
     // Get client credentials
     let (client_id, client_secret) = get_client_credentials(oauth_provider)?;
@@ -979,47 +1044,77 @@ pub async fn mcp_oauth_disconnect(
 ) -> Result<(), String> {
     tracing::info!("Disconnecting connector: {}", provider);
 
-    // Remove OAuth tokens if this is an OAuth provider
-    if let Some(oauth_provider) = McpOAuthProvider::from_str(&provider) {
-        delete_tokens(oauth_provider)?;
-    }
+    // Disconnect and remove MCP server first so failures do not silently report success.
+    if let Some(mapping) = get_connector_mcp_mapping(&provider) {
+        let server_name = mapping.server_name.to_string();
+        if let Some(mcp_state) = app_handle.try_state::<McpState>() {
+            // Disconnect only when currently connected.
+            if mcp_state
+                .client
+                .get_connected_servers()
+                .contains(&server_name)
+            {
+                if let Err(err) = mcp_state.client.disconnect_server(&server_name).await {
+                    let err_message = format!(
+                        "Connector '{}' MCP server '{}' disconnect failed: {}",
+                        provider, server_name, err
+                    );
+                    emit_mcp_event(
+                        &app_handle,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: server_name.clone(),
+                            connected: false,
+                            error: Some(err_message.clone()),
+                        },
+                    );
+                    return Err(err_message);
+                }
+            }
 
-    // Also delete any stored API key
-    if let Ok(db_path) = get_db_path() {
-        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
-            let api_key_key = format!("api_key_{}", provider);
-            let _ = conn.execute(
-                "DELETE FROM settings_v2 WHERE key = ?1",
-                rusqlite::params![api_key_key],
+            // Remove from persistent config
+            let config_snapshot = {
+                let mut config = mcp_state.config.lock();
+                config.mcp_servers.remove(&server_name);
+                config.clone()
+            };
+            mcp_state
+                .persist_config_snapshot(&config_snapshot)
+                .await
+                .map_err(|e| format!("Failed to save MCP config after disconnect: {}", e))?;
+
+            emit_mcp_event(
+                &app_handle,
+                McpEvent::ServerConnectionChanged {
+                    server_name: server_name.clone(),
+                    connected: false,
+                    error: None,
+                },
+            );
+            emit_mcp_event(
+                &app_handle,
+                McpEvent::ToolsUpdated {
+                    server_name: server_name.clone(),
+                    tool_count: 0,
+                },
             );
         }
     }
 
-    // Disconnect and remove MCP server if one exists
-    if let Some(mapping) = get_connector_mcp_mapping(&provider) {
-        let server_name = mapping.server_name.to_string();
-        if let Some(mcp_state) = app_handle.try_state::<McpState>() {
-            // Disconnect the running server (ignore errors if not connected)
-            let _ = mcp_state.client.disconnect_server(&server_name).await;
-
-            // Remove from persistent config
-            {
-                let mut config = mcp_state.config.lock();
-                config.mcp_servers.remove(&server_name);
-                if let Ok(config_path) = McpServersConfig::default_config_path() {
-                    let config_clone = config.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = config_clone.save_to_file(&config_path).await {
-                            tracing::warn!("Failed to save MCP config after disconnect: {}", e);
-                        }
-                    });
-                }
-            }
-
-            let _ = app_handle.emit("mcp:tools_updated", ());
-        }
+    // Remove OAuth tokens if this is an OAuth provider.
+    if let Some(oauth_provider) = McpOAuthProvider::from_str(&provider) {
+        delete_tokens(oauth_provider)?;
     }
 
+    // Also delete any stored API key.
+    if let Ok(conn) = open_mcp_settings_db() {
+        let api_key_key = format!("api_key_{}", provider);
+        let _ = conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![api_key_key],
+        );
+    }
+
+    let _ = app_handle.emit("connector:disconnected", &provider);
     tracing::info!("Disconnected connector: {}", provider);
     Ok(())
 }
@@ -1147,31 +1242,19 @@ pub async fn mcp_oauth_set_credentials(
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-    let db_path = get_db_path()?;
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
-
-    let now = chrono::Utc::now().to_rfc3339();
+    let conn = open_mcp_settings_db()?;
 
     // Encrypt and store client_id
     let encrypted_id = encrypt_credential(&client_id)?;
     let id_key = format!("mcp_oauth_config_{}_client_id", oauth_provider.as_str());
-    conn.execute(
-        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
-         VALUES (?1, ?2, 'mcp_oauth', 1, ?3, ?3)",
-        rusqlite::params![id_key, encrypted_id, now],
-    )
-    .map_err(|e| format!("Failed to store client_id: {}", e))?;
+    upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
+        .map_err(|e| format!("Failed to store client_id: {}", e))?;
 
     // Encrypt and store client_secret
     let encrypted_secret = encrypt_credential(&client_secret)?;
     let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
-    conn.execute(
-        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
-         VALUES (?1, ?2, 'mcp_oauth', 1, ?3, ?3)",
-        rusqlite::params![secret_key, encrypted_secret, now],
-    )
-    .map_err(|e| format!("Failed to store client_secret: {}", e))?;
+    upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
+        .map_err(|e| format!("Failed to store client_secret: {}", e))?;
 
     tracing::info!(
         "OAuth credentials stored for provider: {}",
@@ -1280,14 +1363,18 @@ async fn fetch_user_info(
             })
         }
         _ => Ok(UserInfo {
-            id: data["id"].as_str()
+            id: data["id"]
+                .as_str()
                 .or(data["account_id"].as_str())
-                .unwrap_or_default().to_string(),
-            name: data["name"].as_str()
+                .unwrap_or_default()
+                .to_string(),
+            name: data["name"]
+                .as_str()
                 .or(data["display_name"].as_str())
                 .map(|s| s.to_string()),
             email: data["email"].as_str().map(|s| s.to_string()),
-            avatar_url: data["avatar_url"].as_str()
+            avatar_url: data["avatar_url"]
+                .as_str()
                 .or(data["img"].as_str())
                 .or(data["picture"].as_str())
                 .map(|s| s.to_string()),
@@ -1298,10 +1385,7 @@ async fn fetch_user_info(
 /// Lists all connector provider IDs that have stored OAuth tokens or API keys
 #[tauri::command]
 pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
-    let db_path = get_db_path()?;
-
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let mut providers = Vec::new();
 
@@ -1415,26 +1499,27 @@ pub async fn mcp_connect_connector(
         }
     };
 
-    // Resolve credentials
-    let mut env = HashMap::new();
+    // Build both runtime env (with decrypted secrets) and persisted env (placeholders only).
+    let mut runtime_env = HashMap::new();
+    let mut persisted_env = HashMap::new();
     match &mapping.credential_source {
         ConnectorCredentialSource::OAuth { provider } => {
             // Try to get OAuth token from stored tokens
             let oauth_provider_str = *provider;
             match retrieve_tokens_by_id(oauth_provider_str) {
                 Ok(Some(tokens)) => {
+                    let placeholder = format!("<from_oauth:{}>", oauth_provider_str);
+                    persisted_env.insert(mapping.env_keys[0].0.to_string(), placeholder);
+
                     // For Notion, the MCP server expects headers in JSON format
                     if connector_id == "notion" {
                         let headers = format!(
                             r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
                             tokens.access_token
                         );
-                        env.insert(mapping.env_keys[0].0.to_string(), headers);
+                        runtime_env.insert(mapping.env_keys[0].0.to_string(), headers);
                     } else {
-                        env.insert(
-                            mapping.env_keys[0].0.to_string(),
-                            tokens.access_token,
-                        );
+                        runtime_env.insert(mapping.env_keys[0].0.to_string(), tokens.access_token);
                     }
                 }
                 Ok(None) => {
@@ -1455,7 +1540,11 @@ pub async fn mcp_connect_connector(
             // Retrieve API key from settings_v2
             let api_key = retrieve_api_key(&connector_id)?;
             for (env_var, _desc) in mapping.env_keys {
-                env.insert(env_var.to_string(), api_key.clone());
+                runtime_env.insert(env_var.to_string(), api_key.clone());
+                persisted_env.insert(
+                    env_var.to_string(),
+                    format!("<from_api_key:{}>", connector_id),
+                );
             }
         }
         ConnectorCredentialSource::None => {
@@ -1467,7 +1556,14 @@ pub async fn mcp_connect_connector(
     let server_config = McpServerConfig {
         command: mapping.command.to_string(),
         args: mapping.args.iter().map(|s| s.to_string()).collect(),
-        env,
+        env: runtime_env,
+        enabled: true,
+        transport: None,
+    };
+    let persisted_config = McpServerConfig {
+        command: mapping.command.to_string(),
+        args: mapping.args.iter().map(|s| s.to_string()).collect(),
+        env: persisted_env,
         enabled: true,
         transport: None,
     };
@@ -1478,30 +1574,118 @@ pub async fn mcp_connect_connector(
         .ok_or_else(|| "MCP state not initialized".to_string())?;
 
     let server_name = mapping.server_name.to_string();
+    let was_connected = mcp_state
+        .client
+        .get_connected_servers()
+        .contains(&server_name);
 
-    // Add to persistent config so it auto-reconnects on restart
-    {
+    if was_connected {
+        mcp_state
+            .client
+            .disconnect_server(&server_name)
+            .await
+            .map_err(|e| {
+                format!(
+                    "Failed to reset existing MCP server '{}': {}",
+                    server_name, e
+                )
+            })?;
+        emit_mcp_event(
+            &app_handle,
+            McpEvent::ServerConnectionChanged {
+                server_name: server_name.clone(),
+                connected: false,
+                error: None,
+            },
+        );
+        emit_mcp_event(
+            &app_handle,
+            McpEvent::ToolsUpdated {
+                server_name: server_name.clone(),
+                tool_count: 0,
+            },
+        );
+    }
+
+    // Add to persistent config so it auto-reconnects on restart.
+    let (previous_config, config_snapshot) = {
         let mut config = mcp_state.config.lock();
-        config
+        let previous = config
             .mcp_servers
-            .insert(server_name.clone(), server_config.clone());
-        // Save config to disk (best effort)
-        if let Ok(config_path) = McpServersConfig::default_config_path() {
-            let config_clone = config.clone();
-            tokio::spawn(async move {
-                if let Err(e) = config_clone.save_to_file(&config_path).await {
-                    tracing::warn!("Failed to save MCP config: {}", e);
-                }
-            });
+            .insert(server_name.clone(), persisted_config);
+        (previous, config.clone())
+    };
+    if let Err(err) = mcp_state.persist_config_snapshot(&config_snapshot).await {
+        let mut config = mcp_state.config.lock();
+        match previous_config {
+            Some(previous) => {
+                config.mcp_servers.insert(server_name.clone(), previous);
+            }
+            None => {
+                config.mcp_servers.remove(&server_name);
+            }
         }
+        return Err(format!("Failed to save MCP config: {}", err));
     }
 
     // Connect the MCP server
-    mcp_state
+    if let Err(err) = mcp_state
         .client
         .connect_server(server_name.clone(), server_config)
         .await
-        .map_err(|e| format!("Failed to connect MCP server '{}': {}", server_name, e))?;
+    {
+        // Roll back persisted config to previous value.
+        let rollback_snapshot = {
+            let mut config = mcp_state.config.lock();
+            match previous_config {
+                Some(previous) => {
+                    config.mcp_servers.insert(server_name.clone(), previous);
+                }
+                None => {
+                    config.mcp_servers.remove(&server_name);
+                }
+            }
+            config.clone()
+        };
+        if let Err(save_err) = mcp_state.persist_config_snapshot(&rollback_snapshot).await {
+            tracing::warn!(
+                "Failed to rollback connector MCP config for '{}': {}",
+                server_name,
+                save_err
+            );
+        }
+        let err_message = format!("Failed to connect MCP server '{}': {}", server_name, err);
+        emit_mcp_event(
+            &app_handle,
+            McpEvent::ServerConnectionChanged {
+                server_name: server_name.clone(),
+                connected: false,
+                error: Some(err_message.clone()),
+            },
+        );
+        return Err(err_message);
+    }
+
+    let tool_count = mcp_state
+        .client
+        .list_server_tools(&server_name)
+        .map(|tools| tools.len())
+        .unwrap_or(0);
+    emit_mcp_event(
+        &app_handle,
+        McpEvent::ServerConnectionChanged {
+            server_name: server_name.clone(),
+            connected: true,
+            error: None,
+        },
+    );
+    emit_mcp_event(
+        &app_handle,
+        McpEvent::ToolsUpdated {
+            server_name: server_name.clone(),
+            tool_count,
+        },
+    );
 
     tracing::info!(
         "Successfully connected connector '{}' as MCP server '{}'",
@@ -1511,7 +1695,6 @@ pub async fn mcp_connect_connector(
 
     // Emit events
     let _ = app_handle.emit("connector:connected", &connector_id);
-    let _ = app_handle.emit("mcp:tools_updated", ());
 
     Ok(())
 }
@@ -1519,22 +1702,14 @@ pub async fn mcp_connect_connector(
 /// Save an API key for a provider (encrypted)
 #[tauri::command]
 pub async fn save_api_key(provider: String, key: String) -> Result<(), String> {
-    let db_path = get_db_path()?;
-
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     // Encrypt the API key before storing
     let encrypted = encrypt_credential(&key)?;
-    let now = chrono::Utc::now().to_rfc3339();
     let setting_key = format!("api_key_{}", provider);
 
-    conn.execute(
-        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
-         VALUES (?1, ?2, 'security', 1, ?3, ?3)",
-        rusqlite::params![setting_key, encrypted, now],
-    )
-    .map_err(|e| format!("Failed to store API key: {}", e))?;
+    upsert_settings_v2_value(&conn, &setting_key, &encrypted, "security", true)
+        .map_err(|e| format!("Failed to store API key: {}", e))?;
 
     tracing::info!("API key stored for provider: {}", provider);
     Ok(())
@@ -1553,13 +1728,11 @@ fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, Stri
     }
 
     // Fallback: try direct DB lookup for providers not in the enum
-    let db_path = get_db_path()?;
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let key = format!("mcp_oauth_tokens_{}", provider_id);
     let result: Result<String, rusqlite::Error> = conn.query_row(
-        "SELECT value FROM settings_v2 WHERE key = ?1 AND category = 'mcp_oauth'",
+        "SELECT value FROM settings_v2 WHERE key = ?1",
         rusqlite::params![key],
         |row| row.get(0),
     );
@@ -1576,9 +1749,7 @@ fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, Stri
 
 /// Retrieve an API key for a connector from the database
 fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
-    let db_path = get_db_path()?;
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let setting_key = format!("api_key_{}", connector_id);
     let encrypted: String = conn

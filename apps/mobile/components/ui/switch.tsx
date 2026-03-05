@@ -31,6 +31,8 @@ export function Switch({ value, onValueChange }: SwitchProps) {
       className={`w-[44px] h-[24px] rounded-full justify-center ${
         value ? 'bg-teal-500' : 'bg-white/20'
       }`}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
     >
       <Animated.View style={thumbStyle} className="w-5 h-5 rounded-full bg-white shadow-sm" />
     </Pressable>

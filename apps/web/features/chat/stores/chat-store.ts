@@ -85,6 +85,7 @@ function getGreetingTime(): string {
 
 // Guard against rapid duplicate session creation (e.g., double-click on "New Chat")
 let lastSessionCreatedAt = 0;
+let lastSessionCreatedId: string | null = null;
 
 export const useChatStore = create<ChatState & ChatActions>()(
   persist(
@@ -100,10 +101,11 @@ export const useChatStore = create<ChatState & ChatActions>()(
       // Actions
       createSession: (userId?: string) => {
         const now = Date.now();
-        // Prevent duplicate session creation within 1 second (e.g., rapid "New Chat" clicks)
-        if (now - lastSessionCreatedAt < 1000) {
-          const state = get();
-          if (state.activeSessionId) return state.activeSessionId;
+        // Prevent duplicate session creation within 500ms (e.g., rapid "New Chat" clicks,
+        // or createSession called from both "New Chat" button and send handler)
+        if (now - lastSessionCreatedAt < 500 && lastSessionCreatedId) {
+          // Return the recently-created session instead of making a duplicate
+          return lastSessionCreatedId;
         }
         lastSessionCreatedAt = now;
 
@@ -123,6 +125,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           state.messages[id] = [];
           state.activeSessionId = id;
         });
+        lastSessionCreatedId = id;
         // Fire-and-forget DB save
         if (userId) {
           get()
@@ -133,6 +136,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       deleteSession: (sessionId) => {
+        if (lastSessionCreatedId === sessionId) {
+          lastSessionCreatedId = null;
+        }
         set((state) => {
           state.sessions = state.sessions.filter((s) => s.id !== sessionId);
           delete state.messages[sessionId];

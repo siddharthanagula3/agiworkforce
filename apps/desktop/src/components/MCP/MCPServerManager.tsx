@@ -356,7 +356,7 @@ export function MCPServerManager() {
       delete updatedServers[serverName];
 
       await invoke('mcp_update_config', {
-        config: {
+        new_config: {
           ...currentConfig,
           mcpServers: updatedServers,
         },

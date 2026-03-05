@@ -241,7 +241,12 @@ mod tests {
     fn test_google_gemini_flash_cost() {
         let calc = CostCalculator::new();
         // gemini-3-flash-preview: $0.50/M input, $3.00/M output
-        let cost = calc.calculate(Provider::Google, "gemini-3-flash-preview", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Google,
+            "gemini-3-flash-preview",
+            1_000_000,
+            1_000_000,
+        );
         assert!(
             (cost - 3.50).abs() < 1e-9,
             "Expected $3.50 for gemini-3-flash-preview 1M+1M tokens, got ${}",

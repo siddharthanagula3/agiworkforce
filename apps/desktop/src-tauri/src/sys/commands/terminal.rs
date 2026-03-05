@@ -90,8 +90,8 @@ pub async fn execute_terminal_command(
 
     let mut cwd = cwd;
     if let Some(ref dir) = cwd {
-        let canonical = std::fs::canonicalize(dir)
-            .map_err(|e| format!("Invalid working directory: {}", e))?;
+        let canonical =
+            std::fs::canonicalize(dir).map_err(|e| format!("Invalid working directory: {}", e))?;
         // Use canonical path from here
         cwd = Some(canonical.to_string_lossy().to_string());
     }

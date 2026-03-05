@@ -17,7 +17,7 @@ impl WorkflowScheduler {
     }
 
     pub async fn start(&self) {
-        println!("Workflow scheduler started");
+        tracing::info!("Workflow scheduler started");
 
         let engine = Arc::clone(&self.engine);
         let executor = Arc::clone(&self.executor);
@@ -53,7 +53,7 @@ impl WorkflowScheduler {
         let _schedule =
             Schedule::from_str(cron_expr).map_err(|e| format!("Invalid cron expression: {}", e))?;
 
-        println!(
+        tracing::info!(
             "Scheduled workflow {} with cron: {} (timezone: {:?})",
             workflow_id, cron_expr, timezone
         );
@@ -67,7 +67,7 @@ impl WorkflowScheduler {
         event_type: &str,
         event_data: HashMap<String, serde_json::Value>,
     ) -> Result<String, String> {
-        println!(
+        tracing::info!(
             "Triggering workflow {} on event: {}",
             workflow_id, event_type
         );
@@ -85,7 +85,7 @@ impl WorkflowScheduler {
     ) -> Result<String, String> {
         if let Some(_token) = auth_token {}
 
-        println!("Triggering workflow {} via webhook", workflow_id);
+        tracing::info!("Triggering workflow {} via webhook", workflow_id);
 
         self.executor
             .execute_workflow(workflow_id.to_string(), payload)
@@ -98,7 +98,7 @@ impl WorkflowScheduler {
         path: &str,
         _event_types: Vec<String>,
     ) -> Result<(), String> {
-        println!(
+        tracing::info!(
             "Registered file watcher for workflow {} at path: {}",
             workflow_id, path
         );
@@ -112,7 +112,7 @@ impl WorkflowScheduler {
         account_id: &str,
         _filter: HashMap<String, String>,
     ) -> Result<(), String> {
-        println!(
+        tracing::info!(
             "Registered email trigger for workflow {} on account: {}",
             workflow_id, account_id
         );
@@ -127,7 +127,7 @@ impl WorkflowScheduler {
         table: &str,
         operation: &str,
     ) -> Result<(), String> {
-        println!(
+        tracing::info!(
             "Registered database trigger for workflow {} on {}.{} ({})",
             workflow_id, database_id, table, operation
         );
@@ -141,7 +141,7 @@ impl WorkflowScheduler {
         endpoint: &str,
         method: &str,
     ) -> Result<(), String> {
-        println!(
+        tracing::info!(
             "Registered API trigger for workflow {} at {} {}",
             workflow_id, method, endpoint
         );
@@ -169,7 +169,7 @@ impl WorkflowScheduler {
     }
 
     pub fn cancel_scheduled_workflow(&self, workflow_id: &str) -> Result<(), String> {
-        println!("Cancelled scheduled workflow: {}", workflow_id);
+        tracing::info!("Cancelled scheduled workflow: {}", workflow_id);
 
         Ok(())
     }

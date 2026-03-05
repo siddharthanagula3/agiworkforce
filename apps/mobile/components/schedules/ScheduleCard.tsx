@@ -127,7 +127,12 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         .delay(index * 60)
         .springify()}
     >
-      <Pressable onPress={() => onPress(schedule.id)} className="mb-3 active:opacity-80">
+      <Pressable
+        onPress={() => onPress(schedule.id)}
+        className="mb-3 active:opacity-80"
+        accessibilityLabel={`Schedule: ${schedule.name}, ${formatRecurrence(schedule)}`}
+        accessibilityRole="button"
+      >
         <Card variant="elevated">
           {/* Row 1: Name + Toggle */}
           <View className="flex-row items-center justify-between mb-2">
@@ -163,6 +168,8 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               onPress={handleDelete}
               hitSlop={12}
               className="p-1.5 rounded-md active:bg-red-500/10"
+              accessibilityLabel="Delete schedule"
+              accessibilityRole="button"
             >
               <Trash2 size={14} color={colors.agentError} />
             </Pressable>

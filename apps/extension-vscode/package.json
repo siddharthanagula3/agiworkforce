@@ -30,6 +30,7 @@
     "gemini"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onChatParticipant:agiworkforce.agi"
   ],
   "main": "./out/extension.js",
@@ -40,6 +41,11 @@
         "command": "agi-workforce.chat",
         "title": "AGI Workforce: Open Chat",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agi-workforce.agentMode",
+        "title": "AGI Workforce: Agent Mode",
+        "icon": "$(robot)"
       },
       {
         "command": "agi-workforce.explain",
@@ -90,6 +96,16 @@
         "command": "agi-workforce.refreshConversations",
         "title": "AGI Workforce: Refresh Conversations",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.sendToDesktop",
+        "title": "AGI Workforce: Send Code to Desktop Agent",
+        "icon": "$(export)"
+      },
+      {
+        "command": "agi-workforce.syncContextToDesktop",
+        "title": "AGI Workforce: Sync Workspace Context to Desktop",
+        "icon": "$(sync)"
       }
     ],
     "chatParticipants": [
@@ -276,6 +292,20 @@
           "default": false,
           "description": "Enable ghost-text inline completions (requires API key)"
         },
+        "agiWorkforce.inlineCompletions.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 50,
+          "maximum": 2000,
+          "description": "Debounce delay in milliseconds before requesting inline completions (default: 300ms)"
+        },
+        "agiWorkforce.inlineCompletions.maxLength": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Maximum character length for inline completion suggestions (default: 500)"
+        },
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
@@ -293,7 +323,7 @@
         },
         "agiWorkforce.desktopBridge.port": {
           "type": "number",
-          "default": 9000,
+          "default": 8787,
           "minimum": 1024,
           "maximum": 65535,
           "description": "Local port for AGI Workforce desktop bridge connection"
@@ -312,6 +342,11 @@
         "key": "ctrl+shift+e",
         "mac": "cmd+shift+e",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "agi-workforce.agentMode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
       }
     ]
   },
@@ -320,7 +355,7 @@
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
-    "test": "echo 'vscode extension tests not yet configured'",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf out",
     "prebuild": "pnpm run clean && pnpm run typecheck",
@@ -338,6 +373,7 @@
     "esbuild": "^0.25.0",
     "eslint": "^9.0.0",
     "rimraf": "^6.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.0.18"
   }
 }

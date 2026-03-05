@@ -45,16 +45,16 @@ pub async fn example_parallel_code_analysis(
 
     let agent_ids = orchestrator.spawn_parallel(goals).await?;
 
-    println!(
+    tracing::info!(
         "Spawned {} agents for parallel code analysis",
         agent_ids.len()
     );
 
     let results = orchestrator.wait_for_all().await;
 
-    println!("Analysis complete. Results:");
+    tracing::info!("Analysis complete. Results:");
     for result in &results {
-        println!(
+        tracing::info!(
             "  - Agent {}: {} in {}ms",
             result.agent_id,
             if result.success { "Success" } else { "Failed" },
@@ -78,12 +78,12 @@ pub async fn example_sequential_workflow(
     };
 
     let agent1_id = orchestrator.spawn_agent(goal1).await?;
-    println!("Agent 1 (schema design) spawned: {}", agent1_id);
+    tracing::info!("Agent 1 (schema design) spawned: {}", agent1_id);
 
     loop {
         if let Some(status) = orchestrator.get_agent_status(&agent1_id).await {
             if status.status == AgentState::Completed {
-                println!("Schema design complete!");
+                tracing::info!("Schema design complete!");
                 break;
             } else if status.status == AgentState::Failed {
                 return Err(anyhow::anyhow!("Schema design failed"));
@@ -103,12 +103,12 @@ pub async fn example_sequential_workflow(
     };
 
     let agent2_id = orchestrator.spawn_agent(goal2).await?;
-    println!("Agent 2 (API implementation) spawned: {}", agent2_id);
+    tracing::info!("Agent 2 (API implementation) spawned: {}", agent2_id);
 
     loop {
         if let Some(status) = orchestrator.get_agent_status(&agent2_id).await {
             if status.status == AgentState::Completed {
-                println!("API implementation complete!");
+                tracing::info!("API implementation complete!");
                 break;
             } else if status.status == AgentState::Failed {
                 return Err(anyhow::anyhow!("API implementation failed"));
@@ -127,11 +127,11 @@ pub async fn example_sequential_workflow(
     };
 
     let agent3_id = orchestrator.spawn_agent(goal3).await?;
-    println!("Agent 3 (test writing) spawned: {}", agent3_id);
+    tracing::info!("Agent 3 (test writing) spawned: {}", agent3_id);
 
     let results = orchestrator.wait_for_all().await;
 
-    println!("Sequential workflow complete!");
+    tracing::info!("Sequential workflow complete!");
     Ok(results)
 }
 
@@ -141,17 +141,17 @@ pub async fn example_resource_locking(orchestrator: &AgentOrchestrator) -> anyho
     let file_path = std::path::PathBuf::from("/workspace/src/main.rs");
     let _guard1 = resource_lock.try_acquire_file(&file_path)?;
 
-    println!("Agent 1 acquired lock on {}", file_path.display());
+    tracing::info!("Agent 1 acquired lock on {}", file_path.display());
 
     match resource_lock.try_acquire_file(&file_path) {
-        Ok(_) => println!("Agent 2 acquired lock (unexpected!)"),
-        Err(e) => println!("Agent 2 blocked: {}", e),
+        Ok(_) => tracing::warn!("Agent 2 acquired lock (unexpected!)"),
+        Err(e) => tracing::info!("Agent 2 blocked: {}", e),
     }
 
     drop(_guard1);
 
     let _guard2 = resource_lock.try_acquire_file(&file_path)?;
-    println!("Agent 2 acquired lock after Agent 1 released it");
+    tracing::info!("Agent 2 acquired lock after Agent 1 released it");
 
     Ok(())
 }
@@ -169,7 +169,7 @@ pub async fn example_supervisor_worker(
     };
 
     let supervisor_id = orchestrator.spawn_agent(supervisor_goal).await?;
-    println!("Supervisor agent spawned: {}", supervisor_id);
+    tracing::info!("Supervisor agent spawned: {}", supervisor_id);
 
     loop {
         if let Some(status) = orchestrator.get_agent_status(&supervisor_id).await {
@@ -210,11 +210,11 @@ pub async fn example_supervisor_worker(
     ];
 
     let worker_ids = orchestrator.spawn_parallel(worker_goals).await?;
-    println!("Spawned {} worker agents", worker_ids.len());
+    tracing::info!("Spawned {} worker agents", worker_ids.len());
 
     let results = orchestrator.wait_for_all().await;
 
-    println!("Supervisor-worker pattern complete!");
+    tracing::info!("Supervisor-worker pattern complete!");
     Ok(results)
 }
 
@@ -244,18 +244,18 @@ pub async fn example_monitoring(orchestrator: &AgentOrchestrator) -> anyhow::Res
         let statuses = orchestrator.list_active_agents().await;
 
         if statuses.is_empty() {
-            println!("All agents completed!");
+            tracing::info!("All agents completed!");
             break;
         }
 
-        println!("\n=== Agent Status ===");
+        tracing::debug!("\n=== Agent Status ===");
         for status in &statuses {
-            println!(
+            tracing::debug!(
                 "  {} [{}]: {}% - {:?}",
                 status.name, status.id, status.progress, status.status
             );
             if let Some(ref step) = status.current_step {
-                println!("    Current: {}", step);
+                tracing::debug!("    Current: {}", step);
             }
         }
 
@@ -282,7 +282,7 @@ pub async fn example_conditional_execution(
     loop {
         if let Some(status) = orchestrator.get_agent_status(&diagnostic_id).await {
             if status.status == AgentState::Completed {
-                println!("Diagnostics complete - system is healthy");
+                tracing::info!("Diagnostics complete - system is healthy");
 
                 let optimization_goal = Goal {
                     id: "goal_optimize".to_string(),
@@ -296,7 +296,7 @@ pub async fn example_conditional_execution(
                 orchestrator.spawn_agent(optimization_goal).await?;
                 break;
             } else if status.status == AgentState::Failed {
-                println!("Diagnostics failed - spawning repair agent");
+                tracing::warn!("Diagnostics failed - spawning repair agent");
 
                 let repair_goal = Goal {
                     id: "goal_repair".to_string(),
@@ -349,13 +349,13 @@ pub async fn example_cleanup(orchestrator: &AgentOrchestrator) -> anyhow::Result
 
         let removed = orchestrator.cleanup_completed().await?;
         if removed > 0 {
-            println!("Cleaned up {} completed agents", removed);
+            tracing::debug!("Cleaned up {} completed agents", removed);
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
 
-    println!("All agents completed and cleaned up");
+    tracing::info!("All agents completed and cleaned up");
     Ok(())
 }
 

@@ -46,6 +46,10 @@ export function ModelRow({
       className={`flex-row items-center px-4 py-3 gap-3 ${
         isSelected ? 'bg-teal-500/10' : 'active:bg-white/5'
       }`}
+      accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}`}
+      accessibilityRole="button"
+      accessibilityHint="Tap to select, long press to favorite"
+      accessibilityState={{ selected: isSelected }}
     >
       {/* Left: model name + badges */}
       <View className="flex-1 gap-1">
