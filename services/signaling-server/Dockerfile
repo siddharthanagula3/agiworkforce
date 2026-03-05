@@ -2,7 +2,7 @@
 # WebSocket Signaling Server Dockerfile
 # =============================================================================
 # Multi-stage build for minimal production image
-# Supports both standalone and monorepo builds
+# Uses pnpm for consistency with the monorepo
 #
 # Build standalone:
 #   docker build -t signaling-server .
@@ -17,18 +17,22 @@
 # =============================================================================
 FROM node:22-alpine AS deps
 
+RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
+
 WORKDIR /app
 
-# Copy package files and lockfile for reproducible installs
-COPY package.json package-lock.json ./
+# Copy package manifest for dependency install
+COPY package.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+RUN pnpm install --frozen-lockfile=false
 
 # =============================================================================
 # Stage 2: Build
 # =============================================================================
 FROM node:22-alpine AS builder
+
+RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
 WORKDIR /app
 
@@ -41,20 +45,22 @@ COPY tsconfig.docker.json ./tsconfig.json
 COPY src/ ./src/
 
 # Build TypeScript to JavaScript
-RUN npm run build
+RUN pnpm run build
 
 # =============================================================================
 # Stage 3: Production Dependencies
 # =============================================================================
 FROM node:22-alpine AS prod-deps
 
+RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
+
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 
 # Install only production dependencies
-RUN npm ci --omit=dev && \
-    npm cache clean --force
+RUN pnpm install --prod --frozen-lockfile=false && \
+    pnpm store prune
 
 # =============================================================================
 # Stage 4: Production Runtime
