@@ -4,11 +4,12 @@ use super::AppDatabase;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
-    inspector::UIInspector,
     recorder::{global_recorder, Recording, RecordingSession},
     types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
     InspectorService,
 };
+#[cfg(any(windows, target_os = "macos"))]
+use crate::automation::inspector::UIInspector;
 
 use crate::data::db::repository;
 

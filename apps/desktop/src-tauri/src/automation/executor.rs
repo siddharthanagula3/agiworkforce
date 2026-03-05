@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use super::types::ElementSelector;
+#[cfg(any(windows, target_os = "macos"))]
 use super::inspector::UIInspector;
 use super::InspectorService;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
