@@ -226,7 +226,7 @@ impl SlackClient {
                     Ok(Message::Text(text)) => {
                         if let Ok(event) = serde_json::from_str::<SlackEvent>(&text) {
                             if let Err(e) = tx.send(event).await {
-                                eprintln!("Failed to send event: {}", e);
+                                tracing::error!("Failed to send event: {}", e);
                                 break;
                             }
                         }
@@ -237,14 +237,14 @@ impl SlackClient {
                                     "envelope_id": envelope_id,
                                 });
                                 if let Err(e) = write.send(Message::Text(ack.to_string())).await {
-                                    eprintln!("Failed to send acknowledgment: {}", e);
+                                    tracing::error!("Failed to send acknowledgment: {}", e);
                                 }
                             }
                         }
                     }
                     Ok(Message::Close(_)) => break,
                     Err(e) => {
-                        eprintln!("WebSocket error: {}", e);
+                        tracing::error!("WebSocket error: {}", e);
                         break;
                     }
                     _ => {}

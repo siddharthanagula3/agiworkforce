@@ -4,6 +4,7 @@ import type {
   McpServerInfo,
   McpServersConfig,
   McpToolInfo,
+  McpConfigLocation,
   McpOAuthProvider,
   McpOAuthStartResponse,
   McpOAuthTokenResponse,
@@ -16,6 +17,7 @@ export type {
   McpServerInfo,
   McpServersConfig,
   McpToolInfo,
+  McpConfigLocation,
   McpOAuthProvider,
   McpOAuthStartResponse,
   McpOAuthTokenResponse,
@@ -191,6 +193,14 @@ export async function mcpGetConfig(): Promise<McpServersConfig> {
     return await invokeWithTimeout<McpServersConfig>('mcp_get_config');
   } catch (error) {
     throw new Error(`Failed to get MCP configuration: ${error}`);
+  }
+}
+
+export async function mcpGetConfigLocation(): Promise<McpConfigLocation> {
+  try {
+    return await invokeWithTimeout<McpConfigLocation>('mcp_get_config_location');
+  } catch (error) {
+    throw new Error(`Failed to get MCP configuration location: ${error}`);
   }
 }
 
@@ -528,6 +538,10 @@ export class McpClient {
 
   static async getConfig(): Promise<McpServersConfig> {
     return mcpGetConfig();
+  }
+
+  static async getConfigLocation(): Promise<McpConfigLocation> {
+    return mcpGetConfigLocation();
   }
 
   static async updateConfig(config: McpServersConfig): Promise<string> {

@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
+import { supabase } from '@shared/lib/supabase-client';
 
 export interface Message {
   id: string;
@@ -392,28 +393,6 @@ const INITIAL_STATE: ChatState = {
 // AbortController registry for cleanup - kept outside store for proper cleanup
 const streamAbortControllers = new Map<string, AbortController>();
 
-/**
- * Creates a delay that can be aborted via AbortController signal
- * Prevents memory leaks by properly cleaning up timeouts
- */
-const abortableDelay = (ms: number, signal: AbortSignal): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'));
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      resolve();
-    }, ms);
-
-    signal.addEventListener('abort', () => {
-      clearTimeout(timeoutId);
-      reject(new DOMException('Aborted', 'AbortError'));
-    });
-  });
-};
-
 const enableDevtools = process.env.NODE_ENV !== 'production';
 
 export const useChatStore = create<ChatStore>()(
@@ -594,9 +573,9 @@ export const useChatStore = create<ChatStore>()(
 
         // AI interactions
         sendMessage: async (conversationId: string, content: string, options = {}) => {
-          const { addMessage } = get();
+          const { addMessage, conversations, selectedModel, defaultSettings } = get();
 
-          // Add user message
+          // Add user message locally
           addMessage(conversationId, {
             conversationId,
             role: 'user',
@@ -615,7 +594,31 @@ export const useChatStore = create<ChatStore>()(
           });
 
           try {
-            // Simulate AI response with streaming
+            // Get auth session for API calls
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (!session) {
+              set((state) => {
+                state.isStreamingResponse = false;
+                state.activeStreamId = null;
+                state.error =
+                  'Please sign in to send messages. Your API key is linked to your account.';
+              });
+              streamAbortControllers.delete(streamId);
+              return;
+            }
+
+            // Build message history from the conversation
+            const conversation = conversations[conversationId];
+            const messageHistory = (conversation?.messages ?? []).map((m) => ({
+              role: m.role,
+              content: m.content,
+            }));
+
+            const modelId = options.model || selectedModel;
+
+            // Create assistant message placeholder for streaming
             const assistantMessageId = addMessage(conversationId, {
               conversationId,
               role: 'assistant',
@@ -623,73 +626,143 @@ export const useChatStore = create<ChatStore>()(
               isStreaming: true,
             });
 
-            // TODO: Replace with real AI API call
-            // This is a development placeholder — NOT a production implementation.
-            const fullResponse = `[Development Mode] This is a placeholder response. The AI API integration is pending. Your message: "${content}"`;
+            const startTime = Date.now();
 
-            let currentContent = '';
-            const words = fullResponse.split(' ');
+            // Call the LLM completions API with streaming
+            const response = await fetch('/api/llm/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                model: modelId,
+                messages: messageHistory,
+                stream: true,
+                temperature: options.temperature ?? defaultSettings.temperature,
+                max_tokens: options.maxTokens ?? defaultSettings.maxTokens,
+              }),
+              signal: abortController.signal,
+            });
 
-            for (let i = 0; i < words.length; i++) {
-              // Check if aborted via AbortController or stopGeneration
-              if (abortController.signal.aborted || !get().isStreamingResponse) {
-                break;
-              }
-
-              try {
-                // Use abortable delay to prevent memory leaks
-                await abortableDelay(50, abortController.signal);
-              } catch (e) {
-                // AbortError is expected when stream is cancelled
-                if (e instanceof DOMException && e.name === 'AbortError') {
-                  break;
-                }
-                throw e;
-              }
-
-              currentContent += (i > 0 ? ' ' : '') + words[i];
-
-              set((state) => {
-                for (const conversation of Object.values(state.conversations)) {
-                  const message = conversation.messages.find((m) => m.id === assistantMessageId);
-                  if (message) {
-                    message.content = currentContent;
-                    break;
-                  }
-                }
-              });
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              const errorMessage =
+                response.status === 401
+                  ? 'Session expired. Please sign in again.'
+                  : response.status === 402
+                    ? 'Insufficient credits. Please add credits to continue.'
+                    : response.status === 429
+                      ? 'Rate limit reached. Please wait a moment and try again.'
+                      : (errorData as { error?: { message?: string } }).error?.message ||
+                        `Request failed (${response.status})`;
+              throw new Error(errorMessage);
             }
 
-            // Complete or stop the streaming
+            // Parse SSE stream
+            const reader = response.body?.getReader();
+            if (!reader) {
+              throw new Error('No response stream available');
+            }
+
+            const decoder = new TextDecoder();
+            let currentContent = '';
+            let buffer = '';
+            let totalPromptTokens = 0;
+            let totalCompletionTokens = 0;
+            let usedModel = modelId;
+
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                // Keep the last potentially incomplete line in the buffer
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+                  const data = trimmed.slice(6);
+                  if (data === '[DONE]') continue;
+
+                  try {
+                    const chunk = JSON.parse(data);
+                    const delta = chunk.choices?.[0]?.delta;
+
+                    if (delta?.content) {
+                      currentContent += delta.content;
+
+                      set((state) => {
+                        const conv = state.conversations[conversationId];
+                        if (conv) {
+                          const message = conv.messages.find((m) => m.id === assistantMessageId);
+                          if (message) {
+                            message.content = currentContent;
+                          }
+                        }
+                      });
+                    }
+
+                    // Capture usage from the final chunk
+                    if (chunk.usage) {
+                      totalPromptTokens = chunk.usage.prompt_tokens || 0;
+                      totalCompletionTokens = chunk.usage.completion_tokens || 0;
+                    }
+                    if (chunk.model) {
+                      usedModel = chunk.model;
+                    }
+                  } catch {
+                    // Skip malformed JSON chunks
+                  }
+                }
+              }
+            } finally {
+              reader.releaseLock();
+            }
+
+            const processingTime = Date.now() - startTime;
+
+            // Finalize the assistant message
             set((state) => {
-              for (const conversation of Object.values(state.conversations)) {
-                const message = conversation.messages.find((m) => m.id === assistantMessageId);
+              const conv = state.conversations[conversationId];
+              if (conv) {
+                const message = conv.messages.find((m) => m.id === assistantMessageId);
                 if (message) {
                   message.isStreaming = false;
-                  message.streamingComplete =
-                    !abortController.signal.aborted && get().isStreamingResponse;
+                  message.streamingComplete = true;
                   message.metadata = {
-                    model: options.model || state.selectedModel,
-                    tokensUsed: words.length * 1.3, // Rough estimate
-                    cost: (words.length * 1.3 * 0.002) / 1000,
-                    processingTime: words.length * 50,
+                    model: usedModel,
+                    tokensUsed: totalPromptTokens + totalCompletionTokens,
+                    processingTime,
                     temperature: options.temperature || state.defaultSettings.temperature,
                   };
-                  break;
                 }
+                conv.metadata.totalTokens += totalPromptTokens + totalCompletionTokens;
               }
 
               state.isStreamingResponse = false;
               state.activeStreamId = null;
             });
           } catch (error) {
+            // AbortError is expected when user cancels
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              set((state) => {
+                state.isStreamingResponse = false;
+                state.activeStreamId = null;
+              });
+              return;
+            }
+
             set((state) => {
               state.isStreamingResponse = false;
               state.activeStreamId = null;
               state.error = error instanceof Error ? error.message : 'Failed to send message';
             });
           } finally {
-            // Clean up AbortController from registry
             streamAbortControllers.delete(streamId);
           }
         },

@@ -1,11 +1,10 @@
 use tauri::{AppHandle, State};
 
 use super::AppDatabase;
-#[allow(unused_imports)]
-use crate::automation::inspector::UIInspector;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
+    inspector::UIInspector,
     recorder::{global_recorder, Recording, RecordingSession},
     types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
     InspectorService,

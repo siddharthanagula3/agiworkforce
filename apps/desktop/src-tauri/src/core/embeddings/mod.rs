@@ -43,11 +43,8 @@ impl EmbeddingService {
         let generator_arc = Arc::new(Mutex::new(generator));
         let similarity_arc = Arc::new(Mutex::new(similarity));
 
-        let indexer = IncrementalIndexer::new(
-            temp_dir,
-            generator_arc.clone(),
-            similarity_arc.clone(),
-        );
+        let indexer =
+            IncrementalIndexer::new(temp_dir, generator_arc.clone(), similarity_arc.clone());
 
         Ok(Self {
             generator: generator_arc,

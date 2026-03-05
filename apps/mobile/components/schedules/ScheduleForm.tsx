@@ -1,11 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
+import BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { RecurrencePicker } from './RecurrencePicker';
+import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { getDisplayName } from '@/lib/models';
 import { colors } from '@/lib/theme';
 import type { Schedule, RecurrenceType } from '@/stores/scheduleStore';
 
@@ -49,7 +52,8 @@ export function ScheduleForm({
   // Form state
   const [name, setName] = useState(initialData?.name ?? '');
   const [prompt, setPrompt] = useState(initialData?.prompt ?? '');
-  const [model] = useState(initialData?.model ?? 'auto-balanced');
+  const [model, setModel] = useState(initialData?.model ?? 'auto-balanced');
+  const modelPickerRef = useRef<BottomSheet>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(initialData?.recurrence ?? 'daily');
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initialData?.daysOfWeek ?? []);
   const [dayOfMonth, setDayOfMonth] = useState(initialData?.dayOfMonth ?? 1);
@@ -196,12 +200,12 @@ export function ScheduleForm({
           <Text className="text-sm text-white/70 mb-1.5">Model</Text>
           <Pressable
             className="flex-row items-center justify-between h-11 px-3 rounded-lg bg-surface-elevated border border-white/10"
-            onPress={() => {
-              // TODO: Wire to ModelPickerSheet bottom sheet
-            }}
+            onPress={() => modelPickerRef.current?.snapToIndex(0)}
+            accessibilityLabel={`Model: ${getDisplayName(model)}`}
+            accessibilityRole="button"
             accessibilityHint="Opens model selection"
           >
-            <Text className="text-sm text-white">{model}</Text>
+            <Text className="text-sm text-white">{getDisplayName(model)}</Text>
             <ChevronDown size={16} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -280,6 +284,9 @@ export function ScheduleForm({
           )}
         </View>
       </ScrollView>
+
+      {/* Model picker bottom sheet */}
+      <ModelPickerSheet sheetRef={modelPickerRef} onSelect={setModel} />
     </KeyboardAvoidingView>
   );
 }

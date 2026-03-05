@@ -23,6 +23,7 @@ pub struct ModelCapabilities {
 #[derive(Deserialize)]
 struct OllamaShowResponse {
     template: Option<String>,
+    /// Ollama model file content (populated by serde, reserved for template analysis)
     #[allow(dead_code)]
     modelfile: Option<String>,
     details: Option<OllamaModelDetails>,
@@ -32,6 +33,7 @@ struct OllamaShowResponse {
 #[derive(Deserialize)]
 struct OllamaModelDetails {
     family: Option<String>,
+    /// Model parameter size (populated by serde, reserved for size-based routing)
     #[allow(dead_code)]
     parameter_size: Option<String>,
 }
@@ -175,9 +177,7 @@ async fn detect_uncached(
 pub fn default_capabilities(model: &str) -> ModelCapabilities {
     let lower = model.to_lowercase();
     ModelCapabilities {
-        supports_tools: TOOL_CAPABLE_FAMILIES
-            .iter()
-            .any(|f| lower.contains(*f)),
+        supports_tools: TOOL_CAPABLE_FAMILIES.iter().any(|f| lower.contains(*f)),
         supports_vision: lower.contains("vision") || lower.contains("llava"),
         context_length: 4096,
     }
@@ -271,8 +271,14 @@ mod tests {
     #[test]
     fn default_capabilities_llava_supports_vision() {
         let caps = default_capabilities("llava:13b");
-        assert!(caps.supports_vision, "llava model must report supports_vision");
-        assert!(!caps.supports_tools, "plain llava is not a tool-capable family");
+        assert!(
+            caps.supports_vision,
+            "llava model must report supports_vision"
+        );
+        assert!(
+            !caps.supports_tools,
+            "plain llava is not a tool-capable family"
+        );
     }
 
     #[test]
@@ -287,7 +293,10 @@ mod tests {
     #[test]
     fn default_capabilities_qwen3_supports_tools() {
         let caps = default_capabilities("qwen3:14b");
-        assert!(caps.supports_tools, "qwen3 family must match via name substring");
+        assert!(
+            caps.supports_tools,
+            "qwen3 family must match via name substring"
+        );
     }
 
     #[test]
@@ -324,7 +333,10 @@ mod tests {
             !caps.supports_tools,
             "unknown model family must not claim tool support"
         );
-        assert!(!caps.supports_vision, "unknown model must not claim vision support");
+        assert!(
+            !caps.supports_vision,
+            "unknown model must not claim vision support"
+        );
         assert_eq!(caps.context_length, 4096);
     }
 
@@ -342,19 +354,28 @@ mod tests {
     #[test]
     fn default_capabilities_command_r_supports_tools() {
         let caps = default_capabilities("command-r-plus:latest");
-        assert!(caps.supports_tools, "command-r-plus must be detected as tool-capable");
+        assert!(
+            caps.supports_tools,
+            "command-r-plus must be detected as tool-capable"
+        );
     }
 
     #[test]
     fn default_capabilities_hermes3_supports_tools() {
         let caps = default_capabilities("hermes3:8b");
-        assert!(caps.supports_tools, "hermes3 must be detected as tool-capable");
+        assert!(
+            caps.supports_tools,
+            "hermes3 must be detected as tool-capable"
+        );
     }
 
     #[test]
     fn default_capabilities_nemotron_supports_tools() {
         let caps = default_capabilities("nemotron-mini:4b");
-        assert!(caps.supports_tools, "nemotron must be detected as tool-capable");
+        assert!(
+            caps.supports_tools,
+            "nemotron must be detected as tool-capable"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -454,7 +475,10 @@ mod tests {
         clear_capability_cache().await;
 
         let cache = CAPABILITY_CACHE.read().await;
-        assert!(cache.is_empty(), "Cache must remain empty after double clear");
+        assert!(
+            cache.is_empty(),
+            "Cache must remain empty after double clear"
+        );
     }
 
     // -----------------------------------------------------------------------

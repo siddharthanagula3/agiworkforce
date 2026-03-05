@@ -209,11 +209,10 @@ pub struct PiperLocal {
     /// Directory containing voice models
     models_dir: PathBuf,
     /// Currently selected voice
-    #[allow(dead_code)]
     voice_id: String,
     /// Voice model path
     model_path: PathBuf,
-    /// Voice config path (used for reading sample rate)
+    /// Voice config path (reserved for runtime voice switching)
     #[allow(dead_code)]
     config_path: PathBuf,
     /// Voice sample rate

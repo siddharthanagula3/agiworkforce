@@ -96,14 +96,14 @@ pub struct ExtensionManager {
 /// Information about a running extension server
 #[derive(Debug, Clone)]
 struct ExtensionServerInfo {
-    /// Extension ID
+    /// Extension ID (used for logging and identification)
     #[allow(dead_code)]
     extension_id: String,
 
     /// MCP server name (used for MCP client)
     server_name: String,
 
-    /// Start time
+    /// Start time (reserved for uptime reporting)
     #[allow(dead_code)]
     started_at: chrono::DateTime<Utc>,
 }

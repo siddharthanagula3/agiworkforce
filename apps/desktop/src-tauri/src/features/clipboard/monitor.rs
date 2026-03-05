@@ -134,7 +134,7 @@ impl ClipboardMonitor {
                 )
                 .await
                 {
-                    eprintln!("Clipboard monitoring error: {}", e);
+                    tracing::error!("Clipboard monitoring error: {}", e);
                 }
             }
         });

@@ -20,6 +20,8 @@ export interface AttachmentPreviewProps {
   className?: string;
   /** Whether the current model supports vision/images */
   visionSupported?: boolean;
+  /** Disable remove controls */
+  disableRemove?: boolean;
 }
 
 export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
@@ -27,6 +29,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
   onRemove,
   className,
   visionSupported = true,
+  disableRemove = false,
 }) => {
   if (attachments.length === 0) {
     return null;
@@ -49,7 +52,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
                 src={audioUrl}
                 name={attachment.name}
                 duration={attachment.duration}
-                onRemove={() => onRemove(attachment.id)}
+                onRemove={disableRemove ? undefined : () => onRemove(attachment.id)}
                 compact
               />
             );
@@ -92,12 +95,14 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
               )}
               <button
                 type="button"
+                disabled={disableRemove}
                 onClick={() => onRemove(attachment.id)}
                 className={cn(
                   'transition',
                   isImage
                     ? 'absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100'
                     : 'text-gray-400 hover:text-gray-600',
+                  disableRemove && 'cursor-not-allowed opacity-40',
                 )}
                 aria-label={`Remove ${attachment.name}`}
               >

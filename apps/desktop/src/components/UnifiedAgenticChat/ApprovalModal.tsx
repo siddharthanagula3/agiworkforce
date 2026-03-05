@@ -61,6 +61,11 @@ export const ApprovalModal = () => {
       );
     } catch (error) {
       console.error('[ApprovalModal] Timeout rejection failed:', error);
+      showError(
+        'APPROVAL_TIMEOUT_ERROR',
+        'Failed to auto-reject timed out request',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
     } finally {
       setIsRejecting(false);
       timeoutRejectInProgressRef.current = false;

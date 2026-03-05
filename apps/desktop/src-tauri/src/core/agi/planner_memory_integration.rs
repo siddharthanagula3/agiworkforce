@@ -41,6 +41,7 @@ impl Default for MemoryPlanContext {
 /// Memory-aware planner enhancement
 pub struct PlannerMemoryIntegration {
     memory_manager: Arc<MemoryManager>,
+    /// Reserved for injecting memory context into planner prompts
     #[allow(dead_code)]
     memory_injector: MemoryInjector,
 }

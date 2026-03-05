@@ -48,6 +48,8 @@ export function StreamingIndicator() {
         },
         animatedStyle,
       ]}
+      accessibilityLabel="Generating response"
+      accessibilityRole="text"
     >
       |
     </Animated.Text>

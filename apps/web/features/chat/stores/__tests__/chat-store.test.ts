@@ -5,7 +5,7 @@
  * messages, streaming state, debounce guards, and Supabase persistence.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 
 // Mock crypto.randomUUID for deterministic IDs
 let uuidCounter = 0;
@@ -39,19 +39,22 @@ vi.mock('@shared/lib/supabase-client', () => ({
 import { useChatStore, getGreetingTime } from '../chat-store';
 
 describe('ChatStore', () => {
-  beforeEach(() => {
+  beforeAll(() => {
     vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
     uuidCounter = 0;
 
     // Reset store to initial state
     useChatStore.getState().reset();
 
-    // Advance past any debounce window from previous tests
+    // Advance past any debounce window from previous tests (500ms guard)
     vi.advanceTimersByTime(1500);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   // ==========================================================================
@@ -621,6 +624,14 @@ describe('ChatStore', () => {
   // ==========================================================================
 
   describe('getGreetingTime', () => {
+    // getGreetingTime tests use vi.setSystemTime which moves the clock to specific
+    // dates in 2024. We must restore the clock to a far-future date after each test
+    // so the module-level debounce guard (lastSessionCreatedAt) doesn't get confused
+    // by Date.now() jumping backward relative to previously recorded timestamps.
+    afterEach(() => {
+      vi.setSystemTime(new Date('2099-01-01T00:00:00'));
+    });
+
     it('returns "morning" at midnight (hour 0)', () => {
       vi.setSystemTime(new Date('2024-06-15T00:00:00'));
       expect(getGreetingTime()).toBe('morning');

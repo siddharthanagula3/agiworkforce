@@ -10,6 +10,7 @@ vi.mock('../../api/mcp', () => ({
     listTools: vi.fn(),
     getStats: vi.fn(),
     getConfig: vi.fn(),
+    getConfigLocation: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
     enableServer: vi.fn(),
@@ -43,6 +44,7 @@ interface McpClientMocks {
   listTools: Mock<() => Promise<MockToolInfo[]>>;
   getStats: Mock<() => Promise<Record<string, number>>>;
   getConfig: Mock<() => Promise<Partial<McpServersConfig> | { servers: Record<string, unknown> }>>;
+  getConfigLocation: Mock<() => Promise<{ path: string; source: string } | null>>;
   connect: Mock<(serverName: string) => Promise<string>>;
   disconnect: Mock<(serverName: string) => Promise<string>>;
   enableServer: Mock<(serverName: string) => Promise<string>>;
@@ -107,6 +109,7 @@ describe('mcpStore', () => {
       mcpMock.listTools.mockResolvedValue(mockTools);
       mcpMock.getStats.mockResolvedValue(mockStats);
       mcpMock.getConfig.mockResolvedValue(mockConfig);
+      mcpMock.getConfigLocation.mockResolvedValue(null);
 
       await useMcpStore.getState().initialize();
 
@@ -302,6 +305,7 @@ describe('mcpStore', () => {
     it('should load configuration', async () => {
       const mockConfig = { servers: { test: { command: 'test' } } };
       mcpMock.getConfig.mockResolvedValue(mockConfig);
+      mcpMock.getConfigLocation.mockResolvedValue(null);
 
       await useMcpStore.getState().loadConfig();
 

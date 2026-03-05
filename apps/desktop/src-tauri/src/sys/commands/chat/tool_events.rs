@@ -15,9 +15,7 @@ static PROGRESS_LAST_EMIT: std::sync::LazyLock<Mutex<HashMap<String, Instant>>> 
 /// for the given `tool_id`. This prevents flooding the frontend with high-frequency
 /// progress events that can degrade UI performance.
 pub fn should_emit_progress(tool_id: &str) -> bool {
-    let mut map = PROGRESS_LAST_EMIT
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut map = PROGRESS_LAST_EMIT.lock().unwrap_or_else(|e| e.into_inner());
     let now = Instant::now();
     if let Some(last) = map.get(tool_id) {
         if now.duration_since(*last).as_millis() < 100 {
@@ -115,7 +113,10 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         ("LS", path.unwrap_or_else(|| ".".to_string()))
     } else if contains_any(&lower, &["search_files", "grep", "find_files", "glob"]) {
         ("Search", query.unwrap_or_default())
-    } else if contains_any(&lower, &["bash", "execute", "terminal", "shell", "run_command"]) {
+    } else if contains_any(
+        &lower,
+        &["bash", "execute", "terminal", "shell", "run_command"],
+    ) {
         ("Bash", command.unwrap_or_default())
     } else if contains_any(&lower, &["web_search", "search_web"]) {
         ("WebSearch", query.unwrap_or_default())
@@ -135,11 +136,7 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         &lower,
         &["git_status", "git_diff", "git_log", "git_commit", "git_"],
     ) {
-        let git_cmd = lower
-            .rsplit("__")
-            .next()
-            .unwrap_or("git")
-            .replace('_', " ");
+        let git_cmd = lower.rsplit("__").next().unwrap_or("git").replace('_', " ");
         ("Git", truncate(&git_cmd, 30))
     } else if contains_any(&lower, &["image_generate", "dalle", "generate_image"]) {
         let prompt = args
@@ -195,10 +192,8 @@ mod tests {
 
     #[test]
     fn test_read_file_display() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__read_file",
-            r#"{"path": "src/main.rs"}"#,
-        );
+        let info =
+            get_tool_display_info("mcp__filesystem__read_file", r#"{"path": "src/main.rs"}"#);
         assert_eq!(info.display_name, "Read");
         // "src/main.rs" has only 2 path segments — shorten_path returns as-is
         assert_eq!(info.display_args, "src/main.rs");
@@ -217,40 +212,29 @@ mod tests {
 
     #[test]
     fn test_write_file_display() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__write_file",
-            r#"{"path": "output.txt"}"#,
-        );
+        let info =
+            get_tool_display_info("mcp__filesystem__write_file", r#"{"path": "output.txt"}"#);
         assert_eq!(info.display_name, "Write");
         assert_eq!(info.display_args, "output.txt");
     }
 
     #[test]
     fn test_edit_file_display() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__edit_file",
-            r#"{"path": "src/lib.rs"}"#,
-        );
+        let info = get_tool_display_info("mcp__filesystem__edit_file", r#"{"path": "src/lib.rs"}"#);
         assert_eq!(info.display_name, "Edit");
         assert_eq!(info.display_args, "src/lib.rs");
     }
 
     #[test]
     fn test_list_directory_display_uses_dot_when_no_path() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__list_directory",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("mcp__filesystem__list_directory", r#"{}"#);
         assert_eq!(info.display_name, "LS");
         assert_eq!(info.display_args, ".");
     }
 
     #[test]
     fn test_list_directory_with_path() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__list_directory",
-            r#"{"path": "src"}"#,
-        );
+        let info = get_tool_display_info("mcp__filesystem__list_directory", r#"{"path": "src"}"#);
         assert_eq!(info.display_name, "LS");
         assert_eq!(info.display_args, "src");
     }
@@ -269,30 +253,21 @@ mod tests {
 
     #[test]
     fn test_bash_execute_display() {
-        let info = get_tool_display_info(
-            "mcp__bash__execute",
-            r#"{"command": "cargo test"}"#,
-        );
+        let info = get_tool_display_info("mcp__bash__execute", r#"{"command": "cargo test"}"#);
         assert_eq!(info.display_name, "Bash");
         assert_eq!(info.display_args, "cargo test");
     }
 
     #[test]
     fn test_terminal_execute_display() {
-        let info = get_tool_display_info(
-            "mcp__terminal__execute",
-            r#"{"command": "npm install"}"#,
-        );
+        let info = get_tool_display_info("mcp__terminal__execute", r#"{"command": "npm install"}"#);
         assert_eq!(info.display_name, "Bash");
         assert_eq!(info.display_args, "npm install");
     }
 
     #[test]
     fn test_run_command_display() {
-        let info = get_tool_display_info(
-            "mcp__shell__run_command",
-            r#"{"command": "ls -la"}"#,
-        );
+        let info = get_tool_display_info("mcp__shell__run_command", r#"{"command": "ls -la"}"#);
         assert_eq!(info.display_name, "Bash");
         assert_eq!(info.display_args, "ls -la");
     }
@@ -300,10 +275,7 @@ mod tests {
     #[test]
     fn test_bash_cmd_field_fallback() {
         // Uses "cmd" field instead of "command"
-        let info = get_tool_display_info(
-            "mcp__bash__execute",
-            r#"{"cmd": "echo hello"}"#,
-        );
+        let info = get_tool_display_info("mcp__bash__execute", r#"{"cmd": "echo hello"}"#);
         assert_eq!(info.display_name, "Bash");
         assert_eq!(info.display_args, "echo hello");
     }
@@ -312,20 +284,15 @@ mod tests {
 
     #[test]
     fn test_search_files_display() {
-        let info = get_tool_display_info(
-            "mcp__grep__search_files",
-            r#"{"pattern": "error handler"}"#,
-        );
+        let info =
+            get_tool_display_info("mcp__grep__search_files", r#"{"pattern": "error handler"}"#);
         assert_eq!(info.display_name, "Search");
         assert_eq!(info.display_args, "error handler");
     }
 
     #[test]
     fn test_glob_display() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__glob",
-            r#"{"pattern": "**/*.rs"}"#,
-        );
+        let info = get_tool_display_info("mcp__filesystem__glob", r#"{"pattern": "**/*.rs"}"#);
         assert_eq!(info.display_name, "Search");
         assert_eq!(info.display_args, "**/*.rs");
     }
@@ -364,10 +331,8 @@ mod tests {
 
     #[test]
     fn test_web_fetch_with_uri_field() {
-        let info = get_tool_display_info(
-            "mcp__browser__web_fetch",
-            r#"{"uri": "https://docs.rs"}"#,
-        );
+        let info =
+            get_tool_display_info("mcp__browser__web_fetch", r#"{"uri": "https://docs.rs"}"#);
         assert_eq!(info.display_name, "WebFetch");
         assert_eq!(info.display_args, "https://docs.rs");
     }
@@ -376,30 +341,22 @@ mod tests {
 
     #[test]
     fn test_git_status_display() {
-        let info = get_tool_display_info(
-            "mcp__git__git_status",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("mcp__git__git_status", r#"{}"#);
         assert_eq!(info.display_name, "Git");
         assert_eq!(info.display_args, "git status");
     }
 
     #[test]
     fn test_git_commit_display() {
-        let info = get_tool_display_info(
-            "mcp__git__git_commit",
-            r#"{"message": "feat: add tests"}"#,
-        );
+        let info =
+            get_tool_display_info("mcp__git__git_commit", r#"{"message": "feat: add tests"}"#);
         assert_eq!(info.display_name, "Git");
         assert_eq!(info.display_args, "git commit");
     }
 
     #[test]
     fn test_git_diff_display() {
-        let info = get_tool_display_info(
-            "mcp__git__git_diff",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("mcp__git__git_diff", r#"{}"#);
         assert_eq!(info.display_name, "Git");
         assert_eq!(info.display_args, "git diff");
     }
@@ -419,10 +376,7 @@ mod tests {
 
     #[test]
     fn test_add_observations_display() {
-        let info = get_tool_display_info(
-            "mcp__memory__add_observations",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("mcp__memory__add_observations", r#"{}"#);
         assert_eq!(info.display_name, "Memory");
         assert_eq!(info.display_args, "");
     }
@@ -443,10 +397,7 @@ mod tests {
 
     #[test]
     fn test_unknown_tool_falls_back_to_last_segment() {
-        let info = get_tool_display_info(
-            "mcp__custom__my_tool",
-            r#"{"query": "test"}"#,
-        );
+        let info = get_tool_display_info("mcp__custom__my_tool", r#"{"query": "test"}"#);
         // Fallback uses the last __ segment as display name
         assert_eq!(info.display_name, "my_tool");
         // query field is extracted as display_args
@@ -455,10 +406,7 @@ mod tests {
 
     #[test]
     fn test_unknown_tool_no_known_args() {
-        let info = get_tool_display_info(
-            "mcp__custom__do_something",
-            r#"{"arbitrary": "value"}"#,
-        );
+        let info = get_tool_display_info("mcp__custom__do_something", r#"{"arbitrary": "value"}"#);
         assert_eq!(info.display_name, "do_something");
         assert_eq!(info.display_args, "");
     }
@@ -466,10 +414,7 @@ mod tests {
     #[test]
     fn test_bare_tool_name_no_segments() {
         // Tool name with no double-underscore separator
-        let info = get_tool_display_info(
-            "my_bare_tool",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("my_bare_tool", r#"{}"#);
         // rsplit("__").next() returns the whole string when no __ present
         assert_eq!(info.display_name, "my_bare_tool");
     }
@@ -479,10 +424,7 @@ mod tests {
     #[test]
     fn test_invalid_json_args_does_not_panic() {
         // serde_json::from_str with unwrap_or_default() gives a Null value
-        let info = get_tool_display_info(
-            "mcp__filesystem__read_file",
-            "not valid json",
-        );
+        let info = get_tool_display_info("mcp__filesystem__read_file", "not valid json");
         assert_eq!(info.display_name, "Read");
         // path will be None → empty string
         assert_eq!(info.display_args, "");
@@ -490,20 +432,14 @@ mod tests {
 
     #[test]
     fn test_empty_args_json() {
-        let info = get_tool_display_info(
-            "mcp__filesystem__write_file",
-            r#"{}"#,
-        );
+        let info = get_tool_display_info("mcp__filesystem__write_file", r#"{}"#);
         assert_eq!(info.display_name, "Write");
         assert_eq!(info.display_args, "");
     }
 
     #[test]
     fn test_null_field_value_treated_as_missing() {
-        let info = get_tool_display_info(
-            "mcp__bash__execute",
-            r#"{"command": null}"#,
-        );
+        let info = get_tool_display_info("mcp__bash__execute", r#"{"command": null}"#);
         assert_eq!(info.display_name, "Bash");
         // as_str() on null returns None → empty
         assert_eq!(info.display_args, "");
@@ -567,7 +503,10 @@ mod tests {
     #[test]
     fn test_truncate_long_string_adds_ellipsis() {
         // max=15, truncates to 12 chars + "..."
-        assert_eq!(truncate("this is a very long string", 15), "this is a ve...");
+        assert_eq!(
+            truncate("this is a very long string", 15),
+            "this is a ve..."
+        );
     }
 
     #[test]

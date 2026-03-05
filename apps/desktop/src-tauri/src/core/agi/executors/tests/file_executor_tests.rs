@@ -29,9 +29,9 @@ mod tests {
                 crate::automation::AutomationService::new()
                     .expect("Failed to create AutomationService for tests"),
             ),
-            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
-            tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
-            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
+            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::default())),
+            tool_cache: Arc::new(crate::data::cache::ToolResultCache::default()),
+            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::default()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "file_executor_test".to_string(),
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_file_executor_tool_names() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let names = executor.tool_names();
 
         assert!(names.contains(&"file_read"));
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_file_executor_description() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let desc = executor.description();
 
         assert!(!desc.is_empty());
@@ -108,7 +108,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_read_missing_path_parameter() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let params = HashMap::new(); // No path parameter
@@ -124,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_read_null_path_parameter() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -141,7 +141,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_read_non_string_path_parameter() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -158,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_read_nonexistent_file() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -182,7 +182,7 @@ mod tests {
         let test_file = temp_dir.path().join("test_read.txt");
         fs::write(&test_file, "Hello, Test World!").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -207,7 +207,7 @@ mod tests {
         let test_file = temp_dir.path().join("empty.txt");
         fs::write(&test_file, "").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -232,7 +232,7 @@ mod tests {
         let large_content = "x".repeat(1_000_000); // 1MB of content
         fs::write(&test_file, &large_content).unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -257,7 +257,7 @@ mod tests {
         let unicode_content = "Hello Unicode chars here";
         fs::write(&test_file, unicode_content).unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -281,7 +281,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_write_missing_path_parameter() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -301,7 +301,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -324,7 +324,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -348,7 +348,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("new_file.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -378,7 +378,7 @@ mod tests {
         let test_file = temp_dir.path().join("existing.txt");
         fs::write(&test_file, "Original content").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -407,7 +407,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("empty_write.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -427,7 +427,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_write_nonexistent_parent_directory() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -456,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_delete_missing_path_parameter() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let params = HashMap::new();
@@ -472,7 +472,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_delete_nonexistent_file() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -494,7 +494,7 @@ mod tests {
         let test_file = temp_dir.path().join("to_delete.txt");
         fs::write(&test_file, "Delete me").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -521,7 +521,7 @@ mod tests {
         let test_file = temp_dir.path().join("empty_to_delete.txt");
         fs::write(&test_file, "").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -547,7 +547,7 @@ mod tests {
         let sub_dir = temp_dir.path().join("subdir");
         fs::create_dir(&sub_dir).unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -573,7 +573,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_tool() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let params = HashMap::new();
@@ -589,7 +589,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_tool_name() {
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let params = HashMap::new();
@@ -611,7 +611,7 @@ mod tests {
         let test_file = temp_dir.path().join("relative_test.txt");
         fs::write(&test_file, "Relative path content").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -635,7 +635,7 @@ mod tests {
         let test_file = temp_dir.path().join("canonical_test.txt");
         fs::write(&test_file, "content").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -676,7 +676,7 @@ mod tests {
             perms.set_mode(0o000);
             fs::set_permissions(&test_file, perms).unwrap();
 
-            let executor = FileExecutor::new();
+            let executor = FileExecutor::default();
             let context = create_test_context();
             let exec_context = create_test_execution_context();
             let mut params = HashMap::new();
@@ -707,7 +707,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("write_read.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -746,7 +746,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("lifecycle.txt");
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
 
@@ -803,7 +803,7 @@ mod tests {
         let test_file = temp_dir.path().join("file with spaces.txt");
         fs::write(&test_file, "content").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -827,7 +827,7 @@ mod tests {
         let test_file = temp_dir.path().join("file-with_special.chars.txt");
         fs::write(&test_file, "special content").unwrap();
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -850,7 +850,7 @@ mod tests {
         let test_file = temp_dir.path().join("multiline.txt");
         let multiline_content = "Line 1\nLine 2\nLine 3\n";
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();
@@ -877,7 +877,7 @@ mod tests {
         let test_file = temp_dir.path().join("data.json");
         let json_content = r#"{"key": "value", "array": [1, 2, 3]}"#;
 
-        let executor = FileExecutor::new();
+        let executor = FileExecutor::default();
         let context = create_test_context();
         let exec_context = create_test_execution_context();
         let mut params = HashMap::new();

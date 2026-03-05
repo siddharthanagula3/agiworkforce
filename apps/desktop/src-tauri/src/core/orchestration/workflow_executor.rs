@@ -5,6 +5,22 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 
+/// Check if a program exists on the system PATH.
+fn which_exists(program: &str) -> bool {
+    let check = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
+    std::process::Command::new(check)
+        .arg(program)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
     pub execution_id: String,
@@ -70,7 +86,7 @@ impl WorkflowExecutor {
         tokio::spawn(async move {
             let executor = WorkflowExecutor::new(engine);
             if let Err(e) = executor.run_workflow(workflow, context).await {
-                eprintln!("Workflow execution failed: {}", e);
+                tracing::error!("Workflow execution failed: {}", e);
             }
         });
 
@@ -238,7 +254,7 @@ impl WorkflowExecutor {
         data: &AgentNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing agent node: {}", data.label);
+        tracing::info!("Executing agent node: {}", data.label);
 
         use crate::core::agi::{Goal, Priority};
         use crate::sys::commands::agi::ORCHESTRATOR;
@@ -330,7 +346,7 @@ impl WorkflowExecutor {
         data: &DecisionNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing decision node: {}", data.label);
+        tracing::debug!("Executing decision node: {}", data.label);
 
         let condition_result = self.evaluate_condition(&data.condition, context)?;
 
@@ -349,7 +365,7 @@ impl WorkflowExecutor {
         data: &LoopNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing loop node: {}", data.label);
+        tracing::debug!("Executing loop node: {}", data.label);
 
         match data.loop_type {
             LoopType::Count => {
@@ -390,102 +406,216 @@ impl WorkflowExecutor {
 
     async fn execute_parallel_node(
         &self,
-        _workflow: &WorkflowDefinition,
+        workflow: &WorkflowDefinition,
         data: &ParallelNodeData,
-        _context: &mut ExecutionContext,
+        context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing parallel node: {}", data.label);
+        tracing::info!(
+            "Executing parallel node: {} with {} branches",
+            data.label,
+            data.branches.len()
+        );
 
-        use crate::core::agi::{Goal, Priority};
-        use crate::sys::commands::agi::ORCHESTRATOR;
-
-        let orchestrator_arc = {
-            let guard = ORCHESTRATOR.lock();
-            guard
-                .as_ref()
-                .ok_or_else(|| "Orchestrator not initialized".to_string())?
-                .clone()
-        };
-
-        let mut goals = Vec::new();
-        // Assuming ParallelNodeData has a field to describe sub-tasks,
-        // but for now we'll simulate splitting the label into sub-goals or similar
-        // Since data structure is opaque in previous view, we will create generic goals
-
-        // Note: In a real implementation, ParallelNodeData should contain a list of actions.
-        // For this fix, we will assume we want to run 2 sub-agents to demonstrate parallel capability
-        for i in 1..=2 {
-            let goal = Goal {
-                id: format!(
-                    "goal_{}_{}",
-                    uuid::Uuid::new_v4().to_string().get(..8).unwrap_or(""),
-                    i
-                ),
-                description: format!("Parallel Task {}: {}", i, data.label),
-                priority: Priority::Medium,
-                deadline: None,
-                constraints: vec![],
-                success_criteria: vec![],
-            };
-            goals.push(goal);
+        if data.branches.is_empty() {
+            tracing::warn!("Parallel node {} has no branches, skipping", data.label);
+            return Ok(());
         }
 
-        let orchestrator = orchestrator_arc.lock().await;
-        // spawn_parallel returns agent IDs but doesn't wait
-        let agent_ids = orchestrator
-            .spawn_parallel(goals)
-            .await
-            .map_err(|e| format!("Failed to spawn parallel agents: {}", e))?;
+        // Resolve branch node IDs to actual workflow nodes
+        let branch_nodes: Vec<WorkflowNode> = data
+            .branches
+            .iter()
+            .filter_map(|branch_id| {
+                workflow.nodes.iter().find(|n| n.id() == branch_id).cloned()
+            })
+            .collect();
 
-        // Wait for all to complete
-        let max_attempts = 600;
-        for _ in 0..max_attempts {
-            let mut all_done = true;
-            for agent_id in &agent_ids {
-                if let Some(status) = orchestrator.get_agent_status(agent_id).await {
-                    use crate::core::agi::AgentState;
-                    if status.status != AgentState::Completed && status.status != AgentState::Failed
-                    {
-                        all_done = false;
-                        break;
+        if branch_nodes.is_empty() {
+            return Err(format!(
+                "Parallel node {}: none of the branch node IDs ({:?}) found in workflow",
+                data.label, data.branches
+            ));
+        }
+
+        // Each branch gets its own cloned context so they can run concurrently.
+        // After all branches complete, we merge their variables back into the parent context.
+        let timeout_secs = data.timeout_seconds.unwrap_or(300) as u64;
+
+        let mut handles: Vec<
+            tokio::task::JoinHandle<Result<(String, HashMap<String, Value>), String>>,
+        > = Vec::with_capacity(branch_nodes.len());
+
+        for branch_node in &branch_nodes {
+            let mut branch_context = context.clone();
+            let branch_workflow = workflow.clone();
+            let branch_node = branch_node.clone();
+            let branch_engine = Arc::clone(&self.engine);
+            let branch_timeout = timeout_secs;
+
+            handles.push(tokio::spawn(async move {
+                let executor = WorkflowExecutor::new(branch_engine);
+                let branch_id = branch_node.id().to_string();
+
+                let result = timeout(
+                    Duration::from_secs(branch_timeout),
+                    executor.execute_node(&branch_workflow, &branch_node, &mut branch_context),
+                )
+                .await;
+
+                match result {
+                    Ok(Ok(())) => Ok((branch_id, branch_context.variables)),
+                    Ok(Err(e)) => Err(format!("Branch {} failed: {}", branch_id, e)),
+                    Err(_) => Err(format!(
+                        "Branch {} timed out after {}s",
+                        branch_id, branch_timeout
+                    )),
+                }
+            }));
+        }
+
+        // Collect results from all branches
+        let mut errors: Vec<String> = Vec::new();
+        let mut merged_vars: HashMap<String, Value> = HashMap::new();
+
+        for handle in handles {
+            match handle.await {
+                Ok(Ok((_branch_id, branch_vars))) => {
+                    merged_vars.extend(branch_vars);
+                }
+                Ok(Err(e)) => {
+                    tracing::error!("Parallel branch error: {}", e);
+                    if data.wait_for_all {
+                        errors.push(e);
+                    } else {
+                        return Err(e);
+                    }
+                }
+                Err(join_err) => {
+                    let msg = format!("Branch task panicked: {}", join_err);
+                    tracing::error!("{}", msg);
+                    if data.wait_for_all {
+                        errors.push(msg);
+                    } else {
+                        return Err(msg);
                     }
                 }
             }
-
-            if all_done {
-                return Ok(());
-            }
-            sleep(Duration::from_millis(100)).await;
         }
 
-        Err("Parallel execution timed out".to_string())
+        // Merge all branch variables back into the parent context
+        context.variables.extend(merged_vars);
+
+        if !errors.is_empty() {
+            return Err(format!(
+                "Parallel node {} had {} branch failures: {}",
+                data.label,
+                errors.len(),
+                errors.join("; ")
+            ));
+        }
+
+        Ok(())
     }
 
     async fn execute_wait_node(
         &self,
         data: &WaitNodeData,
-        _context: &mut ExecutionContext,
+        context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing wait node: {}", data.label);
+        tracing::info!("Executing wait node: {} (type: {:?})", data.label, data.wait_type);
 
         match data.wait_type {
             WaitType::Duration => {
-                if let Some(duration) = data.duration_seconds {
-                    sleep(Duration::from_secs(duration as u64)).await;
+                if let Some(duration_secs) = data.duration_seconds {
+                    if duration_secs <= 0 {
+                        return Ok(());
+                    }
+                    let total = Duration::from_secs(duration_secs as u64);
+                    self.interruptible_sleep(total, &context.execution_id).await?;
                 }
             }
             WaitType::UntilTime => {
-                if let Some(_until_time) = data.until_time {
-                    sleep(Duration::from_millis(100)).await;
+                if let Some(until_timestamp) = data.until_time {
+                    let now = chrono::Utc::now().timestamp();
+                    let delta_secs = until_timestamp - now;
+                    if delta_secs <= 0 {
+                        tracing::debug!(
+                            "Wait node target time {} already passed (now={}), continuing",
+                            until_timestamp, now
+                        );
+                        return Ok(());
+                    }
+                    let wait_duration = Duration::from_secs(delta_secs as u64);
+                    tracing::info!(
+                        "Wait node sleeping until timestamp {} ({} seconds from now)",
+                        until_timestamp, delta_secs
+                    );
+                    self.interruptible_sleep(wait_duration, &context.execution_id).await?;
                 }
             }
             WaitType::Condition => {
-                if let Some(_condition) = &data.condition {
-                    sleep(Duration::from_millis(100)).await;
+                if let Some(condition) = &data.condition {
+                    let max_polls = 3600u32;
+                    let poll_interval = Duration::from_secs(1);
+                    for poll_count in 0..max_polls {
+                        if let Ok(execution) = self.engine.get_execution_status(&context.execution_id) {
+                            if execution.status == WorkflowStatus::Cancelled {
+                                return Err("Wait cancelled".to_string());
+                            }
+                            if execution.status == WorkflowStatus::Paused {
+                                sleep(poll_interval).await;
+                                continue;
+                            }
+                        }
+
+                        if self.evaluate_condition(condition, context)? {
+                            tracing::info!(
+                                "Wait node condition met after {} polls: {}",
+                                poll_count, condition
+                            );
+                            return Ok(());
+                        }
+                        sleep(poll_interval).await;
+                    }
+                    return Err(format!(
+                        "Wait node condition timed out after {} seconds: {}",
+                        max_polls, condition
+                    ));
                 }
             }
         }
 
+        Ok(())
+    }
+
+    /// Sleep for a duration in 1-second chunks, checking each second whether the
+    /// execution has been cancelled or paused. Returns `Err` if cancelled.
+    async fn interruptible_sleep(
+        &self,
+        total: Duration,
+        execution_id: &str,
+    ) -> Result<(), String> {
+        let chunk = Duration::from_secs(1);
+        let mut remaining = total;
+
+        while !remaining.is_zero() {
+            let this_sleep = remaining.min(chunk);
+            sleep(this_sleep).await;
+            remaining = remaining.saturating_sub(this_sleep);
+
+            if let Ok(execution) = self.engine.get_execution_status(execution_id) {
+                match execution.status {
+                    WorkflowStatus::Cancelled => {
+                        return Err("Wait cancelled".to_string());
+                    }
+                    WorkflowStatus::Paused => {
+                        // Freeze the timer while paused
+                        remaining = remaining.saturating_add(this_sleep);
+                    }
+                    _ => {}
+                }
+            }
+        }
         Ok(())
     }
 
@@ -494,26 +624,150 @@ impl WorkflowExecutor {
         data: &ScriptNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing script node: {}", data.label);
+        tracing::info!("Executing script node: {}", data.label);
 
-        match data.language {
+        /// Maximum output size in bytes to prevent memory exhaustion (1 MB).
+        const MAX_OUTPUT_BYTES: usize = 1_024 * 1_024;
+
+        let timeout_secs = data
+            .timeout_seconds
+            .map(|t| if t > 0 { t as u64 } else { 30 })
+            .unwrap_or(30);
+
+        let (program, args, code) = match data.language {
             ScriptLanguage::JavaScript => {
-                println!("Would execute JavaScript: {}", data.code);
+                // Prefer deno, fall back to node
+                let runtime = if which_exists("deno") {
+                    "deno"
+                } else if which_exists("node") {
+                    "node"
+                } else {
+                    return Err(
+                        "No JavaScript runtime found (install node or deno)".to_string()
+                    );
+                };
+                if runtime == "deno" {
+                    (
+                        "deno".to_string(),
+                        vec!["run".to_string(), "--allow-env".to_string(), "-".to_string()],
+                        data.code.clone(),
+                    )
+                } else {
+                    ("node".to_string(), vec!["-e".to_string(), data.code.clone()], String::new())
+                }
             }
             ScriptLanguage::Python => {
-                println!("Would execute Python: {}", data.code);
+                let runtime = if which_exists("python3") {
+                    "python3"
+                } else if which_exists("python") {
+                    "python"
+                } else {
+                    return Err("No Python runtime found (install python3)".to_string());
+                };
+                (runtime.to_string(), vec!["-c".to_string(), data.code.clone()], String::new())
             }
             ScriptLanguage::Bash => {
-                println!("Would execute Bash: {}", data.code);
+                let shell = if cfg!(target_os = "windows") {
+                    "cmd"
+                } else {
+                    "bash"
+                };
+                let flag = if cfg!(target_os = "windows") {
+                    "/C"
+                } else {
+                    "-c"
+                };
+                (shell.to_string(), vec![flag.to_string(), data.code.clone()], String::new())
+            }
+        };
+
+        // Build the subprocess command
+        let mut cmd = tokio::process::Command::new(&program);
+        cmd.args(&args);
+
+        // Pass workflow variables as environment variables (WF_ prefix)
+        for (key, value) in &context.variables {
+            let env_val = match value {
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            cmd.env(format!("WF_{}", key.to_uppercase()), env_val);
+        }
+
+        // For deno reading from stdin, pipe the code
+        if data.language == ScriptLanguage::JavaScript && program == "deno" {
+            cmd.stdin(std::process::Stdio::piped());
+        } else {
+            cmd.stdin(std::process::Stdio::null());
+        }
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+
+        // Spawn the child process
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to spawn {} process: {}", program, e))?;
+
+        // If deno stdin mode, write the code to stdin
+        if data.language == ScriptLanguage::JavaScript && program == "deno" {
+            if let Some(mut stdin) = child.stdin.take() {
+                use tokio::io::AsyncWriteExt;
+                let _ = stdin.write_all(code.as_bytes()).await;
+                drop(stdin);
             }
         }
 
-        sleep(Duration::from_millis(100)).await;
+        // Wait with timeout
+        let output = timeout(Duration::from_secs(timeout_secs), child.wait_with_output()).await;
 
+        let output = match output {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                return Err(format!("Script process error: {}", e));
+            }
+            Err(_) => {
+                // Timeout — attempt to kill the process (best effort, child already moved)
+                return Err(format!(
+                    "Script execution timed out after {} seconds",
+                    timeout_secs
+                ));
+            }
+        };
+
+        let mut stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let mut stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        // Truncate oversized output
+        if stdout.len() > MAX_OUTPUT_BYTES {
+            stdout.truncate(MAX_OUTPUT_BYTES);
+            stdout.push_str("\n... [output truncated]");
+        }
+        if stderr.len() > MAX_OUTPUT_BYTES {
+            stderr.truncate(MAX_OUTPUT_BYTES);
+            stderr.push_str("\n... [output truncated]");
+        }
+
+        if !output.status.success() {
+            let exit_code = output.status.code().unwrap_or(-1);
+            return Err(format!(
+                "Script exited with code {}.\nstderr: {}",
+                exit_code, stderr
+            ));
+        }
+
+        // Store stdout as the script output variable
         context.set_variable(
             "script_output".to_string(),
-            Value::String("Script executed successfully".to_string()),
+            Value::String(stdout.trim().to_string()),
         );
+
+        // Also store stderr if non-empty, for debugging
+        if !stderr.trim().is_empty() {
+            context.set_variable(
+                "script_stderr".to_string(),
+                Value::String(stderr.trim().to_string()),
+            );
+        }
 
         Ok(())
     }
@@ -523,7 +777,7 @@ impl WorkflowExecutor {
         data: &ToolNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        println!("Executing tool node: {}", data.label);
+        tracing::info!("Executing tool node: {}", data.label);
 
         sleep(Duration::from_millis(100)).await;
 
@@ -623,7 +877,7 @@ impl WorkflowExecutor {
                         None,
                     );
                     if let Err(e) = executor.execute_node(&workflow, &node, &mut context).await {
-                        eprintln!("Failed to resume workflow: {}", e);
+                        tracing::error!("Failed to resume workflow: {}", e);
                         let _ = executor.engine.update_execution_status(
                             &execution_id,
                             WorkflowStatus::Failed,
@@ -640,7 +894,7 @@ impl WorkflowExecutor {
             tokio::spawn(async move {
                 let executor = WorkflowExecutor::new(engine);
                 if let Err(e) = executor.run_workflow(workflow, context).await {
-                    eprintln!("Failed to resume workflow: {}", e);
+                    tracing::error!("Failed to resume workflow: {}", e);
                     let _ = executor.engine.update_execution_status(
                         &execution_id,
                         WorkflowStatus::Failed,

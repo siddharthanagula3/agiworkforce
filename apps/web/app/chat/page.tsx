@@ -143,11 +143,11 @@ function ChatPageInner() {
       const activeId = state.activeSessionId;
       const existingMessages = activeId ? state.messages[activeId] : null;
 
-      // Reuse active session if it exists and is empty (just created by "New Chat")
-      const sessionId =
-        activeId && (!existingMessages || existingMessages.length === 0)
-          ? activeId
-          : createSession(user?.id);
+      // Reuse active session if it exists and is empty (just created by "New Chat").
+      // Only reuse if the session actually exists in our sessions list (not stale).
+      const sessionExists = activeId && state.sessions.some((s) => s.id === activeId);
+      const isEmpty = !existingMessages || existingMessages.length === 0;
+      const sessionId = sessionExists && isEmpty ? activeId : createSession(user?.id);
 
       addMessage(sessionId, { role: 'user', content });
 

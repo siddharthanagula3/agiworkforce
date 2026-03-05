@@ -96,7 +96,11 @@ export function PairingStatus({ status, desktopName, error }: PairingStatusProps
   }));
 
   return (
-    <View className="flex-row items-center gap-2.5 py-2 px-3 rounded-lg bg-white/5">
+    <View
+      className="flex-row items-center gap-2.5 py-2 px-3 rounded-lg bg-white/5"
+      accessibilityLabel={`Connection status: ${config.label}`}
+      accessibilityRole="text"
+    >
       <Animated.View
         style={[
           {
@@ -108,11 +112,7 @@ export function PairingStatus({ status, desktopName, error }: PairingStatusProps
           dotAnimatedStyle,
         ]}
       />
-      <Text
-        className="text-sm flex-1"
-        style={{ color: config.color }}
-        numberOfLines={2}
-      >
+      <Text className="text-sm flex-1" style={{ color: config.color }} numberOfLines={2}>
         {config.label}
       </Text>
     </View>

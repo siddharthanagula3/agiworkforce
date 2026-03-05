@@ -72,7 +72,7 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<()> {
     if log_files.len() > max_files {
         for (path, _) in log_files.iter().take(log_files.len() - max_files) {
             if let Err(e) = fs::remove_file(path) {
-                eprintln!("Failed to remove old log file {:?}: {}", path, e);
+                tracing::warn!("Failed to remove old log file {:?}: {}", path, e);
             }
         }
     }

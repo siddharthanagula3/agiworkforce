@@ -224,7 +224,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       sessionStorage.removeItem(`oauth_state_${provider}`);
 
       try {
-        await invoke('mcp_oauth_callback', { provider, code, state });
+        await invoke('mcp_oauth_callback', { provider, code, callbackState: state });
         // Refresh status
         await checkOAuthStatus(provider);
         setOauthState((prev) => ({

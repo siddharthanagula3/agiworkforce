@@ -440,6 +440,317 @@ impl TaskStorage {
     }
 }
 
+/// Autonomous task checkpoint for resume across app restarts.
+///
+/// Captures the full state of an autonomous task execution at a point in time:
+/// task description, planned steps, current progress, conversation history,
+/// tool results, retry/replan counts, and cumulative cost.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomousTaskCheckpoint {
+    /// Checkpoint UUID
+    pub id: String,
+    /// Original task ID from the autonomous agent
+    pub task_id: String,
+    /// Task description / goal
+    pub description: String,
+    /// Serialized task steps (JSON array of TaskStep)
+    pub steps_json: String,
+    /// Index of the step that was last completed successfully
+    pub completed_step_index: i32,
+    /// Total number of steps in the plan
+    pub total_steps: i32,
+    /// Number of retries consumed so far
+    pub retry_count: i32,
+    /// Number of replans consumed so far
+    pub replan_count: i32,
+    /// Whether the task uses auto-approve
+    pub auto_approve: bool,
+    /// Cumulative LLM cost in USD at checkpoint time
+    pub cumulative_cost: f64,
+    /// Serialized conversation history (JSON array of messages)
+    pub conversation_history_json: String,
+    /// Serialized tool results from completed steps (JSON array)
+    pub tool_results_json: String,
+    /// Checkpoint creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Task status at checkpoint time (e.g. "paused", "executing")
+    pub status: String,
+}
+
+impl AutonomousTaskCheckpoint {
+    pub fn new(
+        task_id: String,
+        description: String,
+        steps_json: String,
+        completed_step_index: i32,
+        total_steps: i32,
+        retry_count: i32,
+        replan_count: i32,
+        auto_approve: bool,
+        cumulative_cost: f64,
+        conversation_history_json: String,
+        tool_results_json: String,
+        status: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            task_id,
+            description,
+            steps_json,
+            completed_step_index,
+            total_steps,
+            retry_count,
+            replan_count,
+            auto_approve,
+            cumulative_cost,
+            conversation_history_json,
+            tool_results_json,
+            created_at: Utc::now(),
+            status,
+        }
+    }
+}
+
+impl TaskStorage {
+    /// Ensure the autonomous_task_checkpoints table exists.
+    pub fn ensure_autonomous_table(&self) -> Result<()> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS autonomous_task_checkpoints (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                description TEXT NOT NULL,
+                steps_json TEXT NOT NULL,
+                completed_step_index INTEGER NOT NULL DEFAULT 0,
+                total_steps INTEGER NOT NULL DEFAULT 0,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                replan_count INTEGER NOT NULL DEFAULT 0,
+                auto_approve INTEGER NOT NULL DEFAULT 0,
+                cumulative_cost REAL NOT NULL DEFAULT 0.0,
+                conversation_history_json TEXT NOT NULL DEFAULT '[]',
+                tool_results_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'paused'
+            );
+            CREATE INDEX IF NOT EXISTS idx_auto_checkpoints_task_id
+                ON autonomous_task_checkpoints(task_id);
+            "#,
+        )?;
+
+        Ok(())
+    }
+
+    /// Save an autonomous task checkpoint.
+    pub fn save_autonomous_checkpoint(&self, checkpoint: &AutonomousTaskCheckpoint) -> Result<()> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO autonomous_task_checkpoints
+             (id, task_id, description, steps_json, completed_step_index, total_steps,
+              retry_count, replan_count, auto_approve, cumulative_cost,
+              conversation_history_json, tool_results_json, created_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                &checkpoint.id,
+                &checkpoint.task_id,
+                &checkpoint.description,
+                &checkpoint.steps_json,
+                checkpoint.completed_step_index,
+                checkpoint.total_steps,
+                checkpoint.retry_count,
+                checkpoint.replan_count,
+                checkpoint.auto_approve as i32,
+                checkpoint.cumulative_cost,
+                &checkpoint.conversation_history_json,
+                &checkpoint.tool_results_json,
+                checkpoint.created_at.to_rfc3339(),
+                &checkpoint.status,
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Load the latest autonomous checkpoint for a given task ID.
+    pub fn load_latest_autonomous_checkpoint(
+        &self,
+        task_id: &str,
+    ) -> Result<Option<AutonomousTaskCheckpoint>> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, description, steps_json, completed_step_index, total_steps,
+                    retry_count, replan_count, auto_approve, cumulative_cost,
+                    conversation_history_json, tool_results_json, created_at, status
+             FROM autonomous_task_checkpoints
+             WHERE task_id = ?
+             ORDER BY created_at DESC
+             LIMIT 1",
+        )?;
+
+        let checkpoint = stmt
+            .query_row(params![task_id], |row| {
+                Ok(AutonomousTaskCheckpoint {
+                    id: row.get(0)?,
+                    task_id: row.get(1)?,
+                    description: row.get(2)?,
+                    steps_json: row.get(3)?,
+                    completed_step_index: row.get(4)?,
+                    total_steps: row.get(5)?,
+                    retry_count: row.get(6)?,
+                    replan_count: row.get(7)?,
+                    auto_approve: row.get::<_, i32>(8)? != 0,
+                    cumulative_cost: row.get(9)?,
+                    conversation_history_json: row.get(10)?,
+                    tool_results_json: row.get(11)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(12)?)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    status: row.get(13)?,
+                })
+            })
+            .optional()?;
+
+        Ok(checkpoint)
+    }
+
+    /// List all autonomous checkpoints for a given task, newest first.
+    pub fn list_autonomous_checkpoints(
+        &self,
+        task_id: &str,
+    ) -> Result<Vec<AutonomousTaskCheckpoint>> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, description, steps_json, completed_step_index, total_steps,
+                    retry_count, replan_count, auto_approve, cumulative_cost,
+                    conversation_history_json, tool_results_json, created_at, status
+             FROM autonomous_task_checkpoints
+             WHERE task_id = ?
+             ORDER BY created_at DESC",
+        )?;
+
+        let rows = stmt.query_map(params![task_id], |row| {
+            Ok(AutonomousTaskCheckpoint {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                description: row.get(2)?,
+                steps_json: row.get(3)?,
+                completed_step_index: row.get(4)?,
+                total_steps: row.get(5)?,
+                retry_count: row.get(6)?,
+                replan_count: row.get(7)?,
+                auto_approve: row.get::<_, i32>(8)? != 0,
+                cumulative_cost: row.get(9)?,
+                conversation_history_json: row.get(10)?,
+                tool_results_json: row.get(11)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(12)?)
+                    .ok()
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(Utc::now),
+                status: row.get(13)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// List all autonomous checkpoints across all tasks (for the UI list view).
+    pub fn list_all_autonomous_checkpoints(&self) -> Result<Vec<AutonomousTaskCheckpoint>> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, description, steps_json, completed_step_index, total_steps,
+                    retry_count, replan_count, auto_approve, cumulative_cost,
+                    conversation_history_json, tool_results_json, created_at, status
+             FROM autonomous_task_checkpoints
+             ORDER BY created_at DESC
+             LIMIT 100",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(AutonomousTaskCheckpoint {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                description: row.get(2)?,
+                steps_json: row.get(3)?,
+                completed_step_index: row.get(4)?,
+                total_steps: row.get(5)?,
+                retry_count: row.get(6)?,
+                replan_count: row.get(7)?,
+                auto_approve: row.get::<_, i32>(8)? != 0,
+                cumulative_cost: row.get(9)?,
+                conversation_history_json: row.get(10)?,
+                tool_results_json: row.get(11)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(12)?)
+                    .ok()
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(Utc::now),
+                status: row.get(13)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Delete an autonomous checkpoint by its ID.
+    pub fn delete_autonomous_checkpoint(&self, checkpoint_id: &str) -> Result<()> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        conn.execute(
+            "DELETE FROM autonomous_task_checkpoints WHERE id = ?",
+            params![checkpoint_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete all autonomous checkpoints for a task.
+    pub fn delete_autonomous_checkpoints_for_task(&self, task_id: &str) -> Result<usize> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+
+        let count = conn.execute(
+            "DELETE FROM autonomous_task_checkpoints WHERE task_id = ?",
+            params![task_id],
+        )?;
+
+        Ok(count)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,5 +769,80 @@ mod tests {
             TaskCheckpoint::new("task-1".to_string(), 1, "{}".to_string(), "{}".to_string());
         assert_eq!(checkpoint.task_id, "task-1");
         assert_eq!(checkpoint.step_number, 1);
+    }
+
+    #[test]
+    fn test_autonomous_task_checkpoint_new() {
+        let checkpoint = AutonomousTaskCheckpoint::new(
+            "task-42".to_string(),
+            "Test autonomous goal".to_string(),
+            "[]".to_string(),
+            3,
+            10,
+            1,
+            0,
+            true,
+            0.25,
+            "[]".to_string(),
+            "[]".to_string(),
+            "paused".to_string(),
+        );
+        assert_eq!(checkpoint.task_id, "task-42");
+        assert_eq!(checkpoint.completed_step_index, 3);
+        assert_eq!(checkpoint.total_steps, 10);
+        assert!(checkpoint.auto_approve);
+        assert!((checkpoint.cumulative_cost - 0.25).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_autonomous_checkpoint_storage_roundtrip() {
+        let conn = Connection::open_in_memory().expect("Failed to open in-memory db");
+        let db = Arc::new(Mutex::new(conn));
+        let storage = TaskStorage::new(db).expect("Failed to create TaskStorage");
+        storage
+            .ensure_autonomous_table()
+            .expect("Failed to ensure autonomous table");
+
+        let checkpoint = AutonomousTaskCheckpoint::new(
+            "task-rt".to_string(),
+            "Roundtrip test".to_string(),
+            r#"[{"id":"s1"}]"#.to_string(),
+            2,
+            5,
+            0,
+            0,
+            false,
+            1.5,
+            r#"[{"role":"user","content":"hello"}]"#.to_string(),
+            r#"[{"step":"s1","result":"ok"}]"#.to_string(),
+            "paused".to_string(),
+        );
+
+        storage
+            .save_autonomous_checkpoint(&checkpoint)
+            .expect("Failed to save autonomous checkpoint");
+
+        let loaded = storage
+            .load_latest_autonomous_checkpoint("task-rt")
+            .expect("Failed to load checkpoint");
+        assert!(loaded.is_some());
+        let loaded = loaded.expect("checkpoint should exist");
+        assert_eq!(loaded.task_id, "task-rt");
+        assert_eq!(loaded.completed_step_index, 2);
+        assert_eq!(loaded.total_steps, 5);
+
+        let listed = storage
+            .list_autonomous_checkpoints("task-rt")
+            .expect("Failed to list checkpoints");
+        assert_eq!(listed.len(), 1);
+
+        storage
+            .delete_autonomous_checkpoint(&checkpoint.id)
+            .expect("Failed to delete checkpoint");
+
+        let after_delete = storage
+            .list_autonomous_checkpoints("task-rt")
+            .expect("Failed to list after delete");
+        assert!(after_delete.is_empty());
     }
 }

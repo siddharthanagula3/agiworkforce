@@ -882,16 +882,14 @@ async fn consume_llm_stream(
                 // Accumulate tool calls from this chunk
                 if let Some(ref tool_calls) = chunk.tool_calls {
                     for tc in tool_calls {
-                        let entry = accumulated_tool_calls
-                            .entry(tc.index)
-                            .or_insert_with(|| {
-                                crate::core::llm::sse_parser::StreamingToolCall {
-                                    index: tc.index,
-                                    id: String::new(),
-                                    name: String::new(),
-                                    arguments: String::new(),
-                                }
-                            });
+                        let entry = accumulated_tool_calls.entry(tc.index).or_insert_with(|| {
+                            crate::core::llm::sse_parser::StreamingToolCall {
+                                index: tc.index,
+                                id: String::new(),
+                                name: String::new(),
+                                arguments: String::new(),
+                            }
+                        });
 
                         // Merge: ID and name only appear in first chunk
                         if !tc.id.is_empty() {
@@ -3298,8 +3296,19 @@ pub async fn chat_send_message(
     // Add project folder context if one is set
     // Priority: request.project_folder > state context
     let effective_folder = if let Some(ref folder) = request.project_folder {
-        // Update the project context state so tools can use it
+        // Update the project context state so tools can use it.
+        // Reload MCP scope only when folder actually changes to avoid reconnect churn.
+        let previous_folder = project_context_state.get_folder().await;
+        let folder_changed = previous_folder.as_deref() != Some(folder.as_str());
         project_context_state.set_folder(folder.clone()).await;
+        if folder_changed {
+            if let Err(err) = mcp_state.reload_active_config(&app_handle).await {
+                warn!(
+                    "[Chat] Failed to reload MCP config for project folder '{}': {}",
+                    folder, err
+                );
+            }
+        }
         Some(folder.clone())
     } else {
         let ctx = project_context_state.get_context().await;
@@ -4411,7 +4420,9 @@ pub async fn chat_send_message(
                                 // Task 3: Check for queued follow-up messages from the user
                                 // and inject them into the conversation before the next LLM call.
                                 // Use atomic pop (single lock) to avoid check-then-act race.
-                                if let Some(pending) = pop_pending_message_for_conversation(conversation_id_clone) {
+                                if let Some(pending) =
+                                    pop_pending_message_for_conversation(conversation_id_clone)
+                                {
                                     info!(
                                         "[Chat] Injecting pending user message into agentic loop: {}...",
                                         pending.content.chars().take(50).collect::<String>()
@@ -4523,10 +4534,7 @@ pub async fn chat_send_message(
                                 let followup_stream = match followup_stream_result {
                                     Ok(Ok(s)) => Some(s),
                                     Ok(Err(e)) => {
-                                        warn!(
-                                            "[Chat] Follow-up streaming request failed: {}",
-                                            e
-                                        );
+                                        warn!("[Chat] Follow-up streaming request failed: {}", e);
                                         None
                                     }
                                     Err(_) => {
@@ -4665,7 +4673,9 @@ pub async fn chat_send_message(
                                                         current_tool_results = new_results;
                                                         has_media_tools =
                                                             current_tool_results.iter().any(|r| {
-                                                                is_media_generation_tool(&r.tool_name)
+                                                                is_media_generation_tool(
+                                                                    &r.tool_name,
+                                                                )
                                                             });
                                                         only_fast_metadata_tools =
                                                             is_fast_metadata_batch(
@@ -5658,14 +5668,25 @@ pub async fn cancel_tool_execution(
         return Err("Tool id is required for cancellation".to_string());
     }
 
+    if !crate::ui::events::tool_stream::is_tool_active(trimmed) {
+        return Err(format!(
+            "No active tool execution found for id '{}'",
+            trimmed
+        ));
+    }
+
     mark_tool_cancelled(trimmed);
-    crate::ui::events::tool_stream::emit_tool_cancelled(
-        &app_handle,
-        trimmed,
-        Some("Cancelled by user"),
-        0,
+    info!(
+        "[Chat] Cancellation requested for active tool execution: {}",
+        trimmed
     );
-    info!("[Chat] Marked tool for cancellation: {}", trimmed);
+    let _ = app_handle.emit(
+        "agi:tool_cancel_requested",
+        serde_json::json!({
+            "tool_id": trimmed,
+            "reason": "Cancelled by user",
+        }),
+    );
     Ok(true)
 }
 
@@ -5782,6 +5803,8 @@ pub async fn chat_clear_pending_messages(app_handle: tauri::AppHandle) -> Result
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PopPendingMessageRequest {
     pub conversation_id: Option<i64>,
+    #[serde(default)]
+    pub pending_message_id: Option<String>,
 }
 
 #[tauri::command]
@@ -5797,9 +5820,22 @@ pub async fn chat_pop_pending_message(
         return Ok(None);
     }
 
-    // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided
-    let msg = if let Some(conversation_id) = request.conversation_id {
-        // Find the first message matching this conversation
+    // Pop by explicit pending message ID when available to avoid FIFO mismatches.
+    let msg = if let Some(pending_message_id) = request.pending_message_id.as_deref() {
+        let idx = queue.iter().position(|m| {
+            m.id == pending_message_id
+                && request
+                    .conversation_id
+                    .map(|cid| m.conversation_id == Some(cid))
+                    .unwrap_or(true)
+        });
+        if let Some(idx) = idx {
+            queue.remove(idx)
+        } else {
+            return Ok(None);
+        }
+    } else if let Some(conversation_id) = request.conversation_id {
+        // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided.
         let idx = queue
             .iter()
             .position(|m| m.conversation_id == Some(conversation_id));
@@ -5875,15 +5911,12 @@ pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<Pendi
 
 /// Pop the first pending message for a specific conversation (used by agentic loop).
 pub fn pop_pending_message_for_conversation(conversation_id: i64) -> Option<PendingUserMessage> {
-    PENDING_MESSAGES
-        .lock()
-        .ok()
-        .and_then(|mut q| {
-            let idx = q
-                .iter()
-                .position(|m| m.conversation_id == Some(conversation_id))?;
-            Some(q.remove(idx))
-        })
+    PENDING_MESSAGES.lock().ok().and_then(|mut q| {
+        let idx = q
+            .iter()
+            .position(|m| m.conversation_id == Some(conversation_id))?;
+        Some(q.remove(idx))
+    })
 }
 
 // ============================================================================
@@ -6119,7 +6152,6 @@ pub async fn chat_handle_stop(app_handle: tauri::AppHandle) -> Result<bool, Stri
 
     Ok(true)
 }
-
 
 /// Export a conversation as formatted text.
 ///

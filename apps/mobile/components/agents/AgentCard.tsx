@@ -36,12 +36,16 @@ export function AgentCard({ agent, index, onPress }: AgentCardProps) {
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300).delay(index * 80).springify()}
+      entering={FadeInDown.duration(300)
+        .delay(index * 80)
+        .springify()}
     >
       <Pressable
         onPress={() => onPress(agent.id)}
         className="rounded-xl overflow-hidden active:opacity-80"
         style={{ backgroundColor: colors.surfaceElevated }}
+        accessibilityLabel={`Agent: ${agent.name}, ${agent.status}, ${agent.progress}% complete`}
+        accessibilityRole="button"
       >
         <View className="p-3 gap-2">
           {/* Top row: icon + name */}

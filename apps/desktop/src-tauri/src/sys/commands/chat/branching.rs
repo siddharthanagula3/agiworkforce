@@ -137,8 +137,12 @@ pub fn conversation_list_branches(
     }
     let conn = db.connection()?;
     verify_conversation_access(&conn, conversation_id, user_id.as_deref())?;
-    repository::list_branches(&conn, conversation_id)
-        .map_err(|e| format!("Failed to list branches for conversation {}: {e}", conversation_id))
+    repository::list_branches(&conn, conversation_id).map_err(|e| {
+        format!(
+            "Failed to list branches for conversation {}: {e}",
+            conversation_id
+        )
+    })
 }
 
 /// Switch to a branch — returns all messages on that branch in order.

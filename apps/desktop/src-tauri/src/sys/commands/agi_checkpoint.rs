@@ -33,14 +33,6 @@ impl<T> CheckpointResponse<T> {
         }
     }
 
-    #[allow(dead_code)]
-    fn err(error: impl std::fmt::Display) -> Self {
-        Self {
-            success: false,
-            data: None,
-            error: Some(error.to_string()),
-        }
-    }
 }
 
 /// Request to save a checkpoint for a task
@@ -281,6 +273,94 @@ pub async fn agi_checkpoint_init(
         }
         Err(e) => Err(format!("Failed to initialize checkpoint system: {}", e)),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Autonomous Task Persistence Commands (P5D)
+// ---------------------------------------------------------------------------
+
+use crate::core::agent::background_tasks::{AutonomousTaskCheckpoint, TaskStorage};
+use std::sync::Arc;
+
+/// Managed state wrapper for autonomous task checkpoint storage.
+pub struct AutonomousCheckpointState {
+    pub storage: Arc<TaskStorage>,
+}
+
+/// Lists all autonomous task checkpoints (newest first, max 100).
+#[tauri::command]
+pub async fn list_autonomous_task_checkpoints(
+    state: State<'_, AutonomousCheckpointState>,
+) -> Result<Vec<AutonomousTaskCheckpoint>, String> {
+    state
+        .storage
+        .list_all_autonomous_checkpoints()
+        .map_err(|e| format!("Failed to list autonomous checkpoints: {}", e))
+}
+
+/// Lists autonomous checkpoints for a specific task.
+#[tauri::command]
+pub async fn list_autonomous_task_checkpoints_by_task(
+    task_id: String,
+    state: State<'_, AutonomousCheckpointState>,
+) -> Result<Vec<AutonomousTaskCheckpoint>, String> {
+    state
+        .storage
+        .list_autonomous_checkpoints(&task_id)
+        .map_err(|e| format!("Failed to list autonomous checkpoints for task: {}", e))
+}
+
+/// Resumes an autonomous task from its latest checkpoint.
+///
+/// Loads the checkpoint from storage, reconstructs the Task, and queues it
+/// for execution in the autonomous agent. Returns the task ID.
+#[tauri::command]
+pub async fn resume_autonomous_task(
+    task_id: String,
+    state: State<'_, AutonomousCheckpointState>,
+) -> Result<String, String> {
+    let checkpoint = state
+        .storage
+        .load_latest_autonomous_checkpoint(&task_id)
+        .map_err(|e| format!("Failed to load checkpoint: {}", e))?
+        .ok_or_else(|| format!("No checkpoint found for task {}", task_id))?;
+
+    info!(
+        "Resuming autonomous task {} from checkpoint at step {}/{}",
+        task_id, checkpoint.completed_step_index, checkpoint.total_steps
+    );
+
+    // Return the checkpoint data so the frontend / caller can feed it to
+    // the autonomous agent's resume_from_checkpoint method.
+    // The actual re-submission happens via agi_submit_goal with checkpoint context.
+    Ok(serde_json::to_string(&checkpoint)
+        .map_err(|e| format!("Failed to serialize checkpoint: {}", e))?)
+}
+
+/// Deletes a specific autonomous task checkpoint by ID.
+#[tauri::command]
+pub async fn delete_autonomous_task_checkpoint(
+    checkpoint_id: String,
+    state: State<'_, AutonomousCheckpointState>,
+) -> Result<(), String> {
+    info!("Deleting autonomous checkpoint {}", checkpoint_id);
+    state
+        .storage
+        .delete_autonomous_checkpoint(&checkpoint_id)
+        .map_err(|e| format!("Failed to delete autonomous checkpoint: {}", e))
+}
+
+/// Deletes all autonomous checkpoints for a task.
+#[tauri::command]
+pub async fn delete_autonomous_task_checkpoints(
+    task_id: String,
+    state: State<'_, AutonomousCheckpointState>,
+) -> Result<usize, String> {
+    info!("Deleting all autonomous checkpoints for task {}", task_id);
+    state
+        .storage
+        .delete_autonomous_checkpoints_for_task(&task_id)
+        .map_err(|e| format!("Failed to delete autonomous checkpoints: {}", e))
 }
 
 #[cfg(test)]

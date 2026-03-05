@@ -16,11 +16,16 @@ import { colors } from '@/lib/theme';
 
 interface ModelPickerSheetProps {
   /** Ref forwarded so the parent can open/close the sheet. */
-
   sheetRef: React.RefObject<BottomSheet | null>;
+  /**
+   * Optional override for model selection. When provided, the sheet calls this
+   * instead of updating the global modelStore. Useful for forms that manage
+   * their own model state (e.g. ScheduleForm).
+   */
+  onSelect?: (modelId: string) => void;
 }
 
-export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
+export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) {
   const snapPoints = useMemo(() => ['50%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -67,19 +72,26 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
 
   const handleSelectModel = useCallback(
     (id: string) => {
-      setModel(id);
-      // Close the sheet after selection.
+      if (onSelect) {
+        onSelect(id);
+      } else {
+        setModel(id);
+      }
       sheetRef.current?.close();
     },
-    [setModel, sheetRef],
+    [onSelect, setModel, sheetRef],
   );
 
   const handleSelectAutoMode = useCallback(
     (id: string) => {
-      setModel(id);
+      if (onSelect) {
+        onSelect(id);
+      } else {
+        setModel(id);
+      }
       sheetRef.current?.close();
     },
-    [setModel, sheetRef],
+    [onSelect, setModel, sheetRef],
   );
 
   const clearSearch = useCallback(() => {
@@ -123,6 +135,8 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
               ? 'border-purple-500/50 bg-purple-500/15'
               : 'border-white/10 bg-white/5'
           }`}
+          accessibilityLabel={`Thinking mode: ${thinkingModeEnabled ? 'on' : 'off'}`}
+          accessibilityRole="button"
         >
           <Brain size={14} color={thinkingModeEnabled ? '#a78bfa' : colors.textMuted} />
           <Text
@@ -149,9 +163,15 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
           autoCorrect={false}
           autoCapitalize="none"
           returnKeyType="search"
+          accessibilityLabel="Search models"
         />
         {search.length > 0 && (
-          <Pressable onPress={clearSearch} className="p-0.5">
+          <Pressable
+            onPress={clearSearch}
+            className="p-0.5"
+            accessibilityLabel="Clear search"
+            accessibilityRole="button"
+          >
             <X size={14} color={colors.textMuted} />
           </Pressable>
         )}

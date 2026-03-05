@@ -7,6 +7,7 @@ export type SettingsTab =
   | 'privacy'
   | 'connectors'
   | 'api-keys'
+  | 'mcp'
   | 'extensions'
   | 'notifications';
 

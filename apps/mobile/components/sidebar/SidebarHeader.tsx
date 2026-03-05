@@ -14,13 +14,19 @@ export function SidebarHeader() {
         <Pressable
           onPress={() => router.push('/(app)')}
           className="p-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="New chat"
+          accessibilityRole="button"
         >
           <SquarePen size={20} color={colors.teal} />
         </Pressable>
       </View>
 
       {/* Search bar placeholder */}
-      <Pressable className="flex-row items-center gap-2 h-9 px-3 rounded-lg bg-white/5">
+      <Pressable
+        className="flex-row items-center gap-2 h-9 px-3 rounded-lg bg-white/5"
+        accessibilityLabel="Search conversations"
+        accessibilityRole="search"
+      >
         <Search size={14} color={colors.textMuted} />
         <Text className="text-xs text-white/30">Search conversations...</Text>
       </Pressable>
