@@ -271,9 +271,7 @@ mod tests {
 // rate-limit-skip/cost-cap semantics used by route_with_retry internally.
 #[cfg(test)]
 mod route_with_retry_tests {
-    use crate::core::llm::fallback_chain::{
-        FallbackChain, FallbackConfig, ModelCandidate,
-    };
+    use crate::core::llm::fallback_chain::{FallbackChain, FallbackConfig, ModelCandidate};
     use crate::core::llm::Provider;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -328,9 +326,11 @@ mod route_with_retry_tests {
         });
 
         // Pre-mark Anthropic as rate-limited
-        chain
-            .rate_limit_tracker()
-            .record_rate_limit(Provider::Anthropic, Some("claude-sonnet-4-5"), None);
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet-4-5"),
+            None,
+        );
         chain
             .rate_limit_tracker()
             .record_rate_limit(Provider::OpenAI, Some("gpt-5.2"), None);

@@ -32,6 +32,7 @@ export function AutoApproveToggle() {
       onPress={cycleMode}
       className="p-1.5 rounded-lg active:bg-white/5"
       accessibilityLabel={`Auto-approve: ${config.label}`}
+      accessibilityRole="button"
       accessibilityHint="Tap to cycle approval mode"
     >
       <Icon size={20} color={config.color} />

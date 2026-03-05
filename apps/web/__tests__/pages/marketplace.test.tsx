@@ -295,7 +295,7 @@ describe('MarketplacePublicPage', () => {
       isFetchedAfterMount: false,
       isInitialLoading: true,
       promise: Promise.resolve([]),
-    } as ReturnType<typeof useQuery>);
+    } as unknown as ReturnType<typeof useQuery>);
 
     const { MarketplacePublicPage } = await import('@features/pages/PublicMarketplace');
     render(<MarketplacePublicPage />);
@@ -352,7 +352,7 @@ describe('MarketplacePublicPage', () => {
       isFetchedAfterMount: true,
       isInitialLoading: false,
       promise: Promise.resolve(mockAgents),
-    } as ReturnType<typeof useQuery>);
+    } as unknown as ReturnType<typeof useQuery>);
 
     const { MarketplacePublicPage } = await import('@features/pages/PublicMarketplace');
     render(<MarketplacePublicPage />);

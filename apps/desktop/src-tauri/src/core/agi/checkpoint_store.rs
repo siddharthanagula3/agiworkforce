@@ -531,7 +531,7 @@ mod tests {
         let store = CheckpointStore::new(&db_path).unwrap();
         let result = store.init().await;
         if let Err(e) = &result {
-            eprintln!("Init error: {:?}", e);
+            tracing::error!("Init error: {:?}", e);
         }
         assert!(result.is_ok());
         drop(temp_dir); // Explicitly drop after test

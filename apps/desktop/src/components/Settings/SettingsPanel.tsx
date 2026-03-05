@@ -11,6 +11,7 @@ import {
   Loader2,
   Plug,
   Puzzle,
+  Wrench,
   Server,
   Settings2,
   Shield,
@@ -33,6 +34,7 @@ import { openPricingPage } from '../../utils/navigation';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
 import { errorTracking } from '../../services/errorTracking';
+import type { NotificationSettings } from '../../hooks/useNotifications';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
@@ -49,6 +51,7 @@ import { AgentsSettings } from './AgentsSettings';
 import { InstructionFilesSettings } from './InstructionFilesSettings';
 import { CustomModelsSettings } from './CustomModelsSettings';
 import { SkillsPluginsSettings } from './SkillsPluginsSettings';
+import { MCPToolsSettings } from './MCPToolsSettings';
 import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
@@ -69,14 +72,39 @@ const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }
   { key: 'privacy', label: 'Privacy & Data', icon: Shield },
   { key: 'connectors', label: 'Connectors', icon: Plug },
   { key: 'api-keys', label: 'API Keys', icon: Server },
+  { key: 'mcp', label: 'MCP & Skills', icon: Wrench },
   { key: 'extensions', label: 'Extensions', icon: Puzzle },
   { key: 'notifications', label: 'Notifications', icon: Bell },
 ];
 
+function stableSerialize(value: unknown): string {
+  const sortRecursively = (input: unknown): unknown => {
+    if (Array.isArray(input)) {
+      return input.map(sortRecursively);
+    }
+    if (input && typeof input === 'object') {
+      return Object.keys(input as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, key) => {
+          acc[key] = sortRecursively((input as Record<string, unknown>)[key]);
+          return acc;
+        }, {});
+    }
+    return input;
+  };
+
+  return JSON.stringify(sortRecursively(value));
+}
+
 export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
+  const hasInitializedOpenStateRef = useRef(false);
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
+  const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
+  const allowedDirectories = useSettingsStore(useShallow((state) => state.allowedDirectories));
+  const customModels = useSettingsStore(useShallow((state) => state.customModels));
+  const features = useSettingsStore(useShallow((state) => state.features));
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
@@ -101,6 +129,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
   const [checkingOllama, setCheckingOllama] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
+    null,
+  );
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const baselineSnapshotRef = useRef<string | null>(null);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
@@ -112,6 +148,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const ollamaStatus = providerStatuses.ollama;
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
+  const isBusy = loading || isSaving || notificationLoading;
 
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
@@ -122,6 +159,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       } else {
         setDefaultModel('ollama', '');
       }
+      setHasUnsavedChanges(true);
     },
     [selectedOllamaModel, ollamaModels, setDefaultModel],
   );
@@ -132,44 +170,118 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       if (ollamaEnabled) {
         setDefaultModel('ollama', model);
       }
+      setHasUnsavedChanges(true);
     },
     [ollamaEnabled, setDefaultModel],
   );
 
-  useEffect(() => {
-    if (open) {
-      loadSettings().catch((err) => {
-        console.error('Failed to load settings:', err);
+  const loadNotificationSettings = useCallback(async (): Promise<NotificationSettings | null> => {
+    setNotificationLoading(true);
+    setNotificationError(null);
+
+    try {
+      const settings = await invoke<NotificationSettings>('notification_get_settings');
+      setNotificationSettings(settings);
+      return settings;
+    } catch (err) {
+      console.error('Failed to load notification settings:', err);
+      setNotificationError(getSimpleErrorMessage(err));
+      setNotificationSettings(null);
+      return null;
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, []);
+
+  const updateNotificationSettings = useCallback((updates: Partial<NotificationSettings>) => {
+    setNotificationSettings((current) => {
+      if (!current) {
+        return current;
+      }
+      return { ...current, ...updates };
+    });
+    setNotificationError(null);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const refreshOllamaState = useCallback(async () => {
+    setCheckingOllama(true);
+    try {
+      await checkProviderStatus('ollama');
+      const models =
+        (await invoke<string[]>('llm_get_ollama_models').catch(() => [] as string[])) || [];
+
+      setOllamaModels(models);
+      setSelectedOllamaModel((currentModel) => {
+        const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
+        if (persistedModel && models.includes(persistedModel)) {
+          return persistedModel;
+        }
+        if (currentModel && models.includes(currentModel)) {
+          return currentModel;
+        }
+        return models[0] || '';
       });
-      setCheckingOllama(true);
-      checkProviderStatus('ollama')
-        .then(() => {
-          invoke<string[]>('llm_get_ollama_models')
-            .then((models) => {
-              setOllamaModels(models || []);
-              const persistedModel = resolvedLLMConfig.defaultModels?.ollama;
-              if (persistedModel && models?.includes(persistedModel)) {
-                setSelectedOllamaModel(persistedModel);
-              } else if (models && models.length > 0 && !selectedOllamaModel) {
-                setSelectedOllamaModel(models[0] || '');
-              }
-            })
-            .catch(() => {
-              setOllamaModels([]);
-            });
-        })
-        .finally(() => setCheckingOllama(false));
+    } catch (error) {
+      console.error('Failed to refresh Ollama settings:', error);
+      setOllamaModels([]);
+      setSelectedOllamaModel('');
+    } finally {
+      setCheckingOllama(false);
+    }
+  }, [checkProviderStatus]);
+
+  const buildCurrentSnapshot = useCallback((notifications: NotificationSettings | null) => {
+    const state = useSettingsStore.getState();
+    return stableSerialize({
+      llmConfig: state.llmConfig,
+      windowPreferences: state.windowPreferences,
+      chatPreferences: state.chatPreferences,
+      executionPreferences: state.executionPreferences,
+      globalHotkeyPreferences: state.globalHotkeyPreferences,
+      allowedDirectories: state.allowedDirectories,
+      customModels: state.customModels,
+      features: state.features,
+      notifications,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (open && !hasInitializedOpenStateRef.current) {
+      hasInitializedOpenStateRef.current = true;
+      void (async () => {
+        try {
+          const [, loadedNotifications] = await Promise.all([
+            loadSettings(),
+            loadNotificationSettings(),
+          ]);
+          baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
+        } catch (err) {
+          console.error('Failed to load settings:', err);
+          baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
+        }
+        await refreshOllamaState();
+        setHasUnsavedChanges(false);
+      })();
+      return;
+    }
+
+    if (!open) {
+      hasInitializedOpenStateRef.current = false;
+      baselineSnapshotRef.current = null;
     }
   }, [
     open,
+    buildCurrentSnapshot,
+    loadNotificationSettings,
     loadSettings,
-    checkProviderStatus,
-    selectedOllamaModel,
-    resolvedLLMConfig.defaultModels?.ollama,
+    notificationSettings,
+    refreshOllamaState,
   ]);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const requiresDeferredSave = activeTab !== 'mcp' && activeTab !== 'extensions';
   const accountData = useAccountStore((state) => state.account);
 
   useEffect(() => {
@@ -177,6 +289,27 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setActiveTab(initialTab);
     }
   }, [open, initialTab]);
+
+  useEffect(() => {
+    if (!open || !baselineSnapshotRef.current) {
+      return;
+    }
+
+    const currentSnapshot = buildCurrentSnapshot(notificationSettings);
+    setHasUnsavedChanges(currentSnapshot !== baselineSnapshotRef.current);
+  }, [
+    open,
+    llmConfig,
+    windowPreferences,
+    chatPreferences,
+    executionPreferences,
+    globalHotkeyPreferences,
+    allowedDirectories,
+    customModels,
+    features,
+    notificationSettings,
+    buildCurrentSnapshot,
+  ]);
 
   const handleThemeChange = useCallback(
     (value: 'light' | 'dark' | 'system') => {
@@ -266,34 +399,72 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   useEffect(() => {
     if (open) {
-      setHasUnsavedChanges(false);
+      setSaveError(null);
     }
   }, [open]);
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = useCallback(async () => {
+    if (isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
     try {
       await saveSettings();
+      if (notificationSettings) {
+        await invoke('notification_set_settings', { settings: notificationSettings });
+      }
+      baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
       setHasUnsavedChanges(false);
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to save settings:', error);
+      setSaveError(getSimpleErrorMessage(error));
+    } finally {
+      setIsSaving(false);
     }
-  };
+  }, [buildCurrentSnapshot, isSaving, notificationSettings, onOpenChange, saveSettings]);
 
-  const handleCancel = async () => {
-    if (hasUnsavedChanges) {
-      try {
-        await loadSettings();
-      } catch (error) {
-        console.error('Failed to reload settings:', error);
-      }
+  const handleCancel = useCallback(async () => {
+    try {
+      // Always reload to revert mutations from nested settings panels.
+      const [, loadedNotifications] = await Promise.all([
+        loadSettings(),
+        loadNotificationSettings(),
+      ]);
+      baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
+      await refreshOllamaState();
+    } catch (error) {
+      console.error('Failed to reload settings:', error);
+      setSaveError('Failed to discard changes. Please try again.');
+      return;
     }
+    setSaveError(null);
     setHasUnsavedChanges(false);
     onOpenChange(false);
-  };
+  }, [
+    buildCurrentSnapshot,
+    loadNotificationSettings,
+    loadSettings,
+    onOpenChange,
+    refreshOllamaState,
+  ]);
+
+  const handleDialogOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
+        onOpenChange(true);
+        return;
+      }
+
+      void handleCancel();
+    },
+    [handleCancel, onOpenChange],
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-5xl w-full p-0 overflow-hidden">
         <div className="flex h-[85vh]">
           {/* Vertical sidebar navigation */}
@@ -308,11 +479,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 key={item.key}
                 type="button"
                 onClick={() => setActiveTab(item.key)}
+                disabled={isBusy}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
                   activeTab === item.key
                     ? 'bg-primary/10 text-primary font-medium'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
+                } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{item.label}</span>
@@ -322,14 +494,18 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div
+              className={`flex-1 overflow-y-auto px-6 py-6 ${
+                isBusy ? 'pointer-events-none opacity-80' : ''
+              }`}
+            >
               {error && (
                 <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
 
-              {loading && !llmConfig ? (
+              {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -832,15 +1008,18 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                     </>
                   )}
 
-                  {/* Extensions Tab */}
-                  {activeTab === 'extensions' && (
-                    <>
-                      <ExtensionsSettings />
+                  {/* MCP Tab */}
+                  {activeTab === 'mcp' && (
+                    <div className="space-y-6">
+                      <MCPToolsSettings />
                       <div className="pt-6 border-t border-border">
                         <SkillsPluginsSettings />
                       </div>
-                    </>
+                    </div>
                   )}
+
+                  {/* Extensions Tab */}
+                  {activeTab === 'extensions' && <ExtensionsSettings />}
 
                   {/* Notifications Tab */}
                   {activeTab === 'notifications' && (
@@ -849,36 +1028,52 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       <p className="text-sm text-muted-foreground mb-6">
                         Configure how you receive notifications
                       </p>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Desktop Notifications</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Show system notifications for agent completions and alerts
-                            </p>
-                          </div>
-                          <Switch
-                            checked={localStorage.getItem('notifications_desktop') !== 'false'}
-                            onCheckedChange={(v) =>
-                              localStorage.setItem('notifications_desktop', String(v))
-                            }
-                          />
+                      {notificationLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Loading notification settings...</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Sound Effects</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Play sounds for message received and task completion
-                            </p>
+                      ) : notificationSettings ? (
+                        <div className="space-y-4">
+                          {notificationError && (
+                            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                              {notificationError}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Desktop Notifications</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Show system notifications for agent completions and alerts
+                              </p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.desktop_notifications}
+                              onCheckedChange={(enabled) =>
+                                updateNotificationSettings({ desktop_notifications: enabled })
+                              }
+                            />
                           </div>
-                          <Switch
-                            checked={localStorage.getItem('notifications_sound') !== 'false'}
-                            onCheckedChange={(v) =>
-                              localStorage.setItem('notifications_sound', String(v))
-                            }
-                          />
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Sound Effects</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Play sounds for message received and task completion
+                              </p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.sound_enabled}
+                              onCheckedChange={(enabled) =>
+                                updateNotificationSettings({ sound_enabled: enabled })
+                              }
+                            />
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                          {notificationError || 'Notification settings are unavailable.'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -887,12 +1082,33 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
             {/* Footer buttons */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
-              <Button variant="outline" onClick={() => void handleCancel()}>
-                Cancel
-              </Button>
-              <Button onClick={() => void handleSaveSettings()} disabled={loading}>
-                {loading ? 'Saving...' : 'Save Changes'}
-              </Button>
+              {requiresDeferredSave ? (
+                <>
+                  {saveError && (
+                    <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      {saveError}
+                    </div>
+                  )}
+                  <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => void handleSaveSettings()}
+                    disabled={isBusy || !hasUnsavedChanges}
+                  >
+                    {loading || isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mr-auto text-xs text-muted-foreground">
+                    Changes in this section apply immediately.
+                  </p>
+                  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
+                    Close
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -905,6 +1121,8 @@ function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [clearingData, setClearingData] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
   const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
     return errorTracking.getConfig().enabled;
   });
@@ -930,12 +1148,50 @@ function DataPrivacyTab() {
         }
       }
     };
+
     void loadPreference();
 
     return () => {
       mounted = false;
     };
   }, []);
+
+  const handleClearAllData = async () => {
+    const confirmed = confirm(
+      'Are you sure you want to clear all local data? This will delete chat history, settings, cached data, and encrypted local credentials, then reload the app.',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingData(true);
+    setClearError(null);
+
+    try {
+      const results = await Promise.allSettled([
+        invoke('clear_local_database'),
+        invoke('cache_clear_all'),
+        invoke('settings_v2_clear_cache'),
+        invoke('analytics_delete_all_data'),
+      ]);
+
+      const failures = results
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map((result) => getSimpleErrorMessage(result.reason));
+
+      if (failures.length > 0) {
+        throw new Error(failures.join('; '));
+      }
+
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
+    } catch (error) {
+      setClearError(getSimpleErrorMessage(error));
+    } finally {
+      setClearingData(false);
+    }
+  };
 
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
     setSavingCrashReporting(true);
@@ -1083,24 +1339,18 @@ function DataPrivacyTab() {
               </h4>
               <p className="text-sm text-muted-foreground mb-4">
                 Reset the application to its initial state. This will clear all chat history,
-                settings, and cached data. This action cannot be undone.
+                settings, cached data, and encrypted local credentials. This action cannot be
+                undone.
               </p>
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => {
-                  if (
-                    confirm(
-                      'Are you sure you want to clear all local storage? This will reset the app and reload the window.',
-                    )
-                  ) {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
-                }}
+                onClick={() => void handleClearAllData()}
+                disabled={clearingData}
               >
-                Clear All Data
+                {clearingData ? 'Clearing...' : 'Clear All Data'}
               </Button>
+              {clearError && <p className="mt-3 text-sm text-red-600">{clearError}</p>}
             </div>
           </div>
         </div>
@@ -1167,6 +1417,9 @@ function DataPrivacyTab() {
             {crashReportingEnabled
               ? 'Crash reporting is enabled. Thank you for helping us improve!'
               : 'Crash reporting is disabled. You can enable it anytime.'}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            This preference applies immediately and is not controlled by Save/Cancel.
           </p>
         </div>
       </div>

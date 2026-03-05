@@ -248,7 +248,7 @@ impl ProviderAdapterFactory {
             Provider::Google => Box::new(GoogleAdapter),
             Provider::Ollama => Box::new(OllamaAdapter),
             Provider::Perplexity => Box::new(PerplexityAdapter), // strips tools; Perplexity doesn't support function calling
-            Provider::XAI => Box::new(OpenAIAdapter),        // XAI/Grok uses OpenAI format
+            Provider::XAI => Box::new(OpenAIAdapter),            // XAI/Grok uses OpenAI format
             Provider::DeepSeek => Box::new(DeepSeekAdapter),
             Provider::Qwen => Box::new(OpenAIAdapter), // Qwen uses OpenAI-compatible format
             Provider::Moonshot => Box::new(MoonshotAdapter),
@@ -276,8 +276,7 @@ struct OpenAIAdapter;
 impl ProviderAdapter for OpenAIAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
         // Determine if we should use Responses API (for gpt-5+) or Chat Completions API
-        let use_responses_api =
-            super::models_config::model_uses_responses_api(&request.model);
+        let use_responses_api = super::models_config::model_uses_responses_api(&request.model);
 
         if use_responses_api {
             self.adapt_to_responses_api(request)
@@ -993,7 +992,7 @@ impl OpenAIAdapter {
         Ok(audio_config)
     }
 
-    /// Process multimodal content and extract audio inputs
+    /// Process multimodal content and extract audio inputs (reserved for audio-capable models)
     #[allow(dead_code)]
     fn process_audio_content(
         &self,
@@ -1788,7 +1787,6 @@ impl ProviderAdapter for GoogleAdapter {
             });
         }
 
-
         // ── Thinking config (Gemini Pro models only) ─────────────────
         // gemini-3-pro-preview and gemini-2.5-pro support thinking_config
         // in generationConfig. Flash models do not support thinking.
@@ -1925,11 +1923,7 @@ impl GoogleAdapter {
     fn normalize_google_tool_schema_mut(schema: &mut Value, is_root: bool) {
         match schema {
             Value::Object(map) => {
-                if is_root
-                    && map
-                        .get("schema")
-                        .is_some_and(Self::has_google_schema_shape)
-                {
+                if is_root && map.get("schema").is_some_and(Self::has_google_schema_shape) {
                     if let Some(unwrapped) = map.get("schema").cloned() {
                         *schema = unwrapped;
                         Self::normalize_google_tool_schema_mut(schema, true);

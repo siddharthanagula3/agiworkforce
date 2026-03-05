@@ -56,14 +56,8 @@ function PulsingIndicator({ color }: { color: string }) {
 
   return (
     <View className="relative w-2 h-2">
-      <View
-        className="w-2 h-2 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      <Animated.View
-        className="absolute inset-0 rounded-full"
-        style={pulseStyle}
-      />
+      <View className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <Animated.View className="absolute inset-0 rounded-full" style={pulseStyle} />
     </View>
   );
 }
@@ -96,7 +90,13 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
 
   return (
     <Animated.View entering={FadeInDown.duration(250).springify()}>
-      <Pressable onPress={toggleExpanded} disabled={!hasDetail}>
+      <Pressable
+        onPress={toggleExpanded}
+        disabled={!hasDetail}
+        accessibilityLabel={`Step: ${step.message}, status: ${step.status}`}
+        accessibilityRole={hasDetail ? 'button' : 'text'}
+        accessibilityHint={hasDetail ? 'Double tap to toggle details' : undefined}
+      >
         <View
           className="flex-row items-start gap-2.5 px-3 py-2 rounded-lg my-0.5"
           style={{ backgroundColor: `${colors.surfaceOverlay}80` }}

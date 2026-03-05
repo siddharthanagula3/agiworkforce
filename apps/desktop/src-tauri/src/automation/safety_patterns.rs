@@ -25,21 +25,14 @@ pub fn dangerous_command_patterns() -> &'static Vec<Regex> {
             // Destructive file-system commands
             Regex::new(r"(?i)rm\s+-(?:rf|fr)")
                 .expect("safety pattern regex: rm -rf destructive removal"),
-            Regex::new(r"(?i)format\s+[a-z]:")
-                .expect("safety pattern regex: format drive"),
-            Regex::new(r"(?i)del\s+/[fqs]")
-                .expect("safety pattern regex: del /f forced delete"),
-            Regex::new(r"(?i)\bdeltree\b")
-                .expect("safety pattern regex: deltree recursive delete"),
-            Regex::new(r"(?i)mkfs")
-                .expect("safety pattern regex: mkfs filesystem creation"),
+            Regex::new(r"(?i)format\s+[a-z]:").expect("safety pattern regex: format drive"),
+            Regex::new(r"(?i)del\s+/[fqs]").expect("safety pattern regex: del /f forced delete"),
+            Regex::new(r"(?i)\bdeltree\b").expect("safety pattern regex: deltree recursive delete"),
+            Regex::new(r"(?i)mkfs").expect("safety pattern regex: mkfs filesystem creation"),
             // Sensitive system paths
-            Regex::new(r"(?i)system32")
-                .expect("safety pattern regex: system32 path"),
-            Regex::new(r"(?i)/etc/passwd")
-                .expect("safety pattern regex: /etc/passwd"),
-            Regex::new(r"(?i)~/.ssh")
-                .expect("safety pattern regex: ~/.ssh directory"),
+            Regex::new(r"(?i)system32").expect("safety pattern regex: system32 path"),
+            Regex::new(r"(?i)/etc/passwd").expect("safety pattern regex: /etc/passwd"),
+            Regex::new(r"(?i)~/.ssh").expect("safety pattern regex: ~/.ssh directory"),
             // Sensitive data keywords
             Regex::new(r"(?i)password|passwd|credential|api[_-]?key|secret|token")
                 .expect("safety pattern regex: sensitive data keywords"),

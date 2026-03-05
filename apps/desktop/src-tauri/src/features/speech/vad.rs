@@ -154,7 +154,6 @@ enum VadCommand {
 #[cfg(feature = "vad")]
 pub struct SharedVad {
     command_tx: std::sync::mpsc::Sender<VadCommand>,
-    #[allow(dead_code)]
     worker_handle: Option<std::thread::JoinHandle<()>>,
 }
 

@@ -358,13 +358,13 @@ impl TeamsClient {
     pub fn handle_activity(&self, activity: TeamsActivity) -> Result<(), TeamsError> {
         match activity.activity_type.as_str() {
             "message" => {
-                println!("Received message: {:?}", activity.text);
+                tracing::info!("Received message: {:?}", activity.text);
             }
             "mention" => {
-                println!("Bot was mentioned: {:?}", activity.text);
+                tracing::info!("Bot was mentioned: {:?}", activity.text);
             }
             _ => {
-                println!("Unknown activity type: {}", activity.activity_type);
+                tracing::warn!("Unknown activity type: {}", activity.activity_type);
             }
         }
 

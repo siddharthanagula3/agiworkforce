@@ -1040,10 +1040,8 @@ export function routeMessage(
   // returns a result at 'hobby' tier, making it safe to call synchronously here.
   // The returned IntentType is mapped to a TaskType via intentToTaskType().
   //
-  // TODO [M8-LLM]: For Pro+ tiers, pass an async llmClassify callback through
-  // routeMessage() so that ambiguous messages can be classified by a fast model
-  // (e.g. Gemini Flash / GPT-5 Nano).  Signature: (prompt: string) => Promise<string>.
-  // Wire through call-sites once the subscription tier is available in this context.
+  // For Pro+ tiers, use routeMessageAsync() which accepts an llmClassify callback
+  // for higher-accuracy classification via a fast model (e.g. Gemini Flash / GPT-5 Nano).
   let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
 
   const intentResult = classifyIntentLocally(message, {
@@ -1112,12 +1110,13 @@ export function getModelForRequest(
   selectedModel: string,
   message: string,
   hasImages: boolean = false,
-): { modelId: string; reason: string; wasRouted: boolean } {
+): { modelId: string; taskType: TaskType; reason: string; wasRouted: boolean } {
   // Manual selection bypasses routing
   if (isManualSelection(selectedModel)) {
     const metadata = MODEL_METADATA[selectedModel];
     return {
       modelId: selectedModel,
+      taskType: 'general',
       reason: `Manual selection: ${metadata?.name || selectedModel}`,
       wasRouted: false,
     };
@@ -1132,6 +1131,7 @@ export function getModelForRequest(
     const result = routeMessage(message, selectedModel as AutoMode, hasImages);
     return {
       modelId: result.selectedModel,
+      taskType: result.taskType,
       reason: result.reason,
       wasRouted: true,
     };
@@ -1142,6 +1142,7 @@ export function getModelForRequest(
     const result = routeMessage(message, 'auto-balanced', hasImages);
     return {
       modelId: result.selectedModel,
+      taskType: result.taskType,
       reason: result.reason,
       wasRouted: true,
     };
@@ -1150,8 +1151,168 @@ export function getModelForRequest(
   // Unknown - fallback to the selection
   return {
     modelId: selectedModel,
+    taskType: 'general',
     reason: 'Unknown model, using as-is',
     wasRouted: false,
+  };
+}
+
+// ============================================
+// ASYNC ROUTING FOR PRO+ TIERS
+// ============================================
+
+/**
+ * Async version of routeMessage that uses LLM classification for Pro+ tiers.
+ * When local classification has low confidence and an llmClassify callback is
+ * provided, it sends the ambiguous message to a fast/cheap model (e.g. Gemini
+ * Flash, GPT-5 Nano) for more accurate task type classification.
+ *
+ * Economy tier always uses local-only classification (no extra LLM call cost).
+ */
+export async function routeMessageAsync(
+  message: string,
+  autoMode: AutoMode,
+  hasImages: boolean = false,
+  llmClassify?: (prompt: string) => Promise<string>,
+): Promise<RoutingResult & { complexity?: ComplexityLevel }> {
+  // Force multimodal if images are present
+  if (hasImages) {
+    const pool = MODEL_POOLS[autoMode];
+    const { modelId, reason, complexity } = selectModelFromPool(
+      pool,
+      'multimodal',
+      autoMode,
+      message,
+      true,
+    );
+    return {
+      selectedModel: modelId,
+      taskType: 'multimodal',
+      reason: `Image detected. ${reason}`,
+      confidence: 1.0,
+      complexity,
+    };
+  }
+
+  // Try local classification first (fast, free)
+  const localResult = classifyTaskLocally(message);
+
+  if (localResult && localResult.confidence >= 0.7) {
+    const pool = MODEL_POOLS[autoMode];
+    const { modelId, reason, complexity } = selectModelFromPool(
+      pool,
+      localResult.taskType,
+      autoMode,
+      message,
+      false,
+    );
+    return {
+      selectedModel: modelId,
+      taskType: localResult.taskType,
+      reason: `Keywords: [${localResult.keywords.slice(0, 3).join(', ')}]. ${reason}`,
+      confidence: localResult.confidence,
+      complexity,
+    };
+  }
+
+  // For Pro+ tiers with low-confidence local classification, use LLM classifier
+  if (autoMode !== 'auto-economy' && llmClassify) {
+    try {
+      const prompt = getClassificationPrompt(message);
+      const llmResponse = await llmClassify(prompt);
+      const llmTaskType = parseClassificationResponse(llmResponse);
+
+      const pool = MODEL_POOLS[autoMode];
+      const { modelId, reason, complexity } = selectModelFromPool(
+        pool,
+        llmTaskType,
+        autoMode,
+        message,
+        false,
+      );
+      return {
+        selectedModel: modelId,
+        taskType: llmTaskType,
+        reason: `LLM classified as ${llmTaskType}. ${reason}`,
+        confidence: 0.85,
+        complexity,
+      };
+    } catch {
+      // LLM classification failed — fall through to local intent classification
+    }
+  }
+
+  // Fallback: local intent classification (same as sync routeMessage)
+  let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
+
+  const intentResult = classifyIntentLocally(message, {
+    tier: 'hobby',
+    hasAttachments: false,
+    attachmentTypes: [],
+  });
+
+  if (intentResult && intentResult.confidence >= 0.4) {
+    inferredTaskType = intentToTaskType(intentResult.primary);
+  }
+
+  const pool = MODEL_POOLS[autoMode];
+  const { modelId, reason, complexity } = selectModelFromPool(
+    pool,
+    inferredTaskType,
+    autoMode,
+    message,
+    false,
+  );
+
+  return {
+    selectedModel: modelId,
+    taskType: inferredTaskType,
+    reason: `Local classification (${intentResult?.primary ?? 'unknown'} → ${inferredTaskType}). ${reason}`,
+    confidence: intentResult?.confidence ?? 0.4,
+    complexity,
+  };
+}
+
+/**
+ * Async version of getModelForRequest for Pro+ tiers.
+ * Uses LLM-based classification when local confidence is low.
+ *
+ * @param selectedModel - The user's selected model or auto mode
+ * @param message - The user's message
+ * @param hasImages - Whether images are attached
+ * @param llmClassify - Optional callback for LLM-based classification (Pro+ only)
+ */
+export async function getModelForRequestAsync(
+  selectedModel: string,
+  message: string,
+  hasImages: boolean = false,
+  llmClassify?: (prompt: string) => Promise<string>,
+): Promise<{ modelId: string; taskType: TaskType; reason: string; wasRouted: boolean }> {
+  // Manual selection bypasses routing
+  if (isManualSelection(selectedModel)) {
+    const metadata = MODEL_METADATA[selectedModel];
+    return {
+      modelId: selectedModel,
+      taskType: 'general',
+      reason: `Manual selection: ${metadata?.name || selectedModel}`,
+      wasRouted: false,
+    };
+  }
+
+  // Auto mode - perform async routing
+  const autoMode: AutoMode =
+    selectedModel === 'auto-economy' ||
+    selectedModel === 'auto-balanced' ||
+    selectedModel === 'auto-premium'
+      ? (selectedModel as AutoMode)
+      : 'auto-balanced'; // Legacy 'auto' → balanced
+
+  const result = await routeMessageAsync(message, autoMode, hasImages, llmClassify);
+  return {
+    modelId: result.selectedModel,
+    taskType: result.taskType,
+    reason: result.reason,
+    wasRouted: true,
   };
 }
 

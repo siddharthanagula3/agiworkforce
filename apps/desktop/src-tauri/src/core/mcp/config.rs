@@ -1,8 +1,11 @@
 use super::transport::TransportConfig;
+use crate::data::db::encryption::open_encrypted_connection;
+use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::io::AsyncWriteExt;
 
 const DEFAULT_CONFIG_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -11,8 +14,20 @@ const DEFAULT_CONFIG_JSON: &str = include_str!(concat!(
 
 /// Prefix for OAuth placeholder values (e.g., "<from_oauth:github>")
 const OAUTH_PLACEHOLDER_PREFIX: &str = "<from_oauth:";
+/// Prefix for API key placeholder values (e.g., "<from_api_key:vercel>")
+const API_KEY_PLACEHOLDER_PREFIX: &str = "<from_api_key:";
 /// Legacy credential manager placeholder
 const CREDENTIAL_PLACEHOLDER: &str = "<from_credential_manager>";
+/// Environment variable used to resolve project-scoped MCP config.
+pub const PROJECT_FOLDER_ENV_VAR: &str = "AGIWORKFORCE_PROJECT_FOLDER";
+/// Project-level MCP config filename (compatible with Cursor/Claude workflows).
+pub const PROJECT_MCP_CONFIG_FILENAME: &str = ".mcp.json";
+/// Alternate project-level MCP config filename (used by Cursor/VS Code).
+pub const PROJECT_MCP_ALT_CONFIG_FILENAME: &str = "mcp.json";
+/// VS Code workspace MCP config path.
+pub const PROJECT_VSCODE_MCP_RELATIVE_PATH: &str = ".vscode/mcp.json";
+/// App-level fallback MCP config filename.
+const GLOBAL_MCP_CONFIG_FILENAME: &str = "mcp-servers-config.json";
 
 /// Configuration for an MCP server
 ///
@@ -80,6 +95,30 @@ pub struct McpServersConfig {
 }
 
 impl McpServersConfig {
+    pub fn project_config_candidates(project_root: &str) -> Vec<PathBuf> {
+        let project_path = PathBuf::from(project_root);
+        vec![
+            project_path.join(PROJECT_MCP_CONFIG_FILENAME),
+            project_path.join(PROJECT_MCP_ALT_CONFIG_FILENAME),
+            project_path.join(PROJECT_VSCODE_MCP_RELATIVE_PATH),
+        ]
+    }
+
+    pub fn resolve_project_config_path(project_root: &str) -> PathBuf {
+        let candidates = Self::project_config_candidates(project_root);
+        for candidate in &candidates {
+            if candidate.exists() {
+                return candidate.clone();
+            }
+        }
+
+        // Canonical write target when no project config file exists yet.
+        candidates
+            .first()
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from(project_root).join(PROJECT_MCP_CONFIG_FILENAME))
+    }
+
     pub async fn from_file(path: &PathBuf) -> crate::core::mcp::McpResult<Self> {
         let contents = tokio::fs::read_to_string(path).await?;
         let config: Self = serde_json::from_str(&contents)?;
@@ -93,20 +132,65 @@ impl McpServersConfig {
 
     pub async fn save_to_file(&self, path: &PathBuf) -> crate::core::mcp::McpResult<()> {
         let json = serde_json::to_string_pretty(self)?;
-        tokio::fs::write(path, json).await?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Invalid config path"))?;
+        tokio::fs::create_dir_all(parent).await?;
+
+        // Write atomically via temp file + rename to avoid partial writes.
+        let base_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("mcp-config");
+        let temp_path = parent.join(format!(
+            ".{}.{}.{}.tmp",
+            base_name,
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+
+        let mut temp_file = tokio::fs::File::create(&temp_path).await?;
+        temp_file.write_all(json.as_bytes()).await?;
+        temp_file.sync_all().await?;
+        drop(temp_file);
+
+        if let Err(rename_err) = tokio::fs::rename(&temp_path, path).await {
+            // Windows doesn't always replace existing destination on rename.
+            if path.exists() {
+                let _ = tokio::fs::remove_file(path).await;
+                tokio::fs::rename(&temp_path, path).await?;
+            } else {
+                return Err(rename_err.into());
+            }
+        }
         Ok(())
     }
 
+    pub fn project_config_path(project_root: &str) -> PathBuf {
+        Self::resolve_project_config_path(project_root)
+    }
+
+    pub fn active_project_folder_from_env() -> Option<String> {
+        let raw = std::env::var(PROJECT_FOLDER_ENV_VAR).ok()?;
+        let normalized = raw.trim();
+        if normalized.is_empty() {
+            None
+        } else {
+            Some(normalized.to_string())
+        }
+    }
+
     pub fn default_config_path() -> crate::core::mcp::McpResult<PathBuf> {
-        let app_data = dirs::data_dir().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Failed to get app data directory",
-            )
-        })?;
-        Ok(app_data
-            .join("agiworkforce")
-            .join("mcp-servers-config.json"))
+        if let Some(project_root) = Self::active_project_folder_from_env() {
+            return Ok(Self::project_config_path(&project_root));
+        }
+
+        let app_data = crate::sys::utils::app_data_dir()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        Ok(app_data.join(GLOBAL_MCP_CONFIG_FILENAME))
     }
 
     pub fn default() -> Self {
@@ -236,91 +320,117 @@ impl McpServersConfig {
     /// OAuth tokens are checked first, with automatic fallback to legacy credentials
     /// if OAuth is not configured. Expired OAuth tokens are auto-refreshed.
     pub fn inject_credentials(&mut self) -> crate::core::mcp::McpResult<()> {
-        // Get the database path
-        let app_data = dirs::data_dir().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Failed to get app data directory",
-            )
-        })?;
-        let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+        let db_path = crate::sys::utils::database_path()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         // Try to open database if it exists
         if db_path.exists() {
-            if let Ok(conn) = rusqlite::Connection::open(&db_path) {
-                for (server_name, config) in &mut self.mcp_servers {
-                    for (key, value) in &mut config.env {
-                        // Check for OAuth placeholder first (e.g., "<from_oauth:github>")
-                        if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with(">") {
-                            // Extract provider name before mutating value
-                            let provider =
-                                value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
+            let conn = open_mcp_settings_db()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            for (server_name, config) in &mut self.mcp_servers {
+                for (key, value) in &mut config.env {
+                    // Check for OAuth placeholder first (e.g., "<from_oauth:github>")
+                    if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with(">") {
+                        // Extract provider name before mutating value
+                        let provider =
+                            value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
 
-                            // Try to get OAuth token
-                            match get_oauth_token(&conn, &provider) {
-                                Ok(token) => {
+                        // Try to get OAuth token
+                        match get_oauth_token(&conn, &provider) {
+                            Ok(token) => {
+                                if key == "OPENAPI_MCP_HEADERS" && provider == "notion" {
+                                    *value = format!(
+                                        r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
+                                        token
+                                    );
+                                } else {
                                     *value = token;
-                                    tracing::debug!(
-                                        "Injected OAuth token for provider: {}",
-                                        provider
-                                    );
                                 }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        "OAuth token not available for {} ({}), trying legacy credential",
-                                        provider,
-                                        e
-                                    );
-                                    // Fall back to legacy credential manager
-                                    let cred_key =
-                                        format!("mcp_credential_{}_{}", server_name, key);
-                                    if let Ok(stored_value) = conn.query_row(
-                                        "SELECT value FROM settings_v2 WHERE key = ?1",
-                                        rusqlite::params![cred_key],
-                                        |row| row.get::<_, String>(0),
-                                    ) {
-                                        if let Some(decrypted) =
-                                            decrypt_mcp_credential(&stored_value)
-                                        {
-                                            *value = decrypted;
-                                            tracing::debug!(
-                                                "Injected legacy credential for {} / {}",
-                                                server_name,
-                                                key
-                                            );
-                                        }
-                                    }
-                                }
+                                tracing::debug!("Injected OAuth token for provider: {}", provider);
                             }
-                        }
-                        // Check for legacy credential manager placeholder
-                        else if value == CREDENTIAL_PLACEHOLDER {
-                            let cred_key = format!("mcp_credential_{}_{}", server_name, key);
-                            // Try to get credential from database
-                            match conn.query_row(
-                                "SELECT value FROM settings_v2 WHERE key = ?1",
-                                rusqlite::params![cred_key],
-                                |row| row.get::<_, String>(0),
-                            ) {
-                                Ok(stored_value) => {
-                                    // Value is stored encrypted - decrypt using machine key
+                            Err(e) => {
+                                tracing::warn!(
+                                    "OAuth token not available for {} ({}), trying legacy credential",
+                                    provider,
+                                    e
+                                );
+                                // Fall back to legacy credential manager
+                                let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+                                if let Ok(stored_value) = conn.query_row(
+                                    "SELECT value FROM settings_v2 WHERE key = ?1",
+                                    rusqlite::params![cred_key],
+                                    |row| row.get::<_, String>(0),
+                                ) {
                                     if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
                                         *value = decrypted;
-                                    } else {
-                                        tracing::warn!(
-                                            "Failed to decrypt credential for {} / {}",
+                                        tracing::debug!(
+                                            "Injected legacy credential for {} / {}",
                                             server_name,
                                             key
                                         );
                                     }
                                 }
-                                Err(_) => {
+                            }
+                        }
+                    }
+                    // Check for API key placeholders (e.g., "<from_api_key:vercel>")
+                    else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with(">")
+                    {
+                        let provider =
+                            value[API_KEY_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
+                        let api_key_storage_key = format!("api_key_{}", provider);
+
+                        match conn.query_row(
+                            "SELECT value FROM settings_v2 WHERE key = ?1",
+                            rusqlite::params![api_key_storage_key],
+                            |row| row.get::<_, String>(0),
+                        ) {
+                            Ok(stored_value) => {
+                                if let Some(decrypted) = decrypt_oauth_token(&stored_value) {
+                                    *value = decrypted;
+                                    tracing::debug!(
+                                        "Injected API key placeholder value for provider: {}",
+                                        provider
+                                    );
+                                } else {
                                     tracing::warn!(
-                                        "Credential not found for {} / {}",
+                                        "Failed to decrypt API key for provider: {}",
+                                        provider
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                tracing::warn!("API key not found for provider: {}", provider);
+                            }
+                        }
+                    }
+                    // Check for legacy credential manager placeholder
+                    else if value == CREDENTIAL_PLACEHOLDER {
+                        let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+                        // Try to get credential from database
+                        match conn.query_row(
+                            "SELECT value FROM settings_v2 WHERE key = ?1",
+                            rusqlite::params![cred_key],
+                            |row| row.get::<_, String>(0),
+                        ) {
+                            Ok(stored_value) => {
+                                // Value is stored encrypted - decrypt using machine key
+                                if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
+                                    *value = decrypted;
+                                } else {
+                                    tracing::warn!(
+                                        "Failed to decrypt credential for {} / {}",
                                         server_name,
                                         key
                                     );
                                 }
+                            }
+                            Err(_) => {
+                                tracing::warn!(
+                                    "Credential not found for {} / {}",
+                                    server_name,
+                                    key
+                                );
                             }
                         }
                     }
@@ -329,6 +439,36 @@ impl McpServersConfig {
         }
         Ok(())
     }
+}
+
+pub fn open_mcp_settings_db() -> Result<rusqlite::Connection, String> {
+    let db_path = crate::sys::utils::database_path()
+        .map_err(|e| format!("Failed to resolve database path: {}", e))?;
+    let encryption_key = derive_key(KeyPurpose::DatabaseEncryption);
+    open_encrypted_connection(db_path.to_string_lossy().as_ref(), &encryption_key)
+}
+
+pub fn upsert_settings_v2_value(
+    conn: &rusqlite::Connection,
+    key: &str,
+    value: &str,
+    category: &str,
+    encrypted: bool,
+) -> Result<(), String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+         ON CONFLICT(key) DO UPDATE SET
+           value = excluded.value,
+           category = excluded.category,
+           encrypted = excluded.encrypted,
+           updated_at = excluded.updated_at",
+        rusqlite::params![key, value, category, encrypted as i32, now],
+    )
+    .map_err(|e| format!("Failed to upsert settings_v2 key '{}': {}", key, e))?;
+
+    Ok(())
 }
 
 /// Get an OAuth token for a provider, auto-refreshing if expired
@@ -389,13 +529,19 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
                         Ok((new_access, new_expires)) => {
                             // Store the new token
                             if let Some(encrypted_new) = encrypt_oauth_token(&new_access) {
-                                let _ = conn.execute(
-                                    "INSERT OR REPLACE INTO settings_v2 (key, value) VALUES (?1, ?2)",
-                                    rusqlite::params![access_token_key, encrypted_new],
+                                let _ = upsert_settings_v2_value(
+                                    conn,
+                                    &access_token_key,
+                                    &encrypted_new,
+                                    "security",
+                                    true,
                                 );
-                                let _ = conn.execute(
-                                    "INSERT OR REPLACE INTO settings_v2 (key, value) VALUES (?1, ?2)",
-                                    rusqlite::params![expires_at_key, new_expires.to_string()],
+                                let _ = upsert_settings_v2_value(
+                                    conn,
+                                    &expires_at_key,
+                                    &new_expires.to_string(),
+                                    "security",
+                                    false,
                                 );
                                 tracing::info!(
                                     "Successfully refreshed OAuth token for {}",
@@ -422,8 +568,8 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
 /// OAuth provider configuration for token refresh
 struct OAuthProviderConfig {
     token_url: &'static str,
-    client_id_key: &'static str,
-    client_secret_key: &'static str,
+    client_id_keys: &'static [&'static str],
+    client_secret_keys: &'static [&'static str],
 }
 
 /// Get OAuth provider configuration
@@ -431,28 +577,58 @@ fn get_oauth_provider_config(provider: &str) -> Option<OAuthProviderConfig> {
     match provider {
         "github" => Some(OAuthProviderConfig {
             token_url: "https://github.com/login/oauth/access_token",
-            client_id_key: "mcp_oauth_github_client_id",
-            client_secret_key: "mcp_oauth_github_client_secret",
+            client_id_keys: &[
+                "mcp_oauth_config_github_client_id",
+                "mcp_oauth_github_client_id",
+            ],
+            client_secret_keys: &[
+                "mcp_oauth_config_github_client_secret",
+                "mcp_oauth_github_client_secret",
+            ],
         }),
         "google" => Some(OAuthProviderConfig {
             token_url: "https://oauth2.googleapis.com/token",
-            client_id_key: "mcp_oauth_google_client_id",
-            client_secret_key: "mcp_oauth_google_client_secret",
+            client_id_keys: &[
+                "mcp_oauth_config_google_client_id",
+                "mcp_oauth_google_client_id",
+            ],
+            client_secret_keys: &[
+                "mcp_oauth_config_google_client_secret",
+                "mcp_oauth_google_client_secret",
+            ],
         }),
         "slack" => Some(OAuthProviderConfig {
             token_url: "https://slack.com/api/oauth.v2.access",
-            client_id_key: "mcp_oauth_slack_client_id",
-            client_secret_key: "mcp_oauth_slack_client_secret",
+            client_id_keys: &[
+                "mcp_oauth_config_slack_client_id",
+                "mcp_oauth_slack_client_id",
+            ],
+            client_secret_keys: &[
+                "mcp_oauth_config_slack_client_secret",
+                "mcp_oauth_slack_client_secret",
+            ],
         }),
         "microsoft" => Some(OAuthProviderConfig {
             token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-            client_id_key: "mcp_oauth_microsoft_client_id",
-            client_secret_key: "mcp_oauth_microsoft_client_secret",
+            client_id_keys: &[
+                "mcp_oauth_config_microsoft_client_id",
+                "mcp_oauth_microsoft_client_id",
+            ],
+            client_secret_keys: &[
+                "mcp_oauth_config_microsoft_client_secret",
+                "mcp_oauth_microsoft_client_secret",
+            ],
         }),
         "dropbox" => Some(OAuthProviderConfig {
             token_url: "https://api.dropboxapi.com/oauth2/token",
-            client_id_key: "mcp_oauth_dropbox_client_id",
-            client_secret_key: "mcp_oauth_dropbox_client_secret",
+            client_id_keys: &[
+                "mcp_oauth_config_dropbox_client_id",
+                "mcp_oauth_dropbox_client_id",
+            ],
+            client_secret_keys: &[
+                "mcp_oauth_config_dropbox_client_secret",
+                "mcp_oauth_dropbox_client_secret",
+            ],
         }),
         _ => None,
     }
@@ -468,33 +644,30 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
         .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
 
     // Get client credentials from database
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+    let conn = open_mcp_settings_db()?;
 
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let load_credential = |keys: &[&str], label: &str| -> Result<String, String> {
+        for key in keys {
+            let result: Result<String, rusqlite::Error> = conn.query_row(
+                "SELECT value FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![key],
+                |row| row.get(0),
+            );
 
-    // Get client ID
-    let client_id: String = conn
-        .query_row(
-            "SELECT value FROM settings_v2 WHERE key = ?1",
-            rusqlite::params![provider_config.client_id_key],
-            |row| row.get(0),
-        )
-        .map_err(|_| format!("OAuth client_id not found for provider: {}", provider))?;
+            if let Ok(stored_value) = result {
+                // Newer credentials are encrypted; legacy values may be plaintext.
+                return Ok(decrypt_oauth_token(&stored_value).unwrap_or(stored_value));
+            }
+        }
 
-    // Get client secret (encrypted)
-    let encrypted_secret: String = conn
-        .query_row(
-            "SELECT value FROM settings_v2 WHERE key = ?1",
-            rusqlite::params![provider_config.client_secret_key],
-            |row| row.get(0),
-        )
-        .map_err(|_| format!("OAuth client_secret not found for provider: {}", provider))?;
+        Err(format!(
+            "OAuth {} not found for provider: {}",
+            label, provider
+        ))
+    };
 
-    let client_secret = decrypt_oauth_token(&encrypted_secret)
-        .ok_or_else(|| "Failed to decrypt client secret".to_string())?;
+    let client_id = load_credential(provider_config.client_id_keys, "client_id")?;
+    let client_secret = load_credential(provider_config.client_secret_keys, "client_secret")?;
 
     // Use blocking HTTP client since we're in a sync context
     let client = reqwest::blocking::Client::new();
@@ -548,9 +721,12 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
     if let Some(new_refresh_token) = token_response.get("refresh_token").and_then(|v| v.as_str()) {
         let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
         if let Some(encrypted_refresh) = encrypt_oauth_token(new_refresh_token) {
-            let _ = conn.execute(
-                "INSERT OR REPLACE INTO settings_v2 (key, value) VALUES (?1, ?2)",
-                rusqlite::params![refresh_token_key, encrypted_refresh],
+            let _ = upsert_settings_v2_value(
+                &conn,
+                &refresh_token_key,
+                &encrypted_refresh,
+                "security",
+                true,
             );
             tracing::debug!("Stored new refresh token for provider: {}", provider);
         }

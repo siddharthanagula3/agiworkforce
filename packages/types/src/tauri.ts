@@ -247,9 +247,9 @@ export interface MCPServerConfig {
 // Error Types (re-exported from errors.ts for backwards compatibility)
 // ============================================================================
 
-// Note: Error types are now defined in errors.ts and re-exported here
-// for backwards compatibility. New code should import from errors.ts directly.
-export type { CodedError, ErrorCode } from './errors';
+// Note: Error types are now defined in errors.ts and re-exported from index.ts.
+// New code should import from '@agiworkforce/types' directly.
+export type { CodedError } from './errors';
 export { isCodedError } from './errors';
 
 // ============================================================================
@@ -279,7 +279,7 @@ export interface TypedReactFlowEdge {
   targetHandle?: string;
   label?: string;
   animated?: boolean;
-  style?: React.CSSProperties;
+  style?: Record<string, string | number>;
 }
 
 // ============================================================================

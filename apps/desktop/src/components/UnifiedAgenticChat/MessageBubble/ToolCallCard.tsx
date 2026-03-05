@@ -8,6 +8,7 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
 import { invoke, isTauri } from '../../../lib/tauri-mock';
 import { respondToolConfirmation } from '../../../api/toolConfirmation';
 import { SidecarMode } from '../../../stores/unifiedChatStore';
@@ -37,6 +38,10 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   onToggleSidecar,
 }) => {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
+  const [pendingAction, setPendingAction] = React.useState<'approve' | 'deny' | 'cancel' | null>(
+    null,
+  );
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   // Determine target sidecar tab based on tool name
   const targetTab = useMemo(() => {
@@ -54,71 +59,87 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
 
   // AUDIT-UI-052 fix: Use proper tool confirmation response command
   const handleApprove = useCallback(async () => {
-    // If we have a confirmation request ID, use the tool confirmation response
-    if (confirmationRequestId) {
-      if (!isTauri) {
-        console.log('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
-        return;
-      }
-      try {
-        await respondToolConfirmation(confirmationRequestId, true);
-        console.log(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
-      } catch (error) {
-        console.error('[ToolCallCard] Failed to approve confirmation:', error);
-      }
-    } else {
-      // Fallback: Try to cancel the tool execution (for non-confirmation cases)
-      const toolCallId = actionId || messageId;
-      if (isTauri) {
-        try {
-          await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
-        } catch (error) {
-          console.error('[ToolCallCard] Failed to resume tool:', error);
-        }
-      }
-    }
-  }, [confirmationRequestId, actionId, messageId]);
-
-  const handleDeny = useCallback(async () => {
-    // If we have a confirmation request ID, use the tool confirmation response
-    if (confirmationRequestId) {
-      if (!isTauri) {
-        console.log('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
-        return;
-      }
-      try {
-        await respondToolConfirmation(confirmationRequestId, false);
-        console.log(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
-      } catch (error) {
-        console.error('[ToolCallCard] Failed to deny confirmation:', error);
-      }
-    } else {
-      // Fallback: Try to cancel the tool execution (for non-confirmation cases)
-      const toolCallId = actionId || messageId;
-      if (isTauri) {
-        try {
-          await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
-        } catch (error) {
-          console.error('[ToolCallCard] Failed to cancel tool:', error);
-        }
-      }
-    }
-  }, [confirmationRequestId, actionId, messageId]);
-
-  const handleCancel = useCallback(async () => {
-    // Cancel tool execution
-    const toolCallId = actionId || messageId;
-    if (!isTauri) {
-      console.log('[ToolCallCard] Mock cancel tool:', toolCallId);
+    if (!confirmationRequestId) {
+      const message = 'Approval request is no longer available.';
+      setActionError(message);
+      toast.error(message);
       return;
     }
+
+    if (!isTauri) {
+      console.log('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
+      return;
+    }
+
+    setPendingAction('approve');
+    setActionError(null);
     try {
-      await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
-      console.log(`[ToolCallCard] Cancelled tool ${toolCallId}`);
+      await respondToolConfirmation(confirmationRequestId, true);
+      console.log(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
+    } catch (error) {
+      console.error('[ToolCallCard] Failed to approve confirmation:', error);
+      const message = 'Failed to approve tool request.';
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      setPendingAction(null);
+    }
+  }, [confirmationRequestId]);
+
+  const handleDeny = useCallback(async () => {
+    if (!confirmationRequestId) {
+      const message = 'Approval request is no longer available.';
+      setActionError(message);
+      toast.error(message);
+      return;
+    }
+
+    if (!isTauri) {
+      console.log('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
+      return;
+    }
+
+    setPendingAction('deny');
+    setActionError(null);
+    try {
+      await respondToolConfirmation(confirmationRequestId, false);
+      console.log(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
+    } catch (error) {
+      console.error('[ToolCallCard] Failed to deny confirmation:', error);
+      const message = 'Failed to reject tool request.';
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      setPendingAction(null);
+    }
+  }, [confirmationRequestId]);
+
+  const handleCancel = useCallback(async () => {
+    if (!actionId) {
+      const message = 'Live tool execution is no longer available.';
+      setActionError(message);
+      toast.error(message);
+      return;
+    }
+    if (!isTauri) {
+      console.log('[ToolCallCard] Mock cancel tool:', actionId);
+      return;
+    }
+
+    setPendingAction('cancel');
+    setActionError(null);
+    try {
+      await invoke('cancel_tool_execution', { tool_id: actionId });
+      console.log(`[ToolCallCard] Cancelled tool ${actionId}`);
     } catch (error) {
       console.error('[ToolCallCard] Failed to cancel tool:', error);
+      const message = 'Failed to cancel tool execution.';
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      setPendingAction(null);
     }
-  }, [actionId, messageId]);
+  }, [actionId]);
 
   // Construct ToolCallUI object from props
   const toolCall: ToolCallUI = useMemo(() => {
@@ -149,13 +170,22 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     <div className="w-full">
       <SharedToolCallCard
         toolCall={toolCall}
-        onApprove={handleApprove}
-        onReject={handleDeny}
-        onCancel={handleCancel}
+        onApprove={confirmationRequestId && pendingAction === null ? handleApprove : undefined}
+        onReject={confirmationRequestId && pendingAction === null ? handleDeny : undefined}
+        onCancel={actionId && pendingAction === null ? handleCancel : undefined}
         showParameters={!isSimpleMode}
         defaultExpanded={requiresApproval} // Expand by default if approval needed
         className="bg-black/20 border-white/5"
       />
+      {(pendingAction || actionError || (requiresApproval && !confirmationRequestId)) && (
+        <div className="mt-2 px-1 text-[11px]">
+          {pendingAction && <p className="text-zinc-400">Waiting for {pendingAction}...</p>}
+          {actionError && <p className="text-red-400">{actionError}</p>}
+          {!actionError && requiresApproval && !confirmationRequestId && (
+            <p className="text-amber-400">Approval request is no longer available.</p>
+          )}
+        </div>
+      )}
       {/* 
          In the original, there was a "View Output" button that toggled sidecar.
          The SharedToolCallCard doesn't have that specific slot, but we can wrap it or add it below.

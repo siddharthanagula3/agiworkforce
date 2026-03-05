@@ -7,22 +7,30 @@
  * operations on scheduled jobs.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
+// The store imports from ../../lib/tauri-mock (not @tauri-apps/api/core directly)
+const mockInvoke = vi.fn();
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('../../lib/tauri-mock', () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
   listen: vi.fn().mockResolvedValue(() => {}),
   emit: vi.fn(),
   once: vi.fn(),
+  isTauri: false,
+  isTauriContext: () => false,
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 // Import after mocking to get the store wired to the mocked invoke
 import { useSchedulerStore } from '../../stores/schedulerStore';
-
-const mockInvoke = vi.mocked(invoke);
 
 describe('schedulerStore — Tauri command wiring', () => {
   beforeEach(() => {

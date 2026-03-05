@@ -9,31 +9,6 @@ use crate::core::agi::executors::ExecutorContext;
 use crate::core::agi::executors::ToolExecutor;
 use crate::core::agi::ExecutionContext;
 
-#[allow(unused_imports)]
-use crate::sys::account::{get_access_token, get_api_base_url};
-
-/// Request for image generation
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaImageRequest {
-    pub prompt: String,
-    #[serde(default)]
-    pub negative_prompt: Option<String>,
-    #[serde(default)]
-    pub provider: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub size: Option<String>,
-    #[serde(default)]
-    pub style: Option<String>,
-    #[serde(default)]
-    pub quality: Option<String>,
-    #[serde(default)]
-    pub n: Option<u32>,
-}
-
 /// Response from image generation
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,30 +30,6 @@ pub struct GeneratedImage {
     pub url: Option<String>,
     #[serde(default)]
     pub b64_json: Option<String>,
-}
-
-/// Request for video generation
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaVideoRequest {
-    pub prompt: String,
-    #[serde(default)]
-    pub negative_prompt: Option<String>,
-    #[serde(default)]
-    pub duration_secs: Option<u32>,
-    #[serde(default)]
-    pub resolution: Option<String>,
-    #[serde(default)]
-    pub style: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub plan: Option<String>,
-    #[serde(default)]
-    pub provider: Option<String>,
-    #[serde(default)]
-    pub input_image_url: Option<String>,
 }
 
 /// Response from video generation
@@ -116,8 +67,8 @@ impl MediaExecutor {
             .timeout(std::time::Duration::from_secs(90))
             .build()
             .unwrap_or_else(|e| {
-                eprintln!(
-                    "Warning: Failed to create HTTP client with timeout ({e}), using default"
+                tracing::warn!(
+                    "Failed to create HTTP client with timeout ({e}), using default"
                 );
                 reqwest::Client::new()
             });

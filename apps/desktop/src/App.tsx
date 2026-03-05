@@ -12,6 +12,7 @@ import {
   initializeAgentStatusListener,
   initializeToolEventListener,
   useUnifiedChatStore,
+  uuidToDbId,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import {
@@ -38,6 +39,7 @@ import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore from './stores/ui';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
+import { useSettingsStore } from './stores/settingsStore';
 
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -172,6 +174,51 @@ const DesktopShell = () => {
 
     // Ref to store cleanup functions from async initialization
     const cleanupFns: Array<() => void | Promise<void>> = [];
+    let disposed = false;
+
+    const registerCleanup = (cleanup: () => void | Promise<void>) => {
+      if (disposed) {
+        try {
+          cleanup();
+        } catch (error) {
+          console.warn('[App] Deferred cleanup function failed:', error);
+        }
+        return;
+      }
+
+      cleanupFns.push(cleanup);
+    };
+
+    const reportStartupFailure = (step: string, error: unknown, notify = false) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[App] ${step} failed:`, error);
+
+      if (!notify) {
+        return;
+      }
+
+      addError({
+        type: 'APP_STARTUP_ERROR',
+        severity: 'warning',
+        message: `${step} failed during app startup`,
+        details: message,
+        context: {
+          step,
+        },
+      });
+    };
+
+    const runStartupStep = async (
+      step: string,
+      task: () => Promise<void>,
+      options?: { notify?: boolean },
+    ) => {
+      try {
+        await task();
+      } catch (error) {
+        reportStartupFailure(step, error, options?.notify === true);
+      }
+    };
 
     trackAction('app_loaded');
 
@@ -181,14 +228,18 @@ const DesktopShell = () => {
     void (async () => {
       // Wait for settings store hydration from localStorage before loading from backend
       const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
-      await waitForSettingsHydration();
+      await runStartupStep('Settings hydration', () => waitForSettingsHydration());
 
       // Initialize settings (syncs with backend and configures providers)
-      await useSettingsStore.getState().loadSettings();
+      await runStartupStep(
+        'Settings synchronization',
+        () => useSettingsStore.getState().loadSettings(),
+        { notify: true },
+      );
 
       // Apply window preferences on startup (dock/position)
       if (isTauri) {
-        try {
+        await runStartupStep('Window preference restore', async () => {
           const settings = useSettingsStore.getState();
           const prefs = settings.windowPreferences;
 
@@ -203,41 +254,50 @@ const DesktopShell = () => {
               void win.center();
             }, 50);
           }
-        } catch (error) {
-          console.warn('[App] Failed to apply window preferences on startup:', error);
-        }
+        });
       }
 
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
-      await initializeModelStoreFromSettings();
+      await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
+        notify: true,
+      });
 
       // Initialize Ollama health service for graceful degradation of local models
       if (isTauri) {
-        const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
-        const cleanup = initializeOllamaHealthService();
-        cleanupFns.push(cleanup);
+        await runStartupStep('Ollama health monitor', async () => {
+          const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
+          const cleanup = initializeOllamaHealthService();
+          registerCleanup(cleanup);
+        });
       }
 
       // Load custom instructions from backend (syncs with stored data)
       const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
-      await useCustomInstructionsStore.getState().loadFromBackend();
+      await runStartupStep('Custom instructions sync', async () => {
+        await useCustomInstructionsStore.getState().loadFromBackend();
+      });
 
       // Sync access token to keyring if user is already authenticated
       if (isTauri) {
-        try {
-          const { supabaseAuth } = await import('./services/supabaseAuth');
-          const { waitForAuthReady } = await import('./stores/auth');
-          const { invoke } = await import('@tauri-apps/api/core');
+        await runStartupStep(
+          'Managed cloud credential sync',
+          async () => {
+            const { supabaseAuth } = await import('./services/supabaseAuth');
+            const { waitForAuthReady } = await import('./stores/auth');
+            const { invoke } = await import('@tauri-apps/api/core');
 
-          // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
-          await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+            // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
+            await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
 
-          // Wait for auth state to be ready before accessing session data
-          // This prevents race conditions where we read stale/empty state
-          await waitForAuthReady();
+            // Wait for auth state to be ready before accessing session data
+            // This prevents race conditions where we read stale/empty state
+            await waitForAuthReady();
 
-          const authState = supabaseAuth.getState();
-          if (authState.session?.access_token) {
+            const authState = supabaseAuth.getState();
+            if (!authState.session?.access_token) {
+              return;
+            }
+
             await invoke('account_store_access_token', {
               accessToken: authState.session.access_token,
             });
@@ -247,14 +307,14 @@ const DesktopShell = () => {
               });
             }
             await invoke('llm_ensure_managed_cloud');
-          }
-        } catch (error) {
-          console.warn('[App] Failed to sync access token on startup:', error);
-        }
+          },
+          { notify: true },
+        );
       }
     })();
 
     return () => {
+      disposed = true;
       void errorReportingService.flush();
       // Call all cleanup functions from async initialization
       cleanupFns.forEach((cleanup) => {
@@ -265,7 +325,7 @@ const DesktopShell = () => {
         }
       });
     };
-  }, []);
+  }, [addError]);
 
   // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
@@ -343,6 +403,9 @@ const DesktopShell = () => {
       try {
         const unlisten = await listen<string>('global-hotkey-triggered', () => {
           if (!isMounted) return;
+          if (!useSettingsStore.getState().globalHotkeyPreferences.enabled) {
+            return;
+          }
           setQuickQueryOpen(true);
         });
 
@@ -369,14 +432,33 @@ const DesktopShell = () => {
 
   // Handle Quick Query submission: add user message and route to main chat
   const handleQuickQuerySubmit = useCallback(
-    (query: string, _model: string) => {
+    (query: string, model: string) => {
       // Ensure there's an active conversation, then add the user message
       ensureActiveConversation();
 
       // Import dynamically to avoid circular dependency
       void (async () => {
         try {
+          const { useModelStore } = await import('./stores/modelStore');
           const { useChatStore } = await import('./stores/chat/chatStore');
+
+          const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
+          if (model && (selectedModel !== model || selectedProvider !== 'managed_cloud')) {
+            await selectModel(model, 'managed_cloud');
+          }
+
+          if (isTauri) {
+            const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+            const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : null;
+            await invoke('chat_add_pending_message', {
+              request: {
+                content: query,
+                conversation_id: conversationDbId,
+              },
+            });
+            return;
+          }
+
           useChatStore.getState().addPendingMessage({
             id: crypto.randomUUID(),
             content: query,
@@ -384,10 +466,16 @@ const DesktopShell = () => {
           });
         } catch (error) {
           console.error('[QuickQuery] Failed to submit message:', error);
+          addError({
+            type: 'QUICK_QUERY_ERROR',
+            severity: 'warning',
+            message: 'Quick Query failed to queue your message',
+            details: error instanceof Error ? error.message : String(error),
+          });
         }
       })();
     },
-    [ensureActiveConversation],
+    [ensureActiveConversation, addError],
   );
 
   // Listen for global shortcut actions
@@ -413,7 +501,7 @@ const DesktopShell = () => {
               setCommandPaletteOpen(true);
               break;
             case 'quick_query':
-              setQuickQueryOpen(true);
+              // Handled by dedicated `global-hotkey-triggered` listener to avoid duplicate opens.
               break;
             case 'voice_input':
               // Handle voice input

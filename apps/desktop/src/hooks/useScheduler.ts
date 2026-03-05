@@ -237,35 +237,23 @@ export function useScheduler() {
     [storeAddJob],
   );
 
+  const storeUpdateJobOnBackend = useSchedulerStore((state) => state.updateJobOnBackend);
+
   /**
-   * Update an existing job
-   * Note: The backend doesn't support direct updates, so we delete and recreate
+   * Update an existing job via the backend
    */
   const updateJob = useCallback(
     async (jobId: string, params: UpdateJobParams): Promise<string> => {
-      // Get the existing job
-      const existingJob = useSchedulerStore.getState().jobs.find((j) => j.id === jobId);
-      if (!existingJob) {
-        throw new Error(`Job not found: ${jobId}`);
-      }
+      const updates: Record<string, unknown> = {};
+      if (params.name !== undefined) updates['name'] = params.name;
+      if (params.description !== undefined) updates['description'] = params.description;
+      if (params.schedule !== undefined) updates['schedule'] = { cron_expression: params.schedule };
+      if (params.actionType !== undefined) updates['action_type'] = params.actionType;
 
-      // Delete the old job
-      await storeRemoveJob(jobId);
-
-      // Create the updated job
-      const actionData = params.actionData
-        ? JSON.stringify(params.actionData)
-        : existingJob.action_data;
-      const newJobId = await storeAddJob(
-        params.name ?? existingJob.name,
-        params.schedule ?? existingJob.cron_expression ?? '',
-        params.actionType ?? existingJob.action_type,
-        typeof actionData === 'string' ? actionData : JSON.stringify(actionData),
-      );
-
-      return newJobId;
+      await storeUpdateJobOnBackend(jobId, updates);
+      return jobId;
     },
-    [storeAddJob, storeRemoveJob],
+    [storeUpdateJobOnBackend],
   );
 
   /**
@@ -298,45 +286,29 @@ export function useScheduler() {
     [storePauseJob],
   );
 
+  const storeToggleJob = useSchedulerStore((state) => state.toggleJob);
+
   /**
    * Toggle job enabled state
    */
   const toggleJob = useCallback(
-    async (jobId: string, enabled: boolean): Promise<boolean> => {
-      if (enabled) {
-        return storeResumeJob(jobId);
-      } else {
-        return storePauseJob(jobId);
-      }
+    async (jobId: string, _enabled?: boolean): Promise<boolean> => {
+      return storeToggleJob(jobId);
     },
-    [storePauseJob, storeResumeJob],
+    [storeToggleJob],
   );
+
+  const storeRunJobNow = useSchedulerStore((state) => state.runJobNow);
 
   /**
    * Run a job immediately
-   * Note: This invokes the backend command directly
    */
-  const runNow = useCallback(async (jobId: string): Promise<boolean> => {
-    try {
-      // The backend doesn't have a run_now command yet, but we can simulate
-      // by getting the job and executing its action
-      const job = await invoke<ScheduledJob | null>('scheduler_get_job', { jobId });
-      if (!job) {
-        throw new Error(`Job not found: ${jobId}`);
-      }
-
-      // For now, emit a toast or notification that the job is running
-      // In a full implementation, this would trigger the actual job execution
-      console.log('[useScheduler] Running job immediately:', job.name);
-
-      // The backend would need a `scheduler_run_now` command
-      // For now, we'll just return true to indicate the request was received
-      return true;
-    } catch (error) {
-      console.error('[useScheduler] Failed to run job:', error);
-      throw error;
-    }
-  }, []);
+  const runNow = useCallback(
+    async (jobId: string): Promise<boolean> => {
+      return storeRunJobNow(jobId);
+    },
+    [storeRunJobNow],
+  );
 
   /**
    * Get job execution history

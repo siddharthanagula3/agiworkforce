@@ -20,8 +20,13 @@ import { useExtensionEvents } from '../../hooks/useExtensionEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
-import { getModelForRequest } from '../../lib/modelRouter';
-import { getModelMetadata } from '../../constants/llm';
+import { getModelForRequest, type AutoMode } from '../../lib/modelRouter';
+import {
+  isAutoModel,
+  normalizeAutoMode,
+  resolveKnownModelCapabilities,
+  toModelCapabilitiesDto,
+} from '../../lib/modelCapabilities';
 import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -320,6 +325,35 @@ const normalizeMcpFilesystemInlineData = (
       data['source'] = (data['source'] as string | undefined) ?? 'mcp_filesystem_list_directory';
     }
   }
+};
+
+const buildProjectSlashCommandInstructions = (
+  command: string,
+  args: string,
+  commandContent: string,
+  commandPath?: string,
+): string => {
+  const MAX_COMMAND_CONTENT_CHARS = 40_000;
+  const trimmedCommandContent = commandContent.trim();
+  const boundedCommandContent =
+    trimmedCommandContent.length > MAX_COMMAND_CONTENT_CHARS
+      ? `${trimmedCommandContent.slice(0, MAX_COMMAND_CONTENT_CHARS)}\n\n[...truncated]`
+      : trimmedCommandContent;
+  const normalizedArgs = args.trim();
+
+  return [
+    '## Project Slash Command',
+    `Command: /${command}`,
+    `Source: ${commandPath ?? '(unknown file path)'}`,
+    '',
+    '### Command File Instructions',
+    boundedCommandContent || '(command file is empty)',
+    '',
+    '### Invocation Arguments',
+    normalizedArgs !== '' ? normalizedArgs : '(none)',
+    '',
+    'Follow the command file instructions for this invocation. If instructions are empty or invalid, explain why and stop.',
+  ].join('\n');
 };
 
 const normalizeInlineToolData = (
@@ -2177,10 +2211,67 @@ export const UnifiedAgenticChat: React.FC<{
   const handleSendMessage = async (content: string, options: SendOptions = {}) => {
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
+    let customSlashInstructions: string | undefined;
+    let customSlashMetadata:
+      | {
+          command: string;
+          args: string;
+          rawInput: string;
+          source: 'project-command';
+          commandPath?: string;
+        }
+      | undefined;
 
     if (slashCommand) {
-      // Validate command arguments first
-      if (!validateSlashCommandArgs(slashCommand.command, slashCommand.args)) {
+      if (slashCommand.source === 'project-command') {
+        if (!validateSlashCommandArgs(slashCommand.command, slashCommand.args)) {
+          const userMessageId = addMessage({
+            role: 'user',
+            content: slashCommand.rawInput,
+            slashCommand,
+            inlinePanels: [],
+          });
+
+          updateMessage(userMessageId, {
+            content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
+            metadata: { streaming: false },
+          });
+          return;
+        }
+
+        customSlashInstructions = buildProjectSlashCommandInstructions(
+          slashCommand.command,
+          slashCommand.args,
+          slashCommand.commandContent ?? '',
+          slashCommand.commandPath,
+        );
+        customSlashMetadata = {
+          command: slashCommand.command,
+          args: slashCommand.args,
+          rawInput: slashCommand.rawInput,
+          source: 'project-command',
+        };
+        if (slashCommand.commandPath) {
+          customSlashMetadata.commandPath = slashCommand.commandPath;
+        }
+      } else {
+        // Validate command arguments first
+        if (!validateSlashCommandArgs(slashCommand.command, slashCommand.args)) {
+          const userMessageId = addMessage({
+            role: 'user',
+            content: slashCommand.rawInput,
+            slashCommand,
+            inlinePanels: [],
+          });
+
+          updateMessage(userMessageId, {
+            content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
+            metadata: { streaming: false },
+          });
+          return;
+        }
+
+        // Create user message with slash command metadata
         const userMessageId = addMessage({
           role: 'user',
           content: slashCommand.rawInput,
@@ -2188,137 +2279,123 @@ export const UnifiedAgenticChat: React.FC<{
           inlinePanels: [],
         });
 
-        updateMessage(userMessageId, {
-          content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
-          metadata: { streaming: false },
-        });
+        try {
+          // Execute the appropriate command handler
+          let panel;
+          switch (slashCommand.command) {
+            case 'browser':
+              panel = await executeBrowserCommand(slashCommand.args);
+              break;
+            case 'terminal':
+              panel = await executeTerminalCommand(slashCommand.args, userMessageId);
+              break;
+            case 'code':
+              panel = await executeCodeCommand(slashCommand.args);
+              break;
+            case 'database':
+              panel = await executeDatabaseCommand(slashCommand.args);
+              break;
+            case 'undo':
+              panel = await executeUndoCommand(slashCommand.args);
+              break;
+            case 'imagine':
+              panel = await executeImagineCommand(slashCommand.args);
+              break;
+            case 'swarm':
+              panel = await executeSwarmCommand(slashCommand.args);
+              break;
+            case 'vision':
+              panel = await executeVisionCommand(slashCommand.args);
+              break;
+            case 'skills':
+              panel = await executeSkillsCommand(slashCommand.args);
+              break;
+            case 'memory':
+              panel = await executeMemoryCommand(slashCommand.args);
+              break;
+            case 'recall':
+              panel = await executeRecallCommand(slashCommand.args);
+              break;
+            case 'agents':
+              panel = await executeAgentsCommand(slashCommand.args);
+              break;
+            case 'git':
+              panel = await executeGitCommand(slashCommand.args);
+              break;
+            case 'schedule':
+              panel = await executeScheduleCommand(slashCommand.args);
+              break;
+            case 'voice':
+              panel = await executeVoiceCommand(slashCommand.args);
+              break;
+            case 'think':
+              panel = await executeThinkCommand(slashCommand.args);
+              break;
+            case 'pdf':
+            case 'word':
+            case 'excel':
+            case 'docs':
+              panel = await executeDocsCommand(
+                slashCommand.command === 'docs'
+                  ? slashCommand.args
+                  : `${slashCommand.command} ${slashCommand.args}`,
+              );
+              break;
+            case 'record':
+              panel = await executeRecordCommand(slashCommand.args);
+              break;
+            case 'metrics':
+              panel = await executeMetricsCommand();
+              break;
+            case 'marketplace':
+              panel = await executeMarketplaceCommand(slashCommand.args);
+              break;
+            case 'desktop':
+              panel = await executeDesktopCommand();
+              useUnifiedChatStore.getState().openSidecar('computer-use');
+              break;
+            case 'ocr':
+              panel = await executeOCRCommand(slashCommand.args);
+              break;
+            case 'notify':
+              panel = await executeNotifyCommand(slashCommand.args);
+              break;
+            case 'lsp':
+              panel = await executeLSPCommand(slashCommand.args);
+              break;
+            case 'enhance':
+              panel = await executeEnhanceCommand(slashCommand.args);
+              break;
+            case 'migrate':
+              panel = await executeMigrateCommand();
+              break;
+            case 'message':
+              panel = await executeMessageCommand(slashCommand.args);
+              break;
+            case 'settings':
+              panel = await executeSettingsCommand(slashCommand.args);
+              break;
+            case 'compact': {
+              const activeConvId = useUnifiedChatStore.getState().activeConversationId;
+              const compactDbId = activeConvId ? (uuidToDbId(activeConvId) ?? null) : null;
+              const compactUserId = supabaseAuth.getUser()?.id ?? null;
+              panel = await executeCompactCommand(slashCommand.args, compactDbId, compactUserId);
+              break;
+            }
+            default:
+              throw new Error(`Unknown command: ${slashCommand.command}`);
+          }
+
+          // Add the inline panel to the message
+          useUnifiedChatStore.getState().addInlinePanel(userMessageId, panel);
+        } catch (error) {
+          const errorMessage = getSimpleErrorMessage(error);
+          updateMessage(userMessageId, {
+            error: errorMessage,
+          });
+        }
         return;
       }
-
-      // Create user message with slash command metadata
-      const userMessageId = addMessage({
-        role: 'user',
-        content: slashCommand.rawInput,
-        slashCommand,
-        inlinePanels: [],
-      });
-
-      try {
-        // Execute the appropriate command handler
-        let panel;
-        switch (slashCommand.command) {
-          case 'browser':
-            panel = await executeBrowserCommand(slashCommand.args);
-            break;
-          case 'terminal':
-            panel = await executeTerminalCommand(slashCommand.args, userMessageId);
-            break;
-          case 'code':
-            panel = await executeCodeCommand(slashCommand.args);
-            break;
-          case 'database':
-            panel = await executeDatabaseCommand(slashCommand.args);
-            break;
-          case 'undo':
-            panel = await executeUndoCommand(slashCommand.args);
-            break;
-          case 'imagine':
-            panel = await executeImagineCommand(slashCommand.args);
-            break;
-          case 'swarm':
-            panel = await executeSwarmCommand(slashCommand.args);
-            break;
-          case 'vision':
-            panel = await executeVisionCommand(slashCommand.args);
-            break;
-          case 'skills':
-            panel = await executeSkillsCommand(slashCommand.args);
-            break;
-          case 'memory':
-            panel = await executeMemoryCommand(slashCommand.args);
-            break;
-          case 'recall':
-            panel = await executeRecallCommand(slashCommand.args);
-            break;
-          case 'agents':
-            panel = await executeAgentsCommand(slashCommand.args);
-            break;
-          case 'git':
-            panel = await executeGitCommand(slashCommand.args);
-            break;
-          case 'schedule':
-            panel = await executeScheduleCommand(slashCommand.args);
-            break;
-          case 'voice':
-            panel = await executeVoiceCommand(slashCommand.args);
-            break;
-          case 'think':
-            panel = await executeThinkCommand(slashCommand.args);
-            break;
-          case 'pdf':
-          case 'word':
-          case 'excel':
-          case 'docs':
-            panel = await executeDocsCommand(
-              slashCommand.command === 'docs'
-                ? slashCommand.args
-                : `${slashCommand.command} ${slashCommand.args}`,
-            );
-            break;
-          case 'record':
-            panel = await executeRecordCommand(slashCommand.args);
-            break;
-          case 'metrics':
-            panel = await executeMetricsCommand();
-            break;
-          case 'marketplace':
-            panel = await executeMarketplaceCommand(slashCommand.args);
-            break;
-          case 'desktop':
-            panel = await executeDesktopCommand();
-            useUnifiedChatStore.getState().openSidecar('computer-use');
-            break;
-          case 'ocr':
-            panel = await executeOCRCommand(slashCommand.args);
-            break;
-          case 'notify':
-            panel = await executeNotifyCommand(slashCommand.args);
-            break;
-          case 'lsp':
-            panel = await executeLSPCommand(slashCommand.args);
-            break;
-          case 'enhance':
-            panel = await executeEnhanceCommand(slashCommand.args);
-            break;
-          case 'migrate':
-            panel = await executeMigrateCommand();
-            break;
-          case 'message':
-            panel = await executeMessageCommand(slashCommand.args);
-            break;
-          case 'settings':
-            panel = await executeSettingsCommand(slashCommand.args);
-            break;
-          case 'compact': {
-            const activeConvId = useUnifiedChatStore.getState().activeConversationId;
-            const compactDbId = activeConvId ? (uuidToDbId(activeConvId) ?? null) : null;
-            const compactUserId = supabaseAuth.getUser()?.id ?? null;
-            panel = await executeCompactCommand(slashCommand.args, compactDbId, compactUserId);
-            break;
-          }
-          default:
-            throw new Error(`Unknown command: ${slashCommand.command}`);
-        }
-
-        // Add the inline panel to the message
-        useUnifiedChatStore.getState().addInlinePanel(userMessageId, panel);
-      } catch (error) {
-        const errorMessage = getSimpleErrorMessage(error);
-        updateMessage(userMessageId, {
-          error: errorMessage,
-        });
-      }
-      return;
     }
 
     // When the agentic loop is active, queue the message as a pending follow-up
@@ -2371,7 +2448,7 @@ export const UnifiedAgenticChat: React.FC<{
     // Only use intelligent routing when:
     // 1. User has selected "auto" mode (auto-economy, auto-balanced, auto-premium, or legacy 'auto')
     // 2. No explicit model override was provided
-    const isExplicitModelSelection = currentModel !== 'auto' && !currentModel.startsWith('auto-');
+    const isExplicitModelSelection = !isAutoModel(currentModel);
 
     // Only perform routing if user selected an auto mode
     const routingResult = isExplicitModelSelection
@@ -2479,9 +2556,25 @@ export const UnifiedAgenticChat: React.FC<{
       }
     }
 
-    const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
+    const autoMode = normalizeAutoMode(currentModel) as AutoMode | undefined;
+    const taskMetadata = deriveTaskMetadata(
+      entryPoint,
+      enrichedOptions.attachments,
+      undefined,
+      autoMode,
+    );
 
-    addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
+    if (routingResult.modelId) {
+      taskMetadata.selectedModel = routingResult.modelId;
+      taskMetadata.routingReason = routingResult.reason;
+    }
+
+    addMessage({
+      role: 'user',
+      content,
+      attachments: enrichedOptions.attachments,
+      slashCommand: customSlashMetadata,
+    });
 
     // Handle deep-research focus mode: create research task and set special metadata
     const isDeepResearchMode = enrichedOptions.focusMode === 'deep-research';
@@ -2611,6 +2704,12 @@ export const UnifiedAgenticChat: React.FC<{
           }
         }
 
+        if (customSlashInstructions) {
+          mergedCustomInstructions = mergedCustomInstructions
+            ? `${customSlashInstructions}\n\n${mergedCustomInstructions}`
+            : customSlashInstructions;
+        }
+
         // Check if always use agent mode is enabled in settings
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
@@ -2641,8 +2740,16 @@ export const UnifiedAgenticChat: React.FC<{
 
         // Look up model capabilities to help backend filter tools appropriately
         const effectiveModel = enrichedOptions.modelOverride || selectedModel || 'auto';
-        const modelMeta = getModelMetadata(effectiveModel);
-        const modelCapabilities = modelMeta?.capabilities ?? undefined;
+        const effectiveProvider =
+          (enrichedOptions.providerOverride as typeof selectedProvider | undefined) ??
+          selectedProvider;
+        const customModels = useSettingsStore.getState().customModels;
+        const resolvedCapabilities = resolveKnownModelCapabilities(
+          effectiveModel,
+          effectiveProvider,
+          customModels,
+        );
+        const modelCapabilities = toModelCapabilitiesDto(resolvedCapabilities);
 
         interface ChatSendMessageResponse {
           conversation?: { id: number };
@@ -2679,6 +2786,7 @@ export const UnifiedAgenticChat: React.FC<{
             preferCloudCredits: true,
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
+            autoInjectSkills: useSettingsStore.getState().chatPreferences.autoInjectSkills ?? true,
             // Pass research task ID for deep research mode
             researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
             // Enable agent mode priority:

@@ -94,14 +94,12 @@ pub fn filter_tools_by_capabilities(
         .filter(|tool| {
             let name = tool.name.as_str();
 
-            // Local browser/UI automation tools run through desktop tool calling.
-            // They should stay available whenever function calling is enabled,
-            // even if the provider model does not advertise native "computer use".
+            // Browser/UI automation tools require explicit computer-use capability.
             if name.starts_with("browser_")
                 || name.starts_with("ui_")
                 || name.starts_with("computer_use_")
             {
-                return true;
+                return capabilities.computer_use;
             }
 
             // Search tools require search capability
@@ -109,19 +107,14 @@ pub fn filter_tools_by_capabilities(
                 return capabilities.search;
             }
 
-            // Image/video generation tools: available to any function-calling model.
-            // The actual generation is done via the web API (MediaExecutor), not natively
-            // by the LLM. Models with native image gen (imageGen: true) have tools: false
-            // and never reach this filter, so this gate would always exclude the tool.
+            // Image/video generation tools require image generation capability.
             if name == "image_generate" || name == "video_generate" {
-                return true;
+                return capabilities.image_gen;
             }
 
-            // Terminal execution is an app-side tool. It should remain available
-            // whenever model-level tool calling is enabled, even if the model
-            // doesn't advertise built-in sandboxed code execution.
-            if name == "terminal_execute" {
-                return true;
+            // Terminal/code execution tools require code execution capability.
+            if name == "terminal_execute" || name == "code_execute" {
+                return capabilities.code_execution;
             }
 
             // Document generation requires tools (already checked above)
@@ -1159,7 +1152,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_keeps_terminal_when_tools_enabled_without_code_execution() {
+    fn filter_hides_terminal_when_code_execution_disabled() {
         let tools = vec![
             test_tool("terminal_execute"),
             test_tool("file_read"),
@@ -1175,7 +1168,7 @@ mod tests {
         let filtered = filter_tools_by_capabilities(tools, &caps);
         let names: Vec<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
 
-        assert!(names.contains(&"terminal_execute"));
+        assert!(!names.contains(&"terminal_execute"));
         assert!(names.contains(&"file_read"));
         assert!(!names.contains(&"search_web"));
     }
@@ -1193,9 +1186,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_keeps_media_generation_for_any_tool_calling_model() {
-        // image_generate/video_generate are available to any model with tools: true.
-        // The actual image is generated via the external media API, not natively by the LLM.
+    fn filter_hides_media_generation_when_image_gen_disabled() {
         let tools = vec![test_tool("image_generate"), test_tool("video_generate")];
         let caps = ModelCapabilitiesDto {
             tools: true,
@@ -1205,12 +1196,12 @@ mod tests {
 
         let filtered = filter_tools_by_capabilities(tools, &caps);
         let names: HashSet<&str> = filtered.iter().map(|t| t.name.as_str()).collect();
-        assert!(names.contains("image_generate"));
-        assert!(names.contains("video_generate"));
+        assert!(!names.contains("image_generate"));
+        assert!(!names.contains("video_generate"));
     }
 
     #[test]
-    fn filter_keeps_browser_and_ui_tools_when_tools_enabled_without_computer_use() {
+    fn filter_hides_browser_and_ui_tools_without_computer_use() {
         let tools = vec![test_tool("browser_navigate"), test_tool("ui_click")];
         let caps = ModelCapabilitiesDto {
             tools: true,
@@ -1221,8 +1212,8 @@ mod tests {
         let filtered = filter_tools_by_capabilities(tools, &caps);
         let names: HashSet<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
 
-        assert!(names.contains("browser_navigate"));
-        assert!(names.contains("ui_click"));
+        assert!(!names.contains("browser_navigate"));
+        assert!(!names.contains("ui_click"));
     }
 
     #[test]

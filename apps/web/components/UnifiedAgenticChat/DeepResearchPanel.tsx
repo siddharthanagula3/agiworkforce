@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- research task steps have dynamic structure */
 import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/card';
+import { Card } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';

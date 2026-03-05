@@ -54,10 +54,13 @@ export function Button({
   return (
     <Pressable
       className={`items-center justify-center flex-row ${variantClasses[variant]} ${sizeClasses[size]} ${
-        (disabled || loading) ? 'opacity-50' : ''
+        disabled || loading ? 'opacity-50' : ''
       } ${className}`}
       disabled={disabled || loading}
       onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading }}
       {...props}
     >
       <Text className={`text-sm ${textVariantClasses[variant]}`}>

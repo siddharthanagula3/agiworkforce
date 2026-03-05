@@ -72,7 +72,10 @@ impl BackgroundManager {
         _webhook_url: Option<String>,
         _webhook_secret: Option<String>,
     ) -> Result<BackgroundSubmitResult, crate::sys::error::Error> {
-        let id = format!("bg_{}", &uuid::Uuid::new_v4().to_string().replace("-", "")[..12]);
+        let id = format!(
+            "bg_{}",
+            &uuid::Uuid::new_v4().to_string().replace("-", "")[..12]
+        );
         let bg_request = BackgroundRequest {
             id: id.clone(),
             status: BackgroundStatus::Queued,
@@ -97,21 +100,15 @@ impl BackgroundManager {
         response_id: &str,
     ) -> Result<BackgroundRequest, crate::sys::error::Error> {
         let requests = self.requests.read().await;
-        requests
-            .get(response_id)
-            .cloned()
-            .ok_or_else(|| {
-                crate::sys::error::Error::Generic(format!(
-                    "Background request not found: {}",
-                    response_id
-                ))
-            })
+        requests.get(response_id).cloned().ok_or_else(|| {
+            crate::sys::error::Error::Generic(format!(
+                "Background request not found: {}",
+                response_id
+            ))
+        })
     }
 
-    pub async fn cancel_request(
-        &self,
-        response_id: &str,
-    ) -> Result<(), crate::sys::error::Error> {
+    pub async fn cancel_request(&self, response_id: &str) -> Result<(), crate::sys::error::Error> {
         let mut requests = self.requests.write().await;
         if let Some(req) = requests.get_mut(response_id) {
             req.status = BackgroundStatus::Cancelled;
@@ -168,7 +165,9 @@ impl BackgroundManager {
         requests.retain(|_, req| {
             if matches!(
                 req.status,
-                BackgroundStatus::Completed | BackgroundStatus::Failed | BackgroundStatus::Cancelled
+                BackgroundStatus::Completed
+                    | BackgroundStatus::Failed
+                    | BackgroundStatus::Cancelled
             ) {
                 if let Some(created) = req.created_at {
                     return now.duration_since(created) < max_age;

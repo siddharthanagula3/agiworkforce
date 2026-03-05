@@ -115,9 +115,7 @@ fn build_augmented_path() -> String {
                 let name_str = name.to_string_lossy();
                 if name_str.starts_with("node") {
                     let bin = format!("{}/bin", entry.path().display());
-                    if std::path::Path::new(&bin).is_dir()
-                        && !dirs.iter().any(|d| d == &bin)
-                    {
+                    if std::path::Path::new(&bin).is_dir() && !dirs.iter().any(|d| d == &bin) {
                         dirs.push(bin);
                     }
                 }
