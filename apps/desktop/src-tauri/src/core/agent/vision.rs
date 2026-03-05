@@ -41,9 +41,15 @@ impl VisionAutomation {
     pub async fn find_text(&self, query: &str, fuzzy: bool) -> Result<Vec<(i32, i32, String)>> {
         #[cfg(feature = "ocr")]
         {
-            let screenshot_path = self.capture_screenshot(None).await?;
+            let screenshot_path = match self.capture_screenshot(None).await {
+                Ok(path) => path,
+                Err(_) => return Ok(Vec::new()),
+            };
             use crate::automation::screen::perform_ocr;
-            let ocr_result = perform_ocr(&screenshot_path).await?;
+            let ocr_result = match perform_ocr(&screenshot_path).await {
+                Ok(result) => result,
+                Err(_) => return Ok(Vec::new()),
+            };
 
             let mut matches = Vec::new();
             if fuzzy {
