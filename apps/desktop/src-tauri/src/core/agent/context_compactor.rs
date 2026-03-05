@@ -126,10 +126,7 @@ impl ContextCompactor {
         }
     }
 
-    async fn generate_summary_with_llm(
-        &self,
-        messages: &[Message],
-    ) -> Result<String> {
+    async fn generate_summary_with_llm(&self, messages: &[Message]) -> Result<String> {
         let mut conversation_text = String::new();
         conversation_text.push_str("Summarize the following conversation history, preserving:\n");
         conversation_text.push_str("- Key decisions and outcomes\n");

@@ -205,26 +205,6 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
 }
 
-/// Returns a set of permissive fallback directories (home, cwd, temp).
-/// IMPORTANT: This function is intentionally NOT used by `check_file_permission`
-/// (M9 fix — fail closed). It is retained here for potential future use in
-/// explicit opt-in contexts only.
-#[allow(dead_code)]
-fn default_allowed_directories() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-
-    if let Some(home) = dirs::home_dir() {
-        dirs.push(home);
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        dirs.push(cwd);
-    }
-
-    dirs.push(std::env::temp_dir());
-
-    dirs
-}
 
 fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
     let canonical_normalized = canonical_path.replace('\\', "/");

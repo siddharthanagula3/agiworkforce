@@ -18,10 +18,7 @@ mod tests {
     // C10: compute_hash returns consistent hashes for the same input
     #[test]
     fn compute_hash_is_deterministic() {
-        let messages = vec![
-            make_msg("user", "Hello"),
-            make_msg("assistant", "Hi there"),
-        ];
+        let messages = vec![make_msg("user", "Hello"), make_msg("assistant", "Hi there")];
         let hash1 = CacheManager::compute_hash(&messages);
         let hash2 = CacheManager::compute_hash(&messages);
         assert_eq!(hash1, hash2, "Same messages must produce the same hash");

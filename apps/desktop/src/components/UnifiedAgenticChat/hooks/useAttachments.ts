@@ -40,6 +40,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const [isProcessingAttachments, setIsProcessingAttachments] = useState(false);
 
   const fileReadersRef = useRef<FileReader[]>([]);
+  const attachmentsRef = useRef<Attachment[]>([]);
   // AUDIT-005-006 fix: Track mount state to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
@@ -50,6 +51,10 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   /**
    * Read a file as base64 data URL
@@ -89,6 +94,51 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     fileReadersRef.current = [];
   }, []);
 
+  const appendAttachments = useCallback(
+    (incomingAttachments: Attachment[]) => {
+      setAttachments((prev) => {
+        if (incomingAttachments.length === 0) {
+          return prev;
+        }
+
+        const availableSlots = ATTACHMENT_LIMITS.MAX_COUNT - prev.length;
+        if (availableSlots <= 0) {
+          onError?.(`Maximum ${ATTACHMENT_LIMITS.MAX_COUNT} attachments allowed`);
+          return prev;
+        }
+
+        let candidates = incomingAttachments;
+        if (incomingAttachments.length > availableSlots) {
+          candidates = incomingAttachments.slice(0, availableSlots);
+          onError?.(
+            `Only ${availableSlots} attachment(s) added (max ${ATTACHMENT_LIMITS.MAX_COUNT} total)`,
+          );
+        }
+
+        const currentTotalSize = prev.reduce((sum, att) => sum + (att.size || 0), 0);
+        let runningSize = currentTotalSize;
+        const accepted: Attachment[] = [];
+
+        for (const attachment of candidates) {
+          const attachmentSize = attachment.size || 0;
+          if (runningSize + attachmentSize > ATTACHMENT_LIMITS.MAX_TOTAL_SIZE) {
+            onError?.('Total attachment size would exceed 200MB limit');
+            break;
+          }
+          runningSize += attachmentSize;
+          accepted.push(attachment);
+        }
+
+        if (accepted.length === 0) {
+          return prev;
+        }
+
+        return [...prev, ...accepted];
+      });
+    },
+    [onError],
+  );
+
   /**
    * Handle files added (from file picker or drag/drop)
    */
@@ -110,8 +160,10 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         return;
       }
 
+      const currentAttachments = attachmentsRef.current;
+
       // Check total attachment count
-      const totalAttachments = attachments.length + files.length;
+      const totalAttachments = currentAttachments.length + files.length;
       if (totalAttachments > ATTACHMENT_LIMITS.MAX_COUNT) {
         onError?.(
           `Maximum ${ATTACHMENT_LIMITS.MAX_COUNT} attachments allowed (${totalAttachments} provided)`,
@@ -120,7 +172,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       }
 
       // Check total size across all attachments
-      const currentTotalSize = attachments.reduce((sum, att) => sum + (att.size || 0), 0);
+      const currentTotalSize = currentAttachments.reduce((sum, att) => sum + (att.size || 0), 0);
       if (currentTotalSize + totalSize > ATTACHMENT_LIMITS.MAX_TOTAL_SIZE) {
         onError?.(`Total attachment size would exceed 200MB limit`);
         return;
@@ -159,7 +211,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
             }),
           );
           if (!isMountedRef.current) return;
-          setAttachments((prev) => [...prev, ...newAttachments]);
+          appendAttachments(newAttachments);
         } finally {
           if (isMountedRef.current) setIsProcessingAttachments(false);
         }
@@ -190,7 +242,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           }),
         );
         if (!isMountedRef.current) return;
-        setAttachments((prev) => [...prev, ...newAttachments]);
+        appendAttachments(newAttachments);
       } catch (error) {
         console.error('[useAttachments] Error reading files:', error);
         if (isMountedRef.current) {
@@ -200,7 +252,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         if (isMountedRef.current) setIsProcessingAttachments(false);
       }
     },
-    [selectedModel, attachments, readFileAsBase64, onError],
+    [selectedModel, readFileAsBase64, onError, appendAttachments],
   );
 
   /**
@@ -227,6 +279,19 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       }
 
       event.preventDefault();
+      let pendingReads = 0;
+      const markReadComplete = () => {
+        pendingReads = Math.max(0, pendingReads - 1);
+        if (pendingReads === 0 && isMountedRef.current) {
+          setIsProcessingAttachments(false);
+        }
+      };
+      const beginRead = () => {
+        if (pendingReads === 0 && isMountedRef.current) {
+          setIsProcessingAttachments(true);
+        }
+        pendingReads += 1;
+      };
 
       items.forEach((item) => {
         const file = item.getAsFile();
@@ -257,6 +322,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           if (isMountedRef.current) {
             onError?.('Failed to read pasted file. Please try again.');
           }
+          markReadComplete();
         };
 
         reader.onloadend = (e) => {
@@ -270,6 +336,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
           // Check for read errors (onloadend fires for both success and error)
           if (reader.error) {
+            markReadComplete();
             return; // Error already handled in onerror
           }
 
@@ -277,6 +344,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
             const base64 = e.target?.result as string;
             if (!base64 || base64.length === 0) {
               onError?.('Pasted file is empty or unreadable.');
+              markReadComplete();
               return;
             }
 
@@ -288,17 +356,20 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
               mimeType: file.type,
               content: base64,
             };
-            setAttachments((prev) => [...prev, attachment]);
+            appendAttachments([attachment]);
           } catch (err) {
             console.error('[useAttachments] Error processing pasted file:', err);
             onError?.('Error processing pasted file. Please try again.');
+          } finally {
+            markReadComplete();
           }
         };
 
+        beginRead();
         reader.readAsDataURL(file);
       });
     },
-    [selectedModel, onError],
+    [selectedModel, onError, appendAttachments],
   );
 
   /**

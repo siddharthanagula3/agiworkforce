@@ -53,18 +53,37 @@ pub fn tool_to_capability(tool_name: &str) -> Option<&'static str> {
         "file_read" | "file_write" | "file_delete" | "file_list" => Some("fileOperations"),
 
         // Document operations
-        "document_read" | "document_extract_text" | "document_get_metadata"
-        | "document_detect_type" | "document_search" | "document_create_pdf"
-        | "document_create_word" | "document_create_excel" => Some("documentCreation"),
+        "document_read"
+        | "document_extract_text"
+        | "document_get_metadata"
+        | "document_detect_type"
+        | "document_search"
+        | "document_create_pdf"
+        | "document_create_word"
+        | "document_create_excel" => Some("documentCreation"),
 
         // Browser automation
-        "browser_navigate" | "browser_click" | "browser_type" | "browser_extract"
-        | "browser_screenshot" | "browser_hover" | "browser_focus"
-        | "browser_scroll_into_view" | "browser_query_all" | "browser_execute_async_js"
-        | "browser_get_element_state" | "browser_wait_for_interactive"
-        | "browser_select_option" | "browser_check" | "browser_uncheck"
-        | "browser_get_url" | "browser_get_title" | "browser_go_back"
-        | "browser_go_forward" | "browser_wait_for_selector" | "browser_get_text"
+        "browser_navigate"
+        | "browser_click"
+        | "browser_type"
+        | "browser_extract"
+        | "browser_screenshot"
+        | "browser_hover"
+        | "browser_focus"
+        | "browser_scroll_into_view"
+        | "browser_query_all"
+        | "browser_execute_async_js"
+        | "browser_get_element_state"
+        | "browser_wait_for_interactive"
+        | "browser_select_option"
+        | "browser_check"
+        | "browser_uncheck"
+        | "browser_get_url"
+        | "browser_get_title"
+        | "browser_go_back"
+        | "browser_go_forward"
+        | "browser_wait_for_selector"
+        | "browser_get_text"
         | "browser_get_attribute" => Some("browserAutomation"),
 
         // Computer use (mouse, keyboard, desktop)
@@ -140,7 +159,10 @@ mod tests {
             Some("browserAutomation")
         );
         assert_eq!(tool_to_capability("ui_click"), Some("computerUse"));
-        assert_eq!(tool_to_capability("terminal_execute"), Some("terminalAccess"));
+        assert_eq!(
+            tool_to_capability("terminal_execute"),
+            Some("terminalAccess")
+        );
         assert_eq!(tool_to_capability("code_execute"), Some("codeExecution"));
         assert_eq!(tool_to_capability("unknown_tool"), None);
     }

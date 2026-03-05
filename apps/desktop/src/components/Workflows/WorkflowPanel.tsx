@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkflows, type WorkflowExecutionState } from '../../hooks/useWorkflows';
 import type { WorkflowDefinition, WorkflowStatus, WorkflowTrigger } from '../../types/workflow';
@@ -25,13 +26,23 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/Dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/DropdownMenu';
+import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
+import { Textarea } from '../ui/Textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +109,7 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     isExecuting,
     error,
     list,
+    create,
     execute,
     pause,
     resume,
@@ -110,13 +122,21 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
   const [expandedWorkflows, setExpandedWorkflows] = useState<Set<string>>(new Set());
   const [selectedForDelete, setSelectedForDelete] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState('');
+  const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const userId = useAuthStore((state) => state.getCurrentUserId());
 
   // Load workflows on mount
   useEffect(() => {
     if (userId) {
-      list(userId).catch(console.error);
+      list(userId).catch((err: unknown) => {
+        toast.error('Failed to load workflows', {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
   }, [userId, list]);
 
@@ -132,12 +152,46 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     });
   }, []);
 
+  const handleCreate = useCallback(async () => {
+    if (!newWorkflowName.trim() || !userId) return;
+    setIsCreating(true);
+
+    try {
+      const definition: WorkflowDefinition = {
+        id: '',
+        user_id: userId,
+        name: newWorkflowName.trim(),
+        description: newWorkflowDescription.trim() || undefined,
+        nodes: [],
+        edges: [],
+        triggers: [{ type: 'manual' }],
+        metadata: {},
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      };
+      await create(definition);
+      toast.success('Workflow created', { description: newWorkflowName.trim() });
+      setShowCreateDialog(false);
+      setNewWorkflowName('');
+      setNewWorkflowDescription('');
+    } catch (err) {
+      toast.error('Failed to create workflow', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  }, [newWorkflowName, newWorkflowDescription, userId, create]);
+
   const handleExecute = useCallback(
     async (workflowId: string) => {
       try {
         await execute(workflowId);
+        toast.success('Workflow started');
       } catch (err) {
-        console.error('Failed to execute workflow:', err);
+        toast.error('Failed to execute workflow', {
+          description: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [execute],
@@ -147,8 +201,11 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     async (executionId: string) => {
       try {
         await pause(executionId);
+        toast.info('Workflow paused');
       } catch (err) {
-        console.error('Failed to pause workflow:', err);
+        toast.error('Failed to pause workflow', {
+          description: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [pause],
@@ -158,8 +215,11 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     async (executionId: string) => {
       try {
         await resume(executionId);
+        toast.info('Workflow resumed');
       } catch (err) {
-        console.error('Failed to resume workflow:', err);
+        toast.error('Failed to resume workflow', {
+          description: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [resume],
@@ -169,8 +229,11 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     async (executionId: string) => {
       try {
         await cancel(executionId);
+        toast.info('Workflow cancelled');
       } catch (err) {
-        console.error('Failed to cancel workflow:', err);
+        toast.error('Failed to cancel workflow', {
+          description: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [cancel],
@@ -183,8 +246,11 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
       await remove(selectedForDelete);
       setShowDeleteDialog(false);
       setSelectedForDelete(null);
+      toast.success('Workflow deleted');
     } catch (err) {
-      console.error('Failed to delete workflow:', err);
+      toast.error('Failed to delete workflow', {
+        description: err instanceof Error ? err.message : String(err),
+      });
     }
   }, [selectedForDelete, remove]);
 
@@ -195,7 +261,13 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
 
   const handleRefresh = useCallback(async () => {
     if (userId) {
-      await refresh(userId);
+      try {
+        await refresh(userId);
+      } catch (err) {
+        toast.error('Failed to refresh workflows', {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }, [userId, refresh]);
 
@@ -253,7 +325,7 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
           <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
           </Button>
-          <Button variant="outline" size="sm" disabled>
+          <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4 mr-1" />
             New
           </Button>
@@ -275,7 +347,7 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
 
       {/* Workflows List */}
       {workflows.length === 0 ? (
-        <EmptyState />
+        <EmptyState onCreateClick={() => setShowCreateDialog(true)} />
       ) : (
         <ScrollArea className="flex-1">
           <div className="divide-y divide-border">
@@ -304,6 +376,63 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
           </div>
         </ScrollArea>
       )}
+
+      {/* Create Workflow Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Workflow</DialogTitle>
+            <DialogDescription>
+              Create a new workflow to automate multi-step tasks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="workflow-name" className="text-sm font-medium">
+                Name
+              </label>
+              <Input
+                id="workflow-name"
+                placeholder="My Workflow"
+                value={newWorkflowName}
+                onChange={(e) => setNewWorkflowName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newWorkflowName.trim()) {
+                    handleCreate();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="workflow-description" className="text-sm font-medium">
+                Description (optional)
+              </label>
+              <Textarea
+                id="workflow-description"
+                placeholder="Describe what this workflow does..."
+                value={newWorkflowDescription}
+                onChange={(e) => setNewWorkflowDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={!newWorkflowName.trim() || isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -555,7 +684,7 @@ function WorkflowItem({
   );
 }
 
-function EmptyState() {
+function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-4 py-12">
       <div className="p-4 rounded-full bg-muted">
@@ -568,7 +697,7 @@ function EmptyState() {
           with process automation.
         </p>
       </div>
-      <Button disabled>
+      <Button onClick={onCreateClick}>
         <Plus className="mr-2 h-4 w-4" />
         Create Workflow
       </Button>

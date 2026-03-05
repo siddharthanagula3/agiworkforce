@@ -198,7 +198,10 @@ mod r3_app_state_default {
         );
         let geom = snap.geometry.unwrap();
         assert!(geom.width > 0.0, "Default window width should be positive");
-        assert!(geom.height > 0.0, "Default window height should be positive");
+        assert!(
+            geom.height > 0.0,
+            "Default window height should be positive"
+        );
     }
 
     #[test]
@@ -213,7 +216,10 @@ mod r3_app_state_default {
     #[test]
     fn persistent_window_state_default_pinned() {
         let state = PersistentWindowState::default();
-        assert!(state.pinned, "Default PersistentWindowState should be pinned");
+        assert!(
+            state.pinned,
+            "Default PersistentWindowState should be pinned"
+        );
         assert!(!state.maximized);
         assert!(!state.fullscreen);
         assert!(state.dock.is_none());
@@ -270,6 +276,8 @@ mod r5_context_compactor_ordering {
             model: None,
             created_at: Utc::now(),
             user_id: "test_user".to_string(),
+            parent_message_id: None,
+            branch_id: None,
         }
     }
 
@@ -382,9 +390,7 @@ mod r5_context_compactor_ordering {
         let compactor = ContextCompactor::new(config);
 
         // 5 messages with high token counts — but fewer than min_messages
-        let messages: Vec<Message> = (1..=5)
-            .map(|i| make_message(i, "x", 500))
-            .collect();
+        let messages: Vec<Message> = (1..=5).map(|i| make_message(i, "x", 500)).collect();
 
         assert!(
             !compactor.should_compact(&messages),
@@ -403,9 +409,7 @@ mod r5_context_compactor_ordering {
         let compactor = ContextCompactor::new(config);
 
         // 6 messages * 1000 tokens = 6000 > 5000 max → should compact
-        let messages: Vec<Message> = (1..=6)
-            .map(|i| make_message(i, "x", 1000))
-            .collect();
+        let messages: Vec<Message> = (1..=6).map(|i| make_message(i, "x", 1000)).collect();
 
         assert!(
             compactor.should_compact(&messages),
@@ -594,7 +598,10 @@ mod r7_token_counter_fallback {
         // Strings with null bytes can trip some tokenizers
         let s = "hello\0world";
         let result = TokenCounter::estimate_text_tokens(s);
-        assert!(result > 0, "Non-empty string with null byte must yield > 0 tokens");
+        assert!(
+            result > 0,
+            "Non-empty string with null byte must yield > 0 tokens"
+        );
     }
 
     #[test]

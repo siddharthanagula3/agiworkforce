@@ -10,10 +10,12 @@
  */
 
 import * as vscode from 'vscode';
+import * as net from 'net';
 import { registerChatParticipant } from './providers/chatParticipant';
 import { SidebarProvider } from './providers/sidebarProvider';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from './providers/codeActionProvider';
 import { AgiHoverProvider } from './providers/hoverProvider';
+import { AgiInlineCompletionProvider } from './providers/inlineCompletionProvider';
 import { ConversationStore } from './storage/conversationStore';
 import {
   ConversationTreeProvider,
@@ -21,10 +23,19 @@ import {
 } from './providers/conversationTreeProvider';
 import { getApiKey, setApiKey, clearApiKey, chatCompletion, type ChatMessage } from './utils/api';
 import { applyLlmEdit } from './utils/applyEdit';
+import { AgentModePanel } from './providers/agentModeProvider';
+import * as telemetry from './services/telemetry';
+import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridge';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
+  // ── 0. Telemetry ──────────────────────────────────────────────────────────
+  context.subscriptions.push(telemetry.activate(context));
+
+  // ── 0b. Desktop Bridge ──────────────────────────────────────────────────────
+  context.subscriptions.push(activateDesktopBridge(context));
+
   // ── 1. Chat participant (@agi in VS Code Chat) ──────────────────────────────
   const chatParticipant = registerChatParticipant(context);
   context.subscriptions.push(chatParticipant);
@@ -56,12 +67,43 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerHoverProvider('*', new AgiHoverProvider()),
   );
 
-  // ── 4. Commands ─────────────────────────────────────────────────────────────
+  let inlineCompletionRegistration: vscode.Disposable | undefined;
+
+  const syncInlineCompletionProvider = (): void => {
+    const inlineEnabled =
+      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('inlineCompletions.enabled') ??
+      false;
+
+    if (!inlineEnabled) {
+      inlineCompletionRegistration?.dispose();
+      inlineCompletionRegistration = undefined;
+      return;
+    }
+
+    if (inlineCompletionRegistration !== undefined) {
+      return;
+    }
+
+    inlineCompletionRegistration = vscode.languages.registerInlineCompletionItemProvider(
+      { pattern: '**' },
+      new AgiInlineCompletionProvider(context.secrets),
+    );
+    context.subscriptions.push(inlineCompletionRegistration);
+  };
+
+  syncInlineCompletionProvider();
+
+  // ── 5. Commands ─────────────────────────────────────────────────────────────
   context.subscriptions.push(
     // ── agi-workforce.chat ────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.chat', async () => {
       // Open the Chat panel pre-populated with @agi
       await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+    }),
+
+    // ── agi-workforce.agentMode ──────────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.agentMode', () => {
+      AgentModePanel.createOrShow(context.extensionUri, context.secrets, context);
     }),
 
     // ── agi-workforce.explain ─────────────────────────────────────────────────
@@ -226,6 +268,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       await config.update('model', picked.label, vscode.ConfigurationTarget.Global);
 
+      telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.label });
+
       vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.label}`);
     }),
 
@@ -281,6 +325,62 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('agi-workforce.refreshConversations', () => {
       conversationTreeProvider.refresh();
     }),
+
+    // ── agi-workforce.sendToDesktop ─────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.sendToDesktop', async () => {
+      const bridge = getDesktopBridge();
+      if (bridge === undefined || bridge.status !== 'connected') {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
+        );
+        return;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      if (editor === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: No active editor.');
+        return;
+      }
+
+      const selection = editor.selection;
+      const code = editor.document.getText(selection.isEmpty ? undefined : selection);
+      if (code.trim() === '') {
+        vscode.window.showWarningMessage('AGI Workforce: No code to send.');
+        return;
+      }
+
+      const result = await bridge.sendCodeSnippet(
+        code,
+        editor.document.languageId,
+        editor.document.uri.fsPath,
+      );
+
+      if (result.ok) {
+        vscode.window.showInformationMessage('AGI Workforce: Code sent to desktop agent.');
+      } else {
+        vscode.window.showErrorMessage(`AGI Workforce: ${result.error ?? 'Failed to send code.'}`);
+      }
+    }),
+
+    // ── agi-workforce.syncContextToDesktop ───────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.syncContextToDesktop', async () => {
+      const bridge = getDesktopBridge();
+      if (bridge === undefined || bridge.status !== 'connected') {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
+        );
+        return;
+      }
+
+      const result = await bridge.shareContext();
+      if (result.ok) {
+        vscode.window.showInformationMessage('AGI Workforce: Workspace context synced to desktop.');
+      } else {
+        vscode.window.showErrorMessage(
+          `AGI Workforce: ${result.error ?? 'Failed to sync context.'}`,
+        );
+      }
+    }),
   );
 
   // ── Status bar item ──────────────────────────────────────────────────────
@@ -290,17 +390,52 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
-    const model = vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? 'auto';
-    statusBar.text = `$(hubot) AGI: ${model}`;
+    const config = vscode.workspace.getConfiguration('agiWorkforce');
+    const model = config.get<string>('model') ?? 'auto';
+    const chips: string[] = [];
+
+    if (config.get<boolean>('agent.planMode') ?? false) {
+      chips.push('plan');
+    }
+    if (config.get<boolean>('mcp.enabled') ?? false) {
+      chips.push('mcp');
+    }
+    if (config.get<boolean>('desktopBridge.enabled') ?? false) {
+      const port = config.get<number>('desktopBridge.port') ?? 8787;
+      chips.push(`bridge:${port}`);
+    }
+
+    statusBar.text =
+      chips.length > 0 ? `$(hubot) AGI: ${model} · ${chips.join(' · ')}` : `$(hubot) AGI: ${model}`;
     statusBar.show();
   }
 
   updateStatusBar();
+  void validateAdvancedFeatureFlags(context);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('agiWorkforce.model')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.model') ||
+        e.affectsConfiguration('agiWorkforce.agent.planMode') ||
+        e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
+        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
+        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
+      ) {
         updateStatusBar();
+      }
+
+      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
+        syncInlineCompletionProvider();
+      }
+
+      if (
+        e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
+        e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
+        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
+        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
+      ) {
+        void validateAdvancedFeatureFlags(context);
       }
     }),
   );
@@ -340,6 +475,20 @@ async function runInlineCommand(
   }
 
   const lang = editor.document.languageId;
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const planModeEnabled = config.get<boolean>('agent.planMode') ?? false;
+  const autoApplyFixes = config.get<boolean>('autoApplyFixes') ?? false;
+
+  if (planModeEnabled && command !== 'explain') {
+    const choice = await vscode.window.showInformationMessage(
+      `AGI Workforce plan mode is enabled. Proceed with ${commandLabel(command)}?`,
+      'Proceed',
+      'Cancel',
+    );
+    if (choice !== 'Proceed') {
+      return;
+    }
+  }
 
   const prompts: Record<string, string> = {
     explain: `Explain the following ${lang} code clearly and concisely:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
@@ -370,6 +519,10 @@ async function runInlineCommand(
 
       try {
         progress.report({ increment: 0 });
+        telemetry.logEvent(telemetry.TelemetryEvents.INLINE_COMMAND_EXECUTED, {
+          command,
+          language: lang,
+        });
         const result = await chatCompletion(context.secrets, messages, cancelSource.token);
         cancelSource.dispose();
 
@@ -380,6 +533,7 @@ async function runInlineCommand(
           selection.isEmpty ? new vscode.Selection(0, 0, 0, 0) : selection,
           result,
           commandLabel(command),
+          { autoApply: autoApplyFixes && command === 'fix' },
         );
       } catch (err) {
         cancelSource.dispose();
@@ -389,6 +543,7 @@ async function runInlineCommand(
         }
 
         const message = err instanceof Error ? err.message : String(err);
+        telemetry.logError(err instanceof Error ? err : message, { command });
 
         vscode.window
           .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
@@ -435,4 +590,60 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   if (choice === 'Set API Key') {
     await vscode.commands.executeCommand('agi-workforce.setApiKey');
   }
+}
+
+async function validateAdvancedFeatureFlags(context: vscode.ExtensionContext): Promise<void> {
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const inlineEnabled = config.get<boolean>('inlineCompletions.enabled') ?? false;
+  const mcpEnabled = config.get<boolean>('mcp.enabled') ?? false;
+  const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
+  const desktopBridgePort = config.get<number>('desktopBridge.port') ?? 8787;
+
+  if (inlineEnabled) {
+    const hasApiKey = (await getApiKey(context.secrets)) !== undefined;
+    if (!hasApiKey) {
+      void vscode.window
+        .showInformationMessage(
+          'AGI Workforce inline completions are enabled, but no API key is configured.',
+          'Set API Key',
+        )
+        .then((choice) => {
+          if (choice === 'Set API Key') {
+            void vscode.commands.executeCommand('agi-workforce.setApiKey');
+          }
+        });
+    }
+  }
+
+  if (mcpEnabled && !desktopBridgeEnabled) {
+    void vscode.window.showWarningMessage(
+      'AGI Workforce MCP is enabled, but desktop bridge is disabled. Enable desktop bridge to use local MCP tools.',
+    );
+  }
+
+  if (desktopBridgeEnabled) {
+    const reachable = await isLocalPortReachable(desktopBridgePort, 800);
+    if (!reachable) {
+      void vscode.window.showWarningMessage(
+        `AGI Workforce desktop bridge is enabled but not reachable on localhost:${desktopBridgePort}.`,
+      );
+    }
+  }
+}
+
+function isLocalPortReachable(port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const finish = (value: boolean): void => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(value);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(port, '127.0.0.1');
+  });
 }

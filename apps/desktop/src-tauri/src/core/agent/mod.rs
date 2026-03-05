@@ -29,7 +29,7 @@ pub use background_agent::{
     BackgroundAgentManagerState, BackgroundAgentStatus, ConversationMessage,
     DEFAULT_AGENT_TIMEOUT_SECS, MAX_BACKGROUND_AGENTS,
 };
-pub use background_tasks::{PersistentTask, TaskCheckpoint, TaskStorage};
+pub use background_tasks::{AutonomousTaskCheckpoint, PersistentTask, TaskCheckpoint, TaskStorage};
 pub use change_tracker::ChangeTracker;
 pub use continuous_executor::{
     ContinuousExecutor, ContinuousExecutorConfig, ContinuousTask, ContinuousTaskStatus,

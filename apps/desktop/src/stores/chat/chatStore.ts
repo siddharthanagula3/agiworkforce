@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
+import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
 import type {
   EnhancedMessage,
@@ -394,6 +395,27 @@ export interface ChatState {
   resetOnLogout: () => void;
 }
 
+/**
+ * Resolve the context window size for the currently selected model.
+ * Uses a lazy import of modelStore to avoid circular dependencies.
+ */
+function getActiveModelContextWindow(): number {
+  try {
+    // Lazy require to avoid circular import at module load time
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useModelStore } = require('../modelStore') as {
+      useModelStore: { getState: () => { selectedModel: string | null } };
+    };
+    const selectedModel = useModelStore.getState().selectedModel;
+    if (selectedModel) {
+      return getModelContextWindow(selectedModel);
+    }
+  } catch {
+    // modelStore not yet initialized — use default
+  }
+  return 128_000;
+}
+
 export const useChatStore = create<ChatState>()(
   devtools(
     persist(
@@ -414,8 +436,7 @@ export const useChatStore = create<ChatState>()(
             current: 0,
             inputTokens: 0,
             outputTokens: 0,
-            // TODO: [M6] Update dynamically when model changes — use MODEL_METADATA[selectedModel]?.contextWindow
-            max: 200000,
+            max: getActiveModelContextWindow(),
             percentage: 0,
             estimatedCost: 0,
           },
@@ -1248,7 +1269,17 @@ export const useChatStore = create<ChatState>()(
           addPendingMessage: (message) =>
             set(
               (state) => {
-                state.pendingMessages.push(message);
+                const existingIdx = state.pendingMessages.findIndex((m) => m.id === message.id);
+                if (existingIdx === -1) {
+                  state.pendingMessages.push(message);
+                  return;
+                }
+
+                // Keep existing ordering while updating fields from the latest payload.
+                state.pendingMessages[existingIdx] = {
+                  ...state.pendingMessages[existingIdx],
+                  ...message,
+                };
               },
               undefined,
               'chat/addPendingMessage',
@@ -1732,8 +1763,7 @@ export const useChatStore = create<ChatState>()(
                   current: 0,
                   inputTokens: 0,
                   outputTokens: 0,
-                  // TODO: [M6] Update dynamically when model changes — use MODEL_METADATA[selectedModel]?.contextWindow
-                  max: 200000,
+                  max: getActiveModelContextWindow(),
                   percentage: 0,
                   estimatedCost: 0,
                 };
@@ -1812,3 +1842,18 @@ export const selectPinnedConversations = (state: ChatState) =>
 
 export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimelineByMessage;
 export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;
+
+// Cross-store subscription: update tokenUsage.max when the selected model changes
+if (typeof window !== 'undefined') {
+  import('../modelStore').then(({ useModelStore }) => {
+    useModelStore.subscribe(
+      (state) => state.selectedModel,
+      (selectedModel) => {
+        if (selectedModel) {
+          const contextWindow = getModelContextWindow(selectedModel);
+          useChatStore.getState().updateTokenUsage({ max: contextWindow });
+        }
+      },
+    );
+  });
+}

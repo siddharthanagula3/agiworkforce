@@ -421,9 +421,19 @@ mod tests {
         let creator = PdfDocumentCreator::new();
         // Generate enough paragraphs to overflow a single page
         let paragraphs: Vec<String> = (0..60)
-            .map(|i| format!("Line {} of content to test pagination across multiple pages.", i))
+            .map(|i| {
+                format!(
+                    "Line {} of content to test pagination across multiple pages.",
+                    i
+                )
+            })
             .collect();
-        let result = creator.create_simple(output_path_str, Some("Pagination Test".to_string()), None, paragraphs);
+        let result = creator.create_simple(
+            output_path_str,
+            Some("Pagination Test".to_string()),
+            None,
+            paragraphs,
+        );
         assert!(result.is_ok());
         assert!(output_path.exists());
     }

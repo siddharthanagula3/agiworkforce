@@ -117,9 +117,9 @@ impl TaskExecutor {
             Action::Navigate { url } => {
                 // BUG-07 fix: validate URL before handing to OS open to prevent
                 // command injection and ensure the call is to a real web URL.
-                // Full CDP-controlled navigation requires wiring PlaywrightBridge
-                // into the executor (architectural TODO); OS-level open is the
-                // current fallback and must at least be sanitised.
+                // NOTE: Full CDP-controlled navigation requires wiring PlaywrightBridge
+                // into the executor. OS-level open is the current fallback and must
+                // at least be sanitised.
                 let parsed =
                     url::Url::parse(url).map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
                 if !matches!(parsed.scheme(), "http" | "https") {

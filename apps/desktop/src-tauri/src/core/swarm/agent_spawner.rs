@@ -141,7 +141,7 @@ pub struct SpawnedAgent {
     circuit_breaker: Arc<CircuitBreaker>,
     /// Channel to send tasks to this agent.
     task_sender: mpsc::Sender<AgentTask>,
-    /// Handle to the agent's task loop.
+    /// Handle to the agent's task loop (reserved for graceful shutdown/join).
     #[allow(dead_code)]
     handle: Option<tokio::task::JoinHandle<()>>,
     /// Signal to stop the agent.

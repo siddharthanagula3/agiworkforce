@@ -1,3 +1,4 @@
+use crate::core::mcp::config::{open_mcp_settings_db, upsert_settings_v2_value};
 use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
     McpToolRegistry,
@@ -11,13 +12,70 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex as TokioMutex;
 use tokio::time::{timeout, Duration};
 
 pub struct McpState {
     pub client: Arc<McpClient>,
     pub registry: Arc<McpToolRegistry>,
     pub config: Arc<Mutex<McpServersConfig>>,
+    pub persist_lock: Arc<TokioMutex<()>>,
     pub health_monitor: Arc<McpHealthMonitor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpConfigLocation {
+    pub path: String,
+    /// "project" when backed by a project MCP config path, otherwise "global".
+    pub source: String,
+    pub project_folder: Option<String>,
+    pub exists: bool,
+}
+
+fn build_runtime_config(raw_config: &McpServersConfig) -> Result<McpServersConfig, String> {
+    let mut runtime_config = raw_config.clone();
+    runtime_config
+        .inject_credentials()
+        .map_err(|e| format!("Failed to inject credentials: {}", e))?;
+    Ok(runtime_config)
+}
+
+fn resolve_config_location() -> Result<McpConfigLocation, String> {
+    let project_folder = McpServersConfig::active_project_folder_from_env();
+    let config_path = McpServersConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+
+    Ok(McpConfigLocation {
+        path: config_path.to_string_lossy().to_string(),
+        source: if project_folder.is_some() {
+            "project".to_string()
+        } else {
+            "global".to_string()
+        },
+        project_folder,
+        exists: config_path.exists(),
+    })
+}
+
+fn restore_redacted_env_values(
+    incoming: &mut McpServersConfig,
+    existing: &McpServersConfig,
+    redacted_sentinel: &str,
+) {
+    for (server_name, incoming_server) in incoming.mcp_servers.iter_mut() {
+        let Some(existing_server) = existing.mcp_servers.get(server_name) else {
+            continue;
+        };
+
+        for (env_key, env_value) in incoming_server.env.iter_mut() {
+            if env_value == redacted_sentinel {
+                if let Some(existing_value) = existing_server.env.get(env_key) {
+                    *env_value = existing_value.clone();
+                }
+            }
+        }
+    }
 }
 
 impl Default for McpState {
@@ -31,12 +89,14 @@ impl McpState {
         let client = Arc::new(McpClient::new());
         let registry = Arc::new(McpToolRegistry::new(client.clone()));
         let config = Arc::new(Mutex::new(McpServersConfig::default()));
+        let persist_lock = Arc::new(TokioMutex::new(()));
         let health_monitor = Arc::new(McpHealthMonitor::new(client.clone()));
 
         Self {
             client,
             registry,
             config,
+            persist_lock,
             health_monitor,
         }
     }
@@ -44,6 +104,143 @@ impl McpState {
     pub fn start_health_monitoring(&self, app_handle: tauri::AppHandle) {
         let monitor = self.health_monitor.clone();
         monitor.start_monitoring(std::time::Duration::from_secs(30), app_handle);
+    }
+
+    pub async fn persist_config_snapshot(&self, snapshot: &McpServersConfig) -> Result<(), String> {
+        let _persist_guard = self.persist_lock.lock().await;
+        let config_path = McpServersConfig::default_config_path()
+            .map_err(|e| format!("Failed to get config path: {}", e))?;
+        snapshot
+            .save_to_file(&config_path)
+            .await
+            .map_err(|e| format!("Failed to save MCP config: {}", e))
+    }
+
+    /// Reload active MCP config from disk and reconnect enabled servers.
+    /// The config source is resolved by `McpServersConfig::default_config_path()`,
+    /// which resolves project config precedence when a project folder is active.
+    pub async fn reload_active_config(&self, app: &tauri::AppHandle) -> Result<String, String> {
+        let config_path = McpServersConfig::default_config_path()
+            .map_err(|e| format!("Failed to get config path: {}", e))?;
+
+        let raw_config = if config_path.exists() {
+            McpServersConfig::from_file(&config_path)
+                .await
+                .map_err(|e| format!("Failed to load MCP config: {}", e))?
+        } else {
+            // Seed new config files (including project MCP config targets) from current in-memory state.
+            let seed_config = self.config.lock().clone();
+            self.persist_config_snapshot(&seed_config)
+                .await
+                .map_err(|e| format!("Failed to save default config: {}", e))?;
+            seed_config
+        };
+
+        let runtime_config = build_runtime_config(&raw_config)?;
+        *self.config.lock() = raw_config;
+
+        let mut warnings: Vec<String> = Vec::new();
+
+        for server_name in self.client.get_connected_servers() {
+            match self.client.disconnect_server(&server_name).await {
+                Ok(_) => {
+                    emit_mcp_event(
+                        app,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: server_name.clone(),
+                            connected: false,
+                            error: None,
+                        },
+                    );
+                    emit_mcp_event(
+                        app,
+                        McpEvent::ToolsUpdated {
+                            server_name,
+                            tool_count: 0,
+                        },
+                    );
+                }
+                Err(err) => {
+                    warnings.push(format!("failed to disconnect '{}': {}", server_name, err))
+                }
+            }
+        }
+
+        let mut connected_count = 0;
+        let mut total_tools = 0;
+        for (name, server_config) in &runtime_config.mcp_servers {
+            if !server_config.enabled {
+                continue;
+            }
+
+            match self
+                .client
+                .connect_server(name.clone(), server_config.clone())
+                .await
+            {
+                Ok(_) => {
+                    connected_count += 1;
+                    emit_mcp_event(
+                        app,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: name.clone(),
+                            connected: true,
+                            error: None,
+                        },
+                    );
+
+                    let tool_count = self
+                        .client
+                        .list_server_tools(name)
+                        .map(|tools| tools.len())
+                        .unwrap_or(0);
+                    total_tools += tool_count;
+                    emit_mcp_event(
+                        app,
+                        McpEvent::ToolsUpdated {
+                            server_name: name.clone(),
+                            tool_count,
+                        },
+                    );
+                }
+                Err(err) => {
+                    let err_str = err.to_string();
+                    warnings.push(format!("failed to connect '{}': {}", name, err_str));
+                    emit_mcp_event(
+                        app,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: name.clone(),
+                            connected: false,
+                            error: Some(err_str),
+                        },
+                    );
+                }
+            }
+        }
+
+        emit_mcp_event(
+            app,
+            McpEvent::SystemInitialized {
+                server_count: connected_count,
+                tool_count: total_tools,
+            },
+        );
+
+        let location = resolve_config_location()?;
+        let summary = format!(
+            "MCP initialized from {} config ({}). Connected to {} server(s) with {} tool(s)",
+            location.source, location.path, connected_count, total_tools
+        );
+
+        if warnings.is_empty() {
+            Ok(summary)
+        } else {
+            Ok(format!(
+                "{} with warnings: {}",
+                summary,
+                warnings.join("; ")
+            ))
+        }
     }
 
     /// Update the filesystem MCP server root directory.
@@ -73,7 +270,7 @@ impl McpState {
         }
 
         // Update config
-        let needs_restart = {
+        let (needs_restart, config_snapshot) = {
             let mut config = self.config.lock();
             if let Some(server_config) = config.mcp_servers.get_mut("filesystem") {
                 // Get current roots (all args after the package name)
@@ -100,7 +297,7 @@ impl McpState {
                     current_roots,
                     new_roots
                 );
-                true
+                (true, config.clone())
             } else {
                 return Err("Filesystem server not found in config".to_string());
             }
@@ -109,6 +306,10 @@ impl McpState {
         if !needs_restart {
             return Ok(false);
         }
+
+        self.persist_config_snapshot(&config_snapshot)
+            .await
+            .map_err(|e| format!("Failed to persist filesystem MCP config: {}", e))?;
 
         // Restart the server to apply new config
         let server_config = self.config.lock().mcp_servers.get("filesystem").cloned();
@@ -443,91 +644,9 @@ pub async fn mcp_initialize(
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     tracing::info!("Initializing MCP system");
-
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-
-    let mut config = if config_path.exists() {
-        McpServersConfig::from_file(&config_path)
-            .await
-            .map_err(|e| format!("Failed to load MCP config: {}", e))?
-    } else {
-        let default_config = McpServersConfig::default();
-        default_config
-            .save_to_file(&config_path)
-            .await
-            .map_err(|e| format!("Failed to save default config: {}", e))?;
-        default_config
-    };
-
-    config
-        .inject_credentials()
-        .map_err(|e| format!("Failed to inject credentials: {}", e))?;
-
-    *state.config.lock() = config.clone();
-
-    let mut connected_count = 0;
-    let mut total_tools = 0;
-    for (name, server_config) in &config.mcp_servers {
-        if server_config.enabled {
-            match state
-                .client
-                .connect_server(name.clone(), server_config.clone())
-                .await
-            {
-                Ok(_) => {
-                    connected_count += 1;
-                    tracing::info!("Connected to MCP server: {}", name);
-
-                    emit_mcp_event(
-                        &app,
-                        McpEvent::ServerConnectionChanged {
-                            server_name: name.clone(),
-                            connected: true,
-                            error: None,
-                        },
-                    );
-
-                    if let Ok(tools) = state.client.list_server_tools(name) {
-                        total_tools += tools.len();
-                        emit_mcp_event(
-                            &app,
-                            McpEvent::ToolsUpdated {
-                                server_name: name.clone(),
-                                tool_count: tools.len(),
-                            },
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to connect to MCP server '{}': {}", name, e);
-                    emit_mcp_event(
-                        &app,
-                        McpEvent::ServerConnectionChanged {
-                            server_name: name.clone(),
-                            connected: false,
-                            error: Some(e.to_string()),
-                        },
-                    );
-                }
-            }
-        }
-    }
-
-    emit_mcp_event(
-        &app,
-        McpEvent::SystemInitialized {
-            server_count: connected_count,
-            tool_count: total_tools,
-        },
-    );
-
-    state.start_health_monitoring(app);
-
-    Ok(format!(
-        "MCP initialized. Connected to {} server(s) with {} tool(s)",
-        connected_count, total_tools
-    ))
+    let message = state.reload_active_config(&app).await?;
+    state.start_health_monitoring(app.clone());
+    Ok(message)
 }
 
 #[tauri::command]
@@ -558,9 +677,12 @@ pub async fn mcp_connect_server(
     app: tauri::AppHandle,
     name: String,
 ) -> Result<String, String> {
-    let config = state.config.lock().clone();
+    if state.client.get_connected_servers().contains(&name) {
+        return Ok(format!("Server '{}' is already connected", name));
+    }
 
-    let server_config = config
+    let raw_config = state.config.lock().clone();
+    let raw_server_config = raw_config
         .mcp_servers
         .get(&name)
         .ok_or_else(|| format!("Server '{}' not found in configuration", name))?
@@ -572,13 +694,13 @@ pub async fn mcp_connect_server(
         tool_description: format!(
             "Connect to MCP server '{}' (command: {} {})",
             name,
-            server_config.command,
-            server_config.args.join(" ")
+            raw_server_config.command,
+            raw_server_config.args.join(" ")
         ),
         parameters: serde_json::json!({
             "server": name.clone(),
-            "command": server_config.command.clone(),
-            "args": server_config.args.clone(),
+            "command": raw_server_config.command.clone(),
+            "args": raw_server_config.args.clone(),
         }),
         risk_level: RiskLevel::High,
         safety_tier: ToolSafetyTier::RequiresExplicitApproval,
@@ -596,11 +718,39 @@ pub async fn mcp_connect_server(
         return Err("MCP server connection cancelled".to_string());
     }
 
+    let runtime_config = build_runtime_config(&raw_config)?;
+    let server_config = runtime_config
+        .mcp_servers
+        .get(&name)
+        .ok_or_else(|| format!("Server '{}' not found in runtime configuration", name))?
+        .clone();
+
     state
         .client
         .connect_server(name.clone(), server_config)
         .await
         .map_err(|e| format!("Failed to connect: {}", e))?;
+
+    emit_mcp_event(
+        &app,
+        McpEvent::ServerConnectionChanged {
+            server_name: name.clone(),
+            connected: true,
+            error: None,
+        },
+    );
+    let tool_count = state
+        .client
+        .list_server_tools(&name)
+        .map(|tools| tools.len())
+        .unwrap_or(0);
+    emit_mcp_event(
+        &app,
+        McpEvent::ToolsUpdated {
+            server_name: name.clone(),
+            tool_count,
+        },
+    );
 
     Ok(format!("Connected to server '{}'", name))
 }
@@ -608,13 +758,49 @@ pub async fn mcp_connect_server(
 #[tauri::command]
 pub async fn mcp_disconnect_server(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     name: String,
 ) -> Result<String, String> {
+    if !state.client.get_connected_servers().contains(&name) {
+        emit_mcp_event(
+            &app,
+            McpEvent::ServerConnectionChanged {
+                server_name: name.clone(),
+                connected: false,
+                error: None,
+            },
+        );
+        emit_mcp_event(
+            &app,
+            McpEvent::ToolsUpdated {
+                server_name: name.clone(),
+                tool_count: 0,
+            },
+        );
+        return Ok(format!("Server '{}' is already disconnected", name));
+    }
+
     state
         .client
         .disconnect_server(&name)
         .await
         .map_err(|e| format!("Failed to disconnect: {}", e))?;
+
+    emit_mcp_event(
+        &app,
+        McpEvent::ServerConnectionChanged {
+            server_name: name.clone(),
+            connected: false,
+            error: None,
+        },
+    );
+    emit_mcp_event(
+        &app,
+        McpEvent::ToolsUpdated {
+            server_name: name.clone(),
+            tool_count: 0,
+        },
+    );
 
     Ok(format!("Disconnected from server '{}'", name))
 }
@@ -852,49 +1038,142 @@ pub async fn mcp_call_tool(
 
 #[tauri::command]
 pub async fn mcp_get_config(state: State<'_, McpState>) -> Result<Value, String> {
-    let config = state.config.lock();
-    serde_json::to_value(&*config).map_err(|e| format!("Failed to serialize config: {}", e))
+    let mut sanitized_config = state.config.lock().clone();
+    for server_config in sanitized_config.mcp_servers.values_mut() {
+        for env_value in server_config.env.values_mut() {
+            if !env_value.starts_with("<from_") {
+                *env_value = "<redacted>".to_string();
+            }
+        }
+    }
+
+    serde_json::to_value(sanitized_config).map_err(|e| format!("Failed to serialize config: {}", e))
+}
+
+#[tauri::command]
+pub async fn mcp_get_config_location() -> Result<McpConfigLocation, String> {
+    resolve_config_location()
 }
 
 #[tauri::command]
 pub async fn mcp_update_config(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     new_config: Value,
 ) -> Result<String, String> {
     let mut parsed_config: McpServersConfig =
         serde_json::from_value(new_config).map_err(|e| format!("Invalid config: {}", e))?;
+    let existing_config = state.config.lock().clone();
+    restore_redacted_env_values(&mut parsed_config, &existing_config, "<redacted>");
+    let runtime_config = build_runtime_config(&parsed_config)?;
 
-    parsed_config
-        .inject_credentials()
-        .map_err(|e| format!("Failed to inject credentials: {}", e))?;
-
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-    parsed_config
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save config: {}", e))?;
+    state.persist_config_snapshot(&parsed_config).await?;
 
     *state.config.lock() = parsed_config;
 
-    Ok("Configuration updated successfully".to_string())
+    let mut warnings: Vec<String> = Vec::new();
+    let connected_servers = state.client.get_connected_servers();
+    for server_name in connected_servers {
+        match state.client.disconnect_server(&server_name).await {
+            Ok(_) => {
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ServerConnectionChanged {
+                        server_name: server_name.clone(),
+                        connected: false,
+                        error: None,
+                    },
+                );
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ToolsUpdated {
+                        server_name: server_name.clone(),
+                        tool_count: 0,
+                    },
+                );
+            }
+            Err(err) => warnings.push(format!("failed to disconnect '{}': {}", server_name, err)),
+        }
+    }
+
+    for (name, server_config) in runtime_config.mcp_servers.iter() {
+        if !server_config.enabled {
+            continue;
+        }
+
+        match state
+            .client
+            .connect_server(name.clone(), server_config.clone())
+            .await
+        {
+            Ok(_) => {
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ServerConnectionChanged {
+                        server_name: name.clone(),
+                        connected: true,
+                        error: None,
+                    },
+                );
+                let tool_count = state
+                    .client
+                    .list_server_tools(name)
+                    .map(|tools| tools.len())
+                    .unwrap_or(0);
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ToolsUpdated {
+                        server_name: name.clone(),
+                        tool_count,
+                    },
+                );
+            }
+            Err(err) => {
+                let err_str = err.to_string();
+                warnings.push(format!("failed to connect '{}': {}", name, err_str));
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ServerConnectionChanged {
+                        server_name: name.clone(),
+                        connected: false,
+                        error: Some(err_str),
+                    },
+                );
+            }
+        }
+    }
+
+    if warnings.is_empty() {
+        Ok("Configuration updated successfully".to_string())
+    } else {
+        Ok(format!(
+            "Configuration updated with warnings: {}",
+            warnings.join("; ")
+        ))
+    }
 }
 
 #[tauri::command]
-pub async fn mcp_enable_server(state: State<'_, McpState>, name: String) -> Result<String, String> {
-    set_server_enabled(state, name, true).await
+pub async fn mcp_enable_server(
+    state: State<'_, McpState>,
+    app: tauri::AppHandle,
+    name: String,
+) -> Result<String, String> {
+    set_server_enabled(state, app, name, true).await
 }
 
 #[tauri::command]
 pub async fn mcp_disable_server(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     name: String,
 ) -> Result<String, String> {
-    set_server_enabled(state, name, false).await
+    set_server_enabled(state, app, name, false).await
 }
 
 async fn set_server_enabled(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     name: String,
     enabled: bool,
 ) -> Result<String, String> {
@@ -903,42 +1182,147 @@ async fn set_server_enabled(
         return Err("Server name cannot be empty".to_string());
     }
 
-    let server_config = {
-        let mut config_guard = state.config.lock();
-        let entry = config_guard
-            .mcp_servers
-            .get_mut(trimmed)
-            .ok_or_else(|| format!("Server '{}' not found in configuration", trimmed))?;
-        entry.enabled = enabled;
-        entry.clone()
-    };
-    let snapshot = {
-        let config_guard = state.config.lock();
-        config_guard.clone()
-    };
-
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-    snapshot
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
-
     if enabled {
-        state
+        {
+            let mut config_guard = state.config.lock();
+            let entry = config_guard
+                .mcp_servers
+                .get_mut(trimmed)
+                .ok_or_else(|| format!("Server '{}' not found in configuration", trimmed))?;
+            entry.enabled = true;
+        }
+        let snapshot = state.config.lock().clone();
+        state.persist_config_snapshot(&snapshot).await?;
+
+        if state
+            .client
+            .get_connected_servers()
+            .contains(&trimmed.to_string())
+        {
+            emit_mcp_event(
+                &app,
+                McpEvent::ServerConnectionChanged {
+                    server_name: trimmed.to_string(),
+                    connected: true,
+                    error: None,
+                },
+            );
+            let tool_count = state
+                .client
+                .list_server_tools(trimmed)
+                .map(|tools| tools.len())
+                .unwrap_or(0);
+            emit_mcp_event(
+                &app,
+                McpEvent::ToolsUpdated {
+                    server_name: trimmed.to_string(),
+                    tool_count,
+                },
+            );
+            return Ok(format!("Server '{}' enabled", trimmed));
+        }
+
+        let runtime_config = build_runtime_config(&snapshot)?;
+        let server_config = runtime_config
+            .mcp_servers
+            .get(trimmed)
+            .ok_or_else(|| format!("Server '{}' not found in runtime configuration", trimmed))?
+            .clone();
+        if let Err(err) = state
             .client
             .connect_server(trimmed.to_string(), server_config)
             .await
-            .map_err(|e| format!("Failed to start '{}': {}", trimmed, e))?;
+        {
+            {
+                let mut config_guard = state.config.lock();
+                if let Some(entry) = config_guard.mcp_servers.get_mut(trimmed) {
+                    entry.enabled = false;
+                }
+            }
+            let rollback_snapshot = state.config.lock().clone();
+            if let Err(save_err) = state.persist_config_snapshot(&rollback_snapshot).await {
+                tracing::warn!(
+                    "Failed to rollback persisted enabled state for '{}': {}",
+                    trimmed,
+                    save_err
+                );
+            }
+            return Err(format!("Failed to start '{}': {}", trimmed, err));
+        }
+        emit_mcp_event(
+            &app,
+            McpEvent::ServerConnectionChanged {
+                server_name: trimmed.to_string(),
+                connected: true,
+                error: None,
+            },
+        );
+        let tool_count = state
+            .client
+            .list_server_tools(trimmed)
+            .map(|tools| tools.len())
+            .unwrap_or(0);
+        emit_mcp_event(
+            &app,
+            McpEvent::ToolsUpdated {
+                server_name: trimmed.to_string(),
+                tool_count,
+            },
+        );
         Ok(format!("Server '{}' enabled", trimmed))
     } else {
-        if let Err(err) = state.client.disconnect_server(trimmed).await {
-            tracing::warn!(
-                "Server '{}' disabled but disconnect failed: {}",
-                trimmed,
-                err
-            );
+        {
+            let config_guard = state.config.lock();
+            if !config_guard.mcp_servers.contains_key(trimmed) {
+                return Err(format!("Server '{}' not found in configuration", trimmed));
+            }
         }
+
+        let was_connected = state
+            .client
+            .get_connected_servers()
+            .contains(&trimmed.to_string());
+        if was_connected {
+            if let Err(err) = state.client.disconnect_server(trimmed).await {
+                let err_message = format!("Failed to stop '{}': {}", trimmed, err);
+                emit_mcp_event(
+                    &app,
+                    McpEvent::ServerConnectionChanged {
+                        server_name: trimmed.to_string(),
+                        connected: false,
+                        error: Some(err_message.clone()),
+                    },
+                );
+                return Err(err_message);
+            }
+        }
+
+        {
+            let mut config_guard = state.config.lock();
+            let entry = config_guard
+                .mcp_servers
+                .get_mut(trimmed)
+                .ok_or_else(|| format!("Server '{}' not found in configuration", trimmed))?;
+            entry.enabled = false;
+        }
+        let snapshot = state.config.lock().clone();
+        state.persist_config_snapshot(&snapshot).await?;
+
+        emit_mcp_event(
+            &app,
+            McpEvent::ServerConnectionChanged {
+                server_name: trimmed.to_string(),
+                connected: false,
+                error: None,
+            },
+        );
+        emit_mcp_event(
+            &app,
+            McpEvent::ToolsUpdated {
+                server_name: trimmed.to_string(),
+                tool_count: 0,
+            },
+        );
         Ok(format!("Server '{}' disabled", trimmed))
     }
 }
@@ -1001,24 +1385,10 @@ pub async fn mcp_set_credential(
     let encrypted =
         encrypt_mcp_credential(&value).ok_or_else(|| "Failed to encrypt credential".to_string())?;
 
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Store in database
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let cred_key = format!("mcp_credential_{}_{}", server_name, key);
-    let now = chrono::Utc::now().to_rfc3339();
-
-    conn.execute(
-        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
-         VALUES (?1, ?2, 'mcp_credentials', 1, ?3, ?3)",
-        rusqlite::params![cred_key, encrypted, now],
-    )
-    .map_err(|e| format!("Failed to store credential: {}", e))?;
+    upsert_settings_v2_value(&conn, &cred_key, &encrypted, "security", true)?;
 
     tracing::info!(
         "Credential stored for MCP server: {} / {}",
@@ -1031,14 +1401,7 @@ pub async fn mcp_set_credential(
 /// Delete a credential for an MCP server from encrypted database
 #[tauri::command]
 pub async fn mcp_delete_credential(server_name: String, key: String) -> Result<String, String> {
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Delete from database
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_mcp_settings_db()?;
 
     let cred_key = format!("mcp_credential_{}_{}", server_name, key);
 
@@ -1270,12 +1633,7 @@ pub async fn mcp_install_server(
     };
 
     // Save configuration to disk
-    let config_path = McpServersConfig::default_config_path()
-        .map_err(|e| format!("Failed to get config path: {}", e))?;
-    updated_config
-        .save_to_file(&config_path)
-        .await
-        .map_err(|e| format!("Failed to save config: {}", e))?;
+    state.persist_config_snapshot(&updated_config).await?;
 
     tracing::info!("Successfully installed MCP server: {}", server_name);
 

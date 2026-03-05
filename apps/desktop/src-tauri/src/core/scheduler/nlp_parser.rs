@@ -32,9 +32,8 @@ static RE_RELATIVE_TIME: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^in\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months)$").expect("RE_RELATIVE_TIME")
 });
 
-static RE_AT_TIME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_AT_TIME")
-});
+static RE_AT_TIME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_AT_TIME"));
 
 static RE_TOMORROW_AT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^tomorrow\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_TOMORROW_AT")
@@ -49,7 +48,8 @@ static RE_ON_DATE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_EVERY_N_UNIT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^every\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$").expect("RE_EVERY_N_UNIT")
+    Regex::new(r"^every\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$")
+        .expect("RE_EVERY_N_UNIT")
 });
 
 static RE_EVERY_UNIT: LazyLock<Regex> = LazyLock::new(|| {
@@ -61,7 +61,8 @@ static RE_EVERY_DAY_AT: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_EVERY_WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$").expect("RE_EVERY_WEEKDAY")
+    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$")
+        .expect("RE_EVERY_WEEKDAY")
 });
 
 static RE_EVERY_WEEKDAY_AT: LazyLock<Regex> = LazyLock::new(|| {

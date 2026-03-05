@@ -518,8 +518,6 @@ mod tests {
     // These tests are marked as integration tests and should be run separately
     #[cfg(feature = "ocr")]
     mod ocr_integration_tests {
-        use super::*;
-
         #[tokio::test]
         async fn test_ocr_with_valid_image() {
             // This test requires an actual image and Tesseract installed

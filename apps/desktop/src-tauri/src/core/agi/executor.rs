@@ -11,14 +11,8 @@ use crate::sys::security::ToolExecutionGuard;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
-// json! macro is used with full path (serde_json::json!) in parallel execution
-#[allow(unused_imports)]
-use serde_json::json;
 use std::collections::HashMap;
-// PathBuf is used indirectly through the executor registry
 use crate::core::agi::reflection::ReflectionEngine;
-#[allow(unused_imports)]
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The AGI Executor handles tool execution with security validation,
@@ -632,7 +626,8 @@ impl AGIExecutor {
                     automation,
                     router.clone(),
                     app_handle,
-                    // TODO: Pass actual reasoning/tracker if needed for sub-agents
+                    // Sub-agents get fresh reasoning/tracker instances; sharing the parent's
+                    // would require cross-task synchronization with limited benefit.
                     Arc::new(
                         ProcessReasoning::new(router.clone())
                             .expect("Failed to create process reasoning"),
@@ -787,7 +782,33 @@ impl AGIExecutor {
                         match reflection.reflect(goal, context, &plan).await {
                             Ok(insight) => {
                                 tracing::info!("[Executor] Reflection Insight: {:?}", insight);
-                                // TODO: Act on insight (Corrections, SubGoals)
+
+                                // Log actionable corrections from the reflection
+                                for correction in &insight.corrections {
+                                    tracing::info!(
+                                        "[Executor] Correction for step '{}': {:?} — {}",
+                                        correction.for_step_id,
+                                        correction.correction_type,
+                                        correction.description,
+                                    );
+                                }
+
+                                // Log derived sub-goals for future planning
+                                for sub_goal in &insight.sub_goals {
+                                    tracing::info!(
+                                        "[Executor] Sub-goal derived: {} (priority: {})",
+                                        sub_goal.description,
+                                        sub_goal.priority,
+                                    );
+                                }
+
+                                // Store the reflection for future use
+                                if let Err(store_err) = reflection.store_reflection(&insight).await {
+                                    tracing::warn!(
+                                        "[Executor] Failed to store reflection: {}",
+                                        store_err
+                                    );
+                                }
                             }
                             Err(re) => {
                                 tracing::warn!("[Executor] Reflection failed: {}", re);

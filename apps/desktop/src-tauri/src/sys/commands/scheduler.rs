@@ -3,14 +3,14 @@
 //! These commands expose the ProactiveScheduler to the frontend,
 //! allowing users to schedule automated tasks with cron expressions.
 //!
-//! TODO(H14): This module defines its own `ScheduledJob`, `ProactiveScheduler`,
+//! NOTE: This module defines its own `ScheduledJob`, `ProactiveScheduler`,
 //! and related types that duplicate `core::scheduler::types::ScheduledJob` and
 //! `core::scheduler::proactive::ProactiveScheduler`. The two type hierarchies
 //! are structurally incompatible (this one uses flat cron strings + action_type
 //! enum, while core uses `JobSchedule`/`JobAction` tagged enums with richer
 //! features like interval scheduling, callbacks, and execution history).
 //!
-//! The long-term plan is to:
+//! Migration plan:
 //! 1. Migrate these Tauri commands to delegate to `core::scheduler::ProactiveScheduler`.
 //! 2. Add adapter logic to convert the frontend's flat cron+action_type format
 //!    into `core::scheduler::types::JobSchedule` / `JobAction`.
@@ -445,10 +445,7 @@ pub async fn scheduler_get_next_runs(
 /// # Returns
 /// `true` if the job was found and toggled, `false` otherwise
 #[command]
-pub async fn scheduler_toggle_job(
-    id: String,
-    state: State<'_, SchedulerState>,
-) -> Result<bool> {
+pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) -> Result<bool> {
     // Check current status and toggle accordingly
     let current_status = {
         let job = state.scheduler.get_job(&id)?;
@@ -480,10 +477,7 @@ pub async fn scheduler_toggle_job(
 /// # Returns
 /// `true` if the job was found and marked as run
 #[command]
-pub async fn scheduler_run_job_now(
-    id: String,
-    state: State<'_, SchedulerState>,
-) -> Result<bool> {
+pub async fn scheduler_run_job_now(id: String, state: State<'_, SchedulerState>) -> Result<bool> {
     state.scheduler.mark_job_run(&id, true)
 }
 

@@ -20,10 +20,11 @@ export function CitationChip({ index, title, url }: CitationChipProps) {
     <Pressable
       onPress={handlePress}
       className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-500/15 active:bg-teal-500/25"
+      accessibilityLabel={`Citation ${index}: ${title}`}
+      accessibilityRole="link"
+      accessibilityHint={url ? 'Opens source in browser' : undefined}
     >
-      <Text className="text-[11px] font-medium text-teal-400">
-        [{index}]
-      </Text>
+      <Text className="text-[11px] font-medium text-teal-400">[{index}]</Text>
       <Text className="text-[11px] text-teal-300" numberOfLines={1}>
         {title}
       </Text>

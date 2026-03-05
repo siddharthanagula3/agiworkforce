@@ -14,6 +14,7 @@ import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import { toast } from 'sonner';
 
 // ============================================================================
 // Types
@@ -60,6 +61,20 @@ interface SchedulerState {
   resumeJob: (jobId: string) => Promise<boolean>;
   listJobs: () => Promise<void>;
   getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
+
+  // Additional actions
+  toggleJob: (jobId: string) => Promise<boolean>;
+  runJobNow: (jobId: string) => Promise<boolean>;
+  updateJobOnBackend: (
+    jobId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      schedule?: unknown;
+      status?: string;
+      prompt?: string;
+    },
+  ) => Promise<boolean>;
 
   // Internal actions
   updateJob: (job: ScheduledJob) => void;
@@ -135,11 +150,13 @@ export const useSchedulerStore = create<SchedulerState>()(
             await get().listJobs();
 
             set({ isLoading: false }, undefined, 'scheduler/addJob/success');
+            toast.success('Scheduled job created');
             return jobId;
           } catch (error) {
             const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to add job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/addJob/error');
+            toast.error(`Failed to create job: ${errorMessage}`);
             throw error;
           }
         },
@@ -159,8 +176,10 @@ export const useSchedulerStore = create<SchedulerState>()(
                 undefined,
                 'scheduler/removeJob/success',
               );
+              toast.success('Job removed');
             } else {
               set({ isLoading: false }, undefined, 'scheduler/removeJob/notFound');
+              toast.error('Job not found');
             }
 
             return success;
@@ -168,6 +187,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to remove job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/removeJob/error');
+            toast.error(`Failed to remove job: ${errorMessage}`);
             throw error;
           }
         },
@@ -198,6 +218,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to pause job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/pauseJob/error');
+            toast.error(`Failed to pause job: ${errorMessage}`);
             throw error;
           }
         },
@@ -228,6 +249,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to resume job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/resumeJob/error');
+            toast.error(`Failed to resume job: ${errorMessage}`);
             throw error;
           }
         },
@@ -259,6 +281,107 @@ export const useSchedulerStore = create<SchedulerState>()(
             return nextRuns;
           } catch (error) {
             console.error('[schedulerStore] Failed to get next runs:', error);
+            throw error;
+          }
+        },
+
+        toggleJob: async (jobId: string): Promise<boolean> => {
+          set({ isLoading: true, error: null }, undefined, 'scheduler/toggleJob/start');
+
+          try {
+            const success = await invoke<boolean>('scheduler_toggle_job', { id: jobId });
+
+            if (success) {
+              // Toggle the local state
+              set(
+                (state) => ({
+                  jobs: state.jobs.map((job) =>
+                    job.id === jobId ? { ...job, enabled: !job.enabled } : job,
+                  ),
+                  isLoading: false,
+                }),
+                undefined,
+                'scheduler/toggleJob/success',
+              );
+              toast.success('Job toggled');
+            } else {
+              set({ isLoading: false }, undefined, 'scheduler/toggleJob/notFound');
+              toast.error('Job not found');
+            }
+
+            return success;
+          } catch (error) {
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to toggle job:', error);
+            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/toggleJob/error');
+            toast.error(`Failed to toggle job: ${errorMessage}`);
+            throw error;
+          }
+        },
+
+        runJobNow: async (jobId: string): Promise<boolean> => {
+          set({ isLoading: true, error: null }, undefined, 'scheduler/runJobNow/start');
+
+          try {
+            const success = await invoke<boolean>('scheduler_run_job_now', { id: jobId });
+
+            set({ isLoading: false }, undefined, 'scheduler/runJobNow/success');
+
+            if (success) {
+              toast.success('Job triggered');
+              // Refresh to pick up updated last_run
+              await get().listJobs();
+            } else {
+              toast.error('Job not found');
+            }
+
+            return success;
+          } catch (error) {
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to run job:', error);
+            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/runJobNow/error');
+            toast.error(`Failed to run job: ${errorMessage}`);
+            throw error;
+          }
+        },
+
+        updateJobOnBackend: async (
+          jobId: string,
+          updates: {
+            name?: string;
+            description?: string;
+            schedule?: unknown;
+            status?: string;
+            prompt?: string;
+          },
+        ): Promise<boolean> => {
+          set({ isLoading: true, error: null }, undefined, 'scheduler/updateJobOnBackend/start');
+
+          try {
+            const success = await invoke<boolean>('scheduler_update_job', {
+              id: jobId,
+              updates,
+            });
+
+            if (success) {
+              // Refresh full job list to get the updated data from backend
+              await get().listJobs();
+              toast.success('Job updated');
+            } else {
+              set({ isLoading: false }, undefined, 'scheduler/updateJobOnBackend/notFound');
+              toast.error('Job not found');
+            }
+
+            return success;
+          } catch (error) {
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to update job:', error);
+            set(
+              { error: errorMessage, isLoading: false },
+              undefined,
+              'scheduler/updateJobOnBackend/error',
+            );
+            toast.error(`Failed to update job: ${errorMessage}`);
             throw error;
           }
         },

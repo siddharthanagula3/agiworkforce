@@ -327,13 +327,13 @@ impl WhatsAppClient {
                 if let Some(value) = change.value {
                     if let Some(messages) = value.messages {
                         for message in messages {
-                            println!("Received message from {}: {:?}", message.from, message.text);
+                            tracing::info!("Received message from {}: {:?}", message.from, message.text);
                         }
                     }
 
                     if let Some(statuses) = value.statuses {
                         for status in statuses {
-                            println!("Message {} status: {}", status.id, status.status);
+                            tracing::debug!("Message {} status: {}", status.id, status.status);
                         }
                     }
                 }

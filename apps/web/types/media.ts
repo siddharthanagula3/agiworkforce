@@ -74,6 +74,3 @@ export interface MediaGenerationError {
   message: string;
   provider?: string;
 }
-
-export const _stub = true;
-export default {};

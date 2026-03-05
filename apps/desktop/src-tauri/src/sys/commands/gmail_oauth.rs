@@ -108,30 +108,6 @@ fn store_gmail_tokens(conn: &Connection, account_id: &str, token: &TokenResponse
     Ok(())
 }
 
-/// Retrieve and decrypt Gmail OAuth tokens
-#[allow(dead_code)]
-fn get_gmail_tokens(conn: &Connection, account_id: &str) -> Result<TokenResponse> {
-    let encrypted_json: String = conn
-        .query_row(
-            "SELECT token_encrypted FROM gmail_accounts WHERE id = ?1",
-            params![account_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| Error::Database(format!("Failed to retrieve Gmail token: {}", e)))?;
-
-    let encrypted: EncryptedSecret = serde_json::from_str(&encrypted_json)
-        .map_err(|e| Error::Generic(format!("Failed to parse encrypted token: {}", e)))?;
-
-    let key = get_gmail_encryption_key();
-    let token_json = decrypt_secret(&key, &encrypted)
-        .map_err(|e| Error::Generic(format!("Failed to decrypt Gmail token: {}", e)))?;
-
-    let token: TokenResponse = serde_json::from_str(&token_json)
-        .map_err(|e| Error::Generic(format!("Failed to parse Gmail token: {}", e)))?;
-
-    Ok(token)
-}
-
 // =============================================================================
 // Tauri Commands
 // =============================================================================

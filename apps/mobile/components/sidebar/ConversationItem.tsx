@@ -38,18 +38,14 @@ export function ConversationItem({ conversation, isActive }: ConversationItemPro
   }, [router, conversation.id]);
 
   const handleDelete = useCallback(() => {
-    Alert.alert(
-      'Delete Conversation',
-      `Are you sure you want to delete "${conversation.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteConversation(conversation.id),
-        },
-      ],
-    );
+    Alert.alert('Delete Conversation', `Are you sure you want to delete "${conversation.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteConversation(conversation.id),
+      },
+    ]);
   }, [conversation.id, conversation.title, deleteConversation]);
 
   const handleRename = useCallback(() => {
@@ -119,79 +115,109 @@ export function ConversationItem({ conversation, isActive }: ConversationItemPro
 
   return (
     <>
-    <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
-      <Animated.View entering={FadeIn.duration(200)}>
-        <Pressable
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          style={[
-            {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 8,
-            },
-            isActive && {
-              backgroundColor: 'rgba(33, 128, 141, 0.1)',
-              borderLeftWidth: 2,
-              borderLeftColor: colors.teal,
-            },
-          ]}
-          accessibilityLabel={conversation.title}
-          accessibilityRole="button"
-        >
-          <MessageSquare size={16} color={isActive ? colors.teal : colors.textMuted} />
+      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+        <Animated.View entering={FadeIn.duration(200)}>
+          <Pressable
+            onPress={handlePress}
+            onLongPress={handleLongPress}
+            style={[
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderRadius: 8,
+              },
+              isActive && {
+                backgroundColor: 'rgba(33, 128, 141, 0.1)',
+                borderLeftWidth: 2,
+                borderLeftColor: colors.teal,
+              },
+            ]}
+            accessibilityLabel={conversation.title}
+            accessibilityRole="button"
+          >
+            <MessageSquare size={16} color={isActive ? colors.teal : colors.textMuted} />
 
-          <View style={{ flex: 1, minWidth: 0 }}>
-            {/* Title row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text
+            <View style={{ flex: 1, minWidth: 0 }}>
+              {/* Title row */}
+              <View
                 style={{
-                  fontSize: 14,
-                  fontWeight: '500',
-                  color: isActive ? colors.teal : 'rgba(255, 255, 255, 0.8)',
-                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                 }}
-                numberOfLines={1}
               >
-                {conversation.title}
-              </Text>
-              {conversation.pinned && <Pin size={10} color={colors.teal} />}
-            </View>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '500',
+                    color: isActive ? colors.teal : 'rgba(255, 255, 255, 0.8)',
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {conversation.title}
+                </Text>
+                {conversation.pinned && <Pin size={10} color={colors.teal} />}
+              </View>
 
-            {/* Preview + time row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-              <Text
-                style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.3)', flex: 1 }}
-                numberOfLines={1}
+              {/* Preview + time row */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginTop: 2,
+                }}
               >
-                {conversation.lastMessage
-                  ? truncate(conversation.lastMessage, 30)
-                  : `${conversation.messageCount} messages`}
-              </Text>
-              <Text style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.2)', marginLeft: 8 }}>
-                {formatRelativeTime(conversation.updatedAt)}
-              </Text>
+                <Text
+                  style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.3)', flex: 1 }}
+                  numberOfLines={1}
+                >
+                  {conversation.lastMessage
+                    ? truncate(conversation.lastMessage, 30)
+                    : `${conversation.messageCount} messages`}
+                </Text>
+                <Text style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.2)', marginLeft: 8 }}>
+                  {formatRelativeTime(conversation.updatedAt)}
+                </Text>
+              </View>
             </View>
-          </View>
-        </Pressable>
-      </Animated.View>
-    </Swipeable>
+          </Pressable>
+        </Animated.View>
+      </Swipeable>
 
       {/* Android rename modal */}
       {Platform.OS !== 'ios' && (
-        <Modal visible={renameVisible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
+        <Modal
+          visible={renameVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRenameVisible(false)}
+        >
           <Pressable
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              justifyContent: 'center',
+              padding: 24,
+            }}
             onPress={() => setRenameVisible(false)}
           >
             <View
               style={{ backgroundColor: colors.surfaceElevated, borderRadius: 12, padding: 16 }}
               onStartShouldSetResponder={() => true}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                  marginBottom: 12,
+                }}
+              >
                 Rename Conversation
               </Text>
               <TextInput
@@ -213,12 +239,24 @@ export function ConversationItem({ conversation, isActive }: ConversationItemPro
                 returnKeyType="done"
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                <Pressable onPress={() => setRenameVisible(false)} style={{ paddingVertical: 8, paddingHorizontal: 16 }}>
+                <Pressable
+                  onPress={() => setRenameVisible(false)}
+                  style={{ paddingVertical: 8, paddingHorizontal: 16 }}
+                  accessibilityLabel="Cancel rename"
+                  accessibilityRole="button"
+                >
                   <Text style={{ color: colors.textMuted, fontSize: 14 }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleRenameSubmit}
-                  style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: colors.teal, borderRadius: 8 }}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    backgroundColor: colors.teal,
+                    borderRadius: 8,
+                  }}
+                  accessibilityLabel="Confirm rename"
+                  accessibilityRole="button"
                 >
                   <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Rename</Text>
                 </Pressable>

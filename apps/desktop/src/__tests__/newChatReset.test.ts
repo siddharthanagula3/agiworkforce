@@ -15,7 +15,7 @@ const clearBackgroundTasks = vi.fn();
 // Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(() => Promise.resolve()),
-  isTauri: vi.fn(() => Promise.resolve(false)),
+  isTauri: vi.fn(() => Promise.resolve(true)),
 }));
 
 vi.mock('../stores/chat/chatStore', () => ({

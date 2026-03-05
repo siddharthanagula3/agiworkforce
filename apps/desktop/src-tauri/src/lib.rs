@@ -11,6 +11,7 @@ use crate::data::settings::SettingsService;
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::{
     ai_native::{CodeGeneratorState, ContextManagerState},
+    auth::SessionState,
     gmail_oauth::GmailOAuthState,
     intent::IntentState,
     load_persisted_calendar_accounts,
@@ -18,7 +19,6 @@ use crate::sys::commands::{
     mcp_extensions::McpExtensionsState,
     project_memory::ProjectMemoryState,
     research::ResearchState,
-    auth::SessionState,
     security::AuthManagerState,
     skills::SkillsState,
     tool_confirmation::ToolConfirmationState,
@@ -137,6 +137,12 @@ pub fn run() {
             if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
                 tracing::error!("Failed to create data directory: {}", e);
             }
+
+            // Ensure utility/path helpers resolve to the same app-data root as startup DB init.
+            std::env::set_var(
+                "AGIWORKFORCE_APP_DATA_DIR",
+                app_data_dir.to_string_lossy().to_string(),
+            );
 
 
 
@@ -485,7 +491,7 @@ pub fn run() {
             });
 
             // MCP OAuth state for handling OAuth flows (GitHub, Google Drive, Slack)
-            app.manage(McpOAuthState::new());
+            app.manage(McpOAuthState::default());
 
             // MCP Bundle (MCPB) state for bundle management
             app.manage(McpbState::new());
@@ -815,6 +821,38 @@ pub fn run() {
             });
             app.manage(TaskManagerState(task_manager));
 
+            // P5D: Autonomous task checkpoint persistence
+            {
+                use crate::core::agent::background_tasks::TaskStorage;
+                use crate::sys::commands::agi_checkpoint::AutonomousCheckpointState;
+                match TaskStorage::new(db_conn_arc.clone()) {
+                    Ok(storage) => {
+                        if let Err(e) = storage.ensure_autonomous_table() {
+                            tracing::warn!("Failed to create autonomous checkpoints table: {}", e);
+                        }
+                        let storage_arc = Arc::new(storage);
+                        app.manage(AutonomousCheckpointState {
+                            storage: storage_arc,
+                        });
+                        tracing::info!("AutonomousCheckpointState initialized");
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to initialize TaskStorage for autonomous checkpoints: {}. \
+                             Checkpoint persistence will be unavailable.",
+                            e
+                        );
+                        // Create a degraded state with a dummy storage that will fail
+                        // gracefully when used. We need to manage *something* so the
+                        // Tauri commands don't panic on missing state.
+                        if let Ok(fallback) = TaskStorage::new(db_conn_arc.clone()) {
+                            app.manage(AutonomousCheckpointState {
+                                storage: Arc::new(fallback),
+                            });
+                        }
+                    }
+                }
+            }
 
             match AppState::load(app.handle()) {
                 Ok(state) => {
@@ -828,7 +866,7 @@ pub fn run() {
 
 
             if let Err(err) = build_system_tray(app) {
-                eprintln!("[tray] initialization failed: {err:?}");
+                tracing::error!("[tray] initialization failed: {err:?}");
             }
 
             // Initialize global shortcuts (Option+Space, etc.)
@@ -840,7 +878,7 @@ pub fn run() {
             {
                 if accessibility_is_trusted() {
                     if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
-                        eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+                        tracing::error!("[shortcuts] global shortcuts initialization failed: {err:?}");
                     }
                 } else {
                     tracing::info!("Accessibility permission not yet granted; global shortcuts deferred until permission is obtained");
@@ -849,13 +887,13 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             {
                 if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
-                    eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+                    tracing::error!("[shortcuts] global shortcuts initialization failed: {err:?}");
                 }
             }
 
             if let Some(window) = app.get_webview_window("main") {
                 if let Err(err) = initialize_window(&window) {
-                    eprintln!("[window] initialization failed: {err:?}");
+                    tracing::error!("[window] initialization failed: {err:?}");
                 }
             }
 
@@ -1031,6 +1069,13 @@ pub fn run() {
             crate::sys::commands::agi_checkpoint_record_restore,
             crate::sys::commands::agi_checkpoint_cleanup,
             crate::sys::commands::agi_checkpoint_init,
+
+            // Autonomous Task Persistence (P5D)
+            crate::sys::commands::list_autonomous_task_checkpoints,
+            crate::sys::commands::list_autonomous_task_checkpoints_by_task,
+            crate::sys::commands::resume_autonomous_task,
+            crate::sys::commands::delete_autonomous_task_checkpoint,
+            crate::sys::commands::delete_autonomous_task_checkpoints,
 
             // AGI Task Control (pause/resume/abort running tasks)
             crate::sys::commands::agi_pause_task,
@@ -1655,6 +1700,7 @@ pub fn run() {
             crate::sys::commands::mcp_search_tools,
             crate::sys::commands::mcp_call_tool,
             crate::sys::commands::mcp_get_config,
+            crate::sys::commands::mcp_get_config_location,
             crate::sys::commands::mcp_update_config,
             crate::sys::commands::mcp_enable_server,
             crate::sys::commands::mcp_disable_server,
