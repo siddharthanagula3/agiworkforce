@@ -77,3 +77,30 @@
 - Model is set in agent frontmatter `model:` field (opus/sonnet/haiku/inherit)
 - `inherit` uses whatever model the parent session is using
 - Users can override per-agent model in Settings > Agents
+
+## Skills
+
+A skill is a set of local instructions to follow that is stored in a `SKILL.md` file.
+
+### Available skills
+
+- `skill-creator`: Guide for creating effective skills. Use when creating or updating a skill that extends Codex capabilities. (file: `/Users/siddhartha/.codex/skills/.system/skill-creator/SKILL.md`)
+- `skill-installer`: Installs Codex skills into `$CODEX_HOME/skills` from curated list or GitHub repo path. (file: `/Users/siddhartha/.codex/skills/.system/skill-installer/SKILL.md`)
+
+### How to use skills
+
+- Discovery: The list above is the skills available in this session (name + description + file path).
+- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a listed skill description, use that skill for that turn.
+- Missing/blocked: If a named skill is unavailable or its path cannot be read, say so briefly and continue with the best fallback.
+- Progressive disclosure:
+  1. Open the skill `SKILL.md` and read only enough to follow the workflow.
+  2. Resolve relative paths in skill docs relative to the skill directory first.
+  3. Load only specific reference files needed; avoid bulk-loading.
+  4. Prefer using existing skill scripts/templates/assets rather than recreating.
+- Coordination:
+  1. If multiple skills apply, use the minimal set and state order.
+  2. Announce which skills are used and why in one short line.
+- Context hygiene:
+  1. Keep context small: summarize long content instead of pasting.
+  2. Avoid deep reference chasing unless blocked.
+- Safety and fallback: If a skill cannot be applied cleanly, state the issue, pick next-best approach, and continue.

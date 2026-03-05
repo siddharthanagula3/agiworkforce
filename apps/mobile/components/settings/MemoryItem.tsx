@@ -104,6 +104,8 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
       <Pressable
         onPress={() => onDelete(memory.id)}
         className="bg-red-500/20 items-center justify-center px-6 rounded-r-xl"
+        accessibilityLabel="Delete memory"
+        accessibilityRole="button"
       >
         <Trash2 size={20} color={colors.agentError} />
       </Pressable>
@@ -117,7 +119,13 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
         <Card variant="default" className="mb-2">
           {/* Top row: content + edit button */}
           <View className="flex-row items-start gap-2">
-            <Pressable onPress={toggleExpand} className="flex-1">
+            <Pressable
+              onPress={toggleExpand}
+              className="flex-1"
+              accessibilityLabel={`Memory: ${memory.content.slice(0, 80)}`}
+              accessibilityRole="button"
+              accessibilityHint={expanded ? 'Tap to collapse' : 'Tap to expand'}
+            >
               <Text
                 className="text-sm text-white leading-5"
                 numberOfLines={expanded ? undefined : 3}
@@ -127,9 +135,7 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
 
               {/* Expanded content indicator */}
               {!expanded && memory.content.length > 150 && (
-                <Text className="text-xs text-teal-400 mt-1">
-                  Tap to expand
-                </Text>
+                <Text className="text-xs text-teal-400 mt-1">Tap to expand</Text>
               )}
             </Pressable>
 
@@ -137,28 +143,21 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
               onPress={() => onEdit(memory)}
               className="p-1.5 rounded-md active:bg-white/5"
               accessibilityLabel="Edit memory"
+              accessibilityRole="button"
             >
               <Pencil size={14} color={colors.textMuted} />
             </Pressable>
           </View>
 
           {/* Expanded extra content (animated) */}
-          {expanded && (
-            <Animated.View style={expandStyle} className="mt-1" />
-          )}
+          {expanded && <Animated.View style={expandStyle} className="mt-1" />}
 
           {/* Bottom row: badges + timestamp */}
           <View className="flex-row items-center mt-2.5 gap-2">
             {memory.category && (
-              <Badge
-                label={memory.category}
-                color={getCategoryColor(memory.category)}
-              />
+              <Badge label={memory.category} color={getCategoryColor(memory.category)} />
             )}
-            <Badge
-              label={SOURCE_LABELS[memory.source] ?? memory.source}
-              color="gray"
-            />
+            <Badge label={SOURCE_LABELS[memory.source] ?? memory.source} color="gray" />
             <View className="flex-1" />
             <Text className="text-[10px] text-white/30">
               {formatRelativeTime(memory.updatedAt)}

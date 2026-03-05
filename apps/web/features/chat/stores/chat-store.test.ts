@@ -5,7 +5,7 @@
  * streaming state, and Supabase persistence.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
 
 // Mock supabase-client before importing the store
 vi.mock('@shared/lib/supabase-client', () => ({
@@ -27,16 +27,20 @@ vi.mock('@shared/lib/supabase-client', () => ({
 import { useChatStore, getGreetingTime } from './chat-store';
 
 describe('ChatStore (features/chat)', () => {
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     // Reset store to initial state
-    useChatStore.setState({
-      sessions: [],
-      messages: {},
-      activeSessionId: null,
-      isLoading: false,
-      sidebarOpen: true,
-      dbLoaded: false,
-    });
+    useChatStore.getState().reset();
+
+    // Advance past any debounce window from previous tests (500ms guard)
+    vi.advanceTimersByTime(1500);
   });
 
   // ==========================================================================
@@ -73,6 +77,7 @@ describe('ChatStore (features/chat)', () => {
     it('returns a unique id string', () => {
       const { createSession } = useChatStore.getState();
       const id1 = createSession();
+      vi.advanceTimersByTime(1500); // bypass debounce
       const id2 = useChatStore.getState().createSession();
 
       expect(typeof id1).toBe('string');
@@ -83,6 +88,7 @@ describe('ChatStore (features/chat)', () => {
     it('prepends (unshifts) new session so most recent is first', () => {
       const { createSession } = useChatStore.getState();
       const id1 = createSession();
+      vi.advanceTimersByTime(1500); // bypass debounce
       const id2 = useChatStore.getState().createSession();
 
       const { sessions } = useChatStore.getState();
@@ -114,6 +120,7 @@ describe('ChatStore (features/chat)', () => {
     it('sets activeSessionId to the next session if available', () => {
       const { createSession } = useChatStore.getState();
       const id1 = createSession();
+      vi.advanceTimersByTime(1500); // bypass debounce
       const id2 = useChatStore.getState().createSession();
 
       // id2 is now active (most recently created)
@@ -354,6 +361,7 @@ describe('ChatStore (features/chat)', () => {
     it('sets the active session id', () => {
       const { createSession } = useChatStore.getState();
       const id1 = createSession();
+      vi.advanceTimersByTime(1500); // bypass debounce
       const id2 = useChatStore.getState().createSession();
 
       useChatStore.getState().setActiveSession(id1);
@@ -803,8 +811,6 @@ describe('ChatStore (features/chat)', () => {
   // ==========================================================================
 
   describe('getGreetingTime', () => {
-    afterEach(() => vi.useRealTimers());
-
     it('returns "morning" for hours before 12', () => {
       vi.setSystemTime(new Date('2024-01-01T09:00:00'));
       expect(getGreetingTime()).toBe('morning');

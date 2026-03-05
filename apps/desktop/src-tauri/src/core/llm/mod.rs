@@ -540,7 +540,9 @@ impl<'de> serde::Deserialize<'de> for ToolChoice {
                     "unrecognized tool_choice object format",
                 ))
             }
-            _ => Err(serde::de::Error::custom("expected string or object for tool_choice")),
+            _ => Err(serde::de::Error::custom(
+                "expected string or object for tool_choice",
+            )),
         }
     }
 }

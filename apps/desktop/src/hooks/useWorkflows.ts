@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { listen } from '../lib/tauri-mock';
 import {
   createWorkflow as apiCreateWorkflow,
@@ -107,6 +108,9 @@ export function useWorkflows(): UseWorkflowsResult {
           // Clear executing state when workflow completes
           if (['completed', 'failed', 'cancelled'].includes(status)) {
             setIsExecuting(false);
+            if (status === 'completed') {
+              toast.success('Workflow completed');
+            }
           }
         },
       ),
@@ -147,6 +151,7 @@ export function useWorkflows(): UseWorkflowsResult {
         });
         setError(errorMessage);
         setIsExecuting(false);
+        toast.error('Workflow failed', { description: errorMessage });
       }),
     ];
 

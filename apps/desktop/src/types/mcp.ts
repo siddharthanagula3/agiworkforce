@@ -25,6 +25,13 @@ export interface McpServerConfig {
   enabled: boolean;
 }
 
+export interface McpConfigLocation {
+  path: string;
+  source: 'project' | 'global' | string;
+  projectFolder: string | null;
+  exists: boolean;
+}
+
 export interface McpToolResult {
   success: boolean;
   data: unknown;

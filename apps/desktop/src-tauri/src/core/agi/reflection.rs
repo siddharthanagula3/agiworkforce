@@ -247,7 +247,7 @@ pub struct ReflectionEngine {
     router: Arc<RwLock<LLMRouter>>,
     /// Knowledge base for context
     knowledge_base: Arc<KnowledgeBase>,
-    /// Learning system for strategy updates
+    /// Learning system for strategy updates (reserved for adaptive learning integration)
     #[allow(dead_code)]
     learning: Arc<LearningSystem>,
     /// History of reflections for pattern analysis
@@ -972,7 +972,7 @@ Evaluate the plan and respond with a JSON object:
     }
 
     /// Store reflection in history
-    async fn store_reflection(&self, insight: &ReflectionInsight) -> Result<()> {
+    pub async fn store_reflection(&self, insight: &ReflectionInsight) -> Result<()> {
         let mut history = self.reflection_history.lock().await;
 
         history.push(insight.clone());

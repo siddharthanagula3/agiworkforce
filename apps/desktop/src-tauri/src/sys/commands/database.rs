@@ -1014,11 +1014,10 @@ pub async fn db_store_password(connection_id: String, password: String) -> Resul
     //      (enabled below) allows concurrent reads alongside this write without
     //      blocking the pool. Write contention risk is negligible in practice.
     //
-    // TODO (M16): Migrate to pool-based access by adding
-    //   `pool: State<'_, SqlitePoolState>`
-    // to the command signature and replacing this block with `pool.acquire()`.
-    // That change requires updating the corresponding `invoke()` call in the
-    // TypeScript frontend and the Tauri command registration in `lib.rs`.
+    // TECH DEBT (M16): This opens a standalone connection instead of using the pool.
+    // Migration to pool-based access requires adding `pool: State<'_, SqlitePoolState>`
+    // to the command signature, updating the frontend `invoke()` call, and the
+    // Tauri command registration in `lib.rs`.
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 

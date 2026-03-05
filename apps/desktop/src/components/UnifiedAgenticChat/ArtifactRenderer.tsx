@@ -318,7 +318,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         // Check if component is still mounted before proceeding
         if (!isMountedRef.current) return;
         const base64 = (reader.result as string).split(',')[1];
-        await invoke('file_write_binary', { file_path: savePath, content: base64 });
+        await invoke('file_write_binary', { file_path: savePath, base64_content: base64 });
         if (isMountedRef.current) {
           toast.success('Exported as SVG');
         }

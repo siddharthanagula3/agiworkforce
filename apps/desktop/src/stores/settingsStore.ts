@@ -288,13 +288,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setFeature',
           );
-          // Sync capability toggles to the Rust backend for enforcement
-          const updated = { ...get().features, [key]: enabled };
-          if (isTauriContext()) {
-            invoke('sync_capabilities', { capabilities: updated }).catch((err: unknown) => {
-              console.warn('[Settings] Failed to sync capabilities to backend:', err);
-            });
-          }
         },
 
         addCustomModel: (config: CustomModelConfig) => {
@@ -606,20 +599,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAutoApproveTools',
           );
-          if (isTauriContext()) {
-            try {
-              await invoke('set_auto_approve_all', { enabled });
-            } catch (error) {
-              console.error('Failed to sync auto-approve-all to backend:', error);
-            }
-            // Persist chatPreferences to Rust disk so loadSettings reads the correct
-            // value after restart (loadSettings overwrites Zustand state with disk state).
-            void get()
-              .saveSettings()
-              .catch((e: unknown) => {
-                console.error('Failed to persist auto-approve setting to disk:', e);
-              });
-          }
         },
 
         addAllowedDirectory: (path: string) => {
@@ -665,7 +644,10 @@ export const useSettingsStore = create<SettingsState>()(
               windowPreferences: WindowPreferences;
               chatPreferences?: ChatPreferences;
               executionPreferences?: ExecutionPreferences;
+              globalHotkeyPreferences?: GlobalHotkeyPreferences;
               allowedDirectories: string[];
+              customModels?: CustomModelConfig[];
+              featureFlags?: Record<string, boolean>;
             };
 
             try {
@@ -674,7 +656,10 @@ export const useSettingsStore = create<SettingsState>()(
                 windowPreferences: WindowPreferences;
                 chatPreferences?: ChatPreferences;
                 executionPreferences?: ExecutionPreferences;
+                globalHotkeyPreferences?: GlobalHotkeyPreferences;
                 allowedDirectories: string[];
+                customModels?: CustomModelConfig[];
+                featureFlags?: Record<string, boolean>;
               }>('settings_load_from_disk');
             } catch (diskError) {
               console.warn(
@@ -686,7 +671,10 @@ export const useSettingsStore = create<SettingsState>()(
                 windowPreferences: WindowPreferences;
                 chatPreferences?: ChatPreferences;
                 executionPreferences?: ExecutionPreferences;
+                globalHotkeyPreferences?: GlobalHotkeyPreferences;
                 allowedDirectories: string[];
+                customModels?: CustomModelConfig[];
+                featureFlags?: Record<string, boolean>;
               }>('settings_load');
             }
 
@@ -735,6 +723,11 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.executionPreferences ?? defaultSettings.executionPreferences),
             };
 
+            const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
+              ...defaultSettings.globalHotkeyPreferences,
+              ...(settings.globalHotkeyPreferences ?? defaultSettings.globalHotkeyPreferences),
+            };
+
             // Configure local Ollama provider
             try {
               await invoke('llm_configure_provider', {
@@ -757,7 +750,13 @@ export const useSettingsStore = create<SettingsState>()(
                 windowPreferences: mergedWindowPreferences,
                 chatPreferences: mergedChatPreferences,
                 executionPreferences: mergedExecutionPreferences,
+                globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
                 allowedDirectories: settings.allowedDirectories ?? [],
+                customModels: Array.isArray(settings.customModels) ? settings.customModels : [],
+                features:
+                  settings.featureFlags && typeof settings.featureFlags === 'object'
+                    ? settings.featureFlags
+                    : get().features,
                 loading: false,
               },
               undefined,
@@ -783,15 +782,28 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to sync auto-approve-all to backend:', error);
             }
 
+            // Keep backend capability enforcement in sync with loaded settings.
+            try {
+              await invoke('sync_capabilities', {
+                capabilities:
+                  settings.featureFlags && typeof settings.featureFlags === 'object'
+                    ? settings.featureFlags
+                    : get().features,
+              });
+            } catch (error) {
+              console.error('Failed to sync capabilities to backend:', error);
+            }
+
             // FIX-003: Sync allowed directories to the backend security guard
             // This ensures file operations respect user-configured allowed directories
             try {
               const dirs = settings.allowedDirectories ?? [];
-              if (dirs.length > 0) {
-                await invoke('update_allowed_directories', { paths: dirs });
-                console.log('[settingsStore] Synced allowed directories to backend:', dirs.length);
+              await invoke('update_allowed_directories', { paths: dirs });
+              console.log('[settingsStore] Synced allowed directories to backend:', dirs.length);
 
-                // Also update MCP filesystem server to use the allowed directories
+              // Also update MCP filesystem server to use the allowed directories.
+              // Empty directory lists are represented by ToolGuard only.
+              if (dirs.length > 0) {
                 await invoke('mcp_update_filesystem_directories', { directories: dirs });
                 console.log(
                   '[settingsStore] Updated MCP filesystem with allowed directories:',
@@ -822,7 +834,10 @@ export const useSettingsStore = create<SettingsState>()(
               windowPreferences,
               chatPreferences,
               executionPreferences,
+              globalHotkeyPreferences,
               allowedDirectories,
+              customModels,
+              features,
             } = get();
             await invoke('settings_save', {
               settings: {
@@ -830,16 +845,19 @@ export const useSettingsStore = create<SettingsState>()(
                 windowPreferences,
                 chatPreferences,
                 executionPreferences,
+                globalHotkeyPreferences,
                 allowedDirectories,
+                customModels,
+                featureFlags: features,
               },
             });
 
             // FIX-003: Sync allowed directories to the backend security guard
             // This ensures file operations respect user-configured allowed directories
             try {
-              if (allowedDirectories.length > 0) {
-                await invoke('update_allowed_directories', { paths: allowedDirectories });
+              await invoke('update_allowed_directories', { paths: allowedDirectories });
 
+              if (allowedDirectories.length > 0) {
                 // Also update MCP filesystem server to use the allowed directories
                 await invoke('mcp_update_filesystem_directories', {
                   directories: allowedDirectories,
@@ -858,6 +876,13 @@ export const useSettingsStore = create<SettingsState>()(
               await invoke('set_auto_approve_all', { enabled: chatPreferences.autoApproveTools });
             } catch (error) {
               console.error('Failed to sync auto-approve-all to backend:', error);
+            }
+
+            // Sync capability toggles on explicit save.
+            try {
+              await invoke('sync_capabilities', { capabilities: features });
+            } catch (error) {
+              console.error('Failed to sync capabilities to backend:', error);
             }
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');

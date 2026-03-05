@@ -707,9 +707,7 @@ pub async fn get_benchmark_comparison(
 }
 
 #[tauri::command]
-pub async fn get_recent_activity(
-    _limit: u32,
-) -> Result<Vec<ActivityItem>, String> {
+pub async fn get_recent_activity(_limit: u32) -> Result<Vec<ActivityItem>, String> {
     // Return empty for now - would need activity tracking system
     Ok(vec![])
 }

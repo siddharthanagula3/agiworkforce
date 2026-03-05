@@ -8,6 +8,11 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
+import {
+  registerForPushNotifications,
+  setupNotificationListeners,
+  handleInitialNotification,
+} from '@/services/notifications';
 import '../global.css';
 
 export default function RootLayout() {
@@ -20,6 +25,19 @@ export default function RootLayout() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Push notifications — register + listeners
+  useEffect(() => {
+    if (!session) return;
+
+    registerForPushNotifications();
+    const removeListeners = setupNotificationListeners();
+
+    // Handle the notification that cold-started the app
+    handleInitialNotification();
+
+    return removeListeners;
+  }, [session]);
 
   // Auth guard
   useEffect(() => {
@@ -40,9 +58,7 @@ export default function RootLayout() {
     if (!url || !session || !isInitialized) return;
 
     const parsed = Linking.parse(url);
-    const isPairRoute =
-      parsed.hostname === 'pair' ||
-      parsed.path?.startsWith('pair');
+    const isPairRoute = parsed.hostname === 'pair' || parsed.path?.startsWith('pair');
 
     if (isPairRoute) {
       const code =
@@ -80,7 +96,14 @@ export default function RootLayout() {
 
   if (!isInitialized || isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <ActivityIndicator color={colors.teal} size="large" />
       </View>
     );

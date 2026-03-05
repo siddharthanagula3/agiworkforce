@@ -8,7 +8,6 @@ use crate::integrations::native_messaging::{
         get_chrome_native_messaging_dir, get_edge_native_messaging_dir, install_manifests,
         is_native_messaging_installed, uninstall_manifests,
     },
-    messages::TabInfo,
     ConnectionState, NativeMessagingState,
 };
 use serde::{Deserialize, Serialize};
@@ -186,19 +185,6 @@ pub async fn native_messaging_get_connection_state(
         ConnectionState::Error(_) => "error",
     };
     Ok(conn_state.to_string())
-}
-
-/// Convert TabInfo to BrowserTab
-#[allow(dead_code)]
-fn convert_tab_info(tab: &TabInfo) -> BrowserTab {
-    BrowserTab {
-        id: tab.id,
-        url: tab.url.clone(),
-        title: tab.title.clone(),
-        active: tab.active,
-        window_id: tab.window_id,
-        favicon_url: tab.favicon_url.clone(),
-    }
 }
 
 #[cfg(test)]

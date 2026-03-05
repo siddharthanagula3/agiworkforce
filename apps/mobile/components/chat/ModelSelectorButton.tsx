@@ -35,6 +35,9 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
     <Pressable
       onPress={handlePress}
       className="flex-row items-center gap-1 px-1.5 py-1.5 rounded-lg active:bg-white/5"
+      accessibilityLabel={`Model: ${label}${thinkingModeEnabled ? ', thinking mode on' : ''}`}
+      accessibilityRole="button"
+      accessibilityHint="Opens model picker"
     >
       {/* Bot icon — teal when a specific model is selected */}
       <View className="relative">
@@ -50,9 +53,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
 
       {/* Truncated label */}
       <Text
-        className={`text-xs font-medium max-w-[80px] ${
-          isAuto ? 'text-white/50' : 'text-teal-400'
-        }`}
+        className={`text-xs font-medium max-w-[80px] ${isAuto ? 'text-white/50' : 'text-teal-400'}`}
         numberOfLines={1}
       >
         {label}

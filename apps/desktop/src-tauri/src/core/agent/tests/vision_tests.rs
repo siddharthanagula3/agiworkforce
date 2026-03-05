@@ -63,6 +63,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[tokio::test]
+    #[ignore] // requires display + OCR runtime
     async fn test_search_text_without_ocr_returns_empty() {
         let vision = VisionAutomation::new().unwrap();
         let result = vision.search_text("OK").await;
@@ -75,6 +76,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[tokio::test]
+    #[ignore] // requires display + OCR runtime
     async fn test_find_text_single_without_ocr_returns_err() {
         let vision = VisionAutomation::new().unwrap();
         let result = vision.find_text_single("OK", false).await;

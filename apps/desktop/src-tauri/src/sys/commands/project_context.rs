@@ -6,6 +6,7 @@
 //! - Scope file operations and terminal commands to the project directory
 //! - Enable folder-aware tool execution
 
+use crate::core::mcp::config::PROJECT_FOLDER_ENV_VAR;
 use crate::sys::commands::mcp::McpState;
 use crate::sys::commands::settings::SettingsState;
 use serde::{Deserialize, Serialize};
@@ -67,6 +68,12 @@ impl ProjectContextState {
             .file_name()
             .and_then(|n| n.to_str())
             .map(|s| s.to_string());
+
+        if is_valid {
+            std::env::set_var(PROJECT_FOLDER_ENV_VAR, &path);
+        } else {
+            std::env::remove_var(PROJECT_FOLDER_ENV_VAR);
+        }
 
         let mut ctx = self.context.write().await;
         ctx.folder = Some(path);
@@ -159,6 +166,23 @@ pub async fn project_context_set_folder(
             p, name
         );
 
+        // Switch MCP config source to project-local MCP config immediately.
+        let previous_scope = std::env::var(PROJECT_FOLDER_ENV_VAR).ok();
+        std::env::set_var(PROJECT_FOLDER_ENV_VAR, p);
+        if let Err(e) = mcp_state.reload_active_config(&app_handle).await {
+            // Restore previous scope if switching fails.
+            if let Some(previous) = previous_scope {
+                std::env::set_var(PROJECT_FOLDER_ENV_VAR, previous);
+            } else {
+                std::env::remove_var(PROJECT_FOLDER_ENV_VAR);
+            }
+            let _ = mcp_state.reload_active_config(&app_handle).await;
+            return Err(format!(
+                "Failed to switch MCP config to project scope: {}",
+                e
+            ));
+        }
+
         // Ensure folder-scoped sessions have immediate filesystem access without
         // requiring a separate manual allowed-directories update.
         let normalized_project = normalize_path_for_compare(p);
@@ -224,6 +248,18 @@ pub async fn project_context_set_folder(
     } else {
         // Clear the project folder
         info!("[ProjectContext] Cleared project folder");
+        let previous_scope = std::env::var(PROJECT_FOLDER_ENV_VAR).ok();
+        std::env::remove_var(PROJECT_FOLDER_ENV_VAR);
+        if let Err(e) = mcp_state.reload_active_config(&app_handle).await {
+            if let Some(previous) = previous_scope {
+                std::env::set_var(PROJECT_FOLDER_ENV_VAR, previous);
+            }
+            let _ = mcp_state.reload_active_config(&app_handle).await;
+            return Err(format!(
+                "Failed to switch MCP config back to global scope: {}",
+                e
+            ));
+        }
         let mut ctx = state.context.write().await;
         ctx.folder = None;
         ctx.name = None;

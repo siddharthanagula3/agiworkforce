@@ -26,6 +26,7 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface ChatCompletionChunk {
@@ -122,6 +123,13 @@ export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> 
 
 function getApiEndpoint(): string {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
+  const desktopBridgePort = config.get<number>('desktopBridge.port') ?? 8787;
+
+  if (desktopBridgeEnabled) {
+    return `http://127.0.0.1:${desktopBridgePort}`;
+  }
+
   return (config.get<string>('apiEndpoint') ?? DEFAULT_ENDPOINT).replace(/\/+$/, '');
 }
 
@@ -133,6 +141,19 @@ function getModel(): string {
 function isStreamingEnabled(): boolean {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   return config.get<boolean>('streamingEnabled') ?? true;
+}
+
+function getFeatureFlags(): {
+  mcpEnabled: boolean;
+  desktopBridgeEnabled: boolean;
+  desktopBridgePort: number;
+} {
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  return {
+    mcpEnabled: config.get<boolean>('mcp.enabled') ?? false,
+    desktopBridgeEnabled: config.get<boolean>('desktopBridge.enabled') ?? false,
+    desktopBridgePort: config.get<number>('desktopBridge.port') ?? 8787,
+  };
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
@@ -309,6 +330,7 @@ export async function streamChatCompletion(
   const endpoint = getApiEndpoint();
   const model = overrideModel ?? getModel();
   const streaming = isStreamingEnabled();
+  const features = getFeatureFlags();
 
   const requestBody: ChatCompletionRequest = {
     model,
@@ -316,6 +338,11 @@ export async function streamChatCompletion(
     stream: streaming,
     temperature: 0.2,
     max_tokens: 4096,
+    metadata: {
+      mcp_enabled: features.mcpEnabled,
+      desktop_bridge_enabled: features.desktopBridgeEnabled,
+      desktop_bridge_port: features.desktopBridgePort,
+    },
   };
 
   const bodyStr = JSON.stringify(requestBody);

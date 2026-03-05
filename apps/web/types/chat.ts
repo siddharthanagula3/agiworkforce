@@ -100,6 +100,3 @@ export interface ChatMessageMetadata {
   processingTime?: number;
   temperature?: number;
 }
-
-export const _stub = true;
-export default {};

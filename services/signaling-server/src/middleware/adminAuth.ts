@@ -11,6 +11,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { timingSafeEqual } from 'crypto';
+import { logger } from '../logger.js';
 
 // =============================================================================
 // Configuration
@@ -103,7 +104,7 @@ function recordAuthFailure(ip: string): void {
 
     if (entry.failures >= MAX_AUTH_FAILURES && !entry.lockedUntil) {
       entry.lockedUntil = now + AUTH_LOCKOUT_DURATION_MS;
-      console.warn(`[security] IP ${ip} locked out due to ${entry.failures} auth failures`);
+      logger.warn({ ip, failures: entry.failures }, 'IP locked out due to auth failures');
     }
   }
 
@@ -169,7 +170,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
 
   // Check if admin API key is configured
   if (!ADMIN_API_KEY) {
-    console.warn(`[security] Admin endpoint accessed but ADMIN_API_KEY not configured (IP: ${ip})`);
+    logger.warn({ ip }, 'Admin endpoint accessed but ADMIN_API_KEY not configured');
     res.status(503).json({
       error: 'ADMIN_NOT_CONFIGURED',
       message: 'Admin endpoints are not configured.',
@@ -198,7 +199,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
   // Validate API key
   if (!apiKey) {
     recordAuthFailure(ip);
-    console.warn(`[security] Admin auth failed: no API key provided (IP: ${ip})`);
+    logger.warn({ ip }, 'Admin auth failed: no API key provided');
     res.status(401).json({
       error: 'UNAUTHORIZED',
       message: 'API key required. Use Authorization: Bearer <key> or X-API-Key header.',
@@ -208,7 +209,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
 
   if (!secureCompare(apiKey, ADMIN_API_KEY)) {
     recordAuthFailure(ip);
-    console.warn(`[security] Admin auth failed: invalid API key (IP: ${ip})`);
+    logger.warn({ ip }, 'Admin auth failed: invalid API key');
     res.status(401).json({
       error: 'UNAUTHORIZED',
       message: 'Invalid API key.',

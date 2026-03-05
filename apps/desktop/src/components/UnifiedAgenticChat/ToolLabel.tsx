@@ -51,13 +51,14 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
   const Icon = ICON_MAP[entry.displayName] ?? Wrench;
   const isRunning = entry.status === 'running';
   const isError = entry.status === 'error';
+  const errorTitle = isError && entry.error ? entry.error : undefined;
 
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       className={cn(
-        'flex items-center gap-2 py-0.5 text-xs font-mono',
+        'flex min-w-0 items-center gap-2 py-0.5 text-xs font-mono',
         isError ? 'text-red-400' : 'text-muted-foreground',
       )}
     >
@@ -74,11 +75,17 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
       <Icon className="w-3 h-3 shrink-0" />
 
       {/* Tool label: Name(args) */}
-      <span className="truncate max-w-[300px]">
+      <span className="truncate max-w-[300px]" title={errorTitle}>
         <span className="text-foreground/80">{entry.displayName}</span>
         {entry.displayArgs && <span className="text-muted-foreground">({entry.displayArgs})</span>}
         {isRunning && <span className="text-violet-400">...</span>}
       </span>
+
+      {isError && entry.error && (
+        <span className="truncate max-w-[240px] text-red-400/80" title={entry.error}>
+          {entry.error}
+        </span>
+      )}
 
       {/* Duration */}
       {entry.durationMs != null && !isRunning && (

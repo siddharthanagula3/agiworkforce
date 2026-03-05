@@ -4,7 +4,7 @@ import { ErrorBoundary } from '../index';
 import * as errorReportingService from '../../../services/errorReporting';
 
 const mockAddError = vi.fn();
-vi.mock('../../../stores/errorStore', () => ({
+vi.mock('../../../stores/ui', () => ({
   default: {
     getState: () => ({
       addError: mockAddError,

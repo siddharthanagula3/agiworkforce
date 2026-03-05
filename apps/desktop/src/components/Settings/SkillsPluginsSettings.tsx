@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 import { Button } from '../ui/Button';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -71,6 +72,13 @@ interface DirEntry {
   is_dir: boolean;
 }
 
+interface TerminalCommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  durationMs: number;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function pluginIdFromKey(key: string): { name: string; marketplace: string } {
@@ -83,6 +91,39 @@ function humanizeId(id: string): string {
     .split(/[-_]/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
+}
+
+function normalizeProjectPath(path: string | undefined): string | null {
+  if (!path) return null;
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+function normalizePluginSpec(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  // Keep this strict to avoid shell injection in CLI execution.
+  if (!/^[A-Za-z0-9._:@/-]+$/.test(trimmed)) return null;
+  if (trimmed.length > 200) return null;
+  return trimmed;
+}
+
+function pluginCliCandidates(
+  action: 'install' | 'update' | 'remove',
+  pluginSpec: string,
+): string[] {
+  if (action === 'install') {
+    return [`claude plugins install ${pluginSpec}`, `claude plugin install ${pluginSpec}`];
+  }
+  if (action === 'update') {
+    return [`claude plugins update ${pluginSpec}`, `claude plugin update ${pluginSpec}`];
+  }
+  return [
+    `claude plugins remove ${pluginSpec}`,
+    `claude plugin remove ${pluginSpec}`,
+    `claude plugins uninstall ${pluginSpec}`,
+    `claude plugin uninstall ${pluginSpec}`,
+  ];
 }
 
 async function tryDirList(path: string): Promise<DirEntry[]> {
@@ -129,8 +170,22 @@ function SectionHeader({
   );
 }
 
-function PluginRow({ plugin }: { plugin: ResolvedPlugin }) {
+function PluginRow({
+  plugin,
+  actionInProgress,
+  onUpdate,
+  onRemove,
+}: {
+  plugin: ResolvedPlugin;
+  actionInProgress: string | null;
+  onUpdate: (plugin: ResolvedPlugin) => void;
+  onRemove: (plugin: ResolvedPlugin) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const updateKey = `update:${plugin.id}`;
+  const removeKey = `remove:${plugin.id}`;
+  const isUpdating = actionInProgress === updateKey;
+  const isRemoving = actionInProgress === removeKey;
   const scopeBadge =
     plugin.scope === 'local' ? (
       <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -176,37 +231,75 @@ function PluginRow({ plugin }: { plugin: ResolvedPlugin }) {
         </div>
       </button>
 
-      {expanded && (plugin.skills.length > 0 || plugin.agents.length > 0) && (
+      {expanded && (
         <div className="px-11 pb-3 space-y-2">
-          {plugin.skills.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Skills</p>
-              <div className="flex flex-wrap gap-1">
-                {plugin.skills.map((s) => (
-                  <span
-                    key={s}
-                    className="rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-foreground"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {plugin.agents.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Agents</p>
-              <div className="flex flex-wrap gap-1">
-                {plugin.agents.map((a) => (
-                  <span
-                    key={a}
-                    className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
-                  >
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isUpdating || isRemoving}
+              onClick={() => onUpdate(plugin)}
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  Updating…
+                </>
+              ) : (
+                'Update'
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isUpdating || isRemoving}
+              className="text-destructive hover:text-destructive"
+              onClick={() => onRemove(plugin)}
+            >
+              {isRemoving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  Removing…
+                </>
+              ) : (
+                'Remove'
+              )}
+            </Button>
+          </div>
+
+          {(plugin.skills.length > 0 || plugin.agents.length > 0) && (
+            <>
+              {plugin.skills.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Skills</p>
+                  <div className="flex flex-wrap gap-1">
+                    {plugin.skills.map((s) => (
+                      <span
+                        key={s}
+                        className="rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-foreground"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {plugin.agents.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Agents</p>
+                  <div className="flex flex-wrap gap-1">
+                    {plugin.agents.map((a) => (
+                      <span
+                        key={a}
+                        className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                      >
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -244,6 +337,7 @@ function EntryRow({
 
 export function SkillsPluginsSettings() {
   const allowedDirectories = useSettingsStore((s) => s.allowedDirectories);
+  const currentProjectFolder = useProjectStore(selectCurrentFolder);
 
   const [plugins, setPlugins] = useState<ResolvedPlugin[]>([]);
   const [commands, setCommands] = useState<ProjectEntry[]>([]);
@@ -251,6 +345,9 @@ export function SkillsPluginsSettings() {
   const [agents, setAgents] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pluginInput, setPluginInput] = useState('');
+  const [pluginActionInProgress, setPluginActionInProgress] = useState<string | null>(null);
+  const [pluginActionMessage, setPluginActionMessage] = useState<string | null>(null);
 
   const [pluginsExpanded, setPluginsExpanded] = useState(true);
   const [commandsExpanded, setCommandsExpanded] = useState(true);
@@ -261,7 +358,7 @@ export function SkillsPluginsSettings() {
   // Use the string primitive (not the array reference) as the dependency so
   // useCallback doesn't re-create load on every render when the selector
   // returns a new array instance with the same value.
-  const projectRoot = allowedDirectories[0];
+  const projectRoot = currentProjectFolder ?? allowedDirectories[0] ?? null;
 
   const load = useCallback(async () => {
     if (isNonTauri) {
@@ -295,10 +392,17 @@ export function SkillsPluginsSettings() {
 
           // Read all plugin manifests in parallel instead of serially.
           const entries = Object.entries(data.plugins ?? {});
+          const normalizedProjectRoot = normalizeProjectPath(projectRoot ?? undefined);
           const resolved = await Promise.all(
             entries.map(async ([key, records]) => {
+              const scopedRecords = records.filter((record) => {
+                if (record.scope !== 'local') return true;
+                if (!normalizedProjectRoot) return false;
+                return normalizeProjectPath(record.projectPath) === normalizedProjectRoot;
+              });
+
               const { name, marketplace } = pluginIdFromKey(key);
-              const latestRecord = [...records].sort(
+              const latestRecord = [...scopedRecords].sort(
                 (a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
               )[0];
               if (!latestRecord) return null;
@@ -369,6 +473,10 @@ export function SkillsPluginsSettings() {
             .map((e) => ({ name: e.name, path: e.path }))
             .sort((a, b) => a.name.localeCompare(b.name)),
         );
+      } else {
+        setCommands([]);
+        setSkills([]);
+        setAgents([]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load plugins');
@@ -380,6 +488,78 @@ export function SkillsPluginsSettings() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const runPluginCliAction = useCallback(
+    async (action: 'install' | 'update' | 'remove', pluginSpec: string) => {
+      const normalizedSpec = normalizePluginSpec(pluginSpec);
+      if (!normalizedSpec) {
+        setPluginActionMessage(
+          `Invalid plugin identifier "${pluginSpec}". Use letters, numbers, ., _, -, :, @, and /.`,
+        );
+        return;
+      }
+
+      const actionKey = `${action}:${normalizedSpec}`;
+      setPluginActionInProgress(actionKey);
+      setPluginActionMessage(null);
+
+      const candidates = pluginCliCandidates(action, normalizedSpec);
+      let lastError = 'Command failed';
+      let successfulCommand: string | null = null;
+
+      for (const command of candidates) {
+        try {
+          const response = await invoke<TerminalCommandResult>('execute_terminal_command', {
+            command,
+            cwd: projectRoot,
+            shell: null,
+            timeout_ms: 120000,
+          });
+          if ((response.exitCode ?? 1) === 0) {
+            successfulCommand = command;
+            break;
+          }
+          lastError =
+            response.stderr.trim() ||
+            response.stdout.trim() ||
+            `Exited with status ${response.exitCode ?? 1}`;
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
+        }
+      }
+
+      if (successfulCommand) {
+        setPluginActionMessage(`Plugin ${action} succeeded: ${normalizedSpec}`);
+        if (action === 'install') {
+          setPluginInput('');
+        }
+        await load();
+      } else {
+        setPluginActionMessage(`Plugin ${action} failed for ${normalizedSpec}: ${lastError}`);
+      }
+
+      setPluginActionInProgress(null);
+    },
+    [load, projectRoot],
+  );
+
+  const handleInstallPlugin = useCallback(async () => {
+    await runPluginCliAction('install', pluginInput);
+  }, [pluginInput, runPluginCliAction]);
+
+  const handleUpdatePlugin = useCallback(
+    (plugin: ResolvedPlugin) => {
+      void runPluginCliAction('update', plugin.id);
+    },
+    [runPluginCliAction],
+  );
+
+  const handleRemovePlugin = useCallback(
+    (plugin: ResolvedPlugin) => {
+      void runPluginCliAction('remove', plugin.id);
+    },
+    [runPluginCliAction],
+  );
 
   const totalProjectItems = commands.length + skills.length + agents.length;
 
@@ -407,6 +587,41 @@ export function SkillsPluginsSettings() {
             <RefreshCw className="h-4 w-4" />
           )}
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-border p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium">Plugin Lifecycle (Claude CLI)</p>
+          <p className="text-xs text-muted-foreground">
+            Install, update, or remove plugins directly from settings.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={pluginInput}
+            onChange={(event) => setPluginInput(event.target.value)}
+            placeholder="plugin-name@marketplace"
+            disabled={isNonTauri || pluginActionInProgress !== null}
+            className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+          />
+          <Button
+            size="sm"
+            disabled={isNonTauri || pluginActionInProgress !== null || !pluginInput.trim()}
+            onClick={() => void handleInstallPlugin()}
+          >
+            {pluginActionInProgress?.startsWith('install:') ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                Installing…
+              </>
+            ) : (
+              'Install Plugin'
+            )}
+          </Button>
+        </div>
+        {pluginActionMessage && (
+          <p className="text-xs text-muted-foreground break-words">{pluginActionMessage}</p>
+        )}
       </div>
 
       {isNonTauri && (
@@ -448,21 +663,29 @@ export function SkillsPluginsSettings() {
                     No plugins installed. Install plugins via the Claude Code CLI.
                   </p>
                 ) : (
-                  plugins.map((p) => <PluginRow key={p.id} plugin={p} />)
+                  plugins.map((p) => (
+                    <PluginRow
+                      key={p.id}
+                      plugin={p}
+                      actionInProgress={pluginActionInProgress}
+                      onUpdate={handleUpdatePlugin}
+                      onRemove={handleRemovePlugin}
+                    />
+                  ))
                 )}
               </div>
             )}
           </div>
 
           {/* Project Resources */}
-          {totalProjectItems > 0 || allowedDirectories[0] ? (
+          {totalProjectItems > 0 || Boolean(projectRoot) ? (
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-semibold mb-1">Project Resources</h4>
                 <p className="text-xs text-muted-foreground">
                   From{' '}
                   <code className="rounded bg-muted px-1 py-0.5">
-                    {allowedDirectories[0] ?? 'project'}/.claude/
+                    {projectRoot ?? 'project'}/.claude/
                   </code>
                 </p>
               </div>

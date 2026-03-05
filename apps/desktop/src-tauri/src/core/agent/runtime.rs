@@ -386,7 +386,11 @@ impl AgentRuntime {
         Err(anyhow!("Task execution failed after retries"))
     }
 
-    async fn analyze_error_and_suggest_fix(&self, task: &RuntimeTask, error: &str) -> Option<String> {
+    async fn analyze_error_and_suggest_fix(
+        &self,
+        task: &RuntimeTask,
+        error: &str,
+    ) -> Option<String> {
         tracing::info!("[AgentRuntime] Analyzing error with LLM: {}", error);
 
         if let Some(_agi_core) = &self.agi_core {
@@ -459,7 +463,11 @@ Do not repeat the error message."#,
         Some(suggestion.to_string())
     }
 
-    async fn execute_via_agi(&self, agi: &Arc<AGICore>, task: &RuntimeTask) -> Result<serde_json::Value> {
+    async fn execute_via_agi(
+        &self,
+        agi: &Arc<AGICore>,
+        task: &RuntimeTask,
+    ) -> Result<serde_json::Value> {
         tracing::info!("[AgentRuntime] Executing task via AGI Core: {}", task.id);
 
         let goal = crate::core::agi::Goal {
@@ -494,6 +502,7 @@ Do not repeat the error message."#,
         }))
     }
 
+    /// Execute task with retry and model fallback (reserved for resilient agent execution)
     #[allow(dead_code)]
     async fn execute_with_retry_fallback(
         &self,

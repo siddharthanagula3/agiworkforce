@@ -47,6 +47,13 @@ vi.mock('@/stores/settingsStore', () => ({
   ),
 }));
 
+vi.mock('@/stores/projectStore', () => ({
+  useProjectStore: vi.fn((selector: (s: { currentFolder: string | null }) => unknown) =>
+    selector({ currentFolder: '/projects/myapp' }),
+  ),
+  selectCurrentFolder: (s: { currentFolder: string | null }) => s.currentFolder,
+}));
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const PLUGINS_JSON = JSON.stringify({
@@ -58,6 +65,7 @@ const PLUGINS_JSON = JSON.stringify({
         installPath: '/home/.claude/plugins/cache/code-review/abc123',
         version: 'abc123',
         installedAt: '2026-01-01T00:00:00.000Z',
+        projectPath: '/projects/myapp',
       },
     ],
     'hookify@claude-plugins-official': [

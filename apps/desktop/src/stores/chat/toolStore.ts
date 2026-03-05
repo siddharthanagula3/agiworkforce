@@ -15,6 +15,7 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
+import type { ToolLabelEntry } from '../../components/UnifiedAgenticChat/ToolLabel';
 import { useAgentStore } from './agentStore';
 import { useChatStore } from './chatStore';
 
@@ -740,9 +741,7 @@ export const useToolStore = create<ToolState>()(
                 if (existing) {
                   state.activeToolStreams.set(toolId, {
                     ...existing,
-                    status: 'cancelled',
-                    completedAt: new Date(),
-                    error: 'Cancelled by user',
+                    progressMessage: 'Cancelling...',
                   });
                 }
               },
@@ -755,6 +754,19 @@ export const useToolStore = create<ToolState>()(
                 await invoke('cancel_tool_execution', { tool_id: toolId });
               } catch (error) {
                 console.warn('[ToolStore] Failed to cancel tool execution:', error);
+                set(
+                  (state) => {
+                    const existing = state.activeToolStreams.get(toolId);
+                    if (existing && existing.status === 'running') {
+                      state.activeToolStreams.set(toolId, {
+                        ...existing,
+                        progressMessage: undefined,
+                      });
+                    }
+                  },
+                  undefined,
+                  'tool/cancelToolExecution/error',
+                );
               }
             }
           },
@@ -905,6 +917,43 @@ interface AgenticLoopEndedPayload {
 
 let toolEventListenerInitialized = false;
 
+function getExistingToolTimelineEntry(
+  messageId: string,
+  toolId: string,
+): ToolLabelEntry | undefined {
+  return useChatStore
+    .getState()
+    .toolTimelineByMessage[messageId]?.find((entry) => entry.id === toolId);
+}
+
+function resolveToolLabel(payload: ToolEventPayload): {
+  displayName: string;
+  displayArgs: string;
+} {
+  const existingEntry = getExistingToolTimelineEntry(payload.message_id, payload.id);
+  if (existingEntry) {
+    return {
+      displayName: existingEntry.displayName,
+      displayArgs: existingEntry.displayArgs,
+    };
+  }
+
+  const activeStream = useToolStore.getState().activeToolStreams.get(payload.id);
+  const streamDisplayName =
+    typeof activeStream?.parameters?.['displayName'] === 'string'
+      ? activeStream.parameters['displayName']
+      : activeStream?.tool_name;
+  const streamDisplayArgs =
+    typeof activeStream?.parameters?.['displayArgs'] === 'string'
+      ? activeStream.parameters['displayArgs']
+      : '';
+
+  return {
+    displayName: payload.display_name ?? payload.tool_name ?? streamDisplayName ?? 'Tool',
+    displayArgs: payload.display_args ?? streamDisplayArgs,
+  };
+}
+
 /**
  * Initializes the Tauri event listeners for tool events and agentic loop lifecycle.
  * - `tool:event` — updates toolStore streams, chatStore timeline, and agentStore action trail
@@ -928,8 +977,7 @@ export async function initializeToolEventListener(): Promise<void> {
       const payload = event.payload;
       const toolId = payload.id;
       const messageId = payload.message_id;
-      const displayName = payload.display_name ?? payload.tool_name ?? 'Tool';
-      const displayArgs = payload.display_args ?? '';
+      const { displayName, displayArgs } = resolveToolLabel(payload);
 
       if (payload.type === 'started') {
         // Update tool stream in toolStore
@@ -939,6 +987,10 @@ export async function initializeToolEventListener(): Promise<void> {
           status: 'running',
           progress: 0,
           startedAt: new Date(),
+          parameters: {
+            displayName,
+            displayArgs,
+          },
         });
 
         // Add entry to chat timeline

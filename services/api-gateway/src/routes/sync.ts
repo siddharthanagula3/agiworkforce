@@ -287,8 +287,6 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
     throw new AppError('Unauthorized', 401);
   }
 
-  const _deviceId = req.headers['x-device-id'] as string | undefined;
-
   // Get counts for this user
   const { count: pendingCount } = await supabase
     .from('sync_data')
@@ -397,7 +395,7 @@ router.delete(
 const legacySyncSchema = z
   .object({
     type: z.string().max(100),
-    data: z.record(z.string(), z.any()),
+    data: z.record(z.string(), z.unknown()),
     deviceId: z.string().max(100),
   })
   .strict();
