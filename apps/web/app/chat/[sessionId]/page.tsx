@@ -315,14 +315,37 @@ export default function ChatSessionPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         {hasMessages ? (
           <>
-            {/* Message list */}
-            <div className="flex-1 overflow-hidden">
+            {/* Message list with top scroll fade */}
+            <div className="relative flex-1 overflow-hidden">
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent" />
               <MessageListNew
                 messages={messages}
                 isLoading={isLoading}
                 onDelete={handleDeleteMessage}
               />
             </div>
+
+            {/* Suggested follow-ups after last AI message */}
+            {messages.length > 0 &&
+              messages[messages.length - 1]?.role === 'assistant' &&
+              !messages[messages.length - 1]?.isStreaming &&
+              !isLoading && (
+                <div className="flex flex-wrap justify-center gap-2 px-4 py-3">
+                  {[
+                    'Tell me more about this',
+                    'Can you give an example?',
+                    'How would I implement this?',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => handleSend(suggestion)}
+                      className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
 
             {/* Composer */}
             <div className="pb-2 pt-2">
