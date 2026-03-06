@@ -133,11 +133,12 @@ export default function Home() {
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
             <div className="container relative mx-auto px-4 text-center">
               <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
-                <span className="mr-2 flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+                <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500" />
                 Now in Public Beta
               </div>
-              <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                AGI for Everyone
+              <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-white md:text-7xl lg:text-8xl">
+                Your AI Agent. <br className="hidden md:block" />
+                <span className="text-blue-400">Any Model. Any Tool.</span>
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
                 A native desktop AI agent with chat, browser automation, multi-provider model
@@ -191,12 +192,12 @@ export default function Home() {
               <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
                 {features.map((feature) => {
                   const card = (
-                    <div className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-105 hover:border-blue-500/50">
+                    <div className="rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-colors hover:border-blue-500/50">
                       <feature.icon className="mb-4 h-10 w-10 text-blue-500" />
                       <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
                       <p className="leading-relaxed text-zinc-400">{feature.desc}</p>
                       {feature.href && (
-                        <div className="mt-4 flex items-center gap-1 text-sm font-medium text-blue-400 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="mt-4 flex items-center gap-1 text-sm font-medium text-blue-400">
                           Learn more <ArrowRight className="h-3 w-3" />
                         </div>
                       )}
