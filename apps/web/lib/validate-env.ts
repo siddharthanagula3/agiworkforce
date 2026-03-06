@@ -51,6 +51,10 @@ export function validateRequiredEnvVars(): ValidationResult {
     'UPSTASH_REDIS_REST_TOKEN',
     // Required for encrypting device tokens (push notifications)
     'DEVICE_TOKEN_ENCRYPTION_KEY',
+    // Required for TOTP secret encryption (2FA / authenticator app flows)
+    'TOTP_ENCRYPTION_KEY',
+    // API gateway base URL used by web → backend calls; falls back to localhost:3001
+    'NEXT_PUBLIC_API_URL',
   ];
 
   // Stripe price IDs (required for checkout to work)
