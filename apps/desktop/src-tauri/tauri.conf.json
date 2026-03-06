@@ -51,11 +51,8 @@
       "timestampUrl": "https://timestamp.digicert.com",
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "sidebarIcon": "icons/icon.ico",
-        "headerImage": "icons/icon.ico",
         "installMode": "currentUser",
-        "languages": ["English"],
-        "webviewInstallMode": { "type": "downloadBootstrapper" }
+        "languages": ["English"]
       },
       "wix": {
         "language": "en-US"
