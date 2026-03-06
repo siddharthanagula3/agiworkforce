@@ -632,7 +632,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
 
     expect(sessionId).toBe('win-session-pwsh-001');
     expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-      shell_type: 'powershell',
+      shellType: 'powershell',
       cwd: 'C:\\Users\\nagul',
     });
   });
@@ -652,7 +652,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
 
     expect(sessionId).toBe('win-session-cmd-001');
     expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-      shell_type: 'cmd',
+      shellType: 'cmd',
       cwd: undefined,
     });
   });
@@ -672,7 +672,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
 
     expect(sessionId).toBe('win-session-gitbash-001');
     expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-      shell_type: 'gitbash',
+      shellType: 'gitbash',
       cwd: 'C:\\repos\\myproject',
     });
   });
@@ -692,7 +692,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
 
     expect(sessionId).toBe('win-session-wsl-001');
     expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-      shell_type: 'wsl',
+      shellType: 'wsl',
       cwd: undefined,
     });
   });
@@ -752,7 +752,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_send_input', {
-      session_id: 'session-123',
+      sessionId: 'session-123',
       data: 'dir C:\\Users\r\n',
     });
   });
@@ -770,7 +770,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_set_env', {
-      session_id: 'session-456',
+      sessionId: 'session-456',
       key: 'USERPROFILE',
       value: 'C:\\Users\\nagul',
     });
@@ -789,7 +789,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_resize', {
-      session_id: 'session-789',
+      sessionId: 'session-789',
       cols: 120,
       rows: 30,
     });
