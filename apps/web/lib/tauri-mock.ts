@@ -79,12 +79,14 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   }
 }
 
+export type UnlistenFn = () => void;
+
 export const isTauri = false;
 
-export async function listen(
+export async function listen<T = unknown>(
   event: string,
-  _handler: (payload: unknown) => void,
-): Promise<() => void> {
+  _handler: (event: { payload: T }) => void,
+): Promise<UnlistenFn> {
   console.warn(`[tauri-mock] Called listen('${event}') in web environment.`);
   return () => {};
 }
