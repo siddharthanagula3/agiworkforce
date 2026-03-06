@@ -413,7 +413,7 @@ impl ExtensionInstaller {
         let npm_dir = package_json_paths
             .iter()
             .find(|p| p.exists())
-            .map(|p| p.parent().unwrap())
+            .and_then(|p| p.parent())
             .ok_or_else(|| {
                 ExtensionError::DependencyInstallFailed("No package.json found".to_string())
             })?;
