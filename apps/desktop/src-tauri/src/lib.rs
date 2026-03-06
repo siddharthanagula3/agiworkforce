@@ -56,6 +56,9 @@ pub mod integrations;
 pub mod sys;
 pub mod ui;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use data::state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use ui::tray::build_system_tray;
 pub use ui::window::{
@@ -721,7 +724,7 @@ pub fn run() {
             if let Err(e) = std::fs::write(app_data_dir.join(".ipc_token"), &realtime_token) {
                 tracing::error!("Failed to write .ipc_token: {}", e);
             }
-            // Restrict .ipc_token to owner-only read/write (0600)
+            // Restrict .ipc_token to owner-only read/write (0600 on Unix).
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -730,6 +733,10 @@ pub fn run() {
                     std::fs::Permissions::from_mode(0o600),
                 );
             }
+            // On Windows, the file lives inside %APPDATA%\com.agiworkforce.desktop\
+            // which is already user-scoped. The write above uses the default ACL
+            // (owner-only for APPDATA), so no additional ACL manipulation is needed.
+            // This comment documents the intentional no-op for future auditors.
 
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
                 presence_manager.clone(),

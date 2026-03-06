@@ -84,15 +84,30 @@ pub fn detect_available_shells() -> Vec<ShellInfo> {
             ));
         }
 
+        // Probe well-known Git Bash install paths first, then fall back to
+        // whatever `bash` is on %PATH% (covers non-standard Git installs and
+        // environments where bash is already on the path, e.g. Git for Windows
+        // portable or Scoop/Winget installs).
         let git_bash_paths = vec![
             "C:\\Program Files\\Git\\bin\\bash.exe",
             "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
         ];
 
+        let mut git_bash_found = false;
         for path in git_bash_paths {
             if PathBuf::from(path).exists() {
                 shells.push(ShellInfo::new(ShellType::GitBash, path.to_string()));
+                git_bash_found = true;
                 break;
+            }
+        }
+
+        if !git_bash_found {
+            if let Ok(path) = which::which("bash") {
+                shells.push(ShellInfo::new(
+                    ShellType::GitBash,
+                    path.to_string_lossy().to_string(),
+                ));
             }
         }
     }

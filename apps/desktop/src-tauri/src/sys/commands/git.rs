@@ -15,6 +15,53 @@ use tauri::async_runtime::spawn_blocking;
 use tauri::State;
 use tokio::sync::RwLock;
 
+/// Build a git2 credential fallback chain that works on all platforms.
+///
+/// On macOS/Linux the SSH agent is typically running so `ssh_key_from_agent`
+/// succeeds on the first try. On Windows the agent is often absent; we fall
+/// back to probing the standard key files in `~/.ssh` and finally to the
+/// system credential helper for HTTPS remotes.
+fn make_git_credentials(
+    url: &str,
+    username_from_url: Option<&str>,
+    allowed_types: git2::CredentialType,
+) -> std::result::Result<Cred, git2::Error> {
+    let username = username_from_url.unwrap_or("git");
+
+    if allowed_types.contains(git2::CredentialType::SSH_KEY) {
+        // Prefer the SSH agent (works on macOS/Linux by default, Windows if configured).
+        if let Ok(cred) = Cred::ssh_key_from_agent(username) {
+            return Ok(cred);
+        }
+
+        // Fallback: probe default key files in ~/.ssh
+        let ssh_dir = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".ssh");
+
+        for key_name in &["id_ed25519", "id_rsa", "id_ecdsa"] {
+            let private_key = ssh_dir.join(key_name);
+            if private_key.exists() {
+                if let Ok(cred) = Cred::ssh_key(username, None, &private_key, None) {
+                    return Ok(cred);
+                }
+            }
+        }
+    }
+
+    // HTTPS / credential-helper path
+    if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+        let cfg = git2::Config::open_default().unwrap_or_else(|_| {
+            git2::Config::new().expect("git2 in-memory config must be constructible")
+        });
+        return Cred::credential_helper(&cfg, url, username_from_url);
+    }
+
+    Err(git2::Error::from_str(
+        "No valid credentials found. Configure SSH agent or SSH keys in ~/.ssh/",
+    ))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitStatus {
     pub branch: String,
@@ -288,9 +335,7 @@ pub async fn git_push(
         };
 
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-        });
+        callbacks.credentials(make_git_credentials);
 
         let mut push_opts = PushOptions::new();
         push_opts.remote_callbacks(callbacks);
@@ -328,9 +373,7 @@ pub async fn git_pull(
         };
 
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-        });
+        callbacks.credentials(make_git_credentials);
 
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
@@ -743,9 +786,7 @@ pub async fn git_clone(url: String, destination: String) -> Result<String, Strin
 
     spawn_blocking(move || {
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-        });
+        callbacks.credentials(make_git_credentials);
 
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
@@ -774,9 +815,7 @@ pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, S
             .map_err(|e| e.message().to_string())?;
 
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-        });
+        callbacks.credentials(make_git_credentials);
 
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);

@@ -124,16 +124,36 @@ pub async fn execute_terminal_command(
             vec!["bash".to_string(), "-lc".to_string(), command.clone()],
         ),
         "gitbash" => {
-            if cfg!(target_os = "windows") {
-                ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
-            } else {
+            // On Windows, resolve the full Git Bash executable path rather than relying
+            // on bare "bash" being discoverable on %PATH%, which is not guaranteed.
+            #[cfg(target_os = "windows")]
+            {
+                let git_bash_paths = [
+                    "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                ];
+                let program = git_bash_paths
+                    .iter()
+                    .find(|p| std::path::Path::new(p).exists())
+                    .map(|p| p.to_string())
+                    .unwrap_or_else(|| "bash".to_string());
+                (program, vec!["-lc".to_string(), command.clone()])
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
                 // Git Bash is Windows-specific; fall back to bash on non-Windows
                 ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
             }
         }
         "powershell" | "pwsh" => (
             if cfg!(target_os = "windows") {
-                "powershell.exe".to_string()
+                // Prefer PowerShell 7 (pwsh) when available; fall back to
+                // legacy Windows PowerShell (powershell.exe).
+                if which::which("pwsh").is_ok() {
+                    "pwsh".to_string()
+                } else {
+                    "powershell.exe".to_string()
+                }
             } else {
                 "pwsh".to_string()
             },
@@ -150,7 +170,13 @@ pub async fn execute_terminal_command(
             match get_default_shell() {
                 ShellType::PowerShell => (
                     if cfg!(target_os = "windows") {
-                        "powershell.exe".to_string()
+                        // Prefer PowerShell 7 (pwsh) when available; fall back to
+                        // legacy Windows PowerShell (powershell.exe).
+                        if which::which("pwsh").is_ok() {
+                            "pwsh".to_string()
+                        } else {
+                            "powershell.exe".to_string()
+                        }
                     } else {
                         "pwsh".to_string()
                     },
@@ -174,7 +200,23 @@ pub async fn execute_terminal_command(
                     vec!["bash".to_string(), "-lc".to_string(), command.clone()],
                 ),
                 ShellType::GitBash => {
-                    ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                    #[cfg(target_os = "windows")]
+                    {
+                        let git_bash_paths = [
+                            "C:\\Program Files\\Git\\bin\\bash.exe",
+                            "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                        ];
+                        let program = git_bash_paths
+                            .iter()
+                            .find(|p| std::path::Path::new(p).exists())
+                            .map(|p| p.to_string())
+                            .unwrap_or_else(|| "bash".to_string());
+                        (program, vec!["-lc".to_string(), command.clone()])
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                    }
                 }
             }
         }

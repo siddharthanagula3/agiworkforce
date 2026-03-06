@@ -8,7 +8,8 @@
 @theme {
   /* Font families */
   --font-sans:
-    'FK Grotesk', 'Inter', 'Söhne', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    'FK Grotesk', 'Inter', 'Söhne', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* 'Segoe UI' is listed before -apple-system so Windows WebView2 picks it up as the preferred fallback */
   --font-mono: 'Berkeley Mono', 'Söhne Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
 
   /* Line height */
