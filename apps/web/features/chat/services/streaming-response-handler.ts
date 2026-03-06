@@ -8,6 +8,7 @@
  * - Stream recovery on connection loss
  */
 
+import { logger } from '@shared/lib/logger';
 import { unifiedLLMService } from '@core/ai/llm/unified-language-model';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
 import type { StreamingUpdate } from '../types';
@@ -66,6 +67,7 @@ interface StreamRecoveryState {
 
 // Stream recovery configuration
 const RECOVERY_TIMEOUT = 30000; // 30 seconds
+const MAX_RECONNECT_ATTEMPTS = 3;
 
 export class ChatStreamingService {
   private activeStreams: Map<string, ActiveStream> = new Map();
@@ -116,7 +118,7 @@ export class ChatStreamingService {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(
+      logger.info(
         `[StreamRecovery] Recovering stream ${streamId} from chunk ${state.lastChunkIndex}`,
       );
     }
@@ -214,12 +216,12 @@ export class ChatStreamingService {
           );
 
           if (process.env.NODE_ENV === 'development') {
-            console.log(
+            logger.info(
               `[TokenTracking] ✅ Logged ${tokensUsed} tokens (${inputTokens} in, ${outputTokens} out) for session ${sessionId}, agent ${agentId || 'default'}`,
             );
           }
         } catch (error) {
-          console.error('[TokenTracking] ❌ Failed to log token usage:', error);
+          logger.error('[TokenTracking] ❌ Failed to log token usage:', error);
           metrics.errors++;
         }
       }
@@ -293,7 +295,7 @@ export class ChatStreamingService {
 
       // Check if we should retry
       if (
-        reconnectAttempts < reconnectAttempts &&
+        reconnectAttempts < MAX_RECONNECT_ATTEMPTS &&
         !controller.signal.aborted &&
         this.isRecoverableError(error)
       ) {
@@ -301,8 +303,8 @@ export class ChatStreamingService {
         metrics.reconnects++;
 
         if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `[StreamRecovery] Attempting recovery ${reconnectAttempts}/${reconnectAttempts}`,
+          logger.info(
+            `[StreamRecovery] Attempting recovery ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`,
           );
         }
 

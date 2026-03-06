@@ -192,7 +192,9 @@ export function useFileUpload(): UseFileUploadReturn {
           session_id: sessionId,
         };
 
-        const { error: dbError } = await (supabase.from('vibe_files') as ReturnType<typeof supabase.from>).insert({
+        const { error: dbError } = await (
+          supabase.from('vibe_files') as ReturnType<typeof supabase.from>
+        ).insert({
           id: vibeFile.id,
           name: vibeFile.name,
           type: vibeFile.type,

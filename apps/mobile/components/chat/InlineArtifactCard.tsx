@@ -172,9 +172,10 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
             fontSize: 12,
             lineHeight: 18,
             color: 'rgba(245, 247, 251, 0.55)',
-            fontFamily: artifact.type === 'code'
-              ? Platform.select({ ios: 'Menlo', default: 'monospace' })
-              : undefined,
+            fontFamily:
+              artifact.type === 'code'
+                ? Platform.select({ ios: 'Menlo', default: 'monospace' })
+                : undefined,
           }}
           numberOfLines={3}
         >

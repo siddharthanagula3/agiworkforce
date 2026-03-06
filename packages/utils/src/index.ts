@@ -51,6 +51,7 @@ export {
   withTimeout,
   retryBatch,
   RetryError,
+  AbortError,
   type RetryOptions,
 } from './async';
 

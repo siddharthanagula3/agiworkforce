@@ -134,7 +134,7 @@ impl McpServersConfig {
         let json = serde_json::to_string_pretty(self)?;
         let parent = path
             .parent()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Invalid config path"))?;
+            .ok_or_else(|| std::io::Error::other("Invalid config path"))?;
         tokio::fs::create_dir_all(parent).await?;
 
         // Write atomically via temp file + rename to avoid partial writes.
@@ -189,7 +189,7 @@ impl McpServersConfig {
         }
 
         let app_data = crate::sys::utils::app_data_dir()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         Ok(app_data.join(GLOBAL_MCP_CONFIG_FILENAME))
     }
 
@@ -321,12 +321,12 @@ impl McpServersConfig {
     /// if OAuth is not configured. Expired OAuth tokens are auto-refreshed.
     pub fn inject_credentials(&mut self) -> crate::core::mcp::McpResult<()> {
         let db_path = crate::sys::utils::database_path()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
 
         // Try to open database if it exists
         if db_path.exists() {
             let conn = open_mcp_settings_db()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                .map_err(std::io::Error::other)?;
             for (server_name, config) in &mut self.mcp_servers {
                 for (key, value) in &mut config.env {
                     // Check for OAuth placeholder first (e.g., "<from_oauth:github>")

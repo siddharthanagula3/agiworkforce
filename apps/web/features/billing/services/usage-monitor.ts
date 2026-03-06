@@ -1,4 +1,5 @@
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 interface DBUsageRow {
   tokens_used: number;
@@ -71,7 +72,7 @@ export class UsageTracker {
         cost: params.cost,
       } as never);
     } catch (error) {
-      console.error('[UsageTracker] Failed to track API call:', error);
+      logger.error('[UsageTracker] Failed to track API call', error);
     }
   }
 

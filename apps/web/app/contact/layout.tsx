@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'Contact AGI Workforce',
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Contact Us | AGI Workforce',
     description: 'Have questions about AGI Workforce? Get in touch with our team.',
-    images: ['/og-image.svg'],
+    images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
 };

@@ -81,11 +81,7 @@ export const useMcpAppStore = create<McpAppState>()(
           timestamp: Date.now(),
           interactionLog: [],
         };
-        set(
-          (state) => ({ apps: { ...state.apps, [id]: app } }),
-          undefined,
-          'mcpApp/registerApp',
-        );
+        set((state) => ({ apps: { ...state.apps, [id]: app } }), undefined, 'mcpApp/registerApp');
         return id;
       },
 

@@ -86,7 +86,7 @@ const faqs: FAQItem[] = [
     category: 'Security',
     question: 'Which AI providers are supported?',
     answer:
-      'AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, Grok 4, DeepSeek Chat, Qwen 3, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
+      'AGI Workforce supports models from OpenAI, Anthropic, Google, xAI, DeepSeek, Alibaba, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
   },
   // Features
   {
@@ -105,7 +105,7 @@ const faqs: FAQItem[] = [
     category: 'Features',
     question: 'Can I use multiple AI models?',
     answer:
-      'Yes! AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, DeepSeek Chat, Qwen 3, and local models via Ollama. The AI automatically picks the best model for each task, or you can specify your preference.',
+      'Yes! AGI Workforce supports models from OpenAI, Anthropic, Google, DeepSeek, Alibaba, and local models via Ollama. The AI automatically picks the best model for each task, or you can specify your preference.',
   },
   {
     category: 'Features',

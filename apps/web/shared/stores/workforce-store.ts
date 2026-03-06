@@ -8,6 +8,7 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from './authentication-store';
+import { logger } from '@shared/lib/logger';
 
 export interface HiredEmployee {
   id: string;
@@ -63,14 +64,14 @@ export const useWorkforceStore = create<WorkforceState>()(
             .order('hired_at', { ascending: false });
 
           if (error) {
-            console.error('[WorkforceStore] Error fetching hired employees:', error);
+            logger.error('[WorkforceStore] Error fetching hired employees:', error);
             set({ error: error.message, isLoading: false });
             return;
           }
 
           set({ hiredEmployees: (data as HiredEmployee[]) || [], isLoading: false });
         } catch (error) {
-          console.error('[WorkforceStore] Unexpected error:', error);
+          logger.error('[WorkforceStore] Unexpected error:', error);
           set({
             error: error instanceof Error ? error.message : 'Unknown error',
             isLoading: false,
@@ -113,7 +114,7 @@ export const useWorkforceStore = create<WorkforceState>()(
             .maybeSingle();
 
           if (error) {
-            console.error('[WorkforceStore] Error hiring employee:', error);
+            logger.error('[WorkforceStore] Error hiring employee:', error);
             set({ error: error.message, isLoading: false });
             return null;
           }
@@ -138,7 +139,7 @@ export const useWorkforceStore = create<WorkforceState>()(
           set({ isLoading: false });
           return null;
         } catch (error) {
-          console.error('[WorkforceStore] Unexpected error hiring employee:', error);
+          logger.error('[WorkforceStore] Unexpected error hiring employee:', error);
           set({
             error: error instanceof Error ? error.message : 'Unknown error',
             isLoading: false,
@@ -174,7 +175,7 @@ export const useWorkforceStore = create<WorkforceState>()(
             .eq('employee_id', employeeId);
 
           if (error) {
-            console.error('[WorkforceStore] Error firing employee:', error);
+            logger.error('[WorkforceStore] Error firing employee:', error);
             set({ error: error.message, isLoading: false });
             return false;
           }
@@ -187,7 +188,7 @@ export const useWorkforceStore = create<WorkforceState>()(
 
           return true;
         } catch (error) {
-          console.error('[WorkforceStore] Unexpected error firing employee:', error);
+          logger.error('[WorkforceStore] Unexpected error firing employee:', error);
           set({
             error: error instanceof Error ? error.message : 'Unknown error',
             isLoading: false,
@@ -228,7 +229,6 @@ export const setupWorkforceSubscription = () => {
 
   // If subscription exists for a different user, clean it up first
   if (subscription && subscriptionUserId !== user.id) {
-    console.log('[WorkforceStore] User changed, cleaning up old subscription');
     cleanupWorkforceSubscription();
   }
 
@@ -253,11 +253,9 @@ export const setupWorkforceSubscription = () => {
         // Verify subscription is still valid (user hasn't changed)
         const currentUser = useAuthStore.getState().user;
         if (!currentUser || currentUser.id !== subscriptionUserId) {
-          console.warn('[WorkforceStore] Ignoring stale subscription event');
+          logger.warn('[WorkforceStore] Ignoring stale subscription event');
           return;
         }
-
-        console.log('[WorkforceStore] Real-time update:', payload);
 
         const { eventType, new: newRecord, old: oldRecord } = payload;
 
@@ -280,10 +278,8 @@ export const setupWorkforceSubscription = () => {
       },
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('[WorkforceStore] Real-time subscription established for user:', user.id);
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error('[WorkforceStore] Subscription error, cleaning up');
+      if (status === 'CHANNEL_ERROR') {
+        logger.error('[WorkforceStore] Subscription error, cleaning up');
         cleanupWorkforceSubscription();
       }
     });
@@ -299,9 +295,8 @@ export const cleanupWorkforceSubscription = () => {
   if (subscription) {
     try {
       supabase.removeChannel(subscription);
-      console.log('[WorkforceStore] Real-time subscription cleaned up');
-    } catch (error) {
-      console.warn('[WorkforceStore] Error cleaning up subscription:', error);
+    } catch (_error) {
+      // Subscription cleanup may fail if already disconnected
     }
     subscription = null;
     subscriptionUserId = null;
@@ -335,21 +330,18 @@ if (typeof window !== 'undefined') {
 
     // User logged out - clean up subscription and reset store
     if (wasLoggedIn && !isLoggedIn) {
-      console.log('[WorkforceStore] User logged out, cleaning up subscription');
       cleanupWorkforceSubscription();
       useWorkforceStore.getState().reset();
     }
 
     // User logged in - set up new subscription
     if (!wasLoggedIn && isLoggedIn) {
-      console.log('[WorkforceStore] User logged in, setting up subscription');
       setupWorkforceSubscription();
       useWorkforceStore.getState().fetchHiredEmployees();
     }
 
     // User changed (different user logged in) - clean up and re-setup
     if (wasLoggedIn && isLoggedIn && prevState.user?.id !== state.user?.id) {
-      console.log('[WorkforceStore] User changed, resetting subscription');
       cleanupWorkforceSubscription();
       useWorkforceStore.getState().reset();
       setupWorkforceSubscription();

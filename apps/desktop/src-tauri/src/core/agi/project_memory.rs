@@ -181,7 +181,7 @@ impl ProjectMemoryManager {
                     updated_at: String::new(),
                     last_accessed: None,
                 })
-                .unwrap(),
+                .map_err(|e| Error::Generic(format!("Failed to serialize project context: {}", e)))?,
                 importance
             ],
         )

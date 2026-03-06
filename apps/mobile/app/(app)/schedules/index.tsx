@@ -19,15 +19,8 @@ export default function SchedulesScreen() {
   const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  const {
-    schedules,
-    loading,
-    error,
-    fetchSchedules,
-    toggleSchedule,
-    deleteSchedule,
-    clearError,
-  } = useScheduleStore();
+  const { schedules, loading, error, fetchSchedules, toggleSchedule, deleteSchedule, clearError } =
+    useScheduleStore();
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -188,10 +181,7 @@ function Header({
 }) {
   return (
     <View className="flex-row items-center px-4 h-12">
-      <Pressable
-        onPress={onMenuPress}
-        className="p-2 -ml-2 rounded-lg active:bg-white/5"
-      >
+      <Pressable onPress={onMenuPress} className="p-2 -ml-2 rounded-lg active:bg-white/5">
         <Menu size={22} color={colors.textSecondary} />
       </Pressable>
       <Text variant="subheading" className="ml-2 flex-1">

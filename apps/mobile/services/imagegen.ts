@@ -42,27 +42,21 @@ export interface ImageGenProgress {
  * Submit an image generation request.
  * Returns immediately with an ID for polling.
  */
-export async function generateImage(
-  request: ImageGenRequest,
-): Promise<ImageGenResponse> {
+export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
   return api.post<ImageGenResponse>('/api/imagegen/generate', request);
 }
 
 /**
  * Poll the status/progress of an in-flight image generation.
  */
-export async function getImageStatus(
-  id: string,
-): Promise<ImageGenProgress> {
+export async function getImageStatus(id: string): Promise<ImageGenProgress> {
   return api.get<ImageGenProgress>(`/api/imagegen/status/${id}`);
 }
 
 /**
  * List all generated images for a conversation.
  */
-export async function listGeneratedImages(
-  conversationId: string,
-): Promise<ImageGenResponse[]> {
+export async function listGeneratedImages(conversationId: string): Promise<ImageGenResponse[]> {
   return api.get<ImageGenResponse[]>(
     `/api/imagegen/list?conversationId=${encodeURIComponent(conversationId)}`,
   );

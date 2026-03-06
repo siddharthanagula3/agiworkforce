@@ -343,6 +343,7 @@ impl PlaywrightBridge {
     ///
     /// Sends an HTTP GET to `http://127.0.0.1:<port>/json` and deserializes the
     /// response into a vector of `CdpTarget`.
+    // Used by: CDP browser automation API — navigate/click/type/screenshot/evaluate
     #[allow(dead_code)]
     pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
         let port = self.config.ws_port;
@@ -386,6 +387,7 @@ impl PlaywrightBridge {
     /// Because `tungstenite` is synchronous, this is wrapped in
     /// `tokio::task::spawn_blocking`. A 30-second timeout prevents hanging if
     /// Chrome stops responding.
+    // Used by: CDP browser automation API — internal transport for all CDP methods
     #[allow(dead_code)]
     async fn send_cdp_command(
         &self,
@@ -507,6 +509,7 @@ impl PlaywrightBridge {
     }
 
     /// Helper: find the first `"page"` target with a valid `webSocketDebuggerUrl`.
+    // Used by: CDP browser automation API — page targeting for navigate/click/type/etc.
     #[allow(dead_code)]
     async fn first_page_ws_url(&self) -> Result<String> {
         let targets = self.list_targets().await?;
@@ -525,6 +528,7 @@ impl PlaywrightBridge {
     /// Navigate the first available browser page to the given URL.
     ///
     /// Uses the CDP `Page.navigate` method.
+    // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn navigate(&self, url: &str) -> Result<()> {
         let ws_url = self.first_page_ws_url().await?;
@@ -553,6 +557,7 @@ impl PlaywrightBridge {
     /// Click on the element matching the given CSS selector on the first available page.
     ///
     /// Uses `Runtime.evaluate` to execute `document.querySelector(selector).click()`.
+    // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn click_selector(&self, selector: &str) -> Result<()> {
         let js = format!(
@@ -583,6 +588,7 @@ impl PlaywrightBridge {
     /// Type text into the element matching the given CSS selector on the first available page.
     ///
     /// Focuses the element, sets its value, and dispatches `input` and `change` events.
+    // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
         let js = format!(
@@ -617,6 +623,7 @@ impl PlaywrightBridge {
     /// Take a screenshot of the first available page and return it as a base64-encoded PNG string.
     ///
     /// Uses the CDP `Page.captureScreenshot` method.
+    // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn screenshot_base64(&self) -> Result<String> {
         let ws_url = self.first_page_ws_url().await?;
@@ -644,6 +651,7 @@ impl PlaywrightBridge {
     /// Execute a JavaScript expression in the first available page and return the result.
     ///
     /// Uses the CDP `Runtime.evaluate` method with `returnByValue: true`.
+    // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn evaluate_js(&self, expression: &str) -> Result<serde_json::Value> {
         let ws_url = self.first_page_ws_url().await?;
@@ -673,6 +681,7 @@ impl PlaywrightBridge {
 
 /// Escape special characters in a string intended for insertion into a
 /// JavaScript single-quoted string literal.
+// Used by: CDP browser automation API — click_selector and type_text
 #[allow(dead_code)]
 fn escape_js_string(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -687,6 +696,7 @@ fn escape_js_string(s: &str) -> String {
 
 /// Check the CDP `Runtime.evaluate` response for an exception description and
 /// return an error if one is present.
+// Used by: CDP browser automation API — click_selector, type_text, evaluate_js
 #[allow(dead_code)]
 fn check_runtime_exception(response: &serde_json::Value, context: &str) -> Result<()> {
     if let Some(result) = response.get("result") {

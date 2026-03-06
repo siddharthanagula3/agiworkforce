@@ -225,7 +225,7 @@ export async function getFailurePatterns(goalId: string): Promise<FailurePattern
   }
 
   try {
-    const result = await invoke<FailurePattern[]>('agi_get_failure_patterns', { goal_id: goalId });
+    const result = await invoke<FailurePattern[]>('agi_get_failure_patterns', { goalId });
     return result;
   } catch (error) {
     console.error('[reflection] Failed to get failure patterns:', error);
@@ -244,7 +244,7 @@ export async function getSuggestedCorrections(goalId: string): Promise<Correctio
   }
 
   try {
-    const result = await invoke<Correction[]>('agi_get_suggested_corrections', { goal_id: goalId });
+    const result = await invoke<Correction[]>('agi_get_suggested_corrections', { goalId });
     return result;
   } catch (error) {
     console.error('[reflection] Failed to get suggested corrections:', error);
@@ -263,7 +263,7 @@ export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
   }
 
   try {
-    const result = await invoke<SubGoal[]>('agi_get_sub_goals', { goal_id: goalId });
+    const result = await invoke<SubGoal[]>('agi_get_sub_goals', { goalId });
     return result;
   } catch (error) {
     console.error('[reflection] Failed to get sub-goals:', error);
@@ -282,7 +282,7 @@ export async function getRecommendations(goalId: string): Promise<string[]> {
   }
 
   try {
-    const result = await invoke<string[]>('agi_get_recommendations', { goal_id: goalId });
+    const result = await invoke<string[]>('agi_get_recommendations', { goalId });
     return result;
   } catch (error) {
     console.error('[reflection] Failed to get recommendations:', error);

@@ -67,7 +67,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     }
 
     if (!isTauri) {
-      console.log('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
+      console.debug('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
       return;
     }
 
@@ -75,7 +75,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     setActionError(null);
     try {
       await respondToolConfirmation(confirmationRequestId, true);
-      console.log(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
+      console.debug(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
     } catch (error) {
       console.error('[ToolCallCard] Failed to approve confirmation:', error);
       const message = 'Failed to approve tool request.';
@@ -95,7 +95,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     }
 
     if (!isTauri) {
-      console.log('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
+      console.debug('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
       return;
     }
 
@@ -103,7 +103,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     setActionError(null);
     try {
       await respondToolConfirmation(confirmationRequestId, false);
-      console.log(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
+      console.debug(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
     } catch (error) {
       console.error('[ToolCallCard] Failed to deny confirmation:', error);
       const message = 'Failed to reject tool request.';
@@ -122,15 +122,15 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
       return;
     }
     if (!isTauri) {
-      console.log('[ToolCallCard] Mock cancel tool:', actionId);
+      console.debug('[ToolCallCard] Mock cancel tool:', actionId);
       return;
     }
 
     setPendingAction('cancel');
     setActionError(null);
     try {
-      await invoke('cancel_tool_execution', { tool_id: actionId });
-      console.log(`[ToolCallCard] Cancelled tool ${actionId}`);
+      await invoke('cancel_tool_execution', { toolId: actionId });
+      console.debug(`[ToolCallCard] Cancelled tool ${actionId}`);
     } catch (error) {
       console.error('[ToolCallCard] Failed to cancel tool:', error);
       const message = 'Failed to cancel tool execution.';

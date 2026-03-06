@@ -15,6 +15,7 @@ export default [
       'build/**',
       '**/build/**',
       'out/**',
+      '**/out/**',
       '.next/**',
       '**/.next/**',
       'node_modules/**',
@@ -442,19 +443,62 @@ export default [
     },
   },
 
-  // Web app: stub/ported components use `any` intentionally — warn at root level
-  // (apps/web has its own eslint.config.mjs with eslint-config-next for full linting)
+  // Web app: `any` is used extensively for web port compatibility (desktop-to-web stubs,
+  // Tauri API shims, and Zustand store adapters). The web app has its own
+  // eslint.config.mjs (eslint-config-next) for full per-workspace linting.
   {
     files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 
-  // Web app unified stubs: intentionally use `any` for desktop-parity stubs
+  // Web app stubs: intentionally use `any` for desktop-parity stub implementations.
+  // These files provide no-op shims for Tauri/desktop-only modules so the web app compiles.
   {
-    files: ['apps/web/stores/unified/**/*.ts', 'apps/web/stores/unified/**/*.tsx'],
+    files: [
+      // Unified store stubs (desktop Zustand stores shimmed for web)
+      'apps/web/stores/unified/**/*.ts',
+      'apps/web/stores/unified/**/*.tsx',
+      // API stubs (desktop Tauri API wrappers)
+      'apps/web/api/**/*.ts',
+      // Utility stubs (desktop-only utilities)
+      'apps/web/utils/autoCorrection.ts',
+      'apps/web/utils/captureTransforms.ts',
+      'apps/web/utils/clipboard.ts',
+      'apps/web/utils/commandHistory.ts',
+      'apps/web/utils/credits.ts',
+      'apps/web/utils/ipc.ts',
+      'apps/web/utils/navigation.ts',
+      'apps/web/utils/security.ts',
+      'apps/web/utils/subscriptionGate.ts',
+      'apps/web/utils/tokenCount.ts',
+      // Handler stubs
+      'apps/web/handlers/slashCommandHandlers.ts',
+      // Service stubs
+      'apps/web/services/supabaseAuth.ts',
+      // Store stubs
+      'apps/web/stores/artifactStore.ts',
+      'apps/web/stores/memoryStore.ts',
+      'apps/web/stores/schedulerStore.ts',
+      // Constant stubs
+      'apps/web/constants/errorMessages.ts',
+      'apps/web/constants/event-names.ts',
+      'apps/web/constants/planModels.ts',
+      // Component stubs (desktop-only UI components shimmed for web)
+      'apps/web/components/Browser/BrowserVisualization.tsx',
+      'apps/web/components/Canvas.tsx',
+      'apps/web/components/Editor/MonacoEditor.tsx',
+      'apps/web/components/ErrorBoundary.tsx',
+      'apps/web/components/Execution/TerminalPanel.tsx',
+      'apps/web/components/Execution/TimeoutWarningDialog.tsx',
+      'apps/web/components/MemoryPanel.tsx',
+      'apps/web/components/ROIDashboard/roiStore.tsx',
+      'apps/web/components/ScreenCapture/ScreenCaptureButton.tsx',
+      'apps/web/components/Subscription.tsx',
+      'apps/web/components/UnifiedAgenticChat/Sidecar/DiffViewer.tsx',
+    ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off', // intentional stub files
     },

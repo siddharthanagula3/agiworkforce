@@ -29,7 +29,7 @@ const WidgetListComponent: React.FC<WidgetListProps> = ({
 }) => {
   const handleWidgetAction = useCallback(
     (event: WidgetActionEvent) => {
-      console.log('[WidgetList] Widget action:', event);
+      console.debug('[WidgetList] Widget action:', event);
       // Emit widget action event for handling by chat system
       if (isTauri) {
         emit('widget:action', {

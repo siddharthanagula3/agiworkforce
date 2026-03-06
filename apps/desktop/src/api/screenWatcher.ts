@@ -5,7 +5,7 @@
  * Provides periodic screenshot capture for AGI screen awareness.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 /**

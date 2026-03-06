@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Chat AI Service
  * Bridges the chat UI to the real /api/llm/completion backend with SSE streaming.
@@ -52,7 +53,7 @@ async function loadEmployees(): Promise<AIEmployee[]> {
       return employees;
     })
     .catch((err) => {
-      console.error('[ChatAIService] Failed to load employees:', err);
+      logger.error('[ChatAIService] Failed to load employees:', err);
       employeesLoading = null;
       return [];
     });
@@ -242,7 +243,7 @@ export class ChatAIService {
       return fullResponse;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      console.error('[ChatAIService] sendMessage error:', error);
+      logger.error('[ChatAIService] sendMessage error:', error);
       throw new Error(errorMessage);
     }
   }

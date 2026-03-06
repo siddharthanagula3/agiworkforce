@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 // Chat persistence service - handles database operations for chat sessions and messages
 import { supabase } from '@shared/lib/supabase-client';
 import type { ChatSession, ChatMessage } from '../types';
@@ -211,7 +212,7 @@ export class ChatPersistenceService {
       // Note: PGRST116 is now handled by maybeSingle() returning null
       // RLS policy violation - user doesn't own this session
       if (error.code === '42501' || error.message?.includes('permission denied')) {
-        console.warn('Access denied to session:', sessionId);
+        logger.warn('Access denied to session:', sessionId);
         return null;
       }
       throw new Error(`Failed to load session: ${error.message}`);
@@ -321,7 +322,7 @@ export class ChatPersistenceService {
     if (error) {
       // RLS policy violation - user doesn't own this session
       if (error.code === '42501' || error.message?.includes('permission denied')) {
-        console.warn('Access denied to messages for session:', sessionId);
+        logger.warn('Access denied to messages for session:', sessionId);
         return []; // Return empty array instead of throwing
       }
       throw new Error(`Failed to load messages: ${error.message}`);
@@ -358,7 +359,7 @@ export class ChatPersistenceService {
 
     if (error) {
       if (error.code === '42501' || error.message?.includes('permission denied')) {
-        console.warn('Access denied to messages for session:', sessionId);
+        logger.warn('Access denied to messages for session:', sessionId);
         return { data: [], nextCursor: null, hasMore: false, total: 0 };
       }
       throw new Error(`Failed to load messages: ${error.message}`);
@@ -413,7 +414,7 @@ export class ChatPersistenceService {
 
     if (error) {
       if (error.code === '42501' || error.message?.includes('permission denied')) {
-        console.warn('Access denied to messages for session:', sessionId);
+        logger.warn('Access denied to messages for session:', sessionId);
         return { data: [], nextCursor: null, hasMore: false, total: 0 };
       }
       throw new Error(`Failed to load messages: ${error.message}`);
@@ -492,7 +493,7 @@ export class ChatPersistenceService {
 
     if (error) {
       if (error.code === '42501' || error.message?.includes('permission denied')) {
-        console.warn('Access denied to edit history for message:', messageId);
+        logger.warn('Access denied to edit history for message:', messageId);
         return [];
       }
       throw new Error(`Failed to load edit history: ${error.message}`);
@@ -723,10 +724,10 @@ export class ChatPersistenceService {
 
     // Validate dates
     if (isNaN(createdAt.getTime())) {
-      console.warn('Invalid createdAt for session:', dbSession.id);
+      logger.warn('Invalid createdAt for session:', dbSession.id);
     }
     if (isNaN(updatedAt.getTime())) {
-      console.warn('Invalid updatedAt for session:', dbSession.id);
+      logger.warn('Invalid updatedAt for session:', dbSession.id);
     }
 
     // Extract tags from metadata if available
@@ -772,10 +773,10 @@ export class ChatPersistenceService {
 
     // Validate dates
     if (isNaN(createdAt.getTime())) {
-      console.warn('Invalid createdAt for message:', dbMessage.id);
+      logger.warn('Invalid createdAt for message:', dbMessage.id);
     }
     if (isNaN(updatedAt.getTime())) {
-      console.warn('Invalid updatedAt for message:', dbMessage.id);
+      logger.warn('Invalid updatedAt for message:', dbMessage.id);
     }
 
     return {

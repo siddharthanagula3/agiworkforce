@@ -4,6 +4,8 @@
  * Based on official pricing from OpenAI, Anthropic, Google, and Perplexity
  */
 
+import { logger } from '@shared/lib/logger';
+
 export interface TokenUsage {
   provider: string;
   model: string;
@@ -108,7 +110,7 @@ export class TokenTrackingService {
     const pricing = providerPricing?.[modelKey];
 
     if (!pricing) {
-      console.warn(`No pricing found for ${provider}/${model}, using default rates`);
+      logger.warn(`No pricing found for ${provider}/${model}, using default rates`);
       // Default fallback pricing
       const defaultPricing = { input: 1, output: 2 };
       const inputCost = (inputTokens / 1000000) * defaultPricing.input;

@@ -1,3 +1,5 @@
+import { logger } from '@shared/lib/logger';
+
 /**
  * Gradual Rollout System
  *
@@ -173,7 +175,7 @@ export function updateRollout(feature: FeatureFlag, config: Partial<RolloutConfi
     ...config,
   };
 
-  console.log(`[Gradual Rollout] Updated ${feature}:`, rolloutConfigs[feature]);
+  logger.info(`[Gradual Rollout] Updated ${feature}:`, rolloutConfigs[feature]);
 }
 
 /**
@@ -183,7 +185,7 @@ export function enableForUsers(feature: FeatureFlag, userIds: string[]): void {
   const config = rolloutConfigs[feature];
   config.targetUsers = [...(config.targetUsers || []), ...userIds];
 
-  console.log(`[Gradual Rollout] Enabled ${feature} for users:`, userIds);
+  logger.info(`[Gradual Rollout] Enabled ${feature} for users:`, userIds);
 }
 
 /**
@@ -193,7 +195,7 @@ export function disableForUsers(feature: FeatureFlag, userIds: string[]): void {
   const config = rolloutConfigs[feature];
   config.excludeUsers = [...(config.excludeUsers || []), ...userIds];
 
-  console.log(`[Gradual Rollout] Disabled ${feature} for users:`, userIds);
+  logger.info(`[Gradual Rollout] Disabled ${feature} for users:`, userIds);
 }
 
 /**
@@ -209,7 +211,7 @@ export function graduateRollout(
   const currentPercentage = config.percentage;
 
   if (currentPercentage >= targetPercentage) {
-    console.log(`[Gradual Rollout] ${feature} already at ${currentPercentage}%`);
+    logger.info(`[Gradual Rollout] ${feature} already at ${currentPercentage}%`);
     return;
   }
 
@@ -223,13 +225,13 @@ export function graduateRollout(
 
       updateRollout(feature, { percentage: newPercentage });
 
-      console.log(
+      logger.info(
         `[Gradual Rollout] ${feature} now at ${newPercentage}% (step ${currentStep}/${steps})`,
       );
 
       if (currentStep >= steps || newPercentage >= targetPercentage) {
         clearInterval(interval);
-        console.log(`[Gradual Rollout] ${feature} rollout complete at ${newPercentage}%`);
+        logger.info(`[Gradual Rollout] ${feature} rollout complete at ${newPercentage}%`);
       }
     },
     intervalMinutes * 60 * 1000,
@@ -250,7 +252,7 @@ async function sendSecurityAlert(feature: FeatureFlag, errorRate: number): Promi
   };
 
   // Always log to console for local visibility
-  console.error('[SECURITY ALERT]', JSON.stringify(alertPayload, null, 2));
+  logger.error('[SECURITY ALERT]', JSON.stringify(alertPayload, null, 2));
 
   // Attempt to send to monitoring webhook if configured
   const webhookUrl = process.env['NEXT_PUBLIC_MONITORING_WEBHOOK_URL'];
@@ -261,9 +263,9 @@ async function sendSecurityAlert(feature: FeatureFlag, errorRate: number): Promi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(alertPayload),
       });
-      console.log('[Gradual Rollout] Alert sent to monitoring service');
+      logger.info('[Gradual Rollout] Alert sent to monitoring service');
     } catch (error) {
-      console.error('[Gradual Rollout] Failed to send alert to monitoring service:', error);
+      logger.error('[Gradual Rollout] Failed to send alert to monitoring service:', error);
     }
   }
 
@@ -300,7 +302,7 @@ export function trackFeatureUsage(feature: FeatureFlag, success: boolean): void 
     const errorRate = (tracking.errors / tracking.requests) * 100;
 
     if (errorRate > config.monitoring.errorThreshold) {
-      console.error(
+      logger.error(
         `[Gradual Rollout] AUTO-DISABLE: ${feature} error rate ${errorRate.toFixed(2)}% exceeds threshold ${config.monitoring.errorThreshold}%`,
       );
 
@@ -361,14 +363,14 @@ export function getRolloutStatuses(): Record<
  */
 export function resetTracking(feature: FeatureFlag): void {
   errorTracking.delete(feature);
-  console.log(`[Gradual Rollout] Reset tracking for ${feature}`);
+  logger.info(`[Gradual Rollout] Reset tracking for ${feature}`);
 }
 
 /**
  * Emergency kill switch - disable all features
  */
 export function emergencyDisableAll(): void {
-  console.error('[Gradual Rollout] EMERGENCY: Disabling all features');
+  logger.error('[Gradual Rollout] EMERGENCY: Disabling all features');
 
   for (const feature of Object.keys(rolloutConfigs) as FeatureFlag[]) {
     updateRollout(feature, { enabled: false });
@@ -400,11 +402,11 @@ export async function withFeatureFlag<T>(
   } catch (error) {
     trackFeatureUsage(feature, false);
 
-    console.error(`[Gradual Rollout] Error in feature ${feature}:`, error);
+    logger.error(`[Gradual Rollout] Error in feature ${feature}:`, error);
 
     // Try fallback if available
     if (fallback) {
-      console.log(`[Gradual Rollout] Using fallback for ${feature}`);
+      logger.info(`[Gradual Rollout] Using fallback for ${feature}`);
       return fallback();
     }
 

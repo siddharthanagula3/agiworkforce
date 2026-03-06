@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'AGI Workforce - About Us',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'About AGI Automation LLC | AGI Workforce',
     description: 'Meet the team behind AGI Workforce. Founded in 2025 in Austin, TX.',
-    images: ['/og-image.svg'],
+    images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
 };
@@ -51,7 +51,7 @@ const jsonLd = {
       '@id': 'https://agiworkforce.com/#organization',
       name: 'AGI Automation LLC',
       url: 'https://agiworkforce.com',
-      logo: 'https://agiworkforce.com/logo.svg',
+      logo: 'https://agiworkforce.com/logo.png',
       description:
         'AGI Automation LLC builds AGI Workforce, a desktop app where you tell the AI what you want and it handles everything - with full undo support.',
       foundingDate: '2025',

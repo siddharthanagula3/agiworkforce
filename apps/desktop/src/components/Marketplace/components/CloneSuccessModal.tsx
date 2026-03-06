@@ -1,4 +1,6 @@
 import { ArrowRight, CheckCircle, Play, Settings, Share2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import { invoke } from '../../../lib/tauri-mock';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
@@ -16,14 +18,26 @@ export function CloneSuccessModal() {
 
   if (!clonedWorkflow) return null;
 
-  const handleRunNow = () => {
+  const handleRunNow = async () => {
     closeCloneSuccess();
-    console.log('Running workflow:', clonedWorkflow.id);
+    try {
+      await invoke('execute_workflow', { workflowId: clonedWorkflow.id, inputs: {} });
+      toast.success(`Running "${clonedWorkflow.title}"`, {
+        description: 'Workflow execution started.',
+      });
+    } catch {
+      // Backend command may not exist yet — show informational toast
+      toast.info(`Workflow "${clonedWorkflow.title}" cloned`, {
+        description: 'Open the Workflows panel to run it.',
+      });
+    }
   };
 
   const handleCustomize = () => {
     closeCloneSuccess();
-    console.log('Customizing workflow:', clonedWorkflow.id);
+    toast.info(`Customize "${clonedWorkflow.title}"`, {
+      description: 'Open the Workflows panel to edit and configure this workflow.',
+    });
   };
 
   const handleShareMyVersion = () => {

@@ -46,11 +46,7 @@ function PulsingDot() {
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    opacity.value = withRepeat(
-      withTiming(0.3, { duration: 800 }),
-      -1,
-      true,
-    );
+    opacity.value = withRepeat(withTiming(0.3, { duration: 800 }), -1, true);
   }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -108,9 +104,7 @@ export function RecordingOverlay({
       <View className="flex-row items-center justify-center gap-2 mb-3">
         <PulsingDot />
         <Text className="text-red-400 text-sm font-medium">Recording</Text>
-        <Text className="text-white/50 text-sm font-mono ml-2">
-          {formatDuration(durationMs)}
-        </Text>
+        <Text className="text-white/50 text-sm font-mono ml-2">{formatDuration(durationMs)}</Text>
       </View>
 
       {/* Waveform preview */}

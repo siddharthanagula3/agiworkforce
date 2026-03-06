@@ -133,11 +133,11 @@ pub fn sanitize_tool_output(output: &str) -> String {
 
     static SECRET_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
         vec![
-            Regex::new(r"sk-[A-Za-z0-9_-]{32,}").unwrap(),
-            Regex::new(r"sk_live_[A-Za-z0-9]{24,}").unwrap(),
-            Regex::new(r"sk_test_[A-Za-z0-9]{24,}").unwrap(),
-            Regex::new(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}").unwrap(),
-            Regex::new(r"Bearer\s+[A-Za-z0-9_-]{20,}").unwrap(),
+            Regex::new(r"sk-[A-Za-z0-9_-]{32,}").expect("valid regex: sk- API key pattern"),
+            Regex::new(r"sk_live_[A-Za-z0-9]{24,}").expect("valid regex: sk_live_ key pattern"),
+            Regex::new(r"sk_test_[A-Za-z0-9]{24,}").expect("valid regex: sk_test_ key pattern"),
+            Regex::new(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}").expect("valid regex: JWT pattern"),
+            Regex::new(r"Bearer\s+[A-Za-z0-9_-]{20,}").expect("valid regex: bearer token pattern"),
         ]
     });
 

@@ -116,7 +116,7 @@ fn default_global_hotkey_enabled() -> bool {
 }
 
 fn default_global_hotkey_combo() -> String {
-    "CommandOrControl+Shift+Space".to_string()
+    crate::sys::commands::shortcuts::platform_default_quick_query_combo().to_string()
 }
 
 fn default_allowed_directories() -> Vec<String> {
@@ -238,6 +238,15 @@ pub async fn settings_save(
     state: State<'_, SettingsState>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    let mut settings = settings;
+    settings.global_hotkey_preferences.combo =
+        crate::sys::commands::shortcuts::normalize_accelerator_for_platform(
+            &settings.global_hotkey_preferences.combo,
+        );
+    if settings.global_hotkey_preferences.combo.is_empty() {
+        settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
+    }
+
     // Update in-memory state
     let mut current_settings = state.settings.lock().await;
     *current_settings = settings.clone();
@@ -297,6 +306,14 @@ pub async fn settings_load_from_disk(
 
         let loaded_settings: Settings =
             serde_json::from_str(&json).map_err(|e| format!("Failed to parse settings: {}", e))?;
+        let mut loaded_settings = loaded_settings;
+        loaded_settings.global_hotkey_preferences.combo =
+            crate::sys::commands::shortcuts::normalize_accelerator_for_platform(
+                &loaded_settings.global_hotkey_preferences.combo,
+            );
+        if loaded_settings.global_hotkey_preferences.combo.is_empty() {
+            loaded_settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
+        }
 
         // Update in-memory state
         let mut current_settings = state.settings.lock().await;

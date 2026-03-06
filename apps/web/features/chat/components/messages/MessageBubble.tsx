@@ -309,7 +309,9 @@ export const MessageBubble = React.memo(function MessageBubble({
                   .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                   .join(' ') || 'AI'}
           </span>
-          <span className="text-xs text-muted-foreground">{formatMessageTime(message.timestamp)}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatMessageTime(message.timestamp)}
+          </span>
           {message.metadata?.isPinned && (
             <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
           )}

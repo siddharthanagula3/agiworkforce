@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Conversation Branching Service
  *
@@ -127,7 +128,7 @@ export class ConversationBranchingService {
 
       return branchSession;
     } catch (error) {
-      console.error('Failed to branch conversation:', error);
+      logger.error('Failed to branch conversation:', error);
       throw new Error(
         `Failed to branch conversation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -160,7 +161,7 @@ export class ConversationBranchingService {
       .single();
 
     if (error) {
-      console.error('Failed to save branch metadata:', error);
+      logger.error('Failed to save branch metadata:', error);
       throw new Error(`Failed to save branch metadata: ${(error as { message: string }).message}`);
     }
 
@@ -193,7 +194,7 @@ export class ConversationBranchingService {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Failed to get branches for session:', error);
+      logger.error('Failed to get branches for session:', error);
       return [];
     }
 
@@ -253,7 +254,7 @@ export class ConversationBranchingService {
     );
 
     if (error) {
-      console.error('Failed to get branch history:', error);
+      logger.error('Failed to get branch history:', error);
       return [{ sessionId, branchName: null, branchPointMessageId: null, depth: 0 }];
     }
 
@@ -291,7 +292,7 @@ export class ConversationBranchingService {
     );
 
     if (error) {
-      console.error('Failed to get root session:', error);
+      logger.error('Failed to get root session:', error);
       return sessionId; // Return self if error
     }
 
@@ -310,7 +311,7 @@ export class ConversationBranchingService {
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to check if session is branch:', error);
+      logger.error('Failed to check if session is branch:', error);
       return false;
     }
 
@@ -459,7 +460,7 @@ export class ConversationBranchingService {
 
       return duplicateSession;
     } catch (error) {
-      console.error('Failed to duplicate conversation:', error);
+      logger.error('Failed to duplicate conversation:', error);
       throw new Error(
         `Failed to duplicate conversation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -518,7 +519,7 @@ export class ConversationBranchingService {
 
       return mergeSession;
     } catch (error) {
-      console.error('Failed to merge branches:', error);
+      logger.error('Failed to merge branches:', error);
       throw new Error(
         `Failed to merge branches: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -584,7 +585,7 @@ export class ConversationBranchingService {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Failed to get branches at message:', error);
+      logger.error('Failed to get branches at message:', error);
       return [];
     }
 
@@ -642,7 +643,7 @@ export class ConversationBranchingService {
       .eq('parent_session_id', sessionId);
 
     if (error) {
-      console.error('Failed to count branches:', error);
+      logger.error('Failed to count branches:', error);
       return 0;
     }
 

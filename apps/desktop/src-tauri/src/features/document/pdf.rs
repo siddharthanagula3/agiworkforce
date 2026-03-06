@@ -227,6 +227,7 @@ impl Default for PdfHandler {
 
 impl PdfHandler {
     /// DOC-014 fix: Clear the metadata cache (useful for testing or manual refresh)
+    // Used by: testing and cache invalidation
     #[allow(dead_code)]
     pub fn clear_cache(&self) {
         if let Ok(mut cache) = self.cache.write() {

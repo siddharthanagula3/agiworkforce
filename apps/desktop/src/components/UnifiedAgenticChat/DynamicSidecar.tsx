@@ -183,7 +183,7 @@ function VideoPanel({ src, title }: { src?: string; title?: string }) {
       } catch (err) {
         // AutoPlay was blocked - this is expected behavior in many browsers
         // The video will still be playable via controls
-        console.log('[DynamicSidecar] Video autoPlay was blocked:', err);
+        console.debug('[DynamicSidecar] Video autoPlay was blocked:', err);
         setAutoPlayFailed(true);
       }
     };

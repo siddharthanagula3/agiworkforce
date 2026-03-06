@@ -11,6 +11,7 @@
 
 import { supabase } from '@shared/lib/supabase-client';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { logger } from '@shared/lib/logger';
 
 // =============================================
 // TYPES
@@ -68,7 +69,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   connect(): void {
     this.connectionState.connected = true;
-    console.log('[RealtimeService] Connected');
+    // Connected to realtime service
   }
 
   /**
@@ -81,7 +82,7 @@ class RealtimeServiceImpl implements RealtimeService {
     this.channels.clear();
     this.connectionState.connected = false;
     this.connectionState.channels = [];
-    console.log('[RealtimeService] Disconnected from all channels');
+    // Disconnected from all channels
   }
 
   /**
@@ -114,7 +115,7 @@ class RealtimeServiceImpl implements RealtimeService {
             this.connectionState.channels.push(channelName);
           }
           this.reconnectAttempts = 0;
-          console.log(`[RealtimeService] Subscribed to ${channelName}`);
+          // Subscribed successfully
         } else if (status === 'CHANNEL_ERROR') {
           this.handleReconnect(channelName, () => this.subscribe(channelName, handler));
         } else if (status === 'CLOSED') {
@@ -207,7 +208,7 @@ class RealtimeServiceImpl implements RealtimeService {
       );
 
       this.connect();
-      console.log(`[RealtimeService] Initialized realtime for user: ${userId}`);
+      // Realtime initialized for user
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.connectionState.lastError = errorMessage;
@@ -276,9 +277,9 @@ class RealtimeServiceImpl implements RealtimeService {
           if (!this.connectionState.channels.includes(channelName)) {
             this.connectionState.channels.push(channelName);
           }
-          console.log(`[RealtimeService] Subscribed to ${table} (${channelName})`);
+          // Subscribed to table successfully
         } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[RealtimeService] Channel error for ${channelName}`);
+          logger.error(`[RealtimeService] Channel error for ${channelName}`);
           this.handleReconnect(channelName, () =>
             this.subscribeToTable(channelName, table, filter, handler),
           );
@@ -307,7 +308,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   private handleReconnect(channelName: string, reconnectFn: () => void): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`[RealtimeService] Max reconnect attempts reached for ${channelName}`);
+      logger.error(`[RealtimeService] Max reconnect attempts reached for ${channelName}`);
       this.connectionState.lastError = `Failed to reconnect to ${channelName} after ${this.maxReconnectAttempts} attempts`;
       this.callbacks.onError?.(this.connectionState.lastError);
       return;
@@ -315,10 +316,6 @@ class RealtimeServiceImpl implements RealtimeService {
 
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
     this.reconnectAttempts++;
-
-    console.log(
-      `[RealtimeService] Reconnecting ${channelName} in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
-    );
 
     const timeoutId = setTimeout(() => {
       // Remove from tracking set once executed

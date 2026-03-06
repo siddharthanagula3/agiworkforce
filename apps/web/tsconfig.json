@@ -23,8 +23,7 @@
       "@/*": ["./*"],
       "@features/*": ["./features/*"],
       "@core/*": ["./core/*"],
-      "@shared/*": ["./shared/*"],
-      "@desktop-constants/*": ["../desktop/src/constants/*"]
+      "@shared/*": ["./shared/*"]
     },
     "allowJs": true
   },

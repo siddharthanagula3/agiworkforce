@@ -8,16 +8,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { QuickModelSelector } from './QuickModelSelector';
 
 export const ChatInputToolbar = () => {
-  const { conversationMode, setConversationMode, createConversation, activeConversationId, conversations } =
-    useUnifiedChatStore(
-      useShallow((s) => ({
-        conversationMode: s.conversationMode,
-        setConversationMode: s.setConversationMode,
-        createConversation: s.createConversation,
-        activeConversationId: s.activeConversationId,
-        conversations: s.conversations,
-      })),
-    );
+  const {
+    conversationMode,
+    setConversationMode,
+    createConversation,
+    activeConversationId,
+    conversations,
+  } = useUnifiedChatStore(
+    useShallow((s) => ({
+      conversationMode: s.conversationMode,
+      setConversationMode: s.setConversationMode,
+      createConversation: s.createConversation,
+      activeConversationId: s.activeConversationId,
+      conversations: s.conversations,
+    })),
+  );
 
   const activeConvo = conversations.find((c) => c.id === activeConversationId);
   const isIncognito = activeConvo?.incognito ?? false;

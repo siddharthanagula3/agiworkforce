@@ -17,6 +17,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 export interface VeoGenerationRequest {
   prompt: string;
@@ -101,7 +102,7 @@ async function getAuthToken(): Promise<string | null> {
     } = await supabase.auth.getSession();
     return session?.access_token || null;
   } catch (error) {
-    console.error('[GoogleVeoService] Failed to get auth token:', error);
+    logger.error('[GoogleVeoService] Failed to get auth token:', error);
     return null;
   }
 }
@@ -416,7 +417,7 @@ export class GoogleVeoService {
       // SECURITY: Get auth token for authenticated proxy calls
       const authToken = await getAuthToken();
       if (!authToken) {
-        console.warn('User not authenticated, using original prompt');
+        logger.warn('[GoogleVeoService] User not authenticated, using original prompt');
         return prompt;
       }
 
@@ -447,7 +448,7 @@ export class GoogleVeoService {
       });
 
       if (!apiResponse.ok) {
-        console.warn('Failed to enhance prompt with Gemini, using original');
+        logger.warn('[GoogleVeoService] Failed to enhance prompt with Gemini, using original');
         return prompt;
       }
 
@@ -457,7 +458,7 @@ export class GoogleVeoService {
 
       return enhancedPrompt.trim();
     } catch (error) {
-      console.warn('Error enhancing prompt with Gemini:', error);
+      logger.warn('[GoogleVeoService] Error enhancing prompt with Gemini:', error);
       return prompt;
     }
   }

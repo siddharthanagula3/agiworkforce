@@ -17,7 +17,27 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
       },
       {
-        userAgent: 'Claude-Web',
+        userAgent: 'ChatGPT-User',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
+        userAgent: 'ClaudeBot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
+        userAgent: 'PerplexityBot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
+        userAgent: 'Applebot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
+        userAgent: 'Google-Extended',
         allow: '/',
         disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
       },

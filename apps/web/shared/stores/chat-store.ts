@@ -8,6 +8,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { supabase } from '@shared/lib/supabase-client';
+import { useAuthStore } from '@shared/stores/authentication-store';
 
 export interface Message {
   id: string;
@@ -168,6 +169,8 @@ export interface Checkpoint {
   messageCount: number;
   timestamp: Date;
   label: string;
+  /** Snapshot of messages at the time the checkpoint was saved */
+  messagesSnapshot?: Message[];
 }
 
 export interface ChatActions {
@@ -550,9 +553,9 @@ export const useChatStore = create<ChatStore>()(
               if (message) {
                 if (!message.reactions) message.reactions = [];
 
-                const PLACEHOLDER_USER_ID = 'current-user'; // TODO: Wire to authentication store
+                const currentUserId = useAuthStore.getState().user?.id ?? 'current-user';
                 const existingReaction = message.reactions.find(
-                  (r) => r.type === reactionType && r.userId === PLACEHOLDER_USER_ID,
+                  (r) => r.type === reactionType && r.userId === currentUserId,
                 );
 
                 if (existingReaction) {
@@ -562,7 +565,7 @@ export const useChatStore = create<ChatStore>()(
                   // Add new reaction
                   message.reactions.push({
                     type: reactionType,
-                    userId: PLACEHOLDER_USER_ID,
+                    userId: currentUserId,
                     timestamp: new Date(),
                   });
                 }
@@ -1078,7 +1081,18 @@ export const useChatStore = create<ChatStore>()(
 
         saveCheckpoint: (checkpoint: Checkpoint) =>
           set((state) => {
-            state.checkpointHistory.push(checkpoint);
+            // Capture a messages snapshot if not already provided
+            const checkpointWithSnapshot: Checkpoint = checkpoint.messagesSnapshot
+              ? checkpoint
+              : {
+                  ...checkpoint,
+                  messagesSnapshot:
+                    state.activeConversationId &&
+                    state.conversations[state.activeConversationId] != null
+                      ? state.conversations[state.activeConversationId]!.messages.slice()
+                      : [],
+                };
+            state.checkpointHistory.push(checkpointWithSnapshot);
             state.currentCheckpoint = checkpoint.id;
           }),
 
@@ -1087,12 +1101,13 @@ export const useChatStore = create<ChatStore>()(
             const checkpoint = state.checkpointHistory.find((cp) => cp.id === checkpointId);
             if (checkpoint) {
               state.currentCheckpoint = checkpointId;
-              // TODO: Checkpoint restoration is incomplete - messages field needed
-              // The checkpoint type should capture a messages snapshot on save,
-              // and restoreCheckpoint should restore messages from that snapshot.
-              console.warn(
-                'restoreCheckpoint: only updates currentCheckpoint ID. Message restoration not yet implemented.',
-              );
+              // Restore message snapshot if captured at save time
+              if (checkpoint.messagesSnapshot && state.activeConversationId) {
+                const conversation = state.conversations[state.activeConversationId];
+                if (conversation) {
+                  conversation.messages = checkpoint.messagesSnapshot.slice();
+                }
+              }
             }
           }),
       })),

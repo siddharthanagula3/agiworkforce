@@ -1,4 +1,5 @@
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 // Use type assertion to access tables not in generated schema
 const db = supabase as unknown as {
@@ -628,7 +629,7 @@ class ToolInvocationService {
         success: true,
       });
     } catch (error) {
-      console.error('Failed to log tool execution:', error);
+      logger.error('Failed to log tool execution:', error);
     }
   }
 

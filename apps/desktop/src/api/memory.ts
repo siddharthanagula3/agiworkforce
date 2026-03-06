@@ -5,7 +5,7 @@
  * long-term memory system integrated with chat and project workflows.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -113,8 +113,8 @@ export async function configureMemoryInjection(
 ): Promise<void> {
   return invoke<void>('chat_configure_memory_injection', {
     enabled,
-    max_memories: maxMemories,
-    min_importance: minImportance,
+    maxMemories,
+    minImportance,
   });
 }
 
@@ -182,7 +182,7 @@ export async function recallMemory(
   return invoke<MemoryEntry | null>('chat_recall_memory', {
     category,
     topic,
-    boost_importance: boostImportance,
+    boostImportance,
   });
 }
 
@@ -212,7 +212,7 @@ export async function getProjectMemories(
   limit: number = 10,
 ): Promise<MemoryEntry[]> {
   return invoke<MemoryEntry[]>('memory_get_project_memories', {
-    project_name: projectName,
+    projectName,
     limit,
   });
 }
@@ -286,7 +286,7 @@ export async function getByCategory(category: string, limit?: number): Promise<M
  */
 export async function getImportant(minImportance: number = 7): Promise<MemoryEntry[]> {
   return invoke<MemoryEntry[]>('memory_get_important', {
-    min_importance: minImportance,
+    minImportance,
   });
 }
 
@@ -294,7 +294,7 @@ export async function getImportant(minImportance: number = 7): Promise<MemoryEnt
  * Delete a memory by ID
  */
 export async function forget(memoryId: number): Promise<boolean> {
-  return invoke<boolean>('memory_forget', { memory_id: memoryId });
+  return invoke<boolean>('memory_forget', { memoryId });
 }
 
 /**
@@ -314,7 +314,7 @@ export async function logContext(
 ): Promise<number> {
   return invoke<number>('memory_log_context', {
     content,
-    entry_type: entryType,
+    entryType,
     metadata,
   });
 }
@@ -363,10 +363,10 @@ export async function setDecayConfig(
 ): Promise<void> {
   return invoke<void>('memory_set_decay_config', {
     enabled,
-    decay_rate: decayRate,
-    decay_period_days: decayPeriodDays,
-    min_importance: minImportance,
-    access_boost: accessBoost,
+    decayRate,
+    decayPeriodDays,
+    minImportance,
+    accessBoost,
   });
 }
 
@@ -374,7 +374,7 @@ export async function setDecayConfig(
  * Boost memory importance on access
  */
 export async function boostOnAccess(memoryId: number): Promise<number> {
-  return invoke<number>('memory_boost_on_access', { memory_id: memoryId });
+  return invoke<number>('memory_boost_on_access', { memoryId });
 }
 
 // ============================================================================

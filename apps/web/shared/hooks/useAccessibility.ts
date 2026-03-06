@@ -67,12 +67,10 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
   const trackInteraction = useCallback(
     (action: string, target: string, properties?: Record<string, unknown>) => {
       if (trackInteractions) {
-        // This would integrate with your analytics service
-        console.log('Accessibility interaction:', {
-          action,
-          target,
-          properties,
-        });
+        // Integration point: connect to analytics service
+        void action;
+        void target;
+        void properties;
       }
     },
     [trackInteractions],

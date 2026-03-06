@@ -65,11 +65,9 @@ export const ResearchReport = memo(function ResearchReport({
     try {
       const { useDocumentStore } = await import('@/stores/documentStore');
       const outputPath = `/tmp/research-${Date.now()}.pdf`;
-      await useDocumentStore.getState().generatePdf(
-        outputPath,
-        `Research: ${result.query}`,
-        buildPlainText(result),
-      );
+      await useDocumentStore
+        .getState()
+        .generatePdf(outputPath, `Research: ${result.query}`, buildPlainText(result));
       toast.success('PDF exported successfully');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to export PDF';
@@ -77,8 +75,7 @@ export const ResearchReport = memo(function ResearchReport({
     }
   }, [result]);
 
-  const confidenceClass =
-    CONFIDENCE_COLORS[result.confidence] ?? CONFIDENCE_COLORS['medium'];
+  const confidenceClass = CONFIDENCE_COLORS[result.confidence] ?? CONFIDENCE_COLORS['medium'];
   const durationFormatted =
     result.duration_secs < 60
       ? `${result.duration_secs}s`
@@ -96,10 +93,7 @@ export const ResearchReport = memo(function ResearchReport({
               &bull; {result.sources_cited} cited
             </p>
           </div>
-          <Badge
-            variant="outline"
-            className={cn('shrink-0 capitalize text-xs', confidenceClass)}
-          >
+          <Badge variant="outline" className={cn('shrink-0 capitalize text-xs', confidenceClass)}>
             {result.confidence.replace('_', ' ')} confidence
           </Badge>
         </div>

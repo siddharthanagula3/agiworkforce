@@ -253,13 +253,9 @@ export const useVibeViewStore: UseBoundStore<StoreApi<VibeViewStore>> = create<V
 
         updateTerminalCommand: (id, updates) =>
           set((state) => {
-            const commandIndex = state.terminalState.history.findIndex((c) => c.id === id);
-            if (commandIndex !== -1) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (state.terminalState.history as any)[commandIndex] = {
-                ...state.terminalState.history[commandIndex]!,
-                ...updates,
-              };
+            const command = state.terminalState.history.find((c) => c.id === id);
+            if (command) {
+              Object.assign(command, updates);
             }
             if (updates.status === 'completed' || updates.status === 'failed') {
               state.terminalState.activeCommand = null;
@@ -302,13 +298,9 @@ export const useVibeViewStore: UseBoundStore<StoreApi<VibeViewStore>> = create<V
 
         updateTask: (taskId, updates) =>
           set((state) => {
-            const taskIndex = state.plannerState.tasks.findIndex((t) => t.id === taskId);
-            if (taskIndex !== -1) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (state.plannerState.tasks as any)[taskIndex] = {
-                ...state.plannerState.tasks[taskIndex]!,
-                ...updates,
-              };
+            const task = state.plannerState.tasks.find((t) => t.id === taskId);
+            if (task) {
+              Object.assign(task, updates);
             }
           }),
 

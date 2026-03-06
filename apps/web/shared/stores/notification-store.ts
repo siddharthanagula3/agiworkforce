@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
+import { logger } from '@shared/lib/logger';
 
 // Track auto-close timeouts to prevent memory leaks
 const notificationTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
@@ -482,7 +483,7 @@ export const useNotificationStore = create<NotificationStore>()(
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.3);
           } catch (error) {
-            console.warn('Could not play notification sound:', error);
+            logger.warn('Could not play notification sound', error);
           }
         },
 

@@ -81,7 +81,13 @@ export const HireButton: React.FC<HireButtonProps> = ({
 
         // Insert hire record
 
-        const { error } = await (supabase.from('hired_employees') as unknown as { insert: (data: Record<string, string>) => Promise<{ error: { code: string; message: string } | null }> }).insert({
+        const { error } = await (
+          supabase.from('hired_employees') as unknown as {
+            insert: (
+              data: Record<string, string>,
+            ) => Promise<{ error: { code: string; message: string } | null }>;
+          }
+        ).insert({
           user_id: user.id,
           employee_id: employeeId,
           employee_name: employeeName,

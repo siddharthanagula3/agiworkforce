@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- React.ComponentType registry requires generic any */
 import React, { memo, useCallback, useMemo } from 'react';
 import { FileDiff } from 'lucide-react';
 import { DiffViewer } from '../Visualizations/DiffViewer';

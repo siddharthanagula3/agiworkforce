@@ -86,9 +86,7 @@ export async function checkPermission(): Promise<boolean> {
  * Optionally provide a callback for metering updates (~60fps).
  * @throws if permission denied or recording already active
  */
-export async function startRecording(
-  onMetering?: MeteringCallback,
-): Promise<void> {
+export async function startRecording(onMetering?: MeteringCallback): Promise<void> {
   if (activeRecording) {
     throw new Error('Recording already in progress');
   }
@@ -197,12 +195,16 @@ export async function transcribe(uri: string): Promise<TranscriptionResult> {
   const token = data.session?.access_token;
 
   // Build multipart form data
+  // React Native's FormData accepts { uri, type, name } objects for file uploads.
+  // The standard Blob type doesn't apply; cast to `any` for the RN-specific API.
   const formData = new FormData();
-  formData.append('audio', {
+  const filePayload: { uri: string; type: string; name: string } = {
     uri,
     type: 'audio/m4a',
     name: 'recording.m4a',
-  } as unknown as Blob);
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formData.append('audio', filePayload as any);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);

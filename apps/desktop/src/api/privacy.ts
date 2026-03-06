@@ -256,11 +256,7 @@ export async function deleteUserAccount(userId: string): Promise<string> {
   }
 
   try {
-    return await invokeWithTimeout<string>(
-      'privacy_delete_account',
-      { user_id: userId },
-      DELETE_TIMEOUT_MS,
-    );
+    return await invokeWithTimeout<string>('privacy_delete_account', { userId }, DELETE_TIMEOUT_MS);
   } catch (error) {
     throw new Error(`Failed to delete account: ${error}`);
   }

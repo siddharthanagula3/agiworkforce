@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- web port compilation stub; desktop IPC types not available */
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;

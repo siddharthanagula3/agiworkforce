@@ -172,9 +172,7 @@ export function ScheduledTasksPanel() {
             onUseExample={(ex) => void handleUseExample(ex)}
           />
         ) : filteredTasks.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500">
-            No {activeFilter} tasks.
-          </div>
+          <div className="py-8 text-center text-sm text-slate-500">No {activeFilter} tasks.</div>
         ) : (
           <div className="space-y-2 p-3">
             {filteredTasks.map((task) => (
@@ -185,11 +183,7 @@ export function ScheduledTasksPanel() {
       </div>
 
       {/* Modal */}
-      <CreateTaskModal
-        isOpen={isModalOpen}
-        editingTask={editingTask}
-        onClose={handleCloseModal}
-      />
+      <CreateTaskModal isOpen={isModalOpen} editingTask={editingTask} onClose={handleCloseModal} />
     </div>
   );
 }

@@ -36,6 +36,7 @@ export interface UseChatSubmitOptions {
   monthlyLimit: number;
   monthlyCost: number;
   isQueueMode: boolean;
+  conversationId?: number | null;
   onQueueMessage: (msg: PendingUserMessage) => void;
   onClearContent: () => void;
   onClearAttachments: () => void;
@@ -63,6 +64,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
     monthlyLimit,
     monthlyCost,
     isQueueMode,
+    conversationId,
     onQueueMessage,
     onClearContent,
     onClearAttachments,
@@ -97,14 +99,13 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
           const pendingMsg = await invoke<PendingUserMessage>('chat_add_pending_message', {
             request: {
               content: messageContent,
-              conversation_id: null,
+              conversation_id: conversationId ?? null,
             },
           });
 
           onQueueMessage(pendingMsg);
           onClearContent();
 
-          console.log('[useChatSubmit] Message queued:', pendingMsg.id);
           return true;
         } catch (error) {
           console.error('[useChatSubmit] Failed to queue message:', error);
@@ -223,6 +224,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
     [
       isSending,
       isQueueMode,
+      conversationId,
       selectedModel,
       selectedProvider,
       focusMode,

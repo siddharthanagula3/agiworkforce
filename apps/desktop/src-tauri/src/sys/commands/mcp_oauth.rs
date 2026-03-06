@@ -40,7 +40,8 @@ enum ConnectorCredentialSource {
     OAuth { provider: &'static str },
     /// Uses API key stored via api_key_{connector_id}
     ApiKey,
-    /// No credentials needed (reserved for public MCP servers)
+    /// No credentials needed
+    // Used by: public MCP servers that require no authentication
     #[allow(dead_code)]
     None,
 }
