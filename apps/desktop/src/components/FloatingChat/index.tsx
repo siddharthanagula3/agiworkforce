@@ -150,8 +150,13 @@ export const FloatingChat = () => {
             <p className="text-sm text-zinc-400">Ask me anything! I'm AGI Workforce.</p>
             <p className="text-xs text-zinc-500 mt-1">
               Press{' '}
-              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Cmd+Shift+F</kbd> to
-              toggle
+              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">
+                {typeof navigator !== 'undefined' && navigator.platform.includes('Mac')
+                  ? 'Cmd'
+                  : 'Ctrl'}
+                +Shift+F
+              </kbd>{' '}
+              to toggle
             </p>
           </div>
         ) : (

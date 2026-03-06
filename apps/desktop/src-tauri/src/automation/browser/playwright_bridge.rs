@@ -272,16 +272,31 @@ impl PlaywrightBridge {
             BrowserType::Chromium => {
                 #[cfg(windows)]
                 {
-                    let possible_paths = [
+                    // Build the user-profile Chrome path by resolving LOCALAPPDATA at runtime;
+                    // %USERNAME% is not expanded by Path::exists(), so we use the env var instead.
+                    let user_chrome = std::env::var("LOCALAPPDATA")
+                        .map(|local| {
+                            std::path::PathBuf::from(local)
+                                .join("Google")
+                                .join("Chrome")
+                                .join("Application")
+                                .join("chrome.exe")
+                        })
+                        .ok();
+
+                    let system_paths: &[&str] = &[
                         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                        r"C:\Users\%USERNAME%\AppData\Local\Google\Chrome\Application\chrome.exe",
                     ];
 
-                    possible_paths
+                    let found = system_paths
                         .iter()
-                        .find(|p| std::path::Path::new(p).exists())
-                        .map(|s| s.to_string())
+                        .map(|p| std::path::PathBuf::from(p))
+                        .chain(user_chrome.into_iter())
+                        .find(|p| p.exists());
+
+                    found
+                        .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_else(|| "chrome".to_string())
                 }
 
