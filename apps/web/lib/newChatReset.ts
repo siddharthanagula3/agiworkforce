@@ -1,7 +1,7 @@
 import { useAgentStore } from '@/stores/unified/chat/agentStore';
 import { useChatStore } from '@/stores/unified/chat/chatStore';
 import { useToolStore } from '@/stores/unified/chat/toolStore';
-import { isTauri, invoke } from '@tauri-apps/api/core';
+import { isTauri, invoke } from '@/lib/tauri-mock';
 
 const NEW_CHAT_ABORT_EVENT = 'chat:new-conversation';
 
@@ -35,7 +35,7 @@ export async function resetInFlightChatState(): Promise<void> {
   // Cancel each running tool via backend first
   for (const stream of runningTools) {
     try {
-      if (await isTauri()) {
+      if (isTauri) {
         await invoke('cancel_tool_execution', { tool_id: stream.tool_id });
       }
     } catch (error) {
@@ -46,7 +46,7 @@ export async function resetInFlightChatState(): Promise<void> {
   }
 
   // Also stop any ongoing generation on the backend
-  if (await isTauri()) {
+  if (isTauri) {
     try {
       await invoke('chat_stop_generation');
     } catch (error) {
