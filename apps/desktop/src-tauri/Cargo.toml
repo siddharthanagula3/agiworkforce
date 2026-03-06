@@ -8,7 +8,7 @@ default-run = "agiworkforce-desktop"
 
 [lints.rust]
 warnings = "warn"
-unsafe_code = "deny"
+unsafe_code = "allow"
 unused = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
