@@ -37,7 +37,7 @@ describe('useTerminal', () => {
 
       expect(sessionId).toBe(mockSessionId);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-        shell_type: 'powershell',
+        shellType: 'powershell',
         cwd: undefined,
       });
     });
@@ -53,7 +53,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-        shell_type: 'gitbash',
+        shellType: 'gitbash',
         cwd: '/home/user',
       });
     });
@@ -83,7 +83,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_kill', {
-        session_id: 'session-to-close',
+        sessionId: 'session-to-close',
       });
     });
   });
@@ -99,7 +99,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_send_input', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         data: 'ls -la\n',
       });
     });
@@ -119,7 +119,7 @@ describe('useTerminal', () => {
 
       expect(output).toBe('Command output here');
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         limit: 1,
       });
     });
@@ -136,7 +136,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_resize', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         cols: 80,
         rows: 24,
       });
@@ -157,7 +157,7 @@ describe('useTerminal', () => {
 
       expect(history).toEqual(mockHistory);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         limit: 100,
       });
     });
@@ -172,7 +172,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         limit: 50,
       });
     });
@@ -192,7 +192,7 @@ describe('useTerminal', () => {
 
       expect(results).toEqual(['git commit', 'git push']);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         limit: 100,
       });
     });
@@ -209,7 +209,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_set_env', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         key: 'MY_VAR',
         value: 'my_value',
       });
@@ -227,7 +227,7 @@ describe('useTerminal', () => {
 
       expect(value).toBe('test_value');
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_env', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         key: 'MY_VAR',
       });
     });
@@ -251,7 +251,7 @@ describe('useTerminal', () => {
         { key: 'HOME', value: '/home/user' },
       ]);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_list_env', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
       });
     });
 
@@ -265,7 +265,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_unset_env', {
-        session_id: 'session-123',
+        sessionId: 'session-123',
         key: 'MY_VAR',
       });
     });
