@@ -240,6 +240,7 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       const selector = action.selector ? String(action.selector) : '';
       const timeout = action.delay != null ? Math.max(Number(action.delay), 500) : 5_000;
       const response = (await handleWaitForSelector({
+        type: 'WAIT_FOR_SELECTOR',
         selector,
         timeout,
         options: { visible: true },
@@ -255,19 +256,38 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
           error: `Invalid or missing URL for navigate action: ${url}`,
         };
       }
+      // Validate that the URL is well-formed beyond the regex check
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return {
+            type: actionType,
+            success: false,
+            error: `Only http/https URLs are allowed: ${url}`,
+          };
+        }
+      } catch {
+        return {
+          type: actionType,
+          success: false,
+          error: `Malformed URL for navigate action: ${url}`,
+        };
+      }
       window.location.href = url;
       return { type: actionType, success: true, url };
     }
     case 'click': {
       const response = (await handleClick({
-        selector: action.selector,
+        type: 'CLICK',
+        selector: action.selector ?? '',
         options: { delay: action.delay ?? undefined },
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
     case 'type': {
       const response = (await handleType({
-        selector: action.selector,
+        type: 'TYPE',
+        selector: action.selector ?? '',
         text: String(action.value || ''),
         options: { delay: action.delay ?? undefined },
       })) as unknown as ActionExecutionResult;
@@ -362,6 +382,7 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       }
 
       const response = (await handleAutoFillJobApplication({
+        type: 'AUTO_FILL_JOB_APPLICATION',
         profile: parsedProfile,
         options: parsedOptions,
       })) as unknown as ActionExecutionResult;
@@ -369,6 +390,7 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
     }
     case 'submit_job_application': {
       const response = (await handleAutoFillJobApplication({
+        type: 'AUTO_FILL_JOB_APPLICATION',
         profile: {},
         options: {
           autoSubmit: true,
@@ -745,7 +767,6 @@ const SAFE_ATTRIBUTES = new Set([
   'alt',
   'role',
   'tabindex',
-  'style',
   'width',
   'height',
   'min',
@@ -1190,7 +1211,6 @@ const VALID_MESSAGE_TYPES = new Set([
   'CONNECTION_STATUS_CHANGED',
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
-  'queue_message',
   'open_side_panel',
 ]);
 
