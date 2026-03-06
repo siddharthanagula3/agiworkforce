@@ -46,10 +46,32 @@ export function useDeepLink() {
   }, []);
 }
 
+/** Only forward these known-safe parameter names from deep link URLs. */
+const ALLOWED_DEEP_LINK_PARAMS = new Set([
+  'access_token',
+  'refresh_token',
+  'type',
+  'code',
+  'state',
+  'error',
+  'error_description',
+  'provider_token',
+  'token_type',
+  'expires_in',
+  'expires_at',
+]);
+
 function handleDeepLink(url: string) {
   try {
     const parsed = new URL(url);
-    console.log('[DeepLink] Parsing URL:', parsed.href);
+    // Log only non-sensitive parts — never log tokens
+    console.log('[DeepLink] Parsing URL:', parsed.protocol, parsed.hostname, parsed.pathname);
+
+    // Validate URL scheme — only accept our registered deep link scheme
+    if (parsed.protocol !== 'agiworkforce:' && parsed.protocol !== 'https:') {
+      console.warn('[DeepLink] Rejected URL with unexpected scheme:', parsed.protocol);
+      return;
+    }
 
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
@@ -63,7 +85,14 @@ function handleDeepLink(url: string) {
       hashParams = Object.fromEntries(hashSearchParams.entries());
     }
 
-    const allParams = { ...queryParams, ...hashParams };
+    // Only keep known-safe parameter names to prevent injection of unexpected fields
+    const rawParams = { ...queryParams, ...hashParams };
+    const allParams: Record<string, string> = {};
+    for (const key of Object.keys(rawParams)) {
+      if (ALLOWED_DEEP_LINK_PARAMS.has(key)) {
+        allParams[key] = rawParams[key];
+      }
+    }
 
     // Check for MCP OAuth callback URLs
     // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
@@ -117,7 +146,7 @@ function handleDeepLink(url: string) {
       window.dispatchEvent(
         new CustomEvent('agi-deep-link', {
           detail: {
-            url,
+            // Only forward validated params — never the raw URL
             ...allParams,
           },
         }),
