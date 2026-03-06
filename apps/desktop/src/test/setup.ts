@@ -130,6 +130,17 @@ Object.defineProperty(globalWindow, 'scrollTo', {
   value: vi.fn(),
 });
 
+// Spy on window event methods using vi.spyOn so that:
+//  1. The EventTarget brand check is preserved (real method is still called internally),
+//     which prevents "called on an object that is not a valid instance of EventTarget"
+//     errors when tests dispatch real DOM events (e.g. windows-compat.test.ts).
+//  2. The spy is a vi.fn() that other tests can interrogate via
+//     vi.mocked(window.addEventListener).mockImplementation(...) —
+//     used by useWindowManager.test.ts and newChatReset.test.ts.
+vi.spyOn(globalWindow, 'addEventListener');
+vi.spyOn(globalWindow, 'removeEventListener');
+vi.spyOn(globalWindow, 'dispatchEvent');
+
 globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
