@@ -1,6 +1,6 @@
 import { Copy, Download, FileText, FolderOpen, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
-import { save } from '@tauri-apps/plugin-dialog';
+// Web environment: use browser download instead of native save dialog
 import { invoke } from '@/lib/tauri-mock';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
@@ -106,17 +106,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
 
   const handleSaveAs = async () => {
     try {
-      const targetPath = await save({
-        defaultPath: fileName,
-        filters: [{ name: 'Generated Document', extensions: [extension] }],
-      });
-      if (!targetPath) return;
-
-      if (resolvedPath) {
-        await invoke('file_copy', { src: resolvedPath, dest: targetPath });
-        return;
-      }
-
       if (downloadUrl) {
         const link = document.createElement('a');
         link.href = downloadUrl;

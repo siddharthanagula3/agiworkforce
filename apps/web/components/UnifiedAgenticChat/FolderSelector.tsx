@@ -8,7 +8,20 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+// Web environment: native folder picker via showDirectoryPicker (or no-op fallback)
+async function openFolderDialog(): Promise<string | null> {
+  if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+    try {
+      const handle = await (
+        window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
+      ).showDirectoryPicker();
+      return handle.name;
+    } catch {
+      return null; // user cancelled
+    }
+  }
+  return null;
+}
 import { ChevronDown, Folder, FolderOpen, X, Clock, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { invoke } from '@/lib/tauri-mock';
@@ -74,11 +87,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     setIsOpen(false);
 
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: 'Select Project Folder',
-      });
+      const selected = await openFolderDialog();
 
       if (selected && typeof selected === 'string') {
         await syncFolderContext(selected);
