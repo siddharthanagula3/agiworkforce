@@ -185,5 +185,8 @@ ms-playwright/
 .agent/
 .claude/
 
+# --- Business / personal data ---
+leads/
+
 # --- Supabase temp files ---
 **/.temp/
