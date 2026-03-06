@@ -300,7 +300,8 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
 
     // Check dangerous patterns (ALWAYS blocked, even in interactive mode)
     for pattern in DANGEROUS_PATTERNS.iter() {
-        if normalized.contains(pattern) {
+        let lower_pattern = pattern.to_lowercase();
+        if normalized.contains(lower_pattern.as_str()) {
             tracing::warn!(
                 correlation_id = correlation_id,
                 pattern = pattern,
