@@ -11,7 +11,7 @@
  * Also provides message loading functionality for conversations.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type { Message } from '../types/chat';
 
 /**

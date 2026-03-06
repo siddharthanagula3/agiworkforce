@@ -1,8 +1,20 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, Bot, Cpu, Globe, Shield, Zap, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Bot,
+  Shield,
+  Sparkles,
+  CheckCircle2,
+  Users,
+  Plug,
+  Wrench,
+  MessageSquare,
+} from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
+import { CtaSection } from '../components/marketing/CtaSection';
+import { MarketingFooter } from '../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce | AI Agent for Desktop',
@@ -28,7 +40,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'AGI Workforce — AI agent desktop app',
@@ -40,7 +52,7 @@ export const metadata: Metadata = {
     title: 'AGI Workforce | AI Agent for Desktop',
     description:
       'Native AI agent desktop app with chat, browser automation, and multi-provider LLM support. Now in Public Beta.',
-    images: ['/og-image.svg'],
+    images: ['/app-preview.png'],
   },
 };
 
@@ -57,46 +69,52 @@ const jsonLd = {
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'macOS, Windows, Linux',
     featureList: [
-      'Desktop application (Tauri)',
-      'Web application',
-      'Browser automation tools',
-      'Multiple LLM provider configuration',
-      'Local model support via Ollama',
-      'Chat interface',
+      '140+ AI skills across 9 industries',
+      'Unlimited MCP tools and plugins',
+      'Desktop automation and computer use',
+      'Parallel AI agent orchestration',
+      '9+ LLM providers including local models',
+      'Mobile companion with live agent dashboard',
     ],
   },
 };
 
 const features = [
   {
-    icon: Cpu,
-    title: 'Desktop App (Tauri + Rust)',
-    desc: 'Native desktop shell with a React UI and Tauri backend for local tools, system integrations, and packaged releases.',
+    icon: Users,
+    title: '140+ AI Skills',
+    desc: 'Pre-built AI specialists across healthcare, legal, finance, creative, education, and more — ready to handle real work in every industry.',
+    href: '/features/ai-skills',
   },
   {
-    icon: Globe,
-    title: 'Web App + API Routes',
-    desc: 'Next.js web app with authenticated pages and API routes for chat, downloads, device linking, billing, and release checks.',
+    icon: Plug,
+    title: 'Unlimited MCP Plugins',
+    desc: 'Connect any MCP tool — file systems, databases, APIs, browsers, and cloud services. No artificial tool caps.',
+    href: '/features/plugins',
+  },
+  {
+    icon: Wrench,
+    title: 'Desktop Automation',
+    desc: 'Native computer use: browser control, terminal commands, file management, screen capture, and OCR — all with safety controls.',
+    href: '/features/tools',
   },
   {
     icon: Bot,
-    title: 'Multi-Provider Models',
-    desc: 'Model/provider configuration includes cloud providers and local Ollama support, with provider switching in desktop settings and tests.',
+    title: 'Parallel AI Agents',
+    desc: 'Swarm orchestration decomposes tasks, spawns parallel agents, and aggregates results — autonomous AI that scales.',
+    href: '/features/agents',
   },
   {
-    icon: Zap,
-    title: 'Browser Automation Flows',
-    desc: 'Desktop codebase includes browser automation hooks, stores, and end-to-end tests for automation workflows.',
-  },
-  {
-    icon: Shield,
-    title: 'Undo and Safety Controls',
-    desc: 'Desktop app exposes undo APIs and approval-related hooks/components for controlled execution flows.',
+    icon: MessageSquare,
+    title: 'Agentic Chat',
+    desc: 'Chat interface with real-time tool execution, inline results, reasoning traces, and Claude Code-style status labels.',
+    href: '/features/ai-chat',
   },
   {
     icon: Sparkles,
-    title: 'Chat-First Interface',
-    desc: 'Primary product surface is a chat-driven UI with attachments, inline tool results, and settings panels.',
+    title: 'Multi-Provider LLMs',
+    desc: 'Connect OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama, and more. Bring your own keys, run fully offline with local models.',
+    href: null,
   },
 ];
 
@@ -148,7 +166,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Claude, GPT-4o, Gemini, Grok, DeepSeek, and Ollama</span>
+                  <span>OpenAI, Anthropic, Google, xAI, DeepSeek, and Ollama</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -171,42 +189,60 @@ export default function Home() {
                 </p>
               </div>
               <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                {features.map((feature) => (
-                  <div
-                    key={feature.title}
-                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-105 hover:border-blue-500/50"
-                  >
-                    <feature.icon className="mb-4 h-10 w-10 text-blue-500" />
-                    <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
-                    <p className="leading-relaxed text-zinc-400">{feature.desc}</p>
-                  </div>
-                ))}
+                {features.map((feature) => {
+                  const card = (
+                    <div className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-105 hover:border-blue-500/50">
+                      <feature.icon className="mb-4 h-10 w-10 text-blue-500" />
+                      <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
+                      <p className="leading-relaxed text-zinc-400">{feature.desc}</p>
+                      {feature.href && (
+                        <div className="mt-4 flex items-center gap-1 text-sm font-medium text-blue-400 opacity-0 transition-opacity group-hover:opacity-100">
+                          Learn more <ArrowRight className="h-3 w-3" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                  return feature.href ? (
+                    <Link key={feature.title} href={feature.href} className="block">
+                      {card}
+                    </Link>
+                  ) : (
+                    <div key={feature.title}>{card}</div>
+                  );
+                })}
               </div>
             </div>
           </section>
 
           <section className="bg-black py-24">
             <div className="container mx-auto px-4">
-              <div className="grid gap-8 text-center md:grid-cols-3">
+              <div className="grid gap-8 text-center md:grid-cols-4">
                 <div className="p-8">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">6+</div>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">140+</div>
+                  <div className="text-lg text-zinc-400">AI Skills</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Healthcare, legal, finance, creative, and more
+                  </p>
+                </div>
+                <div className="p-8">
+                  <div className="mb-2 text-5xl font-bold text-blue-500">9+</div>
                   <div className="text-lg text-zinc-400">AI Providers</div>
                   <p className="mt-2 text-sm text-zinc-600">
-                    Claude, GPT-4o, Gemini, Grok, DeepSeek, Ollama
+                    OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama
+                  </p>
+                </div>
+                <div className="p-8">
+                  <div className="mb-2 text-5xl font-bold text-blue-500">∞</div>
+                  <div className="text-lg text-zinc-400">MCP Tools</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Unlimited plugins via Model Context Protocol
                   </p>
                 </div>
                 <div className="p-8">
                   <div className="mb-2 text-5xl font-bold text-blue-500">3</div>
                   <div className="text-lg text-zinc-400">Platforms</div>
                   <p className="mt-2 text-sm text-zinc-600">
-                    macOS, Windows, and Linux desktop downloads
-                  </p>
-                </div>
-                <div className="p-8">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">∞</div>
-                  <div className="text-lg text-zinc-400">Automatable Tasks</div>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Browser, file system, terminal, and custom MCP tools
+                    macOS, Windows, and Linux desktop + mobile
                   </p>
                 </div>
               </div>
@@ -297,71 +333,25 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="relative overflow-hidden py-24">
-            <div className="absolute inset-0 bg-blue-600/10" />
-            <div className="container relative mx-auto px-4 text-center">
-              <h2 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl">
-                Start automating today
-              </h2>
-              <p className="mx-auto mb-10 max-w-2xl text-xl text-zinc-400">
-                Download the desktop app and connect your preferred AI provider in minutes. No
-                infrastructure required.
-              </p>
-              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link
-                  href="/download"
-                  className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-lg font-bold text-black transition-transform hover:scale-105"
-                >
-                  Download Desktop App
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-                <Link
-                  href="/pricing"
-                  className="inline-flex h-14 items-center justify-center rounded-full border border-zinc-700 bg-black px-8 text-lg font-medium text-white transition-colors hover:bg-zinc-900"
-                >
-                  View Pricing
-                </Link>
-              </div>
-            </div>
-          </section>
+          <CtaSection
+            headline="Start automating today"
+            body="Download the desktop app and connect your preferred AI provider in minutes. No infrastructure required."
+          />
         </main>
 
-        <footer className="border-t border-white/10 bg-black py-12">
-          <div className="container mx-auto px-4">
-            <div className="mb-8 flex flex-col items-center justify-between gap-6 md:flex-row">
-              <div className="flex items-center gap-2 font-bold">
-                <Bot className="h-5 w-5 text-zinc-500" />
-                <span className="text-zinc-500">AGI Workforce</span>
-              </div>
-              <div className="flex flex-wrap justify-center gap-6 text-sm">
-                <Link href="/about" className="text-zinc-400 transition-colors hover:text-white">
-                  About
-                </Link>
-                <Link href="/pricing" className="text-zinc-400 transition-colors hover:text-white">
-                  Pricing
-                </Link>
-                <Link href="/docs" className="text-zinc-400 transition-colors hover:text-white">
-                  Documentation
-                </Link>
-                <Link href="/faq" className="text-zinc-400 transition-colors hover:text-white">
-                  FAQ
-                </Link>
-                <Link href="/contact" className="text-zinc-400 transition-colors hover:text-white">
-                  Contact
-                </Link>
-                <Link href="/privacy" className="text-zinc-400 transition-colors hover:text-white">
-                  Privacy
-                </Link>
-                <Link href="/terms" className="text-zinc-400 transition-colors hover:text-white">
-                  Terms
-                </Link>
-              </div>
-            </div>
-            <div className="text-center text-sm text-zinc-600">
-              © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-            </div>
-          </div>
-        </footer>
+        <MarketingFooter
+          links={[
+            { label: 'AI Skills', href: '/features/ai-skills' },
+            { label: 'Plugins', href: '/features/plugins' },
+            { label: 'Tools', href: '/features/tools' },
+            { label: 'Agents', href: '/features/agents' },
+            { label: 'Pricing', href: '/pricing' },
+            { label: 'Docs', href: '/docs' },
+            { label: 'About', href: '/about' },
+            { label: 'Privacy', href: '/privacy' },
+            { label: 'Terms', href: '/terms' },
+          ]}
+        />
       </div>
     </>
   );

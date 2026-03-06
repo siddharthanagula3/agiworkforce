@@ -8,6 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { getVideoTaskOwner } from '@/lib/video-task-store';
 
 /**
  * Video Generation Status API
@@ -327,13 +328,17 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   // Parse task ID to determine provider and get the original provider-side ID
   const { provider, originalId } = parseTaskId(taskId);
 
-  // TODO: [H33] task ownership verification — requires storing task_id → user_id mapping at creation time
-  // A proper fix: at creation time (generate/route.ts), store { task_id, user_id } in Redis/Supabase,
-  // then here look up the mapping and reject if user.id !== storedUserId.
-  logger.warn(
-    { hasTaskId: !!taskId, hasUserId: !!user?.id },
-    'Video task status called without ownership verification',
-  );
+  // Verify task ownership: the requesting user must be the one who created this task.
+  // Tasks created in a different serverless instance won't be in this store — in that
+  // case we allow the request through to avoid blocking legitimate cross-instance polls.
+  const taskOwner = getVideoTaskOwner(taskId);
+  if (taskOwner && taskOwner !== user.id) {
+    logger.warn(
+      { taskId, requestingUser: user.id, taskOwner },
+      'Video task ownership mismatch — rejecting status request',
+    );
+    throw createError.forbidden('You do not have permission to check this task');
+  }
 
   logger.info(
     {

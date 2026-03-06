@@ -412,9 +412,7 @@ export const MODEL_LIST: ModelDef[] = [
 // Lookup helpers
 // ---------------------------------------------------------------------------
 
-const modelMap = new Map<string, ModelDef>(
-  MODEL_LIST.map((m) => [m.id, m]),
-);
+const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((m) => [m.id, m]));
 
 /** Get a single model by id. Returns undefined if not found. */
 export function getModelById(id: string): ModelDef | undefined {

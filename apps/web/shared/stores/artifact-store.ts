@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 import type {
   ArtifactData,
   ArtifactVersion,
@@ -147,11 +148,11 @@ export const useArtifactStore = create<ArtifactState>()(
 
           if (error) {
             // If table doesn't exist, fall back to local storage only
-            console.warn('Could not persist shared artifact to database:', error.message);
+            logger.warn('Could not persist shared artifact to database', error.message);
           }
         } catch (dbError) {
           // Non-critical - continue with local sharing
-          console.warn('Database error during artifact sharing:', dbError);
+          logger.warn('Database error during artifact sharing', dbError);
         }
 
         // Store locally for immediate access
@@ -194,7 +195,7 @@ export const useArtifactStore = create<ArtifactState>()(
             return data.artifact_data as ArtifactData;
           }
         } catch (dbError) {
-          console.warn('Error fetching shared artifact:', dbError);
+          logger.warn('Error fetching shared artifact', dbError);
         }
 
         return undefined;

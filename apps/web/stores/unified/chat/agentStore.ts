@@ -346,7 +346,7 @@ export const useAgentStore = create<AgentState>()(
         },
       })),
     ),
-    { name: 'AgentStore', enabled: process.env.NODE_ENV === "development" },
+    { name: 'AgentStore', enabled: process.env.NODE_ENV === 'development' },
   ),
 );
 

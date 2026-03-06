@@ -16,22 +16,15 @@
  * └─────────────────────────────┘
  */
 
-import {
-  Check,
-  Code2,
-  Copy,
-  Download,
-  Eye,
-  FileText,
-  Globe,
-  Play,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Check, Code2, Copy, Download, Eye, FileText, Globe, Play, Trash2, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { useCanvasStore, type CanvasArtifact, type CanvasArtifactType } from '../../stores/canvasStore';
+import {
+  useCanvasStore,
+  type CanvasArtifact,
+  type CanvasArtifactType,
+} from '../../stores/canvasStore';
 import { ArtifactPreview } from './ArtifactPreview';
 import { CodeEditor } from './CodeEditor';
 
@@ -102,11 +95,12 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
   }, [artifact.content]);
 
   const handleExport = useCallback(() => {
-    const ext = artifact.type === 'html'
-      ? 'html'
-      : artifact.type === 'markdown'
-        ? 'md'
-        : artifact.language ?? 'txt';
+    const ext =
+      artifact.type === 'html'
+        ? 'html'
+        : artifact.type === 'markdown'
+          ? 'md'
+          : (artifact.language ?? 'txt');
     const blob = new Blob([artifact.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -223,11 +217,7 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
             className="h-full rounded-none"
           />
         ) : (
-          <ArtifactPreview
-            artifact={artifact}
-            onFixBug={handleFixBug}
-            className="h-full"
-          />
+          <ArtifactPreview artifact={artifact} onFixBug={handleFixBug} className="h-full" />
         )}
       </div>
 
@@ -260,7 +250,11 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
           title="Copy code"
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-green-400" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
           {copied ? 'Copied' : 'Copy'}
         </button>
 

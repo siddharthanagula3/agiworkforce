@@ -47,7 +47,10 @@ export async function GET(request: Request) {
 
     const errorUrl = new URL('/auth/error', requestUrl.origin);
     errorUrl.searchParams.set('error', 'server_error');
-    errorUrl.searchParams.set('error_description', 'An unexpected error occurred. Please try again.');
+    errorUrl.searchParams.set(
+      'error_description',
+      'An unexpected error occurred. Please try again.',
+    );
     return NextResponse.redirect(errorUrl);
   }
 }

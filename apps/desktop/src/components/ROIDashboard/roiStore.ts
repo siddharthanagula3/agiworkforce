@@ -1,4 +1,4 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '../../lib/tauri-mock';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
@@ -235,7 +235,7 @@ export const useROIStore = create<ROIState>()(
 
     acknowledgeMilestone: async (milestoneId: string) => {
       try {
-        await invoke('acknowledge_milestone', { milestone_id: milestoneId });
+        await invoke('acknowledge_milestone', { milestoneId });
 
         set((state) => {
           const milestone = state.milestones.find((m) => m.id === milestoneId);

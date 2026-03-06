@@ -297,6 +297,39 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_task_cancel':
       return undefined as T;
 
+    // Workflow execution
+    case 'execute_workflow':
+      return undefined as T;
+
+    // Automation script commands
+    case 'list_automation_scripts':
+      return [] as T;
+    case 'save_recording_as_script':
+      return {
+        id: `script_mock_${Date.now()}`,
+        name: (args?.['name'] as string | undefined) ?? 'Mock Script',
+        description: (args?.['description'] as string | undefined) ?? '',
+        tags: (args?.['tags'] as string[] | undefined) ?? [],
+        actions: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } as T;
+    case 'save_automation_script':
+      return undefined as T;
+    case 'delete_automation_script':
+      return undefined as T;
+    case 'execute_automation_script':
+      return {
+        success: true,
+        actionsCompleted: 0,
+        actionsFailed: 0,
+        durationMs: 0,
+        screenshots: [],
+        logs: [],
+      } as T;
+    case 'inspect_element_at':
+      return null as T;
+
     // Marketplace commands
     case 'get_published_workflows':
     case 'get_featured_workflows':

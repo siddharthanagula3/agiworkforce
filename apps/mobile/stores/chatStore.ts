@@ -22,6 +22,8 @@ interface ChatState {
   isLoadingConversations: boolean;
   /** Whether messages are loading for the current conversation */
   isLoadingMessages: boolean;
+  /** Error message from the last failed operation */
+  error: string | null;
 
   // --- Actions ---
   loadConversations: () => Promise<void>;
@@ -32,6 +34,7 @@ interface ChatState {
   stopStreaming: () => void;
   renameConversation: (id: string, title: string) => Promise<void>;
   setCurrentConversationId: (id: string | null) => void;
+  clearError: () => void;
 }
 
 /** Abort controllers keyed by conversationId — supports concurrent streams */
@@ -54,13 +57,14 @@ export const useChatStore = create<ChatState>()(
       streamingReasoning: '',
       isLoadingConversations: false,
       isLoadingMessages: false,
+      error: null,
 
       setCurrentConversationId: (id) => {
         set({ currentConversationId: id });
       },
 
       loadConversations: async () => {
-        set({ isLoadingConversations: true });
+        set({ isLoadingConversations: true, error: null });
         try {
           const data = await api.get<{ conversations: ConversationSummary[] }>(
             '/api/chat/conversations',
@@ -69,6 +73,9 @@ export const useChatStore = create<ChatState>()(
         } catch (err) {
           // Keep existing conversations on failure — offline resilience
           console.warn('Failed to load conversations:', err);
+          set({
+            error: err instanceof Error ? err.message : 'Failed to load conversations',
+          });
         } finally {
           set({ isLoadingConversations: false });
         }
@@ -123,7 +130,9 @@ export const useChatStore = create<ChatState>()(
           await api.delete(`/api/chat/conversations/${id}`);
         } catch (err) {
           console.warn('Failed to delete conversation on server:', err);
-          // Already removed locally — don't re-add to avoid confusion
+          set({
+            error: err instanceof Error ? err.message : 'Failed to delete conversation',
+          });
         }
       },
 
@@ -132,7 +141,7 @@ export const useChatStore = create<ChatState>()(
         const existing = get().messages[conversationId];
         if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) return;
 
-        set({ isLoadingMessages: true });
+        set({ isLoadingMessages: true, error: null });
         try {
           const data = await api.get<{ messages: ChatMessage[] }>(
             `/api/chat/conversations/${conversationId}`,
@@ -145,6 +154,9 @@ export const useChatStore = create<ChatState>()(
           }));
         } catch (err) {
           console.warn('Failed to load messages:', err);
+          set({
+            error: err instanceof Error ? err.message : 'Failed to load messages',
+          });
           // Initialize empty array so the UI doesn't stay in loading state
           set((state) => ({
             messages: {
@@ -397,7 +409,14 @@ export const useChatStore = create<ChatState>()(
           await api.put(`/api/chat/conversations/${id}`, { title });
         } catch (err) {
           console.warn('Failed to rename conversation on server:', err);
+          set({
+            error: err instanceof Error ? err.message : 'Failed to rename conversation',
+          });
         }
+      },
+
+      clearError: () => {
+        set({ error: null });
       },
     }),
     {

@@ -249,9 +249,7 @@ pub async fn browser_open_tab(
     let browser_state = state.get()?;
     let target_url = url.unwrap_or_else(|| "about:blank".to_string());
 
-    // Try to create tab via Chrome HTTP API
-    // We assume default port 9222 as per PlaywrightBridge default
-    // TODO: Get actual port from config/state if possible, but 9222 is hardcoded in PlaywrightBridge for now.
+    // Create tab via Chrome HTTP API on port 9222 (hardcoded in PlaywrightBridge)
     let create_url = format!("http://127.0.0.1:9222/json/new?{}", target_url);
 
     let client = reqwest::Client::builder()
@@ -601,7 +599,10 @@ pub async fn browser_screenshot(
 
     if selector.is_some() {
         return Err(
-            "Screenshot by selector not yet supported, use full page or viewport".to_string(),
+            "Screenshot by CSS selector is not yet supported. To capture a specific element, \
+             take a full-page screenshot (omit the selector parameter) and crop the result, \
+             or use browser_extract with the selector to get the element's text content."
+                .to_string(),
         );
     }
 

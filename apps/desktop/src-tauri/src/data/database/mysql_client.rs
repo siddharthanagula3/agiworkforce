@@ -31,8 +31,8 @@ impl MySqlClient {
                 .or_else(|| PoolConstraints::new(1, 10))
                 .unwrap_or_else(|| {
                     tracing::warn!("Using hardcoded pool constraints as fallback");
-                    // This is a valid constraint that should never fail
-                    PoolConstraints::new(1, 10).unwrap()
+                    // This is a valid constraint that should never fail (1 <= 10)
+                    PoolConstraints::new(1, 10).expect("static pool constraints 1..10")
                 }),
         );
 

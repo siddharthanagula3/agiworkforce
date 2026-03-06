@@ -12,8 +12,8 @@ type Tab = 'create' | 'monitor' | 'scheduled';
 export function AgentTaskPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('create');
   const taskCount = useAgentTaskStore((s) => s.tasks.length);
-  const scheduledCount = useScheduledTaskStore((s) =>
-    s.tasks.filter((t) => t.status === 'active').length,
+  const scheduledCount = useScheduledTaskStore(
+    (s) => s.tasks.filter((t) => t.status === 'active').length,
   );
 
   const handleTaskCreated = useCallback(() => {

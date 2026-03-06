@@ -4,7 +4,16 @@
  */
 
 import React from 'react';
-import { Loader2, Image as ImageIcon, Video, FileText, Search, Users, Code, MessageSquare } from 'lucide-react';
+import {
+  Loader2,
+  Image as ImageIcon,
+  Video,
+  FileText,
+  Search,
+  Users,
+  Code,
+  MessageSquare,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ToolType } from '../../services/chat-tool-router';
 

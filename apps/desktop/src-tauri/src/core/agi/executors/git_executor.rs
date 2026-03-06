@@ -1447,7 +1447,7 @@ impl GitExecutor {
         // Try credential helper via git config
         if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
             return git2::Cred::credential_helper(
-                &git2::Config::open_default().unwrap_or_else(|_| git2::Config::new().unwrap()),
+                &git2::Config::open_default().or_else(|_| git2::Config::new())?,
                 url,
                 username_from_url,
             );

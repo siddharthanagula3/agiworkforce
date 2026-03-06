@@ -27,7 +27,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { invoke, isTauri } from '../../lib/tauri-mock';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 
 // ============================================================================

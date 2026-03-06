@@ -213,7 +213,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const deleteCapture = useCallback(async (captureId: string): Promise<void> => {
     try {
-      await invoke('capture_delete', { capture_id: captureId });
+      await invoke('capture_delete', { captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       // AUDIT-007-005 fix: Check isMounted before setState
@@ -226,7 +226,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const saveToClipboard = useCallback(async (captureId: string): Promise<void> => {
     try {
-      await invoke('capture_save_to_clipboard', { capture_id: captureId });
+      await invoke('capture_save_to_clipboard', { captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       // AUDIT-007-005 fix: Check isMounted before setState

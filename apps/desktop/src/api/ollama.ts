@@ -193,11 +193,7 @@ export async function ollamaPullModel(modelName: string): Promise<void> {
   }
 
   try {
-    await invokeWithTimeout<void>(
-      'ollama_pull_model',
-      { model_name: modelName },
-      OLLAMA_PULL_TIMEOUT_MS,
-    );
+    await invokeWithTimeout<void>('ollama_pull_model', { modelName }, OLLAMA_PULL_TIMEOUT_MS);
   } catch (error) {
     throw new Error(`Failed to pull model '${modelName}': ${error}`);
   }
@@ -221,7 +217,7 @@ export async function ollamaDeleteModel(modelName: string): Promise<void> {
   }
 
   try {
-    await invokeWithTimeout<void>('ollama_delete_model', { model_name: modelName });
+    await invokeWithTimeout<void>('ollama_delete_model', { modelName });
   } catch (error) {
     throw new Error(`Failed to delete model '${modelName}': ${error}`);
   }

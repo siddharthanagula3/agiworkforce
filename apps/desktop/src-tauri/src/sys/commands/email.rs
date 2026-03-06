@@ -370,7 +370,8 @@ struct EmailAccountRecord {
     smtp_host: String,
     smtp_port: u16,
     smtp_use_tls: bool,
-    /// Password field populated by SQLite row deserialization (not accessed directly)
+    /// Password field populated by SQLite row deserialization
+    // Used by: serde — populated by SQLite query_map, not accessed directly
     #[allow(dead_code)]
     password: String,
     created_at: i64,

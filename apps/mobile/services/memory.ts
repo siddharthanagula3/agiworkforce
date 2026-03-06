@@ -46,10 +46,7 @@ export async function fetchMemories(): Promise<MemoryEntry[]> {
 /**
  * Create a new memory.
  */
-export async function createMemory(
-  content: string,
-  category?: string,
-): Promise<MemoryEntry> {
+export async function createMemory(content: string, category?: string): Promise<MemoryEntry> {
   const data = await api.post<{ memory: MemoryEntry }>('/api/memory', {
     content,
     category: category || undefined,
@@ -61,10 +58,7 @@ export async function createMemory(
 /**
  * Update an existing memory's content.
  */
-export async function updateMemory(
-  id: string,
-  content: string,
-): Promise<MemoryEntry> {
+export async function updateMemory(id: string, content: string): Promise<MemoryEntry> {
   const data = await api.put<{ memory: MemoryEntry }>(`/api/memory/${id}`, {
     content,
   });

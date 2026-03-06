@@ -52,9 +52,8 @@ export const accountApi = {
   deviceLinkPoll: async (deviceCode: string): Promise<TokenResponse> => {
     const invoke = await getInvoke();
     // Longer timeout for polling (60s) since user needs time to authorize
-    // Note: Rust expects 'device_id' field name
     return withTimeout(
-      invoke('device_link_poll', { device_id: deviceCode }),
+      invoke('device_link_poll', { deviceId: deviceCode }),
       'device_link_poll',
       60_000,
     );
@@ -128,11 +127,11 @@ export const accountApi = {
     const invoke = await getInvoke();
     return withTimeout(
       invoke('report_llm_usage', {
-        amount_cents: amountCents,
+        amountCents,
         model,
         provider,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
+        inputTokens,
+        outputTokens,
       }),
       'report_llm_usage',
     );

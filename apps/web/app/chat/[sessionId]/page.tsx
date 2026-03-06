@@ -17,6 +17,7 @@ import {
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useModelStore } from '@shared/stores/model-store';
 import { ChatAIService } from '@features/chat/services/chat-ai-service';
+import { logger } from '@shared/lib/logger';
 
 export default function ChatSessionPage() {
   const router = useRouter();
@@ -168,7 +169,7 @@ export default function ChatSessionPage() {
         saveSessionToDb(session, user.id).catch(() => {});
       }
     } catch (err) {
-      console.error('[ChatSession] AI response error:', err);
+      logger.error('[ChatSession] AI response error:', err);
       const store = useChatStore.getState();
       const errorContent =
         err instanceof Error ? err.message : 'Something went wrong. Please try again.';

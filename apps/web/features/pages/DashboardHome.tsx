@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- supabase client type bridge and dynamic query results */
 /**
  * Dashboard Home Page - Stats & Activity Overview
  * Landing page with usage stats, recent conversations, quick actions, and activity feed.
@@ -61,6 +60,20 @@ interface TokenCreditsRow {
   credits_allocated_cents: number;
   credits_used_cents: number;
   credits_remaining_cents: number;
+}
+
+/** Row shape for web_conversations (not yet in generated Supabase types). */
+interface ConversationRow {
+  id: string;
+  title: string | null;
+  updated_at: string;
+  last_message_at: string | null;
+}
+
+/** Row shape for web_messages token columns. */
+interface TokenUsageRow {
+  input_tokens: number | null;
+  output_tokens: number | null;
 }
 
 // --- Sub-components ---
@@ -264,9 +277,8 @@ export const DashboardHomePage: React.FC = () => {
     fetchHiredEmployees();
 
     // web_conversations and token_credits are not in the generated Supabase types yet,
-    // so we cast the client to `any` for these queries.
-
-    const untypedClient = supabase as any;
+    // so we cast the client to an untyped SupabaseClient for these queries.
+    const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
     // Fetch 5 most recent non-deleted conversations
     const fetchConversations = async () => {
@@ -282,10 +294,10 @@ export const DashboardHomePage: React.FC = () => {
 
         if (!error && data) {
           setRecentConversations(
-            (data as any[]).map((row: any) => ({
-              id: row.id as string,
-              title: (row.title as string) || 'Untitled conversation',
-              updatedAt: (row.last_message_at || row.updated_at) as string,
+            (data as ConversationRow[]).map((row) => ({
+              id: row.id,
+              title: row.title || 'Untitled conversation',
+              updatedAt: row.last_message_at || row.updated_at,
             })),
           );
         }
@@ -318,8 +330,9 @@ export const DashboardHomePage: React.FC = () => {
           .eq('user_id', user.id);
 
         if (tokenData) {
-          const total = (tokenData as any[]).reduce(
-            (sum: number, msg: any) => sum + (msg.input_tokens || 0) + (msg.output_tokens || 0),
+          const total = (tokenData as TokenUsageRow[]).reduce(
+            (sum: number, msg: TokenUsageRow) =>
+              sum + (msg.input_tokens || 0) + (msg.output_tokens || 0),
             0,
           );
           setTotalTokens(total);

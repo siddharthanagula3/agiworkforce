@@ -1016,7 +1016,7 @@ export function useAgenticEvents() {
                 try {
                   const INVOKE_TIMEOUT_MS = 10000;
                   await Promise.race([
-                    invoke('agent_set_workflow_hash', { workflow_hash: workflowHash }),
+                    invoke('agent_set_workflow_hash', { workflowHash }),
                     new Promise<never>((_, reject) => {
                       timeoutId = setTimeout(
                         () =>
@@ -1358,7 +1358,11 @@ export function useAgenticEvents() {
         if (!isMountedRef.current) return;
         const { message, reason, graceful } = event.payload;
         const openSettings = () => {
-          void invoke('request_automation_permission', { kind: reason ?? 'accessibility' });
+          void invoke('request_automation_permission', { kind: reason ?? 'accessibility' }).catch(
+            (err) => {
+              console.error('Failed to request automation permission:', err);
+            },
+          );
         };
         if (graceful) {
           // Soft toast — agent fell back to normal LLM, user can enable if they want

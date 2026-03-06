@@ -44,14 +44,17 @@ export const CookieConsent = () => {
     setShowBanner(false);
     setShowSettings(false);
 
-    // Apply preferences (connect to analytics service)
-    if (prefs.analytics) {
-      // Enable analytics
-      console.log('Analytics enabled');
-    }
-    if (prefs.marketing) {
-      // Enable marketing cookies
-      console.log('Marketing enabled');
+    // Dispatch a custom DOM event so analytics/marketing scripts can react to consent changes
+    // without coupling this component to specific analytics libraries
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('cookie-consent-updated', {
+          detail: {
+            analytics: prefs.analytics,
+            marketing: prefs.marketing,
+          },
+        }),
+      );
     }
   };
 

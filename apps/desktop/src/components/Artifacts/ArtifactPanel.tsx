@@ -139,31 +139,34 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   }, [activeArtifactId]);
 
   // Handle resize
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
 
-    const startX = e.clientX;
-    const startWidth = panelWidth;
+      const startX = e.clientX;
+      const startWidth = panelWidth;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = startX - e.clientX;
-      const newWidth = Math.max(320, Math.min(800, startWidth + delta));
-      setPanelWidth(newWidth);
-    };
+      const handleMouseMove = (e: MouseEvent) => {
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(320, Math.min(800, startWidth + delta));
+        setPanelWidth(newWidth);
+      };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('mousemove', resizeHandlersRef.current.move!);
-      document.removeEventListener('mouseup', resizeHandlersRef.current.up!);
-      resizeHandlersRef.current = {};
-    };
+      const handleMouseUp = () => {
+        setIsResizing(false);
+        document.removeEventListener('mousemove', resizeHandlersRef.current.move!);
+        document.removeEventListener('mouseup', resizeHandlersRef.current.up!);
+        resizeHandlersRef.current = {};
+      };
 
-    resizeHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
+      resizeHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [panelWidth, setPanelWidth]);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [panelWidth, setPanelWidth],
+  );
 
   // Cleanup effect to ensure resize listeners are removed on unmount
   useEffect(() => {
@@ -246,7 +249,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
       }
     },
-    [activeArtifactId, rollbackArtifact, getRenderedArtifact]
+    [activeArtifactId, rollbackArtifact, getRenderedArtifact],
   );
 
   // Handle inline edit save
@@ -262,7 +265,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         toast.error('Failed to save changes');
       }
     },
-    [activeArtifactId, applyDiffToArtifact, getRenderedArtifact]
+    [activeArtifactId, applyDiffToArtifact, getRenderedArtifact],
   );
 
   // Handle share dialog open
@@ -281,7 +284,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
       <div
         className={cn(
           'w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors z-20',
-          isResizing && 'bg-blue-500'
+          isResizing && 'bg-blue-500',
         )}
         onMouseDown={handleResizeStart}
       />
@@ -291,7 +294,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         className={cn(
           'flex flex-col bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800',
           isExpanded && 'fixed inset-0 z-50 border-none',
-          className
+          className,
         )}
         style={{ width: isExpanded ? '100%' : panelWidth }}
       >
@@ -326,7 +329,15 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { closePanel(); onClose?.(); }}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    closePanel();
+                    onClose?.();
+                  }}
+                >
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
@@ -491,22 +502,27 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                     {/* Rendered content or inline editor */}
                     {isEditing ? (
                       <InlineArtifactEditor
-                        artifact={editingArtifact ?? {
-                          id: artifact.id,
-                          title: artifact.title,
-                          artifact_type: artifact.artifact_type,
-                          content: '',
-                          metadata: { Generic: {} },
-                          status: 'complete',
-                          versions: [],
-                          current_version: 1,
-                          created_at: new Date().toISOString(),
-                          updated_at: new Date().toISOString(),
-                          tags: [],
-                          pinned: false,
-                        }}
+                        artifact={
+                          editingArtifact ?? {
+                            id: artifact.id,
+                            title: artifact.title,
+                            artifact_type: artifact.artifact_type,
+                            content: '',
+                            metadata: { Generic: {} },
+                            status: 'complete',
+                            versions: [],
+                            current_version: 1,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                            tags: [],
+                            pinned: false,
+                          }
+                        }
                         onSave={handleEditSave}
-                        onCancel={() => { setIsEditing(false); setEditingArtifact(null); }}
+                        onCancel={() => {
+                          setIsEditing(false);
+                          setEditingArtifact(null);
+                        }}
                       />
                     ) : (
                       <ScrollArea className="flex-1">
@@ -526,9 +542,12 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
           <div className="flex-1 flex items-center justify-center p-8 text-center">
             <div className="max-w-[240px]">
               <Code2 className="h-12 w-12 mx-auto mb-4 text-zinc-300 dark:text-zinc-700" />
-              <h3 className="font-medium text-zinc-900 dark:text-zinc-100 mb-1">No artifacts yet</h3>
+              <h3 className="font-medium text-zinc-900 dark:text-zinc-100 mb-1">
+                No artifacts yet
+              </h3>
               <p className="text-sm text-zinc-500">
-                Artifacts will appear here when AGI Workforce generates code, documents, or other content.
+                Artifacts will appear here when AGI Workforce generates code, documents, or other
+                content.
               </p>
             </div>
           </div>
@@ -551,7 +570,8 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
             useArtifactStore.getState().artifacts.get(shareDialogArtifactId) ?? {
               id: shareDialogArtifactId,
               title: artifacts.find((a) => a.id === shareDialogArtifactId)?.title ?? 'Artifact',
-              artifact_type: artifacts.find((a) => a.id === shareDialogArtifactId)?.artifact_type ?? 'code',
+              artifact_type:
+                artifacts.find((a) => a.id === shareDialogArtifactId)?.artifact_type ?? 'code',
               content: '',
               metadata: { Generic: {} },
               status: 'complete',

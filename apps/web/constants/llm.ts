@@ -5,7 +5,7 @@
  * This file imports it directly and re-exports with the same API as the desktop shim.
  */
 
-import modelsJson from '@desktop-constants/models.json';
+import modelsJson from './models.json';
 
 // ---- Types ----
 

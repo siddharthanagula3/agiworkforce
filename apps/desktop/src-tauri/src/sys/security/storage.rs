@@ -330,11 +330,10 @@ pub fn encrypt_file_with_key(
         .encrypt(nonce, plaintext.as_ref())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    // Format: [salt (32 bytes - ZEROED for raw key capability)][nonce (12 bytes)][ciphertext]
-    // We use a zeroed salt to indicate this wasn't password-derived, or just random
-    // Actually, to maintain compatibility with decrypt_file which expects a salt to SKIP,
-    // we should write a dummy salt.
-    let dummy_salt = [0u8; SALT_SIZE];
+    // Format: [salt (32 bytes)][nonce (12 bytes)][ciphertext]
+    // Write a random salt to maintain format compatibility with decrypt_file_with_key
+    // (which skips the salt field) and avoid leaking the encryption path used.
+    let dummy_salt = generate_salt();
 
     let mut output = Vec::new();
     output.extend_from_slice(&dummy_salt);

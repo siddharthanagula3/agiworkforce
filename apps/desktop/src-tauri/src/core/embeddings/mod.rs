@@ -57,7 +57,9 @@ impl EmbeddingService {
     pub async fn new(workspace_root: PathBuf, config: EmbeddingConfig) -> Result<Self> {
         let generator = EmbeddingGenerator::new(config).await?;
         let db_path = workspace_root.join(".agi").join("embeddings.db");
-        std::fs::create_dir_all(db_path.parent().unwrap())?;
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let cache_path = db_path.with_file_name("embedding_cache.db");
 
         let similarity = SimilaritySearch::new(db_path)?;

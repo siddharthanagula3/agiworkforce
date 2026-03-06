@@ -46,7 +46,9 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
           title: artifact.title,
           type: artifact.artifact_type,
           content: artifact.content,
-          language: (artifact.metadata as Record<string, unknown> & { Code?: { language?: string } })?.Code?.language,
+          language: (
+            artifact.metadata as Record<string, unknown> & { Code?: { language?: string } }
+          )?.Code?.language,
         });
         setShareResult(result);
       } catch (err) {
@@ -57,7 +59,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
     };
 
     void generate();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, expiryMode]);
 
   const handleCopy = useCallback(async () => {
@@ -177,9 +179,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
               )}
             </Button>
           </div>
-          {error && (
-            <p className="mt-1 text-xs text-red-500">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
           {shareResult && !error && (
             <p className="mt-1 text-xs text-zinc-400">
               Method:{' '}
@@ -187,10 +187,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
                 {shareResult.method === 'base64' ? 'Encoded in URL' : 'Stored in cloud'}
               </span>
               {shareResult.expiresAt && (
-                <span>
-                  {' '}
-                  · Expires {new Date(shareResult.expiresAt).toLocaleDateString()}
-                </span>
+                <span> · Expires {new Date(shareResult.expiresAt).toLocaleDateString()}</span>
               )}
             </p>
           )}

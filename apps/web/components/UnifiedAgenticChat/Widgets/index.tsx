@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- React.ComponentType registry requires generic any */
 /**
  * Widgets Module
  *

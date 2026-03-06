@@ -24,7 +24,10 @@ export { SourceCard } from './SourceCard';
 export type { SourceCardProps, SourceData, SourceStatus, SourceType } from './SourceCard';
 
 export { ResearchProgressPanel } from './ResearchProgressPanel';
-export type { ResearchProgressPanelProps, ResearchSource as ResearchSourceShape } from './ResearchProgressPanel';
+export type {
+  ResearchProgressPanelProps,
+  ResearchSource as ResearchSourceShape,
+} from './ResearchProgressPanel';
 
 export { ResearchSourceCard } from './ResearchSourceCard';
 export type { ResearchSourceCardProps } from './ResearchSourceCard';

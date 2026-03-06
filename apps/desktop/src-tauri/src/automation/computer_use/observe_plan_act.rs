@@ -1097,7 +1097,8 @@ struct ActionPlan {
     task_complete: bool,
     making_progress: bool,
     actions: Vec<ComputerUseAction>,
-    /// LLM reasoning for action plan (reserved for debug logging)
+    /// LLM reasoning for action plan
+    // Used by: debug logging and action plan tracing
     #[allow(dead_code)]
     reasoning: String,
 }

@@ -370,7 +370,7 @@ const MAX_SUBSCRIPTION_RETRIES = 3;
 // Schedule retry is exported for use by authOrchestrator
 export function scheduleSubscriptionRetry(userId: string): void {
   if (retryCount >= MAX_SUBSCRIPTION_RETRIES) {
-    console.log('[UnifiedAuth] Max subscription retries reached, stopping retries');
+    console.debug('[UnifiedAuth] Max subscription retries reached, stopping retries');
     return;
   }
 
@@ -378,16 +378,18 @@ export function scheduleSubscriptionRetry(userId: string): void {
   retryCount++;
 
   const delay = Math.min(3000 * Math.pow(2, retryCount - 1), 30000);
-  console.log(
+  console.debug(
     `[UnifiedAuth] Scheduling subscription retry ${retryCount}/${MAX_SUBSCRIPTION_RETRIES} in ${delay}ms`,
   );
 
   retryTimeout = setTimeout(async () => {
-    console.log('[UnifiedAuth] Retrying subscription fetch for user:', userId);
+    console.debug('[UnifiedAuth] Retrying subscription fetch for user:', userId);
     // [C2 fix] Guard: skip retry if the active session has changed since scheduling
     const currentUserId = useUnifiedAuthStore.getState().user?.id;
     if (currentUserId && currentUserId !== userId) {
-      console.log('[UnifiedAuth] User session changed since retry was scheduled, skipping stale retry');
+      console.debug(
+        '[UnifiedAuth] User session changed since retry was scheduled, skipping stale retry',
+      );
       return;
     }
     await supabaseAuth.refreshUserData();
@@ -891,18 +893,18 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         syncWithBackend: async () => {
           // Prevent concurrent sync calls
           if (syncInProgress && pendingSyncPromise) {
-            console.log('[UnifiedAuth] Sync already in progress, waiting for existing sync...');
+            console.debug('[UnifiedAuth] Sync already in progress, waiting for existing sync...');
             return pendingSyncPromise;
           }
 
           syncInProgress = true;
           pendingSyncPromise = (async () => {
             try {
-              console.log('[UnifiedAuth] Starting syncWithBackend...');
+              console.debug('[UnifiedAuth] Starting syncWithBackend...');
               await supabaseAuth.refreshUserData();
 
               const authState = supabaseAuth.getState();
-              console.log('[UnifiedAuth] Auth state after refresh:', {
+              console.debug('[UnifiedAuth] Auth state after refresh:', {
                 hasUser: !!authState.user,
                 hasSession: !!authState.session,
                 planTier: authState.subscription?.plan_tier,
@@ -930,18 +932,21 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   setCachedSubscription(userId, planTier, subscriptionStatus);
                   resetRetryCount();
                 }
-                console.log('[UnifiedAuth] syncWithBackend - Using fetched plan tier:', planTier);
+                console.debug('[UnifiedAuth] syncWithBackend - Using fetched plan tier:', planTier);
               } else if (userId && authState.subscriptionFetchStatus === 'failed') {
                 const cached = getCachedSubscription(userId);
                 if (cached) {
                   planTier = cached.planTier;
                   subscriptionStatus = cached.subscriptionStatus;
                   fetchStatus = 'succeeded';
-                  console.log('[UnifiedAuth] syncWithBackend - Using cached plan tier:', planTier);
+                  console.debug(
+                    '[UnifiedAuth] syncWithBackend - Using cached plan tier:',
+                    planTier,
+                  );
                 } else {
                   planTier = null;
                   fetchStatus = 'failed';
-                  console.log(
+                  console.debug(
                     '[UnifiedAuth] syncWithBackend - Fetch failed, no cache - showing loading state',
                   );
                 }
@@ -950,13 +955,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 fetchStatus = 'succeeded';
                 clearCachedSubscription();
                 resetRetryCount();
-                console.log(
+                console.debug(
                   '[UnifiedAuth] syncWithBackend - Setting plan to free (confirmed no subscription)',
                 );
               } else {
                 planTier = null;
                 fetchStatus = 'fetching';
-                console.log('[UnifiedAuth] syncWithBackend - Plan unknown, showing loading state');
+                console.debug(
+                  '[UnifiedAuth] syncWithBackend - Plan unknown, showing loading state',
+                );
               }
 
               // Fetch credits from API if we have a session
@@ -1208,7 +1215,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.log('[UnifiedAuth] Rehydration complete, waiting for session validation...');
+            console.debug('[UnifiedAuth] Rehydration complete, waiting for session validation...');
           }
         },
         migrate: (persistedState: unknown, version: number) => {

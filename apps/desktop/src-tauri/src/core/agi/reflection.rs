@@ -247,8 +247,8 @@ pub struct ReflectionEngine {
     router: Arc<RwLock<LLMRouter>>,
     /// Knowledge base for context
     knowledge_base: Arc<KnowledgeBase>,
-    /// Learning system for strategy updates (reserved for adaptive learning integration)
-    #[allow(dead_code)]
+    /// Learning system for strategy updates. Called via update() after each
+    /// successful reflection to keep tool performance strategies current.
     learning: Arc<LearningSystem>,
     /// History of reflections for pattern analysis
     reflection_history: Arc<tokio::sync::Mutex<Vec<ReflectionInsight>>>,
@@ -337,6 +337,12 @@ impl ReflectionEngine {
 
         // Store in history
         self.store_reflection(&insight).await?;
+
+        // Wire learning feedback loop: trigger strategy optimization after each
+        // successful reflection so tool performance data stays current.
+        if let Err(e) = self.learning.update().await {
+            tracing::warn!("[Reflection] Learning update failed after reflection: {}", e);
+        }
 
         tracing::info!(
             "[Reflection] Generated insight with {} corrections, {} sub-goals, confidence: {:.2}",

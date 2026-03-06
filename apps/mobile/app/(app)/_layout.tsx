@@ -1,6 +1,13 @@
 import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
-import { MessageSquarePlus, Bot, Smartphone, Settings, MessageCircle, Calendar } from 'lucide-react-native';
+import {
+  MessageSquarePlus,
+  Bot,
+  Smartphone,
+  Settings,
+  MessageCircle,
+  Calendar,
+} from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import { SidebarContent } from '@/components/sidebar/SidebarContent';
 
@@ -31,10 +38,7 @@ export default function AppLayout() {
           drawerIcon: ({ color, size }) => <MessageSquarePlus size={size} color={color} />,
         }}
       />
-      <Drawer.Screen
-        name="chat/[id]"
-        options={{ drawerItemStyle: { display: 'none' } }}
-      />
+      <Drawer.Screen name="chat/[id]" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen
         name="agents/index"
         options={{
@@ -71,14 +75,8 @@ export default function AppLayout() {
         }}
       />
       {/* Hidden routes */}
-      <Drawer.Screen
-        name="schedules/create"
-        options={{ drawerItemStyle: { display: 'none' } }}
-      />
-      <Drawer.Screen
-        name="settings/memory"
-        options={{ drawerItemStyle: { display: 'none' } }}
-      />
+      <Drawer.Screen name="schedules/create" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="settings/memory" options={{ drawerItemStyle: { display: 'none' } }} />
     </Drawer>
   );
 }

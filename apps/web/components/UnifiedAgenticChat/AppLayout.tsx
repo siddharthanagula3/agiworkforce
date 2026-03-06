@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors use untyped state access */
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';

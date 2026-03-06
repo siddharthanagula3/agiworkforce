@@ -142,7 +142,7 @@ class SubscriptionService {
     this.realtimeSubscribedUserId = userId;
 
     const supabase = getSupabase();
-    console.log('[Subscription] Subscribing to realtime updates for user:', userId);
+    console.debug('[Subscription] Subscribing to realtime updates for user:', userId);
 
     // Set a timeout to handle connection failures gracefully
     const connectionTimeout = setTimeout(() => {
@@ -162,7 +162,7 @@ class SubscriptionService {
           filter: `user_id=eq.${userId}`,
         },
         async (payload) => {
-          console.log('[Subscription] Realtime update received:', payload);
+          console.debug('[Subscription] Realtime update received:', payload);
           // When we get an update, fetch the latest fresh data to be safe
           // and triggers logic that relies on `getSubscription()`
           try {
@@ -176,21 +176,21 @@ class SubscriptionService {
       .subscribe((status, err) => {
         clearTimeout(connectionTimeout);
         if (status === 'SUBSCRIBED') {
-          console.log('[Subscription] Realtime subscription established');
+          console.debug('[Subscription] Realtime subscription established');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('[Subscription] Realtime channel error:', err);
           // Don't retry immediately - will be retried on next auth state change
         } else if (status === 'TIMED_OUT') {
           console.warn('[Subscription] Realtime subscription timed out');
         } else if (status === 'CLOSED') {
-          console.log('[Subscription] Realtime channel closed');
+          console.debug('[Subscription] Realtime channel closed');
         }
       });
   }
 
   private unsubscribeRealtime() {
     if (this.realtimeChannel) {
-      console.log('[Subscription] Unsubscribing from realtime updates');
+      console.debug('[Subscription] Unsubscribing from realtime updates');
       getSupabase().removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }

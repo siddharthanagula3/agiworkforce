@@ -7,7 +7,7 @@
 import { useState, useCallback, useMemo, type FC } from 'react';
 import { AlertTriangle, Clock, Zap, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../../lib/tauri-mock';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { cn } from '../../lib/utils';

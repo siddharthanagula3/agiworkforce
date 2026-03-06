@@ -164,30 +164,38 @@ async function streamVscodeLmFallback(
   stream: vscode.ChatResponseStream,
   token: vscode.CancellationToken,
 ): Promise<void> {
-  // Select the best available model — prefer GPT-4o family
-  const [model] = await vscode.lm.selectChatModels({
-    vendor: 'copilot',
-    family: 'gpt-4o',
-  });
+  try {
+    // Select the best available model — prefer GPT-4o family
+    const [model] = await vscode.lm.selectChatModels({
+      vendor: 'copilot',
+      family: 'gpt-4o',
+    });
 
-  if (model === undefined) {
-    stream.markdown(
-      '> **AGI Workforce**: No language model available. Please configure an ' +
-        '[API key](command:agi-workforce.setApiKey) or install GitHub Copilot.',
+    if (model === undefined) {
+      stream.markdown(
+        '> **AGI Workforce**: No language model available. Please configure an ' +
+          '[API key](command:agi-workforce.setApiKey) or install GitHub Copilot.',
+      );
+      return;
+    }
+
+    const lmMessages = messages.map((m) =>
+      m.role === 'user'
+        ? vscode.LanguageModelChatMessage.User(m.content)
+        : vscode.LanguageModelChatMessage.Assistant(m.content),
     );
-    return;
-  }
 
-  const lmMessages = messages.map((m) =>
-    m.role === 'user'
-      ? vscode.LanguageModelChatMessage.User(m.content)
-      : vscode.LanguageModelChatMessage.Assistant(m.content),
-  );
+    const response = await model.sendRequest(lmMessages, {}, token);
 
-  const response = await model.sendRequest(lmMessages, {}, token);
-
-  for await (const fragment of response.text) {
-    stream.markdown(fragment);
+    for await (const fragment of response.text) {
+      stream.markdown(fragment);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    stream.markdown(
+      `> **AGI Workforce**: VS Code language model fallback failed: ${message}\n\n` +
+        '> Run [AGI Workforce: Set API Key](command:agi-workforce.setApiKey) to configure access.',
+    );
   }
 }
 

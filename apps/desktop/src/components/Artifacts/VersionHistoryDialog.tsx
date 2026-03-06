@@ -47,7 +47,7 @@ export function VersionHistoryDialog({
 
   const sortedVersions = React.useMemo(
     () => [...versions].sort((a, b) => b.version - a.version),
-    [versions]
+    [versions],
   );
 
   const handleRollback = () => {
@@ -80,22 +80,27 @@ export function VersionHistoryDialog({
                   key={version.version}
                   className={cn(
                     'p-3 rounded-lg border cursor-pointer transition-colors',
-                    isCurrent && 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-                    isSelected && !isCurrent && 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-                    !isCurrent && !isSelected && 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                    isCurrent &&
+                      'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
+                    isSelected &&
+                      !isCurrent &&
+                      'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+                    !isCurrent &&
+                      !isSelected &&
+                      'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
                   )}
                   onClick={() => !isCurrent && setSelectedVersion(version.version)}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <Badge
-                        variant={isCurrent ? 'default' : 'secondary'}
-                        className="text-xs"
-                      >
+                      <Badge variant={isCurrent ? 'default' : 'secondary'} className="text-xs">
                         v{version.version}
                       </Badge>
                       {isCurrent && (
-                        <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                        <Badge
+                          variant="outline"
+                          className="text-xs text-green-600 border-green-600"
+                        >
                           <Check className="h-3 w-3 mr-1" />
                           Current
                         </Badge>

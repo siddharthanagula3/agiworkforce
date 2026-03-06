@@ -122,7 +122,18 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
     } finally {
       setIsSaving(false);
     }
-  }, [name, description, prompt, modelId, schedule, isEditing, editingTask, createTask, updateTask, onClose]);
+  }, [
+    name,
+    description,
+    prompt,
+    modelId,
+    schedule,
+    isEditing,
+    editingTask,
+    createTask,
+    updateTask,
+    onClose,
+  ]);
 
   // Keyboard shortcuts: Escape to close
   useEffect(() => {
@@ -191,8 +202,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
               htmlFor="task-description"
               className="mb-1.5 block text-sm font-medium text-slate-300"
             >
-              Description{' '}
-              <span className="text-slate-500 font-normal">(optional)</span>
+              Description <span className="text-slate-500 font-normal">(optional)</span>
             </label>
             <input
               id="task-description"
@@ -226,10 +236,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
 
           {/* Model selector */}
           <div>
-            <label
-              htmlFor="task-model"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
-            >
+            <label htmlFor="task-model" className="mb-1.5 block text-sm font-medium text-slate-300">
               Model{' '}
               <span className="text-slate-500 font-normal">(optional — uses app default)</span>
             </label>
@@ -254,11 +261,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
           {/* Schedule */}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">Schedule</label>
-            <TaskScheduleInput
-              value={schedule}
-              onChange={setSchedule}
-              disabled={isSaving}
-            />
+            <TaskScheduleInput value={schedule} onChange={setSchedule} disabled={isSaving} />
           </div>
         </div>
 

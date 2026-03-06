@@ -45,9 +45,9 @@ interface TerminalState {
 
   aiSuggestCommand: (intent: string, shellType: ShellTypeLiteral, cwd?: string) => Promise<string>;
   aiExplainError: (
-    error_output: string,
+    errorOutput: string,
     command?: string,
-    shell_type?: ShellTypeLiteral,
+    shellType?: ShellTypeLiteral,
   ) => Promise<string>;
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
@@ -75,7 +75,7 @@ export const useTerminalStore = create<TerminalState>()(
         createSession: async (shellType: ShellTypeLiteral, cwd?: string, title?: string) => {
           try {
             const sessionId = await invoke<string>('terminal_create_session', {
-              shell_type: shellType,
+              shellType,
               cwd: cwd || undefined,
             });
 
@@ -127,7 +127,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             get().removeOutputListener(sessionId);
 
-            await invoke('terminal_kill', { session_id: sessionId });
+            await invoke('terminal_kill', { sessionId });
 
             set(
               (state) => {
@@ -187,7 +187,7 @@ export const useTerminalStore = create<TerminalState>()(
           }
 
           try {
-            await invoke('terminal_send_input', { session_id: sessionId, data });
+            await invoke('terminal_send_input', { sessionId, data });
           } catch (error) {
             console.error('Failed to send input to terminal:', error);
             throw error;
@@ -196,7 +196,7 @@ export const useTerminalStore = create<TerminalState>()(
 
         resizeTerminal: async (sessionId: string, cols: number, rows: number) => {
           try {
-            await invoke('terminal_resize', { session_id: sessionId, cols, rows });
+            await invoke('terminal_resize', { sessionId, cols, rows });
           } catch (error) {
             console.error('Failed to resize terminal:', error);
             throw error;
@@ -206,7 +206,7 @@ export const useTerminalStore = create<TerminalState>()(
         getHistory: async (sessionId: string, limit: number = 50) => {
           try {
             const history = await invoke<string[]>('terminal_get_history', {
-              session_id: sessionId,
+              sessionId,
               limit,
             });
             return history;
@@ -344,7 +344,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             const command = await invoke<string>('terminal_ai_suggest_command', {
               intent,
-              shell_type: shellType,
+              shellType,
               cwd,
             });
             return command;
@@ -355,15 +355,15 @@ export const useTerminalStore = create<TerminalState>()(
         },
 
         aiExplainError: async (
-          error_output: string,
+          errorOutput: string,
           command?: string,
-          shell_type?: ShellTypeLiteral,
+          shellType?: ShellTypeLiteral,
         ) => {
           try {
             const explanation = await invoke<string>('terminal_ai_explain_error', {
-              error_output,
+              errorOutput,
               command,
-              shell_type: shell_type || 'zsh',
+              shellType: shellType || 'zsh',
             });
             return explanation;
           } catch (error) {
@@ -375,7 +375,7 @@ export const useTerminalStore = create<TerminalState>()(
         smartCommit: async (sessionId: string) => {
           try {
             const result = await invoke<string>('terminal_smart_commit', {
-              session_id: sessionId,
+              sessionId,
             });
             return result;
           } catch (error) {
@@ -388,7 +388,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             const suggestions = await invoke<string | null>('terminal_ai_suggest_improvements', {
               command,
-              shell_type: shellType,
+              shellType,
             });
             return suggestions;
           } catch (error) {

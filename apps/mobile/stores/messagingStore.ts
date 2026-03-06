@@ -73,9 +73,7 @@ export const useMessagingStore = create<MessagingState>()(
 
           // Merge server data with local platforms — preserve local state when server has no data
           const updatedPlatforms = get().platforms.map((platform) => {
-            const serverConn = connections.find(
-              (c) => c.platform === platform.id,
-            );
+            const serverConn = connections.find((c) => c.platform === platform.id);
             if (serverConn) {
               return {
                 ...platform,
@@ -90,12 +88,8 @@ export const useMessagingStore = create<MessagingState>()(
 
           set({ platforms: updatedPlatforms });
         } catch (error) {
-          console.warn('Failed to fetch messaging platforms:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to load messaging connections',
+            error: error instanceof Error ? error.message : 'Failed to load messaging connections',
           });
         } finally {
           set({ loading: false });
@@ -120,12 +114,8 @@ export const useMessagingStore = create<MessagingState>()(
             ),
           }));
         } catch (error) {
-          console.warn('Failed to connect platform:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to connect platform',
+            error: error instanceof Error ? error.message : 'Failed to connect platform',
           });
           throw error;
         } finally {
@@ -152,12 +142,8 @@ export const useMessagingStore = create<MessagingState>()(
             ),
           }));
         } catch (error) {
-          console.warn('Failed to disconnect platform:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to disconnect platform',
+            error: error instanceof Error ? error.message : 'Failed to disconnect platform',
           });
         } finally {
           set({ loading: false });

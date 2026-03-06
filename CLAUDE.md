@@ -6,6 +6,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is a Tauri v2 desktop application (Rust backend + React/TypeScript frontend) — an open, model-agnostic AI desktop platform. Users can connect any LLM (cloud or local), use MCP tools, manage agents, and run autonomous workflows. A companion Next.js web app handles marketing, auth, and billing.
 
+## Competitive Positioning
+
+**Goal**: Beat Claude Desktop, ChatGPT, Gemini. **Six unique differentiators** (Feb 2026 analysis):
+
+1. **Local Desktop Control + Multi-Model + Native GUI** (trifecta)
+   - Only tool combining native Tauri desktop app + 9+ model providers + screen/keyboard/app automation
+   - Claude Code has local control but no GUI, is Claude-only. Cursor has GUI + multi-model but zero desktop control.
+
+2. **Mobile Companion with Live Agent Dashboard**
+   - Dedicated iOS/Android app with QR-pair desktop link, real-time agent oversight, approve/deny per tool call
+   - Zero competitors offer this. Claude's "Remote Control" restricted to Max tier ($100-200/mo).
+
+3. **140+ Non-Coding AI Skills** (healthcare, legal, finance, education, creative, trades, e-commerce)
+   - Every competitor is code-focused (Claude Code, Cursor, GitHub Copilot). AGI Workforce is general-purpose AI workforce.
+
+4. **Full BYOK + Local LLMs + Native GUI**
+   - Only tool combining polished desktop app + bring-your-own-keys for all providers + Ollama/LM Studio support
+   - Users own API relationships, run fully offline with local models. Aider has BYOK but CLI-only.
+
+5. **Proprietary Desktop-Native Agent Platform**
+   - Closed-source, proprietary codebase. Competitors (Claude Desktop, Cursor, Windsurf, Devin) also proprietary. Enterprise-grade security, IP protection, commercial SaaS model.
+
+6. **MCP Without Artificial Limits**
+   - Unlimited MCP tools (stdio + SSE + HTTP) inside native desktop app. Cursor caps at 40 tools.
+
+**Architecture inspired by**: Claude Code (skills system, hooks, agents). **Feature roadmap inspired by**: Perplexity Computer (connector ecosystem, multi-model orchestration).
+
 ## Monorepo Structure
 
 pnpm workspaces monorepo with a Cargo workspace for Rust:
@@ -178,7 +205,7 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - **MCP**: Supports stdio, SSE, and streamable HTTP transports. Config in `.mcp.json`.
 - **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support.
 - **UI stack**: Radix UI primitives + Tailwind CSS 4 + Lucide icons + Sonner toasts.
-- **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `appstore`, `devtools`.
+- **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`.
 - **Rust lint strictness**: Cargo.toml denies `unsafe_code`, `dead_code`, `unused_imports`, `unused_variables`, `unused_mut`. All warnings are errors. `clippy::await_holding_lock` is allowed.
 
 ## Development Rules
@@ -192,12 +219,6 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - React: functional components only, Tailwind for styling
 - Rust: follow Tauri v2 patterns, `#[tauri::command]` for invoke handlers, snake_case
 - **ALWAYS use parallel sub-agents or agent teams** — never do sequential work when tasks can be parallelized. Launch multiple Task tool calls in a single message. Use `TeamCreate` + `TaskCreate` for cross-cutting multi-agent work. Assign tasks, communicate via `SendMessage`, and properly shut down teams with `shutdown_request` when done. This is a hard requirement for all non-trivial tasks.
-
-## Persistent Memory
-
-- `MEMORY.md` — AI learnings, patterns, preferences (updated during work)
-- `AGENTS.md` — Agent roster, zone ownership, model assignments
-- `docs/SESSION_STATE.md` — Session handoff state (updated before compaction)
 
 ## Zone-Based File Ownership (Multi-Agent)
 

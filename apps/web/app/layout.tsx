@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
     template: '%s | AGI Workforce',
   },
   description:
-    'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by GPT-5, Claude 4.5, Gemini 3.',
+    'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
   keywords: [
     'AI agents',
     'automation',
@@ -53,7 +54,7 @@ export const metadata: Metadata = {
       'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'AGI Workforce - Just ask, it does',
@@ -64,9 +65,9 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI Workforce | Your On-Demand AI Workforce',
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
+      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
     creator: '@agiworkforce',
-    images: ['/og-image.svg'],
+    images: ['/app-preview.png'],
   },
   robots: {
     index: true,
@@ -82,6 +83,9 @@ export default async function RootLayout({
   // Read the per-request nonce set by middleware for CSP compliance
   const headersList = await headers();
   const nonce = headersList.get('x-nonce') ?? '';
+
+  // Only wire GA4 when the tracking ID env var is set
+  const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
   // JSON-LD Schema for Organization
   const organizationSchema = {
@@ -116,6 +120,22 @@ export default async function RootLayout({
     url: 'https://agiworkforce.com',
   };
 
+  // JSON-LD Schema for WebSite with SearchAction
+  const webSiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'AGI Workforce',
+    url: 'https://agiworkforce.com',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: 'https://agiworkforce.com/search?q={search_term_string}',
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
   return (
     <html lang="en">
       <head>
@@ -131,9 +151,17 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
         />
+        {/* WebSite Schema with SearchAction */}
+        <script
+          nonce={nonce}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
+        />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>{children}</Providers>
+        {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
+        {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
       </body>
     </html>
   );

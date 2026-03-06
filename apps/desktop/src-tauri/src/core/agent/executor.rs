@@ -521,7 +521,7 @@ impl TaskExecutor {
             "f12" => Key::F12,
 
             s if s.len() == 1 => {
-                let c = s.chars().next().unwrap();
+                let c = s.chars().next().unwrap_or('?');
                 if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
                     Key::Unicode(c)
                 } else {

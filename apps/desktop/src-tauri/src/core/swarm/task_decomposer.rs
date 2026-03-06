@@ -498,12 +498,6 @@ impl DecompositionCacheKey {
 /// result is returned without making a duplicate LLM call.
 pub struct TaskDecomposer {
     router: Arc<RwLock<LLMRouter>>,
-    /// Maximum recursive decomposition depth (reserved for hierarchical decomposition).
-    #[allow(dead_code)]
-    max_depth: usize,
-    /// Minimum subtask size threshold (reserved for hierarchical decomposition).
-    #[allow(dead_code)]
-    min_subtask_size: usize,
     /// Thread-safe decomposition cache keyed on (task_id, input_content_hash).
     /// Protected by a tokio Mutex to allow safe concurrent access from multiple
     /// swarm executions without blocking the async runtime.
@@ -516,8 +510,6 @@ impl TaskDecomposer {
     pub fn new(router: Arc<RwLock<LLMRouter>>) -> Self {
         Self {
             router,
-            max_depth: constants::MAX_DECOMPOSITION_DEPTH,
-            min_subtask_size: 1,
             decomposition_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }

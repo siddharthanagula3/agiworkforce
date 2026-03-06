@@ -23,6 +23,9 @@ export function ConnectorsGallery() {
   const [categoryFilter, setCategoryFilter] = useState<ConnectorCategory | 'all'>('all');
   const [oauthState, setOauthState] = useState<OAuthFlowState>({ status: 'idle' });
   const [apiKeyDialogConnector, setApiKeyDialogConnector] = useState<ConnectorDef | null>(null);
+  const [configureDialogConnector, setConfigureDialogConnector] = useState<ConnectorDef | null>(
+    null,
+  );
 
   const {
     connectedIds,
@@ -156,6 +159,20 @@ export function ConnectorsGallery() {
 
   const lastConnectorName = oauthState.status !== 'idle' ? oauthState.connectorName : '';
 
+  const handleConfigure = useCallback(
+    (connector: ConnectorDef) => {
+      clearError(connector.id);
+      // For API key connectors, re-open the API key dialog to update credentials.
+      // For OAuth connectors, reconnect to re-run the OAuth flow.
+      if (connector.authType === 'api_key') {
+        setConfigureDialogConnector(connector);
+      } else {
+        void handleConnect(connector.id);
+      }
+    },
+    [clearError, handleConnect],
+  );
+
   const handleRetry = useCallback(() => {
     const connector = CONNECTORS.find((c) => c.name === lastConnectorName);
     if (connector) {
@@ -236,6 +253,7 @@ export function ConnectorsGallery() {
                   error={error[connector.id] ?? null}
                   onConnect={() => handleConnectClick(connector)}
                   onDisconnect={() => void handleDisconnect(connector.id)}
+                  onConfigure={() => handleConfigure(connector)}
                 />
               ))}
             </div>
@@ -257,6 +275,7 @@ export function ConnectorsGallery() {
                   error={error[connector.id] ?? null}
                   onConnect={() => handleConnectClick(connector)}
                   onDisconnect={() => void handleDisconnect(connector.id)}
+                  onConfigure={() => handleConfigure(connector)}
                 />
               ))}
             </div>
@@ -273,11 +292,19 @@ export function ConnectorsGallery() {
         onRetry={handleRetry}
       />
 
-      {/* API key dialog */}
+      {/* API key dialog (initial connect) */}
       <ConnectorApiKeyDialog
         connector={apiKeyDialogConnector}
         open={apiKeyDialogConnector !== null}
         onClose={() => setApiKeyDialogConnector(null)}
+        onConnect={handleApiKeyConnect}
+      />
+
+      {/* API key dialog (re-configure) */}
+      <ConnectorApiKeyDialog
+        connector={configureDialogConnector}
+        open={configureDialogConnector !== null}
+        onClose={() => setConfigureDialogConnector(null)}
         onConnect={handleApiKeyConnect}
       />
     </div>

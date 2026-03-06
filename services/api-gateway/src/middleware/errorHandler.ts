@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { logger } from '../lib/logger';
 
 /**
@@ -27,6 +28,31 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  // Handle Zod validation errors with a 400 response
+  if (err instanceof z.ZodError) {
+    logger.warn(
+      {
+        path: req.path,
+        method: req.method,
+        validationErrors: err.issues.map((i) => ({
+          path: i.path.join('.'),
+          message: i.message,
+        })),
+      },
+      'Request validation failed',
+    );
+
+    res.status(400).json({
+      error: 'VALIDATION_ERROR',
+      message: 'Request validation failed',
+      details: err.issues.map((i) => ({
+        field: i.path.join('.'),
+        message: i.message,
+      })),
+    });
+    return;
+  }
+
   // Log error details
   logger.error(
     {

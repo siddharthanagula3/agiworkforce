@@ -1,9 +1,20 @@
 use mailparse::{parse_mail, MailHeaderMap, ParsedMail};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use tokio::fs;
 use tracing::debug;
 
 use super::{EmailAddress, EmailAttachment};
 use crate::sys::error::{Error, Result};
+
+static SCRIPT_TAG_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)<script[^>]*>.*?</script>").expect("valid regex: script tag pattern")
+});
+static EVENT_HANDLER_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?i)\s+on\w+\s*=\s*"[^"]*""#).expect("valid regex: event handler pattern")
+});
+static JAVASCRIPT_URI_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)javascript:").expect("valid regex: javascript URI pattern"));
 
 pub struct ParsedEmail {
     pub message_id: String,
@@ -254,18 +265,15 @@ fn find_attachment_recursive<'a>(
 pub fn sanitize_html(html: &str) -> String {
     let mut sanitized = html.to_string();
 
-    sanitized = regex::Regex::new(r"(?i)<script[^>]*>.*?</script>")
-        .unwrap()
+    sanitized = SCRIPT_TAG_RE
         .replace_all(&sanitized, "")
         .to_string();
 
-    sanitized = regex::Regex::new(r#"(?i)\s+on\w+\s*=\s*"[^"]*""#)
-        .unwrap()
+    sanitized = EVENT_HANDLER_RE
         .replace_all(&sanitized, "")
         .to_string();
 
-    sanitized = regex::Regex::new(r"(?i)javascript:")
-        .unwrap()
+    sanitized = JAVASCRIPT_URI_RE
         .replace_all(&sanitized, "")
         .to_string();
 

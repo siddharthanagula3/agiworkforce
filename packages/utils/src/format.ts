@@ -29,7 +29,9 @@ export function formatDate(
     year: 'numeric',
   },
 ): string {
-  return new Intl.DateTimeFormat('en-US', options).format(new Date(date));
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', options).format(d);
 }
 
 /**
@@ -44,13 +46,15 @@ export function formatDate(
  * ```
  */
 export function formatDateTime(date: string | number | Date): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(new Date(date));
+  }).format(d);
 }
 
 /**
@@ -67,7 +71,9 @@ export function formatDateTime(date: string | number | Date): string {
  */
 export function formatRelativeTime(date: string | number | Date): string {
   const now = Date.now();
-  const then = new Date(date).getTime();
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const then = d.getTime();
   const diffMs = then - now;
   // Derive each unit independently from diffMs to avoid compounding rounding errors.
   const diffSecs = Math.round(diffMs / 1000);
@@ -170,6 +176,9 @@ export function formatBytes(bytes: number, decimals = 2): string {
  * ```
  */
 export function formatDuration(ms: number): string {
+  if (ms < 0) {
+    return '0ms';
+  }
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;
   }
@@ -228,6 +237,7 @@ export function formatPercent(value: number, decimals = 0, isPercentage = false)
  */
 export function truncate(str: string, maxLength: number, ellipsis = '...'): string {
   if (str.length <= maxLength) return str;
+  if (maxLength <= ellipsis.length) return str.slice(0, maxLength);
   return `${str.slice(0, maxLength - ellipsis.length)}${ellipsis}`;
 }
 

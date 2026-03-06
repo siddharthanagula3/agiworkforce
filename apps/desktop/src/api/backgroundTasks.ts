@@ -4,7 +4,7 @@
  * Provides interfaces for managing persistent background tasks.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 export interface PersistentTask {
   id: string;

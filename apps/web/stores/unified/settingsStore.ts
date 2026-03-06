@@ -1,68 +1,84 @@
 // STUB FILE FOR WEB PORT COMPILATION
+// Provides no-op store hooks that mimic Zustand's selector pattern
+// for desktop-only stores that don't exist in the web app.
+
+/** Empty state object used as default for all stub stores */
+const EMPTY_STATE: Record<string, never> = {};
+
+/**
+ * Creates a stub Zustand-compatible hook with getState() support.
+ * Accepts an optional selector; returns empty object if no selector or result of selector(empty).
+ */
+interface StubStoreHook {
+  <T>(selector: (state: Record<string, never>) => T): T;
+  (): Record<string, never>;
+  getState: () => Record<string, never>;
+}
+
+function createStubStore(): StubStoreHook {
+  const hook = ((selector?: (state: Record<string, never>) => unknown) =>
+    selector ? selector(EMPTY_STATE) : EMPTY_STATE) as StubStoreHook;
+  hook.getState = () => EMPTY_STATE;
+  return hook;
+}
+
+/** Typed chat preferences shape mirroring desktop settingsStore.ChatPreferences */
+interface ChatPreferences {
+  promptCompletionEnabled: boolean;
+  alwaysUseAgentMode: boolean;
+  compactMode: boolean;
+  autoApproveTools: boolean;
+  autoInjectSkills?: boolean;
+}
+
+/** Typed settings state for web stub — includes fields accessed by shared UnifiedAgenticChat */
+interface SettingsStubState {
+  chatPreferences: ChatPreferences;
+}
+
+const SETTINGS_STUB_STATE: SettingsStubState = {
+  chatPreferences: {
+    promptCompletionEnabled: false,
+    alwaysUseAgentMode: false,
+    compactMode: false,
+    autoApproveTools: false,
+    autoInjectSkills: false,
+  },
+};
+
+interface SettingsStoreHook {
+  <T>(selector: (state: SettingsStubState) => T): T;
+  (): SettingsStubState;
+  getState: () => SettingsStubState;
+}
+
+const settingsStoreHook: SettingsStoreHook = ((selector?: (state: SettingsStubState) => unknown) =>
+  selector ? selector(SETTINGS_STUB_STATE) : SETTINGS_STUB_STATE) as SettingsStoreHook;
+settingsStoreHook.getState = () => SETTINGS_STUB_STATE;
+
 export const _stub = true;
-export default {} as any;
+export default EMPTY_STATE;
 export const useAuth = () => ({ user: null });
-const _useAccountStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useAccountStoreFn.getState = () => ({});
-export const useAccountStore = _useAccountStoreFn;
-const _useModelStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useModelStoreFn.getState = () => ({});
-export const useModelStore = _useModelStoreFn;
-const _useProjectStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useProjectStoreFn.getState = () => ({});
-export const useProjectStore = _useProjectStoreFn;
-const _useMemoryStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMemoryStoreFn.getState = () => ({});
-export const useMemoryStore = _useMemoryStoreFn;
-const _useArtifactStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useArtifactStoreFn.getState = () => ({});
-export const useArtifactStore = _useArtifactStoreFn;
-const _useExecutionStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useExecutionStoreFn.getState = () => ({});
-export const useExecutionStore = _useExecutionStoreFn;
-const _useTerminalStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useTerminalStoreFn.getState = () => ({});
-export const useTerminalStore = _useTerminalStoreFn;
-const _useBrowserStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useBrowserStoreFn.getState = () => ({});
-export const useBrowserStore = _useBrowserStoreFn;
-const _useMcpStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMcpStoreFn.getState = () => ({});
-export const useMcpStore = _useMcpStoreFn;
-const _useUpdaterStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useUpdaterStoreFn.getState = () => ({});
-export const useUpdaterStore = _useUpdaterStoreFn;
-const _useUsageStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useUsageStoreFn.getState = () => ({});
-export const useUsageStore = _useUsageStoreFn;
-const _useCloudStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useCloudStoreFn.getState = () => ({});
-export const useCloudStore = _useCloudStoreFn;
-const _useAutomationStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useAutomationStoreFn.getState = () => ({});
-export const useAutomationStore = _useAutomationStoreFn;
-const _useErrorStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useErrorStoreFn.getState = () => ({});
-export const useErrorStore = _useErrorStoreFn;
-const _useSchedulerStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useSchedulerStoreFn.getState = () => ({});
-export const useSchedulerStore = _useSchedulerStoreFn;
-const _useMediaGenerationStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMediaGenerationStoreFn.getState = () => ({});
-export const useMediaGenerationStore = _useMediaGenerationStoreFn;
-const _useCustomInstructionsStoreFn: any = (selector?: any) =>
-  selector ? selector({} as any) : {};
-_useCustomInstructionsStoreFn.getState = () => ({});
-export const useCustomInstructionsStore = _useCustomInstructionsStoreFn;
-const _useCodeStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useCodeStoreFn.getState = () => ({});
-export const useCodeStore = _useCodeStoreFn;
-const _useSettingsStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useSettingsStoreFn.getState = () => ({});
-export const useSettingsStore = _useSettingsStoreFn;
-const _useBillingUsageStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useBillingUsageStoreFn.getState = () => ({});
-export const useBillingUsageStore = _useBillingUsageStoreFn;
+export const useAccountStore = createStubStore();
+export const useModelStore = createStubStore();
+export const useProjectStore = createStubStore();
+export const useMemoryStore = createStubStore();
+export const useArtifactStore = createStubStore();
+export const useExecutionStore = createStubStore();
+export const useTerminalStore = createStubStore();
+export const useBrowserStore = createStubStore();
+export const useMcpStore = createStubStore();
+export const useUpdaterStore = createStubStore();
+export const useUsageStore = createStubStore();
+export const useCloudStore = createStubStore();
+export const useAutomationStore = createStubStore();
+export const useErrorStore = createStubStore();
+export const useSchedulerStore = createStubStore();
+export const useMediaGenerationStore = createStubStore();
+export const useCustomInstructionsStore = createStubStore();
+export const useCodeStore = createStubStore();
+export const useSettingsStore = settingsStoreHook;
+export const useBillingUsageStore = createStubStore();
 
 // General dummy exports (covers many cases)
 export const invoke = async () => ({});
@@ -70,17 +86,16 @@ export const isTauri = false;
 export const countTokens = () => 0;
 export const getTokenPercentage = () => 0;
 
-export const BrowserVisualization = (_props?: any) => null;
-export const MonacoEditor = (_props?: any) => null;
-export const TerminalPanel = (_props?: any) => null;
-export const MemoryPanel = (_props?: any) => null;
-export const ScreenCaptureButton = (_props?: any) => null;
-export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = (_props?: any) => null;
-export const DiffViewer = (_props?: any) => null;
+export const BrowserVisualization = (_props?: Record<string, unknown>) => null;
+export const MonacoEditor = (_props?: Record<string, unknown>) => null;
+export const TerminalPanel = (_props?: Record<string, unknown>) => null;
+export const MemoryPanel = (_props?: Record<string, unknown>) => null;
+export const ScreenCaptureButton = (_props?: Record<string, unknown>) => null;
+export const ErrorBoundary = ({ children }: { children: React.ReactNode }) => children;
+export const TimeoutWarningDialog = (_props?: Record<string, unknown>) => null;
+export const DiffViewer = (_props?: Record<string, unknown>) => null;
 
 export const handleSlashCommand = () => {};
-// ... will add more if tsc complains
 
 // Missing named exports from settingsStore stub
 export type Provider = string;

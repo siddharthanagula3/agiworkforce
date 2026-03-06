@@ -143,9 +143,7 @@ export function ReasoningAccordion({ reasoning, isStreaming }: ReasoningAccordio
         >
           {isExpanded ? 'Thinking' : summary}
         </Text>
-        <Text style={{ fontSize: 10, color: 'rgba(168, 85, 247, 0.6)' }}>
-          {wordCount} words
-        </Text>
+        <Text style={{ fontSize: 10, color: 'rgba(168, 85, 247, 0.6)' }}>{wordCount} words</Text>
         <Animated.View style={chevronStyle}>
           <ChevronDown size={14} color={colors.agentThinking} />
         </Animated.View>

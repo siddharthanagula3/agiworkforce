@@ -89,6 +89,7 @@ struct LanguageRunner {
     /// Additional arguments before the script
     args: Vec<String>,
     /// Whether to write code to a file before execution
+    // Used by: LanguageRunner::for_language — set per language, consumed by execute logic
     #[allow(dead_code)]
     use_file: bool,
 }

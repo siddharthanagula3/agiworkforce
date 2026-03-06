@@ -145,7 +145,7 @@ export class RealtimeCollaborationService {
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return;
     }
 
@@ -193,7 +193,7 @@ export class RealtimeCollaborationService {
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return;
     }
 
@@ -271,7 +271,7 @@ export class RealtimeCollaborationService {
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return;
     }
 
@@ -337,7 +337,7 @@ export class RealtimeCollaborationService {
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return;
     }
 
@@ -441,7 +441,7 @@ export class RealtimeCollaborationService {
   ): () => void {
     const channel = this.supabaseChannels.get(sessionId);
     if (!channel) {
-      console.warn(`[Collaboration] Channel not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Channel not found: ${sessionId}`);
       return () => {};
     }
 
@@ -462,7 +462,7 @@ export class RealtimeCollaborationService {
   ): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return () => {};
     }
 
@@ -479,7 +479,7 @@ export class RealtimeCollaborationService {
   onCursorUpdate(sessionId: string, _callback: (cursors: CursorPosition[]) => void): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return () => {};
     }
 
@@ -497,7 +497,7 @@ export class RealtimeCollaborationService {
   ): () => void {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      console.warn(`[Collaboration] Session not found: ${sessionId}`);
+      logger.warn(`[Collaboration] Session not found: ${sessionId}`);
       return () => {};
     }
 
@@ -617,7 +617,7 @@ export class RealtimeCollaborationService {
         ActivityType.VIEWING,
         metadata,
       ).catch((error) => {
-        console.error('[Collaboration] Heartbeat failed', error);
+        logger.error('[Collaboration] Heartbeat failed', error);
       });
     }, PRESENCE_HEARTBEAT);
 

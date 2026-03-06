@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "author": "AGI Workforce",
-  "license": "MIT",
+  "license": "PROPRIETARY",
   "homepage": "https://agiworkforce.com",
   "repository": {
     "type": "git",
@@ -26,7 +26,7 @@
     "test": "vitest run",
     "clean": "rm -rf dist",
     "package": "pnpm build && cd dist && zip -r ../extension.zip . -x '*.map'",
-    "lint": "eslint src --ext .ts,.js",
+    "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint",
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "devDependencies": {

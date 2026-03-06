@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/pricing',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'AGI Workforce Pricing',

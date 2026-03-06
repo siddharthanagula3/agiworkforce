@@ -3,6 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],

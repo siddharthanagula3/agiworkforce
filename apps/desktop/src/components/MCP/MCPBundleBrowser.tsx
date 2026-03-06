@@ -5,7 +5,7 @@
  * Integrates with the mcpbStore for state management.
  */
 import { useState, useEffect, useCallback } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/tauri-mock';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';

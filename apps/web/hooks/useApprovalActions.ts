@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- stub hook with placeholder types */
 // Stub for desktop-only approval actions hook
 export function useApprovalActions() {
   return {

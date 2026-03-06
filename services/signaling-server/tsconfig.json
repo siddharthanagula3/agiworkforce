@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "tsBuildInfoFile": ".tsbuildinfo",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
@@ -13,7 +13,7 @@
     "declaration": false,
     "declarationMap": false,
     "composite": false,
-    "incremental": false,
+    "incremental": true,
     "allowImportingTsExtensions": false
   },
   "include": ["src"],

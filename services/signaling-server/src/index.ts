@@ -30,7 +30,10 @@
 import 'dotenv/config';
 
 if (!process.env['NODE_ENV']) {
-  console.warn('[signaling-server] NODE_ENV is not set — defaulting to "development"');
+  // Logger isn't available yet (depends on NODE_ENV), use stderr directly
+  process.stderr.write(
+    '[signaling-server] WARN: NODE_ENV is not set — defaulting to "development"\n',
+  );
   process.env['NODE_ENV'] = 'development';
 }
 
@@ -252,6 +255,32 @@ const adminLimiter = rateLimit({
     message: `Too many admin requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
     retryAfter: RATE_LIMIT_RETRY_AFTER_SECONDS,
   },
+});
+
+// =============================================================================
+// 404 and Error Handlers
+// =============================================================================
+
+// 404 handler for undefined routes
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: 'NOT_FOUND', message: 'Route not found' });
+});
+
+// Global error handler (must be last middleware)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  // Handle Zod validation errors
+  if (err instanceof z.ZodError) {
+    logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
+    res.status(400).json({
+      error: 'VALIDATION_ERROR',
+      message: 'Request validation failed',
+      details: z.treeifyError(err),
+    });
+    return;
+  }
+
+  logger.error({ error: err.message, path: req.path, method: req.method }, 'Unhandled error');
+  res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Internal server error' });
 });
 
 // =============================================================================
@@ -1148,7 +1177,11 @@ function getPeer(session: Session, role: Role): Participant | undefined {
 
 function notifyParticipant(participant: Participant, payload: Record<string, unknown>): void {
   if (participant.socket.readyState === WebSocket.OPEN) {
-    participant.socket.send(JSON.stringify(payload));
+    try {
+      participant.socket.send(JSON.stringify(payload));
+    } catch (error) {
+      logger.warn({ error, role: participant.role }, 'Failed to send message to participant');
+    }
   }
 }
 

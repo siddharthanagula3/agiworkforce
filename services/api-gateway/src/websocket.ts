@@ -47,16 +47,20 @@ export function sendCommandToDesktop(
   if (userClients) {
     for (const client of userClients) {
       if (client.deviceId === desktopId && client.readyState === WebSocket.OPEN) {
-        client.send(
-          JSON.stringify({
-            type: 'command',
-            commandId,
-            commandType: type,
-            payload,
-            timestamp: Date.now(),
-          }),
-        );
-        delivered = true;
+        try {
+          client.send(
+            JSON.stringify({
+              type: 'command',
+              commandId,
+              commandType: type,
+              payload,
+              timestamp: Date.now(),
+            }),
+          );
+          delivered = true;
+        } catch (error) {
+          logger.warn({ error, desktopId }, 'Failed to send command to desktop');
+        }
         break;
       }
     }
@@ -103,15 +107,20 @@ function flushPendingCommands(ws: AuthenticatedWebSocket) {
 
     for (const cmd of validCommands) {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: 'command',
-            commandId: cmd.commandId,
-            commandType: cmd.type,
-            payload: cmd.payload,
-            timestamp: cmd.timestamp,
-          }),
-        );
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'command',
+              commandId: cmd.commandId,
+              commandType: cmd.type,
+              payload: cmd.payload,
+              timestamp: cmd.timestamp,
+            }),
+          );
+        } catch (error) {
+          logger.warn({ error, deviceId: ws.deviceId }, 'Failed to flush pending command');
+          break;
+        }
       }
     }
 
@@ -413,7 +422,11 @@ function broadcastToUser(ws: AuthenticatedWebSocket, message: BroadcastMessage) 
 
   userClients.forEach((client) => {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
+      try {
+        client.send(JSON.stringify(message));
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to broadcast to client');
+      }
     }
   });
 }

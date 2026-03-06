@@ -42,7 +42,7 @@
 | ------------------------ | --------------------------- | ---- | -------------------------------------------- |
 | devops-build-engineer    | devops-build-engineer.md    | E    | Docker, CI/CD, GitHub Actions, build scripts |
 | documentation-sync-agent | documentation-sync-agent.md | F    | Docs, README, CHANGELOG, API documentation   |
-| progress-state-tracker   | progress-state-tracker.md   | F    | SESSION_STATE.md updates, progress tracking  |
+| progress-state-tracker   | progress-state-tracker.md   | F    | Progress tracking, session state management  |
 
 ## Plugin Agents
 

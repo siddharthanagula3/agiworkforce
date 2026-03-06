@@ -87,6 +87,7 @@ export class AgentModePanel {
   private messages: ChatMessage[] = [];
   private editHistory: EditBatch[] = [];
   private isProcessing = false;
+  private diffProviderDisposables: vscode.Disposable[] = [];
 
   public static createOrShow(
     extensionUri: vscode.Uri,
@@ -340,6 +341,12 @@ export class AgentModePanel {
     const batchId = `batch-${Date.now()}`;
     const descriptions: string[] = [];
 
+    // Dispose previous diff content providers before registering new ones
+    for (const d of this.diffProviderDisposables) {
+      d.dispose();
+    }
+    this.diffProviderDisposables = [];
+
     for (const edit of edits) {
       descriptions.push(edit.filePath);
 
@@ -347,7 +354,7 @@ export class AgentModePanel {
       const originalUri = edit.uri.with({ scheme: 'agi-original', query: batchId });
       const modifiedUri = edit.uri.with({ scheme: 'agi-modified', query: batchId });
 
-      // Register temp content providers
+      // Register temp content providers — tracked separately for cleanup between batches
       const originalProvider = vscode.workspace.registerTextDocumentContentProvider(
         'agi-original',
         {
@@ -361,7 +368,7 @@ export class AgentModePanel {
         },
       );
 
-      this.disposables.push(originalProvider, modifiedProvider);
+      this.diffProviderDisposables.push(originalProvider, modifiedProvider);
 
       await vscode.commands.executeCommand(
         'vscode.diff',
@@ -541,6 +548,10 @@ export class AgentModePanel {
   private dispose(): void {
     AgentModePanel.currentPanel = undefined;
     this.panel.dispose();
+    for (const d of this.diffProviderDisposables) {
+      d.dispose();
+    }
+    this.diffProviderDisposables = [];
     for (const d of this.disposables) {
       d.dispose();
     }

@@ -213,7 +213,7 @@ const ListItem = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Enhanced markdown components
-const markdownComponents: Components = ({
+const markdownComponents: Components = {
   code: CodeBlock as React.ComponentType<React.HTMLAttributes<HTMLElement> & { inline?: boolean }>,
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="mb-4 mt-8 scroll-m-20 border-b border-border pb-2 text-3xl font-bold tracking-tight first:mt-0">
@@ -260,7 +260,7 @@ const markdownComponents: Components = ({
   del: ({ children }: { children?: React.ReactNode }) => (
     <del className="line-through opacity-70">{children}</del>
   ),
-} as unknown) as Components;
+} as unknown as Components;
 
 export const EnhancedMarkdownRenderer = memo(function EnhancedMarkdownRenderer({
   content,
