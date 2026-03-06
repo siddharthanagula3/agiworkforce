@@ -87,20 +87,20 @@ function normalizeAutomationElement(raw: RawAutomationElementInfo): AutomationEl
 
 function buildAutomationQuery(query: AutomationQuery): RawAutomationQuery {
   const payload: RawAutomationQuery = {};
-  if (query.parentId) payload['parent_id'] = query.parentId;
+  if (query.parentId) payload['parentId'] = query.parentId;
   if (query.window) payload['window'] = query.window;
-  if (query.windowClass) payload['window_class'] = query.windowClass;
+  if (query.windowClass) payload['windowClass'] = query.windowClass;
   if (query.name) payload['name'] = query.name;
-  if (query.className) payload['class_name'] = query.className;
-  if (query.automationId) payload['automation_id'] = query.automationId;
-  if (query.controlType) payload['control_type'] = query.controlType;
-  if (query.maxResults != null) payload['max_results'] = query.maxResults;
+  if (query.className) payload['className'] = query.className;
+  if (query.automationId) payload['automationId'] = query.automationId;
+  if (query.controlType) payload['controlType'] = query.controlType;
+  if (query.maxResults != null) payload['maxResults'] = query.maxResults;
   return payload;
 }
 
 function buildClickRequest(request: AutomationClickRequest): RawAutomationQuery {
   const payload: RawAutomationQuery = {};
-  if (request.elementId) payload['element_id'] = request.elementId;
+  if (request.elementId) payload['elementId'] = request.elementId;
   if (request.x != null) payload['x'] = request.x;
   if (request.y != null) payload['y'] = request.y;
   if (request.button) payload['button'] = request.button;
@@ -109,12 +109,12 @@ function buildClickRequest(request: AutomationClickRequest): RawAutomationQuery 
 
 function buildScreenshotRequest(options: AutomationScreenshotOptions): RawAutomationQuery {
   const payload: RawAutomationQuery = {};
-  if (options.elementId) payload['element_id'] = options.elementId;
+  if (options.elementId) payload['elementId'] = options.elementId;
   if (options.x != null) payload['x'] = options.x;
   if (options.y != null) payload['y'] = options.y;
   if (options.width != null) payload['width'] = options.width;
   if (options.height != null) payload['height'] = options.height;
-  if (options.conversationId != null) payload['conversation_id'] = options.conversationId;
+  if (options.conversationId != null) payload['conversationId'] = options.conversationId;
   return payload;
 }
 
@@ -146,7 +146,7 @@ export async function findAutomationElements(
 export async function invokeElement(elementId: string): Promise<void> {
   try {
     validateNonEmpty(elementId, 'elementId');
-    await invokeWithTimeout('automation_invoke', { request: { element_id: elementId } });
+    await invokeWithTimeout('automation_invoke', { request: { elementId } });
   } catch (error) {
     throw new Error(`Failed to invoke element ${elementId}: ${error}`);
   }
@@ -164,7 +164,7 @@ export async function setElementValue(
     }
     await invokeWithTimeout('automation_set_value', {
       request: {
-        element_id: elementId,
+        elementId,
         value,
         focus,
       },
@@ -177,7 +177,7 @@ export async function setElementValue(
 export async function getElementValue(elementId: string): Promise<string> {
   try {
     validateNonEmpty(elementId, 'elementId');
-    return await invokeWithTimeout<string>('automation_get_value', { element_id: elementId });
+    return await invokeWithTimeout<string>('automation_get_value', { elementId });
   } catch (error) {
     throw new Error(`Failed to get element value for ${elementId}: ${error}`);
   }
@@ -186,7 +186,7 @@ export async function getElementValue(elementId: string): Promise<string> {
 export async function toggleElement(elementId: string): Promise<void> {
   try {
     validateNonEmpty(elementId, 'elementId');
-    await invokeWithTimeout('automation_toggle', { element_id: elementId });
+    await invokeWithTimeout('automation_toggle', { elementId });
   } catch (error) {
     throw new Error(`Failed to toggle element ${elementId}: ${error}`);
   }
@@ -195,7 +195,7 @@ export async function toggleElement(elementId: string): Promise<void> {
 export async function focusWindow(elementId: string): Promise<void> {
   try {
     validateNonEmpty(elementId, 'elementId');
-    await invokeWithTimeout('automation_focus_window', { element_id: elementId });
+    await invokeWithTimeout('automation_focus_window', { elementId });
   } catch (error) {
     throw new Error(`Failed to focus window ${elementId}: ${error}`);
   }
@@ -213,7 +213,7 @@ export async function sendKeys(
     await invokeWithTimeout('automation_send_keys', {
       request: {
         text,
-        element_id: options.elementId,
+        elementId: options.elementId,
         x: options.x,
         y: options.y,
         focus: options.focus,
@@ -275,11 +275,7 @@ export async function automationScreenshot(
 export async function automationOcr(imagePath: string): Promise<AutomationOcrResult> {
   try {
     validateNonEmpty(imagePath, 'imagePath');
-    return await invokeWithTimeout<AutomationOcrResult>(
-      'automation_ocr',
-      { image_path: imagePath },
-      60000,
-    );
+    return await invokeWithTimeout<AutomationOcrResult>('automation_ocr', { imagePath }, 60000);
   } catch (error) {
     throw new Error(`Failed to perform OCR on ${imagePath}: ${error}`);
   }

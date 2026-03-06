@@ -40,8 +40,8 @@ export interface ScheduledJob {
 }
 
 export interface NextRunInfo {
-  jobId: string;
-  nextRun: string;
+  job_id: string;
+  next_run: string;
 }
 
 interface SchedulerState {
@@ -414,7 +414,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const unlistenJobExecuted = await listen<ScheduledJob>(
               'scheduler:job_executed',
               (event) => {
-                console.log('[schedulerStore] Job executed:', event.payload);
+                console.debug('[schedulerStore] Job executed:', event.payload);
                 get().updateJob(event.payload);
               },
             );
@@ -422,7 +422,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             // Listen for job added events
             const unlistenJobAdded = await listen<ScheduledJob>('scheduler:job_added', (event) => {
-              console.log('[schedulerStore] Job added:', event.payload);
+              console.debug('[schedulerStore] Job added:', event.payload);
               set(
                 (state) => {
                   // Avoid duplicates
@@ -441,7 +441,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const unlistenJobRemoved = await listen<{ jobId: string }>(
               'scheduler:job_removed',
               (event) => {
-                console.log('[schedulerStore] Job removed:', event.payload);
+                console.debug('[schedulerStore] Job removed:', event.payload);
                 set(
                   (state) => ({
                     jobs: state.jobs.filter((j) => j.id !== event.payload.jobId),
@@ -457,7 +457,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             const unlistenJobUpdated = await listen<ScheduledJob>(
               'scheduler:job_updated',
               (event) => {
-                console.log('[schedulerStore] Job updated:', event.payload);
+                console.debug('[schedulerStore] Job updated:', event.payload);
                 get().updateJob(event.payload);
               },
             );
@@ -507,7 +507,7 @@ export const useSchedulerStore = create<SchedulerState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.log('[SchedulerStore] Rehydration complete');
+            console.debug('[SchedulerStore] Rehydration complete');
           }
         },
       },

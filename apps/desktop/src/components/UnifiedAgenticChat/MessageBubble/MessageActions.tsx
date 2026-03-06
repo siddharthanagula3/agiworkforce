@@ -111,9 +111,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       </button>
 
       {/* Save to Memory button — assistant messages only */}
-      {isAssistant && messageContent && (
-        <SaveToMemoryButton content={messageContent} />
-      )}
+      {isAssistant && messageContent && <SaveToMemoryButton content={messageContent} />}
 
       {/* Speak button — assistant only, requires browser TTS */}
       {isAssistant && ttsSupported && onSpeak && (

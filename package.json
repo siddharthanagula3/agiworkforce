@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/siddhartha/agiworkforce.git"
   },
-  "license": "MIT",
+  "license": "PROPRIETARY",
   "packageManager": "pnpm@9.15.3",
   "engines": {
     "node": ">=22.12.0",
@@ -36,12 +36,12 @@
   },
   "scripts": {
     "prepare": "husky install",
-    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=0 --ignore-pattern 'apps/extension/**'",
-    "lint:extension": "eslint apps/extension --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=0",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --cache --cache-strategy content --cache-location .cache/eslint/root --max-warnings=0 --ignore-pattern 'apps/extension/**'",
+    "lint:extension": "eslint apps/extension --ext .ts,.tsx,.js,.cjs,.mjs --cache --cache-strategy content --cache-location .cache/eslint/extension --max-warnings=0",
     "lint:fix": "pnpm lint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "cd apps/desktop && tsc --noEmit",
+    "typecheck": "pnpm --filter @agiworkforce/desktop typecheck",
     "test": "pnpm -r test",
     "clean": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "clean:build": "pnpm -r exec rm -rf dist",
@@ -51,7 +51,7 @@
     "build:docs": "pnpm --filter @agiworkforce/docs build",
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
     "dev:docs": "pnpm --filter @agiworkforce/docs start",
-    "typecheck:all": "pnpm -r typecheck"
+    "typecheck:all": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.4.2",

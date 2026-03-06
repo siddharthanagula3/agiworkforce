@@ -52,7 +52,8 @@ export function MobileCompanionPanel() {
           </div>
           {pendingApprovals.length > 0 && (
             <p className="text-xs text-emerald-700">
-              {pendingApprovals.length} pending approval{pendingApprovals.length !== 1 ? 's' : ''} from agent
+              {pendingApprovals.length} pending approval{pendingApprovals.length !== 1 ? 's' : ''}{' '}
+              from agent
             </p>
           )}
           <Button

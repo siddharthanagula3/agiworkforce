@@ -320,39 +320,81 @@ impl Default for SchedulerState {
 ///
 /// # Arguments
 /// * `name` - Human-readable name for the job
-/// * `schedule` - Cron expression (e.g., "0 0 9 * * *" for 9 AM daily)
+/// * `schedule` - Cron expression (e.g., "0 0 9 * * *" for 9 AM daily), or a JSON schedule object
 /// * `action_type` - Type of action: "workflow", "agi_task", "shell_command", "notification", "webhook", "script"
 /// * `action_data` - JSON object with action-specific parameters
+/// * `prompt` - Optional prompt text (alternative to action_data for agi_task type)
 ///
 /// # Returns
 /// The unique job ID
 #[command]
 pub async fn scheduler_add_job(
     name: String,
-    schedule: String,
-    action_type: String,
-    action_data: serde_json::Value,
+    schedule: serde_json::Value,
+    action_type: Option<String>,
+    action_data: Option<serde_json::Value>,
+    prompt: Option<String>,
     state: State<'_, SchedulerState>,
 ) -> Result<String> {
-    let action_type = parse_action_type(&action_type)?;
+    // Extract cron expression from schedule (can be a plain string or a JSON object)
+    let cron_expr = match &schedule {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Object(obj) => {
+            if let Some(cron) = obj.get("cronExpression").and_then(|v| v.as_str()) {
+                cron.to_string()
+            } else if let Some(interval) = obj.get("interval").and_then(|v| v.as_str()) {
+                // Convert common interval names to cron expressions
+                match interval {
+                    "hourly" => "0 0 * * * *".to_string(),
+                    "daily" => "0 0 9 * * *".to_string(),
+                    "weekly" => "0 0 9 * * 1".to_string(),
+                    "monthly" => "0 0 9 1 * *".to_string(),
+                    _ => "0 0 9 * * *".to_string(), // default to daily
+                }
+            } else {
+                "0 0 9 * * *".to_string() // default to daily at 9 AM
+            }
+        }
+        _ => "0 0 9 * * *".to_string(),
+    };
+
+    // Determine the action type (default to AgiTask when not explicitly specified)
+    let resolved_action_type = if let Some(ref at) = action_type {
+        parse_action_type(at)?
+    } else {
+        SchedulerActionType::AgiTask
+    };
+
+    // Build action data from explicit action_data or from prompt
+    let resolved_action_data = action_data.unwrap_or_else(|| {
+        if let Some(ref p) = prompt {
+            serde_json::json!({"prompt": p})
+        } else {
+            serde_json::json!({})
+        }
+    });
+
     state
         .scheduler
-        .add_job(name, schedule, action_type, action_data)
+        .add_job(name, cron_expr, resolved_action_type, resolved_action_data)
 }
 
 /// Remove a scheduled job by ID
 ///
-/// # Arguments
-/// * `job_id` - The unique identifier of the job to remove
+/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// `true` if the job was found and removed, `false` otherwise
 #[command]
 pub async fn scheduler_remove_job(
-    job_id: String,
+    job_id: Option<String>,
+    id: Option<String>,
     state: State<'_, SchedulerState>,
 ) -> Result<bool> {
-    state.scheduler.remove_job(&job_id)
+    let resolved_id = job_id
+        .or(id)
+        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
+    state.scheduler.remove_job(&resolved_id)
 }
 
 /// List all scheduled jobs
@@ -366,46 +408,56 @@ pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec
 
 /// Pause a scheduled job
 ///
-/// A paused job will not run until resumed.
-///
-/// # Arguments
-/// * `job_id` - The unique identifier of the job to pause
+/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// `true` if the job was found and paused, `false` if not found or already paused
 #[command]
-pub async fn scheduler_pause_job(job_id: String, state: State<'_, SchedulerState>) -> Result<bool> {
-    state.scheduler.pause_job(&job_id)
+pub async fn scheduler_pause_job(
+    job_id: Option<String>,
+    id: Option<String>,
+    state: State<'_, SchedulerState>,
+) -> Result<bool> {
+    let resolved_id = job_id
+        .or(id)
+        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
+    state.scheduler.pause_job(&resolved_id)
 }
 
 /// Resume a paused scheduled job
 ///
-/// # Arguments
-/// * `job_id` - The unique identifier of the job to resume
+/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// `true` if the job was found and resumed, `false` if not found or not paused
 #[command]
 pub async fn scheduler_resume_job(
-    job_id: String,
+    job_id: Option<String>,
+    id: Option<String>,
     state: State<'_, SchedulerState>,
 ) -> Result<bool> {
-    state.scheduler.resume_job(&job_id)
+    let resolved_id = job_id
+        .or(id)
+        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
+    state.scheduler.resume_job(&resolved_id)
 }
 
 /// Get a specific scheduled job by ID
 ///
-/// # Arguments
-/// * `job_id` - The unique identifier of the job
+/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// The job if found, `None` otherwise
 #[command]
 pub async fn scheduler_get_job(
-    job_id: String,
+    job_id: Option<String>,
+    id: Option<String>,
     state: State<'_, SchedulerState>,
 ) -> Result<Option<ScheduledJob>> {
-    state.scheduler.get_job(&job_id)
+    let resolved_id = job_id
+        .or(id)
+        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
+    state.scheduler.get_job(&resolved_id)
 }
 
 /// Serializable next run entry for frontend consumption

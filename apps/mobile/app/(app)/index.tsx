@@ -62,10 +62,7 @@ export default function HomeScreen() {
       <View className="flex-1" />
 
       {/* Chat input at bottom */}
-      <ChatInput
-        onSend={handleSend}
-        onOpenModelPicker={handleOpenModelPicker}
-      />
+      <ChatInput onSend={handleSend} onOpenModelPicker={handleOpenModelPicker} />
 
       {/* Model picker bottom sheet */}
       <ModelPickerSheet sheetRef={modelPickerRef} />

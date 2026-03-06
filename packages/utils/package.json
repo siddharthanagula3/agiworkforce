@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "dependencies": {
     "@agiworkforce/types": "workspace:*"
   }

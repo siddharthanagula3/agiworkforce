@@ -45,18 +45,14 @@ export function connectMessagingPlatform(
 /**
  * Disconnect (remove) a messaging platform connection.
  */
-export function disconnectMessagingPlatform(
-  platform: string,
-): Promise<{ success: boolean }> {
+export function disconnectMessagingPlatform(platform: string): Promise<{ success: boolean }> {
   return api.delete<{ success: boolean }>(`/api/messaging/config/${platform}`);
 }
 
 /**
  * Get message statistics for a specific platform.
  */
-export function getMessagingStats(
-  platform: string,
-): Promise<MessagingStatsResponse> {
+export function getMessagingStats(platform: string): Promise<MessagingStatsResponse> {
   return api.get<MessagingStatsResponse>(`/api/messaging/stats/${platform}`);
 }
 

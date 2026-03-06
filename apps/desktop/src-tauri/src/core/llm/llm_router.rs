@@ -677,6 +677,10 @@ impl LLMRouter {
         self.set_provider(Provider::Perplexity, provider);
     }
 
+    pub fn set_mistral(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Mistral, provider);
+    }
+
     pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::ManagedCloud, provider);
     }
@@ -919,7 +923,9 @@ impl LLMRouter {
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
-            routed_request.model = "gpt-5.2".to_string();
+            routed_request.model =
+                crate::core::llm::models_config::get_default_model(&candidate.provider)
+                    .to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }
@@ -2180,7 +2186,9 @@ impl LLMRouter {
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
-            routed_request.model = "gpt-5.2".to_string();
+            routed_request.model =
+                crate::core::llm::models_config::get_default_model(&candidate.provider)
+                    .to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }

@@ -17,7 +17,13 @@ interface ChatInputProps {
   onOpenVoiceMode?: () => void;
 }
 
-export function ChatInput({ onSend, isStreaming, onStop, onOpenModelPicker, onOpenVoiceMode }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  isStreaming,
+  onStop,
+  onOpenModelPicker,
+  onOpenVoiceMode,
+}: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const inputRef = useRef<TextInput>(null);

@@ -124,7 +124,13 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 
   const user = await getAuthenticatedUser(request);
   const { id } = await context.params;
-  const rawBody = await request.json();
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON in request body');
+  }
 
   // AUDIT-008-002: Validate input with Zod schema (title max 500 chars, model enum)
   const validationResult = UpdateConversationSchema.safeParse(rawBody);

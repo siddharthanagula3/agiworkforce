@@ -11,10 +11,10 @@ export function useDeepLink() {
 
     const setupListener = async () => {
       try {
-        console.log('[DeepLink] Setting up listener...');
+        console.debug('[DeepLink] Setting up listener...');
         const unlisten = await onOpenUrl((urls) => {
           if (!isMounted) return; // Guard against unmounted callbacks
-          console.log('[DeepLink] Received URLs:', urls);
+          console.debug('[DeepLink] Received URLs:', urls);
           for (const url of urls) {
             handleDeepLink(url);
           }
@@ -23,7 +23,7 @@ export function useDeepLink() {
         // Only store unlisten if we're still mounted
         if (isMounted) {
           unlistenFn = unlisten;
-          console.log('[DeepLink] Listener setup success');
+          console.debug('[DeepLink] Listener setup success');
         } else {
           // Component unmounted while setting up - cleanup immediately
           unlisten();
@@ -38,7 +38,7 @@ export function useDeepLink() {
     return () => {
       isMounted = false;
       if (unlistenFn) {
-        console.log('[DeepLink] Cleaning up listener');
+        console.debug('[DeepLink] Cleaning up listener');
         unlistenFn();
         unlistenFn = null;
       }
@@ -49,7 +49,7 @@ export function useDeepLink() {
 function handleDeepLink(url: string) {
   try {
     const parsed = new URL(url);
-    console.log('[DeepLink] Parsing URL:', parsed.href);
+    console.debug('[DeepLink] Parsing URL:', parsed.href);
 
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
@@ -78,7 +78,7 @@ function handleDeepLink(url: string) {
 
       if (error) {
         // Handle OAuth error callback
-        console.log('[DeepLink] MCP OAuth error for provider:', provider, 'error:', error);
+        console.debug('[DeepLink] MCP OAuth error for provider:', provider, 'error:', error);
         window.dispatchEvent(
           new CustomEvent('mcp-oauth-error', {
             detail: {
@@ -90,7 +90,7 @@ function handleDeepLink(url: string) {
         );
       } else if (code && state) {
         // Handle successful OAuth callback
-        console.log('[DeepLink] MCP OAuth callback for provider:', provider);
+        console.debug('[DeepLink] MCP OAuth callback for provider:', provider);
         window.dispatchEvent(
           new CustomEvent('mcp-oauth-callback', {
             detail: {
@@ -113,7 +113,7 @@ function handleDeepLink(url: string) {
     const code = allParams['code'];
 
     if (access_token || code || type || refresh_token) {
-      console.log('[DeepLink] Dispatched agi-deep-link event');
+      console.debug('[DeepLink] Dispatched agi-deep-link event');
       window.dispatchEvent(
         new CustomEvent('agi-deep-link', {
           detail: {

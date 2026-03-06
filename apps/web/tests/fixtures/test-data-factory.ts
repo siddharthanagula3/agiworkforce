@@ -75,7 +75,11 @@ export function createDebuggerEmployee() {
 
 // ===== LLM Response Factory =====
 
-export function createMockLLMResponse(content: string): { content: string; model: string; tokens: { input: number; output: number; total: number } } {
+export function createMockLLMResponse(content: string): {
+  content: string;
+  model: string;
+  tokens: { input: number; output: number; total: number };
+} {
   return {
     content,
     model: 'gpt-4o-mini',

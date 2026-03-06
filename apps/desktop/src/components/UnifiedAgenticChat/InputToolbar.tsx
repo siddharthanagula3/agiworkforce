@@ -156,7 +156,11 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
               : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
-          title={agentModeEnabled ? 'Agent mode enabled — AI executes multi-step tasks autonomously' : 'Enable agent mode'}
+          title={
+            agentModeEnabled
+              ? 'Agent mode enabled — AI executes multi-step tasks autonomously'
+              : 'Enable agent mode'
+          }
           aria-label={agentModeEnabled ? 'Disable agent mode' : 'Enable agent mode'}
         >
           <Zap size={18} aria-hidden="true" />

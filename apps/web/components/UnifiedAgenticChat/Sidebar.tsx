@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors use untyped state access */
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Archive,
@@ -852,7 +851,9 @@ export function Sidebar({
             <Search className="h-4 w-4" />
             <span>Search</span>
             <div className="ml-auto flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">{modKeySymbol}</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">
+                {modKeySymbol}
+              </kbd>
               <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
             </div>
           </button>

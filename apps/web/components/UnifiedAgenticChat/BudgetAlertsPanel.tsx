@@ -1,15 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store type bridge requires dynamic typing */
 import { useMemo } from 'react';
 import { AlertCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBillingUsageStore } from '@/stores/unified/billingUsage';
 
-const _store = useBillingUsageStore as unknown as (selector?: any) => any;
+interface BudgetAlert {
+  id: string;
+  type: 'warning' | 'danger' | 'exceeded';
+  message: string;
+  timestamp: string | number | Date;
+  dismissed?: boolean;
+}
+
+// Bridge to the billing usage store which may be a stub or real store
+const _store = useBillingUsageStore as unknown as (selector: (state: any) => any) => any;
 
 export function BudgetAlertsPanel() {
   const alerts = useMemo(() => {
-    const allAlerts = (_store((state: any) => state.budgetAlerts) ?? []) as any[];
-    return allAlerts.filter((a: any) => !a.dismissed);
+    const allAlerts = (_store((state: any) => state.budgetAlerts) ?? []) as BudgetAlert[];
+    return allAlerts.filter((a) => !a.dismissed);
   }, []);
   const dismissAlert = (_store((state: any) => state.dismissAlert) ?? ((_id: string) => {})) as (
     id: string,
@@ -20,8 +28,8 @@ export function BudgetAlertsPanel() {
   }
 
   return (
-    <div className="space-y-2 p-4">
-      {alerts.map((alert: any) => {
+    <div className="space-y-2 p-4" role="alert" aria-label="Budget alerts">
+      {alerts.map((alert: BudgetAlert) => {
         const alertConfig = {
           warning: {
             icon: AlertTriangle,
@@ -41,7 +49,7 @@ export function BudgetAlertsPanel() {
             border: 'border-destructive/50',
             text: 'text-destructive',
           },
-        }[alert.type as 'warning' | 'danger' | 'exceeded'];
+        }[alert.type];
 
         const Icon = alertConfig?.icon ?? AlertTriangle;
 
@@ -54,7 +62,7 @@ export function BudgetAlertsPanel() {
               alertConfig?.border,
             )}
           >
-            <Icon className={cn('h-5 w-5 shrink-0', alertConfig?.text)} />
+            <Icon className={cn('h-5 w-5 shrink-0', alertConfig?.text)} aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className={cn('text-sm font-medium', alertConfig?.text)}>{alert.message}</p>
               <p className="mt-1 text-xs text-muted-foreground">

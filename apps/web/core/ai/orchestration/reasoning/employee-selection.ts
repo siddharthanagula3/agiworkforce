@@ -6,6 +6,7 @@
 import { Task, AgentType } from './task-breakdown';
 import { IntentType, DomainType, ComplexityLevel } from './natural-language-processor';
 import type { SelectionAgentCapability } from '@shared/types';
+import { logger } from '@shared/lib/logger';
 
 /**
  * Extended AgentCapability for employee selection with typed domain/intent support
@@ -440,7 +441,7 @@ export class AgentSelector {
    * Get fallback agent when primary agent fails
    */
   fallbackStrategy(task: Task, failedAgent: AgentType, reason: string): AgentType {
-    console.warn(`[AgentSelector] Agent ${failedAgent} failed for task ${task.id}: ${reason}`);
+    logger.warn(`[AgentSelector] Agent ${failedAgent} failed for task ${task.id}: ${reason}`);
 
     // Get all compatible agents except the failed one
     const compatibleAgents = this.getCompatibleAgents(task).filter(

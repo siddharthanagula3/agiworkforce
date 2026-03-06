@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../../lib/tauri-mock';
 import { Check, Database, History, Link, Link2Off, Play, Plus, Table } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -679,7 +679,6 @@ function SchemaExplorer({
 
     setLoadingTables(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const dbType = activeConnection.config?.database_type;
       const sql = getListTablesQuery(dbType, DEFAULT_TABLE_LIMIT);
 
@@ -720,7 +719,6 @@ function SchemaExplorer({
     setSelectedTable(tableName);
     setLoadingSchema(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const dbType = activeConnection?.config?.database_type;
       const sql = getDescribeTableQuery(tableName, dbType);
 

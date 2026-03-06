@@ -124,7 +124,9 @@ pub struct McpToolResult {
 pub struct McpExecutor {
     /// The MCP client for communicating with MCP servers.
     client: Arc<McpClient>,
-    /// Registry for tool schema conversion (reserved for schema-based validation).
+    /// Registry for tool schema conversion.
+    /// TODO: Use registry to validate tool arguments against JSON schema before
+    /// sending to MCP servers, preventing malformed requests.
     #[allow(dead_code)]
     registry: Arc<McpToolRegistry>,
     /// Cached tool names for performance.

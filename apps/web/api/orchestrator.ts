@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
-
 // Web stub for orchestrator — provides the same API surface as the desktop version
 // but routes agent execution to the Next.js /api/agents/execute endpoint.
 

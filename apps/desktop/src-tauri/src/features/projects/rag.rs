@@ -1,5 +1,9 @@
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+
+static HTML_TAG_RE: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"<[^>]*>").expect("valid regex: HTML tag pattern"));
 
 use super::knowledge::{KnowledgeChunk, KnowledgeDocument};
 
@@ -207,7 +211,7 @@ impl RAGEngine {
             })
             .collect();
 
-        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         results
             .into_iter()
@@ -283,8 +287,7 @@ impl RAGEngine {
                 let mut xml_content = String::new();
                 std::io::Read::read_to_string(&mut document_xml, &mut xml_content)?;
 
-                let re = regex::Regex::new(r"<[^>]*>").unwrap();
-                let text = re.replace_all(&xml_content, "").to_string();
+                let text = HTML_TAG_RE.replace_all(&xml_content, "").to_string();
 
                 Ok(text)
             }
@@ -300,8 +303,7 @@ impl RAGEngine {
     }
 
     fn strip_html_tags(&self, html: &str) -> String {
-        let re = regex::Regex::new(r"<[^>]*>").unwrap();
-        re.replace_all(html, " ").to_string()
+        HTML_TAG_RE.replace_all(html, " ").to_string()
     }
 }
 

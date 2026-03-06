@@ -13,6 +13,7 @@
 
 import { AgentType } from '../orchestration/reasoning/task-breakdown';
 import { resolveToolName, type UserPermissionLevel, PERMISSION_LEVELS } from './types';
+import { logger } from '@shared/lib/logger';
 
 export type ToolCategory = 'code' | 'data' | 'automation' | 'search' | 'file' | 'system' | 'ai';
 
@@ -149,7 +150,7 @@ export class ToolManager {
    */
   registerTool(tool: Tool): void {
     if (this.tools.has(tool.id)) {
-      console.warn(`Tool ${tool.id} is already registered, updating...`);
+      logger.warn(`Tool ${tool.id} is already registered, updating...`);
     }
 
     this.tools.set(tool.id, tool);

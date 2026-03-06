@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Web Search Integration Service
  * Detects when web search is needed and performs searches automatically
@@ -123,21 +124,21 @@ export async function performWebSearch(
   const provider = options?.provider;
 
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[WebSearchIntegration] Performing search for: "${query}"`);
+    logger.info(`[WebSearchIntegration] Performing search for: "${query}"`);
   }
 
   try {
     const searchResponse = await webSearch(query, maxResults, provider);
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(
+      logger.info(
         `[WebSearchIntegration] Search completed: ${searchResponse.results.length} results found`,
       );
     }
 
     return searchResponse;
   } catch (error) {
-    console.error('[WebSearchIntegration] Search failed:', error);
+    logger.error('[WebSearchIntegration] Search failed:', error);
     throw error;
   }
 }
@@ -218,7 +219,7 @@ export async function enhanceMessageWithSearch(
       searchQuery: extractSearchQuery(message),
     };
   } catch (error) {
-    console.error('[WebSearchIntegration] Failed to enhance message with search:', error);
+    logger.error('[WebSearchIntegration] Failed to enhance message with search:', error);
     // Return original message if search fails
     return {
       content: message,

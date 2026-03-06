@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '../../lib/tauri-mock';
 import { createPortal } from 'react-dom';
 import { ActionOverlay, type ClickEffect, type TypingEffect } from './ActionOverlay';
 import { ScreenshotOverlay, type RegionEffect } from './ScreenshotOverlay';

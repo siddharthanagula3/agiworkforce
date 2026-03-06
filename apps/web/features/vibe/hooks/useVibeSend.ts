@@ -195,9 +195,7 @@ export function useVibeSend({
 
         setWorkingSteps((prev) =>
           prev.map((step) =>
-            step.id === 'execute'
-              ? { ...step, status: 'completed', timestamp: new Date() }
-              : step,
+            step.id === 'execute' ? { ...step, status: 'completed', timestamp: new Date() } : step,
           ),
         );
       } catch (error) {

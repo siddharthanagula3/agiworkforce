@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors use untyped state access */
 import { Terminal, Copy, Loader2, AlertCircle, Check } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';

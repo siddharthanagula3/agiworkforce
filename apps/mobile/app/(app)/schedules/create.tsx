@@ -13,13 +13,7 @@ export default function CreateScheduleScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
 
-  const {
-    schedules,
-    loading,
-    createSchedule,
-    updateSchedule,
-    deleteSchedule,
-  } = useScheduleStore();
+  const { schedules, loading, createSchedule, updateSchedule, deleteSchedule } = useScheduleStore();
 
   // Determine if editing
   const existingSchedule = useMemo(

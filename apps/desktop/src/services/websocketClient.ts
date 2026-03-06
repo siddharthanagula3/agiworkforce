@@ -196,7 +196,7 @@ export class WebSocketClient {
         jitterFactor: 0.25,
       });
 
-      console.log(
+      console.debug(
         `WebSocket reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`,
       );
 

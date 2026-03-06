@@ -5,6 +5,7 @@
  */
 
 import { useAgentMetricsStore, type ChatSession } from '@shared/stores/agent-metrics-store';
+import { logger } from '@shared/lib/logger';
 import {
   multiAgentOrchestrator,
   type AgentCommunication,
@@ -29,11 +30,15 @@ class BackgroundChatService {
     const metricsStore = useAgentMetricsStore.getState();
 
     if (metricsStore.isBackgroundServiceRunning) {
-      console.log('[BackgroundChatService] Already running');
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('[BackgroundChatService] Already running');
+      }
       return;
     }
 
-    console.log('[BackgroundChatService] Starting...');
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('[BackgroundChatService] Starting...');
+    }
     metricsStore.setBackgroundServiceRunning(true);
 
     // Cleanup old sessions every 5 minutes
@@ -54,7 +59,9 @@ class BackgroundChatService {
   stop() {
     const metricsStore = useAgentMetricsStore.getState();
 
-    console.log('[BackgroundChatService] Stopping...');
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('[BackgroundChatService] Stopping...');
+    }
 
     // Abort all active sessions
     this.activeSessions.forEach((sessionData) => {
@@ -92,7 +99,9 @@ class BackgroundChatService {
     this.activeSessions.set(sessionId, { session, abort });
 
     try {
-      console.log(`[BackgroundChatService] Executing task for session ${sessionId}`);
+      if (process.env.NODE_ENV === 'development') {
+        logger.info(`[BackgroundChatService] Executing task for session ${sessionId}`);
+      }
 
       // CRITICAL FIX: Wrap async operations in try-catch to prevent unhandled rejections
       // Track communications
@@ -105,7 +114,7 @@ class BackgroundChatService {
             messagesCount: (session.messagesCount || 0) + 1,
           });
         } catch (err) {
-          console.error('[BackgroundChatService] Error in handleCommunication:', err);
+          logger.error('[BackgroundChatService] Error in handleCommunication', err);
         }
       };
 
@@ -125,7 +134,7 @@ class BackgroundChatService {
             lastActivity: new Date(),
           });
         } catch (err) {
-          console.error('[BackgroundChatService] Error in handleStatusUpdate:', err);
+          logger.error('[BackgroundChatService] Error in handleStatusUpdate', err);
         }
       };
 
@@ -139,7 +148,7 @@ class BackgroundChatService {
       try {
         plan = await multiAgentOrchestrator.analyzeIntent(userRequest);
       } catch (analyzeError) {
-        console.error('[BackgroundChatService] Error analyzing intent:', analyzeError);
+        logger.error('[BackgroundChatService] Error analyzing intent', analyzeError);
         throw new Error(
           `Failed to analyze request: ${analyzeError instanceof Error ? analyzeError.message : 'Unknown error'}`,
         );
@@ -154,7 +163,7 @@ class BackgroundChatService {
       try {
         await multiAgentOrchestrator.executePlan(plan, handleCommunication, handleStatusUpdate);
       } catch (executeError) {
-        console.error('[BackgroundChatService] Error executing plan:', executeError);
+        logger.error('[BackgroundChatService] Error executing plan', executeError);
         throw new Error(
           `Failed to execute plan: ${executeError instanceof Error ? executeError.message : 'Unknown error'}`,
         );
@@ -175,9 +184,11 @@ class BackgroundChatService {
         onComplete(resultMessage);
       }
 
-      console.log(`[BackgroundChatService] Task completed for session ${sessionId}`);
+      if (process.env.NODE_ENV === 'development') {
+        logger.info(`[BackgroundChatService] Task completed for session ${sessionId}`);
+      }
     } catch (error) {
-      console.error(`[BackgroundChatService] Error in session ${sessionId}:`, error);
+      logger.error(`[BackgroundChatService] Error in session ${sessionId}:`, error);
 
       if (!abort.signal.aborted) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -199,7 +210,9 @@ class BackgroundChatService {
     const sessionData = this.activeSessions.get(sessionId);
 
     if (sessionData) {
-      console.log(`[BackgroundChatService] Aborting session ${sessionId}`);
+      if (process.env.NODE_ENV === 'development') {
+        logger.info(`[BackgroundChatService] Aborting session ${sessionId}`);
+      }
       sessionData.abort.abort();
       this.activeSessions.delete(sessionId);
 
@@ -229,7 +242,11 @@ class BackgroundChatService {
     const metricsStore = useAgentMetricsStore.getState();
     const activeSessions = metricsStore.currentSessions.filter((s) => s.isActive);
 
-    console.log(`[BackgroundChatService] Found ${activeSessions.length} active sessions to resume`);
+    if (process.env.NODE_ENV === 'development') {
+      logger.info(
+        `[BackgroundChatService] Found ${activeSessions.length} active sessions to resume`,
+      );
+    }
 
     // For now, we don't auto-resume sessions
     // In a production app, you might want to save session state and resume
@@ -263,16 +280,22 @@ class BackgroundChatService {
 
     // Second pass: cleanup identified sessions (safe to modify now)
     for (const sessionId of sessionsToClean) {
-      console.log(`[BackgroundChatService] Cleaning up inactive session ${sessionId}`);
+      if (process.env.NODE_ENV === 'development') {
+        logger.info(`[BackgroundChatService] Cleaning up inactive session ${sessionId}`);
+      }
       try {
         metricsStore.endSession(sessionId, 'failed', 'Session timeout due to inactivity');
       } catch (err) {
-        console.error(`[BackgroundChatService] Error cleaning up session ${sessionId}:`, err);
+        logger.error(`[BackgroundChatService] Error cleaning up session ${sessionId}:`, err);
       }
     }
 
     if (sessionsToClean.length > 0) {
-      console.log(`[BackgroundChatService] Cleaned up ${sessionsToClean.length} inactive sessions`);
+      if (process.env.NODE_ENV === 'development') {
+        logger.info(
+          `[BackgroundChatService] Cleaned up ${sessionsToClean.length} inactive sessions`,
+        );
+      }
     }
   }
 }

@@ -5,6 +5,7 @@
 
 import { settingsService } from '@features/settings/services/user-preferences';
 import { unifiedLLMService, type LLMProvider } from './unified-language-model';
+import { logger } from '@shared/lib/logger';
 
 /**
  * Load user AI preferences and apply them to the unified LLM service
@@ -50,7 +51,7 @@ export async function loadUserAIPreferences(): Promise<{
       maxTokens,
     };
   } catch (error) {
-    console.error('Error loading user AI preferences:', error);
+    logger.error('Error loading user AI preferences:', error);
 
     // Return defaults on error
     return {

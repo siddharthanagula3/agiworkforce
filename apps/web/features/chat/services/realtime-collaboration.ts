@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Real-time Collaboration Service
  *
@@ -150,7 +151,7 @@ export class RealtimeCollaborationService {
   async broadcastTyping(sessionId: string, userId: string, username: string): Promise<void> {
     const channel = this.channels.get(sessionId);
     if (!channel) {
-      console.warn('Cannot broadcast typing: not subscribed to session');
+      logger.warn('Cannot broadcast typing: not subscribed to session');
       return;
     }
 

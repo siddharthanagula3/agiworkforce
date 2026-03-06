@@ -541,7 +541,9 @@ describe('Authentication Store', () => {
     });
 
     it('concurrent calls do not double-init', async () => {
-      let resolveAuth: ((value: { user: AuthUser | null; error: string | null }) => void) | undefined;
+      let resolveAuth:
+        | ((value: { user: AuthUser | null; error: string | null }) => void)
+        | undefined;
       vi.mocked(mockAuthService.getCurrentUser).mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -600,9 +602,7 @@ describe('Authentication Store', () => {
     });
 
     it('handles thrown exception gracefully', async () => {
-      vi.mocked(mockAuthService.getCurrentUser).mockRejectedValue(
-        new Error('Network failure'),
-      );
+      vi.mocked(mockAuthService.getCurrentUser).mockRejectedValue(new Error('Network failure'));
 
       await useAuthStore.getState().initialize();
 

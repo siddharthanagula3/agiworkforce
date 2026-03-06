@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { logger } from '@shared/lib/logger';
 
 function isConnectionError(error: Error): boolean {
   const msg = error.message.toLowerCase();
@@ -24,7 +25,7 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Dashboard error:', error);
+    logger.error('Dashboard error:', error);
   }, [error]);
 
   const connectionError = isConnectionError(error);

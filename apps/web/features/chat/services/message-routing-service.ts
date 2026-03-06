@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Message Routing Service
  * Handles intelligent message routing, priority-based delivery, and group messaging
@@ -283,7 +284,7 @@ export class MessageRoutingService {
 
         this.recordDeliveryAttempt(route.messageId, 'success');
       } catch (error) {
-        console.error(`[MessageRouting] Failed to route to ${toId}:`, error);
+        logger.error(`[MessageRouting] Failed to route to ${toId}:`, error);
         this.recordDeliveryAttempt(
           route.messageId,
           'failed',
@@ -314,7 +315,7 @@ export class MessageRoutingService {
 
         this.recordDeliveryAttempt(route.messageId, 'success');
       } catch (error) {
-        console.error(`[MessageRouting] Failed to route to ${toId}:`, error);
+        logger.error(`[MessageRouting] Failed to route to ${toId}:`, error);
         this.recordDeliveryAttempt(
           route.messageId,
           'failed',
@@ -341,7 +342,7 @@ export class MessageRoutingService {
 
       this.recordDeliveryAttempt(route.messageId, 'success');
     } catch (error) {
-      console.error('[MessageRouting] Broadcast failed:', error);
+      logger.error('[MessageRouting] Broadcast failed:', error);
       this.recordDeliveryAttempt(
         route.messageId,
         'failed',
@@ -388,7 +389,7 @@ export class MessageRoutingService {
       // Attempt redelivery (simplified)
       this.recordDeliveryAttempt(route.messageId, 'success');
     } catch (error) {
-      console.error('[MessageRouting] Retry failed:', error);
+      logger.error('[MessageRouting] Retry failed:', error);
       this.recordDeliveryAttempt(
         route.messageId,
         'failed',

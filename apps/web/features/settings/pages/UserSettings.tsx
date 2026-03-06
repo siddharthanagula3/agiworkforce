@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- zodResolver type incompatibility with react-hook-form */
 /**
  * Settings Page - Real Functional Implementation with Supabase
  * NO MOCK DATA - All data comes from and saves to Supabase
@@ -9,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
@@ -126,7 +125,7 @@ const SettingsPageContent: React.FC = () => {
 
   // Profile Form
   const profileForm = useForm<ProfileSettingsFormData>({
-    resolver: zodResolver(profileSettingsSchema) as any,
+    resolver: zodResolver(profileSettingsSchema) as Resolver<ProfileSettingsFormData>,
     defaultValues: {
       name: '',
       phone: '',

@@ -63,4 +63,4 @@ AGI Workforce does not collect, store, or transmit your code outside of the LLM 
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+This software is proprietary. See the root [LICENSE](../../LICENSE) file for details.

@@ -51,10 +51,10 @@ export const useRealtime = (callbacks: RealtimeCallbacks = {}) => {
         if (isMounted) {
           initializedRef.current = true;
           previousUserIdRef.current = user.id;
-          console.log('Real-time subscriptions initialized for user:', user.id);
+          // Real-time subscriptions initialized
         }
       } catch (error) {
-        console.error('Failed to initialize real-time subscriptions:', error);
+        logger.error('Failed to initialize real-time subscriptions', error);
         callbacksRef.current.onError?.('Failed to initialize real-time updates');
       }
     };

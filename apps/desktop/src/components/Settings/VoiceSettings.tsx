@@ -98,18 +98,15 @@ export function VoiceSettings() {
       <div>
         <h3 className="text-lg font-semibold mb-1">Voice Dictation</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Hold a hotkey anywhere in the app to dictate text — Wispr Flow style. The transcription
-          is automatically inserted into the chat composer.
+          Hold a hotkey anywhere in the app to dictate text — Wispr Flow style. The transcription is
+          automatically inserted into the chat composer.
         </p>
 
         <div className="rounded-lg border border-border bg-card p-6 space-y-5">
           {/* Hotkey selector */}
           <div className="space-y-2">
             <Label htmlFor="voiceHotkey">Dictation Hotkey</Label>
-            <Select
-              value={hotkey}
-              onValueChange={(v) => setHotkey(v as typeof hotkey)}
-            >
+            <Select value={hotkey} onValueChange={(v) => setHotkey(v as typeof hotkey)}>
               <SelectTrigger id="voiceHotkey">
                 <SelectValue />
               </SelectTrigger>
@@ -129,10 +126,7 @@ export function VoiceSettings() {
           {/* Provider selector */}
           <div className="space-y-2">
             <Label htmlFor="voiceProvider">Transcription Provider</Label>
-            <Select
-              value={provider}
-              onValueChange={(v) => setProvider(v as typeof provider)}
-            >
+            <Select value={provider} onValueChange={(v) => setProvider(v as typeof provider)}>
               <SelectTrigger id="voiceProvider">
                 <SelectValue />
               </SelectTrigger>
@@ -209,9 +203,7 @@ export function VoiceSettings() {
                 Recording... will auto-stop after 5 seconds
               </p>
             )}
-            {testError && (
-              <p className="text-xs text-destructive">{testError}</p>
-            )}
+            {testError && <p className="text-xs text-destructive">{testError}</p>}
           </div>
         </div>
       </div>
@@ -247,9 +239,7 @@ export function VoiceSettings() {
                       isSelected ? 'border-primary' : 'border-muted-foreground',
                     ].join(' ')}
                   >
-                    {isSelected && (
-                      <span className="w-2 h-2 rounded-full bg-primary" />
-                    )}
+                    {isSelected && <span className="w-2 h-2 rounded-full bg-primary" />}
                   </span>
 
                   <Icon

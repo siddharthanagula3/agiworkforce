@@ -911,11 +911,11 @@ describe('Memory Tauri Commands', () => {
       it('sends memory_id as a number', async () => {
         vi.mocked(invoke).mockResolvedValueOnce(true);
 
-        await invoke('memory_forget', { memory_id: 42 });
+        await invoke('memory_forget', { memoryId: 42 });
 
         const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
         expect(commandName).toBe('memory_forget');
-        expect(typeof (payload as Record<string, unknown>)['memory_id']).toBe('number');
+        expect(typeof (payload as Record<string, unknown>)['memoryId']).toBe('number');
       });
     });
 
@@ -960,11 +960,11 @@ describe('Memory Tauri Commands', () => {
 
         await invoke('memory_log_context', {
           content: 'Milestone reached',
-          entry_type: 'milestone',
+          entryType: 'milestone',
         });
 
         const [, payload] = vi.mocked(invoke).mock.calls[0]!;
-        expect(typeof (payload as Record<string, unknown>)['entry_type']).toBe('string');
+        expect(typeof (payload as Record<string, unknown>)['entryType']).toBe('string');
       });
     });
 
@@ -972,11 +972,11 @@ describe('Memory Tauri Commands', () => {
       it('sends min_importance as a number', async () => {
         vi.mocked(invoke).mockResolvedValueOnce([]);
 
-        await invoke('memory_get_important', { min_importance: 7 });
+        await invoke('memory_get_important', { minImportance: 7 });
 
         const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
         expect(commandName).toBe('memory_get_important');
-        expect(typeof (payload as Record<string, unknown>)['min_importance']).toBe('number');
+        expect(typeof (payload as Record<string, unknown>)['minImportance']).toBe('number');
       });
     });
 
@@ -984,11 +984,11 @@ describe('Memory Tauri Commands', () => {
       it('sends keep_days as a number', async () => {
         vi.mocked(invoke).mockResolvedValueOnce(0);
 
-        await invoke('memory_cleanup_logs', { keep_days: 30 });
+        await invoke('memory_cleanup_logs', { keepDays: 30 });
 
         const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
         expect(commandName).toBe('memory_cleanup_logs');
-        expect(typeof (payload as Record<string, unknown>)['keep_days']).toBe('number');
+        expect(typeof (payload as Record<string, unknown>)['keepDays']).toBe('number');
       });
     });
 

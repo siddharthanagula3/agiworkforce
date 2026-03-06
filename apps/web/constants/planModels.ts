@@ -1,12 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
+import type React from 'react';
+
+// STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
-export default {} as any;
-// specific exports for tests
-export const LLM_MODELS = [];
-export const PLAN_MODELS = [];
-export const ThemeProvider = ({ children }: any) => children;
-export const useTheme = () => ({ theme: 'dark', setTheme: () => {} });
+
+export const LLM_MODELS: unknown[] = [];
+export const PLAN_MODELS: unknown[] = [];
+
 export const supabase = {} as any;
 
-// Missing named exports from planModels stub
-export type SubscriptionTier = 'free' | 'pro' | 'max' | 'enterprise';
+export type SubscriptionTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+
+export interface PlanModel {
+  id: string;
+  name: string;
+  tier: SubscriptionTier;
+}
+
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) =>
+  children as React.ReactElement;
+export const useTheme = () => ({ theme: 'dark' as string, setTheme: (_t: string) => {} });
+export const useThemeContext = () => ({ theme: 'dark' as string, setTheme: (_t: string) => {} });

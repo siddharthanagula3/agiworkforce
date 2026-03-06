@@ -370,15 +370,12 @@ describe('M13: Batch sync user_id validation', () => {
   it('returns 403 when user_id is an empty string and userId is non-empty', async () => {
     const app = createBatchTestApp(AUTHED_USER_ID);
 
-    const res = await request(app)
-      .post('/batch')
-      .set('Content-Type', 'application/json')
-      .send({
-        items: [],
-        device_id: 'test-device-001',
-        user_id: '', // empty — will not match AUTHED_USER_ID
-        timestamp: new Date().toISOString(),
-      });
+    const res = await request(app).post('/batch').set('Content-Type', 'application/json').send({
+      items: [],
+      device_id: 'test-device-001',
+      user_id: '', // empty — will not match AUTHED_USER_ID
+      timestamp: new Date().toISOString(),
+    });
 
     // Zod accepts empty string (max 100); the mismatch check fires and returns 403
     expect(res.status).toBe(403);

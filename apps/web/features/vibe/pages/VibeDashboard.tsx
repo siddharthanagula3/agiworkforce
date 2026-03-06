@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- supabase client type bridge */
 /**
  * VibeDashboard - Redesigned AI Development Agent Interface
  * Inspired by: Lovable.dev, Bolt.new, Replit.com, Emergent.sh
@@ -268,8 +267,7 @@ const VibeDashboard: React.FC = () => {
 
     try {
       // vibe_sessions not in generated Supabase types — use untyped client
-
-      const untypedSupabase = supabase as any;
+      const untypedSupabase = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
       const { data, error } = await untypedSupabase
         .from('vibe_sessions')

@@ -1,4 +1,5 @@
 import * as Sentry from '@shared/lib/sentry';
+import { logger } from '@shared/lib/logger';
 
 // Performance monitoring interface
 interface PerformanceMetrics {
@@ -34,9 +35,9 @@ class MonitoringService {
       this.setupErrorBoundary();
 
       this.isInitialized = true;
-      console.log('Monitoring service initialized');
+      logger.info('[MonitoringService] Initialized');
     } catch (error) {
-      console.error('Failed to initialize monitoring service:', error);
+      logger.error('[MonitoringService] Failed to initialize:', error);
     }
   }
 
@@ -159,7 +160,7 @@ class MonitoringService {
         clsObserver.observe({ entryTypes: ['layout-shift'] });
         this.performanceObservers.push(clsObserver);
       } catch (error) {
-        console.warn('Performance monitoring setup failed:', error);
+        logger.warn('[MonitoringService] Performance monitoring setup failed:', error);
       }
     }
 
@@ -244,7 +245,7 @@ class MonitoringService {
       try {
         observer.disconnect();
       } catch (error) {
-        console.warn('Failed to disconnect PerformanceObserver:', error);
+        logger.warn('[MonitoringService] Failed to disconnect PerformanceObserver:', error);
       }
     });
     this.performanceObservers = [];
@@ -254,7 +255,7 @@ class MonitoringService {
       try {
         fn();
       } catch (error) {
-        console.warn('Failed to run cleanup function:', error);
+        logger.warn('[MonitoringService] Failed to run cleanup function:', error);
       }
     });
     this.cleanupFns = [];
@@ -262,7 +263,7 @@ class MonitoringService {
     // Reset initialization state
     this.isInitialized = false;
 
-    console.log('MonitoringService destroyed and resources cleaned up');
+    logger.info('[MonitoringService] Destroyed and resources cleaned up');
   }
 }
 

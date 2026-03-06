@@ -23,7 +23,8 @@ pub struct ModelCapabilities {
 #[derive(Deserialize)]
 struct OllamaShowResponse {
     template: Option<String>,
-    /// Ollama model file content (populated by serde, reserved for template analysis)
+    /// Ollama model file content
+    // Used by: serde deserialization from Ollama /api/show response
     #[allow(dead_code)]
     modelfile: Option<String>,
     details: Option<OllamaModelDetails>,
@@ -33,7 +34,8 @@ struct OllamaShowResponse {
 #[derive(Deserialize)]
 struct OllamaModelDetails {
     family: Option<String>,
-    /// Model parameter size (populated by serde, reserved for size-based routing)
+    /// Model parameter size
+    // Used by: serde deserialization from Ollama /api/show response
     #[allow(dead_code)]
     parameter_size: Option<String>,
 }

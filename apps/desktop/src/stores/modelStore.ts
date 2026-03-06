@@ -903,7 +903,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
         // In Simple Mode: Always use the BEST auto mode for the tier
         const bestAutoMode = getBestAutoModeForTier(normalizedTier);
         if (selectedModel !== bestAutoMode) {
-          console.log(
+          console.debug(
             `[ModelStore] Simple Mode: Setting ${normalizedTier} tier to best auto mode: ${bestAutoMode}`,
           );
           void selectModel(bestAutoMode, 'managed_cloud');
@@ -911,7 +911,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
       } else {
         // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
         if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
-          console.log(
+          console.debug(
             `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
           );
           void selectModel('auto-economy', 'managed_cloud');
@@ -921,7 +921,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
           !isOllamaSelection &&
           !isModelAllowedForTier(selectedModel, normalizedTier)
         ) {
-          console.log(
+          console.debug(
             `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
           );
           void selectModel('auto-economy', 'managed_cloud');
@@ -955,7 +955,7 @@ if (typeof window !== 'undefined') {
         (state) => state.plan,
         (plan) => {
           if (plan) {
-            console.log(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
+            console.debug(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
             enforceModelTierRestriction(plan);
           }
         },

@@ -89,7 +89,9 @@ class SupportService {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const { data, error } = await (supabase.from('support_tickets') as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('support_tickets') as ReturnType<typeof supabase.from>
+      )
         .insert({
           user_id: user?.id,
           name: ticket.name,
@@ -229,7 +231,9 @@ class SupportService {
         return { data: null, error: 'User not authenticated' };
       }
 
-      const { data, error } = await (supabase.from('support_ticket_replies') as ReturnType<typeof supabase.from>)
+      const { data, error } = await (
+        supabase.from('support_ticket_replies') as ReturnType<typeof supabase.from>
+      )
         .insert({
           ticket_id: ticketId,
           user_id: user.id,
@@ -374,7 +378,9 @@ class SupportService {
       }
 
       const result = await response.json();
-      console.log('[Support Service] Email notification sent:', result.messageId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Support Service] Email notification sent:', result.messageId);
+      }
 
       return {
         success: true,

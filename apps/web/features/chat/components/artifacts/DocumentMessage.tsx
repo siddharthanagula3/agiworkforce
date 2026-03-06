@@ -11,13 +11,7 @@ import { ScrollArea } from '@shared/ui/scroll-area';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
-import {
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Maximize2,
-  Minimize2,
-} from 'lucide-react';
+import { FileText, ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { EnhancedMarkdownRenderer } from '../messages/EnhancedMarkdownRenderer';
 import { DocumentActions } from './DocumentActions';
@@ -25,9 +19,7 @@ import type { GeneratedDocument } from '../../services/document-generation-servi
 
 interface DocumentMessageProps {
   document: GeneratedDocument;
-  onEnhance?: (
-    enhancement: 'proofread' | 'expand' | 'summarize' | 'restructure'
-  ) => void;
+  onEnhance?: (enhancement: 'proofread' | 'expand' | 'summarize' | 'restructure') => void;
   isEnhancing?: boolean;
   className?: string;
 }
@@ -59,9 +51,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div className="flex flex-col gap-1">
-                <CardTitle className="text-xl font-bold">
-                  {document.title}
-                </CardTitle>
+                <CardTitle className="text-xl font-bold">{document.title}</CardTitle>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="outline" className="text-xs">
                     {document.metadata.type}
@@ -78,9 +68,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
                   {document.metadata.model && (
                     <>
                       <span>•</span>
-                      <span className="font-mono">
-                        {document.metadata.model}
-                      </span>
+                      <span className="font-mono">{document.metadata.model}</span>
                     </>
                   )}
                 </div>
@@ -94,11 +82,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
               onClick={() => setIsFullscreen(!isFullscreen)}
               className="h-8 w-8 p-0"
             >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
           </div>
 
@@ -117,10 +101,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
         <CardContent className="p-0">
           {/* Document Preview */}
           <ScrollArea
-            className={cn(
-              'w-full transition-all',
-              isFullscreen && 'h-[calc(100vh-300px)]'
-            )}
+            className={cn('w-full transition-all', isFullscreen && 'h-[calc(100vh-300px)]')}
             style={{
               maxHeight: isFullscreen ? undefined : maxPreviewHeight,
             }}
@@ -130,9 +111,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
                 <div className="flex min-h-[200px] items-center justify-center">
                   <div className="text-center">
                     <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                    <p className="text-sm text-muted-foreground">
-                      Enhancing document...
-                    </p>
+                    <p className="text-sm text-muted-foreground">Enhancing document...</p>
                   </div>
                 </div>
               ) : (

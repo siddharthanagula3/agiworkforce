@@ -571,15 +571,29 @@ impl SearchAgent for EmailSearchAgent {
                 agent_type: AgentType::EmailSearch,
                 results: Vec::new(),
                 search_time_ms: start.elapsed().as_millis() as u64,
-                warnings: vec!["Email not connected".into()],
+                warnings: vec![
+                    "Email search is not configured. Connect a Gmail or IMAP account \
+                     in Settings > Integrations to enable email search."
+                        .into(),
+                ],
                 complete: true,
                 error: None,
             });
         }
 
-        // In production, this would search via Gmail API, IMAP, etc.
-        // For now, return empty results as placeholder
-        Ok(SearchAgentResult::empty(AgentType::EmailSearch))
+        // Connected but not yet implemented — return empty with guidance
+        Ok(SearchAgentResult {
+            agent_type: AgentType::EmailSearch,
+            results: Vec::new(),
+            search_time_ms: start.elapsed().as_millis() as u64,
+            warnings: vec![
+                "Email search integration is pending. Gmail API and IMAP \
+                 connectors are on the roadmap."
+                    .into(),
+            ],
+            complete: true,
+            error: None,
+        })
     }
 }
 
@@ -639,14 +653,29 @@ impl SearchAgent for CalendarSearchAgent {
                 agent_type: AgentType::CalendarSearch,
                 results: Vec::new(),
                 search_time_ms: start.elapsed().as_millis() as u64,
-                warnings: vec!["Calendar not connected".into()],
+                warnings: vec![
+                    "Calendar search is not configured. Connect Google Calendar or \
+                     Outlook Calendar in Settings > Integrations to enable calendar search."
+                        .into(),
+                ],
                 complete: true,
                 error: None,
             });
         }
 
-        // In production, this would search via Google Calendar API, etc.
-        Ok(SearchAgentResult::empty(AgentType::CalendarSearch))
+        // Connected but not yet implemented — return empty with guidance
+        Ok(SearchAgentResult {
+            agent_type: AgentType::CalendarSearch,
+            results: Vec::new(),
+            search_time_ms: start.elapsed().as_millis() as u64,
+            warnings: vec![
+                "Calendar search integration is pending. Google Calendar and \
+                 Outlook connectors are on the roadmap."
+                    .into(),
+            ],
+            complete: true,
+            error: None,
+        })
     }
 }
 
@@ -702,29 +731,35 @@ impl SearchAgent for MemorySearchAgent {
         let start = std::time::Instant::now();
 
         if !self.available {
-            return Ok(SearchAgentResult::failed(
-                AgentType::MemorySearch,
-                "Memory not available",
-            ));
+            return Ok(SearchAgentResult {
+                agent_type: AgentType::MemorySearch,
+                results: Vec::new(),
+                search_time_ms: start.elapsed().as_millis() as u64,
+                warnings: vec!["Memory store is not available".to_string()],
+                complete: true,
+                error: None,
+            });
         }
 
-        // Memory search backend is not yet wired up.
+        // Memory search backend is not yet wired to a persistent store.
+        // Return empty results with a warning instead of an error so callers
+        // can degrade gracefully.
         tracing::warn!(
-            "MemorySearchAgent invoked but memory search backend is not implemented; \
-             returning empty results. strategy={:?} max_results={}",
-            strategy,
+            "MemorySearchAgent: memory search backend not yet wired; \
+             returning empty results. terms={:?} max_results={}",
+            strategy.search_terms,
             max_results
         );
-        let _ = strategy;
-        let _ = max_results;
 
         Ok(SearchAgentResult {
             agent_type: AgentType::MemorySearch,
             results: Vec::new(),
             search_time_ms: start.elapsed().as_millis() as u64,
-            warnings: vec!["Memory search backend is not yet available.".to_string()],
-            complete: false,
-            error: Some("MemorySearchAgent: backend not implemented".to_string()),
+            warnings: vec![
+                "Memory search backend is not yet wired. Results will be available once the memory store integration is complete.".to_string(),
+            ],
+            complete: true,
+            error: None,
         })
     }
 }
