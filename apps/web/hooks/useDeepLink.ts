@@ -89,8 +89,9 @@ function handleDeepLink(url: string) {
     const rawParams = { ...queryParams, ...hashParams };
     const allParams: Record<string, string> = {};
     for (const key of Object.keys(rawParams)) {
-      if (ALLOWED_DEEP_LINK_PARAMS.has(key)) {
-        allParams[key] = rawParams[key];
+      const value = rawParams[key];
+      if (ALLOWED_DEEP_LINK_PARAMS.has(key) && value !== undefined) {
+        allParams[key] = value;
       }
     }
 
