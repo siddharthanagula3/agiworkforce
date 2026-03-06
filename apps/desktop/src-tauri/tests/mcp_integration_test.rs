@@ -234,7 +234,7 @@ mod mcp_integration_tests {
 
         let agi_tool = registry.mcp_tool_to_schema("test_server", &mcp_tool);
 
-        assert_eq!(agi_tool.id, "mcp__test_server__test_tool");
+        assert_eq!(agi_tool.id, "mcp__b64_dGVzdF9zZXJ2ZXI__b64_dGVzdF90b29s");
         assert_eq!(agi_tool.name, "test_tool");
         assert!(!agi_tool.parameters.is_empty());
         assert_eq!(agi_tool.parameters[0].name, "input");
