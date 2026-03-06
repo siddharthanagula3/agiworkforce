@@ -337,7 +337,7 @@ function PricingContent() {
                 <div className="relative">
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     {!isSubscribed && billingInterval === 'annual' && (
-                      <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide animate-pulse">
+                      <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
                         Special Offer for First Time Users
                       </div>
                     )}
@@ -420,7 +420,7 @@ function PricingContent() {
 
               {/* Pro Plan */}
               <div className="rounded-2xl border border-blue-500 bg-blue-950/10 p-6 flex flex-col relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 pointer-events-none" />
+                <div className="absolute inset-0 bg-blue-600/3 pointer-events-none" />
                 <div className="relative">
                   <div className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-200 mb-3">
                     <Zap className="h-3 w-3 mr-2" />
@@ -498,7 +498,7 @@ function PricingContent() {
 
               {/* Max Plan */}
               <div className="rounded-2xl border border-purple-500 bg-purple-950/10 p-6 flex flex-col relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-pink-600/5 pointer-events-none" />
+                <div className="absolute inset-0 bg-zinc-800/30 pointer-events-none" />
                 <div className="relative">
                   <div className="inline-flex items-center rounded-full bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-200 mb-3">
                     <Sparkles className="h-3 w-3 mr-2" />
