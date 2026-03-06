@@ -776,6 +776,9 @@ importers:
       react-day-picker:
         specifier: ^9.14.0
         version: 9.14.0(react@19.2.4)
+      react-diff-viewer-continued:
+        specifier: ^3.4.0
+        version: 3.4.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-dom:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
