@@ -31,7 +31,7 @@ impl InspectorService {
             read_bstr(|| unsafe { element.CurrentClassName().ok() }).unwrap_or_default();
 
         let control_type = unsafe {
-            elemen
+            element
                 .CurrentControlType()
                 .map(|id| format!("ControlType_{:?}", id))
                 .unwrap_or_else(|_| "Unknown".to_string())
@@ -41,19 +41,19 @@ impl InspectorService {
         let bounding_rect = self.native.bounding_rect(&id).ok().flatten();
 
         let is_enabled = unsafe {
-            elemen
+            element
                 .CurrentIsEnabled()
                 .map(|b| b.as_bool())
                 .unwrap_or(false)
         };
         let is_offscreen = unsafe {
-            elemen
+            element
                 .CurrentIsOffscreen()
                 .map(|b| b.as_bool())
                 .unwrap_or(false)
         };
         let has_keyboard_focus = unsafe {
-            elemen
+            element
                 .CurrentHasKeyboardFocus()
                 .map(|b| b.as_bool())
                 .unwrap_or(false)
@@ -111,7 +111,7 @@ impl InspectorService {
             .map_err(|err| anyhow!("CreateTrueCondition failed: {err:?}"))?;
 
         let children_array = unsafe {
-            elemen
+            element
                 .FindAll(TreeScope_Children, &condition)
                 .map_err(|err| anyhow!("FindAll children failed: {err:?}"))?
         };
@@ -137,7 +137,7 @@ impl InspectorService {
         let class_name =
             read_bstr(|| unsafe { element.CurrentClassName().ok() }).unwrap_or_default();
         let control_type = unsafe {
-            elemen
+            element
                 .CurrentControlType()
                 .map(|id| format!("ControlType_{:?}", id))
                 .unwrap_or_else(|_| "Unknown".to_string())

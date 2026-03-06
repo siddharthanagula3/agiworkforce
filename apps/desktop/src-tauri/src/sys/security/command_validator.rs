@@ -145,6 +145,27 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "insmod",
         "rmmod",
         "modprobe -r",
+        // Windows-specific system destruction equivalents
+        "rd /s /q c:\\",
+        "rd /s /q c:/",
+        "rmdir /s /q c:\\",
+        "rmdir /s /q c:/",
+        "del /f /s /q c:\\",
+        "format c:",
+        "format c:/",
+        // Windows registry destruction
+        "reg delete hklm",
+        "reg delete hkcu",
+        "reg delete hkcr",
+        // Windows system file tampering
+        "> c:\\windows\\system32",
+        "del c:\\windows\\system32",
+        // Windows reverse shell patterns
+        "powershell -enc",
+        "powershell -encodedcommand",
+        "cmd /c powershell -",
+        // Windows scheduled task abuse
+        "schtasks /delete",
     ]
 });
 

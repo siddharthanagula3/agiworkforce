@@ -2654,9 +2654,24 @@ impl ToolExecutor {
                 vec!["bash".to_string(), "-lc".to_string(), command.clone()],
             ),
             "gitbash" => {
-                if cfg!(target_os = "windows") {
-                    ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
-                } else {
+                // On Windows, resolve the full Git Bash path so the process does not depend
+                // on bash.exe being on %PATH% (which is not guaranteed for Git Bash installs).
+                // On non-Windows, Git Bash doesn't exist; fall back to plain bash.
+                #[cfg(target_os = "windows")]
+                {
+                    let git_bash_paths = [
+                        "C:\\Program Files\\Git\\bin\\bash.exe",
+                        "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                    ];
+                    let program = git_bash_paths
+                        .iter()
+                        .find(|p| std::path::Path::new(p).exists())
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "bash".to_string());
+                    (program, vec!["-lc".to_string(), command.clone()])
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
                     // Git Bash is Windows-specific; fall back to bash on non-Windows
                     ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
                 }
@@ -2729,7 +2744,23 @@ impl ToolExecutor {
                         vec!["bash".to_string(), "-lc".to_string(), command.clone()],
                     ),
                     ShellType::GitBash => {
-                        ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                        #[cfg(target_os = "windows")]
+                        {
+                            let git_bash_paths = [
+                                "C:\\Program Files\\Git\\bin\\bash.exe",
+                                "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                            ];
+                            let program = git_bash_paths
+                                .iter()
+                                .find(|p| std::path::Path::new(p).exists())
+                                .map(|p| p.to_string())
+                                .unwrap_or_else(|| "bash".to_string());
+                            (program, vec!["-lc".to_string(), command.clone()])
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                        }
                     }
                 }
             }
@@ -4089,7 +4120,18 @@ impl ToolExecutor {
 
             let shell_type = match language.to_lowercase().as_str() {
                 "powershell" | "ps1" => ShellType::PowerShell,
-                "bash" | "sh" | "shell" => ShellType::Wsl,
+                // On Windows, WSL may not be installed; fall back to the system default shell
+                // (PowerShell or Cmd) so bash/sh code snippets still execute rather than fail.
+                // On non-Windows the system default shell will be bash/zsh/sh as expected.
+                "bash" | "sh" | "shell" => {
+                    #[cfg(target_os = "windows")]
+                    {
+                        use crate::features::terminal::get_default_shell;
+                        get_default_shell()
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    ShellType::Wsl
+                }
                 "cmd" | "batch" => ShellType::Cmd,
                 _ => ShellType::PowerShell,
             };

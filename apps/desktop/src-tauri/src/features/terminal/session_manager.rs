@@ -208,8 +208,13 @@ impl SessionManager {
 
         let mut session = session_arc.lock().await;
 
-        // Use 'env' command to list all environment variables
-        let output = session.execute_command("env")?;
+        // Use the appropriate command to list all environment variables per shell
+        let env_cmd = match session.shell_type {
+            ShellType::PowerShell => "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }",
+            ShellType::Cmd => "set",
+            _ => "env",
+        };
+        let output = session.execute_command(env_cmd)?;
 
         let mut env_vars = Vec::new();
         for line in output.lines() {
