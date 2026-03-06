@@ -103,6 +103,7 @@ export class ChatPersistenceService {
    */
   // Updated: Jan 15th 2026 - Use bound handlers for proper cleanup
   private setupEventListeners(): void {
+    if (typeof window === 'undefined') return;
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
     window.addEventListener('beforeunload', this.handleBeforeUnload);
@@ -428,6 +429,7 @@ export class ChatPersistenceService {
    * Save to local storage
    */
   private saveToLocalStorage(): void {
+    if (typeof window === 'undefined') return;
     try {
       const data = {
         sessions: this.state.sessions,
@@ -446,6 +448,7 @@ export class ChatPersistenceService {
    * Load from local storage
    */
   private loadFromLocalStorage(): void {
+    if (typeof window === 'undefined') return;
     try {
       const data = localStorage.getItem('chat-persistence-state');
       if (data) {
@@ -471,7 +474,9 @@ export class ChatPersistenceService {
     this.state.activeSessionId = undefined;
     this.state.lastSync = new Date();
 
-    localStorage.removeItem('chat-persistence-state');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('chat-persistence-state');
+    }
   }
 
   /**

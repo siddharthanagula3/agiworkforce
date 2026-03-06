@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '@/lib/tauri-mock';
 
 export function useDeepLink() {
@@ -12,6 +11,7 @@ export function useDeepLink() {
     const setupListener = async () => {
       try {
         console.log('[DeepLink] Setting up listener...');
+        const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
         const unlisten = await onOpenUrl((urls) => {
           if (!isMounted) return; // Guard against unmounted callbacks
           console.log('[DeepLink] Received URLs:', urls);
