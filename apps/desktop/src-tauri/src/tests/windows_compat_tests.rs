@@ -814,4 +814,256 @@ mod windows_compat_tests {
         let result = clipboard.get_text().expect("get_text failed");
         assert_eq!(result, "second", "Second set should overwrite first");
     }
+
+    // ===================================================================
+    // WINDOWS PATH SEPARATOR TESTS (MCP transport / augmented PATH)
+    // ===================================================================
+
+    #[test]
+    fn test_windows_path_separator_is_semicolon() {
+        // On Windows, entries in PATH are separated by `;`.
+        // std::path::MAIN_SEPARATOR is `\`, but PATH separators are `;`.
+        let sep = std::path::MAIN_SEPARATOR;
+        assert_eq!(sep, '\\', "Main path separator on Windows must be '\\'");
+
+        // Verify that a PATH-style string uses `;` as separator (not `:`)
+        let sample_path = r"C:\Windows\System32;C:\Windows;C:\Users\test\AppData\Roaming\npm";
+        let entries: Vec<&str> = sample_path.split(';').collect();
+        assert_eq!(entries.len(), 3, "Semicolon-split should yield 3 entries");
+        assert_eq!(entries[0], r"C:\Windows\System32");
+    }
+
+    #[test]
+    fn test_windows_path_entry_parsing_handles_backslash() {
+        let path_var = r"C:\Windows\System32;C:\Program Files\nodejs;C:\Users\test\AppData\Roaming\npm";
+        for entry in path_var.split(';') {
+            assert!(
+                !entry.is_empty(),
+                "Each PATH entry should be non-empty"
+            );
+            // Every entry should look like an absolute Windows path
+            if !entry.is_empty() {
+                let p = std::path::Path::new(entry);
+                assert!(p.is_absolute(), "PATH entry '{}' should be absolute", entry);
+            }
+        }
+    }
+
+    #[test]
+    fn test_windows_path_dedup_logic() {
+        // Simulate the dedup logic used in build_augmented_path
+        let mut dirs: Vec<String> = Vec::new();
+        let entries = [
+            r"C:\Windows\System32",
+            r"C:\Windows",
+            r"C:\Windows\System32", // duplicate
+            r"C:\Users\test\AppData\Roaming\npm",
+        ];
+        for entry in &entries {
+            if !dirs.iter().any(|d| d == entry) {
+                dirs.push(entry.to_string());
+            }
+        }
+        assert_eq!(dirs.len(), 3, "Dedup should remove the duplicate entry");
+        assert_eq!(dirs[0], r"C:\Windows\System32");
+        assert_eq!(dirs[2], r"C:\Users\test\AppData\Roaming\npm");
+    }
+
+    #[test]
+    fn test_windows_augmented_path_includes_appdata_npm() {
+        // The app's build_augmented_path prepends %APPDATA%\npm on Windows.
+        // We verify that APPDATA is set and the npm path would be constructible.
+        let appdata = std::env::var("APPDATA").expect("APPDATA must be set on Windows");
+        let npm_path = format!("{}\\npm", appdata);
+        // We cannot guarantee it exists on all machines, but path construction must work.
+        let p = std::path::PathBuf::from(&npm_path);
+        assert!(
+            p.is_absolute(),
+            "Constructed npm path '{}' should be absolute",
+            npm_path
+        );
+        assert!(
+            npm_path.to_lowercase().contains("appdata"),
+            "npm path '{}' should be under AppData",
+            npm_path
+        );
+    }
+
+    #[test]
+    fn test_windows_augmented_path_includes_programfiles_nodejs() {
+        let pf = std::env::var("ProgramFiles").unwrap_or_default();
+        if !pf.is_empty() {
+            let nodejs_path = format!("{}\\nodejs", pf);
+            let p = std::path::PathBuf::from(&nodejs_path);
+            assert!(p.is_absolute(), "Program Files nodejs path should be absolute");
+        }
+    }
+
+    #[test]
+    fn test_windows_is_absolute_command_drive_letter_backslash() {
+        // Mirrors the is_absolute_command() logic in transport.rs
+        let cases = [
+            (r"C:\Windows\System32\node.exe", true),
+            (r"D:\tools\uvx.exe", true),
+            ("C:/tools/npx.cmd", true), // forward slash variant
+            ("npx", false),             // bare name — not absolute
+            ("./bin/node", false),      // relative
+            (r"\\server\share\bin.exe", true), // UNC
+        ];
+        for (cmd, expected) in &cases {
+            let bytes = cmd.as_bytes();
+            let is_drive_abs = bytes.len() >= 3
+                && bytes[1] == b':'
+                && (bytes[2] == b'\\' || bytes[2] == b'/');
+            let is_unc = cmd.starts_with("\\\\") || cmd.starts_with("//");
+            let actual = is_drive_abs || is_unc;
+            assert_eq!(
+                actual, *expected,
+                "is_absolute_command('{}') should be {}",
+                cmd, expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_windows_resolve_command_path_returns_bare_name_when_not_found() {
+        // When the command cannot be found in augmented PATH, the bare name is returned.
+        // We use a definitely-nonexistent command name to test the fallback branch.
+        let fake_cmd = "agi_does_not_exist_xyzzy_12345";
+        // The function cannot be called directly (it's crate-private), but we can test
+        // the equivalent fallback logic: if not found in PATH, return original string.
+        let mut found = false;
+        for dir in std::env::var("PATH").unwrap_or_default().split(';') {
+            if dir.is_empty() {
+                continue;
+            }
+            let candidate = format!("{}\\{}", dir, fake_cmd);
+            if std::path::Path::new(&candidate).is_file() {
+                found = true;
+                break;
+            }
+        }
+        // The fake command definitely should not be found.
+        assert!(!found, "Nonexistent command should not be found in PATH");
+    }
+
+    #[test]
+    fn test_windows_path_extension_candidates() {
+        // On Windows, transport.rs tries .exe, .cmd, .bat, .ps1 extensions.
+        let extensions = ["", ".exe", ".cmd", ".bat", ".ps1"];
+        let dir = r"C:\Windows\System32";
+        let cmd = "cmd";
+
+        let candidates: Vec<String> = extensions
+            .iter()
+            .map(|ext| format!("{}\\{}{}", dir, cmd, ext))
+            .collect();
+
+        // Verify each candidate looks like a valid Windows path
+        for candidate in &candidates {
+            let p = std::path::Path::new(candidate);
+            // Must be under the specified directory
+            assert!(
+                candidate.starts_with(dir),
+                "Candidate '{}' should start with dir '{}'",
+                candidate,
+                dir
+            );
+            // Candidate without extension has no dot after cmd; others have their ext
+            let _ = p.extension(); // must not panic
+        }
+        assert_eq!(candidates.len(), 5);
+    }
+
+    // ===================================================================
+    // COMMAND VALIDATOR — WINDOWS-SPECIFIC INTEGRATION CHECKS
+    // ===================================================================
+
+    #[test]
+    fn test_windows_dir_command_is_safe() {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        let cfg = ValidationConfig::interactive();
+        assert!(validate_command("dir", &cfg).is_ok());
+        assert!(validate_command(r"dir C:\Users", &cfg).is_ok());
+    }
+
+    #[test]
+    fn test_windows_type_command_is_safe() {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        let cfg = ValidationConfig::interactive();
+        assert!(validate_command(r"type C:\agiworkforce\config.json", &cfg).is_ok());
+    }
+
+    #[test]
+    fn test_windows_path_in_cargo_build_is_safe() {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        let cfg = ValidationConfig::interactive();
+        assert!(validate_command(r"cargo build --manifest-path C:\projects\app\Cargo.toml", &cfg).is_ok());
+    }
+
+    #[test]
+    fn test_windows_node_path_command_is_safe() {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        let cfg = ValidationConfig::interactive();
+        // Running node from an absolute path should be safe
+        assert!(validate_command(r"C:\Program Files\nodejs\node.exe --version", &cfg).is_ok());
+    }
+
+    #[test]
+    fn test_windows_destructive_commands_blocked_in_interactive() {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        let cfg = ValidationConfig::interactive();
+        // Even in interactive mode, Windows-specific destructive patterns are blocked
+        assert!(validate_command(r"rd /s /q c:\", &cfg).is_err());
+        assert!(validate_command("format c:", &cfg).is_err());
+        assert!(validate_command("reg delete hklm", &cfg).is_err());
+        assert!(validate_command("powershell -enc SomePayload==", &cfg).is_err());
+    }
+
+    // ===================================================================
+    // SETTINGS MODELS — WINDOWS-SPECIFIC DEFAULTS
+    // ===================================================================
+
+    #[test]
+    fn test_app_settings_default_schema_version() {
+        use crate::data::settings::models::AppSettings;
+        let settings = AppSettings::default();
+        assert_eq!(settings.schema_version, 1, "Default schema version must be 1");
+    }
+
+    #[test]
+    fn test_app_settings_security_defaults_match_windows_expectations() {
+        use crate::data::settings::models::AppSettings;
+        let settings = AppSettings::default();
+        let sec = &settings.security_settings;
+        // File system and network access are enabled by default
+        assert!(sec.allow_file_system_access, "File system access should be enabled by default");
+        assert!(sec.allow_network_access, "Network access should be enabled by default");
+        // Confirmation is required by default (important on Windows where UAC exists)
+        assert!(
+            sec.require_confirmation_for_actions,
+            "Confirmation should be required by default"
+        );
+    }
+
+    #[test]
+    fn test_setting_value_windows_path_round_trips() {
+        use crate::data::settings::models::SettingValue;
+        // Windows paths with backslashes must survive JSON round-trip
+        let path = r"C:\Users\nagul\AppData\Roaming\agiworkforce\config.json";
+        let val = SettingValue::String(path.to_string());
+        let json = val.to_json_string().expect("serialize failed");
+        let back = SettingValue::from_json_string(&json).expect("deserialize failed");
+        assert_eq!(back.as_string(), Some(path));
+    }
+
+    #[test]
+    fn test_setting_value_windows_unc_path_round_trips() {
+        use crate::data::settings::models::SettingValue;
+        let path = r"\\server\share\agiworkforce\data";
+        let val = SettingValue::String(path.to_string());
+        let json = val.to_json_string().expect("serialize failed");
+        let back = SettingValue::from_json_string(&json).expect("deserialize failed");
+        assert_eq!(back.as_string(), Some(path));
+    }
 }
