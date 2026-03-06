@@ -76,7 +76,7 @@ impl UIAutomationService {
                 return Err(anyhow!(
                     "Element {} not visible after {} attempts",
                     element_id,
-                    attemp
+                    attempt
                 ));
             }
 
@@ -108,7 +108,7 @@ impl UIAutomationService {
                 return Err(anyhow!(
                     "Element {} not enabled after {} attempts",
                     element_id,
-                    attemp
+                    attempt
                 ));
             }
 
