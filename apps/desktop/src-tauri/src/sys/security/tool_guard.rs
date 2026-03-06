@@ -1006,6 +1006,7 @@ impl ToolExecutionGuard {
             allowed_tools: std::sync::RwLock::new(allowed_tools),
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
             allowed_paths: std::sync::RwLock::new({
+                #[allow(unused_mut)]
                 let mut paths = vec![std::env::temp_dir()];
                 // On Unix, /tmp may differ from std::env::temp_dir() (e.g. /var/folders on
                 // macOS), so include it explicitly. Skip on Windows where /tmp does not exist.
