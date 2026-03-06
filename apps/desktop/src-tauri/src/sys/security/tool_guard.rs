@@ -1005,10 +1005,14 @@ impl ToolExecutionGuard {
         Self {
             allowed_tools: std::sync::RwLock::new(allowed_tools),
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
-            allowed_paths: std::sync::RwLock::new(vec![
-                PathBuf::from("/tmp"),
-                std::env::temp_dir(),
-            ]),
+            allowed_paths: std::sync::RwLock::new({
+                let mut paths = vec![std::env::temp_dir()];
+                // On Unix, /tmp may differ from std::env::temp_dir() (e.g. /var/folders on
+                // macOS), so include it explicitly. Skip on Windows where /tmp does not exist.
+                #[cfg(not(target_os = "windows"))]
+                paths.push(PathBuf::from("/tmp"));
+                paths
+            }),
             blocked_domains: vec![
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),

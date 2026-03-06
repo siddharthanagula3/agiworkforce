@@ -49,6 +49,14 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "https://timestamp.digicert.com",
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "sidebarIcon": "icons/icon.ico",
+        "headerImage": "icons/icon.ico",
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "webviewInstallMode": { "type": "downloadBootstrapper" }
+      },
       "wix": {
         "language": "en-US"
       }
@@ -63,6 +71,12 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "mobile": [],
+      "desktop": {
+        "schemes": ["agiworkforce"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://www.agiworkforce.com/api/releases/{{target}}/{{current_version}}"

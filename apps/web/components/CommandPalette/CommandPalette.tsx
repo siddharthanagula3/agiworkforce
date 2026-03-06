@@ -36,13 +36,16 @@ function useCommands(): CommandOption[] {
   const router = useRouter();
   const { toggleSimpleMode, simpleMode } = useUIStore();
 
+  // Use platform-appropriate modifier key symbol for shortcut labels
+  const mod = typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+';
+
   return [
     {
       id: 'go-dashboard',
       title: 'Go to Dashboard',
       group: 'Navigate',
       icon: LayoutDashboard,
-      shortcut: '⌘D',
+      shortcut: `${mod}D`,
       action: () => router.push('/dashboard'),
     },
     {
@@ -50,7 +53,7 @@ function useCommands(): CommandOption[] {
       title: 'Go to Chat',
       group: 'Navigate',
       icon: MessageSquare,
-      shortcut: '⌘⇧C',
+      shortcut: `${mod}⇧C`,
       action: () => router.push('/chat'),
     },
     {

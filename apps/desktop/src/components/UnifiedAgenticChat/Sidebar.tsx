@@ -350,6 +350,10 @@ export function Sidebar({
   onToggleMediaLab,
   canAccessMediaLab,
 }: SidebarProps) {
+  // Platform-aware modifier key: ⌘ on Mac, Ctrl on Windows/Linux
+  const modKeySymbol =
+    typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
+
   // Migration: All store hooks now use useChatStore (modular store) instead of useUnifiedChatStore
   // Using exported selectors for optimal re-render performance
   const conversations = useChatStore(selectConversations);
@@ -908,7 +912,7 @@ export function Sidebar({
             <Search className="h-4 w-4" />
             <span>Search</span>
             <div className="ml-auto flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">{modKeySymbol}</kbd>
               <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
             </div>
           </button>
