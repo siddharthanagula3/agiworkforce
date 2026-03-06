@@ -258,7 +258,9 @@ class BackupService {
     };
 
     // In a real implementation, this would save to local storage or file system
-    localStorage.setItem(`backup_${backupId}`, JSON.stringify(backupData));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`backup_${backupId}`, JSON.stringify(backupData));
+    }
   }
 
   /**
@@ -465,7 +467,7 @@ class BackupService {
         }
 
         // Delete from local storage
-        if (this.config.enableLocalBackup) {
+        if (this.config.enableLocalBackup && typeof window !== 'undefined') {
           localStorage.removeItem(`backup_${backup.id}`);
         }
 

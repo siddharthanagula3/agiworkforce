@@ -7,8 +7,7 @@
  * @module useFileOperations
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { invoke, listen, type UnlistenFn } from '@/lib/tauri-mock';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
