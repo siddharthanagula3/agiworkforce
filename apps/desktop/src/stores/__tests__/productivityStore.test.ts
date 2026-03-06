@@ -120,7 +120,7 @@ describe('useProductivityStore', () => {
   it('setAsanaWorkspace persists workspace ID and fetches projects', async () => {
     invokeMock.mockImplementation(async (command: string, payload: unknown) => {
       if (command === 'productivity_asana_list_projects') {
-        expect(payload).toEqual({ workspace_id: 'workspace-123' });
+        expect(payload).toEqual({ workspaceId: 'workspace-123' });
         return [{ gid: 'proj-1', name: 'Marketing Ops' }];
       }
       throw new Error(`Unexpected invoke command: ${command}`);

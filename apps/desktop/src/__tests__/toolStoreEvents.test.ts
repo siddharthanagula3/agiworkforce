@@ -218,11 +218,16 @@ describe('initializeToolEventListener double-init guard', () => {
 
   it('only registers listeners once when called twice with isTauri = true', async () => {
     // Re-mock tauri-mock so isTauri = true for this test.
-    vi.doMock('../lib/tauri-mock', () => ({
-      isTauri: true,
-      invoke: vi.fn(),
-      isTauriContext: () => true,
-    }));
+    // Include listen from @tauri-apps/api/event so the spy can observe calls.
+    vi.doMock('../lib/tauri-mock', async () => {
+      const eventApi = await import('@tauri-apps/api/event');
+      return {
+        isTauri: true,
+        invoke: vi.fn(),
+        isTauriContext: () => true,
+        listen: eventApi.listen,
+      };
+    });
 
     const { listen } = await import('@tauri-apps/api/event');
     const listenSpy = vi.mocked(listen);
@@ -241,11 +246,16 @@ describe('initializeToolEventListener double-init guard', () => {
 
   it('resets the guard flag when listen rejects so a retry is possible', async () => {
     // Re-mock tauri-mock so isTauri = true.
-    vi.doMock('../lib/tauri-mock', () => ({
-      isTauri: true,
-      invoke: vi.fn(),
-      isTauriContext: () => true,
-    }));
+    // Include listen from @tauri-apps/api/event so the spy can observe calls.
+    vi.doMock('../lib/tauri-mock', async () => {
+      const eventApi = await import('@tauri-apps/api/event');
+      return {
+        isTauri: true,
+        invoke: vi.fn(),
+        isTauriContext: () => true,
+        listen: eventApi.listen,
+      };
+    });
 
     const { listen } = await import('@tauri-apps/api/event');
     const listenSpy = vi.mocked(listen);

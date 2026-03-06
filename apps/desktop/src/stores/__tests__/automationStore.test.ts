@@ -103,7 +103,7 @@ describe('automationStore', () => {
     expect(state.elements.length).toBe(2);
     expect(state.loadingElements).toBe(false);
     expect(invokeMock).toHaveBeenCalledWith('automation_find_elements', {
-      request: expect.objectContaining({ control_type: 'Button' }),
+      request: expect.objectContaining({ controlType: 'Button' }),
     });
   });
 
@@ -117,7 +117,7 @@ describe('automationStore', () => {
     expect(state.runningAction).toBe(false);
     expect(state.error).toBeNull();
     expect(invokeMock).toHaveBeenCalledWith('automation_click', {
-      request: expect.objectContaining({ element_id: 'button-1', x: 100, y: 50 }),
+      request: expect.objectContaining({ elementId: 'button-1', x: 100, y: 50 }),
     });
   });
 
@@ -144,7 +144,7 @@ describe('automationStore', () => {
     const state = useAutomationStore.getState();
     expect(state.runningAction).toBe(false);
     expect(invokeMock).toHaveBeenCalledWith('automation_send_keys', {
-      request: expect.objectContaining({ text: 'Hello World', element_id: 'input-1', focus: true }),
+      request: expect.objectContaining({ text: 'Hello World', elementId: 'input-1', focus: true }),
     });
   });
 
