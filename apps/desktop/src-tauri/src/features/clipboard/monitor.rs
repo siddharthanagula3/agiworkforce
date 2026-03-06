@@ -206,7 +206,6 @@ impl ClipboardMonitor {
                         }
                     }
                 }
-            }
         }
 
         if config.track_files {
