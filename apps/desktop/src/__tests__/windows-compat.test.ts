@@ -147,7 +147,8 @@ describe('Download URL construction — Windows installer', () => {
     mockInvoke.mockResolvedValueOnce({
       platform: 'windows',
       version: '1.2.3',
-      installer_url: 'https://github.com/agiworkforce/releases/download/v1.2.3/AGIWorkforce_1.2.3_x64.msi',
+      installer_url:
+        'https://github.com/agiworkforce/releases/download/v1.2.3/AGIWorkforce_1.2.3_x64.msi',
     });
 
     const result = (await mockInvoke('get_app_update_info')) as {
@@ -402,9 +403,8 @@ describe('UpdaterStore — update notification on Windows', () => {
   });
 
   it('dismisses an update and suppresses notification for same version', async () => {
-    const { useUpdaterStore, shouldShowUpdateNotification } = await import(
-      '../stores/updaterStore'
-    );
+    const { useUpdaterStore, shouldShowUpdateNotification } =
+      await import('../stores/updaterStore');
 
     const version = '2.1.0';
     useUpdaterStore.getState().dismissUpdate(version);
@@ -420,9 +420,8 @@ describe('UpdaterStore — update notification on Windows', () => {
   });
 
   it('shows update notification for a different version after dismissal', async () => {
-    const { useUpdaterStore, shouldShowUpdateNotification } = await import(
-      '../stores/updaterStore'
-    );
+    const { useUpdaterStore, shouldShowUpdateNotification } =
+      await import('../stores/updaterStore');
 
     useUpdaterStore.getState().dismissUpdate('2.0.0');
     const { dismissedVersion, dismissedAt } = useUpdaterStore.getState();
@@ -446,7 +445,9 @@ describe('UpdaterStore — update notification on Windows', () => {
     const { useUpdaterStore } = await import('../stores/updaterStore');
 
     useUpdaterStore.getState().setStatus('downloading');
-    useUpdaterStore.getState().setDownloadProgress({ downloaded: 5_000_000, total: 50_000_000, percent: 10 });
+    useUpdaterStore
+      .getState()
+      .setDownloadProgress({ downloaded: 5_000_000, total: 50_000_000, percent: 10 });
 
     const state = useUpdaterStore.getState();
     expect(state.status).toBe('downloading');
@@ -553,16 +554,10 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   it('Ctrl+S shortcut fires action on ctrlKey keydown event', async () => {
     // We wire up a shortcut manually and dispatch a synthetic event to the
     // document so useKeyboardShortcuts (which listens on `window`) can handle it.
+    // setup.ts uses vi.spyOn(window, 'addEventListener') which calls through to
+    // the real implementation, so no manual replacement is needed.
     const action = vi.fn();
     const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
-
-    // Temporarily restore window.addEventListener to the real one for this test
-    const originalAdd = window.addEventListener;
-    const originalRemove = window.removeEventListener;
-    const realAdd = EventTarget.prototype.addEventListener.bind(window);
-    const realRemove = EventTarget.prototype.removeEventListener.bind(window);
-    Object.defineProperty(window, 'addEventListener', { value: realAdd, writable: true, configurable: true });
-    Object.defineProperty(window, 'removeEventListener', { value: realRemove, writable: true, configurable: true });
 
     const { unmount } = renderHook(() =>
       useKeyboardShortcuts([{ key: 's', modifiers: { ctrl: true }, action }]),
@@ -584,28 +579,11 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
     expect(action).toHaveBeenCalledTimes(1);
 
     unmount();
-
-    // Restore mocked versions
-    Object.defineProperty(window, 'addEventListener', { value: originalAdd, writable: true, configurable: true });
-    Object.defineProperty(window, 'removeEventListener', { value: originalRemove, writable: true, configurable: true });
   });
 
   it('Ctrl+Z shortcut does NOT fire when metaKey (Cmd) is used instead', async () => {
     const action = vi.fn();
     const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
-
-    const originalAdd = window.addEventListener;
-    const originalRemove = window.removeEventListener;
-    Object.defineProperty(window, 'addEventListener', {
-      value: EventTarget.prototype.addEventListener.bind(window),
-      writable: true,
-      configurable: true,
-    });
-    Object.defineProperty(window, 'removeEventListener', {
-      value: EventTarget.prototype.removeEventListener.bind(window),
-      writable: true,
-      configurable: true,
-    });
 
     const { unmount } = renderHook(() =>
       useKeyboardShortcuts([{ key: 'z', modifiers: { ctrl: true }, action }]),
@@ -627,8 +605,6 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
     expect(action).not.toHaveBeenCalled();
 
     unmount();
-    Object.defineProperty(window, 'addEventListener', { value: originalAdd, writable: true, configurable: true });
-    Object.defineProperty(window, 'removeEventListener', { value: originalRemove, writable: true, configurable: true });
   });
 });
 
@@ -726,9 +702,24 @@ describe('Terminal — Windows shell types via useTerminal', () => {
     const mockInvoke = vi.mocked(invoke);
 
     const windowsShells = [
-      { name: 'PowerShell 7', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', available: true, shell_type: 'powershell' },
-      { name: 'Command Prompt', path: 'C:\\Windows\\System32\\cmd.exe', available: true, shell_type: 'cmd' },
-      { name: 'Git Bash', path: 'C:\\Program Files\\Git\\bin\\bash.exe', available: true, shell_type: 'gitbash' },
+      {
+        name: 'PowerShell 7',
+        path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        available: true,
+        shell_type: 'powershell',
+      },
+      {
+        name: 'Command Prompt',
+        path: 'C:\\Windows\\System32\\cmd.exe',
+        available: true,
+        shell_type: 'cmd',
+      },
+      {
+        name: 'Git Bash',
+        path: 'C:\\Program Files\\Git\\bin\\bash.exe',
+        available: true,
+        shell_type: 'gitbash',
+      },
       { name: 'WSL', path: 'C:\\Windows\\System32\\wsl.exe', available: true, shell_type: 'wsl' },
     ];
 
@@ -834,7 +825,7 @@ describe('Plugin mocks — Windows path integration', () => {
     const result = await open({ multiple: true });
 
     expect(Array.isArray(result)).toBe(true);
-    expect((result as string[])).toHaveLength(2);
+    expect(result as string[]).toHaveLength(2);
     expect((result as string[])[0]).toContain('C:\\');
   });
 
