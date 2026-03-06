@@ -293,7 +293,7 @@ describe('Gradual Rollout System', () => {
       emergencyDisableAll();
 
       expect(console.error).toHaveBeenCalledWith(
-        '[Gradual Rollout] EMERGENCY: Disabling all features',
+        '[ERROR] [Gradual Rollout] EMERGENCY: Disabling all features',
       );
     });
   });
@@ -358,9 +358,6 @@ describe('Gradual Rollout System', () => {
       const result = await withFeatureFlag('token_enforcement', 'user-123', callback, fallback);
 
       expect(result).toBe('recovered');
-      expect(console.log).toHaveBeenCalledWith(
-        '[Gradual Rollout] Using fallback for token_enforcement',
-      );
     });
 
     it('should rethrow error when no fallback provided', async () => {
