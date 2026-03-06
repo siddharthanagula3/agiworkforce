@@ -229,7 +229,7 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           if (!sessionId) return;
 
           try {
-            await invoke('research_cancel', { session_id: sessionId });
+            await invoke('research_cancel', { sessionId });
             set((state) => {
               state.activeSession.status = 'idle';
               state.activeSession.progress = null;

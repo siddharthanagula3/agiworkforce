@@ -72,7 +72,7 @@ export const WorkflowMarketplace: React.FC = () => {
         offset: 0,
       });
 
-      console.log('Search results:', results);
+      console.debug('[WorkflowMarketplace] Search results:', results);
     } catch (error) {
       console.error('Search failed:', error);
     }

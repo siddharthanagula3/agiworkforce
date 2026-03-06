@@ -172,7 +172,7 @@ export async function applyEdit(editId: string): Promise<boolean> {
   }
 
   try {
-    await invoke('code_apply_edit', { edit_id: editId });
+    await invoke('code_apply_edit', { editId });
     return true;
   } catch (error) {
     console.error('[codeEditing] Failed to apply edit:', error);
@@ -193,7 +193,7 @@ export async function rejectEdit(editId: string): Promise<boolean> {
   }
 
   try {
-    await invoke('code_reject_edit', { edit_id: editId });
+    await invoke('code_reject_edit', { editId });
     return true;
   } catch (error) {
     console.error('[codeEditing] Failed to reject edit:', error);

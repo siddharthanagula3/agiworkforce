@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Enhanced Chat Synchronization Service
  * Handles real-time message sync, conflict resolution, offline queue, and state reconciliation
@@ -189,7 +190,7 @@ export class EnhancedChatSynchronizationService {
    */
   async subscribeToConversation(conversationId: string): Promise<void> {
     if (!this.config.enableRealtime) {
-      console.warn('[ChatSync] Real-time sync is disabled');
+      logger.warn('[ChatSync] Real-time sync is disabled');
       return;
     }
 
@@ -254,7 +255,7 @@ export class EnhancedChatSynchronizationService {
 
       this.channels.set(conversationId, channel);
     } catch (error) {
-      console.error('[ChatSync] Subscription error:', error);
+      logger.error('[ChatSync] Subscription error:', error);
       store.setError(error instanceof Error ? error.message : 'Subscription failed');
     }
   }
@@ -278,7 +279,7 @@ export class EnhancedChatSynchronizationService {
     const conversation = store.conversations[remoteData.conversation_id];
 
     if (!conversation) {
-      console.warn('[ChatSync] Conversation not found for remote insert');
+      logger.warn('[ChatSync] Conversation not found for remote insert');
       return;
     }
 
@@ -306,7 +307,7 @@ export class EnhancedChatSynchronizationService {
     const conversation = store.conversations[remoteData.conversation_id];
 
     if (!conversation) {
-      console.warn('[ChatSync] Conversation not found for remote update');
+      logger.warn('[ChatSync] Conversation not found for remote update');
       return;
     }
 
@@ -432,7 +433,7 @@ export class EnhancedChatSynchronizationService {
       this.statistics.totalSynced++;
       store.recordSyncTimestamp();
     } catch (error) {
-      console.error('[ChatSync] Sync error:', error);
+      logger.error('[ChatSync] Sync error:', error);
       this.statistics.totalErrors++;
 
       // Queue for retry
@@ -491,7 +492,7 @@ export class EnhancedChatSynchronizationService {
       this.statistics.totalSynced++;
       store.recordSyncTimestamp();
     } catch (error) {
-      console.error('[ChatSync] Update error:', error);
+      logger.error('[ChatSync] Update error:', error);
       this.statistics.totalErrors++;
 
       if (this.config.enableOfflineQueue) {
@@ -545,7 +546,7 @@ export class EnhancedChatSynchronizationService {
       this.statistics.totalSynced++;
       store.recordSyncTimestamp();
     } catch (error) {
-      console.error('[ChatSync] Delete error:', error);
+      logger.error('[ChatSync] Delete error:', error);
       this.statistics.totalErrors++;
 
       store.setError('Failed to delete message');
@@ -578,7 +579,7 @@ export class EnhancedChatSynchronizationService {
 
     for (const operation of operations) {
       if (operation.retryCount >= this.config.maxRetries) {
-        console.warn('[ChatSync] Max retries reached, skipping:', operation.id);
+        logger.warn('[ChatSync] Max retries reached, skipping:', operation.id);
         this.statistics.totalErrors++;
         continue;
       }
@@ -598,7 +599,7 @@ export class EnhancedChatSynchronizationService {
           operation.status = 'success';
         }
       } catch (error) {
-        console.error('[ChatSync] Queue processing error:', error);
+        logger.error('[ChatSync] Queue processing error:', error);
         operation.status = 'failed';
         operation.retryCount++;
         operation.error = error instanceof Error ? error.message : 'Unknown error';

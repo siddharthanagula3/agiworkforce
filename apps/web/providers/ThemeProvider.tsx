@@ -1,12 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
-export const _stub = true;
-export default {} as any;
-// specific exports for tests
-export const LLM_MODELS = [];
-export const PLAN_MODELS = [];
-export const ThemeProvider = ({ children }: any) => children;
-export const useTheme = () => ({ theme: 'dark', setTheme: () => {} });
-export const supabase = {} as any;
+'use client';
 
-// Missing named export
-export const useThemeContext = () => ({ theme: 'dark', setTheme: (_t: string) => {} });
+/**
+ * ThemeProvider — re-exports the shared ThemeProvider implementation.
+ * Kept as a separate file for backwards-compat with any direct imports of this path.
+ */
+export { ThemeProvider } from '@shared/components/ThemeProvider';
+export { useThemeContext } from '@shared/hooks/useThemeContext';

@@ -124,10 +124,10 @@ impl PermissionManager {
                     state: PermissionState::from_str(&state_str).unwrap_or(PermissionState::Prompt),
                     pattern,
                     created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
-                        .unwrap()
+                        .unwrap_or_else(|_| chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").expect("static date"))
                         .with_timezone(&Utc),
                     updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
-                        .unwrap()
+                        .unwrap_or_else(|_| chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").expect("static date"))
                         .with_timezone(&Utc),
                 })
             })?

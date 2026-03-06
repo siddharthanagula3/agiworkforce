@@ -1,6 +1,49 @@
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::path::Path;
+
+// TypeScript/JavaScript regex patterns
+static TS_FUNCTION_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+\w+")
+        .expect("valid regex: TS function pattern")
+});
+static TS_CLASS_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?class\s+\w+").expect("valid regex: TS class pattern")
+});
+static TS_CONST_FN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?\(")
+        .expect("valid regex: TS const fn pattern")
+});
+static TS_ARROW_FN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?.*=>")
+        .expect("valid regex: TS arrow fn pattern")
+});
+
+// Rust regex patterns
+static RUST_FN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+\w+").expect("valid regex: Rust fn pattern")
+});
+static RUST_STRUCT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:pub\s+)?struct\s+\w+").expect("valid regex: Rust struct pattern")
+});
+static RUST_IMPL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*impl(?:<[^>]+>)?\s+\w+").expect("valid regex: Rust impl pattern")
+});
+
+// Python regex patterns
+static PY_DEF_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*def\s+\w+").expect("valid regex: Python def pattern"));
+static PY_CLASS_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*class\s+\w+").expect("valid regex: Python class pattern"));
+
+// Go regex patterns
+static GO_FUNC_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*func\s+(?:\([^)]+\)\s+)?\w+").expect("valid regex: Go func pattern")
+});
+static GO_TYPE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*type\s+\w+\s+struct").expect("valid regex: Go type struct pattern")
+});
 
 #[derive(Debug, Clone)]
 pub enum ChunkStrategy {
@@ -143,12 +186,10 @@ impl CodeChunker {
         let mut chunks = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
-        let function_re = Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+\w+").unwrap();
-        let class_re = Regex::new(r"^\s*(?:export\s+)?class\s+\w+").unwrap();
-        let const_fn_re =
-            Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?\(").unwrap();
-        let arrow_fn_re =
-            Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?.*=>").unwrap();
+        let function_re = &*TS_FUNCTION_RE;
+        let class_re = &*TS_CLASS_RE;
+        let const_fn_re = &*TS_CONST_FN_RE;
+        let arrow_fn_re = &*TS_ARROW_FN_RE;
 
         let mut current_chunk: Option<(usize, Vec<&str>, ChunkType)> = None;
         let mut brace_depth = 0;
@@ -221,9 +262,9 @@ impl CodeChunker {
         let mut chunks = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
-        let fn_re = Regex::new(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+\w+").unwrap();
-        let struct_re = Regex::new(r"^\s*(?:pub\s+)?struct\s+\w+").unwrap();
-        let impl_re = Regex::new(r"^\s*impl(?:<[^>]+>)?\s+\w+").unwrap();
+        let fn_re = &*RUST_FN_RE;
+        let struct_re = &*RUST_STRUCT_RE;
+        let impl_re = &*RUST_IMPL_RE;
 
         let mut current_chunk: Option<(usize, Vec<&str>, ChunkType)> = None;
         let mut brace_depth = 0;
@@ -297,8 +338,8 @@ impl CodeChunker {
         let mut chunks = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
-        let def_re = Regex::new(r"^\s*def\s+\w+").unwrap();
-        let class_re = Regex::new(r"^\s*class\s+\w+").unwrap();
+        let def_re = &*PY_DEF_RE;
+        let class_re = &*PY_CLASS_RE;
 
         let mut current_chunk: Option<(usize, Vec<&str>, ChunkType, usize)> = None;
 
@@ -376,8 +417,8 @@ impl CodeChunker {
         let mut chunks = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
-        let func_re = Regex::new(r"^\s*func\s+(?:\([^)]+\)\s+)?\w+").unwrap();
-        let type_re = Regex::new(r"^\s*type\s+\w+\s+struct").unwrap();
+        let func_re = &*GO_FUNC_RE;
+        let type_re = &*GO_TYPE_RE;
 
         let mut current_chunk: Option<(usize, Vec<&str>, ChunkType)> = None;
         let mut brace_depth = 0;

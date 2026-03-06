@@ -106,7 +106,7 @@ async function warmUpDatabase(): Promise<boolean> {
         return false;
       }
 
-      console.log(`[Auth] Database warm-up completed in ${elapsed}ms`);
+      console.debug(`[Auth] Database warm-up completed in ${elapsed}ms`);
       return true;
     } catch (err) {
       console.warn('[Auth] Database warm-up exception:', err);
@@ -133,7 +133,7 @@ async function fetchSubscriptionFromWebAPI(accessToken: string): Promise<Subscri
   const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
 
   try {
-    console.log('[Auth] Trying web API fallback for subscription...');
+    console.debug('[Auth] Trying web API fallback for subscription...');
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -158,7 +158,7 @@ async function fetchSubscriptionFromWebAPI(accessToken: string): Promise<Subscri
 
     // Transform /api/me response to Subscription format
     if (!data.plan) {
-      console.log('[Auth] Web API returned no plan (free tier user)');
+      console.debug('[Auth] Web API returned no plan (free tier user)');
       return null;
     }
 
@@ -180,7 +180,7 @@ async function fetchSubscriptionFromWebAPI(accessToken: string): Promise<Subscri
       updated_at: new Date().toISOString(),
     };
 
-    console.log('[Auth] Web API fallback succeeded:', subscription.plan_tier);
+    console.debug('[Auth] Web API fallback succeeded:', subscription.plan_tier);
     return subscription;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -283,7 +283,7 @@ class SupabaseAuthService {
     const supabase = getSupabase();
 
     supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] State change:', event, session?.user?.email);
+      console.debug('[Auth] State change:', event, session?.user?.email);
 
       if (event === 'SIGNED_IN' && session) {
         await this.handleSignedIn(session);
@@ -306,7 +306,7 @@ class SupabaseAuthService {
                     refreshToken: session.refresh_token,
                   });
                 }
-                console.log('[Auth] Refreshed tokens synced to Rust backend');
+                console.debug('[Auth] Refreshed tokens synced to Rust backend');
               }
             } catch (error) {
               const msg = error instanceof Error ? error.message : String(error);
@@ -394,10 +394,10 @@ class SupabaseAuthService {
     // But allow different users to interrupt (for account switching)
     if (this.isHandlingSignIn) {
       if (this.handlingSignInForUser === user.id) {
-        console.log('[Auth] Already handling sign-in for this user, skipping re-entry');
+        console.debug('[Auth] Already handling sign-in for this user, skipping re-entry');
         return;
       } else {
-        console.log('[Auth] Different user signing in, resetting previous sign-in handler');
+        console.debug('[Auth] Different user signing in, resetting previous sign-in handler');
         // Reset for the new user
       }
     }
@@ -421,7 +421,7 @@ class SupabaseAuthService {
               refreshToken: session.refresh_token,
             });
           }
-          console.log('[Auth] Tokens synced to Rust backend on sign-in');
+          console.debug('[Auth] Tokens synced to Rust backend on sign-in');
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -449,7 +449,7 @@ class SupabaseAuthService {
       subscriptionFetchStatus: cachedSubscription ? 'succeeded' : 'fetching',
     });
 
-    console.log(
+    console.debug(
       '[Auth] UI ready with cached data:',
       cachedSubscription?.plan_tier || 'none',
       '- fetching fresh data in background...',
@@ -479,7 +479,7 @@ class SupabaseAuthService {
     try {
       // Check if this refresh has been superseded by another user or logout
       if (this.activeBackgroundRefreshUserId !== userId) {
-        console.log('[Auth] Background refresh cancelled - user changed');
+        console.debug('[Auth] Background refresh cancelled - user changed');
         return;
       }
 
@@ -496,22 +496,22 @@ class SupabaseAuthService {
 
       // Check again after async operation
       if (this.activeBackgroundRefreshUserId !== userId) {
-        console.log('[Auth] Background refresh cancelled after setSession - user changed');
+        console.debug('[Auth] Background refresh cancelled after setSession - user changed');
         return;
       }
 
       // Warm up the database first (handles cold start)
-      console.log('[Auth] Warming up database connection...');
+      console.debug('[Auth] Warming up database connection...');
       await warmUpDatabase();
 
       // Check again after database warm-up
       if (this.activeBackgroundRefreshUserId !== userId) {
-        console.log('[Auth] Background refresh cancelled after warm-up - user changed');
+        console.debug('[Auth] Background refresh cancelled after warm-up - user changed');
         return;
       }
 
       // Now fetch fresh data with shorter timeouts (database should be warm)
-      console.log('[Auth] Fetching fresh user data...');
+      console.debug('[Auth] Fetching fresh user data...');
       const [profile, subscription, featureFlags] = await Promise.all([
         this.fetchProfile(userId),
         this.fetchSubscription(userId, session),
@@ -520,7 +520,7 @@ class SupabaseAuthService {
 
       // Final check before updating state
       if (this.activeBackgroundRefreshUserId !== userId) {
-        console.log('[Auth] Background refresh cancelled after fetch - user changed');
+        console.debug('[Auth] Background refresh cancelled after fetch - user changed');
         return;
       }
 
@@ -531,7 +531,7 @@ class SupabaseAuthService {
         setCachedData('flags', userId, featureFlags);
       }
 
-      console.log('[Auth] Fresh data fetched, subscription:', subscription?.plan_tier);
+      console.debug('[Auth] Fresh data fetched, subscription:', subscription?.plan_tier);
 
       // Update state with fresh data
       this.updateState({
@@ -613,7 +613,7 @@ class SupabaseAuthService {
     }
 
     const supabase = getSupabase();
-    console.log('[Auth] Subscribing to subscription changes for user:', userId);
+    console.debug('[Auth] Subscribing to subscription changes for user:', userId);
 
     this.subscriptionChannel = supabase
       .channel(`subscription-changes-${userId}`)
@@ -626,7 +626,7 @@ class SupabaseAuthService {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log('[Auth] Subscription change detected:', payload);
+          console.debug('[Auth] Subscription change detected:', payload);
 
           // Debounce: wait 2s before fetching to avoid rapid-fire updates
           if (this.subscriptionChangeDebounceTimer) {
@@ -704,7 +704,7 @@ class SupabaseAuthService {
 
           // Validate the constructed data has required fields
           if (isValidProfileData(fallbackData)) {
-            console.log('[Auth] Constructed fallback profile from auth metadata');
+            console.debug('[Auth] Constructed fallback profile from auth metadata');
             // Safe cast: Profile extends FallbackProfileData structure
             return fallbackData as unknown as Profile;
           }
@@ -744,7 +744,9 @@ class SupabaseAuthService {
 
     // Deduplication: if a fetch is already in progress, wait for it
     if (this.subscriptionFetchInProgress && this.pendingSubscriptionFetch) {
-      console.log('[Auth] Subscription fetch already in progress, waiting for existing request...');
+      console.debug(
+        '[Auth] Subscription fetch already in progress, waiting for existing request...',
+      );
       return this.pendingSubscriptionFetch;
     }
 
@@ -783,7 +785,7 @@ class SupabaseAuthService {
   resetCircuitBreaker(): void {
     this.subscriptionFailureCount = 0;
     this.lastSubscriptionFailure = 0;
-    console.log('[Auth] Circuit breaker reset');
+    console.debug('[Auth] Circuit breaker reset');
   }
 
   private async doFetchSubscription(
@@ -794,7 +796,7 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
 
-    console.log('[Auth] Fetching subscription for user:', userId);
+    console.debug('[Auth] Fetching subscription for user:', userId);
 
     // Get access token for web API fallback
     const accessToken = session?.access_token || this.currentState.session?.access_token;
@@ -803,7 +805,7 @@ class SupabaseAuthService {
     // STEP 1: Try direct Supabase query (fastest when DB is warm)
     // =========================================================================
     try {
-      console.log('[Auth] Step 1: Trying direct Supabase query...');
+      console.debug('[Auth] Step 1: Trying direct Supabase query...');
 
       const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
         setTimeout(() => {
@@ -826,14 +828,14 @@ class SupabaseAuthService {
       const { data, error } = result;
 
       if (!error && data) {
-        console.log('[Auth] Direct Supabase query succeeded:', data.plan_tier);
+        console.debug('[Auth] Direct Supabase query succeeded:', data.plan_tier);
         return data;
       }
 
       // "No rows" is expected for free users - but we should still try web API to confirm
       const errorWithCode = error as { code?: string; message?: string } | null;
       if (error?.message?.includes('no rows') || errorWithCode?.code === 'PGRST116') {
-        console.log('[Auth] No subscription in Supabase, trying web API to confirm...');
+        console.debug('[Auth] No subscription in Supabase, trying web API to confirm...');
       } else if (error) {
         console.warn('[Auth] Supabase query failed:', error.message);
       }
@@ -846,15 +848,15 @@ class SupabaseAuthService {
     // =========================================================================
     if (accessToken) {
       try {
-        console.log('[Auth] Step 2: Trying web API fallback...');
+        console.debug('[Auth] Step 2: Trying web API fallback...');
         const webApiResult = await fetchSubscriptionFromWebAPI(accessToken);
 
         if (webApiResult) {
-          console.log('[Auth] Web API fallback succeeded:', webApiResult.plan_tier);
+          console.debug('[Auth] Web API fallback succeeded:', webApiResult.plan_tier);
           return webApiResult;
         }
 
-        console.log('[Auth] Web API returned no subscription (confirmed free tier)');
+        console.debug('[Auth] Web API returned no subscription (confirmed free tier)');
       } catch (err) {
         console.warn('[Auth] Web API fallback failed:', err);
       }
@@ -990,7 +992,7 @@ class SupabaseAuthService {
 
     // Use deep link for Tauri, web origin for browser dev
     const redirectUrl = getAuthRedirectUrl('/callback');
-    console.log('[Auth] Magic link redirect URL:', redirectUrl);
+    console.debug('[Auth] Magic link redirect URL:', redirectUrl);
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -1032,7 +1034,7 @@ class SupabaseAuthService {
 
     // Use deep link for Tauri, web origin for browser dev
     const redirectUrl = getAuthRedirectUrl('/callback');
-    console.log('[Auth] OAuth redirect URL:', redirectUrl);
+    console.debug('[Auth] OAuth redirect URL:', redirectUrl);
 
     const response = await supabase.auth.signInWithOAuth({
       provider,
@@ -1118,7 +1120,7 @@ class SupabaseAuthService {
               console.warn('[Auth] Failed to clear tokens from keyring:', err);
               // Continue with sign out even if keyring clear fails
             });
-            console.log('[Auth] Auth tokens cleared from secure storage');
+            console.debug('[Auth] Auth tokens cleared from secure storage');
           }
         } catch (err) {
           console.error('[Auth] Failed to clear auth tokens:', err);
@@ -1150,7 +1152,7 @@ class SupabaseAuthService {
           const invoke = await getInvoke();
           if (invoke) {
             await invoke('clear_local_database');
-            console.log('[Auth] Local database cleared on logout');
+            console.debug('[Auth] Local database cleared on logout');
           }
         } catch (err) {
           // Log but don't block sign out state update
@@ -1174,7 +1176,7 @@ class SupabaseAuthService {
     const redirectUrl = isTauri
       ? `${WEB_APP_URL}/auth/update-password`
       : `${window.location.origin}/reset-password`;
-    console.log('[Auth] Password reset redirect URL:', redirectUrl);
+    console.debug('[Auth] Password reset redirect URL:', redirectUrl);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
@@ -1269,7 +1271,7 @@ class SupabaseAuthService {
     }
 
     const supabase = getSupabase();
-    console.log('[Auth] Manually setting session');
+    console.debug('[Auth] Manually setting session');
     this.updateState({ isLoading: true, error: null });
 
     try {

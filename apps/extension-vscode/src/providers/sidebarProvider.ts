@@ -655,6 +655,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _currentCancelSource?: vscode.CancellationTokenSource;
   private _conversationHistory: ChatMessage[] = [];
+  private _messageListener?: vscode.Disposable;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -676,10 +677,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const nonce = getNonce();
     webviewView.webview.html = getWebviewContent(webviewView.webview, this._extensionUri, nonce);
 
-    // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (msg: WebviewToExtMessage) => {
-      await this._handleWebviewMessage(msg);
-    });
+    // Handle messages from the webview — track the listener for cleanup
+    this._messageListener?.dispose();
+    this._messageListener = webviewView.webview.onDidReceiveMessage(
+      async (msg: WebviewToExtMessage) => {
+        await this._handleWebviewMessage(msg);
+      },
+    );
   }
 
   private async _handleWebviewMessage(msg: WebviewToExtMessage): Promise<void> {

@@ -7,6 +7,6 @@
     ".": "./index.js",
     "./plugin": "./plugin.js"
   },
-  "license": "MIT",
+  "license": "PROPRIETARY",
   "private": true
 }

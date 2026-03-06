@@ -204,7 +204,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         disconnectFromSession(sessionId);
-        await invoke('terminal_kill', { session_id: sessionId });
+        await invoke('terminal_kill', { sessionId });
       } catch (err) {
         throw handleError(err);
       } finally {
@@ -241,7 +241,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        await invoke('terminal_send_input', { session_id: sessionId, data });
+        await invoke('terminal_send_input', { sessionId, data });
       } catch (err) {
         throw handleError(err);
       }
@@ -256,7 +256,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const history = await invoke<string[]>('terminal_get_history', {
-          session_id: sessionId,
+          sessionId,
           limit: 1,
         });
         return history.join('\n');
@@ -273,7 +273,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        await invoke('terminal_resize', { session_id: sessionId, cols, rows });
+        await invoke('terminal_resize', { sessionId, cols, rows });
       } catch (err) {
         throw handleError(err);
       }
@@ -288,7 +288,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const history = await invoke<string[]>('terminal_get_history', {
-          session_id: sessionId,
+          sessionId,
           limit,
         });
         return history;
@@ -306,7 +306,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const history = await invoke<string[]>('terminal_get_history', {
-          session_id: sessionId,
+          sessionId,
           limit: Math.max(limit * 2, 100),
         });
         const normalizedQuery = query.trim().toLowerCase();
@@ -326,7 +326,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     async (sessionId: string): Promise<void> => {
       setError(null);
       try {
-        await invoke('terminal_clear_history', { session_id: sessionId });
+        await invoke('terminal_clear_history', { sessionId });
       } catch (err) {
         throw handleError(err);
       }
@@ -339,7 +339,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     async (sessionId: string, key: string, value: string): Promise<void> => {
       setError(null);
       try {
-        await invoke('terminal_set_env', { session_id: sessionId, key, value });
+        await invoke('terminal_set_env', { sessionId, key, value });
       } catch (err) {
         throw handleError(err);
       }
@@ -352,7 +352,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     async (sessionId: string, key: string): Promise<string | null> => {
       setError(null);
       try {
-        return await invoke<string | null>('terminal_get_env', { session_id: sessionId, key });
+        return await invoke<string | null>('terminal_get_env', { sessionId, key });
       } catch (err) {
         throw handleError(err);
       }
@@ -366,7 +366,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
       try {
         const envVars = await invoke<[string, string][]>('terminal_list_env', {
-          session_id: sessionId,
+          sessionId,
         });
         return envVars.map(([key, value]) => ({ key, value }));
       } catch (err) {
@@ -381,7 +381,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     async (sessionId: string, key: string): Promise<void> => {
       setError(null);
       try {
-        await invoke('terminal_unset_env', { session_id: sessionId, key });
+        await invoke('terminal_unset_env', { sessionId, key });
       } catch (err) {
         throw handleError(err);
       }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
+import { useConnectionStore } from '@/stores/connectionStore';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
 export interface Agent {
@@ -48,17 +49,14 @@ export const useAgentStore = create<AgentState>()(
       updateAgent: (id, patch) =>
         set((state) => ({
           agents: state.agents.map((agent) =>
-            agent.id === id
-              ? { ...agent, ...patch, updatedAt: new Date().toISOString() }
-              : agent,
+            agent.id === id ? { ...agent, ...patch, updatedAt: new Date().toISOString() } : agent,
           ),
         })),
 
       removeAgent: (id) =>
         set((state) => ({
           agents: state.agents.filter((agent) => agent.id !== id),
-          selectedAgentId:
-            state.selectedAgentId === id ? null : state.selectedAgentId,
+          selectedAgentId: state.selectedAgentId === id ? null : state.selectedAgentId,
         })),
 
       selectAgent: (id) => set({ selectedAgentId: id }),
@@ -78,19 +76,34 @@ export const useAgentStore = create<AgentState>()(
           pendingApprovals: [...state.pendingApprovals, approval],
         })),
 
-      approveRequest: (id) =>
+      approveRequest: (id) => {
+        // Update local state
         set((state) => ({
           pendingApprovals: state.pendingApprovals.map((r) =>
             r.id === id ? { ...r, status: 'approved' as const } : r,
           ),
-        })),
+        }));
+        // Send decision to desktop via WebRTC
+        useConnectionStore.getState().sendControl('approval_response', {
+          approvalId: id,
+          decision: 'approved',
+        });
+      },
 
-      rejectRequest: (id, _reason) =>
+      rejectRequest: (id, reason) => {
+        // Update local state
         set((state) => ({
           pendingApprovals: state.pendingApprovals.map((r) =>
             r.id === id ? { ...r, status: 'rejected' as const } : r,
           ),
-        })),
+        }));
+        // Send decision to desktop via WebRTC
+        useConnectionStore.getState().sendControl('approval_response', {
+          approvalId: id,
+          decision: 'rejected',
+          reason,
+        });
+      },
     }),
     {
       name: 'agent-store',

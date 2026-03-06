@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- stub file for web port compilation */
-
 export const _stub = true;
 export default {} as any;
 // specific exports for tests

@@ -1,5 +1,6 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { captureError } from '@shared/lib/sentry';
+import { logger } from '@shared/lib/logger';
 
 interface BuyTokenPackParams {
   userId: string;
@@ -38,7 +39,7 @@ export async function buyTokenPack(params: BuyTokenPackParams): Promise<void> {
 
   try {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Buy Token Pack] Initiating purchase:', {
+      logger.info('[Buy Token Pack] Initiating purchase:', {
         userId,
         packId,
         tokens: tokens.toLocaleString(),
@@ -69,7 +70,9 @@ export async function buyTokenPack(params: BuyTokenPackParams): Promise<void> {
 
     const data = await response.json();
 
-    console.log('[Buy Token Pack] ✅ Checkout session created:', data.sessionId);
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('[Buy Token Pack] Checkout session created:', data.sessionId);
+    }
 
     // Redirect to Stripe checkout
     if (data.url) {
@@ -78,7 +81,7 @@ export async function buyTokenPack(params: BuyTokenPackParams): Promise<void> {
       throw new Error('No checkout URL returned');
     }
   } catch (error) {
-    console.error('[Buy Token Pack] Error:', error);
+    logger.error('[Buy Token Pack] Error:', error);
     captureError(error as Error, {
       tags: { feature: 'billing', operation: 'buy_token_pack' },
       extra: { userId, packId, tokens, price },
@@ -102,11 +105,13 @@ export async function addTokensToUserBalance(
   transactionId: string,
 ): Promise<void> {
   try {
-    console.log('[Add Tokens] Adding tokens to user balance:', {
-      userId,
-      tokens: tokens.toLocaleString(),
-      transactionId,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('[Add Tokens] Adding tokens to user balance:', {
+        userId,
+        tokens: tokens.toLocaleString(),
+        transactionId,
+      });
+    }
 
     // Use the add_user_tokens RPC function which handles everything atomically
     // This ensures the user_token_balances record exists (via get_or_create_token_balance)
@@ -122,14 +127,16 @@ export async function addTokensToUserBalance(
     );
 
     if (rpcError) {
-      console.error('[Add Tokens] RPC error:', rpcError);
+      logger.error('[Add Tokens] RPC error:', rpcError);
       captureError(rpcError as Error, {
         tags: { feature: 'billing', operation: 'add_tokens_rpc' },
         extra: { userId, tokens, transactionId },
       });
 
       // Fallback: direct update to user_token_balances table
-      console.log('[Add Tokens] Attempting fallback direct update...');
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('[Add Tokens] Attempting fallback direct update...');
+      }
 
       // Get current balance from user_token_balances
 
@@ -141,7 +148,7 @@ export async function addTokensToUserBalance(
         .maybeSingle();
 
       if (fetchError) {
-        console.error('[Add Tokens] Error fetching balance:', fetchError);
+        logger.error('[Add Tokens] Error fetching balance:', fetchError);
         captureError(fetchError as Error, {
           tags: { feature: 'billing', operation: 'fetch_balance' },
           extra: { userId, tokens, transactionId },
@@ -167,7 +174,7 @@ export async function addTokensToUserBalance(
           .eq('user_id', userId);
 
         if (updateError) {
-          console.error('[Add Tokens] Error updating balance:', updateError);
+          logger.error('[Add Tokens] Error updating balance:', updateError);
           captureError(updateError as Error, {
             tags: { feature: 'billing', operation: 'update_balance' },
             extra: { userId, tokens, transactionId },
@@ -190,7 +197,7 @@ export async function addTokensToUserBalance(
         });
 
         if (insertError) {
-          console.error('[Add Tokens] Error inserting balance:', insertError);
+          logger.error('[Add Tokens] Error inserting balance:', insertError);
           captureError(insertError as Error, {
             tags: { feature: 'billing', operation: 'insert_balance' },
             extra: { userId, tokens, transactionId },
@@ -214,7 +221,7 @@ export async function addTokensToUserBalance(
       });
 
       if (logError) {
-        console.error('[Add Tokens] Error logging transaction:', logError);
+        logger.error('[Add Tokens] Error logging transaction:', logError);
         captureError(logError as Error, {
           tags: { feature: 'billing', operation: 'log_transaction' },
           extra: { userId, tokens, transactionId },
@@ -223,20 +230,24 @@ export async function addTokensToUserBalance(
         // Don't throw - balance update was successful even if log fails
       }
 
-      console.log('[Add Tokens] Fallback balance updated:', {
-        previousBalance: currentBalance.toLocaleString(),
-        tokensAdded: tokens.toLocaleString(),
-        newBalance: updatedBalance.toLocaleString(),
-      });
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('[Add Tokens] Fallback balance updated:', {
+          previousBalance: currentBalance.toLocaleString(),
+          tokensAdded: tokens.toLocaleString(),
+          newBalance: updatedBalance.toLocaleString(),
+        });
+      }
       return;
     }
 
-    console.log('[Add Tokens] Token balance updated via RPC:', {
-      tokensAdded: tokens.toLocaleString(),
-      newBalance: (newBalance as unknown as number).toLocaleString(),
-    });
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('[Add Tokens] Token balance updated via RPC:', {
+        tokensAdded: tokens.toLocaleString(),
+        newBalance: (newBalance as unknown as number).toLocaleString(),
+      });
+    }
   } catch (error) {
-    console.error('[Add Tokens] Error:', error);
+    logger.error('[Add Tokens] Error:', error);
     captureError(error as Error, {
       tags: { feature: 'billing', operation: 'add_tokens' },
       extra: { userId, tokens, transactionId },
@@ -275,7 +286,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
       .maybeSingle();
 
     if (error) {
-      console.error('[Get Token Balance] Error:', error);
+      logger.error('[Get Token Balance] Error:', error);
       captureError(error as Error, {
         tags: { feature: 'billing', operation: 'get_token_balance' },
         extra: { userId },
@@ -286,7 +297,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
 
     return ((data as Record<string, unknown> | null)?.['current_balance'] as number) || 0;
   } catch (error) {
-    console.error('[Get Token Balance] Error:', error);
+    logger.error('[Get Token Balance] Error:', error);
     captureError(error as Error, {
       tags: { feature: 'billing', operation: 'get_token_balance' },
       extra: { userId },
@@ -296,13 +307,4 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
   }
 }
 
-/**
- * Check if Stripe is configured
- */
-export function isStripeConfigured(): boolean {
-  // Check if we're in development or production
-
-  // In production, Stripe should always be configured
-  // In development, it's optional
-  return true; // Always return true - backend will handle errors
-}
+// Note: isStripeConfigured() is exported from stripe-payments.ts — do not duplicate here.

@@ -27,7 +27,7 @@ import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/supabase';
 import { accountApi } from '../api/accountApi';
 import { API_BASE_URL } from '../api/client';
-import { isTauri } from '../lib/tauri-mock';
+import { isTauri, invoke } from '../lib/tauri-mock';
 
 // Singleton guard - ensures only one orchestrator instance exists
 let orchestratorInitialized = false;
@@ -129,7 +129,7 @@ async function fetchCreditsWithCache(accessToken: string): Promise<CreditBalance
 
     if (isUnauthorized) {
       if (!credits401Cache || credits401Cache.accessToken !== accessToken) {
-        console.log(
+        console.debug(
           '[AuthOrchestrator] Could not fetch credits (API unauthorized). In local dev, this often means AGI_API_URL points to a backend that does not match your Supabase project.',
         );
       }
@@ -154,7 +154,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
   // If already processing, queue this state for after current processing completes
   if (isProcessingAuthChange) {
     pendingAuthState = authState;
-    console.log('[AuthOrchestrator] Auth change queued (already processing)');
+    console.debug('[AuthOrchestrator] Auth change queued (already processing)');
     return;
   }
 
@@ -163,17 +163,17 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
   try {
     // Skip if still loading - wait for complete state
     if (authState.isLoading) {
-      console.log('[AuthOrchestrator] Auth is loading, waiting...');
+      console.debug('[AuthOrchestrator] Auth is loading, waiting...');
       return;
     }
 
     // Skip if subscription is still being fetched
     if (authState.subscriptionFetchStatus === 'fetching') {
-      console.log('[AuthOrchestrator] Subscription fetch in progress, waiting...');
+      console.debug('[AuthOrchestrator] Subscription fetch in progress, waiting...');
       return;
     }
 
-    console.log('[AuthOrchestrator] Processing auth state change:', {
+    console.debug('[AuthOrchestrator] Processing auth state change:', {
       hasUser: !!authState.user,
       hasSession: !!authState.session,
       subscriptionFetchStatus: authState.subscriptionFetchStatus,
@@ -201,7 +201,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
 
     // If no user and not loading, clear store and return
     if (!authState.user) {
-      console.log('[AuthOrchestrator] No user, clearing unified auth store');
+      console.debug('[AuthOrchestrator] No user, clearing unified auth store');
       unifiedAuthStore.reset();
       clearCachedSubscription();
       return;
@@ -219,24 +219,24 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       planTier = asPlanTier(authState.subscription.plan_tier);
       subscriptionStatus = (authState.subscription.status as SubscriptionStatus) || 'active';
       setCachedSubscription(userId, planTier, subscriptionStatus);
-      console.log('[AuthOrchestrator] Using fetched plan tier:', planTier);
+      console.debug('[AuthOrchestrator] Using fetched plan tier:', planTier);
     } else if (authState.subscriptionFetchStatus === 'failed') {
       // Fetch failed - try cache
       const cached = getCachedSubscription(userId);
       if (cached) {
         planTier = cached.planTier;
         subscriptionStatus = cached.subscriptionStatus;
-        console.log('[AuthOrchestrator] Using cached plan tier:', planTier);
+        console.debug('[AuthOrchestrator] Using cached plan tier:', planTier);
       } else {
         // CRITICAL: Don't default to 'free' - keep as null
         planTier = null;
-        console.log('[AuthOrchestrator] Fetch failed, no cache - plan unknown');
+        console.debug('[AuthOrchestrator] Fetch failed, no cache - plan unknown');
       }
     } else {
       // Fetch succeeded but no subscription = genuinely free tier
       planTier = 'free';
       clearCachedSubscription();
-      console.log('[AuthOrchestrator] Confirmed free tier (no subscription)');
+      console.debug('[AuthOrchestrator] Confirmed free tier (no subscription)');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -246,7 +246,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     if (authState.session?.access_token) {
       try {
         credits = await fetchCreditsWithCache(authState.session.access_token);
-        console.log('[AuthOrchestrator] Credits fetched:', credits?.remaining_cents);
+        console.debug('[AuthOrchestrator] Credits fetched:', credits?.remaining_cents);
       } catch (error) {
         console.warn('[AuthOrchestrator] Credit fetch failed:', error);
       }
@@ -341,8 +341,6 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     // ═══════════════════════════════════════════════════════════════
     if (isTauri && authState.session) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-
         // Sync API base URL
         await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
 
@@ -359,13 +357,13 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
 
         // Initialize ManagedCloud provider
         await invoke('llm_ensure_managed_cloud');
-        console.log('[AuthOrchestrator] Rust backend synced');
+        console.debug('[AuthOrchestrator] Rust backend synced');
       } catch (error) {
         console.warn('[AuthOrchestrator] Failed to sync with Rust backend:', error);
       }
     }
 
-    console.log('[AuthOrchestrator] Auth state processing complete');
+    console.debug('[AuthOrchestrator] Auth state processing complete');
   } finally {
     isProcessingAuthChange = false;
 
@@ -373,7 +371,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     if (pendingAuthState) {
       const nextState = pendingAuthState;
       pendingAuthState = null;
-      console.log('[AuthOrchestrator] Processing queued auth state');
+      console.debug('[AuthOrchestrator] Processing queued auth state');
       await processAuthStateChange(nextState);
     }
   }
@@ -392,7 +390,7 @@ export function initializeAuthOrchestrator(): () => void {
     return unsubscribeFn || (() => {});
   }
 
-  console.log('[AuthOrchestrator] Initializing...');
+  console.debug('[AuthOrchestrator] Initializing...');
   orchestratorInitialized = true;
 
   // Subscribe to auth state changes
@@ -429,7 +427,7 @@ export function initializeAuthOrchestrator(): () => void {
   });
 
   return () => {
-    console.log('[AuthOrchestrator] Cleanup');
+    console.debug('[AuthOrchestrator] Cleanup');
     orchestratorInitialized = false;
     if (unsubscribeFn) {
       unsubscribeFn();

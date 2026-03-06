@@ -6,7 +6,16 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, File, Image as ImageIcon, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Upload,
+  X,
+  File,
+  Image as ImageIcon,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import { Card } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Progress } from '@shared/ui/progress';

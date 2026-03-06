@@ -15,23 +15,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     // Key feature pages
     { path: '/pricing', priority: 0.9, changeFrequency: 'monthly' },
-    { path: '/about', priority: 0.8, changeFrequency: 'monthly' },
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/get-started', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/download', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/ai-skills', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/agents', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
 
-    // Support/Help pages
-    { path: '/faq', priority: 0.8, changeFrequency: 'monthly' },
-    { path: '/contact', priority: 0.7, changeFrequency: 'yearly' },
+    // About / Blog / Support pages
+    { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/blog', priority: 0.7, changeFrequency: 'daily' },
+    { path: '/contact', priority: 0.5, changeFrequency: 'monthly' },
+    { path: '/faq', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/diagnose', priority: 0.6, changeFrequency: 'weekly' },
 
     // Legal/Policy pages
     { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
     { path: '/terms', priority: 0.7, changeFrequency: 'yearly' },
-
-    // Auth pages (lower priority - users already logged in)
-    { path: '/login', priority: 0.5, changeFrequency: 'yearly' },
-    { path: '/signup', priority: 0.5, changeFrequency: 'yearly' },
   ];
 
   return routes.map((route) => ({

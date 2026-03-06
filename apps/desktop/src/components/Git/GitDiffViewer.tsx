@@ -7,7 +7,7 @@
  * @module GitDiffViewer
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../../lib/tauri-mock';
 import { AlertCircle, FileCode, Loader2, Minus, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';

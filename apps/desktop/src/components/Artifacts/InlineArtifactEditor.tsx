@@ -38,12 +38,7 @@ export function InlineArtifactEditor({ artifact, onSave, onCancel }: InlineArtif
           {artifact.title}
         </span>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
-            className="h-7 px-2 text-xs"
-          >
+          <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 px-2 text-xs">
             Cancel
           </Button>
           <Button

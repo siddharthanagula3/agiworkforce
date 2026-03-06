@@ -114,18 +114,13 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
       {/* Conditional inputs */}
       {isOnce ? (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-400">
-            Date &amp; Time
-          </label>
+          <label className="mb-1.5 block text-xs font-medium text-slate-400">Date &amp; Time</label>
           <input
             type="datetime-local"
             value={formatForInput(value.runAt)}
             onChange={(e) => handleRunAtChange(e.target.value)}
             disabled={disabled}
-            className={cn(
-              fieldClass,
-              '[color-scheme:dark]',
-            )}
+            className={cn(fieldClass, '[color-scheme:dark]')}
           />
         </div>
       ) : (

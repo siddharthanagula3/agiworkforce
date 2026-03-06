@@ -37,11 +37,7 @@ export function MessageList({ messages, onApprove, onReject }: MessageListProps)
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <MessageBubble
-        message={item}
-        onApprove={onApprove}
-        onReject={onReject}
-      />
+      <MessageBubble message={item} onApprove={onApprove} onReject={onReject} />
     ),
     [onApprove, onReject],
   );
@@ -63,8 +59,7 @@ export function MessageList({ messages, onApprove, onReject }: MessageListProps)
       showsVerticalScrollIndicator={false}
       onScroll={(event) => {
         const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-        const distanceFromBottom =
-          contentSize.height - contentOffset.y - layoutMeasurement.height;
+        const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
         isNearBottomRef.current = distanceFromBottom < 150;
       }}
       scrollEventThrottle={100}

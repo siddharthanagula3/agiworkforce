@@ -188,18 +188,26 @@ function httpsPost(
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
+        cancelListener.dispose();
         resolve({
           statusCode: res.statusCode ?? 0,
           body: Buffer.concat(chunks).toString('utf8'),
         });
       });
-      res.on('error', reject);
+      res.on('error', (err) => {
+        cancelListener.dispose();
+        reject(err);
+      });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      cancelListener.dispose();
+      reject(err);
+    });
 
-    // Handle cancellation
-    token.onCancellationRequested(() => {
+    // Handle cancellation — dispose the listener when request completes
+    const cancelListener = token.onCancellationRequested(() => {
+      cancelListener.dispose();
       req.destroy(new Error('Request cancelled'));
       reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
     });
@@ -244,6 +252,7 @@ function httpsPostStream(
         const errorChunks: Buffer[] = [];
         res.on('data', (c: Buffer) => errorChunks.push(c));
         res.on('end', () => {
+          cancelListener.dispose();
           const errBody = Buffer.concat(errorChunks).toString('utf8');
           reject(
             new AgiWorkforceApiError(
@@ -283,13 +292,24 @@ function httpsPostStream(
         }
       });
 
-      res.on('end', resolve);
-      res.on('error', reject);
+      res.on('end', () => {
+        cancelListener.dispose();
+        resolve();
+      });
+      res.on('error', (err) => {
+        cancelListener.dispose();
+        reject(err);
+      });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      cancelListener.dispose();
+      reject(err);
+    });
 
-    token.onCancellationRequested(() => {
+    // Handle cancellation — dispose the listener when request completes
+    const cancelListener = token.onCancellationRequested(() => {
+      cancelListener.dispose();
       req.destroy(new Error('Request cancelled'));
       reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
     });

@@ -81,10 +81,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
         </div>
       </div>
 
-      <label
-        htmlFor="agent-task-parallel"
-        className="flex cursor-pointer items-center gap-2"
-      >
+      <label htmlFor="agent-task-parallel" className="flex cursor-pointer items-center gap-2">
         <input
           id="agent-task-parallel"
           type="checkbox"

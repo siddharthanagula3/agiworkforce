@@ -271,13 +271,9 @@ export const useVibeChatStore = create<VibeChatState>()(
 
       updateMessage: (messageId, updates) => {
         set((state) => {
-          const messageIndex = state.messages.findIndex((m) => m.id === messageId);
-          if (messageIndex !== -1) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (state.messages as any)[messageIndex] = {
-              ...state.messages[messageIndex]!,
-              ...updates,
-            };
+          const message = state.messages.find((m) => m.id === messageId);
+          if (message) {
+            Object.assign(message, updates);
           }
         });
       },

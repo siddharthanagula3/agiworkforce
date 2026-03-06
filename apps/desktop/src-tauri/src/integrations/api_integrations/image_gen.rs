@@ -317,7 +317,7 @@ impl ImageGenerationClient {
                 images,
                 created_at: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_secs(),
                 revised_prompt: None,
             })
@@ -417,7 +417,7 @@ impl ImageGenerationClient {
                 images,
                 created_at: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_secs(),
                 revised_prompt: None,
             })

@@ -12,11 +12,7 @@ export function combineAbortSignals(signals: AbortSignal[]): AbortSignal {
       controller.abort(signal.reason);
       return controller.signal;
     }
-    signal.addEventListener(
-      'abort',
-      () => controller.abort(signal.reason),
-      { once: true },
-    );
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
   }
 
   return controller.signal;

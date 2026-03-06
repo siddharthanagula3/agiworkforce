@@ -366,7 +366,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   unpublishWorkflow: async (workflowId: string) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('unpublish_workflow', { workflow_id: workflowId, user_id: 'default' });
+      await invoke('unpublish_workflow', { workflowId, userId: 'default' });
       set((state) => ({
         myPublishedWorkflows: state.myPublishedWorkflows.filter((w) => w.id !== workflowId),
         isLoading: false,
@@ -382,8 +382,8 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       // MKT-007 fix: Use explicit parameter object to avoid type bypass
       await invoke('rate_workflow', {
-        workflow_id: request.workflow_id,
-        user_id: request.user_id,
+        workflowId: request.workflow_id,
+        userId: request.user_id,
         rating: request.rating,
         comment: request.review_text,
       });
@@ -401,7 +401,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   favoriteWorkflow: async (workflowId: string, userId: string) => {
     try {
-      await invoke('favorite_workflow', { workflow_id: workflowId, user_id: userId });
+      await invoke('favorite_workflow', { workflowId, userId });
     } catch (error) {
       console.error('Failed to favorite workflow:', error);
       throw error;
@@ -410,7 +410,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   unfavoriteWorkflow: async (workflowId: string, userId: string) => {
     try {
-      await invoke('unfavorite_workflow', { workflow_id: workflowId, user_id: userId });
+      await invoke('unfavorite_workflow', { workflowId, userId });
     } catch (error) {
       console.error('Failed to unfavorite workflow:', error);
       throw error;
@@ -420,8 +420,8 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   isFavorited: async (workflowId: string, userId: string) => {
     try {
       const favorited = await invoke<boolean>('is_workflow_favorited', {
-        workflow_id: workflowId,
-        user_id: userId,
+        workflowId,
+        userId,
       });
       return favorited;
     } catch (error) {
@@ -451,9 +451,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   ) => {
     try {
       await invoke('comment_on_workflow', {
-        workflow_id: workflowId,
-        user_id: userId,
-        user_name: userName,
+        workflowId,
+        userId,
+        userName,
         comment,
       });
 
@@ -466,7 +466,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   deleteComment: async (commentId: string) => {
     try {
-      await invoke('delete_workflow_comment', { comment_id: commentId, user_id: 'default' });
+      await invoke('delete_workflow_comment', { commentId, userId: 'default' });
 
       set((state) => ({
         workflowComments: state.workflowComments.filter((c) => c.id !== commentId),
@@ -479,7 +479,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   getShareUrl: async (workflowId: string) => {
     try {
-      const url = await invoke<string>('get_workflow_share_url', { workflow_id: workflowId });
+      const url = await invoke<string>('get_workflow_share_url', { workflowId });
       return url;
     } catch (error) {
       console.error('Failed to get share URL:', error);
@@ -489,7 +489,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   shareWorkflow: async (workflowId: string, platform: string) => {
     try {
-      const url = await invoke<string>('share_workflow', { workflow_id: workflowId, platform });
+      const url = await invoke<string>('share_workflow', { workflowId, platform });
       return url;
     } catch (error) {
       console.error('Failed to generate share link:', error);
@@ -500,7 +500,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   getEmbedCode: async (workflowId: string) => {
     try {
       const embedCode = await invoke<string>('get_workflow_embed_code', {
-        workflow_id: workflowId,
+        workflowId,
       });
       return embedCode;
     } catch (error) {
@@ -511,7 +511,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   trackWorkflowView: async (workflowId: string) => {
     try {
-      await invoke('increment_workflow_view_count', { workflow_id: workflowId });
+      await invoke('increment_workflow_view_count', { workflowId });
     } catch (error) {
       console.error('Failed to track view:', error);
     }

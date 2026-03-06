@@ -180,7 +180,7 @@ export async function mcpCallTool(
     }
     return await invokeWithRetry<unknown>(
       'mcp_call_tool',
-      { tool_id: toolId, arguments: arguments_ },
+      { toolId, arguments: arguments_ },
       MCP_TOOL_CALL_TIMEOUT_MS,
     );
   } catch (error) {
@@ -210,7 +210,7 @@ export async function mcpUpdateConfig(config: McpServersConfig): Promise<string>
       throw new Error('config must be a valid McpServersConfig object');
     }
 
-    return await invokeWithTimeout<string>('mcp_update_config', { new_config: config });
+    return await invokeWithTimeout<string>('mcp_update_config', { newConfig: config });
   } catch (error) {
     throw new Error(`Failed to update MCP configuration: ${error}`);
   }
@@ -236,7 +236,7 @@ export async function mcpStoreCredential(
       throw new Error('credential value cannot be null or undefined');
     }
     return await invokeWithTimeout<string>('mcp_store_credential', {
-      server_name: serverName,
+      serverName,
       key,
       value,
     });
@@ -332,11 +332,7 @@ export async function mcpOAuthCallback(
       provider: string;
       connected: boolean;
       expires_at: number | null;
-    }>(
-      'mcp_oauth_callback',
-      { provider, code, callback_state: callbackState },
-      MCP_OAUTH_TIMEOUT_MS,
-    );
+    }>('mcp_oauth_callback', { provider, code, callbackState }, MCP_OAUTH_TIMEOUT_MS);
     return {
       provider: result.provider,
       connected: result.connected,
@@ -442,8 +438,8 @@ export async function mcpOAuthSetCredentials(
     validateNonEmpty(clientSecret, 'client secret');
     await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
       provider,
-      client_id: clientId,
-      client_secret: clientSecret,
+      clientId,
+      clientSecret,
     });
   } catch (error) {
     throw new Error(`Failed to set OAuth credentials for ${provider}: ${error}`);

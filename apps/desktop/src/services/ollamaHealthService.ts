@@ -47,7 +47,7 @@ async function performHealthCheck(): Promise<boolean> {
     if (available) {
       // Only log status changes
       if (!healthState.isRunning) {
-        console.log('[OllamaHealth] Ollama is now available');
+        console.debug('[OllamaHealth] Ollama is now available');
       }
 
       healthState.isRunning = true;
@@ -88,7 +88,7 @@ function handleUnavailable(reason: string): void {
     if (wasRunning) {
       console.warn('[OllamaHealth] Ollama became unavailable:', reason);
     } else if (healthState.consecutiveFailures === 1) {
-      console.log('[OllamaHealth] Ollama is not running. Local models will be unavailable.');
+      console.debug('[OllamaHealth] Ollama is not running. Local models will be unavailable.');
     }
   }
 
@@ -126,7 +126,7 @@ async function fetchModelsAsync(): Promise<void> {
 
     // Only log if model count changed
     if (models.length !== previousCount) {
-      console.log(`[OllamaHealth] Found ${models.length} local model(s)`);
+      console.debug(`[OllamaHealth] Found ${models.length} local model(s)`);
     }
 
     useModelStore.setState({
@@ -167,7 +167,7 @@ export function initializeOllamaHealthService(): () => void {
   }
 
   isInitialized = true;
-  console.log('[OllamaHealth] Initializing health service...');
+  console.debug('[OllamaHealth] Initializing health service...');
 
   // Delay initial check to let the app fully load
   setTimeout(() => {

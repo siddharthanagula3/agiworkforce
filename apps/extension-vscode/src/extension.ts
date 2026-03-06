@@ -31,10 +31,22 @@ import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridg
 
 export function activate(context: vscode.ExtensionContext): void {
   // ── 0. Telemetry ──────────────────────────────────────────────────────────
-  context.subscriptions.push(telemetry.activate(context));
+  try {
+    context.subscriptions.push(telemetry.activate(context));
+  } catch {
+    // Telemetry failure must not block extension activation
+  }
 
   // ── 0b. Desktop Bridge ──────────────────────────────────────────────────────
-  context.subscriptions.push(activateDesktopBridge(context));
+  try {
+    context.subscriptions.push(activateDesktopBridge(context));
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    vscode.window.showWarningMessage(
+      `AGI Workforce: Desktop bridge failed to initialize — ${errMsg}. ` +
+        'Some features may be unavailable.',
+    );
+  }
 
   // ── 1. Chat participant (@agi in VS Code Chat) ──────────────────────────────
   const chatParticipant = registerChatParticipant(context);

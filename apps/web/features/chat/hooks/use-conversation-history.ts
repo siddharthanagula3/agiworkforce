@@ -41,9 +41,13 @@ export const useChatHistory = () => {
 
   // Initialize userId on first render
   useState(() => {
-    getCurrentUser().then((user) => {
-      if (user) setUserId(user.id);
-    });
+    getCurrentUser()
+      .then((user) => {
+        if (user) setUserId(user.id);
+      })
+      .catch(() => {
+        // User not authenticated — leave userId as null
+      });
   });
 
   // React Query hooks

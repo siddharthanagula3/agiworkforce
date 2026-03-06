@@ -317,10 +317,17 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       reader.onloadend = async () => {
         // Check if component is still mounted before proceeding
         if (!isMountedRef.current) return;
-        const base64 = (reader.result as string).split(',')[1];
-        await invoke('file_write_binary', { file_path: savePath, base64_content: base64 });
-        if (isMountedRef.current) {
-          toast.success('Exported as SVG');
+        try {
+          const base64 = (reader.result as string).split(',')[1];
+          await invoke('file_write_binary', { filePath: savePath, base64Content: base64 });
+          if (isMountedRef.current) {
+            toast.success('Exported as SVG');
+          }
+        } catch (err) {
+          console.error('Failed to write SVG file:', err);
+          if (isMountedRef.current) {
+            toast.error('Failed to save SVG file');
+          }
         }
       };
       reader.onerror = () => {

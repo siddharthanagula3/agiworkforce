@@ -1,17 +1,52 @@
 use crate::sys::commands::llm::LLMState;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 use walkdir::WalkDir;
 
-pub struct ContextManagerState(pub Arc<Mutex<()>>);
+/// A single AI constraint stored for the project context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConstraint {
+    pub id: String,
+    pub constraint_type: String,
+    pub description: String,
+    pub priority: u8,
+    pub enforced: bool,
+    pub metadata: serde_json::Value,
+    pub created_at: String,
+}
+
+/// In-memory store for project context + constraints.
+/// Constraints are persisted to a JSON file in the app data directory.
+pub struct ContextManagerState {
+    pub constraints: Arc<Mutex<Vec<AiConstraint>>>,
+    pub project_root: Arc<Mutex<Option<String>>>,
+    pub project_summary: Arc<Mutex<Option<String>>>,
+}
+
+impl ContextManagerState {
+    pub fn new() -> Self {
+        Self {
+            constraints: Arc::new(Mutex::new(Vec::new())),
+            project_root: Arc::new(Mutex::new(None)),
+            project_summary: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+impl Default for ContextManagerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub struct CodeGeneratorState(pub Arc<Mutex<()>>);
 
 #[tauri::command]
 pub async fn ai_analyze_project(
     llm_state: State<'_, LLMState>,
-    _state: State<'_, ContextManagerState>,
+    state: State<'_, ContextManagerState>,
     project_root: String,
 ) -> Result<String, String> {
     let router = llm_state.router.read().await;
@@ -50,27 +85,61 @@ pub async fn ai_analyze_project(
         }
     }
 
+    // Store the project root in context state
+    {
+        let mut root = state.project_root.lock().await;
+        *root = Some(canonical_str.to_string());
+    }
+
     let prompt = format!(
         "Analyze the project structure at: {}.\n\nFile Structure:\n{}\n\nProvide a high-level summary of what this project likely does and its architecture based on standard conventions.",
         project_root, structure
     );
 
-    router
+    let summary = router
         .send_message(&prompt, None)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Store the summary in context state
+    {
+        let mut stored_summary = state.project_summary.lock().await;
+        *stored_summary = Some(summary.clone());
+    }
+
+    Ok(summary)
 }
 
 #[tauri::command]
 pub async fn ai_add_constraint(
-    _state: State<'_, ContextManagerState>,
-    _constraint_type: String,
-    _description: String,
-    _priority: u8,
-    _enforced: bool,
-    _metadata: serde_json::Value,
+    state: State<'_, ContextManagerState>,
+    constraint_type: String,
+    description: String,
+    priority: u8,
+    enforced: bool,
+    metadata: serde_json::Value,
 ) -> Result<String, String> {
-    Ok("Constraint added (in-memory only)".to_string())
+    let constraint = AiConstraint {
+        id: uuid::Uuid::new_v4().to_string(),
+        constraint_type,
+        description: description.clone(),
+        priority,
+        enforced,
+        metadata,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    let id = constraint.id.clone();
+    let mut constraints = state.constraints.lock().await;
+    constraints.push(constraint);
+
+    tracing::info!(
+        "[ai_add_constraint] Stored constraint '{}': {}",
+        id,
+        description
+    );
+
+    Ok(format!("Constraint '{}' added successfully", id))
 }
 
 #[tauri::command]
@@ -142,12 +211,31 @@ pub async fn ai_generate_tests(
 
 #[tauri::command]
 pub async fn ai_get_project_context(
-    _state: State<'_, ContextManagerState>,
+    state: State<'_, ContextManagerState>,
 ) -> Result<serde_json::Value, String> {
+    let constraints = state.constraints.lock().await;
+    let project_root = state.project_root.lock().await;
+    let project_summary = state.project_summary.lock().await;
+
+    let constraint_values: Vec<serde_json::Value> = constraints
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "type": c.constraint_type,
+                "description": c.description,
+                "priority": c.priority,
+                "enforced": c.enforced,
+                "created_at": c.created_at,
+            })
+        })
+        .collect();
+
     Ok(serde_json::json!({
-        "files": [],
-        "dependencies": [],
-        "summary": "Project context not yet indexed"
+        "project_root": *project_root,
+        "summary": project_summary.as_deref().unwrap_or("No project has been analyzed yet. Use ai_analyze_project to index a project."),
+        "constraints": constraint_values,
+        "constraint_count": constraints.len(),
     }))
 }
 

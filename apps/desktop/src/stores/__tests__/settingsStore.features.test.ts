@@ -172,11 +172,13 @@ describe('settingsStore — features capability toggles', () => {
     it('migrate from v10 adds empty features object when missing', () => {
       // Retrieve the migrate function from the store config.
       // The persist config is accessible via the store's _persist property in zustand v5.
-      const storeConfig = (useSettingsStore as unknown as {
-        persist?: {
-          getOptions?: () => { migrate?: (state: unknown, version: number) => unknown };
-        };
-      }).persist;
+      const storeConfig = (
+        useSettingsStore as unknown as {
+          persist?: {
+            getOptions?: () => { migrate?: (state: unknown, version: number) => unknown };
+          };
+        }
+      ).persist;
 
       if (!storeConfig?.getOptions) {
         // If the internal API is not available, skip via a soft assertion
@@ -211,11 +213,13 @@ describe('settingsStore — features capability toggles', () => {
     });
 
     it('migrate from v10 does not overwrite an existing features object', () => {
-      const storeConfig = (useSettingsStore as unknown as {
-        persist?: {
-          getOptions?: () => { migrate?: (state: unknown, version: number) => unknown };
-        };
-      }).persist;
+      const storeConfig = (
+        useSettingsStore as unknown as {
+          persist?: {
+            getOptions?: () => { migrate?: (state: unknown, version: number) => unknown };
+          };
+        }
+      ).persist;
 
       if (!storeConfig?.getOptions) {
         expect(true).toBe(true);
@@ -241,13 +245,15 @@ describe('settingsStore — features capability toggles', () => {
     });
 
     it('merge preserves features from persisted state', () => {
-      const storeConfig = (useSettingsStore as unknown as {
-        persist?: {
-          getOptions?: () => {
-            merge?: (persisted: unknown, current: unknown) => unknown;
+      const storeConfig = (
+        useSettingsStore as unknown as {
+          persist?: {
+            getOptions?: () => {
+              merge?: (persisted: unknown, current: unknown) => unknown;
+            };
           };
-        };
-      }).persist;
+        }
+      ).persist;
 
       if (!storeConfig?.getOptions) {
         expect(true).toBe(true);
@@ -265,7 +271,9 @@ describe('settingsStore — features capability toggles', () => {
       };
 
       const currentState = useSettingsStore.getState();
-      const merged = options.merge(persisted, currentState) as { features: Record<string, boolean> };
+      const merged = options.merge(persisted, currentState) as {
+        features: Record<string, boolean>;
+      };
 
       // Merged features should come from persisted state
       expect(merged.features['webSearch']).toBe(true);

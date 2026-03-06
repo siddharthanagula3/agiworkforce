@@ -26,13 +26,9 @@ impl AudioProcessor {
 
         match extension.to_lowercase().as_str() {
             "mp3" | "wav" | "m4a" | "ogg" | "flac" | "aac" => {
-                tracing::info!(
-                    "[AudioProcessor] Would transcribe audio from {:?}",
-                    audio_path
-                );
-
-                Ok(format!(
-                    "Audio transcription placeholder for file: {}",
+                Err(anyhow::anyhow!(
+                    "Audio transcription requires a cloud speech-to-text API (e.g. Whisper API) \
+                     or the local-whisper feature to be enabled. File: {}",
                     audio_path.display()
                 ))
             }

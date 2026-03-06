@@ -6,11 +6,7 @@
 
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
@@ -73,9 +69,7 @@ function FilterChip({
           },
           isSelected
             ? {
-                backgroundColor: dotColor
-                  ? `${dotColor}20`
-                  : 'rgba(255, 255, 255, 0.12)',
+                backgroundColor: dotColor ? `${dotColor}20` : 'rgba(255, 255, 255, 0.12)',
                 borderColor: dotColor ?? 'rgba(255, 255, 255, 0.3)',
               }
             : {
@@ -101,12 +95,11 @@ function FilterChip({
           style={{
             fontSize: 12,
             fontWeight: isSelected ? '600' : '400',
-            color: isSelected
-              ? dotColor ?? colors.textPrimary
-              : colors.textSecondary,
+            color: isSelected ? (dotColor ?? colors.textPrimary) : colors.textSecondary,
           }}
         >
-          {label}{countLabel}
+          {label}
+          {countLabel}
         </Text>
       </Pressable>
     </Animated.View>

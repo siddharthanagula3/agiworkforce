@@ -185,7 +185,7 @@ export class WebSocketClient {
       // Handle regular message
       this.handlers.onMessage?.(message);
     } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
+      logger.error('Failed to parse WebSocket message', error);
     }
   }
 
@@ -337,7 +337,10 @@ export class WebSocketClient {
 
   // Event handlers
 
-  on(event: keyof WebSocketEventHandlers, handler: WebSocketEventHandlers[keyof WebSocketEventHandlers]): void {
+  on(
+    event: keyof WebSocketEventHandlers,
+    handler: WebSocketEventHandlers[keyof WebSocketEventHandlers],
+  ): void {
     (this.handlers as Record<string, unknown>)[event] = handler;
   }
 
@@ -471,7 +474,7 @@ export const useWebSocket = ({ enabled = true, ...options }: UseWebSocketOptions
     });
 
     client.connect().catch((error) => {
-      console.error('WebSocket connection failed:', error);
+      logger.error('WebSocket connection failed', error);
     });
 
     return () => {

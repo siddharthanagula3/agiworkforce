@@ -96,12 +96,7 @@ function makeFormDataRequest(
     authHeader?: string;
   } = {},
 ): NextRequest {
-  const {
-    includeFile = true,
-    model,
-    language,
-    authHeader = 'Bearer valid-token',
-  } = options;
+  const { includeFile = true, model, language, authHeader = 'Bearer valid-token' } = options;
 
   const formData = new FormData();
 
@@ -223,7 +218,9 @@ describe('POST /api/voice/transcribe', () => {
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
-    expect((options.headers as Record<string, string>)['Authorization']).toContain('Bearer sk-test');
+    expect((options.headers as Record<string, string>)['Authorization']).toContain(
+      'Bearer sk-test',
+    );
     expect(options.method).toBe('POST');
   });
 

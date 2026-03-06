@@ -671,17 +671,17 @@ describe('Scheduler Tauri Commands', () => {
 
       // Pause job
       vi.mocked(invoke).mockResolvedValueOnce(true);
-      const paused = await invoke('scheduler_pause_job', { job_id: jobId });
+      const paused = await invoke('scheduler_pause_job', { jobId });
       expect(paused).toBe(true);
 
       // Resume job
       vi.mocked(invoke).mockResolvedValueOnce(true);
-      const resumed = await invoke('scheduler_resume_job', { job_id: jobId });
+      const resumed = await invoke('scheduler_resume_job', { jobId });
       expect(resumed).toBe(true);
 
       // Remove job
       vi.mocked(invoke).mockResolvedValueOnce(true);
-      const removed = await invoke('scheduler_remove_job', { job_id: jobId });
+      const removed = await invoke('scheduler_remove_job', { jobId });
       expect(removed).toBe(true);
 
       expect(invoke).toHaveBeenCalledTimes(4);

@@ -11,14 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import {
-  ArrowLeft,
-  Brain,
-  RefreshCw,
-  Search,
-  X,
-  Plus,
-} from 'lucide-react-native';
+import { ArrowLeft, Brain, RefreshCw, Search, X, Plus } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -114,10 +107,7 @@ export default function MemoryScreen() {
 
     if (activeFilter === 'All') return source;
 
-    return source.filter(
-      (e) =>
-        e.category?.toLowerCase() === activeFilter.toLowerCase(),
-    );
+    return source.filter((e) => e.category?.toLowerCase() === activeFilter.toLowerCase());
   }, [entries, filteredEntries, searchQuery, activeFilter]);
 
   // Handlers
@@ -187,10 +177,7 @@ export default function MemoryScreen() {
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Pressable
-          onPress={() => router.back()}
-          className="p-2 -ml-2 rounded-lg active:bg-white/5"
-        >
+        <Pressable onPress={() => router.back()} className="p-2 -ml-2 rounded-lg active:bg-white/5">
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2 flex-1">
@@ -213,9 +200,7 @@ export default function MemoryScreen() {
       {/* Sync status bar */}
       <View className="px-4 mb-2">
         <Text className="text-[11px] text-white/30">
-          {syncing
-            ? 'Syncing...'
-            : `Last synced: ${formatSyncTime(lastSyncAt)}`}
+          {syncing ? 'Syncing...' : `Last synced: ${formatSyncTime(lastSyncAt)}`}
         </Text>
       </View>
 
@@ -263,15 +248,11 @@ export default function MemoryScreen() {
                 key={cat}
                 onPress={() => setActiveFilter(cat)}
                 className={`px-3 py-1.5 rounded-full border ${
-                  isActive
-                    ? 'border-teal-500/50 bg-teal-500/15'
-                    : 'border-white/10 bg-white/5'
+                  isActive ? 'border-teal-500/50 bg-teal-500/15' : 'border-white/10 bg-white/5'
                 }`}
               >
                 <Text
-                  className={`text-xs font-medium ${
-                    isActive ? 'text-teal-400' : 'text-white/60'
-                  }`}
+                  className={`text-xs font-medium ${isActive ? 'text-teal-400' : 'text-white/60'}`}
                 >
                   {cat}
                 </Text>

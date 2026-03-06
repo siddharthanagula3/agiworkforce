@@ -29,9 +29,7 @@ function getInitials(name: string): string {
 }
 
 export function Avatar({ name, size = 'md', variant = 'user' }: AvatarProps) {
-  const bgClass = variant === 'assistant'
-    ? 'bg-teal-500'
-    : 'bg-blue-500';
+  const bgClass = variant === 'assistant' ? 'bg-teal-500' : 'bg-blue-500';
 
   return (
     <View className={`${sizeClasses[size]} ${bgClass} rounded-full items-center justify-center`}>

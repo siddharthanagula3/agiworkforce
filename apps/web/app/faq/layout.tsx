@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/app-preview.png',
         width: 1200,
         height: 630,
         alt: 'AGI Workforce FAQ',
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'FAQ | AGI Workforce',
     description: 'Find answers to common questions about AGI Workforce.',
-    images: ['/og-image.svg'],
+    images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
 };
@@ -141,7 +141,7 @@ const jsonLd = {
       name: 'Which AI providers are supported?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, Grok 4, DeepSeek Chat, Qwen 3, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
+        text: 'AGI Workforce supports models from OpenAI, Anthropic, Google, xAI, DeepSeek, Alibaba, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
       },
     },
     {

@@ -57,20 +57,24 @@ export function ChatComposerNew({
 
   // Load real skills data on mount
   useEffect(() => {
-    ChatAIService.getAvailableSkills().then((skills) => {
-      if (skills.length > 0) {
-        // Prepend the "Auto-Select" option
-        setAvailableSkills([
-          {
-            id: 'auto',
-            name: 'Auto-Select',
-            description: 'Let AI choose the best skill',
-            category: 'General',
-          },
-          ...skills,
-        ]);
-      }
-    });
+    ChatAIService.getAvailableSkills()
+      .then((skills) => {
+        if (skills.length > 0) {
+          // Prepend the "Auto-Select" option
+          setAvailableSkills([
+            {
+              id: 'auto',
+              name: 'Auto-Select',
+              description: 'Let AI choose the best skill',
+              category: 'General',
+            },
+            ...skills,
+          ]);
+        }
+      })
+      .catch(() => {
+        // Skills loading failed — keep default sync skills
+      });
   }, []);
 
   // Auto-resize textarea

@@ -174,10 +174,7 @@ export const MessageBubble = memo(function MessageBubble({
     setExpandedArtifact(null);
   }, []);
 
-  const handleApprove = useCallback(
-    (id: string) => onApprove?.(id),
-    [onApprove],
-  );
+  const handleApprove = useCallback((id: string) => onApprove?.(id), [onApprove]);
 
   const handleReject = useCallback(
     (id: string, reason?: string) => onReject?.(id, reason),
@@ -191,7 +188,7 @@ export const MessageBubble = memo(function MessageBubble({
       entering={FadeInDown.duration(200).springify()}
       className={`px-4 py-3 ${isAssistant ? 'bg-white/[0.02]' : ''}`}
       accessible={true}
-      accessibilityLabel={`${isUser ? 'Your' : message.model ?? 'Assistant'} message: ${message.content?.slice(0, 100) || 'empty'}`}
+      accessibilityLabel={`${isUser ? 'Your' : (message.model ?? 'Assistant')} message: ${message.content?.slice(0, 100) || 'empty'}`}
       accessibilityRole="text"
     >
       <View className="flex-row gap-3">
@@ -202,15 +199,12 @@ export const MessageBubble = memo(function MessageBubble({
         <View className="flex-1 gap-1">
           {/* Role label */}
           <Text className="text-xs text-white/40 font-medium">
-            {isUser ? 'You' : message.model ?? 'Assistant'}
+            {isUser ? 'You' : (message.model ?? 'Assistant')}
           </Text>
 
           {/* Reasoning accordion (before main content, assistant only) */}
           {isAssistant && message.reasoning ? (
-            <ReasoningAccordion
-              reasoning={message.reasoning}
-              isStreaming={message.isStreaming}
-            />
+            <ReasoningAccordion reasoning={message.reasoning} isStreaming={message.isStreaming} />
           ) : null}
 
           {/* Status steps */}

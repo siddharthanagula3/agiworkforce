@@ -24,7 +24,7 @@
  * await runNow('job-id');
  * ```
  */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { useCallback, useEffect, useMemo } from 'react';
 
 import {
@@ -316,7 +316,7 @@ export function useScheduler() {
    */
   const getHistory = useCallback(
     async (jobId?: string, limit?: number): Promise<JobHistoryEntry[]> => {
-      console.log('[useScheduler] Getting history for job:', jobId, 'limit:', limit);
+      console.debug('[useScheduler] Getting history for job:', jobId, 'limit:', limit);
       // The backend would need a `scheduler_get_history` command
       // For now, return an empty array
       return [];
@@ -331,8 +331,8 @@ export function useScheduler() {
     async (limit?: number): Promise<NextRunEntry[]> => {
       const runs = await storeGetNextRuns(limit);
       return runs.map((r) => ({
-        job_id: r.jobId,
-        next_run: r.nextRun,
+        job_id: r.job_id,
+        next_run: r.next_run,
       }));
     },
     [storeGetNextRuns],

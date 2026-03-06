@@ -534,7 +534,13 @@ impl ComputerUseSafetyLayer {
 
     /// Evaluates window focus for protected windows.
     fn evaluate_window_focus(&self, title: &str) -> SafetyDecision {
-        let patterns = SENSITIVE_WINDOW_TITLES.get().unwrap();
+        let Some(patterns) = SENSITIVE_WINDOW_TITLES.get() else {
+            // Patterns not initialized yet; allow but warn
+            return SafetyDecision::allow_with_warning(
+                "Safety patterns not yet initialized".to_string(),
+                3,
+            );
+        };
 
         for pattern in patterns {
             if pattern.is_match(title) {

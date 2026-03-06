@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Employee Chat Service
  * Integrates chat interface with workforce orchestrator for dynamic employee selection
@@ -330,7 +331,7 @@ export class EmployeeChatService {
             thinkingSteps.push('Loaded memory context from previous interactions');
           }
         } catch (error) {
-          console.warn('[EmployeeChat] Failed to load memory context:', error);
+          logger.warn('[EmployeeChat] Failed to load memory context:', error);
         }
       }
 
@@ -367,7 +368,7 @@ export class EmployeeChatService {
           });
           thinkingSteps.push('Saved interaction to memory');
         } catch (error) {
-          console.warn('[EmployeeChat] Failed to save memory:', error);
+          logger.warn('[EmployeeChat] Failed to save memory:', error);
         }
       }
 
@@ -512,7 +513,7 @@ export class EmployeeChatService {
         },
       };
     } catch (error) {
-      console.error('Multi-agent collaboration error:', error);
+      logger.error('Multi-agent collaboration error:', error);
 
       // Fallback to single employee on error
       store.addMessage({
@@ -711,7 +712,7 @@ export class EmployeeChatService {
         },
       };
     } catch (error) {
-      console.error('Workflow execution error:', error);
+      logger.error('Workflow execution error:', error);
 
       store.addMessage({
         from: 'system',
@@ -858,7 +859,7 @@ export class EmployeeChatService {
         },
       };
     } catch (error) {
-      console.error('Consulting task error:', error);
+      logger.error('Consulting task error:', error);
 
       store.addMessage({
         from: 'system',

@@ -11,6 +11,7 @@ import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
+import { useAgentStore } from '@/stores/agentStore';
 import { colors } from '@/lib/theme';
 
 /**
@@ -23,7 +24,7 @@ export default function ChatScreen() {
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
 
-  const conversationMessages = useChatStore((s) => (id ? s.messages[id] ?? [] : []));
+  const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
@@ -33,6 +34,8 @@ export default function ChatScreen() {
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const approveRequest = useAgentStore((s) => s.approveRequest);
+  const rejectRequest = useAgentStore((s) => s.rejectRequest);
 
   // Find current conversation title
   const conversation = conversations.find((c) => c.id === id);
@@ -111,10 +114,7 @@ export default function ChatScreen() {
           </Pressable>
 
           {/* Title */}
-          <Text
-            className="flex-1 text-[15px] font-semibold text-white"
-            numberOfLines={1}
-          >
+          <Text className="flex-1 text-[15px] font-semibold text-white" numberOfLines={1}>
             {title}
           </Text>
 
@@ -136,7 +136,11 @@ export default function ChatScreen() {
             <Text className="text-xs text-white/30 mt-2">Loading messages...</Text>
           </View>
         ) : (
-          <MessageList messages={conversationMessages} />
+          <MessageList
+            messages={conversationMessages}
+            onApprove={approveRequest}
+            onReject={rejectRequest}
+          />
         )}
 
         {/* Input */}
