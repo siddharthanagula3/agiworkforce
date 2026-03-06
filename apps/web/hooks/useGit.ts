@@ -7,7 +7,7 @@
  * @module useGit
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
