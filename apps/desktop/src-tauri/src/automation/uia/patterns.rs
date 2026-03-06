@@ -42,7 +42,7 @@ pub(super) fn get_invoke_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationInvokePattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
             .ok()
     }
@@ -52,7 +52,7 @@ pub(super) fn get_value_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationValuePattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
             .ok()
     }
@@ -62,7 +62,7 @@ pub(super) fn get_toggle_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationTogglePattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
             .ok()
     }
@@ -72,7 +72,7 @@ pub(super) fn get_selection_item_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationSelectionItemPattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationSelectionItemPattern>(UIA_SelectionItemPatternId)
             .ok()
     }
@@ -80,7 +80,7 @@ pub(super) fn get_selection_item_pattern(
 
 pub(super) fn get_text_pattern(element: &IUIAutomationElement) -> Option<IUIAutomationTextPattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPattern(UIA_TextPatternId)
             .ok()
             .and_then(|unknown| unknown.cast::<IUIAutomationTextPattern>().ok())
@@ -89,7 +89,7 @@ pub(super) fn get_text_pattern(element: &IUIAutomationElement) -> Option<IUIAuto
 
 pub(super) fn get_grid_pattern(element: &IUIAutomationElement) -> Option<IUIAutomationGridPattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationGridPattern>(UIA_GridPatternId)
             .ok()
     }
@@ -99,7 +99,7 @@ pub(super) fn get_table_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationTablePattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationTablePattern>(UIA_TablePatternId)
             .ok()
     }
@@ -109,7 +109,7 @@ pub(super) fn get_scroll_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationScrollPattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationScrollPattern>(UIA_ScrollPatternId)
             .ok()
     }
@@ -119,7 +119,7 @@ pub(super) fn get_expand_collapse_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationExpandCollapsePattern> {
     unsafe {
-        elemen
+        element
             .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)
             .ok()
     }
