@@ -468,8 +468,6 @@ fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path
 
         unsafe {
             let mut hkey: HKEY = HKEY::default();
-            let mut disposition: u32 = 0;
-
             let result = RegCreateKeyExW(
                 HKEY_CURRENT_USER,
                 PCWSTR(key_path_wide.as_ptr()),
@@ -479,7 +477,7 @@ fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path
                 KEY_WRITE,
                 None,
                 &mut hkey,
-                Some(&mut disposition),
+                None,
             );
 
             if result.is_err() {
