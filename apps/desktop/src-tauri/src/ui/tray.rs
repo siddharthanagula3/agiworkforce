@@ -1,7 +1,6 @@
 use crate::{data::state::AppState, ui::window};
 use anyhow::Result;
 use tauri::{
-    image::Image,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, Emitter, Manager,
@@ -56,15 +55,10 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
         .on_menu_event(handle_menu_event)
         .on_tray_icon_event(handle_tray_icon_event);
 
-    // On Windows, explicitly load the .ico file so the system tray renders
-    // the correct high-DPI icon rather than relying on the default PNG fallback.
+    // On Windows, use the default window icon for the system tray.
     #[cfg(windows)]
-    {
-        if let Ok(icon) = Image::from_path("icons/icon.ico") {
-            tray_builder = tray_builder.icon(icon);
-        } else if let Ok(icon) = app.default_window_icon().cloned().ok_or(()) {
-            tray_builder = tray_builder.icon(icon);
-        }
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray_builder = tray_builder.icon(icon);
     }
 
     let _tray = tray_builder.build(app)?;
