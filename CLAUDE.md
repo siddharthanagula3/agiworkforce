@@ -166,6 +166,7 @@ React 19 SPA with Vite, using react-router-dom for routing:
 
 - **`components/`** — 60+ component directories (Agent, Chat, Settings, Voice, Vision, Terminal, etc.)
   - `UnifiedAgenticChat/` — Agentic chat UI: `ToolLabel.tsx` (tool execution status), `ToolTimeline.tsx` (collapsible tool timeline)
+- **`lib/chatToolUtils.ts`** — Pure utility functions for tool name normalization and inline data transformations (extracted from UnifiedAgenticChat)
 - **`stores/`** — 40+ Zustand stores with Immer and Persist middleware. Key stores:
   - `settingsStore.ts` — App configuration (persist v10 migration)
   - `unifiedChatStore.ts` — Chat state management
@@ -188,7 +189,18 @@ Frontend calls Rust via `@tauri-apps/api invoke()`. Each command is a `#[tauri::
 
 ### Web App (`apps/web/`)
 
-Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing`, `/chat`, `/docs`, `/download`, etc. Uses Supabase for auth (SSR via `@supabase/ssr`), Stripe for billing, Upstash Redis for rate limiting.
+Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing`, `/chat`, `/docs`, `/download`, `/features/agents`, `/features/ai-skills`, `/features/plugins`, `/features/tools`, etc. Uses Supabase for auth (SSR via `@supabase/ssr`), Stripe for billing, Upstash Redis for rate limiting.
+
+**Key API Routes**:
+
+- `app/api/completion/route.ts` — Ghost-text prompt completion API (used by `useApiPromptCompletion` hook)
+- `app/api/chat/` — Chat message and conversation endpoints
+- `app/api/autotag/`, `app/api/voice/`, `app/api/media/` — Feature-specific routes
+
+**Data Layer**:
+
+- `supabase/migrations/` — VIBE sessions/messages tables with RLS policies, indexes, and triggers
+- `constants/models.json` (2571 lines) — Structured model catalog with provider configs, pricing, task routing; companion to `src/constants/llm.ts`
 
 ### Shared Packages
 
@@ -197,13 +209,13 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 ## Key Technical Details
 
-- **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalog lives in both `src/constants/llm.ts` (frontend) and `provider_adapter.rs` (Rust) — these must stay in sync.
+- **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalogs: desktop in `src/constants/llm.ts`, web in `constants/models.json`, and Rust in `provider_adapter.rs` — these must stay in sync.
 - **Streaming**: SSE parsing via `sse_parser.rs`. Uses dual HTTP clients (one with streaming timeout disabled).
 - **Local LLM Capability Detection** (core/llm/capability_detection.rs): Ollama probing via `/api/show`; detects tool support, caches results per session. Prevents tool injection on non-tool-capable models.
 - **State Management Pattern** (lib.rs): Uses degraded state constructors for optional features — `MemoryState::degraded()`, `MasterPasswordState::degraded()`, etc. Allows graceful fallback if initialization fails.
-- **Security**: ToolGuard validates all tool execution. SecretManager encrypts API keys via Argon2id + AES-GCM, stored in SQLite/keychain. Never plaintext.
+- **Security**: ToolGuard validates all tool execution. SecretManager encrypts API keys via Argon2id + AES-GCM, stored in SQLite/keychain. Never plaintext. Deep linking secured via ALLOWED_DEEP_LINK_PARAMS allowlist, scheme validation, and token redaction in `apps/web/hooks/useDeepLink.ts`.
 - **MCP**: Supports stdio, SSE, and streamable HTTP transports. Config in `.mcp.json`.
-- **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support.
+- **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support. Environment: `TOTP_ENCRYPTION_KEY`, `NEXT_PUBLIC_API_URL` required in web app (see `lib/validate-env.ts`).
 - **UI stack**: Radix UI primitives + Tailwind CSS 4 + Lucide icons + Sonner toasts.
 - **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`.
 - **Rust lint strictness**: Cargo.toml denies `unsafe_code`, `dead_code`, `unused_imports`, `unused_variables`, `unused_mut`. All warnings are errors. `clippy::await_holding_lock` is allowed.
