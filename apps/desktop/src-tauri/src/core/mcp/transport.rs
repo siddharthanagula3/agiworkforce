@@ -77,84 +77,220 @@ pub struct StdioTransport {
     is_shutdown: Arc<AtomicBool>,
 }
 
-/// Build an augmented PATH string that includes common Node.js install locations,
-/// Homebrew, MacPorts, and nvm directories.
+/// Build an augmented PATH string that includes common Node.js install locations.
 ///
-/// Tauri desktop apps launched from Finder/Dock inherit a minimal PATH
-/// (`/usr/bin:/bin:/usr/sbin:/sbin`) that omits Homebrew, nvm, and other
-/// user-installed Node.js locations. This helper builds a comprehensive PATH
-/// so child processes can find `npx`, `node`, etc.
+/// Tauri desktop apps launched from Finder/Dock (macOS) or without a full shell
+/// environment (Windows) may inherit a minimal PATH that omits user-installed
+/// Node.js locations. This helper builds a comprehensive PATH so child processes
+/// can find `npx`, `node`, `uvx`, etc.
+///
+/// On Windows, PATH entries are separated by `;` and Node.js is typically found
+/// in `%APPDATA%\npm`, `%ProgramFiles%\nodejs`, or nvm-windows directories.
+/// On macOS/Linux, `:` is the separator and Homebrew/nvm paths are prepended.
 fn build_augmented_path() -> String {
-    let extra_dirs = [
-        "/opt/homebrew/bin", // Homebrew on Apple Silicon
-        "/usr/local/bin",    // Homebrew on Intel / manual installs
-        "/usr/local/sbin",
-        "/opt/local/bin", // MacPorts
-        "/usr/bin",
-        "/bin",
-    ];
+    #[cfg(target_os = "windows")]
+    {
+        let separator = ";";
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let mut dirs: Vec<String> = Vec::new();
 
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let mut dirs: Vec<String> = extra_dirs.iter().map(|s| s.to_string()).collect();
+        // Common Windows Node.js install locations
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let programfiles = std::env::var("ProgramFiles").unwrap_or_default();
+        let programfiles_x86 =
+            std::env::var("ProgramFiles(x86)").unwrap_or_default();
+        let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
 
-    // Also honour whatever PATH the process already has.
-    for p in current_path.split(':') {
-        if !p.is_empty() && !dirs.iter().any(|d| d == p) {
-            dirs.push(p.to_string());
+        // npm global bin (most common location for npx on Windows)
+        if !appdata.is_empty() {
+            dirs.push(format!("{}\\npm", appdata));
         }
-    }
 
-    // Include versioned Homebrew node installations (e.g. node@22, node@20).
-    // Tauri apps launched from Finder/Dock do NOT get the user's shell PATH, so
-    // `/opt/homebrew/opt/node@22/bin` is missing even though `brew link` may not
-    // have symlinked it into `/opt/homebrew/bin`.
-    for brew_root in &["/opt/homebrew/opt", "/usr/local/opt"] {
-        if let Ok(entries) = std::fs::read_dir(brew_root) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.starts_with("node") {
-                    let bin = format!("{}/bin", entry.path().display());
-                    if std::path::Path::new(&bin).is_dir() && !dirs.iter().any(|d| d == &bin) {
-                        dirs.push(bin);
+        // Node.js installer default locations
+        if !programfiles.is_empty() {
+            dirs.push(format!("{}\\nodejs", programfiles));
+        }
+        if !programfiles_x86.is_empty() {
+            dirs.push(format!("{}\\nodejs", programfiles_x86));
+        }
+
+        // nvm-windows default install locations
+        if !appdata.is_empty() {
+            dirs.push(format!("{}\\nvm", appdata));
+        }
+        if !localappdata.is_empty() {
+            dirs.push(format!("{}\\nvm", localappdata));
+        }
+
+        // nvm-windows symlink (active version)
+        if !userprofile.is_empty() {
+            let nvm_root = format!("{}\\AppData\\Roaming\\nvm", userprofile);
+            if let Ok(entries) = std::fs::read_dir(&nvm_root) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let name = entry.file_name();
+                        let name_str = name.to_string_lossy();
+                        if name_str.starts_with("v") {
+                            let dir_str = path.to_string_lossy().to_string();
+                            if !dirs.iter().any(|d| d == &dir_str) {
+                                dirs.push(dir_str);
+                            }
+                        }
                     }
                 }
             }
         }
-    }
 
-    // Include nvm directories dynamically.
-    let home = std::env::var("HOME").unwrap_or_default();
-    let nvm_dir = format!("{}/.nvm/versions/node", home);
-    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
-        for entry in entries.flatten() {
-            let bin = format!("{}/bin", entry.path().display());
-            if !dirs.iter().any(|d| d == &bin) {
-                dirs.push(bin);
+        // Honour whatever PATH the process already has.
+        for p in current_path.split(separator) {
+            if !p.is_empty() && !dirs.iter().any(|d| d == p) {
+                dirs.push(p.to_string());
             }
         }
+
+        dirs.join(separator)
     }
 
-    dirs.join(":")
+    #[cfg(not(target_os = "windows"))]
+    {
+        let separator = ":";
+        let extra_dirs = [
+            "/opt/homebrew/bin", // Homebrew on Apple Silicon
+            "/usr/local/bin",    // Homebrew on Intel / manual installs
+            "/usr/local/sbin",
+            "/opt/local/bin", // MacPorts
+            "/usr/bin",
+            "/bin",
+        ];
+
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let mut dirs: Vec<String> = extra_dirs.iter().map(|s| s.to_string()).collect();
+
+        // Also honour whatever PATH the process already has.
+        for p in current_path.split(separator) {
+            if !p.is_empty() && !dirs.iter().any(|d| d == p) {
+                dirs.push(p.to_string());
+            }
+        }
+
+        // Include versioned Homebrew node installations (e.g. node@22, node@20).
+        // Tauri apps launched from Finder/Dock do NOT get the user's shell PATH, so
+        // `/opt/homebrew/opt/node@22/bin` is missing even though `brew link` may not
+        // have symlinked it into `/opt/homebrew/bin`.
+        for brew_root in &["/opt/homebrew/opt", "/usr/local/opt"] {
+            if let Ok(entries) = std::fs::read_dir(brew_root) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if name_str.starts_with("node") {
+                        let bin = format!("{}/bin", entry.path().display());
+                        if std::path::Path::new(&bin).is_dir()
+                            && !dirs.iter().any(|d| d == &bin)
+                        {
+                            dirs.push(bin);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Include nvm directories dynamically.
+        // Honour $NVM_DIR if set; otherwise fall back to the conventional ~/.nvm location.
+        let home = std::env::var("HOME").unwrap_or_default();
+        let nvm_base = std::env::var("NVM_DIR")
+            .unwrap_or_else(|_| format!("{}/.nvm", home));
+        let nvm_dir = format!("{}/versions/node", nvm_base);
+        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+            for entry in entries.flatten() {
+                let bin = format!("{}/bin", entry.path().display());
+                if !dirs.iter().any(|d| d == &bin) {
+                    dirs.push(bin);
+                }
+            }
+        }
+
+        dirs.join(separator)
+    }
+}
+
+/// Return the platform-specific PATH separator character.
+#[cfg(target_os = "windows")]
+fn path_separator() -> char {
+    ';'
+}
+
+#[cfg(not(target_os = "windows"))]
+fn path_separator() -> char {
+    ':'
+}
+
+/// Check whether `command` is already an absolute filesystem path.
+///
+/// On Windows, absolute paths begin with a drive letter (`C:\`) or a UNC
+/// prefix (`\\`). On Unix, they start with `/`.
+fn is_absolute_command(command: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        // Drive-letter path: e.g. C:\ or C:/
+        let bytes = command.as_bytes();
+        if bytes.len() >= 3
+            && bytes[1] == b':'
+            && (bytes[2] == b'\\' || bytes[2] == b'/')
+        {
+            return true;
+        }
+        // UNC path: \\server\share
+        if command.starts_with("\\\\") || command.starts_with("//") {
+            return true;
+        }
+        false
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        command.starts_with('/')
+    }
 }
 
 /// Resolve a command name to its absolute path.
 ///
 /// Uses `build_augmented_path` to search common install locations so that
-/// `npx`, `node`, etc. are found even without a full shell environment.
+/// `npx`, `node`, `uvx`, etc. are found even without a full shell environment.
+///
+/// On Windows, executables have `.exe`, `.cmd`, and `.bat` extensions that
+/// must be tried when searching PATH entries.
 fn resolve_command_path(command: &str) -> String {
     // Already an absolute path — use as-is.
-    if command.starts_with('/') {
+    if is_absolute_command(command) {
         return command.to_string();
     }
 
     let augmented = build_augmented_path();
+    let sep = path_separator();
 
-    for dir in augmented.split(':') {
-        let candidate = format!("{}/{}", dir, command);
-        if std::path::Path::new(&candidate).is_file() {
-            tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate);
-            return candidate;
+    #[cfg(target_os = "windows")]
+    let extensions = ["", ".exe", ".cmd", ".bat", ".ps1"];
+    #[cfg(not(target_os = "windows"))]
+    let extensions = [""];
+
+    for dir in augmented.split(sep) {
+        if dir.is_empty() {
+            continue;
+        }
+        for ext in &extensions {
+            let candidate = format!("{}\\{}{}", dir, command, ext);
+            if std::path::Path::new(&candidate).is_file() {
+                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate);
+                return candidate;
+            }
+            // Also try forward-slash form so Unix-style paths work cross-platform.
+            let candidate_fwd = format!("{}/{}{}", dir, command, ext);
+            if candidate_fwd != candidate && std::path::Path::new(&candidate_fwd).is_file() {
+                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate_fwd);
+                return candidate_fwd;
+            }
         }
     }
 
@@ -183,9 +319,10 @@ impl StdioTransport {
 
         // Build augmented PATH using the shared helper, then merge any user-supplied
         // PATH from `env` so it is appended rather than silently replacing ours.
+        // Use the platform-appropriate PATH separator (`;` on Windows, `:` elsewhere).
         let augmented_path = build_augmented_path();
         let final_path = if let Some(user_path) = env.get("PATH") {
-            format!("{}:{}", augmented_path, user_path)
+            format!("{}{}{}", augmented_path, path_separator(), user_path)
         } else {
             augmented_path
         };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -54,6 +54,12 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Platform-aware modifier key label for status bar hints
+  const modKey = useMemo(
+    () => (typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'),
+    [],
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -181,7 +187,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
               size="sm"
               variant="ghost"
               onClick={() => setPanelVisible(false)}
-              title="Close (Cmd+Shift+E)"
+              title={`Close (${modKey}+Shift+E)`}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -311,12 +317,12 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
         {}
         {!isCollapsed && (
           <div className="border-t border-border bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground">
-            <kbd className="rounded bg-background px-1.5 py-0.5">Cmd+Shift+E</kbd> Toggle •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+T</kbd> Thinking •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+R</kbd> Terminal •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+B</kbd> Browser •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+F</kbd> Files •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+I</kbd> Insights
+            <kbd className="rounded bg-background px-1.5 py-0.5">{modKey}+Shift+E</kbd> Toggle •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+T</kbd> Thinking •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+R</kbd> Terminal •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+B</kbd> Browser •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+F</kbd> Files •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+I</kbd> Insights
           </div>
         )}
       </motion.div>

@@ -528,9 +528,14 @@ impl ExtensionInstaller {
 
 impl Default for ExtensionInstaller {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| Self {
-            extensions_dir: PathBuf::from("/tmp/agiworkforce-extensions"),
-            progress_callback: None,
+        Self::new().unwrap_or_else(|_| {
+            // Fall back to a platform-appropriate temp directory rather than a
+            // Unix-only `/tmp` path (which does not exist on Windows).
+            let fallback = std::env::temp_dir().join("agiworkforce-extensions");
+            Self {
+                extensions_dir: fallback,
+                progress_callback: None,
+            }
         })
     }
 }

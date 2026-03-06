@@ -76,6 +76,24 @@ jobs:
         shell: bash
         run: echo "LIBCLANG_PATH=C:/Program Files/LLVM/bin" >> $GITHUB_ENV
 
+      # OpenSSL is required by rusqlite bundled-sqlcipher on Windows.
+      # windows-latest has OpenSSL pre-installed via Chocolatey.
+      - name: Set OpenSSL environment for SQLCipher
+        shell: bash
+        run: |
+          OPENSSL_DIR="C:/Program Files/OpenSSL-Win64"
+          if [ ! -d "$OPENSSL_DIR" ]; then
+            OPENSSL_DIR="C:/Program Files/OpenSSL"
+          fi
+          if [ ! -d "$OPENSSL_DIR" ]; then
+            OPENSSL_DIR="C:/vcpkg/installed/x64-windows"
+          fi
+          echo "OPENSSL_DIR=${OPENSSL_DIR}" >> $GITHUB_ENV
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=${OPENSSL_DIR}/lib" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=${OPENSSL_DIR}/include" >> $GITHUB_ENV
+          echo "Resolved OPENSSL_DIR: ${OPENSSL_DIR}"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
