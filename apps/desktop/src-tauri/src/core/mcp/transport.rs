@@ -280,16 +280,12 @@ fn resolve_command_path(command: &str) -> String {
             continue;
         }
         for ext in &extensions {
-            let candidate = format!("{}\\{}{}", dir, command, ext);
-            if std::path::Path::new(&candidate).is_file() {
-                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate);
-                return candidate;
-            }
-            // Also try forward-slash form so Unix-style paths work cross-platform.
-            let candidate_fwd = format!("{}/{}{}", dir, command, ext);
-            if candidate_fwd != candidate && std::path::Path::new(&candidate_fwd).is_file() {
-                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate_fwd);
-                return candidate_fwd;
+            let candidate = std::path::Path::new(dir)
+                .join(format!("{}{}", command, ext));
+            if candidate.is_file() {
+                let candidate_str = candidate.to_string_lossy().into_owned();
+                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate_str);
+                return candidate_str;
             }
         }
     }
