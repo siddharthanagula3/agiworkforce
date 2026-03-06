@@ -207,10 +207,14 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
-      const taskId = await invoke<string>('productivity_create_task', {
-        provider: selectedProvider,
-        task: request,
-      });
+      const result = await invoke<{ task_id: string; success: boolean }>(
+        'productivity_create_task',
+        {
+          provider: selectedProvider,
+          task: request,
+        },
+      );
+      const taskId = result.task_id;
 
       toast.success('Task created');
       await get().refreshTasks();
@@ -250,7 +254,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const results = await invoke<unknown[]>('productivity_notion_query_database', {
-        request,
+        databaseId: request.database_id,
+        filter: request.filter ?? null,
+        sorts: request.sorts ?? null,
       });
 
       set({ loading: false });
@@ -268,7 +274,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const pageId = await invoke<string>('productivity_notion_create_database_row', {
-        request,
+        databaseId: request.database_id,
+        properties: request.properties,
       });
 
       toast.success('Notion row created');
@@ -303,7 +310,7 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const cards = await invoke<TrelloCard[]>('productivity_trello_list_cards', {
-        board_id: boardId,
+        boardId,
       });
 
       // AUDIT-006-010: Cap trelloCards array to prevent unbounded memory growth
@@ -320,7 +327,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const cardId = await invoke<string>('productivity_trello_create_card', {
-        request,
+        listId: request.list_id,
+        name: request.name,
+        description: request.description ?? null,
       });
 
       toast.success('Trello card created');
@@ -340,7 +349,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       await invoke('productivity_trello_move_card', {
-        request,
+        cardId: request.card_id,
+        listId: request.list_id,
       });
 
       toast.success('Card moved');
@@ -359,7 +369,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const commentId = await invoke<string>('productivity_trello_add_comment', {
-        request,
+        cardId: request.card_id,
+        text: request.text,
       });
 
       toast.success('Comment added');
@@ -402,7 +413,7 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const tasks = await invoke<AsanaTask[]>('productivity_asana_list_project_tasks', {
-        project_id: projectId,
+        projectId,
       });
 
       // AUDIT-006-010: Cap asanaTasks array to prevent unbounded memory growth
@@ -419,7 +430,11 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const taskId = await invoke<string>('productivity_asana_create_task', {
-        request,
+        name: request.name,
+        notes: request.notes ?? null,
+        workspaceId: request.workspace_id ?? null,
+        projectId: request.project_id ?? null,
+        assigneeId: request.assignee_id ?? null,
       });
 
       toast.success('Asana task created');
@@ -439,7 +454,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       await invoke('productivity_asana_assign_task', {
-        request,
+        taskId: request.task_id,
+        assigneeId: request.assignee_id,
       });
 
       toast.success('Task assigned');
@@ -458,7 +474,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       await invoke('productivity_asana_mark_complete', {
-        request,
+        taskId: request.task_id,
+        completed: request.completed,
       });
 
       toast.success('Task updated');
@@ -490,6 +507,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       loading: false,
       error: null,
     });
-    console.log('[ProductivityStore] Reset on logout');
+    console.debug('[ProductivityStore] Reset on logout');
   },
 }));
