@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { FileTreeWithChanges } from './FileTreeWithChanges';
@@ -19,6 +19,12 @@ interface VisualEditorProps {
 export function VisualEditor({ rootPath, className }: VisualEditorProps) {
   const { selectedFile, setSelectedFile, canUndo, canRedo, undo, redo, pendingChanges, conflicts } =
     useEditingStore();
+
+  // Detect platform for keyboard shortcut labels (Cmd on Mac, Ctrl on Windows/Linux)
+  const modKey = useMemo(
+    () => (typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'),
+    [],
+  );
 
   const [layout, setLayout] = useState<'split' | 'full'>('split');
   const [activeView, setActiveView] = useState<'diff' | 'preview'>('diff');
@@ -59,7 +65,7 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
             <Button
               variant="ghost"
               size="sm"
-              title="Undo (Cmd+Z)"
+              title={`Undo (${modKey}+Z)`}
               onClick={undo}
               disabled={!canUndo()}
             >
@@ -68,7 +74,7 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
             <Button
               variant="ghost"
               size="sm"
-              title="Redo (Cmd+Shift+Z)"
+              title={`Redo (${modKey}+Shift+Z)`}
               onClick={redo}
               disabled={!canRedo()}
             >
@@ -166,15 +172,15 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
                 <span>Accept changes</span>
-                <kbd className="px-1 py-0.5 bg-muted rounded">Cmd+S</kbd>
+                <kbd className="px-1 py-0.5 bg-muted rounded">{modKey}+S</kbd>
               </div>
               <div className="flex justify-between">
                 <span>Undo</span>
-                <kbd className="px-1 py-0.5 bg-muted rounded">Cmd+Z</kbd>
+                <kbd className="px-1 py-0.5 bg-muted rounded">{modKey}+Z</kbd>
               </div>
               <div className="flex justify-between">
                 <span>Redo</span>
-                <kbd className="px-1 py-0.5 bg-muted rounded">Cmd+Shift+Z</kbd>
+                <kbd className="px-1 py-0.5 bg-muted rounded">{modKey}+Shift+Z</kbd>
               </div>
             </div>
           </Card>

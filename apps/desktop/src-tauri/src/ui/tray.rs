@@ -1,6 +1,7 @@
 use crate::{data::state::AppState, ui::window};
 use anyhow::Result;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, Emitter, Manager,
@@ -44,11 +45,29 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
         ],
     )?;
 
-    let _tray = TrayIconBuilder::new()
+    // Windows Credential Manager tooltip limit is 128 characters.
+    // We keep the tooltip short and enforce the cap defensively.
+    let raw_tooltip = "AGI Workforce — AI Desktop Platform";
+    let tooltip = &raw_tooltip[..128.min(raw_tooltip.len())];
+
+    let mut tray_builder = TrayIconBuilder::new()
         .menu(&menu)
+        .tooltip(tooltip)
         .on_menu_event(handle_menu_event)
-        .on_tray_icon_event(handle_tray_icon_event)
-        .build(app)?;
+        .on_tray_icon_event(handle_tray_icon_event);
+
+    // On Windows, explicitly load the .ico file so the system tray renders
+    // the correct high-DPI icon rather than relying on the default PNG fallback.
+    #[cfg(windows)]
+    {
+        if let Ok(icon) = Image::from_path("icons/icon.ico") {
+            tray_builder = tray_builder.icon(icon);
+        } else if let Ok(icon) = app.default_window_icon().cloned().ok_or(()) {
+            tray_builder = tray_builder.icon(icon);
+        }
+    }
+
+    let _tray = tray_builder.build(app)?;
 
     Ok(())
 }

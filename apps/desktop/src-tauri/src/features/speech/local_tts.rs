@@ -272,37 +272,71 @@ impl PiperLocal {
 
     /// Find the Piper binary on the system
     fn find_piper_binary() -> Result<PathBuf> {
-        // Check common locations
-        let possible_paths = ["/usr/local/bin/piper", "/usr/bin/piper", "/opt/piper/piper"];
-
-        for path in &possible_paths {
-            let p = PathBuf::from(path);
-            if p.exists() {
-                return Ok(p);
-            }
-        }
-
-        // Check home directory
-        if let Some(home) = dirs::home_dir() {
-            let home_piper = home.join(".local").join("bin").join("piper");
-            if home_piper.exists() {
-                return Ok(home_piper);
+        #[cfg(windows)]
+        {
+            // On Windows the binary is piper.exe
+            if let Some(home) = dirs::home_dir() {
+                let app_piper = home.join(".agiworkforce").join("bin").join("piper.exe");
+                if app_piper.exists() {
+                    return Ok(app_piper);
+                }
             }
 
-            let app_piper = home.join(".agiworkforce").join("bin").join("piper");
-            if app_piper.exists() {
-                return Ok(app_piper);
+            // Check LOCALAPPDATA
+            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+                let app_piper = PathBuf::from(local_app_data)
+                    .join("agiworkforce")
+                    .join("bin")
+                    .join("piper.exe");
+                if app_piper.exists() {
+                    return Ok(app_piper);
+                }
             }
+
+            // Check if piper.exe is in PATH
+            if let Ok(path) = which::which("piper") {
+                return Ok(path);
+            }
+
+            Err(anyhow!(
+                "Piper binary not found. Please download it to %USERPROFILE%\\.agiworkforce\\bin\\piper.exe"
+            ))
         }
 
-        // Check if in PATH
-        if let Ok(path) = which::which("piper") {
-            return Ok(path);
-        }
+        #[cfg(not(windows))]
+        {
+            // Check common Unix locations
+            let possible_paths = ["/usr/local/bin/piper", "/usr/bin/piper", "/opt/piper/piper"];
 
-        Err(anyhow!(
-            "Piper binary not found. Please install Piper or download it to ~/.agiworkforce/bin/piper"
-        ))
+            for path in &possible_paths {
+                let p = PathBuf::from(path);
+                if p.exists() {
+                    return Ok(p);
+                }
+            }
+
+            // Check home directory
+            if let Some(home) = dirs::home_dir() {
+                let home_piper = home.join(".local").join("bin").join("piper");
+                if home_piper.exists() {
+                    return Ok(home_piper);
+                }
+
+                let app_piper = home.join(".agiworkforce").join("bin").join("piper");
+                if app_piper.exists() {
+                    return Ok(app_piper);
+                }
+            }
+
+            // Check if in PATH
+            if let Ok(path) = which::which("piper") {
+                return Ok(path);
+            }
+
+            Err(anyhow!(
+                "Piper binary not found. Please install Piper or download it to ~/.agiworkforce/bin/piper"
+            ))
+        }
     }
 
     /// Read sample rate from voice config JSON
@@ -579,6 +613,9 @@ impl PiperLocal {
             .await
             .context("Failed to create bin directory")?;
 
+        #[cfg(target_os = "windows")]
+        let piper_path = bin_dir.join("piper.exe");
+        #[cfg(not(target_os = "windows"))]
         let piper_path = bin_dir.join("piper");
 
         if piper_path.exists() {
