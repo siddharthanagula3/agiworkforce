@@ -178,7 +178,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const sessionId = await invoke<string>('terminal_create_session', {
-          shell_type: shellType,
+          shellType,
           cwd: cwd || undefined,
         });
 
