@@ -141,7 +141,7 @@ class BackupService {
       // Perform the backup
       const backupData = await this.createBackupData(tables, type);
       backup.size = this.calculateBackupSize(backupData);
-      backup.checksum = this.calculateChecksum(backupData);
+      backup.checksum = await this.calculateChecksum(backupData);
 
       // Store backup
       if (this.config.enableCloudBackup) {
@@ -533,9 +533,13 @@ class BackupService {
   /**
    * Calculate checksum
    */
-  private calculateChecksum(data: BackupTableData): string {
-    // Simple checksum - in production, use a proper hash function
-    return btoa(JSON.stringify(data)).substring(0, 16);
+  private async calculateChecksum(data: BackupTableData): Promise<string> {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(JSON.stringify(data));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   /**
