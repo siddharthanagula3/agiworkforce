@@ -381,13 +381,13 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Local LLMs:</strong> Ollama (Llama, Mistral, etc.)
+                      <strong>Local LLMs:</strong> Ollama (open-source models)
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Economy Models:</strong> GPT-5 Nano, Gemini Flash, DeepSeek
+                      <strong>Economy Models:</strong> OpenAI, Google, DeepSeek
                     </span>
                   </li>
                   <li className="flex gap-2">
@@ -445,7 +445,7 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Pro Models:</strong> Claude Sonnet, GPT-5.2, Gemini Pro
+                      <strong>Pro Models:</strong> Anthropic, OpenAI, Google
                     </span>
                   </li>
                   <li className="flex gap-2">
@@ -523,7 +523,7 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Flagship Models:</strong> Claude Opus, GPT-5 Pro, Gemini Pro
+                      <strong>Flagship Models:</strong> Anthropic, OpenAI, Google
                     </span>
                   </li>
                   <li className="flex gap-2">

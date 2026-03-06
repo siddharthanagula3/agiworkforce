@@ -172,6 +172,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 status poll requests per minute (allow frequent polling)
     failClosed: false, // Not sensitive: just querying status
   },
+  'prompt-completion': {
+    limit: 60,
+    window: '1 m', // 60 ghost-text completions per minute (debounced on client side)
+    failClosed: false, // Non-critical: missing completions is acceptable
+  },
   'admin-security': {
     limit: 10,
     window: '1 m', // 10 admin security actions per minute
@@ -543,13 +548,23 @@ export async function withRateLimit(
     );
 
     // Log to security audit table.
-    // NOTE: x-user-id is used here only for audit enrichment, NOT for the rate-limit
-    // identifier (which is derived from the JWT `sub` claim or IP — see getRateLimitIdentifier).
-    // In production, this header should be set server-side by auth middleware after JWT
-    // verification. If the header originates from the client directly it could be spoofed,
-    // but that only affects audit metadata — rate limiting itself is not impacted.
-    // TODO: Derive userId from the verified session (e.g., parsed JWT) instead of a header.
-    const userId = request.headers.get('x-user-id') || undefined;
+    // Extract userId from the JWT Bearer token sub claim for audit enrichment.
+    // This is only for audit metadata — the rate-limit identifier itself already
+    // uses the JWT sub claim (see getRateLimitIdentifier).
+    let userId: string | undefined;
+    const auditAuthHeader = request.headers.get('authorization');
+    if (auditAuthHeader?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(atob(auditAuthHeader.slice(7).split('.')[1]!)) as {
+          sub?: string;
+        };
+        if (payload.sub) {
+          userId = payload.sub;
+        }
+      } catch {
+        // Malformed token — fall through to undefined
+      }
+    }
     await logRateLimitExceeded(request, identifier || key, userId);
 
     return NextResponse.json(

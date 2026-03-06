@@ -11,7 +11,7 @@
     "build:preview": "eas build --profile preview",
     "build:prod": "eas build --profile production",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "jest"
   },
   "dependencies": {

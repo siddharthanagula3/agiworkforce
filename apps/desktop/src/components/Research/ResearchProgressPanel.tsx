@@ -35,7 +35,7 @@ export const ResearchProgressPanel = memo(function ResearchProgressPanel({
 }: ResearchProgressPanelProps) {
   const percent = progress?.progress_percent ?? 0;
   const statusMessage = progress
-    ? PHASE_LABELS[progress.phase] ?? progress.status_message
+    ? (PHASE_LABELS[progress.phase] ?? progress.status_message)
     : 'Starting research...';
 
   return (
@@ -152,12 +152,7 @@ function LiveSourceRow({ source }: LiveSourceRowProps) {
 }
 
 function RelevanceDot({ score }: { score: number }) {
-  const color =
-    score >= 0.8
-      ? 'bg-emerald-400'
-      : score >= 0.5
-        ? 'bg-yellow-400'
-        : 'bg-red-400';
+  const color = score >= 0.8 ? 'bg-emerald-400' : score >= 0.5 ? 'bg-yellow-400' : 'bg-red-400';
 
   return (
     <span

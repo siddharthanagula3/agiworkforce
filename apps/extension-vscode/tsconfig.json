@@ -21,7 +21,9 @@
     "sourceMap": true,
     "inlineSources": false,
     "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "out", ".vscode-test", "src/__tests__"]

@@ -2,6 +2,10 @@
 //!
 //! Provides Tauri IPC commands for asynchronous large-volume LLM processing
 //! via Google AI Batch API at 50% cost savings with 24-hour SLO.
+//!
+//! **NOTE**: This is currently a mock/stub implementation using in-memory storage.
+//! Job data is NOT persisted across app restarts. A future version will integrate
+//! with the real Google AI Batch API and persist job state to the local database.
 
 use chrono::Utc;
 use once_cell::sync::Lazy;

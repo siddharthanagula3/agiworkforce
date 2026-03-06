@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 export interface DallEGenerationRequest {
   prompt: string;
@@ -49,7 +50,7 @@ async function getAuthToken(): Promise<string | null> {
     } = await supabase.auth.getSession();
     return session?.access_token || null;
   } catch (error) {
-    console.error('[DallEImageService] Failed to get auth token:', error);
+    logger.error('[DallEImageService] Failed to get auth token:', error);
     return null;
   }
 }
@@ -145,7 +146,7 @@ export class DallEImageService {
         createdAt: new Date(data.created * 1000),
       }));
     } catch (error) {
-      console.error('[DallEImageService] Generation failed:', error);
+      logger.error('[DallEImageService] Generation failed:', error);
       throw error instanceof Error ? error : new Error('Unknown error during image generation');
     }
   }

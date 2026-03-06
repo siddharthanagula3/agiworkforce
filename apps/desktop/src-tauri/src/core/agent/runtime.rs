@@ -502,7 +502,8 @@ Do not repeat the error message."#,
         }))
     }
 
-    /// Execute task with retry and model fallback (reserved for resilient agent execution)
+    /// Execute task with retry and model fallback
+    // Used by: resilient agent execution — retry with different models on failure
     #[allow(dead_code)]
     async fn execute_with_retry_fallback(
         &self,
@@ -771,7 +772,9 @@ Do not repeat the error message."#,
     pub fn cancel_task(&self, task_id: &str, reason: String) -> Result<()> {
         let mut queue = self.task_queue.write();
         if let Some(pos) = queue.iter().position(|t| t.id == task_id) {
-            let mut task = queue.remove(pos).unwrap();
+            let Some(mut task) = queue.remove(pos) else {
+                return Err(anyhow::anyhow!("Task {} disappeared from queue", task_id));
+            };
             task.status = RuntimeTaskStatus::Cancelled;
             task.error = Some(reason.clone());
             task.completed_at = Some(Utc::now());

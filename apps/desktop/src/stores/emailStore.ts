@@ -147,7 +147,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   removeAccount: async (accountId) => {
     try {
-      await invoke('email_remove_account', { account_id: accountId });
+      await invoke('email_remove_account', { accountId });
       set((state) => ({
         accounts: state.accounts.filter((acc) => acc.id !== accountId),
         selectedAccountId: state.selectedAccountId === accountId ? null : state.selectedAccountId,

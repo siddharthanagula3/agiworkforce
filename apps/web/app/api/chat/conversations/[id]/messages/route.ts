@@ -84,7 +84,13 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const user = await getAuthenticatedUser(request);
   const { id: conversationId } = await context.params;
-  const rawBody = await request.json();
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON in request body');
+  }
 
   // AUDIT-008-004: Validate input with Zod schema (max content length 100k chars)
   const validationResult = CreateMessageSchema.safeParse(rawBody);

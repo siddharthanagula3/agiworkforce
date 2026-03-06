@@ -31,7 +31,7 @@ const FAQ_ITEMS = [
   {
     question: 'What AI models are available?',
     answer:
-      'AGI Workforce supports models from OpenAI (GPT-4o, o1, o3), Anthropic (Claude 4 Opus, Sonnet), Google (Gemini 2.0 Pro, Flash), Mistral, Groq, DeepSeek, xAI Grok, and local models via Ollama. New models are added as they release.',
+      'AGI Workforce supports models from OpenAI, Anthropic, Google, Mistral, Groq, DeepSeek, xAI, and local models via Ollama. New models are added as they release.',
   },
   {
     question: 'How does billing work?',
@@ -95,16 +95,11 @@ export default function SupportPage() {
     setIsSubmitting(true);
     try {
       // Build a mailto link as the primary support channel
-      const subject = encodeURIComponent(
-        `[${form.category || 'general'}] ${form.subject}`,
-      );
+      const subject = encodeURIComponent(`[${form.category || 'general'}] ${form.subject}`);
       const body = encodeURIComponent(
         `Name: ${form.name}\nEmail: ${form.email}\n\n${form.message}`,
       );
-      window.open(
-        `mailto:support@agiworkforce.com?subject=${subject}&body=${body}`,
-        '_blank',
-      );
+      window.open(`mailto:support@agiworkforce.com?subject=${subject}&body=${body}`, '_blank');
       toast.success(
         'Your default email client should open with the support request. If not, email support@agiworkforce.com directly.',
       );
@@ -183,7 +178,11 @@ export default function SupportPage() {
         <CardContent>
           <Accordion type="single" collapsible className="w-full">
             {FAQ_ITEMS.map((item, index) => (
-              <AccordionItem key={item.question} value={`faq-${index}`} className="border-border/50">
+              <AccordionItem
+                key={item.question}
+                value={`faq-${index}`}
+                className="border-border/50"
+              >
                 <AccordionTrigger className="text-left text-foreground hover:no-underline hover:text-primary">
                   {item.question}
                 </AccordionTrigger>
@@ -300,7 +299,11 @@ export default function SupportPage() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-primary hover:bg-primary/90"
+                >
                   <Mail className="mr-2 h-4 w-4" />
                   {isSubmitting ? 'Sending...' : 'Submit'}
                 </Button>

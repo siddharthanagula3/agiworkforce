@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- tool rationale metadata has dynamic shape */
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,

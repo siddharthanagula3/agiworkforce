@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { Bot, RefreshCw, Home, AlertTriangle } from 'lucide-react';
+import { logger } from '@shared/lib/logger';
 
 export default function Error({
   error,
@@ -12,9 +13,12 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // TODO: Replace with Sentry or similar error reporting service
-    // e.g. Sentry.captureException(error);
-    // Do NOT log errors to console in production — stack traces leak internal details
+    // Log error with digest for server-side correlation without exposing stack traces
+    logger.error('Unhandled Next.js error boundary caught', {
+      digest: error.digest,
+      message: error.message,
+      // Stack traces are omitted intentionally — they leak internal details in production
+    });
   }, [error]);
 
   return (

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -7,6 +7,7 @@ import { Menu, Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentCard } from '@/components/agents/AgentCard';
 import { useAgentStore } from '@/stores/agentStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import { colors } from '@/lib/theme';
 
 export default function AgentsScreen() {
@@ -29,11 +30,19 @@ export default function AgentsScreen() {
     [selectAgent],
   );
 
+  const sendControl = useConnectionStore((s) => s.sendControl);
+  const connectionStatus = useConnectionStore((s) => s.status);
+  const [refreshing, setRefreshing] = useState(false);
+
   const handleRefresh = useCallback(() => {
-    // Agents are synced from desktop companion via WebRTC.
-    // Pull-to-refresh triggers a re-request to the desktop peer.
-    // This is a no-op placeholder until WebRTC companion is wired.
-  }, []);
+    if (connectionStatus !== 'connected') return;
+    setRefreshing(true);
+    // Request the desktop to push a fresh agents snapshot
+    sendControl('request_agents_refresh');
+    // Auto-clear the spinner after a short delay since the response
+    // arrives via the WebRTC data channel (no direct await)
+    setTimeout(() => setRefreshing(false), 1500);
+  }, [connectionStatus, sendControl]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
@@ -55,10 +64,7 @@ export default function AgentsScreen() {
               className="px-2 py-0.5 rounded-full"
               style={{ backgroundColor: `${colors.agentActive}25` }}
             >
-              <Text
-                className="text-[11px] font-semibold"
-                style={{ color: colors.agentActive }}
-              >
+              <Text className="text-[11px] font-semibold" style={{ color: colors.agentActive }}>
                 {activeCount > 0 ? activeCount : agents.length}
               </Text>
             </View>
@@ -67,10 +73,7 @@ export default function AgentsScreen() {
 
         {/* Clear completed button */}
         {agents.some((a) => a.status === 'completed') ? (
-          <Pressable
-            onPress={clearCompleted}
-            className="px-3 py-1 rounded-lg active:bg-white/5"
-          >
+          <Pressable onPress={clearCompleted} className="px-3 py-1 rounded-lg active:bg-white/5">
             <Text className="text-[12px] text-white/40">Clear done</Text>
           </Pressable>
         ) : null}
@@ -97,18 +100,14 @@ export default function AgentsScreen() {
           contentContainerStyle={{ padding: 12 }}
           refreshControl={
             <RefreshControl
-              refreshing={false}
+              refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor={colors.teal}
             />
           }
           renderItem={({ item, index }) => (
             <View className="flex-1 p-1.5">
-              <AgentCard
-                agent={item}
-                index={index}
-                onPress={handleAgentPress}
-              />
+              <AgentCard agent={item} index={index} onPress={handleAgentPress} />
             </View>
           )}
           keyExtractor={(item) => item.id}

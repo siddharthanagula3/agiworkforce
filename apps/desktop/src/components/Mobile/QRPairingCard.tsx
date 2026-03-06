@@ -99,9 +99,7 @@ export function QRPairingCard() {
           {expiresMessage && (
             <p className="mt-1 text-xs text-slate-500">Expires {expiresMessage}</p>
           )}
-          {deepLink && (
-            <p className="mt-2 text-xs text-slate-400 truncate font-mono">{deepLink}</p>
-          )}
+          {deepLink && <p className="mt-2 text-xs text-slate-400 truncate font-mono">{deepLink}</p>}
         </div>
       )}
 

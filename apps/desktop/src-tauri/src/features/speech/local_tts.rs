@@ -212,7 +212,8 @@ pub struct PiperLocal {
     voice_id: String,
     /// Voice model path
     model_path: PathBuf,
-    /// Voice config path (reserved for runtime voice switching)
+    /// Voice config path
+    // Used by: runtime voice switching — will load per-voice JSON config
     #[allow(dead_code)]
     config_path: PathBuf,
     /// Voice sample rate

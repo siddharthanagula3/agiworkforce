@@ -10,6 +10,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { storeVideoTask } from '@/lib/video-task-store';
 
 /**
  * Video Generation API
@@ -412,8 +413,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     throw createError.internal('Failed to start video generation. Please try again.');
   }
 
-  // TODO: [H33] Store { task_id, user_id } mapping in Redis/Supabase for ownership verification
-  // so that GET /api/media/video/status can verify the requesting user owns this task.
+  // Store task_id → user_id mapping in-process memory with TTL for ownership verification.
+  // This allows the status endpoint to verify the requesting user owns the task.
+  // In a distributed/serverless deployment, replace with Redis or Supabase persistence.
+  storeVideoTask(taskId, user.id);
 
   const response: VideoGenerationResponse = {
     success: true,

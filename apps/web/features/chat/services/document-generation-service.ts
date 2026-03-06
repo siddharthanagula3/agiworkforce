@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Document Generation Service
  *
@@ -164,7 +165,7 @@ export async function generateDocument(
       },
     };
   } catch (error) {
-    console.error('Document generation failed:', error);
+    logger.error('Document generation failed:', error);
     throw new Error('Failed to generate document. Please try again.');
   }
 }
@@ -278,7 +279,7 @@ export async function enhanceDocument(
 
     return response.content;
   } catch (error) {
-    console.error('Document enhancement failed:', error);
+    logger.error('Document enhancement failed:', error);
     throw new Error('Failed to enhance document. Please try again.');
   }
 }

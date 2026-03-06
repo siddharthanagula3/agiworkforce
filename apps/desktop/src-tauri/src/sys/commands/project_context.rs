@@ -304,7 +304,10 @@ pub async fn project_context_validate_path(
         return Ok(true);
     }
 
-    let project_folder = ctx.folder.as_ref().unwrap();
+    let project_folder = match ctx.folder.as_ref() {
+        Some(f) => f,
+        None => return Ok(true), // Already checked above, but be safe
+    };
     let project_path = PathBuf::from(project_folder);
     let target_path = PathBuf::from(&path);
 
@@ -375,7 +378,10 @@ pub async fn project_context_list_files(
         return Err("No project folder is set. Please select a folder first.".to_string());
     }
 
-    let folder = ctx.folder.as_ref().unwrap();
+    let folder = match ctx.folder.as_ref() {
+        Some(f) => f,
+        None => return Err("No project folder is set.".to_string()),
+    };
     let max_depth = max_depth.unwrap_or(1);
     let include_hidden = include_hidden.unwrap_or(false);
 
@@ -491,7 +497,10 @@ pub async fn project_context_get_summary(
             return Err("No project folder is set.".to_string());
         }
 
-        let folder = ctx.folder.clone().unwrap();
+        let folder = match ctx.folder.clone() {
+            Some(f) => f,
+            None => return Err("No project folder is set.".to_string()),
+        };
         let name = ctx.name.clone().unwrap_or_else(|| "Unknown".to_string());
         (folder, name)
     };
@@ -566,7 +575,10 @@ async fn project_context_list_files_internal(
         return Err("No project folder is set.".to_string());
     }
 
-    let folder = ctx.folder.as_ref().unwrap().clone();
+    let folder = match ctx.folder.as_ref() {
+        Some(f) => f.clone(),
+        None => return Err("No project folder is set.".to_string()),
+    };
     let max_depth = max_depth.unwrap_or(1);
     let include_hidden = include_hidden.unwrap_or(false);
 

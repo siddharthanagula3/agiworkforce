@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * File Attachment Handler
  *
@@ -68,7 +69,7 @@ export class AttachmentHandler {
       });
 
       if (error) {
-        console.error('Failed to create storage bucket:', error);
+        logger.error('Failed to create storage bucket:', error);
         throw new Error(`Failed to initialize storage: ${error.message}`);
       }
     }
@@ -173,7 +174,7 @@ export class AttachmentHandler {
         publicUrl: urlData.signedUrl,
       };
     } catch (error) {
-      console.error('File upload error:', error);
+      logger.error('File upload error:', error);
       throw new Error(
         `Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -245,7 +246,7 @@ export class AttachmentHandler {
         });
 
       if (error) {
-        console.error('Thumbnail upload error:', error);
+        logger.error('Thumbnail upload error:', error);
         return undefined;
       }
 
@@ -258,7 +259,7 @@ export class AttachmentHandler {
 
       return urlData?.signedUrl;
     } catch (error) {
-      console.error('Thumbnail creation error:', error);
+      logger.error('Thumbnail creation error:', error);
       return undefined;
     }
   }
@@ -357,7 +358,7 @@ export class AttachmentHandler {
     const { data, error } = await supabase.storage.from(this.bucketName).list(folderPath);
 
     if (error) {
-      console.error('Failed to list attachments:', error);
+      logger.error('Failed to list attachments:', error);
       return [];
     }
 

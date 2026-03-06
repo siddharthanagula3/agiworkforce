@@ -34,7 +34,12 @@ const ACTION_COLORS: Record<ActionType, string> = {
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts * 1000);
-  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return d.toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function describeAction(action: ComputerAction): string {

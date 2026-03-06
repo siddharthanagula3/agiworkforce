@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { Bot } from 'lucide-react';
 
 export const metadata = {
-  title: 'Terms of Service | AGI Workforce',
+  title: 'Terms of Service',
+  description: 'Terms of service for AGI Workforce - the AI agent desktop platform.',
+  alternates: { canonical: '/terms' },
 };
 
 export default function TermsPage() {

@@ -2,13 +2,15 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::io::{self, Write};
 
-static API_KEY_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(sk-[a-zA-Z0-9]{20,})").unwrap());
-static BEARER_TOKEN_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"Bearer\s+([a-zA-Z0-9\-\._~\+\/]+=*)").unwrap());
+static API_KEY_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(sk-[a-zA-Z0-9]{20,})").expect("valid regex: API key pattern"));
+static BEARER_TOKEN_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"Bearer\s+([a-zA-Z0-9\-\._~\+\/]+=*)").expect("valid regex: bearer token pattern")
+});
 static GOOGLE_API_KEY_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"AIza[0-9A-Za-z-_]{35}").unwrap());
+    Lazy::new(|| Regex::new(r"AIza[0-9A-Za-z-_]{35}").expect("valid regex: Google API key pattern"));
 static GITHUB_TOKEN_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(ghp_[a-zA-Z0-9]{36})").unwrap());
+    Lazy::new(|| Regex::new(r"(ghp_[a-zA-Z0-9]{36})").expect("valid regex: GitHub token pattern"));
 
 pub struct RedactingWriter<W: Write> {
     inner: W,

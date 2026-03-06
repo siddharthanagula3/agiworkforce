@@ -31,14 +31,12 @@ const STATUS_BORDER_COLOR: Record<ToolCall['status'], string> = {
   failed: colors.agentError,
 };
 
-const STATUS_BADGE: Record<
-  ToolCall['status'],
-  { label: string; color: 'blue' | 'green' | 'red' }
-> = {
-  running: { label: 'Running', color: 'blue' },
-  completed: { label: 'Completed', color: 'green' },
-  failed: { label: 'Failed', color: 'red' },
-};
+const STATUS_BADGE: Record<ToolCall['status'], { label: string; color: 'blue' | 'green' | 'red' }> =
+  {
+    running: { label: 'Running', color: 'blue' },
+    completed: { label: 'Completed', color: 'green' },
+    failed: { label: 'Failed', color: 'red' },
+  };
 
 /** Map tool name patterns to a representative lucide icon. */
 function getToolIcon(toolName: string): typeof Terminal {
@@ -49,11 +47,7 @@ function getToolIcon(toolName: string): typeof Terminal {
   if (name.includes('read_file') || name.includes('read') || name.includes('file_text')) {
     return FileText;
   }
-  if (
-    name.includes('write_file') ||
-    name.includes('edit') ||
-    name.includes('create_file')
-  ) {
+  if (name.includes('write_file') || name.includes('edit') || name.includes('create_file')) {
     return Edit3;
   }
   if (
@@ -176,7 +170,10 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
           <View className="px-3 pb-3 gap-2">
             {toolCall.input ? (
               <View>
-                <Text variant="caption" className="text-white/40 mb-1 uppercase tracking-wider text-[10px]">
+                <Text
+                  variant="caption"
+                  className="text-white/40 mb-1 uppercase tracking-wider text-[10px]"
+                >
                   Input
                 </Text>
                 <View className="bg-black/30 rounded-md px-2.5 py-2 max-h-[200px]">
@@ -189,7 +186,10 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
             {toolCall.output ? (
               <View>
-                <Text variant="caption" className="text-white/40 mb-1 uppercase tracking-wider text-[10px]">
+                <Text
+                  variant="caption"
+                  className="text-white/40 mb-1 uppercase tracking-wider text-[10px]"
+                >
                   Output
                 </Text>
                 <View className="bg-black/30 rounded-md px-2.5 py-2 max-h-[200px]">

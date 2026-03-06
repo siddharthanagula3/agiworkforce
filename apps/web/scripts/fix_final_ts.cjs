@@ -3,32 +3,44 @@ const fs = require('fs');
 const agentStorePath = 'apps/web/stores/unified/chat/agentStore.ts';
 if (fs.existsSync(agentStorePath)) {
   let content = fs.readFileSync(agentStorePath, 'utf8');
-  content = content.replace(/process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g, "process.env['TAURI_ENV_DEBUG'] === 'true'");
+  content = content.replace(
+    /process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g,
+    "process.env['TAURI_ENV_DEBUG'] === 'true'",
+  );
   fs.writeFileSync(agentStorePath, content, 'utf8');
 }
 
 const chatStorePath = 'apps/web/stores/unified/chat/chatStore.ts';
 if (fs.existsSync(chatStorePath)) {
   let content = fs.readFileSync(chatStorePath, 'utf8');
-  content = content.replace(/process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g, "process.env['TAURI_ENV_DEBUG'] === 'true'");
+  content = content.replace(
+    /process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g,
+    "process.env['TAURI_ENV_DEBUG'] === 'true'",
+  );
   fs.writeFileSync(chatStorePath, content, 'utf8');
 }
 
 const toolStorePath = 'apps/web/stores/unified/chat/toolStore.ts';
 if (fs.existsSync(toolStorePath)) {
   let content = fs.readFileSync(toolStorePath, 'utf8');
-  content = content.replace(/process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g, "process.env['TAURI_ENV_DEBUG'] === 'true'");
+  content = content.replace(
+    /process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g,
+    "process.env['TAURI_ENV_DEBUG'] === 'true'",
+  );
   fs.writeFileSync(toolStorePath, content, 'utf8');
 }
 
 const uiStorePath = 'apps/web/stores/unified/ui.ts';
 if (fs.existsSync(uiStorePath)) {
   let content = fs.readFileSync(uiStorePath, 'utf8');
-  content = content.replace(/process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g, "process.env['TAURI_ENV_DEBUG'] === 'true'");
+  content = content.replace(
+    /process\.env\['TAURI_ENV_DEBUG'\](?! ===)/g,
+    "process.env['TAURI_ENV_DEBUG'] === 'true'",
+  );
   content = content.replace(/import \{ useModelStore \} from '\.\/modelStore';/g, '');
   content = content.replace(/import \{ useAccountStore \} from '\.\/accountStore';/g, '');
-  content = content.replace(/useModelStore\.getState\(\)/g, "({} as any)");
-  content = content.replace(/useAccountStore\.getState\(\)/g, "({} as any)");
+  content = content.replace(/useModelStore\.getState\(\)/g, '({} as any)');
+  content = content.replace(/useAccountStore\.getState\(\)/g, '({} as any)');
   fs.writeFileSync(uiStorePath, content, 'utf8');
 }
 

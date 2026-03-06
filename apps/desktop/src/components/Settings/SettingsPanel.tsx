@@ -24,6 +24,7 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   createDefaultLLMConfig,
   createDefaultWindowPreferences,
+  getDefaultGlobalHotkeyCombo,
   useSettingsStore,
   type Language,
   type GlobalHotkeyPreferences,
@@ -140,9 +141,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+  const defaultGlobalHotkeyCombo = getDefaultGlobalHotkeyCombo();
   const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = globalHotkeyPreferences ?? {
     enabled: true,
-    combo: 'CommandOrControl+Shift+Space',
+    combo: defaultGlobalHotkeyCombo,
   };
 
   const ollamaStatus = providerStatuses.ollama;
@@ -543,13 +545,13 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                                   type="text"
                                   value={resolvedGlobalHotkeyPreferences.combo}
                                   onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
-                                  placeholder="CommandOrControl+Shift+Space"
+                                  placeholder={defaultGlobalHotkeyCombo}
                                   className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 />
                                 <p className="text-xs text-muted-foreground">
                                   Use Tauri accelerator format, e.g.{' '}
                                   <code className="rounded bg-muted px-1 py-0.5">
-                                    CommandOrControl+Shift+Space
+                                    {defaultGlobalHotkeyCombo}
                                   </code>
                                 </p>
                               </div>

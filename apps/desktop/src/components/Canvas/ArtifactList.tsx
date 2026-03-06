@@ -8,16 +8,14 @@
  * - "New" button to create a blank artifact
  */
 
-import {
-  Code2,
-  FileText,
-  Globe,
-  Plus,
-  Trash2,
-} from 'lucide-react';
+import { Code2, FileText, Globe, Plus, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { cn } from '../../lib/utils';
-import { useCanvasStore, type CanvasArtifact, type CanvasArtifactType } from '../../stores/canvasStore';
+import {
+  useCanvasStore,
+  type CanvasArtifact,
+  type CanvasArtifactType,
+} from '../../stores/canvasStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,12 +48,9 @@ function relativeTime(ts: number): string {
 function executionBadge(state: CanvasArtifact['executionState']): React.ReactNode | null {
   if (state === 'success')
     return <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />;
-  if (state === 'error')
-    return <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />;
+  if (state === 'error') return <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />;
   if (state === 'running')
-    return (
-      <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0 animate-pulse" />
-    );
+    return <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0 animate-pulse" />;
   return null;
 }
 

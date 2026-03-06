@@ -15,6 +15,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
+import { logger } from '@shared/lib/logger';
 import type {
   MessageDeliveryStatus,
   ParticipantType,
@@ -778,7 +779,7 @@ export const useMultiAgentChatStore = create<MultiAgentChatStore>()(
                 state.pendingSyncOperations = Math.max(0, state.pendingSyncOperations - 1);
               });
             } catch (error) {
-              console.error('Failed to process queued message:', error);
+              logger.error('Failed to process queued message', error);
               set((state) => {
                 state.pendingSyncOperations = Math.max(0, state.pendingSyncOperations - 1);
               });

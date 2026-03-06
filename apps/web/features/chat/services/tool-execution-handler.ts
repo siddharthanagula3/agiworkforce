@@ -13,6 +13,7 @@
  * - file_writer: Full implementation via Vibe file system
  */
 
+import { logger } from '@shared/lib/logger';
 import type { Tool, ToolCall } from '../types';
 import { webSearch, type SearchResponse } from '@core/integrations/web-search-handler';
 import {
@@ -204,14 +205,14 @@ export class ToolsExecutionService {
       const searchResponse = await webSearch(query, maxResults, provider);
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(
+        logger.info(
           `[WebSearch] Query: "${query}" returned ${searchResponse.results.length} results`,
         );
       }
 
       return searchResponse;
     } catch (error) {
-      console.error('[WebSearch] Search failed:', error);
+      logger.error('[WebSearch] Search failed:', error);
       // Provide a more user-friendly error
       throw new Error(
         `Web search failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -257,7 +258,7 @@ export class ToolsExecutionService {
 
     try {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[CodeRunner] Executing ${language} code (${code.length} chars)`);
+        logger.info(`[CodeRunner] Executing ${language} code (${code.length} chars)`);
       }
 
       // Execute code using the CodeExecutionService
@@ -267,7 +268,7 @@ export class ToolsExecutionService {
       });
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(
+        logger.info(
           `[CodeRunner] Execution ${result.success ? 'succeeded' : 'failed'} in ${result.executionTime}ms`,
         );
       }
@@ -304,7 +305,7 @@ export class ToolsExecutionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
-      console.error('[CodeRunner] Execution error:', errorMessage);
+      logger.error('[CodeRunner] Execution error:', errorMessage);
 
       return {
         success: false,
@@ -368,7 +369,7 @@ export class ToolsExecutionService {
 
     try {
       if (process.env.NODE_ENV === 'development') {
-        console.log(
+        logger.info(
           `[ImageGen] Generating image with prompt: "${prompt.substring(0, 50)}..." size=${size} quality=${quality} model=${model}`,
         );
       }
@@ -395,7 +396,7 @@ export class ToolsExecutionService {
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[ImageGen] Successfully generated image: ${result.url.substring(0, 50)}...`);
+        logger.info(`[ImageGen] Successfully generated image: ${result.url.substring(0, 50)}...`);
       }
 
       return {
@@ -411,7 +412,7 @@ export class ToolsExecutionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
-      console.error('[ImageGen] Generation failed:', errorMessage);
+      logger.error('[ImageGen] Generation failed:', errorMessage);
 
       // Provide user-friendly error messages for common issues
       let userMessage = errorMessage;
@@ -528,13 +529,13 @@ export class ToolsExecutionService {
     // Read from Vibe file system
     try {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[FileReader] Reading file from Vibe workspace: ${path}`);
+        logger.info(`[FileReader] Reading file from Vibe workspace: ${path}`);
       }
 
       const content = vibeFileSystem.readFile(path);
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[FileReader] Successfully read ${content.length} bytes from ${path}`);
+        logger.info(`[FileReader] Successfully read ${content.length} bytes from ${path}`);
       }
 
       return {
@@ -683,7 +684,7 @@ export class ToolsExecutionService {
     // Writing should work even if workspace was empty
     try {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[FileWriter] Writing ${content.length} bytes to Vibe workspace: ${path}`);
+        logger.info(`[FileWriter] Writing ${content.length} bytes to Vibe workspace: ${path}`);
       }
 
       // Check if file already exists
@@ -705,7 +706,7 @@ export class ToolsExecutionService {
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[FileWriter] Successfully ${isNewFile ? 'created' : 'updated'} ${path}`);
+        logger.info(`[FileWriter] Successfully ${isNewFile ? 'created' : 'updated'} ${path}`);
       }
 
       return {

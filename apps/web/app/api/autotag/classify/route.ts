@@ -35,9 +35,9 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, flowType: 'pkce' },
-    });
+    // Use service role key for server-side JWT verification — anon key cannot verify
+    // tokens server-side since it lacks the JWT secret needed to validate signatures.
+    const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) {

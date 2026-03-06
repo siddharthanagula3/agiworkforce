@@ -4,7 +4,7 @@ use super::AppDatabase;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
-    recorder::{global_recorder, Recording, RecordingSession},
+    recorder::{global_recorder, RecordedAction, Recording, RecordingSession},
     types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
     InspectorService,
 };
@@ -288,4 +288,177 @@ pub fn automation_generate_code(
     language: CodeLanguage,
 ) -> Result<GeneratedCode, String> {
     CodeGenerator::generate(&script, language).map_err(|e| e.to_string())
+}
+
+// Bridge commands: match frontend invoke() names to existing implementations
+
+/// Frontend calls `list_automation_scripts` (no prefix)
+#[tauri::command]
+pub async fn list_automation_scripts(
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<AutomationScript>, String> {
+    let conn = db.connection()?;
+
+    let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
+
+    let mut scripts = Vec::new();
+    for setting in settings {
+        if setting.key.starts_with("automation_script_") {
+            if let Ok(script) = serde_json::from_str::<AutomationScript>(&setting.value) {
+                scripts.push(script);
+            }
+        }
+    }
+
+    scripts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+    Ok(scripts)
+}
+
+/// Frontend calls `save_automation_script` with `{ script }`
+#[tauri::command]
+pub async fn save_automation_script(
+    db: State<'_, AppDatabase>,
+    script: AutomationScript,
+) -> Result<(), String> {
+    let conn = db.connection()?;
+
+    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
+
+    repository::set_setting(
+        &conn,
+        format!("automation_script_{}", script.id),
+        script_json,
+        false,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Frontend calls `delete_automation_script` with `{ script_id }`
+#[tauri::command]
+pub async fn delete_automation_script(
+    db: State<'_, AppDatabase>,
+    script_id: String,
+) -> Result<(), String> {
+    let conn = db.connection()?;
+
+    repository::delete_setting(&conn, &format!("automation_script_{}", script_id))
+        .map_err(|e| e.to_string())
+}
+
+/// Frontend calls `execute_automation_script` with `{ script_id, script }`
+#[tauri::command]
+pub async fn execute_automation_script(
+    app: AppHandle,
+    db: State<'_, AppDatabase>,
+    script_id: String,
+    script: Option<AutomationScript>,
+) -> Result<ExecutionResult, String> {
+    // Use the provided script directly, or load from DB by script_id
+    let target_script = match script {
+        Some(s) => s,
+        None => {
+            let conn = db.connection()?;
+            let setting =
+                repository::get_setting(&conn, &format!("automation_script_{}", script_id))
+                    .map_err(|e| e.to_string())?;
+            serde_json::from_str(&setting.value).map_err(|e| e.to_string())?
+        }
+    };
+
+    let config = ExecutorConfig::default();
+    let executor = ExecutorService::new(config).map_err(|e| e.to_string())?;
+    executor
+        .execute_script(target_script, Some(&app))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Frontend calls `save_recording_as_script` with `{ recording_id, name, description, tags, actions }`
+#[tauri::command]
+pub async fn save_recording_as_script(
+    db: State<'_, AppDatabase>,
+    recording_id: String,
+    name: String,
+    description: String,
+    tags: Vec<String>,
+    actions: Option<Vec<RecordedAction>>,
+) -> Result<AutomationScript, String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use uuid::Uuid;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let script_actions: Vec<crate::automation::executor::ScriptAction> = actions
+        .unwrap_or_default()
+        .into_iter()
+        .map(|action| {
+            let coordinates =
+                action
+                    .target
+                    .map(|target| crate::automation::executor::Coordinates {
+                        x: target.x,
+                        y: target.y,
+                    });
+
+            crate::automation::executor::ScriptAction {
+                id: action.id,
+                action_type: format!("{:?}", action.action_type).to_lowercase(),
+                selector: None,
+                coordinates,
+                value: action.value,
+                duration: None,
+                condition: None,
+                repeat_count: None,
+            }
+        })
+        .collect();
+
+    let script = AutomationScript {
+        id: Uuid::new_v4().to_string(),
+        name,
+        description,
+        tags,
+        actions: script_actions,
+        created_at: now,
+        updated_at: now,
+        last_run_at: None,
+    };
+
+    let conn = db.connection()?;
+    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
+
+    repository::set_setting(
+        &conn,
+        format!("automation_script_{}", script.id),
+        script_json,
+        false,
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Also store the recording_id → script_id mapping for reference
+    let _ = repository::set_setting(
+        &conn,
+        format!("recording_script_map_{}", recording_id),
+        script.id.clone(),
+        false,
+    );
+
+    Ok(script)
+}
+
+/// Frontend calls `inspect_element_at` with `{ x, y }` — returns JSON element info
+#[tauri::command]
+pub fn inspect_element_at(x: f64, y: f64) -> Result<Option<serde_json::Value>, String> {
+    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
+    match inspector.inspect_element_at_point(x as i32, y as i32) {
+        Ok(info) => {
+            let json = serde_json::to_value(info).map_err(|e| e.to_string())?;
+            Ok(Some(json))
+        }
+        Err(_) => Ok(None),
+    }
 }

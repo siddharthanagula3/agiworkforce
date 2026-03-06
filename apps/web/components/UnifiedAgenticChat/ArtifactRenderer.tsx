@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and string parsing callbacks */
 import { invoke } from '@/lib/tauri-mock';
 // @tauri-apps/plugin-dialog is desktop-only; web exports use browser download APIs.
 import {

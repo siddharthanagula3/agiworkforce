@@ -37,10 +37,7 @@ const RISK_BORDER_COLOR: Record<RiskLevel, string> = {
   high: colors.agentError,
 };
 
-const RISK_CONFIG: Record<
-  RiskLevel,
-  { icon: typeof ShieldCheck; label: string; color: string }
-> = {
+const RISK_CONFIG: Record<RiskLevel, { icon: typeof ShieldCheck; label: string; color: string }> = {
   low: { icon: ShieldCheck, label: 'Low Risk', color: colors.agentSuccess },
   medium: { icon: Shield, label: 'Medium Risk', color: colors.agentWarning },
   high: { icon: ShieldAlert, label: 'High Risk', color: colors.agentError },
@@ -61,9 +58,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [countdown, setCountdown] = useState<number | null>(
-    autoApproveMode === 'smart' && approval.countdown != null
-      ? approval.countdown
-      : null,
+    autoApproveMode === 'smart' && approval.countdown != null ? approval.countdown : null,
   );
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -162,10 +157,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
       >
         {/* Header row */}
         <View className="flex-row items-center gap-2.5 px-3 pt-3 pb-1">
-          <View
-            className="p-1.5 rounded-lg"
-            style={{ backgroundColor: `${riskConfig.color}15` }}
-          >
+          <View className="p-1.5 rounded-lg" style={{ backgroundColor: `${riskConfig.color}15` }}>
             <TypeIcon size={16} color={riskConfig.color} />
           </View>
 
@@ -191,9 +183,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
         {/* Description */}
         <View className="px-3 py-2">
-          <Text className="text-[13px] text-white/80 leading-[18px]">
-            {approval.description}
-          </Text>
+          <Text className="text-[13px] text-white/80 leading-[18px]">{approval.description}</Text>
         </View>
 
         {/* Countdown bar (smart auto mode) */}
@@ -257,9 +247,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                     accessibilityRole="button"
                   >
                     <X size={14} color="#fff" />
-                    <Text className="text-[13px] font-semibold text-white">
-                      Confirm Reject
-                    </Text>
+                    <Text className="text-[13px] font-semibold text-white">Confirm Reject</Text>
                   </Pressable>
                   <Pressable
                     onPress={handleCancelReject}

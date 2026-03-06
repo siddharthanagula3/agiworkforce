@@ -163,7 +163,7 @@ impl AuditLogger {
                     error_message: row.get(6)?,
                     duration_ms: row.get(7)?,
                     created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
-                        .unwrap()
+                        .unwrap_or_else(|_| chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").expect("static date"))
                         .with_timezone(&Utc),
                 })
             })?

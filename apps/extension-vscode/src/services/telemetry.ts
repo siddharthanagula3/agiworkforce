@@ -92,30 +92,38 @@ export function activate(context: vscode.ExtensionContext): vscode.Disposable {
  * Log a telemetry event. Respects both VS Code and extension-level telemetry settings.
  */
 export function logEvent(eventName: TelemetryEventName, properties?: Record<string, string>): void {
-  if (logger === undefined) return;
-  if (!isExtensionTelemetryEnabled()) return;
+  try {
+    if (logger === undefined) return;
+    if (!isExtensionTelemetryEnabled()) return;
 
-  const merged = {
-    ...getCommonProperties(),
-    ...properties,
-  };
+    const merged = {
+      ...getCommonProperties(),
+      ...properties,
+    };
 
-  logger.logUsage(eventName, merged);
+    logger.logUsage(eventName, merged);
+  } catch {
+    // Telemetry must never throw or block the caller
+  }
 }
 
 /**
  * Log an error event.
  */
 export function logError(error: Error | string, properties?: Record<string, string>): void {
-  if (logger === undefined) return;
-  if (!isExtensionTelemetryEnabled()) return;
+  try {
+    if (logger === undefined) return;
+    if (!isExtensionTelemetryEnabled()) return;
 
-  const err = typeof error === 'string' ? new Error(error) : error;
+    const err = typeof error === 'string' ? new Error(error) : error;
 
-  const merged = {
-    ...getCommonProperties(),
-    ...properties,
-  };
+    const merged = {
+      ...getCommonProperties(),
+      ...properties,
+    };
 
-  logger.logError(err, merged);
+    logger.logError(err, merged);
+  } catch {
+    // Telemetry must never throw or block the caller
+  }
 }

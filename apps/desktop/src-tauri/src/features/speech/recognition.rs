@@ -135,10 +135,12 @@ impl Default for SpeechRecognitionConfig {
 struct RecognitionSession {
     /// Deepgram audio sender (if using Deepgram)
     deepgram_audio_tx: Option<mpsc::Sender<Vec<u8>>>,
-    /// Deepgram transcript receiver (reserved for future bidirectional streaming)
+    /// Deepgram transcript receiver
+    // Used by: bidirectional streaming — will read real-time transcripts
     #[allow(dead_code)]
     deepgram_transcript_rx: Option<mpsc::Receiver<TranscriptEvent>>,
-    /// Whether session is active (reserved for session lifecycle management)
+    /// Whether session is active
+    // Used by: session lifecycle management — start/stop/pause
     #[allow(dead_code)]
     is_active: bool,
 }

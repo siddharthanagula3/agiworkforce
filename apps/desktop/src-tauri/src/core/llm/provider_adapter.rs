@@ -992,7 +992,8 @@ impl OpenAIAdapter {
         Ok(audio_config)
     }
 
-    /// Process multimodal content and extract audio inputs (reserved for audio-capable models)
+    /// Process multimodal content and extract audio inputs
+    // Used by: audio-capable model support (e.g., GPT-4o audio, Gemini audio)
     #[allow(dead_code)]
     fn process_audio_content(
         &self,
@@ -1764,15 +1765,19 @@ impl ProviderAdapter for GoogleAdapter {
                         }
                     });
                 }
-                other => {
-                    let mode = match other {
-                        ToolChoice::Auto => "AUTO",
-                        ToolChoice::Required => "ANY",
-                        ToolChoice::None => "NONE",
-                        ToolChoice::Specific(_) => unreachable!(),
-                    };
+                ToolChoice::Auto => {
                     google_request["toolConfig"] = serde_json::json!({
-                        "functionCallingConfig": { "mode": mode }
+                        "functionCallingConfig": { "mode": "AUTO" }
+                    });
+                }
+                ToolChoice::Required => {
+                    google_request["toolConfig"] = serde_json::json!({
+                        "functionCallingConfig": { "mode": "ANY" }
+                    });
+                }
+                ToolChoice::None => {
+                    google_request["toolConfig"] = serde_json::json!({
+                        "functionCallingConfig": { "mode": "NONE" }
                     });
                 }
             }

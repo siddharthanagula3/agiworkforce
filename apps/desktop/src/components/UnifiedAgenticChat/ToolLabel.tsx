@@ -16,17 +16,9 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import type { ToolLabelEntry } from '@agiworkforce/types';
 
-export interface ToolLabelEntry {
-  id: string;
-  displayName: string;
-  displayArgs: string;
-  status: 'running' | 'completed' | 'error';
-  durationMs?: number;
-  error?: string;
-  /** Optional group identifier for visually grouping parallel tool executions. */
-  parallelGroup?: string;
-}
+export type { ToolLabelEntry };
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Read: FileText,

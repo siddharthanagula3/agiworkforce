@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { logger } from '@shared/lib/logger';
 import NextImage from 'next/image';
 import {
   Image as ImageIcon,
@@ -162,7 +163,13 @@ function HistoryCard({ item }: { item: GenerationHistoryItem }) {
       {/* Thumbnail */}
       <div className="aspect-square bg-white/[0.02] flex items-center justify-center overflow-hidden">
         {item.thumbnailUrl ? (
-          <NextImage src={item.thumbnailUrl} alt={item.prompt} width={200} height={200} className="w-full h-full object-cover" />
+          <NextImage
+            src={item.thumbnailUrl}
+            alt={item.prompt}
+            width={200}
+            height={200}
+            className="w-full h-full object-cover"
+          />
         ) : item.type === 'image' ? (
           <ImageIcon className="h-8 w-8 text-white/10" />
         ) : (
@@ -371,7 +378,7 @@ export function MediaStudio() {
             toast.error(status.error || 'Video generation failed');
           }
         } catch (err) {
-          console.error('[MediaStudio] Video status poll error:', err);
+          logger.error('[MediaStudio] Video status poll error:', err);
         }
       };
 
@@ -433,7 +440,7 @@ export function MediaStudio() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Image generation failed';
       toast.error(msg);
-      console.error('[MediaStudio] Image generation error:', err);
+      logger.error('[MediaStudio] Image generation error:', err);
     } finally {
       setIsGenerating(false);
     }
@@ -470,7 +477,7 @@ export function MediaStudio() {
       toast.error(msg);
       setVideoStatus('failed');
       setVideoError(msg);
-      console.error('[MediaStudio] Video generation error:', err);
+      logger.error('[MediaStudio] Video generation error:', err);
     } finally {
       setIsGenerating(false);
     }

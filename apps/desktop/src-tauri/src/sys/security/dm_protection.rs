@@ -78,7 +78,7 @@ impl DmProtection {
 
         // Generate 6-digit code
         let code: String = (0..6)
-            .map(|_| char::from_digit(rand::random::<u32>() % 10, 10).unwrap())
+            .map(|_| char::from_digit(rand::random::<u32>() % 10, 10).unwrap_or('0'))
             .collect();
 
         let now = chrono::Utc::now().timestamp_millis();

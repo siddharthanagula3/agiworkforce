@@ -1,6 +1,16 @@
 import { View, ScrollView, Pressable, Modal } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Copy, Check, Code2, Mail, BookOpen, Image as ImageIcon, FileText, BarChart3 } from 'lucide-react-native';
+import {
+  X,
+  Copy,
+  Check,
+  Code2,
+  Mail,
+  BookOpen,
+  Image as ImageIcon,
+  FileText,
+  BarChart3,
+} from 'lucide-react-native';
 import { useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -89,9 +99,7 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
             {artifact.title}
           </Text>
 
-          {artifact.language && (
-            <Badge label={artifact.language} color="teal" />
-          )}
+          {artifact.language && <Badge label={artifact.language} color="teal" />}
 
           {/* Copy button (shown for code and text content) */}
           <Pressable
@@ -160,7 +168,9 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
               )}
               {artifact.metadata.subject != null && (
                 <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-                  <Text style={{ fontWeight: '600', color: colors.textPrimary }}>{'Subject: '}</Text>
+                  <Text style={{ fontWeight: '600', color: colors.textPrimary }}>
+                    {'Subject: '}
+                  </Text>
                   {String(artifact.metadata.subject)}
                 </Text>
               )}

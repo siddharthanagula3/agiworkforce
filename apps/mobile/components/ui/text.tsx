@@ -13,10 +13,5 @@ const variantClasses: Record<NonNullable<TextProps['variant']>, string> = {
 };
 
 export function Text({ variant = 'default', className = '', ...props }: TextProps) {
-  return (
-    <RNText
-      className={`${variantClasses[variant]} ${className}`}
-      {...props}
-    />
-  );
+  return <RNText className={`${variantClasses[variant]} ${className}`} {...props} />;
 }

@@ -289,11 +289,21 @@ impl DomOperations {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                // We could extract more if CdpClient returned it
+                let mut attributes = std::collections::HashMap::new();
+                if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
+                    if !id.is_empty() {
+                        attributes.insert("id".to_string(), id.to_string());
+                    }
+                }
+                if let Some(class) = obj.get("className").and_then(|v| v.as_str()) {
+                    if !class.is_empty() {
+                        attributes.insert("class".to_string(), class.to_string());
+                    }
+                }
                 elements.push(ElementInfo {
                     tag_name,
                     text,
-                    attributes: std::collections::HashMap::new(), // Todo: extract attributes
+                    attributes,
                     bounds: None,
                 });
             }

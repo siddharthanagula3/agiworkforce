@@ -43,10 +43,7 @@ const McpAppGalleryComponent: React.FC<McpAppGalleryProps> = ({ onClose, classNa
 
   return (
     <div
-      className={cn(
-        'flex flex-col h-full bg-zinc-950 text-zinc-100',
-        className,
-      )}
+      className={cn('flex flex-col h-full bg-zinc-950 text-zinc-100', className)}
       aria-label="MCP Apps Gallery"
     >
       {/* ── Header ──────────────────────────────────────────────────────────── */}

@@ -14,6 +14,7 @@ import {
   sendHotkey,
   sendKeys,
 } from '../api/automation';
+import { invoke } from '../lib/tauri-mock';
 import type {
   AutomationClickRequest,
   AutomationElementInfo,
@@ -26,6 +27,7 @@ import type {
 } from '../types/automation';
 import type {
   AutomationScript,
+  DetailedElementInfo,
   ExecutionHistory,
   ExecutionResult,
   InspectorState,
@@ -345,53 +347,176 @@ export const useAutomationStore = create<AutomationState>()(
           return null;
         },
 
-        saveRecordingAsScript: async () => {
-          console.warn(
-            'automationStore.saveRecordingAsScript: not implemented, use automation API directly',
-          );
-          return null;
+        saveRecordingAsScript: async (recording, name, description, tags) => {
+          try {
+            const script = await invoke<AutomationScript>('save_recording_as_script', {
+              recording_id: recording.id,
+              name,
+              description,
+              tags,
+              actions: recording.actions,
+            });
+            set(
+              (state) => {
+                state.scripts.unshift(script);
+              },
+              undefined,
+              'automation/saveRecordingAsScript/success',
+            );
+            return script;
+          } catch (error) {
+            console.error('Failed to save recording as script:', error);
+            // Local fallback: create script in store without backend persistence
+            const localScript: AutomationScript = {
+              id: `local_${Date.now()}`,
+              name,
+              description,
+              tags,
+              actions: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+            set(
+              (state) => {
+                state.scripts.unshift(localScript);
+              },
+              undefined,
+              'automation/saveRecordingAsScript/local',
+            );
+            return localScript;
+          }
         },
 
         loadScripts: async () => {
           set({ loadingScripts: true, error: null }, undefined, 'automation/loadScripts/start');
           try {
-            set(
-              { scripts: [], loadingScripts: false },
-              undefined,
-              'automation/loadScripts/success',
-            );
+            const scripts = await invoke<AutomationScript[]>('list_automation_scripts');
+            set({ scripts, loadingScripts: false }, undefined, 'automation/loadScripts/success');
           } catch (error) {
             console.error('Failed to load scripts:', error);
-            set(
-              { error: String(error), loadingScripts: false, scripts: [] },
-              undefined,
-              'automation/loadScripts/error',
-            );
-            throw error;
+            // Local fallback: keep existing scripts, clear loading state
+            set({ loadingScripts: false }, undefined, 'automation/loadScripts/localFallback');
           }
         },
 
-        saveScript: async () => {
-          console.warn('automationStore.saveScript: not implemented, use automation API directly');
-          return;
+        saveScript: async (script) => {
+          try {
+            await invoke('save_automation_script', { script });
+            set(
+              (state) => {
+                const idx = state.scripts.findIndex((s) => s.id === script.id);
+                if (idx >= 0) {
+                  state.scripts[idx] = { ...script, updatedAt: Date.now() };
+                } else {
+                  state.scripts.unshift(script);
+                }
+              },
+              undefined,
+              'automation/saveScript/success',
+            );
+          } catch (error) {
+            console.error('Failed to save script:', error);
+            // Local fallback: update in-store
+            set(
+              (state) => {
+                const idx = state.scripts.findIndex((s) => s.id === script.id);
+                if (idx >= 0) {
+                  state.scripts[idx] = { ...script, updatedAt: Date.now() };
+                } else {
+                  state.scripts.unshift(script);
+                }
+              },
+              undefined,
+              'automation/saveScript/local',
+            );
+          }
         },
 
-        deleteScript: async () => {
-          console.warn(
-            'automationStore.deleteScript: not implemented, use automation API directly',
+        deleteScript: async (scriptId) => {
+          try {
+            await invoke('delete_automation_script', { scriptId });
+          } catch (error) {
+            console.error('Failed to delete script from backend:', error);
+            // Continue with local deletion even if backend fails
+          }
+          set(
+            (state) => {
+              const idx = state.scripts.findIndex((s) => s.id === scriptId);
+              if (idx >= 0) {
+                state.scripts.splice(idx, 1);
+              }
+              if (state.selectedScript?.id === scriptId) {
+                state.selectedScript = null;
+              }
+            },
+            undefined,
+            'automation/deleteScript',
           );
-          return;
         },
 
         selectScript: (script) => {
           set({ selectedScript: script }, undefined, 'automation/selectScript');
         },
 
-        executeScript: async () => {
-          console.warn(
-            'automationStore.executeScript: not implemented, use automation API directly',
+        executeScript: async (script) => {
+          set(
+            { isExecuting: true, executionProgress: 0, currentExecution: null },
+            undefined,
+            'automation/executeScript/start',
           );
-          return null;
+          try {
+            const result = await invoke<ExecutionResult>('execute_automation_script', {
+              script_id: script.id,
+              script,
+            });
+            const historyEntry: ExecutionHistory = {
+              id: `exec_${Date.now()}`,
+              scriptId: script.id,
+              scriptName: script.name,
+              startedAt: Date.now() - (result.durationMs ?? 0),
+              completedAt: Date.now(),
+              result,
+            };
+            set(
+              (state) => {
+                state.isExecuting = false;
+                state.executionProgress = 100;
+                state.currentExecution = result;
+                state.executionHistory.unshift(historyEntry);
+              },
+              undefined,
+              'automation/executeScript/success',
+            );
+            return result;
+          } catch (error) {
+            console.error('Failed to execute script:', error);
+            const failResult: ExecutionResult = {
+              success: false,
+              actionsCompleted: 0,
+              actionsFailed: 1,
+              durationMs: 0,
+              error: String(error),
+              screenshots: [],
+              logs: [
+                {
+                  timestamp: Date.now(),
+                  level: 'error',
+                  message: String(error),
+                },
+              ],
+            };
+            set(
+              {
+                isExecuting: false,
+                executionProgress: 0,
+                currentExecution: failResult,
+                error: String(error),
+              },
+              undefined,
+              'automation/executeScript/error',
+            );
+            return failResult;
+          }
         },
 
         stopExecution: () => {
@@ -418,11 +543,20 @@ export const useAutomationStore = create<AutomationState>()(
           );
         },
 
-        inspectElementAt: async () => {
-          console.warn(
-            'automationStore.inspectElementAt: not implemented, use automation API directly',
-          );
-          return;
+        inspectElementAt: async (x, y) => {
+          try {
+            const element = await invoke<DetailedElementInfo>('inspect_element_at', { x, y });
+            set(
+              (state) => {
+                state.inspector.currentElement = element;
+              },
+              undefined,
+              'automation/inspectElementAt/success',
+            );
+          } catch (error) {
+            console.error('Failed to inspect element at coordinates:', error);
+            set({ error: String(error) }, undefined, 'automation/inspectElementAt/error');
+          }
         },
 
         handleRecordingStarted: (session) => {

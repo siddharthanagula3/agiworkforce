@@ -27,10 +27,7 @@ interface ScheduledTaskCardProps {
   onEdit: (task: ScheduledTask) => void;
 }
 
-const STATUS_CONFIG: Record<
-  TaskStatus,
-  { label: string; badgeClass: string; dotClass: string }
-> = {
+const STATUS_CONFIG: Record<TaskStatus, { label: string; badgeClass: string; dotClass: string }> = {
   active: {
     label: 'Active',
     badgeClass: 'bg-green-500/15 text-green-400 border-green-500/25',
@@ -115,11 +112,7 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
           className="mt-0.5 flex-shrink-0 text-slate-500 transition hover:text-slate-300"
           aria-label={expanded ? 'Collapse details' : 'Expand details'}
         >
-          {expanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -152,13 +145,9 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
               </span>
             )}
             {task.nextRunAt !== null && task.status === 'active' && (
-              <span className="text-teal-500">
-                Next: {getRelativeTimeDisplay(task.nextRunAt)}
-              </span>
+              <span className="text-teal-500">Next: {getRelativeTimeDisplay(task.nextRunAt)}</span>
             )}
-            {task.runCount > 0 && (
-              <span>{task.runCount}x run</span>
-            )}
+            {task.runCount > 0 && <span>{task.runCount}x run</span>}
           </div>
         </div>
 

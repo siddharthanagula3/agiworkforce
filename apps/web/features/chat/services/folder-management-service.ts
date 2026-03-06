@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Folder Management Service
  * Handles CRUD operations for chat session folders
@@ -46,7 +47,7 @@ class FolderManagementService {
       .order('name', { ascending: true });
 
     if (error) {
-      console.error('[FolderService] Failed to load folders:', error);
+      logger.error('[FolderService] Failed to load folders:', error);
       throw new Error(`Failed to load folders: ${error.message}`);
     }
 
@@ -66,7 +67,7 @@ class FolderManagementService {
     const { data, error } = await query.maybeSingle();
 
     if (error) {
-      console.error('[FolderService] Failed to load folder:', error);
+      logger.error('[FolderService] Failed to load folder:', error);
       return null;
     }
 
@@ -103,7 +104,7 @@ class FolderManagementService {
       .maybeSingle();
 
     if (error) {
-      console.error('[FolderService] Failed to create folder:', error);
+      logger.error('[FolderService] Failed to create folder:', error);
       throw new Error(`Failed to create folder: ${error.message}`);
     }
 
@@ -129,7 +130,9 @@ class FolderManagementService {
     },
     userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>)
+    let query = (
+      supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>
+    )
       .update({
         ...(updates.name && { name: updates.name }),
         ...(updates.color && { color: updates.color }),
@@ -153,7 +156,7 @@ class FolderManagementService {
     const { error } = await query;
 
     if (error) {
-      console.error('[FolderService] Failed to update folder:', error);
+      logger.error('[FolderService] Failed to update folder:', error);
       throw new Error(`Failed to update folder: ${error.message}`);
     }
   }
@@ -172,7 +175,7 @@ class FolderManagementService {
     const { error } = await query;
 
     if (error) {
-      console.error('[FolderService] Failed to delete folder:', error);
+      logger.error('[FolderService] Failed to delete folder:', error);
       throw new Error(`Failed to delete folder: ${error.message}`);
     }
   }
@@ -190,7 +193,7 @@ class FolderManagementService {
     );
 
     if (error) {
-      console.error('[FolderService] Failed to move session:', error);
+      logger.error('[FolderService] Failed to move session:', error);
       throw new Error(`Failed to move session: ${error.message}`);
     }
   }
@@ -206,7 +209,7 @@ class FolderManagementService {
       .eq('is_active', true);
 
     if (error) {
-      console.error('[FolderService] Failed to count sessions:', error);
+      logger.error('[FolderService] Failed to count sessions:', error);
       return 0;
     }
 
@@ -230,7 +233,7 @@ class FolderManagementService {
     });
 
     if (error) {
-      console.error('[FolderService] Failed to load folder sessions:', error);
+      logger.error('[FolderService] Failed to load folder sessions:', error);
       return [];
     }
 
@@ -246,7 +249,9 @@ class FolderManagementService {
   ): Promise<void> {
     // Update each folder's sort order
     const updates = folderOrders.map(({ id, sortOrder }) => {
-      let query = (supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>)
+      let query = (
+        supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>
+      )
         .update({ sort_order: sortOrder })
         .eq('id', id);
 
@@ -261,7 +266,7 @@ class FolderManagementService {
 
     const errors = results.filter((r) => r.error);
     if (errors.length > 0) {
-      console.error('[FolderService] Failed to reorder folders:', errors);
+      logger.error('[FolderService] Failed to reorder folders:', errors);
       throw new Error('Failed to reorder some folders');
     }
   }

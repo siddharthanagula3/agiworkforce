@@ -261,7 +261,12 @@ export function DocumentGenerator({
             </div>
             <p className="text-xs text-muted-foreground break-all mb-3">{resultPath}</p>
             <div className="flex gap-2">
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => void handleOpen()}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-1.5"
+                onClick={() => void handleOpen()}
+              >
                 <FolderOpen className="h-3.5 w-3.5" />
                 Open
               </Button>

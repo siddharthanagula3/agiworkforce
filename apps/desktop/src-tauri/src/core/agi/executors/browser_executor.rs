@@ -35,7 +35,9 @@ use std::sync::Arc;
 /// Tauri browser state wrapper, supporting navigation, clicking, and
 /// content extraction.
 pub struct BrowserExecutor {
-    /// Shared automation service (currently unused, reserved for future use)
+    /// Shared automation service.
+    /// TODO: Use automation service for cross-platform browser control
+    /// (screen capture, input simulation) as fallback when CDP is unavailable.
     #[allow(dead_code)]
     automation: Arc<AutomationService>,
 }

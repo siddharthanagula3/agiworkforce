@@ -284,7 +284,6 @@ const DesktopShell = () => {
           async () => {
             const { supabaseAuth } = await import('./services/supabaseAuth');
             const { waitForAuthReady } = await import('./stores/auth');
-            const { invoke } = await import('@tauri-apps/api/core');
 
             // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
             await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
@@ -361,7 +360,7 @@ const DesktopShell = () => {
           if (!isMounted) return;
 
           const warningData = event.payload;
-          console.log('[App] Received timeout warning:', warningData);
+          console.debug('[App] Received timeout warning:', warningData);
 
           setTimeoutWarning(warningData);
           setIsTimeoutWarningOpen(true);
@@ -492,7 +491,9 @@ const DesktopShell = () => {
           const action = event.payload;
           switch (action) {
             case 'floating_window':
-              void invoke('window_toggle_floating');
+              void invoke('window_toggle_floating').catch((err) => {
+                console.error('Failed to toggle floating window:', err);
+              });
               break;
             case 'new_composer':
               void startNewChat();
@@ -739,7 +740,7 @@ const App = () => {
       if (cancelled) return;
 
       if (supabaseAuth.isAuthenticated()) {
-        console.log('[App] Store hydrated, forcing account sync with backend...');
+        console.debug('[App] Store hydrated, forcing account sync with backend...');
         await useAccountStore.getState().syncWithBackend();
       }
     })();

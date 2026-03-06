@@ -135,7 +135,10 @@ describe('routeMessage — M8: classifyIntentLocally integration', () => {
 
     it('an agentic message routes to agentic task type', () => {
       // "browse to" and "automate" are high-confidence agentic keywords
-      const result = routeMessage('automate this workflow and browse to the website', 'auto-balanced');
+      const result = routeMessage(
+        'automate this workflow and browse to the website',
+        'auto-balanced',
+      );
       expect(result.taskType).toBe('agentic');
     });
 

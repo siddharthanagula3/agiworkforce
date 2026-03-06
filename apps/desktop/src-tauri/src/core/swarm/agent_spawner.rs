@@ -141,9 +141,6 @@ pub struct SpawnedAgent {
     circuit_breaker: Arc<CircuitBreaker>,
     /// Channel to send tasks to this agent.
     task_sender: mpsc::Sender<AgentTask>,
-    /// Handle to the agent's task loop (reserved for graceful shutdown/join).
-    #[allow(dead_code)]
-    handle: Option<tokio::task::JoinHandle<()>>,
     /// Signal to stop the agent.
     stop_signal: Arc<AtomicBool>,
     /// Current task being executed.
@@ -251,6 +248,8 @@ pub struct AgentSpawner {
     app_handle: Option<tauri::AppHandle>,
     /// Active agents indexed by ID.
     agents: Arc<RwLock<HashMap<String, Arc<SpawnedAgent>>>>,
+    /// Task handles indexed by agent ID for abort-based termination.
+    handles: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
     /// Semaphore to limit concurrent agents.
     agent_semaphore: Arc<Semaphore>,
     /// Maximum number of concurrent agents.
@@ -276,6 +275,7 @@ impl AgentSpawner {
             automation,
             app_handle,
             agents: Arc::new(RwLock::new(HashMap::new())),
+            handles: Arc::new(RwLock::new(HashMap::new())),
             agent_semaphore: Arc::new(Semaphore::new(max_agents)),
             max_agents,
             default_config: SubAgentConfig::default(),
@@ -320,13 +320,13 @@ impl AgentSpawner {
             total_execution_time_ms: AtomicU64::new(0),
             circuit_breaker: circuit_breaker.clone(),
             task_sender,
-            handle: None,
             stop_signal: stop_signal.clone(),
             current_task: current_task.clone(),
         });
 
-        // Start the agent's task processing loop
-        let _handle = self.start_agent_loop(
+        // Start the agent's task processing loop and retain the handle for abort-based
+        // termination — drop of `_handle` is intentionally avoided here.
+        let handle = self.start_agent_loop(
             agent_id.clone(),
             task_receiver,
             stop_signal.clone(),
@@ -336,7 +336,8 @@ impl AgentSpawner {
             config.clone(),
         );
 
-        // Store the agent (we can't modify the Arc, so we store without the handle)
+        // Store agent and its handle separately (Arc prevents storing handle inside SpawnedAgent).
+        self.handles.write().insert(agent_id.clone(), handle);
         self.agents.write().insert(agent_id.clone(), agent.clone());
         self.total_spawned.fetch_add(1, Ordering::SeqCst);
 
@@ -549,19 +550,28 @@ impl AgentSpawner {
             .count()
     }
 
-    /// Terminates an agent.
+    /// Terminates an agent, aborting its task loop immediately.
     pub fn terminate_agent(&self, agent_id: &str) {
         if let Some(agent) = self.agents.write().remove(agent_id) {
+            // Set the cooperative stop signal first so the loop exits cleanly if mid-wait.
             agent.stop();
+            // Abort the task handle for immediate termination regardless of current I/O.
+            if let Some(handle) = self.handles.write().remove(agent_id) {
+                handle.abort();
+            }
             tracing::info!("[AgentSpawner] Agent {} terminated", agent_id);
         }
     }
 
-    /// Terminates all agents.
+    /// Terminates all agents, aborting their task loops immediately.
     pub fn terminate_all(&self) {
         let mut agents = self.agents.write();
+        let mut handles = self.handles.write();
         for (id, agent) in agents.drain() {
             agent.stop();
+            if let Some(handle) = handles.remove(&id) {
+                handle.abort();
+            }
             tracing::debug!("[AgentSpawner] Agent {} terminated", id);
         }
         tracing::info!("[AgentSpawner] All agents terminated");

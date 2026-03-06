@@ -88,10 +88,7 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           console.warn('Failed to fetch schedules:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to load schedules',
+            error: error instanceof Error ? error.message : 'Failed to load schedules',
           });
         } finally {
           set({ loading: false });
@@ -108,10 +105,7 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           console.warn('Failed to create schedule:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to create schedule',
+            error: error instanceof Error ? error.message : 'Failed to create schedule',
           });
           throw error;
         } finally {
@@ -124,17 +118,12 @@ export const useScheduleStore = create<ScheduleState>()(
         try {
           const updated = await apiUpdateSchedule(id, data);
           set((state) => ({
-            schedules: state.schedules.map((s) =>
-              s.id === id ? updated : s,
-            ),
+            schedules: state.schedules.map((s) => (s.id === id ? updated : s)),
           }));
         } catch (error) {
           console.warn('Failed to update schedule:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to update schedule',
+            error: error instanceof Error ? error.message : 'Failed to update schedule',
           });
           throw error;
         } finally {
@@ -156,10 +145,7 @@ export const useScheduleStore = create<ScheduleState>()(
           // Revert on failure
           set({ schedules: prev });
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to delete schedule',
+            error: error instanceof Error ? error.message : 'Failed to delete schedule',
           });
         }
       },
@@ -172,9 +158,7 @@ export const useScheduleStore = create<ScheduleState>()(
 
         // Optimistic update
         set((state) => ({
-          schedules: state.schedules.map((s) =>
-            s.id === id ? { ...s, isActive: newActive } : s,
-          ),
+          schedules: state.schedules.map((s) => (s.id === id ? { ...s, isActive: newActive } : s)),
         }));
 
         try {
@@ -188,10 +172,7 @@ export const useScheduleStore = create<ScheduleState>()(
             ),
           }));
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to toggle schedule',
+            error: error instanceof Error ? error.message : 'Failed to toggle schedule',
           });
         }
       },
@@ -206,10 +187,7 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           console.warn('Failed to fetch schedule runs:', error);
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to load run history',
+            error: error instanceof Error ? error.message : 'Failed to load run history',
           });
         } finally {
           set({ loading: false });

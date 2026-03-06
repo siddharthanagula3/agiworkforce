@@ -107,7 +107,13 @@ function TaskRow({ task }: { task: AgentTask }) {
           <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
         )}
 
-        <span className={cn('flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', config.bgColor, config.color)}>
+        <span
+          className={cn(
+            'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
+            config.bgColor,
+            config.color,
+          )}
+        >
           <StatusIcon className={cn('h-3 w-3', task.status === 'running' && 'animate-spin')} />
           {config.label}
         </span>

@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { Bot } from 'lucide-react';
 
 export const metadata = {
-  title: 'Privacy Policy | AGI Workforce',
+  title: 'Privacy Policy',
+  description: 'Privacy policy for AGI Workforce - how we handle your data securely.',
+  alternates: { canonical: '/privacy' },
 };
 
 export default function PrivacyPage() {
@@ -70,8 +72,8 @@ export default function PrivacyPage() {
             <h3>4. AI Model Privacy</h3>
             <p>
               AGI Workforce uses a managed proxy model for LLM access. When using local LLMs (e.g.,
-              Ollama), no data leaves your machine. When using cloud models (GPT-5, Claude 4.5,
-              Gemini 3, etc.), your requests are routed through our secure proxy. We do not store,
+              Ollama), no data leaves your machine. When using cloud models (OpenAI, Anthropic,
+              Google, etc.), your requests are routed through our secure proxy. We do not store,
               log, or use your conversations to train any models. You pay AGI Workforce directly -
               we handle billing with AI providers on your behalf.
             </p>

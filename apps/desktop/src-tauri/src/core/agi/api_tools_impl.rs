@@ -31,7 +31,7 @@ pub async fn execute_api_call(
 
     let body = if let Some(body_value) = parameters.get("body") {
         Some(if body_value.is_string() {
-            body_value.as_str().unwrap().to_string()
+            body_value.as_str().unwrap_or_default().to_string()
         } else {
             serde_json::to_string(body_value)
                 .map_err(|e| anyhow!("Failed to serialize body: {}", e))?

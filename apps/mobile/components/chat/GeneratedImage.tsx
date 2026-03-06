@@ -21,12 +21,7 @@ type LoadState = 'loading' | 'loaded' | 'error';
  * Shows a generated image with rounded corners, optional revised prompt,
  * long-press share, and fade-in animation on load.
  */
-export function GeneratedImage({
-  imageUrl,
-  revisedPrompt,
-  width,
-  onPress,
-}: GeneratedImageProps) {
+export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: GeneratedImageProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
 
   const handleLoad = useCallback(() => {

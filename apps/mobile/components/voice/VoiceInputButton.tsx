@@ -73,16 +73,8 @@ export function VoiceInputButton({
   // Start pulsing ring animation when recording
   useEffect(() => {
     if (state === 'recording') {
-      ringOpacity.value = withRepeat(
-        withTiming(0.6, { duration: 1000 }),
-        -1,
-        true,
-      );
-      ringScale.value = withRepeat(
-        withTiming(1.6, { duration: 1000 }),
-        -1,
-        true,
-      );
+      ringOpacity.value = withRepeat(withTiming(0.6, { duration: 1000 }), -1, true);
+      ringScale.value = withRepeat(withTiming(1.6, { duration: 1000 }), -1, true);
     } else {
       cancelAnimation(ringOpacity);
       cancelAnimation(ringScale);
@@ -94,11 +86,7 @@ export function VoiceInputButton({
   // Spin animation for processing state
   useEffect(() => {
     if (state === 'processing') {
-      spinRotation.value = withRepeat(
-        withTiming(360, { duration: 1000 }),
-        -1,
-        false,
-      );
+      spinRotation.value = withRepeat(withTiming(360, { duration: 1000 }), -1, false);
     } else {
       cancelAnimation(spinRotation);
       spinRotation.value = 0;

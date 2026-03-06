@@ -51,10 +51,9 @@ export async function classifyConversation(conversationId: string): Promise<Conv
 export async function batchGetTags(
   conversationIds: string[],
 ): Promise<Record<string, ConversationTag>> {
-  const result = await api.post<{ tags: Record<string, ConversationTag> }>(
-    '/api/autotag/batch',
-    { conversationIds },
-  );
+  const result = await api.post<{ tags: Record<string, ConversationTag> }>('/api/autotag/batch', {
+    conversationIds,
+  });
   return result.tags;
 }
 

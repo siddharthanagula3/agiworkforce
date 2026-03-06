@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Multi-Agent Collaboration Service
  * Implements supervisor pattern for complex tasks requiring multiple AI employees
@@ -221,7 +222,7 @@ class MultiAgentCollaborationService {
           employeeContributions[employee.name] = (employeeContributions[employee.name] || 0) + 1;
         } else {
           // Log failed discussion but continue with other results
-          console.warn('[Collaboration] Discussion failed:', result.reason);
+          logger.warn('[Collaboration] Discussion failed:', result.reason);
         }
       }
     }
@@ -357,7 +358,7 @@ Focus on your area of expertise and provide actionable insights. Keep it concise
         tokensUsed: response.usage?.totalTokens,
       };
     } catch (error) {
-      console.error(`Error getting contribution from ${employee.name}:`, error);
+      logger.error(`Error getting contribution from ${employee.name}:`, error);
       return {
         content: `I'm ${employee.name}, and I'm ready to contribute my expertise in ${employee.description}.`,
         tokensUsed: 0,
@@ -397,7 +398,7 @@ Based on your expertise in ${employee.description}, provide a brief response or 
         tokensUsed: response.usage?.totalTokens,
       };
     } catch (error) {
-      console.error(`Error getting discussion from ${employee.name}:`, error);
+      logger.error(`Error getting discussion from ${employee.name}:`, error);
       return {
         content: `Good points from ${otherEmployeeName}.`,
         tokensUsed: 0,
@@ -459,7 +460,7 @@ Provide the final synthesized answer:`;
         tokensUsed: response.usage?.totalTokens,
       };
     } catch (error) {
-      console.error('Error synthesizing final answer:', error);
+      logger.error('Error synthesizing final answer:', error);
 
       // Fallback: concatenate all contributions
       const fallback = `# Collaborative Response\n\nOur team has analyzed your request. Here are the combined insights:\n\n${contributionsSummary}\n\nWe hope this collaborative effort helps address your needs!`;

@@ -91,8 +91,7 @@ function WaveformBar({
     if (active && level > 0.01) {
       // Each bar responds slightly differently to audio level
       const phaseMultiplier = 0.6 + Math.sin((index * Math.PI) / 3) * 0.4;
-      const targetHeight =
-        minHeight + (maxHeight - minHeight) * level * phaseMultiplier;
+      const targetHeight = minHeight + (maxHeight - minHeight) * level * phaseMultiplier;
       return {
         height: withSpring(Math.max(minHeight, targetHeight), SPRING_CONFIG),
         backgroundColor: color,
@@ -137,10 +136,7 @@ export function Waveform({
   }, [externalAudioLevel, audioLevel]);
 
   // Pre-compute bar indices for stable keys
-  const barIndices = useMemo(
-    () => Array.from({ length: barCount }, (_, i) => i),
-    [barCount],
-  );
+  const barIndices = useMemo(() => Array.from({ length: barCount }, (_, i) => i), [barCount]);
 
   return (
     <View
