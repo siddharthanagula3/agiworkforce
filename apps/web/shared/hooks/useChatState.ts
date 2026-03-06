@@ -6,6 +6,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { toast } from 'sonner';
+import { logger } from '@shared/lib/logger';
 import type { SimpleChatMessage } from '@shared/types';
 
 /**
@@ -51,7 +52,7 @@ export const useChatState = () => {
         return newState;
       });
     } catch (error) {
-      console.error('Error updating chat state:', error);
+      logger.error('Error updating chat state', error);
       setState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Unknown error occurred',

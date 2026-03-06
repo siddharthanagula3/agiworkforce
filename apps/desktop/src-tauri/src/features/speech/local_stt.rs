@@ -313,12 +313,10 @@ impl WhisperLocal {
             let start_ms = state
                 .full_get_segment_t0(i)
                 .map_err(|e| anyhow!("Failed to get segment start: {:?}", e))?
-                as i64
                 * 10;
             let end_ms = state
                 .full_get_segment_t1(i)
                 .map_err(|e| anyhow!("Failed to get segment end: {:?}", e))?
-                as i64
                 * 10;
 
             // Get token probabilities for confidence estimation
@@ -513,7 +511,7 @@ fn resample_audio(audio: &[f32], from_rate: u32, to_rate: u32) -> Result<Vec<f32
     let mut resampled = Vec::with_capacity(new_len);
 
     for i in 0..new_len {
-        let src_idx = (i as f64 * ratio) as f64;
+        let src_idx = i as f64 * ratio;
         let idx_floor = src_idx.floor() as usize;
         let idx_ceil = (idx_floor + 1).min(audio.len() - 1);
         let frac = (src_idx - idx_floor as f64) as f32;

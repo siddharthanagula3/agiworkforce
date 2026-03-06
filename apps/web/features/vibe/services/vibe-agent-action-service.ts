@@ -6,6 +6,7 @@
  */
 
 import { supabase as _supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 // Use untyped client to allow unregistered table names
 const supabase = _supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
@@ -80,7 +81,7 @@ export class VibeAgentActionService {
       .single();
 
     if (error) {
-      console.error('[VibeAgentActionService] Failed to create action:', error);
+      logger.error('[VibeAgentActionService] Failed to create action:', error);
       throw new Error(`Failed to create action: ${error.message}`);
     }
 
@@ -94,14 +95,16 @@ export class VibeAgentActionService {
     actionId: string,
     updates: UpdateAgentActionParams,
   ): Promise<VibeAgentAction> {
-    const { data, error } = await (supabase.from('vibe_agent_actions') as ReturnType<typeof supabase.from>)
+    const { data, error } = await (
+      supabase.from('vibe_agent_actions') as ReturnType<typeof supabase.from>
+    )
       .update(updates)
       .eq('id', actionId)
       .select()
       .single();
 
     if (error) {
-      console.error('[VibeAgentActionService] Failed to update action:', error);
+      logger.error('[VibeAgentActionService] Failed to update action:', error);
       throw new Error(`Failed to update action: ${error.message}`);
     }
 
@@ -142,7 +145,7 @@ export class VibeAgentActionService {
       .order('timestamp', { ascending: true });
 
     if (error) {
-      console.error('[VibeAgentActionService] Failed to fetch actions:', error);
+      logger.error('[VibeAgentActionService] Failed to fetch actions:', error);
       throw new Error(`Failed to fetch actions: ${error.message}`);
     }
 
@@ -161,7 +164,7 @@ export class VibeAgentActionService {
       .order('timestamp', { ascending: true });
 
     if (error) {
-      console.error('[VibeAgentActionService] Failed to fetch agent actions:', error);
+      logger.error('[VibeAgentActionService] Failed to fetch agent actions:', error);
       throw new Error(`Failed to fetch agent actions: ${error.message}`);
     }
 
@@ -358,7 +361,7 @@ export class VibeAgentActionService {
       .eq('session_id', sessionId);
 
     if (error) {
-      console.error('[VibeAgentActionService] Failed to clear actions:', error);
+      logger.error('[VibeAgentActionService] Failed to clear actions:', error);
       throw new Error(`Failed to clear actions: ${error.message}`);
     }
   }

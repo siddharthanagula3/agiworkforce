@@ -97,6 +97,26 @@ export interface GlobalHotkeyPreferences {
   combo: string;
 }
 
+const FALLBACK_GLOBAL_HOTKEY_COMBO = 'CommandOrControl+Shift+Space';
+
+export function getDefaultGlobalHotkeyCombo(): string {
+  if (typeof navigator === 'undefined') {
+    return FALLBACK_GLOBAL_HOTKEY_COMBO;
+  }
+
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = (nav.userAgentData?.platform || navigator.platform || '').toLowerCase();
+
+  if (platform.includes('mac')) {
+    return 'Command+Shift+Space';
+  }
+  if (platform.includes('win')) {
+    return 'Control+Shift+Space';
+  }
+
+  return FALLBACK_GLOBAL_HOTKEY_COMBO;
+}
+
 interface SettingsState {
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
@@ -209,7 +229,7 @@ const defaultSettings: Pick<
   },
   globalHotkeyPreferences: {
     enabled: true, // Enabled by default — competitive parity with Claude Desktop / ChatGPT Desktop
-    combo: 'CommandOrControl+Shift+Space',
+    combo: getDefaultGlobalHotkeyCombo(),
   },
   allowedDirectories: [],
   customModels: [],
@@ -799,13 +819,13 @@ export const useSettingsStore = create<SettingsState>()(
             try {
               const dirs = settings.allowedDirectories ?? [];
               await invoke('update_allowed_directories', { paths: dirs });
-              console.log('[settingsStore] Synced allowed directories to backend:', dirs.length);
+              console.debug('[settingsStore] Synced allowed directories to backend:', dirs.length);
 
               // Also update MCP filesystem server to use the allowed directories.
               // Empty directory lists are represented by ToolGuard only.
               if (dirs.length > 0) {
                 await invoke('mcp_update_filesystem_directories', { directories: dirs });
-                console.log(
+                console.debug(
                   '[settingsStore] Updated MCP filesystem with allowed directories:',
                   dirs.length,
                 );
@@ -862,7 +882,7 @@ export const useSettingsStore = create<SettingsState>()(
                 await invoke('mcp_update_filesystem_directories', {
                   directories: allowedDirectories,
                 });
-                console.log(
+                console.debug(
                   '[settingsStore] Updated MCP filesystem with allowed directories:',
                   allowedDirectories.length,
                 );
@@ -1081,7 +1101,7 @@ export const useSettingsStore = create<SettingsState>()(
             if (!stateWithHotkey.globalHotkeyPreferences) {
               stateWithHotkey.globalHotkeyPreferences = {
                 enabled: true,
-                combo: 'CommandOrControl+Shift+Space',
+                combo: getDefaultGlobalHotkeyCombo(),
               };
             }
           }
@@ -1114,7 +1134,7 @@ export const useSettingsStore = create<SettingsState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.log('[SettingsStore] Rehydration complete');
+            console.debug('[SettingsStore] Rehydration complete');
             // Sync capability toggles to backend on startup
             if (isTauriContext() && state.features && Object.keys(state.features).length > 0) {
               invoke('sync_capabilities', { capabilities: state.features }).catch(
@@ -1142,7 +1162,7 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
       return;
     }
 
-    console.log(
+    console.debug(
       `[SettingsStore] Enforcing task routing restriction: ${normalizedTier} tier cannot use ${route.model} for ${category}, switching to auto`,
     );
     setTaskRouting(category, 'managed_cloud', 'auto');

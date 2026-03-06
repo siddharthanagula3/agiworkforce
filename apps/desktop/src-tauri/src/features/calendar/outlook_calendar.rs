@@ -294,14 +294,16 @@ impl OutlookCalendarClient {
         if let Some(start) = request.start {
             update_data.insert(
                 "start".to_string(),
-                serde_json::to_value(self.convert_to_outlook_datetime(&start)).unwrap(),
+                serde_json::to_value(self.convert_to_outlook_datetime(&start))
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize start datetime: {}", e))?,
             );
         }
 
         if let Some(end) = request.end {
             update_data.insert(
                 "end".to_string(),
-                serde_json::to_value(self.convert_to_outlook_datetime(&end)).unwrap(),
+                serde_json::to_value(self.convert_to_outlook_datetime(&end))
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize end datetime: {}", e))?,
             );
         }
 

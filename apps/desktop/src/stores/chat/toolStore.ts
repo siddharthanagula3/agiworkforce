@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, isTauri } from '../../lib/tauri-mock';
+import { invoke, isTauri, listen } from '../../lib/tauri-mock';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 import type { ToolLabelEntry } from '../../components/UnifiedAgenticChat/ToolLabel';
@@ -751,7 +751,7 @@ export const useToolStore = create<ToolState>()(
 
             if (isTauri) {
               try {
-                await invoke('cancel_tool_execution', { tool_id: toolId });
+                await invoke('cancel_tool_execution', { toolId });
               } catch (error) {
                 console.warn('[ToolStore] Failed to cancel tool execution:', error);
                 set(
@@ -970,8 +970,6 @@ export async function initializeToolEventListener(): Promise<void> {
 
   // Set flag after all listeners are registered (not before) to avoid partial init
   try {
-    const { listen } = await import('@tauri-apps/api/event');
-
     // --- tool:event ---
     await listen<ToolEventPayload>('tool:event', (event) => {
       const payload = event.payload;

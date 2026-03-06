@@ -62,9 +62,7 @@ export const useMemoryStore = create<MemoryState>()(
           if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             set({
-              filteredEntries: entries.filter((e) =>
-                e.content.toLowerCase().includes(q),
-              ),
+              filteredEntries: entries.filter((e) => e.content.toLowerCase().includes(q)),
             });
           } else {
             set({ filteredEntries: [] });
@@ -99,9 +97,7 @@ export const useMemoryStore = create<MemoryState>()(
         // Optimistic update
         set((state) => ({
           entries: state.entries.map((e) =>
-            e.id === id
-              ? { ...e, content, updatedAt: new Date().toISOString() }
-              : e,
+            e.id === id ? { ...e, content, updatedAt: new Date().toISOString() } : e,
           ),
         }));
 
@@ -159,9 +155,7 @@ export const useMemoryStore = create<MemoryState>()(
           // Fall back to local filtering
           const q = query.toLowerCase();
           set((state) => ({
-            filteredEntries: state.entries.filter((e) =>
-              e.content.toLowerCase().includes(q),
-            ),
+            filteredEntries: state.entries.filter((e) => e.content.toLowerCase().includes(q)),
             error: error instanceof Error ? error.message : 'Failed to search memories',
           }));
         }
@@ -195,9 +189,7 @@ export const useMemoryStore = create<MemoryState>()(
         // Local filter while the user types
         const q = query.toLowerCase();
         set((state) => ({
-          filteredEntries: state.entries.filter((e) =>
-            e.content.toLowerCase().includes(q),
-          ),
+          filteredEntries: state.entries.filter((e) => e.content.toLowerCase().includes(q)),
         }));
       },
 

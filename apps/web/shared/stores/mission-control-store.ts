@@ -375,11 +375,7 @@ export const useMissionStore = create<MissionState>()(
             state.messages = state.messages.slice(-100);
           }
 
-          if (employeesToRemove.length > 0 || state.missionPlan.length > 0) {
-            console.log(
-              `[MissionStore] Cleaned up ${employeesToRemove.length} idle employees and pruned old tasks/messages`,
-            );
-          }
+          void employeesToRemove;
         }),
 
       // NEW: Multi-agent chat actions

@@ -35,9 +35,7 @@ function formatRelativeTime(timestamp: number): string {
 
 /** Convert snake_case or kebab-case tool name to readable label */
 function formatToolName(name: string): string {
-  return name
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return name.replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────

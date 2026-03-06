@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
-import Animated, {
-  FadeIn,
-  SlideInDown,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 import {
   Menu,
   QrCode,
@@ -26,11 +23,7 @@ import { QRScanner } from '@/components/companion/QRScanner';
 import { PairingStatus } from '@/components/companion/PairingStatus';
 import { AgentDashboard } from '@/components/companion/AgentDashboard';
 import { useConnectionStore } from '@/stores/connectionStore';
-import {
-  startHealthChecks,
-  stopHealthChecks,
-  requestAgentRefresh,
-} from '@/services/companion';
+import { startHealthChecks, stopHealthChecks, requestAgentRefresh } from '@/services/companion';
 import { colors } from '@/lib/theme';
 
 export default function CompanionScreen() {
@@ -125,17 +118,11 @@ export default function CompanionScreen() {
 
       {/* Connection status bar */}
       <View className="px-4 mb-3">
-        <PairingStatus
-          status={status}
-          desktopName={desktopName}
-          error={error}
-        />
+        <PairingStatus status={status} desktopName={desktopName} error={error} />
       </View>
 
       {/* Content based on connection state */}
-      {status === 'disconnected' && (
-        <DisconnectedView onScanPress={() => setShowScanner(true)} />
-      )}
+      {status === 'disconnected' && <DisconnectedView onScanPress={() => setShowScanner(true)} />}
       {status === 'connecting' && <ConnectingView />}
       {status === 'error' && <ErrorView error={error} onRetry={handleRetry} />}
       {status === 'connected' && (
@@ -167,8 +154,8 @@ function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
         Pair with Desktop
       </Text>
       <Text className="text-white/50 text-center text-sm mb-8 leading-5">
-        Scan the QR code shown in your AGI Workforce desktop app to connect and
-        control your agents remotely.
+        Scan the QR code shown in your AGI Workforce desktop app to connect and control your agents
+        remotely.
       </Text>
 
       <Button
@@ -223,8 +210,7 @@ function ConnectingView() {
         Connecting to Desktop...
       </Text>
       <Text className="text-white/50 text-center text-sm">
-        Make sure AGI Workforce is open on your desktop and both devices are on
-        the same network.
+        Make sure AGI Workforce is open on your desktop and both devices are on the same network.
       </Text>
     </Animated.View>
   );
@@ -234,13 +220,7 @@ function ConnectingView() {
 // Error State
 // ---------------------------------------------------------------------------
 
-function ErrorView({
-  error,
-  onRetry,
-}: {
-  error: string | null;
-  onRetry: () => void;
-}) {
+function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
@@ -257,13 +237,7 @@ function ErrorView({
         {error ?? 'Unable to connect to the desktop.'}
       </Text>
 
-      <Button
-        title="Try Again"
-        variant="primary"
-        size="md"
-        onPress={onRetry}
-        className="w-48"
-      />
+      <Button title="Try Again" variant="primary" size="md" onPress={onRetry} className="w-48" />
     </Animated.View>
   );
 }
@@ -278,16 +252,9 @@ interface ConnectedViewProps {
   onDisconnect: () => void;
 }
 
-function ConnectedView({
-  desktopName,
-  desktopMetadata,
-  onDisconnect,
-}: ConnectedViewProps) {
+function ConnectedView({ desktopName, desktopMetadata, onDisconnect }: ConnectedViewProps) {
   return (
-    <Animated.View
-      entering={SlideInDown.duration(300).springify()}
-      className="flex-1"
-    >
+    <Animated.View entering={SlideInDown.duration(300).springify()} className="flex-1">
       {/* Desktop info card */}
       <View className="px-4 mb-3">
         <Card variant="elevated">
@@ -296,16 +263,10 @@ function ConnectedView({
               <Monitor size={20} color={colors.teal} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium text-white">
-                {desktopName ?? 'Desktop'}
-              </Text>
+              <Text className="text-sm font-medium text-white">{desktopName ?? 'Desktop'}</Text>
               <Text className="text-xs text-white/40">
-                {desktopMetadata?.platform
-                  ? `${desktopMetadata.platform}`
-                  : 'Connected'}
-                {desktopMetadata?.version
-                  ? ` v${desktopMetadata.version}`
-                  : ''}
+                {desktopMetadata?.platform ? `${desktopMetadata.platform}` : 'Connected'}
+                {desktopMetadata?.version ? ` v${desktopMetadata.version}` : ''}
               </Text>
             </View>
             <Badge label="Paired" color="teal" />
@@ -318,9 +279,7 @@ function ConnectedView({
               <View className="flex-row items-center gap-4">
                 <View className="flex-row items-center gap-1.5">
                   <Cpu size={12} color={colors.textMuted} />
-                  <Text className="text-[10px] text-white/40">
-                    {String(desktopMetadata.os)}
-                  </Text>
+                  <Text className="text-[10px] text-white/40">{String(desktopMetadata.os)}</Text>
                 </View>
                 {desktopMetadata.arch != null && (
                   <View className="flex-row items-center gap-1.5">

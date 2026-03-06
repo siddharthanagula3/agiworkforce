@@ -57,12 +57,10 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     // If we have a confirmation request ID, use the tool confirmation response
     if (confirmationRequestId) {
       if (!isTauri) {
-        console.log('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
         return;
       }
       try {
         await respondToolConfirmation(confirmationRequestId, true);
-        console.log(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
       } catch (error) {
         console.error('[ToolCallCard] Failed to approve confirmation:', error);
       }
@@ -83,12 +81,10 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     // If we have a confirmation request ID, use the tool confirmation response
     if (confirmationRequestId) {
       if (!isTauri) {
-        console.log('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
         return;
       }
       try {
         await respondToolConfirmation(confirmationRequestId, false);
-        console.log(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
       } catch (error) {
         console.error('[ToolCallCard] Failed to deny confirmation:', error);
       }
@@ -109,12 +105,10 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     // Cancel tool execution
     const toolCallId = actionId || messageId;
     if (!isTauri) {
-      console.log('[ToolCallCard] Mock cancel tool:', toolCallId);
       return;
     }
     try {
       await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
-      console.log(`[ToolCallCard] Cancelled tool ${toolCallId}`);
     } catch (error) {
       console.error('[ToolCallCard] Failed to cancel tool:', error);
     }

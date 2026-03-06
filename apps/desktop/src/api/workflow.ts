@@ -77,7 +77,7 @@ export async function getUserWorkflows(userId: string): Promise<WorkflowDefiniti
     return [];
   }
 
-  return invoke<WorkflowDefinition[]>('get_user_workflows', { user_id: userId });
+  return invoke<WorkflowDefinition[]>('get_user_workflows', { userId });
 }
 
 /**
@@ -92,7 +92,7 @@ export async function executeWorkflow(
     return `mock-execution-${Date.now()}`;
   }
 
-  return invoke<string>('execute_workflow', { workflow_id: workflowId, inputs });
+  return invoke<string>('execute_workflow', { workflowId, inputs });
 }
 
 /**
@@ -104,7 +104,7 @@ export async function pauseWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('pause_workflow', { execution_id: executionId });
+  await invoke('pause_workflow', { executionId });
 }
 
 /**
@@ -116,7 +116,7 @@ export async function resumeWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('resume_workflow', { execution_id: executionId });
+  await invoke('resume_workflow', { executionId });
 }
 
 /**
@@ -128,7 +128,7 @@ export async function cancelWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('cancel_workflow', { execution_id: executionId });
+  await invoke('cancel_workflow', { executionId });
 }
 
 /**
@@ -148,7 +148,7 @@ export async function getWorkflowStatus(executionId: string): Promise<WorkflowEx
     };
   }
 
-  return invoke<WorkflowExecution>('get_workflow_status', { execution_id: executionId });
+  return invoke<WorkflowExecution>('get_workflow_status', { executionId });
 }
 
 /**
@@ -160,7 +160,7 @@ export async function getExecutionLogs(executionId: string): Promise<WorkflowExe
     return [];
   }
 
-  return invoke<WorkflowExecutionLog[]>('get_execution_logs', { execution_id: executionId });
+  return invoke<WorkflowExecutionLog[]>('get_execution_logs', { executionId });
 }
 
 /**
@@ -176,7 +176,7 @@ export async function scheduleWorkflow(
     return;
   }
 
-  await invoke('schedule_workflow', { workflow_id: workflowId, cron_expr: cronExpr, timezone });
+  await invoke('schedule_workflow', { workflowId, cronExpr, timezone });
 }
 
 /**
@@ -188,7 +188,7 @@ export async function getNextExecutionTime(cronExpr: string): Promise<number> {
     return Date.now() + 3600000; // 1 hour from now
   }
 
-  return invoke<number>('get_next_execution_time', { cron_expr: cronExpr });
+  return invoke<number>('get_next_execution_time', { cronExpr });
 }
 
 /**
@@ -205,8 +205,8 @@ export async function triggerWorkflowOnEvent(
   }
 
   return invoke<string>('trigger_workflow_on_event', {
-    workflow_id: workflowId,
-    event_type: eventType,
-    event_data: eventData,
+    workflowId,
+    eventType,
+    eventData,
   });
 }

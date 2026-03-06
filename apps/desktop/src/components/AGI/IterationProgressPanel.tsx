@@ -5,7 +5,7 @@
  * Shows the achieve_goal loop progress with real-time updates.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/tauri-mock';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';

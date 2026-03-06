@@ -195,7 +195,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/forget/start');
 
           try {
-            const deleted = await invoke<boolean>('memory_forget', {
+            const deleted = await invoke<boolean>('memory_forget_topic', {
               category,
               topic,
             });
@@ -278,7 +278,7 @@ export const useMemoryStore = create<MemoryState>()(
             // AUDIT-006-024: Apply memory limits to prevent unbounded growth
             const prunedMemories = pruneMemories(memories);
             if (prunedMemories.length < memories.length) {
-              console.log(
+              console.debug(
                 `[memoryStore] Pruned ${memories.length - prunedMemories.length} memories to fit within limits`,
               );
             }
@@ -331,7 +331,7 @@ export const useMemoryStore = create<MemoryState>()(
               const originalCount = state.memories.length;
               state.memories = pruneMemories(state.memories);
               if (state.memories.length < originalCount) {
-                console.log(
+                console.debug(
                   `[MemoryStore] Migration v2: Pruned ${originalCount - state.memories.length} memories to fit within new limits`,
                 );
               }
@@ -344,7 +344,7 @@ export const useMemoryStore = create<MemoryState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.log('[MemoryStore] Rehydration complete');
+            console.debug('[MemoryStore] Rehydration complete');
           }
         },
       },

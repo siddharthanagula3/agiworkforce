@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- store selectors and event handlers use untyped state access */
 /**
  * Unified Agentic Chat
  *

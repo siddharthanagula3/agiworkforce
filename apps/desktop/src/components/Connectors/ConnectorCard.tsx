@@ -9,6 +9,7 @@ interface ConnectorCardProps {
   error: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  onConfigure?: () => void;
 }
 
 export function ConnectorCard({
@@ -18,6 +19,7 @@ export function ConnectorCard({
   error,
   onConnect,
   onDisconnect,
+  onConfigure,
 }: ConnectorCardProps) {
   return (
     <div
@@ -75,9 +77,7 @@ export function ConnectorCard({
               <PopoverContent align="end" className="w-40 p-1">
                 <button
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted transition-colors"
-                  onClick={() => {
-                    // Configure action placeholder — same as reconnect for now
-                  }}
+                  onClick={onConfigure ?? onConnect}
                 >
                   <Settings className="h-3.5 w-3.5" />
                   Configure

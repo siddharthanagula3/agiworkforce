@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Message Bookmarks Service
  * Handles CRUD operations for bookmarking chat messages
@@ -73,7 +74,7 @@ class MessageBookmarksService {
       .maybeSingle();
 
     if (error) {
-      console.error('[Bookmarks] Failed to check bookmark:', error);
+      logger.error('[Bookmarks] Failed to check bookmark:', error);
       return false;
     }
 
@@ -102,7 +103,7 @@ class MessageBookmarksService {
       .maybeSingle();
 
     if (error) {
-      console.error('[Bookmarks] Failed to add bookmark:', error);
+      logger.error('[Bookmarks] Failed to add bookmark:', error);
       throw new Error(`Failed to add bookmark: ${error.message}`);
     }
 
@@ -124,7 +125,7 @@ class MessageBookmarksService {
       .eq('message_id', messageId);
 
     if (error) {
-      console.error('[Bookmarks] Failed to remove bookmark:', error);
+      logger.error('[Bookmarks] Failed to remove bookmark:', error);
       throw new Error(`Failed to remove bookmark: ${error.message}`);
     }
   }
@@ -137,7 +138,9 @@ class MessageBookmarksService {
     messageId: string,
     updates: { note?: string; tags?: string[] },
   ): Promise<void> {
-    const { error } = await (supabase.from('message_bookmarks') as unknown as ReturnType<typeof supabase.from>)
+    const { error } = await (
+      supabase.from('message_bookmarks') as unknown as ReturnType<typeof supabase.from>
+    )
       .update({
         ...(updates.note !== undefined && { note: updates.note }),
         ...(updates.tags !== undefined && { tags: updates.tags }),
@@ -146,7 +149,7 @@ class MessageBookmarksService {
       .eq('message_id', messageId);
 
     if (error) {
-      console.error('[Bookmarks] Failed to update bookmark:', error);
+      logger.error('[Bookmarks] Failed to update bookmark:', error);
       throw new Error(`Failed to update bookmark: ${error.message}`);
     }
   }
@@ -162,7 +165,7 @@ class MessageBookmarksService {
       .order('bookmarked_at', { ascending: false });
 
     if (error) {
-      console.error('[Bookmarks] Failed to get bookmarks:', error);
+      logger.error('[Bookmarks] Failed to get bookmarks:', error);
       throw new Error(`Failed to get bookmarks: ${error.message}`);
     }
 
@@ -183,7 +186,7 @@ class MessageBookmarksService {
       .order('message_created_at', { ascending: true });
 
     if (error) {
-      console.error('[Bookmarks] Failed to get session bookmarks:', error);
+      logger.error('[Bookmarks] Failed to get session bookmarks:', error);
       throw new Error(`Failed to get session bookmarks: ${error.message}`);
     }
 
@@ -204,7 +207,7 @@ class MessageBookmarksService {
       .order('bookmarked_at', { ascending: false });
 
     if (error) {
-      console.error('[Bookmarks] Failed to search bookmarks:', error);
+      logger.error('[Bookmarks] Failed to search bookmarks:', error);
       throw new Error(`Failed to search bookmarks: ${error.message}`);
     }
 
@@ -223,7 +226,7 @@ class MessageBookmarksService {
       .eq('user_id', userId);
 
     if (error) {
-      console.error('[Bookmarks] Failed to count bookmarks:', error);
+      logger.error('[Bookmarks] Failed to count bookmarks:', error);
       return 0;
     }
 
@@ -242,7 +245,7 @@ class MessageBookmarksService {
       .order('bookmarked_at', { ascending: false });
 
     if (error) {
-      console.error('[Bookmarks] Failed to get bookmarks by tag:', error);
+      logger.error('[Bookmarks] Failed to get bookmarks by tag:', error);
       throw new Error(`Failed to get bookmarks by tag: ${error.message}`);
     }
 
@@ -261,7 +264,7 @@ class MessageBookmarksService {
       .eq('user_id', userId);
 
     if (error) {
-      console.error('[Bookmarks] Failed to get tags:', error);
+      logger.error('[Bookmarks] Failed to get tags:', error);
       return [];
     }
 

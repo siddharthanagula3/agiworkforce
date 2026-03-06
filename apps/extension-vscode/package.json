@@ -4,7 +4,7 @@
   "description": "AI-powered coding assistant powered by AGI Workforce",
   "version": "0.1.0",
   "publisher": "agiworkforce",
-  "license": "MIT",
+  "license": "PROPRIETARY",
   "repository": {
     "type": "git",
     "url": "https://github.com/agiworkforce/agiworkforce"
@@ -354,7 +354,7 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && vsce package --no-dependencies",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf out",

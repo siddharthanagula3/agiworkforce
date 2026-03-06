@@ -625,7 +625,7 @@ pub fn run() {
             app.manage(crate::sys::commands::project_context::ProjectContextState::new());
             tracing::info!("Project context state initialized");
 
-            app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
+            app.manage(ContextManagerState::new());
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
 
 
@@ -1114,6 +1114,12 @@ pub fn run() {
             crate::sys::commands::email_move_message,
             crate::sys::commands::email_download_attachment,
             crate::sys::commands::email_send,
+            crate::sys::commands::email_list_messages,
+            crate::sys::commands::email_send_message,
+            crate::sys::commands::email_get_message,
+            crate::sys::commands::email_search,
+            crate::sys::commands::email_check_keyring_status,
+            crate::sys::commands::email_migrate_credentials,
             crate::sys::commands::contact_create,
             crate::sys::commands::contact_get,
             crate::sys::commands::contact_list,
@@ -1140,6 +1146,8 @@ pub fn run() {
             crate::sys::commands::calendar_create_event,
             crate::sys::commands::calendar_update_event,
             crate::sys::commands::calendar_delete_event,
+            crate::sys::commands::calendar_get_event,
+            crate::sys::commands::calendar_sync,
             crate::sys::commands::calendar_get_system_timezone,
 
 
@@ -1193,6 +1201,12 @@ pub fn run() {
             crate::sys::commands::automation_get_element_tree,
             crate::sys::commands::automation_save_recording_as_script,
             crate::sys::commands::automation_generate_code,
+            crate::sys::commands::list_automation_scripts,
+            crate::sys::commands::save_automation_script,
+            crate::sys::commands::delete_automation_script,
+            crate::sys::commands::execute_automation_script,
+            crate::sys::commands::save_recording_as_script,
+            crate::sys::commands::inspect_element_at,
             crate::sys::commands::overlay_emit_click,
             crate::sys::commands::overlay_emit_type,
             crate::sys::commands::overlay_emit_region,
@@ -1663,6 +1677,7 @@ pub fn run() {
             crate::sys::commands::memory_export_json,
             crate::sys::commands::memory_export_markdown,
             crate::sys::commands::memory_import_json,
+            crate::sys::commands::memory_import_json_string,
             // Memory dashboard commands
             crate::sys::commands::memory_get_dashboard_stats,
             crate::sys::commands::memory_get_project_memories,
@@ -1816,6 +1831,7 @@ pub fn run() {
             crate::sys::commands::shortcuts_reset,
             crate::sys::commands::shortcuts_check_key,
             crate::sys::commands::shortcuts_get_defaults,
+            crate::sys::commands::shortcuts_apply_quick_query_preferences,
             crate::sys::commands::shortcuts_register_global,
             crate::sys::commands::shortcuts_unregister_global,
 

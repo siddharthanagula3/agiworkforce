@@ -132,9 +132,10 @@ function setupPeerConnection(): void {
     }
   });
 
-  // Handle incoming data channels from the desktop
+  // Handle incoming data channels from the desktop.
+  // react-native-webrtc's datachannel event carries a `.channel` property.
   pc.addEventListener('datachannel', (event) => {
-    const channel = (event as unknown as { channel: RTCDataChannelType }).channel;
+    const channel = (event as Event & { channel: RTCDataChannelType }).channel;
     dataChannel = channel;
     if (dataChannel) {
       setupDataChannel(dataChannel);

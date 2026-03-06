@@ -155,8 +155,9 @@ impl EmbeddingGenerator {
 
     async fn generate_fastembed(&self, _text: &str) -> Result<Vector> {
         Err(anyhow!(
-            "Local fastembed generation not yet implemented.
-            Please ensure Ollama is running with 'ollama pull nomic-embed-text'"
+            "Local embedding generation via fastembed is not available. To generate embeddings locally, \
+             install and start Ollama (https://ollama.com), then run: ollama pull nomic-embed-text. \
+             Alternatively, configure an OpenAI or Google API key in Settings for cloud-based embeddings."
         ))
     }
 

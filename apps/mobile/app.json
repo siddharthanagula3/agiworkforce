@@ -28,11 +28,7 @@
         "backgroundColor": "#0f0f0f"
       },
       "package": "com.agiworkforce.mobile",
-      "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "READ_EXTERNAL_STORAGE"
-      ]
+      "permissions": ["CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"]
     },
     "plugins": [
       "expo-router",

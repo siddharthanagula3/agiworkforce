@@ -2,12 +2,21 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+
+// Zod schema for session actions
+const SessionRequestSchema = z.object({
+  action: z.enum(['create', 'list', 'get', 'delete']),
+  sessionId: z.string().uuid().optional(),
+  employeeId: z.string().max(100).optional(),
+  title: z.string().max(500).optional(),
+});
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -60,8 +69,21 @@ async function handler(request: NextRequest) {
     userId = user.id;
   }
 
-  const body = await request.json();
-  const { action, sessionId, employeeId, title } = body;
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    throw createError.badRequest('Invalid JSON in request body');
+  }
+
+  const validationResult = SessionRequestSchema.safeParse(rawBody);
+  if (!validationResult.success) {
+    throw createError.badRequest(
+      'Invalid request body: ' + validationResult.error.issues.map((i) => i.message).join(', '),
+    );
+  }
+
+  const { action, sessionId, employeeId, title } = validationResult.data;
 
   switch (action) {
     case 'create': {

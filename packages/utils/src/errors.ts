@@ -12,54 +12,13 @@ import type {
   ApiError as ApiErrorType,
   FriendlyError as FriendlyErrorType,
 } from '@agiworkforce/types';
+import { ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
 
-// Re-export types for convenience
+// Re-export types and constants from @agiworkforce/types to avoid duplication
 export type ApiError = ApiErrorType;
 export type FriendlyError = FriendlyErrorType;
-
-/**
- * Standardized error codes for API and application errors.
- *
- * Using const object pattern for isolatedModules compatibility.
- * The values are kept in sync with @agiworkforce/types/errors.
- */
-export const ErrorCode = {
-  // Authentication & Authorization
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  FORBIDDEN: 'FORBIDDEN',
-
-  // Validation
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  INVALID_INPUT: 'INVALID_INPUT',
-
-  // Resource
-  NOT_FOUND: 'NOT_FOUND',
-  CONFLICT: 'CONFLICT',
-
-  // Server
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  TIMEOUT: 'TIMEOUT',
-
-  // Rate Limiting
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
-
-  // External Services
-  STRIPE_ERROR: 'STRIPE_ERROR',
-  SUPABASE_ERROR: 'SUPABASE_ERROR',
-  PGRST116: 'PGRST116',
-
-  // Network
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
-  INVALID_RESPONSE: 'INVALID_RESPONSE',
-
-  // Payment
-  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
-} as const;
-
-/** Type for error codes */
-export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
+export { ErrorCode };
+export type { ErrorCodeValue };
 
 /**
  * Application error class with code, status, and details.

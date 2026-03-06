@@ -494,7 +494,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         !canSendWithoutDbConversation &&
         (!targetConversationId || targetConversationId !== activeConversationDbId)
       ) {
-        console.log(
+        console.debug(
           '[ChatInputArea] Skipping pending auto-send for inactive conversation:',
           pendingMessage.id,
           pendingMessage.conversation_id,
@@ -509,7 +509,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         isQueueMode ||
         pendingAutoSendIdsRef.current.has(pendingMessage.id)
       ) {
-        console.log('[ChatInputArea] Skipping auto-send - busy or disabled');
+        console.debug('[ChatInputArea] Skipping auto-send - busy or disabled');
         return false;
       }
 
@@ -556,7 +556,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           }
         }
 
-        console.log('[ChatInputArea] Successfully sent pending message:', pendingMessage.id);
+        console.debug('[ChatInputArea] Successfully sent pending message:', pendingMessage.id);
         return true;
       } catch (err) {
         console.error('[ChatInputArea] Failed to auto-send pending message:', err);
@@ -592,7 +592,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       }
       failedAutoSendIdsRef.current.delete(pendingMessage.id);
 
-      console.log(
+      console.debug(
         '[ChatInputArea] Auto-sending pending message:',
         pendingMessage.id,
         pendingMessage.content.slice(0, 50),
@@ -782,7 +782,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         // Add to UI attachment list while also returning a local value for immediate send.
         setAttachments((current) => [...current, attachment]);
-        console.log('[ChatInputArea] Screenshot attached:', attachment.name);
+        console.debug('[ChatInputArea] Screenshot attached:', attachment.name);
         return attachment;
       } catch (error) {
         console.error('[ChatInputArea] Failed to process screenshot:', error);
@@ -812,7 +812,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       const matchesPattern = screenPatterns.some((pattern) => pattern.test(messageContent));
 
       if (matchesPattern) {
-        console.log('[ChatInputArea] Detected screen query, auto-capturing...');
+        console.debug('[ChatInputArea] Detected screen query, auto-capturing...');
         try {
           // Auto-capture full screen
           await import('../../hooks/useScreenCapture'); // Keep import for side effects if needed, or remove if purely for unused function
@@ -878,7 +878,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         setDraftContent('');
         setSubmitError(null);
 
-        console.log('[ChatInputArea] Message queued:', pendingMsg.id);
+        console.debug('[ChatInputArea] Message queued:', pendingMsg.id);
       } catch (error) {
         console.error('[ChatInputArea] Failed to queue message:', error);
         setSubmitError('Failed to queue message. Please try again.');

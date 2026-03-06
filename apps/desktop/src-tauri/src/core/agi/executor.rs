@@ -190,8 +190,7 @@ impl AGIExecutor {
     /// Returns an empty Vec if no restrictions are configured (backwards compatibility),
     /// which will trigger a security warning but allow access.
     ///
-    /// Note: This method is kept for potential future use in fallback tools that
-    /// need path validation but aren't yet migrated to the ExecutorRegistry.
+    // Used by: fallback tools not yet migrated to ExecutorRegistry
     #[allow(dead_code)]
     fn get_allowed_directories(&self) -> Vec<std::path::PathBuf> {
         // Try to get allowed directories from settings via app_handle
@@ -534,10 +533,81 @@ impl AGIExecutor {
         match tool_name {
             // MCP tool calls are handled separately via the MCP client
             tool if tool.starts_with("mcp__") => {
-                // MCP tools should be routed through the MCP client
-                // This fallback just returns an error suggesting the proper route
                 Err(anyhow!(
                     "MCP tool '{}' should be executed via the MCP client, not the AGI executor",
+                    tool_name
+                ))
+            }
+
+            // Common file operation aliases — redirect to the registered FileExecutor
+            "read_file" | "read" | "file_read" | "open_file" => {
+                tracing::info!(
+                    "[Executor] Tool '{}' is a file operation alias. Use 'file_read' via the \
+                    ExecutorRegistry. Session: {}",
+                    tool_name,
+                    session_id
+                );
+                Err(anyhow!(
+                    "Tool '{}' should be invoked as 'file_read' (handled by FileExecutor). \
+                    Registered file tools: file_read, file_write.",
+                    tool_name
+                ))
+            }
+
+            "write_file" | "write" | "file_write" | "save_file" | "create_file" => {
+                tracing::info!(
+                    "[Executor] Tool '{}' is a file operation alias. Use 'file_write' via the \
+                    ExecutorRegistry. Session: {}",
+                    tool_name,
+                    session_id
+                );
+                Err(anyhow!(
+                    "Tool '{}' should be invoked as 'file_write' (handled by FileExecutor). \
+                    Registered file tools: file_read, file_write.",
+                    tool_name
+                ))
+            }
+
+            // Common shell/terminal aliases — redirect to the registered TerminalExecutor
+            "shell_execute" | "shell" | "bash" | "run_command" | "exec" | "terminal" => {
+                tracing::info!(
+                    "[Executor] Tool '{}' is a terminal alias. Use 'terminal_execute' via the \
+                    ExecutorRegistry. Session: {}",
+                    tool_name,
+                    session_id
+                );
+                Err(anyhow!(
+                    "Tool '{}' should be invoked as 'terminal_execute' (handled by TerminalExecutor).",
+                    tool_name
+                ))
+            }
+
+            // Common code analysis aliases — redirect to the registered CodeExecutor
+            "analyze_code" | "code_analysis" | "lint" => {
+                tracing::info!(
+                    "[Executor] Tool '{}' is a code analysis alias. Use 'code_analyze' via the \
+                    ExecutorRegistry. Session: {}",
+                    tool_name,
+                    session_id
+                );
+                Err(anyhow!(
+                    "Tool '{}' should be invoked as 'code_analyze' or 'code_execute' \
+                    (handled by CodeExecutor).",
+                    tool_name
+                ))
+            }
+
+            // Common web/API aliases — redirect to the registered ApiExecutor
+            "http_request" | "fetch" | "web_request" | "api_request" => {
+                tracing::info!(
+                    "[Executor] Tool '{}' is an API alias. Use 'api_call' via the \
+                    ExecutorRegistry. Session: {}",
+                    tool_name,
+                    session_id
+                );
+                Err(anyhow!(
+                    "Tool '{}' should be invoked as 'api_call' (handled by ApiExecutor). \
+                    Registered API tools: api_call, api_upload, api_download.",
                     tool_name
                 ))
             }
@@ -550,8 +620,10 @@ impl AGIExecutor {
                     session_id
                 );
                 Err(anyhow!(
-                    "Unknown tool: '{}'. This tool may not be implemented or may require \
-                    additional configuration.",
+                    "Unknown tool: '{}'. Available tool families: file_read/file_write (FileExecutor), \
+                    terminal_execute (TerminalExecutor), code_execute/code_analyze (CodeExecutor), \
+                    api_call (ApiExecutor), llm_reason (LlmExecutor), productivity_*/document_* \
+                    (ProductivityExecutor). MCP tools must use the 'mcp__' prefix.",
                     tool_name
                 ))
             }
@@ -612,34 +684,92 @@ impl AGIExecutor {
                     context_memory: Vec::new(),
                 };
 
-                let mut executor = AGIExecutor::with_process_reasoning(
+                let resource_manager = match ResourceManager::new(ResourceLimits {
+                    cpu_percent: 80.0,
+                    memory_mb: 2048,
+                    network_mbps: 100.0,
+                    storage_mb: 10240,
+                }) {
+                    Ok(rm) => rm,
+                    Err(e) => {
+                        tracing::error!("[Executor] Failed to create ResourceManager: {}", e);
+                        return crate::core::agi::ExecutionResult {
+                            plan_id,
+                            sandbox_id,
+                            success: false,
+                            steps_completed: 0,
+                            steps_failed: 1,
+                            output: serde_json::json!({}),
+                            error: Some(format!("Failed to create ResourceManager: {}", e)),
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            cost: None,
+                        };
+                    }
+                };
+
+                let process_reasoning = match ProcessReasoning::new(router.clone()) {
+                    Ok(pr) => pr,
+                    Err(e) => {
+                        tracing::error!("[Executor] Failed to create ProcessReasoning: {}", e);
+                        return crate::core::agi::ExecutionResult {
+                            plan_id,
+                            sandbox_id,
+                            success: false,
+                            steps_completed: 0,
+                            steps_failed: 1,
+                            output: serde_json::json!({}),
+                            error: Some(format!("Failed to create ProcessReasoning: {}", e)),
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            cost: None,
+                        };
+                    }
+                };
+
+                let outcome_tracker = match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
+                    Ok(ot) => ot,
+                    Err(e) => {
+                        tracing::error!("[Executor] Failed to create OutcomeTracker: {}", e);
+                        return crate::core::agi::ExecutionResult {
+                            plan_id,
+                            sandbox_id,
+                            success: false,
+                            steps_completed: 0,
+                            steps_failed: 1,
+                            output: serde_json::json!({}),
+                            error: Some(format!("Failed to create OutcomeTracker: {}", e)),
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            cost: None,
+                        };
+                    }
+                };
+
+                let mut executor = match AGIExecutor::with_process_reasoning(
                     tool_registry,
-                    Arc::new(
-                        ResourceManager::new(ResourceLimits {
-                            cpu_percent: 80.0,
-                            memory_mb: 2048,
-                            network_mbps: 100.0,
-                            storage_mb: 10240,
-                        })
-                        .unwrap(),
-                    ),
+                    Arc::new(resource_manager),
                     automation,
                     router.clone(),
                     app_handle,
-                    // Sub-agents get fresh reasoning/tracker instances; sharing the parent's
-                    // would require cross-task synchronization with limited benefit.
-                    Arc::new(
-                        ProcessReasoning::new(router.clone())
-                            .expect("Failed to create process reasoning"),
-                    ),
-                    Arc::new(
-                        OutcomeTracker::new("outcome_tracker_parallel.db".to_string())
-                            .expect("Failed to create tracker"),
-                    ),
+                    Arc::new(process_reasoning),
+                    Arc::new(outcome_tracker),
                     None, // No reflection engine for parallel sub-tasks for now
                     None, // No change tracker for parallel execution
-                )
-                .unwrap();
+                ) {
+                    Ok(ex) => ex,
+                    Err(e) => {
+                        tracing::error!("[Executor] Failed to create AGIExecutor: {}", e);
+                        return crate::core::agi::ExecutionResult {
+                            plan_id,
+                            sandbox_id,
+                            success: false,
+                            steps_completed: 0,
+                            steps_failed: 1,
+                            output: serde_json::json!({}),
+                            error: Some(format!("Failed to create AGIExecutor: {}", e)),
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            cost: None,
+                        };
+                    }
+                };
 
                 executor.tool_cache = tool_cache;
 

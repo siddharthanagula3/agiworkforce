@@ -49,7 +49,7 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
     let raw_tooltip = "AGI Workforce — AI Desktop Platform";
     let tooltip = &raw_tooltip[..128.min(raw_tooltip.len())];
 
-    let mut tray_builder = TrayIconBuilder::new()
+    let tray_builder = TrayIconBuilder::new()
         .menu(&menu)
         .tooltip(tooltip)
         .on_menu_event(handle_menu_event)
@@ -57,9 +57,11 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
 
     // On Windows, use the default window icon for the system tray.
     #[cfg(windows)]
-    if let Some(icon) = app.default_window_icon().cloned() {
-        tray_builder = tray_builder.icon(icon);
-    }
+    let tray_builder = if let Some(icon) = app.default_window_icon().cloned() {
+        tray_builder.icon(icon)
+    } else {
+        tray_builder
+    };
 
     let _tray = tray_builder.build(app)?;
 

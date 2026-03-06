@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- widget registry requires polymorphic component types */
 /**
  * WidgetRegistry
  *

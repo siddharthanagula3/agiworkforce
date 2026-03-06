@@ -35,7 +35,7 @@ import { useAutomationStore } from './automationStore';
  * Order matters: clean up stores with dependencies last.
  */
 export function cleanupAllStoresOnLogout(): void {
-  console.log('[LogoutCleanup] Starting store cleanup...');
+  console.debug('[LogoutCleanup] Starting store cleanup...');
 
   try {
     // 1. Clean up stores with event listeners and timers first
@@ -44,48 +44,48 @@ export function cleanupAllStoresOnLogout(): void {
     // Browser store has Tauri event listeners
     const browserStore = useBrowserStore.getState();
     browserStore.cleanup();
-    console.log('[LogoutCleanup] Browser store cleaned up');
+    console.debug('[LogoutCleanup] Browser store cleaned up');
 
     // Terminal store has session listeners
     const terminalStore = useTerminalStore.getState();
     terminalStore.reset();
-    console.log('[LogoutCleanup] Terminal store cleaned up');
+    console.debug('[LogoutCleanup] Terminal store cleaned up');
 
     // Automation store has state that should be reset
     const automationStore = useAutomationStore.getState();
     automationStore.reset();
-    console.log('[LogoutCleanup] Automation store cleaned up');
+    console.debug('[LogoutCleanup] Automation store cleaned up');
 
     // AUDIT-006-011: Productivity store cleanup
     const productivityStore = useProductivityStore.getState();
     productivityStore.resetOnLogout();
-    console.log('[LogoutCleanup] Productivity store cleaned up');
+    console.debug('[LogoutCleanup] Productivity store cleaned up');
 
     // 2. Clean up data stores
 
     // Unified chat store - clears conversations, messages, pending state
     const chatStore = useUnifiedChatStore.getState();
     chatStore.resetOnLogout();
-    console.log('[LogoutCleanup] Chat store cleaned up');
+    console.debug('[LogoutCleanup] Chat store cleaned up');
 
     // AUDIT-006-019: MCP store - use dedicated resetOnLogout function
     const mcpStore = useMcpStore.getState();
     mcpStore.resetOnLogout();
-    console.log('[LogoutCleanup] MCP store cleaned up');
+    console.debug('[LogoutCleanup] MCP store cleaned up');
 
     // AUDIT-006-022: Database store - clear connections and state
     const databaseStore = useDatabaseStore.getState();
     databaseStore.resetOnLogout();
-    console.log('[LogoutCleanup] Database store cleaned up');
+    console.debug('[LogoutCleanup] Database store cleaned up');
 
     // AUDIT-006-028: Execution store - cleanup event listeners and reset
     cleanupExecutionListeners();
     const executionStore = useExecutionStore.getState();
     executionStore.reset();
-    console.log('[LogoutCleanup] Execution store cleaned up');
+    console.debug('[LogoutCleanup] Execution store cleaned up');
 
     // Orchestration store archived - visual workflow builder removed
-    console.log('[LogoutCleanup] Orchestration store skipped (archived)');
+    console.debug('[LogoutCleanup] Orchestration store skipped (archived)');
 
     // Stop analytics auto-refresh before resetting state
     stopMetricsAutoRefresh();
@@ -121,25 +121,25 @@ export function cleanupAllStoresOnLogout(): void {
       trends: {},
       isLoadingROI: false,
     });
-    console.log('[LogoutCleanup] Billing/Usage store cleaned up');
+    console.debug('[LogoutCleanup] Billing/Usage store cleaned up');
 
     // Unified Auth store - clear account, billing, and auth data
     // (Consolidated from authStore, accountStore, and billingStore)
     cleanupUnifiedAuthStore();
     useUnifiedAuthStore.getState().reset();
-    console.log('[LogoutCleanup] Unified Auth store cleaned up');
+    console.debug('[LogoutCleanup] Unified Auth store cleaned up');
 
     // 3. Clean up stores that should preserve some state (preferences)
 
     // Code store - close all files
     const codeStore = useCodeStore.getState();
     codeStore.closeAllFiles();
-    console.log('[LogoutCleanup] Code store cleaned up');
+    console.debug('[LogoutCleanup] Code store cleaned up');
 
     // Model store - reset selection but keep favorites (user preference)
     const modelStore = useModelStore.getState();
     modelStore.reset();
-    console.log('[LogoutCleanup] Model store cleaned up');
+    console.debug('[LogoutCleanup] Model store cleaned up');
 
     // Project store - we don't reset since projects are local
     // but clear active project selection
@@ -148,16 +148,16 @@ export function cleanupAllStoresOnLogout(): void {
       isLoading: false,
       error: null,
     });
-    console.log('[LogoutCleanup] Project store cleaned up');
+    console.debug('[LogoutCleanup] Project store cleaned up');
 
     // Settings store - preserve settings (they're app-level, not user-level)
     // Just clear any error state
     useSettingsStore.setState({
       error: null,
     });
-    console.log('[LogoutCleanup] Settings store cleaned up');
+    console.debug('[LogoutCleanup] Settings store cleaned up');
 
-    console.log('[LogoutCleanup] All stores cleaned up successfully');
+    console.debug('[LogoutCleanup] All stores cleaned up successfully');
   } catch (error) {
     console.error('[LogoutCleanup] Error during store cleanup:', error);
     // Don't throw - logout should complete even if cleanup has issues
@@ -194,5 +194,5 @@ export function clearPersistedUserData(): void {
     }
   }
 
-  console.log('[LogoutCleanup] Persisted user data cleared');
+  console.debug('[LogoutCleanup] Persisted user data cleared');
 }

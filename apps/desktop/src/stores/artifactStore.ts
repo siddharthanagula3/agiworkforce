@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { applyDiff } from '@/lib/diffUtils';
 
 // =============================================================================

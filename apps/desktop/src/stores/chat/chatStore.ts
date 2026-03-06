@@ -226,20 +226,9 @@ function generateTitleFromMessage(content: string): string {
 // Storage version for migrations
 const STORAGE_VERSION = 1;
 
-/**
- * Represents a single tool execution entry in the per-message tool timeline.
- * Used by the ToolTimeline component to render Claude Code-style inline tool labels.
- */
-export interface ToolLabelEntry {
-  id: string;
-  displayName: string;
-  displayArgs: string;
-  status: 'running' | 'completed' | 'error';
-  durationMs?: number;
-  error?: string;
-  /** Optional group identifier for visually grouping parallel tool executions. */
-  parallelGroup?: string;
-}
+// ToolLabelEntry is now defined in @agiworkforce/types and re-exported here.
+import type { ToolLabelEntry } from '@agiworkforce/types';
+export type { ToolLabelEntry };
 
 export interface ChatState {
   // Conversation management

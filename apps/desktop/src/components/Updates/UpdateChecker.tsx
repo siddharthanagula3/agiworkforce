@@ -97,7 +97,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
       const intervalMs = checkIntervalHours * 60 * 60 * 1000;
 
       if (lastCheckTime && now - lastCheckTime < intervalMs) {
-        console.log(
+        console.debug(
           '[UpdateChecker] Skipping check, last check was',
           Math.round((now - lastCheckTime) / 1000 / 60),
           'minutes ago',

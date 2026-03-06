@@ -14,7 +14,7 @@
  */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type { McpBundle, McpBundleCategory, BundleInstallProgress } from '../types/mcp';
 
 // API layer for Tauri commands

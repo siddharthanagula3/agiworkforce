@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 import { supabase } from '@shared/lib/supabase-client';
 import type { PromptShortcut } from '../components/shortcuts/PromptShortcuts';
 
@@ -26,7 +27,7 @@ export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[User Shortcuts] Error fetching shortcuts:', error);
+      logger.error('[User Shortcuts] Error fetching shortcuts:', error);
       return [];
     }
 
@@ -49,7 +50,7 @@ export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]
       }) || []
     );
   } catch (error) {
-    console.error('[User Shortcuts] Error:', error);
+    logger.error('[User Shortcuts] Error:', error);
     return [];
   }
 }
@@ -80,12 +81,12 @@ export async function createUserShortcut(
       .maybeSingle();
 
     if (error) {
-      console.error('[User Shortcuts] Error creating shortcut:', error);
+      logger.error('[User Shortcuts] Error creating shortcut:', error);
       return null;
     }
 
     if (!data) {
-      console.error('[User Shortcuts] No data returned after creating shortcut');
+      logger.error('[User Shortcuts] No data returned after creating shortcut');
       return null;
     }
 
@@ -98,7 +99,7 @@ export async function createUserShortcut(
       category: d['category'] as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
     };
   } catch (error) {
-    console.error('[User Shortcuts] Error:', error);
+    logger.error('[User Shortcuts] Error:', error);
     return null;
   }
 }
@@ -130,13 +131,13 @@ export async function updateUserShortcut(
       .eq('user_id', userId); // Only update if user owns the shortcut
 
     if (error) {
-      console.error('[User Shortcuts] Error updating shortcut:', error);
+      logger.error('[User Shortcuts] Error updating shortcut:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('[User Shortcuts] Error:', error);
+    logger.error('[User Shortcuts] Error:', error);
     return false;
   }
 }
@@ -155,13 +156,13 @@ export async function deleteUserShortcut(userId: string, shortcutId: string): Pr
       .eq('user_id', userId); // Only delete if user owns the shortcut
 
     if (error) {
-      console.error('[User Shortcuts] Error deleting shortcut:', error);
+      logger.error('[User Shortcuts] Error deleting shortcut:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('[User Shortcuts] Error:', error);
+    logger.error('[User Shortcuts] Error:', error);
     return false;
   }
 }

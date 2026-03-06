@@ -122,12 +122,6 @@ pub struct SwarmResult {
 pub struct SwarmOrchestrator {
     /// Configuration.
     config: SwarmConfig,
-    /// LLM router for agent operations (reserved for swarm task execution).
-    #[allow(dead_code)]
-    router: Arc<tokio::sync::RwLock<LLMRouter>>,
-    /// Automation service (reserved for swarm task execution).
-    #[allow(dead_code)]
-    automation: Arc<AutomationService>,
     /// Application handle for events.
     app_handle: Option<tauri::AppHandle>,
     /// Task decomposer.
@@ -167,8 +161,6 @@ impl SwarmOrchestrator {
 
         Ok(Self {
             config,
-            router,
-            automation,
             app_handle,
             decomposer,
             spawner,

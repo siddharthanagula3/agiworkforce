@@ -1,3 +1,4 @@
+import { logger } from '@shared/lib/logger';
 /**
  * Global Search Service
  * Searches across all chat sessions and messages with advanced filtering
@@ -109,13 +110,13 @@ class GlobalSearchService {
       // Track search in history (fire and forget, don't block)
       if (options.trackSearch && filters.query.trim()) {
         this.trackSearch(userId, filters.query, stats.totalResults, filters).catch((err) =>
-          console.warn('[GlobalSearch] Failed to track search:', err),
+          logger.warn('[GlobalSearch] Failed to track search:', err),
         );
       }
 
       return { results: limitedResults, stats };
     } catch (error) {
-      console.error('[GlobalSearch] Search failed:', error);
+      logger.error('[GlobalSearch] Search failed:', error);
       throw new Error(`Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -148,10 +149,10 @@ class GlobalSearchService {
       );
 
       if (error) {
-        console.warn('[GlobalSearch] track_search RPC failed:', error);
+        logger.warn('[GlobalSearch] track_search RPC failed:', error);
       }
     } catch (error) {
-      console.warn('[GlobalSearch] Failed to track search:', error);
+      logger.warn('[GlobalSearch] Failed to track search:', error);
     }
   }
 
@@ -169,7 +170,7 @@ class GlobalSearchService {
       );
 
       if (error) {
-        console.error('[GlobalSearch] get_recent_searches RPC failed:', error);
+        logger.error('[GlobalSearch] get_recent_searches RPC failed:', error);
         return [];
       }
 
@@ -181,7 +182,7 @@ class GlobalSearchService {
         createdAt: new Date(row.created_at),
       }));
     } catch (error) {
-      console.error('[GlobalSearch] Failed to get recent searches:', error);
+      logger.error('[GlobalSearch] Failed to get recent searches:', error);
       return [];
     }
   }
@@ -200,7 +201,7 @@ class GlobalSearchService {
       );
 
       if (error) {
-        console.error('[GlobalSearch] get_popular_searches RPC failed:', error);
+        logger.error('[GlobalSearch] get_popular_searches RPC failed:', error);
         return [];
       }
 
@@ -212,7 +213,7 @@ class GlobalSearchService {
         avgResults: row.avg_results || 0,
       }));
     } catch (error) {
-      console.error('[GlobalSearch] Failed to get popular searches:', error);
+      logger.error('[GlobalSearch] Failed to get popular searches:', error);
       return [];
     }
   }
@@ -230,13 +231,13 @@ class GlobalSearchService {
       );
 
       if (error) {
-        console.error('[GlobalSearch] clear_search_history RPC failed:', error);
+        logger.error('[GlobalSearch] clear_search_history RPC failed:', error);
         return 0;
       }
 
       return data || 0;
     } catch (error) {
-      console.error('[GlobalSearch] Failed to clear search history:', error);
+      logger.error('[GlobalSearch] Failed to clear search history:', error);
       return 0;
     }
   }
@@ -275,7 +276,7 @@ class GlobalSearchService {
     });
 
     if (error) {
-      console.error('[GlobalSearch] Session search failed:', error);
+      logger.error('[GlobalSearch] Session search failed:', error);
       return [];
     }
 
@@ -320,7 +321,7 @@ class GlobalSearchService {
     const { data: sessions, error: sessionError } = await sessionQuery;
 
     if (sessionError) {
-      console.error('[GlobalSearch] Failed to get user sessions:', sessionError);
+      logger.error('[GlobalSearch] Failed to get user sessions:', sessionError);
       return [];
     }
 
@@ -365,7 +366,7 @@ class GlobalSearchService {
     const { data, error } = await messageQuery.order('created_at', { ascending: false }).limit(100); // Limit raw query results to prevent overload
 
     if (error) {
-      console.error('[GlobalSearch] Message search failed:', error);
+      logger.error('[GlobalSearch] Message search failed:', error);
       return [];
     }
 
@@ -439,7 +440,7 @@ class GlobalSearchService {
       );
 
       if (error) {
-        console.error('[GlobalSearch] get_search_suggestions RPC failed:', error);
+        logger.error('[GlobalSearch] get_search_suggestions RPC failed:', error);
         return [];
       }
 
@@ -451,7 +452,7 @@ class GlobalSearchService {
         }),
       );
     } catch (error) {
-      console.error('[GlobalSearch] Failed to get search suggestions:', error);
+      logger.error('[GlobalSearch] Failed to get search suggestions:', error);
       return [];
     }
   }
@@ -481,7 +482,7 @@ class GlobalSearchService {
         ),
       ].slice(0, limit);
     } catch (error) {
-      console.error('[GlobalSearch] Autocomplete failed:', error);
+      logger.error('[GlobalSearch] Autocomplete failed:', error);
       return [];
     }
   }

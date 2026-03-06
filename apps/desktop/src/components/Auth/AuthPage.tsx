@@ -138,7 +138,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
     const handleDeepLink = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail) {
-        console.log('[AuthPage] Received deep link event', customEvent.detail);
+        console.debug('[AuthPage] Received deep link event', customEvent.detail);
         processAuthParams(customEvent.detail);
       }
     };

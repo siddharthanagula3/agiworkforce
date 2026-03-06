@@ -376,11 +376,25 @@ export function useWorkforceStats(
         // Table may not exist yet
       }
 
+      // Fetch completed tasks from usage/credits ledger (each LLM request = one task)
+      let totalTasksCompleted = 0;
+      try {
+        const { count } = await (
+          supabase.from('credit_transactions' as never) as ReturnType<typeof supabase.from>
+        )
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('type', 'deduction');
+        totalTasksCompleted = count ?? 0;
+      } catch {
+        // Table may not exist or schema may differ — default to 0
+      }
+
       return {
         totalHired: employees.length,
         activeEmployees,
-        totalTasksCompleted: 0, // TODO: Implement task tracking
-        averageRating: 4.5, // Placeholder
+        totalTasksCompleted,
+        averageRating: 4.5, // Placeholder until ratings table is available
         totalTokensUsed: Math.max(0, totalTokensUsed),
       };
     },

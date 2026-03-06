@@ -122,6 +122,23 @@ export const useUserProfileStore = create<UserProfileStore>()(
         partialize: (state) => ({
           user: state.user,
         }),
+        merge: (persistedState, currentState) => {
+          const persisted = persistedState as Partial<UserProfileState>;
+          // Rehydrate Date fields that JSON.parse converts to strings
+          if (persisted.user) {
+            persisted.user.createdAt = new Date(persisted.user.createdAt);
+            persisted.user.updatedAt = new Date(persisted.user.updatedAt);
+            if (persisted.user.billing?.trialEndsAt) {
+              persisted.user.billing.trialEndsAt = new Date(persisted.user.billing.trialEndsAt);
+            }
+            if (persisted.user.billing?.currentPeriodEnd) {
+              persisted.user.billing.currentPeriodEnd = new Date(
+                persisted.user.billing.currentPeriodEnd,
+              );
+            }
+          }
+          return { ...currentState, ...persisted };
+        },
       },
     ),
     {

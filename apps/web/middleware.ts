@@ -16,11 +16,11 @@ import { updateSession } from '@/utils/supabase/middleware';
 function buildCspWithNonce(nonce: string): string {
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' https://js.stripe.com https://challenges.cloudflare.com;
+    script-src 'self' 'nonce-${nonce}' https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
-    img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com;
+    img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com https://www.google-analytics.com;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;
     frame-ancestors 'none';
     form-action 'self';

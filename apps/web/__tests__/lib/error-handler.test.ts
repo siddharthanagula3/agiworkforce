@@ -280,7 +280,6 @@ describe('Error Handler', () => {
         },
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test: invoking handler through unknown wrapper signature
       const response = await (wrappedHandler as any)(mockRequest);
       const data = await response.json();
 

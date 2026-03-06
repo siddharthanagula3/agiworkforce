@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/services/supabase';
-import * as Crypto from 'expo-crypto' ;
+import * as Crypto from 'expo-crypto';
 
 WebBrowser.maybeCompleteAuthSession();
 

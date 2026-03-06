@@ -91,7 +91,7 @@ export function ArtifactToolbar({
     <div
       className={cn(
         'flex items-center gap-1 px-2 py-1 bg-zinc-100 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-700',
-        className
+        className,
       )}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -103,29 +103,15 @@ export function ArtifactToolbar({
       <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={handleCopy}
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-green-500" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy}>
+              {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={handleDownload}
-            >
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleDownload}>
               <Download className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
@@ -147,12 +133,7 @@ export function ArtifactToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={handleOpenInPanel}
-            >
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleOpenInPanel}>
               <ExternalLink className="h-3 w-3" />
             </Button>
           </TooltipTrigger>

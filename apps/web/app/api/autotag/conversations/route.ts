@@ -31,14 +31,13 @@ const VALID_TAGS = [
 
 async function getAuthenticatedUser(request: NextRequest): Promise<User> {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, flowType: 'pkce' },
-    });
+    // Use service role key for server-side JWT verification — anon key cannot verify
+    // tokens server-side since it lacks the JWT secret needed to validate signatures.
+    const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) {
@@ -48,7 +47,7 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
   }
 
   const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
     auth: { flowType: 'pkce' },
     cookies: {
       get(name: string) {
@@ -96,9 +95,7 @@ async function handleGetConversationsByTag(request: NextRequest) {
   }
 
   if (!VALID_TAGS.includes(tag as (typeof VALID_TAGS)[number])) {
-    throw createError.validation(
-      `Invalid tag. Must be one of: ${VALID_TAGS.join(', ')}`,
-    );
+    throw createError.validation(`Invalid tag. Must be one of: ${VALID_TAGS.join(', ')}`);
   }
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');

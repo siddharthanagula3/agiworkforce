@@ -4,16 +4,24 @@
  * Tests for the dashboard support page with FAQ section and contact form.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
 // Mock shared UI components
 vi.mock('@shared/ui/card', () => ({
-  Card: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  CardContent: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  CardHeader: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  CardTitle: ({ children, ...props }: Record<string, unknown>) => <h3 {...props}>{children as React.ReactNode}</h3>,
+  Card: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  CardContent: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  CardHeader: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  CardTitle: ({ children, ...props }: Record<string, unknown>) => (
+    <h3 {...props}>{children as React.ReactNode}</h3>
+  ),
 }));
 
 vi.mock('@shared/ui/button', () => ({
@@ -33,11 +41,15 @@ vi.mock('@shared/ui/textarea', () => ({
 }));
 
 vi.mock('@shared/ui/badge', () => ({
-  Badge: ({ children, ...props }: Record<string, unknown>) => <span {...props}>{children as React.ReactNode}</span>,
+  Badge: ({ children, ...props }: Record<string, unknown>) => (
+    <span {...props}>{children as React.ReactNode}</span>
+  ),
 }));
 
 vi.mock('@shared/ui/label', () => ({
-  Label: ({ children, ...props }: Record<string, unknown>) => <label {...props}>{children as React.ReactNode}</label>,
+  Label: ({ children, ...props }: Record<string, unknown>) => (
+    <label {...props}>{children as React.ReactNode}</label>
+  ),
 }));
 
 vi.mock('@shared/ui/accordion', () => ({
@@ -64,15 +76,32 @@ vi.mock('@shared/ui/accordion', () => ({
 }));
 
 vi.mock('@shared/ui/select', () => ({
-  Select: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  SelectContent: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  SelectItem: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
-  SelectTrigger: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children as React.ReactNode}</div>,
+  Select: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  SelectContent: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  SelectItem: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
+  SelectTrigger: ({ children, ...props }: Record<string, unknown>) => (
+    <div {...props}>{children as React.ReactNode}</div>
+  ),
   SelectValue: (props: Record<string, unknown>) => <span {...props} />,
 }));
 
 vi.mock('@shared/lib/utils', () => ({
   cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 // Mock lucide-react icons
@@ -97,6 +126,10 @@ vi.mock('lucide-react', () => {
 import SupportPage from '../../../app/dashboard/support/page';
 
 describe('SupportPage (Dashboard)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('open', vi.fn());
+  });
+
   it('renders without crashing', () => {
     render(<SupportPage />);
     expect(screen.getByText('Help & Support')).toBeDefined();
@@ -150,7 +183,7 @@ describe('SupportPage (Dashboard)', () => {
     expect(messageInput.required).toBe(true);
   });
 
-  it('shows success message after form submission', () => {
+  it('shows success message after form submission', async () => {
     render(<SupportPage />);
 
     // Fill required fields
@@ -169,8 +202,10 @@ describe('SupportPage (Dashboard)', () => {
     const submitButton = screen.getByRole('button', { name: /submit/i });
     fireEvent.click(submitButton);
 
-    // Should show success message
-    expect(screen.getByText('Message Sent!')).toBeDefined();
+    // Should show success message (async because handleSubmit is async)
+    await waitFor(() => {
+      expect(screen.getByText('Message Sent!')).toBeDefined();
+    });
   });
 
   it('shows quick links section', () => {
@@ -183,7 +218,7 @@ describe('SupportPage (Dashboard)', () => {
     expect(screen.getByText('Community')).toBeDefined();
   });
 
-  it('allows sending another message after submission', () => {
+  it('allows sending another message after submission', async () => {
     render(<SupportPage />);
 
     // Fill and submit
@@ -193,9 +228,13 @@ describe('SupportPage (Dashboard)', () => {
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Msg' } });
     fireEvent.click(screen.getByRole('button', { name: /submit/i }));
 
+    // Wait for the success state
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /send another/i })).toBeDefined();
+    });
+
     // Click "Send Another Message"
-    const sendAnother = screen.getByRole('button', { name: /send another/i });
-    fireEvent.click(sendAnother);
+    fireEvent.click(screen.getByRole('button', { name: /send another/i }));
 
     // Form should be visible again
     expect(screen.getByLabelText('Name')).toBeDefined();

@@ -14,7 +14,7 @@ fn compile_regex(pattern: &str) -> Regex {
                 .or_else(|_| Regex::new("^$"))
                 .unwrap_or_else(|_| {
                     // This is a last resort - using an always-valid empty string pattern
-                    Regex::new("(?:)").unwrap()
+                    Regex::new("(?:)").expect("empty regex pattern is always valid")
                 })
         }
     }

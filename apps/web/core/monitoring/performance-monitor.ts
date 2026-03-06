@@ -9,6 +9,7 @@
  */
 
 import { monitoringService } from './system-monitor';
+import { logger } from '@shared/lib/logger';
 
 interface PerformanceConfig {
   enableImageOptimization: boolean;
@@ -66,7 +67,7 @@ class PerformanceService {
     this.setupPerformanceMonitoring();
     this.isInitialized = true;
 
-    console.log('PerformanceService initialized with config:', this.config);
+    logger.info('PerformanceService initialized with config:', this.config);
   }
 
   /**
@@ -223,7 +224,7 @@ class PerformanceService {
   private setupResourcePreloading(): void {
     // Note: Critical resources are loaded via Vite's build process
     // This method is reserved for future custom preloading needs
-    console.log('Resource preloading setup complete');
+    logger.info('Resource preloading setup complete');
   }
 
   /**
@@ -251,13 +252,13 @@ class PerformanceService {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log('Service Worker registered:', registration);
+          logger.info('Service Worker registered:', registration);
           monitoringService.trackEvent('service_worker_registered', {
             scope: registration.scope,
           });
         })
         .catch((error) => {
-          console.error('Service Worker registration failed:', error);
+          logger.error('Service Worker registration failed:', error);
           monitoringService.captureError(error, {
             context: 'service_worker_registration',
           });
@@ -448,12 +449,12 @@ class PerformanceService {
         .then((cacheNames) => {
           cacheNames.forEach((cacheName) => {
             caches.delete(cacheName).catch((err) => {
-              console.warn('[PerformanceService] Failed to delete cache:', cacheName, err);
+              logger.warn('[PerformanceService] Failed to delete cache:', cacheName, err);
             });
           });
         })
         .catch((err) => {
-          console.warn('[PerformanceService] Failed to get cache names:', err);
+          logger.warn('[PerformanceService] Failed to get cache names:', err);
         });
     }
   }
@@ -467,7 +468,7 @@ class PerformanceService {
       try {
         observer.disconnect();
       } catch (error) {
-        console.warn('[PerformanceService] Failed to disconnect PerformanceObserver:', error);
+        logger.warn('[PerformanceService] Failed to disconnect PerformanceObserver:', error);
       }
     });
     this.performanceObservers = [];
@@ -477,7 +478,7 @@ class PerformanceService {
       try {
         observer.disconnect();
       } catch (error) {
-        console.warn('[PerformanceService] Failed to disconnect IntersectionObserver:', error);
+        logger.warn('[PerformanceService] Failed to disconnect IntersectionObserver:', error);
       }
     });
     this.intersectionObservers = [];
@@ -488,7 +489,7 @@ class PerformanceService {
     // Reset initialization state
     this.isInitialized = false;
 
-    console.log('[PerformanceService] Destroyed and resources cleaned up');
+    logger.info('[PerformanceService] Destroyed and resources cleaned up');
   }
 }
 

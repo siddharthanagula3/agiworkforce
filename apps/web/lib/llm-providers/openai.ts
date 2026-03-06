@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- LLM tool schemas have dynamic structure */
 import 'server-only';
 
 import {

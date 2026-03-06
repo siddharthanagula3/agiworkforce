@@ -102,16 +102,11 @@ function AttachmentThumbnail({
           }}
         >
           <FileText size={24} color={colors.textMuted} />
-          <Text
-            className="text-[9px] text-white/50 mt-1 text-center"
-            numberOfLines={2}
-          >
+          <Text className="text-[9px] text-white/50 mt-1 text-center" numberOfLines={2}>
             {attachment.fileName}
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-[8px] text-white/30">
-              {formatFileSize(attachment.fileSize)}
-            </Text>
+            <Text className="text-[8px] text-white/30">{formatFileSize(attachment.fileSize)}</Text>
           ) : null}
         </View>
       )}
@@ -120,7 +115,11 @@ function AttachmentThumbnail({
       <Pressable
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
-        style={{ backgroundColor: colors.surfaceOverlay, borderWidth: 1, borderColor: colors.border }}
+        style={{
+          backgroundColor: colors.surfaceOverlay,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
         accessibilityLabel={`Remove ${attachment.fileName}`}
         accessibilityRole="button"
         hitSlop={8}
@@ -161,9 +160,7 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
             className="ml-1 px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.surfaceOverlay }}
           >
-            <Text className="text-[10px] text-white/60 font-medium">
-              {attachments.length}
-            </Text>
+            <Text className="text-[10px] text-white/60 font-medium">{attachments.length}</Text>
           </View>
         )}
       </View>

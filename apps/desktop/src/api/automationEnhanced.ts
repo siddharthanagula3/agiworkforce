@@ -157,7 +157,7 @@ export async function recordWait(durationMs: number): Promise<void> {
     if (!Number.isInteger(durationMs) || durationMs < 0) {
       throw new Error(`Invalid duration: ${durationMs}`);
     }
-    await invokeWithTimeout<void>('automation_record_action_wait', { duration_ms: durationMs });
+    await invokeWithTimeout<void>('automation_record_action_wait', { durationMs });
   } catch (error) {
     throw new Error(`Failed to record wait: ${error}`);
   }
@@ -197,7 +197,7 @@ export async function inspectElementById(elementId: string): Promise<DetailedEle
   try {
     validateNonEmpty(elementId, 'elementId');
     const result = await invokeWithTimeout<unknown>('automation_inspect_element_by_id', {
-      element_id: elementId,
+      elementId,
     });
     return convertKeysToCamelCase(result) as DetailedElementInfo;
   } catch (error) {
@@ -223,7 +223,7 @@ export async function generateSelector(elementId: string): Promise<ElementSelect
   try {
     validateNonEmpty(elementId, 'elementId');
     const result = await invokeWithTimeout<unknown[]>('automation_generate_selector', {
-      element_id: elementId,
+      elementId,
     });
     return result.map((item) => convertKeysToCamelCase(item) as ElementSelector);
   } catch (error) {
@@ -239,7 +239,7 @@ export async function getElementTree(elementId: string): Promise<{
     validateNonEmpty(elementId, 'elementId');
     const result = await invokeWithTimeout<[unknown | null, unknown[]]>(
       'automation_get_element_tree',
-      { element_id: elementId },
+      { elementId },
     );
     return {
       parent: result[0] ? convertKeysToCamelCase(result[0]) : null,
@@ -283,7 +283,7 @@ export async function loadScript(scriptId: string): Promise<AutomationScript> {
   try {
     validateNonEmpty(scriptId, 'scriptId');
     const result = await invokeWithTimeout<unknown>('automation_load_script', {
-      script_id: scriptId,
+      scriptId,
     });
     return convertKeysToCamelCase(result) as AutomationScript;
   } catch (error) {
@@ -303,7 +303,7 @@ export async function listScripts(): Promise<AutomationScript[]> {
 export async function deleteScript(scriptId: string): Promise<void> {
   try {
     validateNonEmpty(scriptId, 'scriptId');
-    await invokeWithTimeout<void>('automation_delete_script', { script_id: scriptId });
+    await invokeWithTimeout<void>('automation_delete_script', { scriptId });
   } catch (error) {
     throw new Error(`Failed to delete script ${scriptId}: ${error}`);
   }

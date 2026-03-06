@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { Check, X, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
-import { useToolStore, type ApprovalRequest, type ApprovalRiskLevel } from '../../stores/chat/toolStore';
+import {
+  useToolStore,
+  type ApprovalRequest,
+  type ApprovalRiskLevel,
+} from '../../stores/chat/toolStore';
 
 const AUTO_DENY_SECONDS = 30;
 
@@ -60,15 +64,11 @@ export function RemoteApprovalCard({ approval }: RemoteApprovalCardProps) {
   };
 
   const isActing = acting !== null;
-  const timerColor = secondsLeft <= 5 ? 'text-rose-600' : secondsLeft <= 10 ? 'text-amber-600' : 'text-slate-500';
+  const timerColor =
+    secondsLeft <= 5 ? 'text-rose-600' : secondsLeft <= 10 ? 'text-amber-600' : 'text-slate-500';
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border bg-white shadow-xs p-4 space-y-3',
-        riskConfig.border,
-      )}
-    >
+    <div className={cn('rounded-lg border bg-white shadow-xs p-4 space-y-3', riskConfig.border)}>
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">

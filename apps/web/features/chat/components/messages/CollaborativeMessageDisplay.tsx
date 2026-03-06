@@ -275,7 +275,11 @@ export const CollaborativeMessageDisplay: React.FC<CollaborativeMessageDisplayPr
           >
             <ReactMarkdown
               components={{
-                code: (({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
+                code: (({
+                  className,
+                  children,
+                  ...props
+                }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
                   const match = /language-(\w+)/.exec(className || '');
                   const isInline =
                     !match && typeof children === 'string' && !children.includes('\n');

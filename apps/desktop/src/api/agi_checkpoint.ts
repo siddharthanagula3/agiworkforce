@@ -5,7 +5,7 @@
  * persistence and resumption of long-running AGI tasks.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 /// Unique identifier for a checkpoint
 export type CheckpointId = string;
@@ -147,7 +147,7 @@ export async function saveCheckpoint(request: SaveCheckpointRequest): Promise<Ch
 /// Gets the latest checkpoint for a task
 export async function getLatestCheckpoint(taskId: TaskId): Promise<Checkpoint | null> {
   const response = await invoke<ApiResponse<Checkpoint | null>>('agi_checkpoint_get_latest', {
-    task_id: taskId,
+    taskId,
   });
 
   if (!response.success) {
@@ -160,7 +160,7 @@ export async function getLatestCheckpoint(taskId: TaskId): Promise<Checkpoint | 
 /// Gets a specific checkpoint by ID
 export async function getCheckpoint(checkpointId: CheckpointId): Promise<Checkpoint | null> {
   const response = await invoke<ApiResponse<Checkpoint | null>>('agi_checkpoint_get', {
-    checkpoint_id: checkpointId,
+    checkpointId,
   });
 
   if (!response.success) {
@@ -177,7 +177,7 @@ export async function listCheckpoints(
 ): Promise<CheckpointListResponse> {
   const response = await invoke<ApiResponse<CheckpointListResponse>>('agi_checkpoint_list', {
     request: {
-      task_id: taskId,
+      taskId,
       limit,
     },
   });
@@ -192,7 +192,7 @@ export async function listCheckpoints(
 /// Deletes a checkpoint
 export async function deleteCheckpoint(checkpointId: CheckpointId): Promise<void> {
   const response = await invoke<ApiResponse<void>>('agi_checkpoint_delete', {
-    checkpoint_id: checkpointId,
+    checkpointId,
   });
 
   if (!response.success) {
@@ -203,7 +203,7 @@ export async function deleteCheckpoint(checkpointId: CheckpointId): Promise<void
 /// Gets restore history for a task
 export async function getRestoreHistory(taskId: TaskId): Promise<string[]> {
   const response = await invoke<ApiResponse<string[]>>('agi_checkpoint_restore_history', {
-    task_id: taskId,
+    taskId,
   });
 
   if (!response.success) {
@@ -221,9 +221,9 @@ export async function recordRestore(
   error?: string,
 ): Promise<void> {
   const response = await invoke<ApiResponse<void>>('agi_checkpoint_record_restore', {
-    checkpoint_id: checkpointId,
-    task_id: taskId,
-    resumed_steps: resumedSteps,
+    checkpointId,
+    taskId,
+    resumedSteps,
     error,
   });
 
@@ -235,8 +235,8 @@ export async function recordRestore(
 /// Cleans up old checkpoints
 export async function cleanupCheckpoints(taskId: TaskId, keepCount?: number): Promise<number> {
   const response = await invoke<ApiResponse<number>>('agi_checkpoint_cleanup', {
-    task_id: taskId,
-    keep_count: keepCount,
+    taskId,
+    keepCount,
   });
 
   if (!response.success) {

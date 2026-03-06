@@ -12,7 +12,7 @@ import type { Database } from './supabase';
 // Permissive stub types for tables not yet in the Supabase schema.
 // Using `any` for Row/Insert/Update ensures supabase .select(), .insert(),
 // .update(), .upsert() all compile without narrowing to `never`.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type StubRow = Record<string, any>;
 type StubTable = {
   Row: StubRow;

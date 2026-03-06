@@ -39,7 +39,7 @@ export function useApprovalActions() {
 
       // For agent-level approvals (non-MCP tools), use agent_resolve_approval
       await invoke('agent_resolve_approval', {
-        approval_id: approval.id,
+        approvalId: approval.id,
         decision,
         reason: options?.reason,
         trust: options?.trust ?? false,

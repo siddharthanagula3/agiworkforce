@@ -392,7 +392,7 @@ export function cleanupStorage(keysToClean: string[], targetFreeBytes: number): 
     if (keySize > 0) {
       if (safeRemoveItem(key)) {
         freedBytes += keySize;
-        console.log(`[localStorage] STR-008: Cleaned up "${key}", freed ${keySize} bytes`);
+        console.debug(`[localStorage] STR-008: Cleaned up "${key}", freed ${keySize} bytes`);
       }
     }
   }

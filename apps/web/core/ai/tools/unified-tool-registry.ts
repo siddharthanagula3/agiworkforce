@@ -11,6 +11,7 @@
  */
 
 import { z } from 'zod';
+import { logger } from '@shared/lib/logger';
 import type {
   UnifiedTool,
   ToolContext,
@@ -202,7 +203,7 @@ export class UnifiedToolRegistry {
    */
   registerTool(tool: UnifiedTool): void {
     if (this.tools.has(tool.id)) {
-      console.warn(`Tool ${tool.id} is already registered, updating...`);
+      logger.warn(`Tool ${tool.id} is already registered, updating...`);
     }
 
     this.tools.set(tool.id, tool);

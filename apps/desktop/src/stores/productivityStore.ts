@@ -396,7 +396,7 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
       set({ loading: true, error: null });
 
       const projects = await invoke<AsanaProject[]>('productivity_asana_list_projects', {
-        workspace_id: workspaceId,
+        workspaceId,
       });
 
       // AUDIT-006-010: Cap asanaProjects array to prevent unbounded memory growth

@@ -21,6 +21,8 @@ import { unifiedLLMService } from '@core/ai/llm/unified-language-model';
 import { employeeMemoryService } from '@core/ai/employees/employee-memory-service';
 import { useMissionStore } from '@shared/stores/mission-control-store';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
+import { logger } from '@shared/lib/logger';
+import { retryWithBackoff, withTimeout, getErrorMessage } from '@shared/utils/error-handling';
 
 // ================================================
 // TYPES - Agent Definition (CrewAI-inspired)
@@ -1266,8 +1268,15 @@ export class ConsultingOrchestrator {
           });
 
           return result;
-        } catch (_error) {
+        } catch (error) {
+          const errorMsg = getErrorMessage(error);
+          logger.error(`[Consulting] Parallel step failed for ${agent.name}: ${errorMsg}`);
           store.updateEmployeeStatus(agent.name, 'error');
+          store.addMessage({
+            from: agent.name,
+            type: 'error',
+            content: `${agent.name} encountered an error: ${errorMsg}`,
+          });
           return null;
         }
       }),
@@ -1304,18 +1313,20 @@ export class ConsultingOrchestrator {
     const store = useMissionStore.getState();
     const supervisor = this.agents[workflow.supervisor || 'supervisor'];
 
+    if (!supervisor) {
+      throw new Error(`Supervisor agent "${workflow.supervisor || 'supervisor'}" not found`);
+    }
+
     store.addMessage({
       from: 'system',
       type: 'system',
-      content: `👔 **${supervisor?.name}** is coordinating your consultation...`,
+      content: `**${supervisor.name}** is coordinating your consultation...`,
     });
-
-    // First, supervisor analyzes the query and creates a plan
 
     // Execute based on supervisor's plan
     const contributions: AgentContribution[] = [];
 
-    // For simplicity, execute sequentially with supervisor coordination
+    // Execute sequentially with supervisor coordination
     for (const step of workflow.steps) {
       const agent = this.agents[step.agentId];
       if (!agent) continue;
@@ -1333,8 +1344,15 @@ export class ConsultingOrchestrator {
           content: result.output,
           metadata: { employeeName: agent.name, role: 'agent' as const },
         });
-      } catch (_error) {
+      } catch (error) {
+        const errorMsg = getErrorMessage(error);
+        logger.error(`[Consulting] Hierarchical step failed for ${agent.name}: ${errorMsg}`);
         store.updateEmployeeStatus(agent.name, 'error');
+        store.addMessage({
+          from: agent.name,
+          type: 'error',
+          content: `${agent.name} encountered an error: ${errorMsg}`,
+        });
       }
     }
 
@@ -1352,7 +1370,7 @@ Create a comprehensive final consultation that:
 3. Prioritizes action items
 4. Provides a clear next steps plan`;
 
-    const synthesis = await this.callLLM(request, supervisor!, synthesisPrompt);
+    const synthesis = await this.callLLM(request, supervisor, synthesisPrompt);
 
     const result = this.synthesizeResults(contributions, workflow);
     result.summary = synthesis.content;
@@ -1410,7 +1428,9 @@ Create a comprehensive final consultation that:
           output: response.content,
           tokensUsed: response.tokensUsed,
         };
-      } catch (_error) {
+      } catch (error) {
+        const errorMsg = getErrorMessage(error);
+        logger.error(`[Consulting] Race participant ${agent.name} failed: ${errorMsg}`);
         store.updateEmployeeStatus(agent.name, 'error');
         return null;
       }
@@ -1420,8 +1440,15 @@ Create a comprehensive final consultation that:
       (r): r is NonNullable<typeof r> => r !== null,
     );
 
+    if (raceResults.length === 0) {
+      throw new Error('All race participants failed. No results to judge.');
+    }
+
     // Have supervisor judge the best answer
     const supervisor = this.agents['supervisor'];
+    if (!supervisor) {
+      throw new Error('Supervisor agent not found for race judging');
+    }
     const judgingPrompt = `You are judging a race between AI consultants. Pick the BEST answer.
 
 Client Question: ${request.query}
@@ -1441,7 +1468,7 @@ Respond with JSON:
   "reasoning": "Why this answer won"
 }`;
 
-    const judging = await this.callLLM(request, supervisor!, judgingPrompt);
+    const judging = await this.callLLM(request, supervisor, judgingPrompt);
 
     // Parse judging result
     let winnerIndex = 0;
@@ -1583,17 +1610,31 @@ ${step.instructions || ''}`;
     agent: ConsultantAgent,
     prompt: string,
   ): Promise<{ content: string; tokensUsed: number }> {
-    const response = await unifiedLLMService.sendMessage({
-      provider: 'anthropic',
-      messages: [
-        { role: 'system', content: agent.systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      model: agent.model,
-      temperature: 0.7,
-      userId: request.userId,
-      sessionId: request.sessionId,
-    });
+    const CONSULTATION_TIMEOUT = 120000; // 2 minutes
+
+    const llmPromise = retryWithBackoff(
+      () =>
+        unifiedLLMService.sendMessage({
+          provider: 'anthropic',
+          messages: [
+            { role: 'system', content: agent.systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          model: agent.model,
+          temperature: 0.7,
+          userId: request.userId,
+          sessionId: request.sessionId,
+        }),
+      {
+        maxRetries: 3,
+      },
+    );
+
+    const response = await withTimeout(
+      llmPromise,
+      CONSULTATION_TIMEOUT,
+      `Consultation with ${agent.name} timed out after ${CONSULTATION_TIMEOUT / 1000}s`,
+    );
 
     // Log tokens
     if (response.usage) {
