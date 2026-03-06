@@ -130,21 +130,6 @@ Object.defineProperty(globalWindow, 'scrollTo', {
   value: vi.fn(),
 });
 
-Object.defineProperty(globalWindow, 'addEventListener', {
-  writable: true,
-  value: vi.fn(),
-});
-
-Object.defineProperty(globalWindow, 'removeEventListener', {
-  writable: true,
-  value: vi.fn(),
-});
-
-Object.defineProperty(globalWindow, 'dispatchEvent', {
-  writable: true,
-  value: vi.fn(),
-});
-
 globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
