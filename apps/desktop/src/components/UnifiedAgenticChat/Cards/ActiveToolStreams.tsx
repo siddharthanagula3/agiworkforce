@@ -40,7 +40,7 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
 
     // Sort by start time (most recent first) and limit
     return filtered
-      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
       .slice(0, maxStreams);
   }, [activeToolStreams, showCompleted, maxStreams]);
 
