@@ -16,17 +16,22 @@ export function ThinkingBlock({
   defaultExpanded = true,
 }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  // BUG-TB-001: Track whether the user manually expanded so auto-collapse is skipped
+  const [userExpanded, setUserExpanded] = useState(false);
 
-  // Auto-collapse when streaming finishes
+  // Auto-collapse when streaming finishes, unless user manually expanded
   useEffect(() => {
-    if (!isStreaming) {
+    if (!isStreaming && !userExpanded) {
       setExpanded(false);
     }
-  }, [isStreaming]);
+  }, [isStreaming, userExpanded]);
+
+  // BUG-TB-002: Guard against undefined content before splitting
+  if (!content) return null;
 
   // Single-line preview: first non-empty line, truncated
   const preview =
-    content
+    (content ?? '')
       .split('\n')
       .find((line) => line.trim().length > 0)
       ?.trim() ?? '';
@@ -38,7 +43,12 @@ export function ThinkingBlock({
       {/* Header */}
       <button
         type="button"
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={() => {
+          // BUG-TB-001: Update userExpanded before toggling so auto-collapse logic is aware
+          const next = !expanded;
+          setUserExpanded(next);
+          setExpanded(next);
+        }}
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/30 transition-colors"
         aria-expanded={expanded}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning`}
@@ -70,9 +80,6 @@ export function ThinkingBlock({
             {preview}
           </span>
         )}
-
-        {/* Spacer */}
-        <span className="flex-1" />
 
         {/* Chevron toggle */}
         <motion.div

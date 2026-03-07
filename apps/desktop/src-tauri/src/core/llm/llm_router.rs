@@ -470,7 +470,7 @@ impl LLMRouter {
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4-5".to_string(),
+                        "claude-3-5-sonnet-20241022".to_string(),
                         "Coding intent detected - routing to Claude Sonnet 4.5 (excellent coding)."
                             .to_string(),
                     )
@@ -482,7 +482,7 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::XAI,
-                        "grok-4-fast-reasoning".to_string(),
+                        "grok-2-1212".to_string(),
                         "Reasoning intent + budget plan - routing to Grok 4 Fast Reasoning."
                             .to_string(),
                     )
@@ -501,14 +501,14 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash-preview".to_string(),
+                        "gemini-2.0-flash".to_string(),
                         "Agentic intent + budget plan - routing to Gemini 3 Flash for tool use."
                             .to_string(),
                     )
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4-5".to_string(),
+                        "claude-3-5-sonnet-20241022".to_string(),
                         "Agentic intent detected - routing to Claude Sonnet 4.5 for tool orchestration.".to_string(),
                     )
                 }
@@ -518,9 +518,9 @@ impl LLMRouter {
             "multimodal" => (
                 Provider::Google,
                 if is_budget_plan {
-                    "gemini-3-flash-preview".to_string()
+                    "gemini-2.0-flash".to_string()
                 } else {
-                    "gemini-3-pro-preview".to_string()
+                    "gemini-2.0-pro-exp".to_string()
                 },
                 "Multimodal intent detected - routing to Google Gemini for vision capabilities."
                     .to_string(),
@@ -540,13 +540,13 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash-preview".to_string(),
+                        "gemini-2.0-flash".to_string(),
                         "Chat intent + budget plan - routing to Gemini 3 Flash.".to_string(),
                     )
                 } else {
                     (
                         Provider::Google,
-                        "gemini-3-pro-preview".to_string(),
+                        "gemini-2.0-pro-exp".to_string(),
                         "Chat intent detected - routing to Gemini 3 Pro.".to_string(),
                     )
                 }
@@ -1291,13 +1291,13 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-3-flash-preview".to_string(),
+                        model: "gemini-2.0-flash".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5-nano".to_string(),
+                        model: "gpt-4o-mini".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1317,7 +1317,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Anthropic,
-                        model: "claude-sonnet-4-5".to_string(),
+                        model: "claude-3-5-sonnet-20241022".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1325,13 +1325,13 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-3-pro-preview".to_string(),
+                        model: "gemini-2.0-pro-exp".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5-nano".to_string(),
+                        model: "gpt-4o-mini".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1340,13 +1340,13 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::OpenAI,
-                    model: "gpt-5-nano".to_string(),
+                    model: "gpt-4o-mini".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::Google,
-                    model: "gemini-3-flash-preview".to_string(),
+                    model: "gemini-2.0-flash".to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -1380,7 +1380,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(),
+                                model: "claude-3-5-haiku-20241022".to_string(),
                                 reason: "auto-economy-quality",
                             },
                             // Remaining fallbacks by cost efficiency
@@ -1399,7 +1399,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash-preview".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
+                                model: "gemini-2.0-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
@@ -1423,7 +1423,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
+                                model: "claude-3-5-haiku-20241022".to_string(), // Best quality/price: 208 Elo/$
                                 reason: "auto-economy-quality",
                             },
                             RouteCandidate {
@@ -1435,25 +1435,25 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash-preview".to_string(), // Best value: 3,307 Elo/$
+                                model: "gemini-2.0-flash".to_string(), // Best value: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "grok-4-fast-reasoning".to_string(), // Managed Cloud Reasoning
+                                model: "grok-2-1212".to_string(), // Managed Cloud Reasoning
                                 reason: "auto-economy-xai-reasoning-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-2-1212".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
+                                model: "grok-2-1212".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
@@ -1469,7 +1469,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash-preview".to_string(), // Best value, multimodal: 3,307 Elo/$
+                                model: "gemini-2.0-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             // Anthropic early fallback — ensures users with only an Anthropic key
@@ -1477,7 +1477,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(),
+                                model: "claude-3-5-haiku-20241022".to_string(),
                                 reason: "auto-economy-quality",
                             },
                             RouteCandidate {
@@ -1495,25 +1495,25 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "gpt-5-nano".to_string(), // Managed Cloud fallback
+                                model: "gpt-4o-mini".to_string(), // Managed Cloud fallback
                                 reason: "auto-economy-fast-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5-nano".to_string(), // Fast budget: 2,667 Elo/$
+                                model: "gpt-4o-mini".to_string(), // Fast budget: 2,667 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-2-1212".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
+                                model: "grok-2-1212".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
@@ -1545,19 +1545,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning
+                                model: "gemini-2.0-pro-exp".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-5".to_string(),
+                                model: "claude-3-5-sonnet-20241022".to_string(),
                                 reason: "auto-balanced-sonnet",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2.5-thinking".to_string(),
+                                model: "moonshot-v1-8k".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1585,7 +1585,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-5".to_string(),
+                                model: "claude-3-5-sonnet-20241022".to_string(),
                                 reason: "auto-balanced-performance",
                             },
                             RouteCandidate {
@@ -1597,13 +1597,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
+                                model: "claude-3-5-sonnet-20241022".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced-coding",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2.5-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
+                                model: "moonshot-v1-8k".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1615,7 +1615,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
+                                model: "gemini-2.0-pro-exp".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1627,13 +1627,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-2-1212".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast".to_string(), // Fast, 2M context (non-reasoning)
+                                model: "grok-2-1212".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
                             },
                             RouteCandidate {
@@ -1655,7 +1655,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2.5-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
+                                model: "moonshot-v1-8k".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1667,7 +1667,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
+                                model: "gemini-2.0-pro-exp".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1679,19 +1679,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
+                                model: "claude-3-5-sonnet-20241022".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-2-1212".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-fast".to_string(), // Fast, 2M context (non-reasoning)
+                                model: "grok-2-1212".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
                             },
                         ]
@@ -1730,19 +1730,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(), // Best reasoning/coding
+                                model: "claude-3-opus-20240229".to_string(), // Best reasoning/coding
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(), // Best multimodal
+                                model: "gemini-2.0-pro-exp".to_string(), // Best multimodal
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4".to_string(),
+                                model: "grok-2-1212".to_string(),
                                 reason: "auto-premium-xai",
                             },
                             RouteCandidate {
@@ -1764,7 +1764,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(),
+                                model: "claude-3-opus-20240229".to_string(),
                                 reason: "auto-premium-reasoning",
                             },
                             RouteCandidate {
@@ -1776,7 +1776,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(), // Best coding: 80.9% SWE-bench
+                                model: "claude-3-opus-20240229".to_string(), // Best coding: 80.9% SWE-bench
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
@@ -1794,7 +1794,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(),
+                                model: "gemini-2.0-pro-exp".to_string(),
                                 reason: "auto-premium-complex",
                             },
                             RouteCandidate {
@@ -1816,7 +1816,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro-preview".to_string(), // Best multimodal/creative
+                                model: "gemini-2.0-pro-exp".to_string(), // Best multimodal/creative
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
@@ -1828,7 +1828,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(),
+                                model: "claude-3-opus-20240229".to_string(),
                                 reason: "auto-premium-creative",
                             },
                         ]
@@ -1856,26 +1856,26 @@ impl LLMRouter {
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
             Provider::OpenAI => match task {
-                TaskCategory::Simple => "gpt-5-nano".to_string(),
+                TaskCategory::Simple => "gpt-4o-mini".to_string(),
                 TaskCategory::Complex => "gpt-4o".to_string(),
-                TaskCategory::Creative => "gpt-5-nano".to_string(),
+                TaskCategory::Creative => "gpt-4o-mini".to_string(),
             },
             Provider::Anthropic => match task {
-                TaskCategory::Simple => "claude-haiku-4-5".to_string(),
-                TaskCategory::Complex => "claude-sonnet-4-5".to_string(),
-                TaskCategory::Creative => "claude-sonnet-4-5".to_string(),
+                TaskCategory::Simple => "claude-3-5-haiku-20241022".to_string(),
+                TaskCategory::Complex => "claude-3-5-sonnet-20241022".to_string(),
+                TaskCategory::Creative => "claude-3-5-sonnet-20241022".to_string(),
             },
             Provider::Google => match task {
-                TaskCategory::Simple => "gemini-3-flash-preview".to_string(),
-                TaskCategory::Complex => "gemini-3-pro-preview".to_string(),
-                TaskCategory::Creative => "gemini-3-pro-preview".to_string(),
+                TaskCategory::Simple => "gemini-2.0-flash".to_string(),
+                TaskCategory::Complex => "gemini-2.0-pro-exp".to_string(),
+                TaskCategory::Creative => "gemini-2.0-pro-exp".to_string(),
             },
             Provider::Ollama => "llama4-maverick".to_string(),
             Provider::XAI => match task {
                 // Prioritize reasoning variant when same price as non-reasoning (December 2025: Grok 4 Fast reasoning = $0.50/1M, same as non-reasoning)
-                TaskCategory::Simple => "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, 2M context (prioritized - same price as non-reasoning)
-                TaskCategory::Complex => "grok-4".to_string(),
-                TaskCategory::Creative => "grok-4".to_string(),
+                TaskCategory::Simple => "grok-2-1212".to_string(), // Reasoning variant: $0.50/1M, 2M context (prioritized - same price as non-reasoning)
+                TaskCategory::Complex => "grok-2-1212".to_string(),
+                TaskCategory::Creative => "grok-2-1212".to_string(),
             },
             Provider::DeepSeek => match task {
                 TaskCategory::Simple => "deepseek-chat".to_string(), // DeepSeek Chat.2
@@ -1888,9 +1888,9 @@ impl LLMRouter {
                 TaskCategory::Creative => "qwen-max".to_string(),
             },
             Provider::Moonshot => match task {
-                TaskCategory::Simple => "kimi-k2.5-thinking".to_string(),
-                TaskCategory::Complex => "kimi-k2.5-thinking".to_string(),
-                TaskCategory::Creative => "kimi-k2.5-thinking".to_string(),
+                TaskCategory::Simple => "moonshot-v1-8k".to_string(),
+                TaskCategory::Complex => "moonshot-v1-8k".to_string(),
+                TaskCategory::Creative => "moonshot-v1-8k".to_string(),
             },
             // ZhipuAI - GLM-4.7 is excellent for coding (73.8% SWE-bench)
             Provider::Zhipu => match task {
@@ -1904,12 +1904,12 @@ impl LLMRouter {
                 TaskCategory::Creative => "sonar-pro".to_string(),
             },
             Provider::Mistral => match task {
-                TaskCategory::Simple => "mistral-medium-3".to_string(),
-                TaskCategory::Complex => "mistral-large-3".to_string(),
-                TaskCategory::Creative => "mistral-large-3".to_string(),
+                TaskCategory::Simple => "mistral-medium-latest".to_string(),
+                TaskCategory::Complex => "mistral-large-latest".to_string(),
+                TaskCategory::Creative => "mistral-large-latest".to_string(),
             },
             Provider::ManagedCloud => match task {
-                TaskCategory::Simple => "gpt-5-nano".to_string(),
+                TaskCategory::Simple => "gpt-4o-mini".to_string(),
                 TaskCategory::Complex => "gpt-4o".to_string(),
                 TaskCategory::Creative => "gpt-4o".to_string(),
             },
@@ -1931,19 +1931,19 @@ impl LLMRouter {
             RoutingStrategy::AutoEconomy => {
                 // Cost-optimized: simple queries use cheap models, complex use capable
                 if token_count < 1000 {
-                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - cheapest OpenAI
+                    "gpt-4o-mini".to_string() // $0.05/$0.40 per 1M - cheapest OpenAI
                 } else if token_count < 8000 {
                     "deepseek-chat".to_string() // $0.28/$0.42 per 1M - best value for medium context
                 } else {
-                    "gemini-3-flash-preview".to_string() // $0.50/$3.00 per 1M - long context value
+                    "gemini-2.0-flash".to_string() // $0.50/$3.00 per 1M - long context value
                 }
             }
             RoutingStrategy::AutoBalanced => {
                 // Balance: cheap for simple, quality for complex
                 if token_count < 500 {
-                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - fast and cheap
+                    "gpt-4o-mini".to_string() // $0.05/$0.40 per 1M - fast and cheap
                 } else if token_count < 4000 {
-                    "claude-sonnet-4-5".to_string() // $3/$15 per 1M - excellent quality
+                    "claude-3-5-sonnet-20241022".to_string() // $3/$15 per 1M - excellent quality
                 } else {
                     "gpt-4o".to_string() // Strong OpenAI balanced model
                 }
@@ -1951,9 +1951,9 @@ impl LLMRouter {
             RoutingStrategy::AutoPremium => {
                 // Premium: Always best models, switch based on context window needs
                 if token_count < 16000 {
-                    "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent coding
+                    "claude-3-5-sonnet-20241022".to_string() // $3/$15 per 1M - excellent coding
                 } else {
-                    "claude-opus-4-6".to_string() // $5/$25 per 1M - best for heavy lifting
+                    "claude-3-opus-20240229".to_string() // $5/$25 per 1M - best for heavy lifting
                 }
             }
             _ => candidate_model.to_string(),

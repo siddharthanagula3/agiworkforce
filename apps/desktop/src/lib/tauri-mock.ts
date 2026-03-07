@@ -441,6 +441,21 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         latencyMs: 100,
       } as T;
 
+    // PTT (Push-to-Talk) commands
+    case 'voice_start_global_ptt':
+    case 'voice_stop_global_ptt':
+    case 'voice_inject_text':
+      return undefined as T;
+
+    // File picker commands
+    case 'glob_search':
+    case 'dir_list':
+      return [] as T;
+
+    // Extension status
+    case 'extension_status':
+      return { status: 'inactive' } as T;
+
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);

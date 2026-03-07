@@ -45,6 +45,7 @@ export interface ProjectSettings {
   defaultProvider?: string;
   contextWindowSize?: number;
   autoArchiveAfterDays?: number;
+  autoSaveMemories?: boolean;
 }
 
 interface ProjectState {

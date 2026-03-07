@@ -99,6 +99,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
     >
       {/* Copy button */}
       <button
+        type="button"
         onClick={onCopy}
         className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
         title="Copy message"
@@ -116,6 +117,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Speak button — assistant only, requires browser TTS */}
       {isAssistant && ttsSupported && onSpeak && (
         <button
+          type="button"
           onClick={onSpeak}
           className={cn(
             'p-1.5 rounded transition-colors',
@@ -136,6 +138,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
 
       {/* Bookmark button */}
       <button
+        type="button"
         onClick={onBookmark}
         className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark message'}
@@ -150,6 +153,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Fork conversation button */}
       {onFork && (
         <button
+          type="button"
           onClick={onFork}
           className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
           title="Fork conversation from here"
@@ -161,6 +165,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Reaction picker */}
       <div className="relative">
         <button
+          type="button"
           onClick={onToggleReactionPicker}
           className={cn(
             'p-1.5 rounded transition-colors',
@@ -182,6 +187,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
             {reactionConfigs.map((reaction) => (
               <button
                 key={reaction.type}
+                type="button"
                 onClick={() => onReaction(reaction.type)}
                 className={cn(
                   'p-1.5 rounded-full transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700',
@@ -204,6 +210,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
             .map((reaction) => (
               <button
                 key={reaction.type}
+                type="button"
                 onClick={() => onReaction(reaction.type)}
                 className="p-0.5 hover:scale-110 transition-transform"
                 title={`Remove ${reaction.label}`}
@@ -217,6 +224,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Regenerate button (assistant only) */}
       {isAssistant && canRegenerate && !hasError && onRegenerate && (
         <button
+          type="button"
           onClick={onRegenerate}
           className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
           title="Regenerate"
@@ -228,6 +236,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Retry button (for failed messages) */}
       {hasError && onRetry && (
         <button
+          type="button"
           onClick={onRetry}
           className="p-1.5 hover:bg-red-200 dark:hover:bg-red-900/30 rounded transition-colors"
           title="Retry sending"
@@ -239,6 +248,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Edit button (user only) */}
       {isUser && canEdit && !hasError && !isEditing && onStartEdit && (
         <button
+          type="button"
           onClick={onStartEdit}
           className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
           title="Edit message"
@@ -250,6 +260,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       {/* Delete button */}
       {onDelete && (
         <button
+          type="button"
           onClick={onDelete}
           className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
           title="Delete"

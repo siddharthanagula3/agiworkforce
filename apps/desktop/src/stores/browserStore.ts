@@ -277,6 +277,14 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         closeBrowser: async (sessionId: string) => {
+          // BUG-001 fix: invoke backend to terminate the browser process before removing from state
+          try {
+            await invoke('browser_close', { browserId: sessionId });
+          } catch (error) {
+            console.error('[browserStore] Failed to close browser process on backend:', error);
+            // Continue so UI state is still cleaned up even if backend call fails
+          }
+
           try {
             set(
               (state) => {

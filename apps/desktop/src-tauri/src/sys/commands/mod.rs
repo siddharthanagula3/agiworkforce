@@ -214,6 +214,7 @@ pub use tutorials::*;
 pub use undo::*;
 pub use vision::*;
 pub use voice::*;
+pub use voice_global::*;
 pub use window::*;
 pub use workspace::*;
 

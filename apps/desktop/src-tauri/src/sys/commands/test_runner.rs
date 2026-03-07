@@ -447,7 +447,7 @@ fn parse_pytest_failures(raw: &str) -> Vec<TestFailure> {
         if line.starts_with("FAILED ") {
             let rest = &line["FAILED ".len()..];
             if let Some((loc, msg)) = rest.split_once(" - ") {
-                let (file, name) = if let Some((f, n)) = loc.split_once("::") {
+                let (file, name) = if let Some((f, _name)) = loc.split_once("::") {
                     (Some(f.to_string()), loc.to_string())
                 } else {
                     (None, loc.to_string())
@@ -797,11 +797,38 @@ fn timed_command(
 
     // We use std::process::Command (blocking). The calling function already
     // runs inside spawn_blocking so this is fine.
-    let output = Command::new(cmd)
+    // Spawn the child process and enforce the timeout via a background thread.
+    let mut child = Command::new(cmd)
         .args(args)
         .current_dir(cwd)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?;
+
+    // Use a channel to get the output from a worker thread, then select with timeout.
+    let (tx, rx) = std::sync::mpsc::channel::<Result<std::process::Output, String>>();
+    let cmd_owned = cmd.to_string();
+    std::thread::spawn(move || {
+        let result = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for '{}': {}", cmd_owned, e));
+        let _ = tx.send(result);
+    });
+
+    let output = match rx.recv_timeout(timeout) {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => return Err(e),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            return Err(format!(
+                "Command timed out after {}s",
+                timeout.as_secs()
+            ));
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            return Err(format!("Command '{}' channel disconnected unexpectedly", cmd));
+        }
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
