@@ -15,8 +15,7 @@ import { TokenAnalyticsDialog } from '../components/dialogs/TokenAnalyticsDialog
 import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
 import { BookmarksDialog } from '../components/dialogs/BookmarksDialog';
 import { ToolProgressIndicator } from '../components/workflows/ToolProgressIndicator';
-import type { ChatSession, ChatMode } from '../types';
-import {} from '@shared/ui/dropdown-menu';
+import type { ChatMode } from '../types';
 import { Button } from '@shared/ui/button';
 import { Menu } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -87,17 +86,11 @@ const ChatPage: React.FC = () => {
   const {
     sessions,
     currentSession,
-    isLoading: isLoadingSessions,
     createSession,
     renameSession,
     deleteSession,
     loadSessions,
     loadSession,
-    toggleStarSession,
-    togglePinSession,
-    toggleArchiveSession,
-    duplicateSession,
-    shareSession,
   } = useChatHistory();
 
   const { availableTools, executeTool, activeTool, toolResults } = useTools();
@@ -117,7 +110,6 @@ const ChatPage: React.FC = () => {
       return true;
     }
   });
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedMode, setSelectedMode] = useState<ChatMode>('team');
   // Models are automatically managed by AI employees - each employee uses their configured model
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -127,22 +119,6 @@ const ChatPage: React.FC = () => {
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [warningModalOpen, setWarningModalOpen] = useState(false);
   const [warningThreshold, setWarningThreshold] = useState<85 | 95>(85);
-
-  // Filter sessions based on search query
-  const filteredSessions = React.useMemo(() => {
-    if (!searchQuery.trim()) {
-      return sessions;
-    }
-
-    const query = searchQuery.toLowerCase();
-    return sessions.filter((session) => {
-      const titleMatch = session.title.toLowerCase().includes(query);
-      const summaryMatch = session.summary?.toLowerCase().includes(query);
-      const tagsMatch = session.tags?.some((tag) => tag.toLowerCase().includes(query));
-
-      return titleMatch || summaryMatch || tagsMatch;
-    });
-  }, [sessions, searchQuery]);
 
   // Refs
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -221,8 +197,8 @@ const ChatPage: React.FC = () => {
       });
   }, [createSession, router, showError]);
 
-  const handleSessionSelect = (session: ChatSession) => {
-    router.push(`/chat/${session.id}`);
+  const handleSessionSelect = (id: string) => {
+    router.push(`/chat/${id}`);
   };
 
   const handleSessionRename = (sessionId: string, newTitle: string) => {
@@ -348,20 +324,12 @@ const ChatPage: React.FC = () => {
         >
           {sidebarOpen && (
             <ChatSidebar
-              sessions={filteredSessions}
-              currentSession={currentSession}
-              searchQuery={searchQuery}
-              isLoading={isLoadingSessions}
-              onSearchChange={setSearchQuery}
+              sessions={sessions}
+              activeSessionId={currentSession?.id}
               onNewChat={handleNewChat}
-              onSessionSelect={handleSessionSelect}
-              onSessionRename={handleSessionRename}
-              onSessionDelete={handleSessionDelete}
-              onSessionStar={toggleStarSession}
-              onSessionPin={togglePinSession}
-              onSessionArchive={toggleArchiveSession}
-              onSessionShare={shareSession}
-              onSessionDuplicate={duplicateSession}
+              onSelectSession={handleSessionSelect}
+              onRenameSession={handleSessionRename}
+              onDeleteSession={handleSessionDelete}
               onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             />
           )}
