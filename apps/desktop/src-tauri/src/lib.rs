@@ -17,6 +17,7 @@ use crate::sys::commands::{
     load_persisted_calendar_accounts,
     master_password::MasterPasswordState,
     mcp_extensions::McpExtensionsState,
+    mcp_server::McpServerState,
     project_memory::ProjectMemoryState,
     research::ResearchState,
     security::AuthManagerState,
@@ -498,6 +499,9 @@ pub fn run() {
 
             // MCP Bundle (MCPB) state for bundle management
             app.manage(McpbState::new());
+
+            // MCP Server Mode state (expose app as an MCP server)
+            app.manage(McpServerState::new(9090));
 
             // MCP Extensions state for desktop extension management
             let mcp_state_ref: tauri::State<McpState> = app.state();
@@ -1759,6 +1763,14 @@ pub fn run() {
             crate::sys::commands::mcpb_get_categories,
             crate::sys::commands::mcpb_get_featured,
 
+            // MCP Server Mode (expose app as MCP server)
+            crate::sys::commands::mcp_server_start,
+            crate::sys::commands::mcp_server_stop,
+            crate::sys::commands::mcp_server_status,
+            crate::sys::commands::mcp_server_get_config,
+            crate::sys::commands::mcp_server_update_config,
+            crate::sys::commands::mcp_server_list_tools,
+
             // MCP Extensions (Desktop Extensions)
             crate::sys::commands::extension_list,
             crate::sys::commands::extension_get,
@@ -2274,6 +2286,8 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::get_allowed_directories,
             crate::sys::commands::tool_confirmation::set_auto_approve_all,
             crate::sys::commands::tool_confirmation::get_auto_approve_all,
+            crate::sys::commands::tool_confirmation::set_agent_mode,
+            crate::sys::commands::tool_confirmation::get_agent_mode,
             crate::sys::commands::tool_confirmation::resolve_task_approval,
 
             // Master Password (SECSYS-001 security enhancement)

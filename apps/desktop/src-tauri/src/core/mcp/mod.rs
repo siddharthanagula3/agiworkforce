@@ -8,6 +8,7 @@ pub mod logs;
 pub mod manager;
 pub mod protocol;
 pub mod registry;
+pub mod server;
 pub mod session;
 pub mod tool_executor;
 pub mod transport;
