@@ -77,6 +77,23 @@ pub struct StdioTransport {
     is_shutdown: Arc<AtomicBool>,
 }
 
+impl Drop for StdioTransport {
+    fn drop(&mut self) {
+        // Ensure child process is killed on drop to prevent zombie processes.
+        // This handles the case where the transport is dropped due to a panic or
+        // unexpected shutdown without calling shutdown() first.
+        if let Some(ref mut child) = *self.child.lock() {
+            if let Err(e) = child.start_kill() {
+                tracing::warn!(
+                    "[MCP Stdio Transport] Failed to kill child process on drop: {}",
+                    e
+                );
+            }
+        }
+        self.is_shutdown.store(true, Ordering::SeqCst);
+    }
+}
+
 /// Build an augmented PATH string that includes common Node.js install locations.
 ///
 /// Tauri desktop apps launched from Finder/Dock (macOS) or without a full shell
@@ -832,12 +849,34 @@ impl HttpSseTransport {
             .connect_timeout(std::time::Duration::from_secs(10));
 
         if !config.verify_ssl {
-            // SECURITY WARNING: Disabling SSL verification exposes the connection to
-            // man-in-the-middle attacks. Only use this for local development or testing
-            // with self-signed certificates. Never disable in production.
+            // SECURITY: Only allow disabling SSL verification for localhost connections.
+            // Disabling for remote servers exposes the connection to MITM attacks.
+            let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
+                matches!(
+                    parsed.host_str(),
+                    Some("localhost") | Some("127.0.0.1") | Some("::1")
+                )
+            } else {
+                false
+            };
+
+            if !is_localhost {
+                tracing::error!(
+                    "[MCP HTTP Transport] Refusing to disable SSL verification for remote server '{}' at {}. \
+                     SSL verification can only be disabled for localhost connections.",
+                    server_name,
+                    config.url
+                );
+                return Err(McpError::ConnectionError(
+                    "SSL verification cannot be disabled for remote servers. \
+                     Only localhost (127.0.0.1, ::1) connections may bypass SSL verification."
+                        .to_string(),
+                ));
+            }
+
             tracing::warn!(
-                "[MCP HTTP Transport] SSL certificate verification DISABLED for server '{}'. \
-                 This is insecure and should only be used for local development.",
+                "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}'. \
+                 This is acceptable for local development with self-signed certificates.",
                 server_name
             );
             client_builder = client_builder.danger_accept_invalid_certs(true);
