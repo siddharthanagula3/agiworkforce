@@ -84,7 +84,8 @@ impl BillingState {
         if let Some(service) = &self.stripe_service {
             matches!(service.get_primary_subscription(), Ok(Some(_)))
         } else {
-            false
+            // Stripe not configured (BYOK / dev mode) — allow access
+            true
         }
     }
 }
