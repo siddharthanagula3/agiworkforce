@@ -27,7 +27,7 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         ),
         // Generic API key patterns in key=value or key:value format
         (
-            Regex::new(r"(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['\"]?[a-zA-Z0-9_\-/.+=]{16,}['\"]?").expect("static regex"),
+            Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#).expect("static regex"),
             "$1=[REDACTED]",
         ),
         // AWS access keys
