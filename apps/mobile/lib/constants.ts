@@ -5,6 +5,12 @@
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://agiworkforce.com';
 
+/**
+ * Deepgram API key for client-side hold-to-record STT.
+ * When unset, the PTT button falls back to server-side Whisper transcription.
+ */
+export const DEEPGRAM_API_KEY = process.env.EXPO_PUBLIC_DEEPGRAM_API_KEY ?? '';
+
 export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiworkforce.com';
 
 /** Set to true when required Supabase env vars are missing */
