@@ -177,7 +177,8 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
     if resolved.is_relative() {
         let mut components = Path::new(&resolved).components();
         if let Some(Component::Normal(first)) = components.next() {
-            if first.to_string_lossy().eq_ignore_ascii_case("desktop") {
+            let first_str = first.to_string_lossy();
+            if first_str.eq_ignore_ascii_case("desktop") {
                 let desktop = dirs::desktop_dir()
                     .or_else(|| dirs::home_dir().map(|dir| dir.join("Desktop")))
                     .ok_or_else(|| {
@@ -189,6 +190,38 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
                 } else {
                     desktop.join(rest)
                 };
+            } else if first_str.eq_ignore_ascii_case("documents") {
+                let docs = dirs::document_dir()
+                    .or_else(|| dirs::home_dir().map(|dir| dir.join("Documents")))
+                    .ok_or_else(|| {
+                        Error::InvalidPath("Unable to resolve Documents directory".to_string())
+                    })?;
+                let rest = components.as_path();
+                resolved = if rest.as_os_str().is_empty() {
+                    docs
+                } else {
+                    docs.join(rest)
+                };
+            } else if first_str.eq_ignore_ascii_case("downloads") {
+                let downloads = dirs::download_dir()
+                    .or_else(|| dirs::home_dir().map(|dir| dir.join("Downloads")))
+                    .ok_or_else(|| {
+                        Error::InvalidPath("Unable to resolve Downloads directory".to_string())
+                    })?;
+                let rest = components.as_path();
+                resolved = if rest.as_os_str().is_empty() {
+                    downloads
+                } else {
+                    downloads.join(rest)
+                };
+            } else {
+                // Bare filename (e.g. "test.pdf") — save to Documents by default
+                let docs = dirs::document_dir()
+                    .or_else(|| dirs::home_dir().map(|dir| dir.join("Documents")))
+                    .ok_or_else(|| {
+                        Error::InvalidPath("Unable to resolve Documents directory".to_string())
+                    })?;
+                resolved = docs.join(&resolved);
             }
         }
     }
