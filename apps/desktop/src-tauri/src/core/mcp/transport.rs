@@ -734,15 +734,6 @@ impl McpTransport for StdioTransport {
     }
 }
 
-impl Drop for StdioTransport {
-    fn drop(&mut self) {
-        let mut child = self.child.lock();
-        if let Some(mut c) = child.take() {
-            let _ = c.start_kill();
-        }
-    }
-}
-
 // ============================================================================
 // HTTP/SSE Transport Implementation
 // ============================================================================
