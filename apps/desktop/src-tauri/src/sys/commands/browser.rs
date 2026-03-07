@@ -28,24 +28,40 @@ fn is_valid_css_selector(selector: &str) -> bool {
         .all(|c| c.is_alphanumeric() || " .#_->+~:[]=^$*|\"'()".contains(c))
 }
 
-/// Sanitize a CSS selector before embedding it in a JavaScript string literal.
-/// Escapes backslashes, single quotes, and double quotes to prevent breaking out of
-/// `document.querySelector('...')` or CSS attribute selectors like `[name="..."]`.
+/// Sanitize a CSS selector for safe embedding in JavaScript.
+///
+/// Uses `serde_json::to_string()` to produce a JSON-encoded string literal,
+/// then strips the outer quotes so it can be interpolated into JS template strings.
+/// This is more robust than manual character escaping because JSON encoding handles
+/// all control characters, Unicode escapes, and special characters correctly.
 fn sanitize_selector(selector: &str) -> String {
-    selector
-        .replace('\\', "\\\\")
-        .replace('\'', "\\'")
-        .replace('"', "\\\"")
+    // serde_json::to_string produces a JSON string like: "my.selector"
+    // We strip the outer quotes to get the safely escaped interior.
+    let json_encoded = serde_json::to_string(selector).unwrap_or_else(|_| selector.to_string());
+    // Strip the outer double quotes added by JSON encoding
+    if json_encoded.len() >= 2
+        && json_encoded.starts_with('"')
+        && json_encoded.ends_with('"')
+    {
+        json_encoded[1..json_encoded.len() - 1].to_string()
+    } else {
+        json_encoded
+    }
 }
 
-/// Sanitize a value before embedding it in a JavaScript single-quoted string.
-/// Used for form field values and other user-supplied data interpolated into JS.
+/// Sanitize a value for safe embedding in a JavaScript string literal.
+///
+/// Uses JSON encoding for robust escaping of all special characters.
 fn sanitize_js_value(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('\'', "\\'")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
+    let json_encoded = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
+    if json_encoded.len() >= 2
+        && json_encoded.starts_with('"')
+        && json_encoded.ends_with('"')
+    {
+        json_encoded[1..json_encoded.len() - 1].to_string()
+    } else {
+        json_encoded
+    }
 }
 
 // =============================================================================
