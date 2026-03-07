@@ -1210,7 +1210,7 @@ impl LLMRouter {
         }
         if candidates_skipped_rate_limit > 0 && last_error.is_none() {
             return Err(anyhow!(
-                "All AI providers are currently busy. Please try again in a moment."
+                "Rate limited — please wait ~60 seconds and try again, or switch to a different model."
             ));
         }
 
@@ -2139,7 +2139,7 @@ impl LLMRouter {
         }
         if candidates_skipped_rate_limit > 0 && last_error.is_none() {
             return Err(anyhow!(
-                "All AI providers are currently busy. Please try again in a moment."
+                "Rate limited — please wait ~60 seconds and try again, or switch to a different model."
             ));
         }
 
