@@ -365,9 +365,9 @@ export function ExtensionsSettings() {
 
       {/* Install Progress */}
       {installProgress && (
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             <div className="flex-1">
               <p className="text-sm font-medium">{installProgress.message}</p>
               <div className="mt-2 h-2 w-full rounded-full bg-muted">
@@ -391,7 +391,7 @@ export function ExtensionsSettings() {
 
       {/* Extensions List */}
       <div className="border rounded-md">
-        <div className="p-3 bg-muted/50 border-b text-sm font-medium flex items-center justify-between">
+        <div className="p-3 bg-card border-b text-sm font-medium flex items-center justify-between">
           <span>Installed Extensions ({extensions.length})</span>
         </div>
 
@@ -412,7 +412,7 @@ export function ExtensionsSettings() {
           ) : (
             <div className="divide-y">
               {extensions.map((extension) => (
-                <div key={extension.id} className="p-4 hover:bg-muted/30 transition-colors">
+                <div key={extension.id} className="p-4 hover:bg-muted/50 transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

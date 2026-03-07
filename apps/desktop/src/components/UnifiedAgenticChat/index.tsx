@@ -213,6 +213,7 @@ export const UnifiedAgenticChat: React.FC<{
     setStreamingMessage,
     conversationMode,
     activeView,
+    setActiveView,
     setWorkflowContext,
   } = useUnifiedChatStore(
     useShallow((state) => ({
@@ -224,6 +225,7 @@ export const UnifiedAgenticChat: React.FC<{
       setStreamingMessage: state.setStreamingMessage,
       conversationMode: state.conversationMode,
       activeView: state.activeView,
+      setActiveView: state.setActiveView,
       setWorkflowContext: state.setWorkflowContext,
     })),
   );
@@ -2683,7 +2685,7 @@ export const UnifiedAgenticChat: React.FC<{
             </div>
           ) : activeView === 'help' ? (
             <div className="flex-1 overflow-auto p-4">
-              <InteractiveHelp />
+              <InteractiveHelp onClose={() => setActiveView('chat')} />
             </div>
           ) : null}
         </AppLayout>

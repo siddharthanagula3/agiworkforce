@@ -30,9 +30,15 @@ function PricingContent() {
         body: JSON.stringify({ plan, billingInterval }),
       });
 
-      if (res.status === 401) {
+      if (res.status === 401 || res.redirected) {
         window.location.href = '/signup?next=/pricing';
         return;
+      }
+
+      // Guard against non-JSON responses (e.g. HTML error pages from middleware)
+      const contentType = res.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Checkout service unavailable. Please sign in and try again.');
       }
 
       const data = await res.json();
@@ -356,7 +362,7 @@ function PricingContent() {
 
                   <h2 className="text-xl font-semibold mb-2 text-white">Hobby</h2>
                   <p className="text-zinc-400 mb-4 h-10">
-                    Perfect for getting started with AI automation during our public beta.
+                    Perfect for getting started with AI automation during our public ALPHA.
                   </p>
 
                   <div className="flex items-baseline gap-2 mb-1">

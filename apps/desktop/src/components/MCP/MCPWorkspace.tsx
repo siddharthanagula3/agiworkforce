@@ -76,7 +76,7 @@ export default function MCPWorkspace() {
       )}
 
       {}
-      <div className="flex items-center gap-4 p-4 bg-muted/30 border-b">
+      <div className="flex items-center gap-4 p-4 bg-[#2a2a2a] border-b">
         <div className="flex items-center gap-2">
           <Server className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium">{servers.length} Servers</span>

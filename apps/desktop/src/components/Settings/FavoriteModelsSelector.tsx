@@ -12,8 +12,8 @@ export const FavoriteModelsSelector: React.FC = () => {
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <div className="flex items-start gap-4">
-        <div className="rounded-md bg-primary/10 p-3">
-          <Cloud className="h-6 w-6 text-primary" />
+        <div className="rounded-md bg-muted p-3">
+          <Cloud className="h-6 w-6 text-muted-foreground" />
         </div>
         <div className="flex-1">
           <h4 className="font-semibold mb-2">Model Selection</h4>

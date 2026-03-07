@@ -53,6 +53,12 @@ i18n
   .init({
     resources,
     fallbackLng: defaultLanguage,
+    // Suppress the i18next maintenance/locize promo log
+    lowerCaseLng: false,
+    appendNamespaceToCIMode: false,
+    partialBundledLanguages: false,
+    ignoreJSONStructure: false,
+    missingKeyHandler: () => {},
     supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
     interpolation: {
       escapeValue: false,

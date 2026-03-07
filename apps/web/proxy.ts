@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateSession } from '@/utils/supabase/middleware';
+import { updateSession } from '@/utils/supabase/proxy';
 
 /**
  * Build a per-request Content-Security-Policy string with a nonce.
@@ -33,7 +33,7 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Run Supabase session refresh and auth-gating first (may return a redirect)
   const supabaseResponse = await updateSession(request);
 

@@ -14,14 +14,13 @@
  */
 
 import { memo, useCallback, useEffect, useState } from 'react';
-import { Brain, Info, Zap } from 'lucide-react';
+import { Brain, Zap } from 'lucide-react';
 
 import { Switch } from '@/components/ui/Switch';
 import { Label } from '@/components/ui/Label';
 import { Slider } from '@/components/ui/Slider';
 import { Separator } from '@/components/ui/Separator';
 import { cn } from '@/lib/utils';
-import { useMemoryStore } from '@/stores/memoryStore';
 import { MemoryManager } from './MemoryManager';
 
 // ---------------------------------------------------------------------------
@@ -73,7 +72,6 @@ export interface MemoryPanelProps {
 }
 
 export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelProps) {
-  const memories = useMemoryStore((s) => s.memories);
   const [settings, setSettings] = useState<MemoryPanelSettings>(readMemoryPanelSettings);
 
   // Re-read from localStorage when the panel mounts (another tab may have
@@ -89,8 +87,6 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
       return next;
     });
   }, []);
-
-  const activeCount = memories.filter((m) => m.importance >= 5).length;
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -173,16 +169,6 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
             </p>
           </div>
         )}
-
-        {/* Info bar */}
-        <div className="flex items-start gap-2 rounded-lg bg-muted/50 border border-border p-3">
-          <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-          <p className="text-xs text-muted-foreground">
-            {activeCount > 0
-              ? `${activeCount} memor${activeCount === 1 ? 'y' : 'ies'} will be injected into your conversations (importance \u2265 5/10).`
-              : 'No memories are eligible for injection yet. Add memories with importance \u2265 5 to get started.'}
-          </p>
-        </div>
       </div>
 
       <Separator />

@@ -15,10 +15,10 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
   const supabaseAnonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
 
-  // Avoid hard-crashing middleware when env is misconfigured.
-  // This file may be imported by Next.js middleware; fail-open is preferable to a global outage.
+  // Avoid hard-crashing proxy when env is misconfigured.
+  // This file may be imported by Next.js proxy; fail-open is preferable to a global outage.
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('[middleware] Missing Supabase env vars; skipping session update.');
+    console.error('[proxy] Missing Supabase env vars; skipping session update.');
     return supabaseResponse;
   }
 
@@ -76,15 +76,16 @@ export async function updateSession(request: NextRequest) {
   );
 
   if (!user && isProtectedPath && !isPublicPath) {
-    // API routes that use Bearer token auth (e.g. desktop app, CLI) must NOT be
-    // redirected to /login — they send Authorization: Bearer <JWT> and the route
-    // handler validates it directly.  A redirect returns HTML which breaks JSON
-    // clients.  Pass through; the route handler will return 401 if the token is
-    // missing or invalid.
+    // API routes must NEVER redirect to an HTML login page — fetch() follows
+    // redirects automatically, turning the HTML response into a JSON parse error
+    // on the client ("Unexpected token '<', <!DOCTYPE...").
+    // Return 401 JSON so callers can handle unauthenticated requests properly.
     const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
-    const hasBearer = request.headers.get('authorization')?.startsWith('Bearer ');
-    if (isApiRoute && hasBearer) {
-      return supabaseResponse;
+    if (isApiRoute) {
+      return NextResponse.json(
+        { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 },
+      );
     }
 
     // Browser navigation to protected pages: redirect to login

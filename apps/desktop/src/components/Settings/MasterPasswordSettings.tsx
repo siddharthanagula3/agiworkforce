@@ -236,7 +236,7 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Shield className="h-5 w-5 text-primary" />
+        <Shield className="h-5 w-5 text-foreground" />
         <h4 className="font-semibold">Set Up Master Password</h4>
       </div>
       <p className="text-xs text-muted-foreground">
@@ -330,7 +330,7 @@ function UnlockView({ onDone, onCancel }: UnlockViewProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Lock className="h-5 w-5 text-primary" />
+        <Lock className="h-5 w-5 text-foreground" />
         <h4 className="font-semibold">Unlock</h4>
       </div>
 
@@ -423,7 +423,7 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <KeyRound className="h-5 w-5 text-primary" />
+        <KeyRound className="h-5 w-5 text-foreground" />
         <h4 className="font-semibold">Change Master Password</h4>
       </div>
 
@@ -518,7 +518,7 @@ function MigrationView({ onDone, onCancel }: MigrationViewProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Shield className="h-5 w-5 text-primary" />
+        <Shield className="h-5 w-5 text-foreground" />
         <h4 className="font-semibold">Migrate Secrets</h4>
       </div>
       <p className="text-xs text-muted-foreground">

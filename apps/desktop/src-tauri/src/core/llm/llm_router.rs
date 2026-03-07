@@ -67,6 +67,11 @@ fn is_retryable_error(error: &str) -> bool {
         return false;
     }
 
+    // Non-retryable: authentication/authorization errors (403, 401, invalid key)
+    if is_auth_error(error) {
+        return false;
+    }
+
     // Rate limiting errors - should retry with backoff
     if error_lower.contains("rate limit")
         || error_lower.contains("too many requests")
@@ -123,6 +128,31 @@ fn is_rate_limit_error(error: &str) -> bool {
         || e.contains("requests per min")
         || e.contains("rpm limit")
         || e.contains("tpm limit")
+}
+
+/// Determine if an error indicates an authentication or authorization failure (401/403).
+/// These errors are never retryable — the user must fix their API key.
+fn is_auth_error(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.contains("403")
+        || e.contains("401")
+        || e.contains("forbidden")
+        || e.contains("unauthorized")
+        || e.contains("invalid_api_key")
+        || e.contains("invalid api key")
+        || (e.contains("api key")
+            && (e.contains("invalid") || e.contains("rejected") || e.contains("expired")))
+        || e.contains("authentication_error")
+        || e.contains("permission_denied")
+}
+
+/// Rewrite an auth error into a user-friendly message that tells the user
+/// exactly what to do (check their key in Settings).
+fn rewrite_auth_error(error: &str, provider_name: &str) -> String {
+    format!(
+        "API key rejected (403 Forbidden). Check your API key in Settings \u{2192} Models for {}. Original error: {}",
+        provider_name, error
+    )
 }
 
 /// Calculate delay for exponential backoff
@@ -1067,6 +1097,21 @@ impl LLMRouter {
                         "LLM request failed"
                     );
 
+                    // 403/401 auth error: rewrite to user-friendly message and
+                    // break immediately — retrying won't help with a bad API key.
+                    if is_auth_error(&error_str) {
+                        let friendly = rewrite_auth_error(
+                            &error_str,
+                            candidate.provider.as_string(),
+                        );
+                        tracing::warn!(
+                            provider = %candidate.provider.as_string(),
+                            "Auth error detected, not retrying"
+                        );
+                        last_error = Some(anyhow!(friendly));
+                        break;
+                    }
+
                     // 429 rate limit: record in tracker and break immediately
                     // to skip to the next provider candidate instead of wasting
                     // retries on a provider that told us to slow down.
@@ -1330,7 +1375,15 @@ impl LLMRouter {
                                 model: "auto-economy".to_string(),
                                 reason: "auto-economy-dynamic",
                             },
-                            // Fallbacks
+                            // Anthropic early fallback — ensures users with only an Anthropic key
+                            // don't hit 403s from unconfigured providers (DeepSeek, Google) first
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::Anthropic,
+                                model: "claude-haiku-4-5".to_string(),
+                                reason: "auto-economy-quality",
+                            },
+                            // Remaining fallbacks by cost efficiency
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
@@ -1355,12 +1408,6 @@ impl LLMRouter {
                                 model: "managed-cloud-auto".to_string(), // Fallback
                                 reason: "auto-economy-cloud",
                             },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(),
-                                reason: "auto-economy-quality",
-                            },
                         ]
                     }
                     TaskCategory::Complex => {
@@ -1370,6 +1417,14 @@ impl LLMRouter {
                                 provider: Provider::ManagedCloud,
                                 model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
+                            },
+                            // Anthropic early fallback — ensures users with only an Anthropic key
+                            // don't hit 403s from unconfigured providers (DeepSeek, Google, XAI) first
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::Anthropic,
+                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
+                                reason: "auto-economy-quality",
                             },
                             RouteCandidate {
                                 strategy: None,
@@ -1407,12 +1462,6 @@ impl LLMRouter {
                                 model: "grok-3-mini".to_string(), // General purpose: $0.80/1M (legacy)
                                 reason: "auto-economy-xai-legacy",
                             },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
-                                reason: "auto-economy",
-                            },
                         ]
                     }
                     TaskCategory::Creative => {
@@ -1422,6 +1471,14 @@ impl LLMRouter {
                                 provider: Provider::Google,
                                 model: "gemini-3-flash-preview".to_string(), // Best value, multimodal: 3,307 Elo/$
                                 reason: "auto-economy",
+                            },
+                            // Anthropic early fallback — ensures users with only an Anthropic key
+                            // don't hit 403s from unconfigured providers first
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::Anthropic,
+                                model: "claude-haiku-4-5".to_string(),
+                                reason: "auto-economy-quality",
                             },
                             RouteCandidate {
                                 strategy: None,
@@ -2279,6 +2336,21 @@ impl LLMRouter {
                         error = %error_str,
                         "Streaming LLM request failed"
                     );
+
+                    // 403/401 auth error: rewrite to user-friendly message and
+                    // break immediately — retrying won't help with a bad API key.
+                    if is_auth_error(&error_str) {
+                        let friendly = rewrite_auth_error(
+                            &error_str,
+                            candidate.provider.as_string(),
+                        );
+                        tracing::warn!(
+                            provider = %candidate.provider.as_string(),
+                            "Auth error detected in streaming path, not retrying"
+                        );
+                        last_error = Some(anyhow!(friendly));
+                        break;
+                    }
 
                     // 429 rate limit: record in tracker and break immediately
                     // to skip to the next provider candidate instead of wasting

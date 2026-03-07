@@ -172,7 +172,7 @@ export function VoiceSettings() {
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
                 isRecording
                   ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30'
-                  : 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20',
+                  : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
                 isTranscribing || isProcessing ? 'opacity-50 cursor-not-allowed' : '',
               ].join(' ')}
             >
@@ -228,15 +228,15 @@ export function VoiceSettings() {
                   className={[
                     'w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors',
                     isSelected
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border bg-background hover:bg-muted/50',
+                      ? 'border-border bg-muted/40'
+                      : 'border-border bg-card hover:bg-muted/50',
                   ].join(' ')}
                 >
                   {/* Radio dot */}
                   <span
                     className={[
                       'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-                      isSelected ? 'border-primary' : 'border-muted-foreground',
+                      isSelected ? 'border-white/20' : 'border-muted-foreground',
                     ].join(' ')}
                   >
                     {isSelected && <span className="w-2 h-2 rounded-full bg-primary" />}
@@ -246,7 +246,7 @@ export function VoiceSettings() {
                     size={16}
                     className={[
                       'mt-0.5 flex-shrink-0',
-                      isSelected ? 'text-primary' : 'text-muted-foreground',
+                      isSelected ? 'text-foreground' : 'text-muted-foreground',
                     ].join(' ')}
                   />
 
@@ -254,7 +254,7 @@ export function VoiceSettings() {
                     <span
                       className={[
                         'block text-sm font-medium',
-                        isSelected ? 'text-primary' : 'text-foreground',
+                        isSelected ? 'text-foreground' : 'text-foreground',
                       ].join(' ')}
                     >
                       {label}
@@ -270,9 +270,9 @@ export function VoiceSettings() {
 
           {/* Context note for AI mode */}
           {selectedPostProcess?.value === 'ai' && (
-            <div className="mt-1 flex items-start gap-2 rounded-md bg-violet-900/20 border border-violet-700/40 px-3 py-2">
-              <Sparkles size={14} className="text-violet-400 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-violet-300 leading-snug">
+            <div className="mt-1 flex items-start gap-2 rounded-md bg-muted/40 border border-border px-3 py-2">
+              <Sparkles size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-muted-foreground leading-snug">
                 AI cleanup uses the model currently selected in the model picker. Switching to a
                 faster model (e.g. Claude Haiku or GPT-5 Nano) reduces the added latency.
               </p>

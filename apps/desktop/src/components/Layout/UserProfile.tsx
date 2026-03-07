@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import type { Language } from '../../stores/settingsStore';
 
@@ -27,7 +28,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
   const [open, setOpen] = useState(false);
   const account = useAccountStore((state) => state.account);
   const isTierLoading = useAccountStore(selectIsTierLoading);
-  const theme = useSettingsStore((state) => state.windowPreferences?.theme ?? 'system');
+  const { theme, setTheme: setThemeContext } = useThemeContext();
+  useSettingsStore((state) => state.windowPreferences?.theme ?? 'system'); // keep store in sync
   const language = useSettingsStore((state) => state.windowPreferences?.language ?? 'en');
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
   const openShortcuts = useSettingsDialogStore((state) => state.openShortcuts);
@@ -50,6 +52,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
   };
 
   const handleThemeChange = (value: 'light' | 'dark' | 'system') => {
+    setThemeContext(value);
     useSettingsStore.getState().setTheme(value);
   };
 

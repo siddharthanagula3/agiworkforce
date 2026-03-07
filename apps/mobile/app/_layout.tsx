@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
+import { storage } from '@/lib/mmkv';
 import {
   registerForPushNotifications,
   setupNotificationListeners,
@@ -39,16 +40,29 @@ export default function RootLayout() {
     return removeListeners;
   }, [session]);
 
-  // Auth guard
+  // Auth guard + onboarding check
   useEffect(() => {
     if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      router.replace('/(app)');
+      // Check if user has completed onboarding
+      const onboardingDone = storage.getString('onboarding-done');
+      if (!onboardingDone && !inOnboarding) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/(app)');
+      }
+    } else if (session && !inAuthGroup && !inOnboarding) {
+      // Already in app — ensure onboarding is done
+      const onboardingDone = storage.getString('onboarding-done');
+      if (!onboardingDone) {
+        router.replace('/onboarding');
+      }
     }
   }, [session, isInitialized, segments, router]);
 

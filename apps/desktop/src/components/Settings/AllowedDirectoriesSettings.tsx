@@ -108,7 +108,7 @@ export function AllowedDirectoriesSettings() {
         )}
 
         <div className="border rounded-md">
-          <div className="p-3 bg-muted/50 border-b text-sm font-medium">
+          <div className="p-3 bg-[#222222] border-b text-sm font-medium">
             Allowed Paths ({allowedDirectories.length})
           </div>
           <ScrollArea className="h-[200px]">
@@ -125,7 +125,7 @@ export function AllowedDirectoriesSettings() {
                 {allowedDirectories.map((path) => (
                   <div
                     key={path}
-                    className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 group transition-colors"
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-[#222222] group transition-colors"
                   >
                     <code className="text-xs font-mono break-all">{path}</code>
                     <Button

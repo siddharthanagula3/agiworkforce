@@ -115,7 +115,7 @@ export function AutomationPermissionsSettings() {
     permissions?.accessibility && permissions?.screen_recording && permissions?.input_monitoring;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
+    <div className="rounded-lg border border-border bg-[#242424] p-6">
       <div className="flex items-center justify-between mb-1">
         <h4 className="font-semibold">Automation Permissions</h4>
         <Button
