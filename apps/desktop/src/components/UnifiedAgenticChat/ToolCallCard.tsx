@@ -1,5 +1,5 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ToolCallCard.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle, ChevronDown, Wrench } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 export type ToolCallStatus = 'pending' | 'running' | 'complete' | 'error';
 
 interface ToolCallCardProps {
+  toolCallId: string;
   toolName: string;
   args?: Record<string, unknown>;
   result?: string;
@@ -41,11 +42,14 @@ function CollapsibleSection({
   content,
   defaultOpen = false,
   contentClassName,
+  // BUG-TCC-001: Accept a unique sectionId so Framer Motion uses a stable, unique key per card
+  sectionId,
 }: {
   label: string;
   content: string;
   defaultOpen?: boolean;
   contentClassName?: string;
+  sectionId: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -64,7 +68,7 @@ function CollapsibleSection({
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
-            key="section-body"
+            key={`section-body-${sectionId}`}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -129,6 +133,7 @@ function borderForStatus(status: ToolCallStatus): string {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function ToolCallCard({
+  toolCallId,
   toolName,
   args,
   result,
@@ -139,11 +144,16 @@ export function ToolCallCard({
 }: ToolCallCardProps) {
   // Live elapsed timer for 'running' state
   const [liveElapsed, setLiveElapsed] = useState<number>(0);
+  // BUG-TCC-002: Use a ref for startTime so it can be reset when status flips back to 'running'
+  const timerStartRef = useRef<number>(startedAt ?? Date.now());
 
   useEffect(() => {
-    if (status !== 'running' || !startedAt) return;
+    if (status !== 'running') return;
 
-    const tick = () => setLiveElapsed(Date.now() - startedAt);
+    // BUG-TCC-002: Reset the timer start whenever we enter 'running' state
+    timerStartRef.current = startedAt ?? Date.now();
+
+    const tick = () => setLiveElapsed(Date.now() - timerStartRef.current);
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
@@ -192,6 +202,7 @@ export function ToolCallCard({
           content={result}
           defaultOpen={false}
           contentClassName="text-slate-300/80"
+          sectionId={`${toolCallId}-result`}
         />
       )}
 
@@ -202,6 +213,7 @@ export function ToolCallCard({
           content={error}
           defaultOpen={false}
           contentClassName="text-red-400/80"
+          sectionId={`${toolCallId}-error`}
         />
       )}
     </motion.div>

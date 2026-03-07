@@ -27,37 +27,57 @@ export function ShareConversationDialog({
   isOpen,
   onClose,
 }: ShareConversationDialogProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  // BUG-SD-03: split the shared isLoading flag into per-action flags so that
+  // Copy and Save do not block each other.
+  const [isCopying, setIsCopying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const exportMarkdown = useCallback(async () => {
-    const result = await invoke<string>('conversation_export', {
-      conversationId,
-      format: 'markdown',
-    });
-    return result;
-  }, [conversationId]);
-
   const handleCopyMarkdown = useCallback(async () => {
-    setIsLoading(true);
+    // BUG-SD-03: use isCopying instead of shared isLoading.
+    setIsCopying(true);
+    let markdown: string;
     try {
-      const markdown = await exportMarkdown();
+      // BUG-SD-01: separate try/catch for the backend call so we can show a
+      // specific error message when the invoke itself fails.
+      markdown = await invoke<string>('conversation_export', {
+        conversationId,
+        format: 'markdown',
+      });
+    } catch (err) {
+      toast.error('Failed to export: ' + (err instanceof Error ? err.message : String(err)));
+      setIsCopying(false);
+      return;
+    }
+    try {
+      // BUG-SD-01: separate try/catch for the clipboard call.
       await navigator.clipboard.writeText(markdown);
       setCopied(true);
       toast.success('Conversation copied as Markdown');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Failed to export conversation');
+      toast.error('Failed to copy to clipboard');
     } finally {
-      setIsLoading(false);
+      setIsCopying(false);
     }
-  }, [exportMarkdown]);
+  }, [conversationId]);
 
   const handleSaveFile = useCallback(async () => {
-    setIsLoading(true);
+    // BUG-SD-03: use isSaving instead of shared isLoading.
+    setIsSaving(true);
     try {
-      const markdown = await exportMarkdown();
+      // BUG-SD-01: separate try/catch for the backend invoke call.
+      let markdown: string;
+      try {
+        markdown = await invoke<string>('conversation_export', {
+          conversationId,
+          format: 'markdown',
+        });
+      } catch (err) {
+        toast.error('Failed to export: ' + (err instanceof Error ? err.message : String(err)));
+        return;
+      }
       const safeName = conversationTitle
         .replace(/[^a-zA-Z0-9 _-]/g, '')
         .replace(/\s+/g, '-')
@@ -69,13 +89,16 @@ export function ShareConversationDialog({
       if (filePath) {
         await writeTextFile(filePath, markdown);
         toast.success('Conversation saved to file');
+        // BUG-SD-02: close dialog after successful save, with a short delay so
+        // the user sees the success toast before the dialog disappears.
+        setTimeout(() => onClose(), 500);
       }
     } catch {
       toast.error('Failed to save conversation');
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
-  }, [exportMarkdown, conversationTitle]);
+  }, [conversationId, conversationTitle, onClose]);
 
   const handleExportPdf = useCallback(async () => {
     setIsPdfLoading(true);
@@ -138,7 +161,7 @@ export function ShareConversationDialog({
         <div className="flex flex-col gap-3 mb-4">
           <Button
             onClick={handleCopyMarkdown}
-            disabled={isLoading || isPdfLoading}
+            disabled={isCopying || isPdfLoading}
             className="w-full gap-2"
           >
             {copied ? (
@@ -146,12 +169,12 @@ export function ShareConversationDialog({
             ) : (
               <ClipboardCopy className="h-4 w-4" />
             )}
-            {copied ? 'Copied!' : 'Copy as Markdown'}
+            {copied ? 'Copied!' : isCopying ? 'Copying…' : 'Copy as Markdown'}
           </Button>
           <Button
             variant="outline"
             onClick={handleSaveFile}
-            disabled={isLoading || isPdfLoading}
+            disabled={isSaving || isPdfLoading}
             className="w-full gap-2"
           >
             <Download className="h-4 w-4" />
@@ -160,7 +183,7 @@ export function ShareConversationDialog({
           <Button
             variant="outline"
             onClick={handleExportPdf}
-            disabled={isLoading || isPdfLoading}
+            disabled={isCopying || isSaving || isPdfLoading}
             className="w-full gap-2"
           >
             <FileText className="h-4 w-4" />

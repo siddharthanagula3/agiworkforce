@@ -5,7 +5,7 @@ import { useBillingUsageStore } from '../../stores/billingUsage';
 
 export function BudgetAlertsPanel() {
   const allAlerts = useBillingUsageStore((state) => state.budgetAlerts);
-  const alerts = useMemo(() => allAlerts.filter((a) => !a.dismissed), [allAlerts]);
+  const alerts = useMemo(() => allAlerts?.filter((a) => !a.dismissed) ?? [], [allAlerts]);
   const dismissAlert = useBillingUsageStore((state) => state.dismissAlert);
 
   if (alerts.length === 0) {
@@ -36,6 +36,8 @@ export function BudgetAlertsPanel() {
           },
         }[alert.type];
 
+        if (!alertConfig) return null;
+
         const Icon = alertConfig.icon;
 
         return (
@@ -55,6 +57,7 @@ export function BudgetAlertsPanel() {
               </p>
             </div>
             <button
+              type="button"
               onClick={() => dismissAlert(alert.id)}
               className="shrink-0 text-muted-foreground hover:text-foreground"
               aria-label="Dismiss alert"

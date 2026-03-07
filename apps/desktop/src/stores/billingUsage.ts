@@ -478,9 +478,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
@@ -511,9 +510,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
@@ -544,9 +542,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
@@ -577,9 +574,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
@@ -610,9 +606,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               const modelMeta = getModelMetadata(modelId);
@@ -688,9 +683,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
@@ -721,9 +715,8 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             const { stripeCustomer: customer } = useBillingStore.getState();
             const { usagePeriodStartSec, usagePeriodEndSec, usageStats } = get();
 
-            if (!customer) {
-              throw new Error('No customer found');
-            }
+            // BUG-009 fix: silently no-op when stripeCustomer is null (BYOK/dev mode)
+            if (!customer) return;
 
             try {
               await StripeService.trackUsage(
