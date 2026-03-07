@@ -126,6 +126,20 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "python3 -c",
         "perl -e",
         "ruby -e",
+        // Pipe-to-network exfiltration (data piped to network tools)
+        "| nc ",
+        "| nc\t",
+        "| netcat ",
+        "| netcat\t",
+        "| ncat ",
+        "|nc ",
+        "|netcat ",
+        "|ncat ",
+        // Pipe to data overwrite tools
+        "| dd ",
+        "|dd ",
+        "| tee /etc",
+        "|tee /etc",
         // Reverse shells
         "nc -e",
         "bash -i >&",

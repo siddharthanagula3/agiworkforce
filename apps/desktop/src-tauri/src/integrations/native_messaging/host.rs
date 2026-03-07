@@ -1,3 +1,6 @@
+// SAFETY: Native messaging on Windows requires unsafe Win32 registry API calls.
+#![allow(unsafe_code)]
+
 //! Native Messaging Host Implementation
 //!
 //! Handles the native messaging host process that communicates with Chrome extension

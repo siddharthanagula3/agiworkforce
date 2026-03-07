@@ -159,7 +159,8 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli@latest
+        # Pin to specific version to prevent supply chain attacks via @latest
+        run: npm install -g @railway/cli@3.22.0
 
       - name: Deploy to Railway
         env:

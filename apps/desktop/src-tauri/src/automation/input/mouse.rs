@@ -1,3 +1,6 @@
+// SAFETY: Mouse input simulation on Windows requires unsafe Win32 API calls.
+#![allow(unsafe_code)]
+
 use anyhow::{anyhow, Result};
 use enigo::{Button, Coordinate, Enigo, Mouse, Settings};
 use std::time::Duration;
