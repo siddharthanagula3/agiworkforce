@@ -243,17 +243,19 @@ pub async fn db_execute_prepared(
                 sql_upper.split_whitespace().next().unwrap_or("SQL"),
                 connection_id
             ),
-            arguments: serde_json::json!({
+            parameters: serde_json::json!({
                 "sql": preview,
                 "connection_id": connection_id,
                 "param_count": params.len(),
             }),
             risk_level: RiskLevel::Medium,
             safety_tier: ToolSafetyTier::RequiresConfirmation,
-            risk_factors: vec![
-                "This operation modifies database data".to_string(),
-                format!("Statement type: {}", sql_upper.split_whitespace().next().unwrap_or("UNKNOWN")),
-            ],
+            reason: format!(
+                "Statement type: {}. This operation modifies database data.",
+                sql_upper.split_whitespace().next().unwrap_or("UNKNOWN")
+            ),
+            reversible: false,
+            undo_description: None,
         };
 
         let approved = request_tool_confirmation(&app, &confirmation_state, confirmation_request, 60)
