@@ -3,9 +3,9 @@ import type { NextConfig } from 'next';
 // Workspace dependency fix: Vercel build will now resolve packages directory
 // This ensures @agiworkforce/types and @agiworkforce/utils are available
 
-// Content Security Policy is now set per-request by middleware.ts with a nonce,
+// Content Security Policy is now set per-request by proxy.ts with a nonce,
 // replacing 'unsafe-inline' in script-src for stronger inline-script protection.
-// See: apps/web/middleware.ts → buildCspWithNonce()
+// See: apps/web/proxy.ts → buildCspWithNonce()
 
 const nextConfig: NextConfig = {
   // Turbopack config (Next.js 16+ default bundler)

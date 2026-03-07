@@ -161,7 +161,7 @@ export const MemoryViewer = memo(function MemoryViewer({
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b">
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-primary" />
+          <Brain className="h-5 w-5 text-foreground" />
           <h2 className="text-lg font-semibold">Memory</h2>
           <span className="text-sm text-muted-foreground">({memories.length} memories)</span>
         </div>
@@ -220,7 +220,7 @@ export const MemoryViewer = memo(function MemoryViewer({
                 className={cn(
                   'text-xs px-1.5 py-0.5 rounded-full',
                   activeTab === tab.value
-                    ? 'bg-primary/20 text-primary'
+                    ? 'bg-accent text-accent-foreground'
                     : 'bg-muted text-muted-foreground',
                 )}
               >

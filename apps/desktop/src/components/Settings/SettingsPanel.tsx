@@ -139,7 +139,7 @@ function BYOKApiKeysSection() {
                 type="button"
                 disabled={!keys[id]?.trim() || status === 'saving'}
                 onClick={() => void handleSave(id)}
-                className="shrink-0 h-8 px-3 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 h-8 px-3 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {status === 'saving' ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -192,8 +192,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
   const setCompactMode = useSettingsStore((state) => state.setCompactMode);
   const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
-  const setTemperature = useSettingsStore((state) => state.setTemperature);
-  const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
   const globalHotkeyPreferences = useSettingsStore(
     useShallow((state) => state.globalHotkeyPreferences),
   );
@@ -441,28 +439,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     [setPromptCompletionEnabled],
   );
 
-  const handleTemperatureChange = useCallback(
-    (value: string) => {
-      const parsed = parseFloat(value);
-      if (!isNaN(parsed)) {
-        setTemperature(Math.max(0, Math.min(2, parsed)));
-        setHasUnsavedChanges(true);
-      }
-    },
-    [setTemperature],
-  );
-
-  const handleMaxTokensChange = useCallback(
-    (value: string) => {
-      const parsed = parseInt(value, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        setMaxTokens(parsed);
-        setHasUnsavedChanges(true);
-      }
-    },
-    [setMaxTokens],
-  );
-
   const handleGlobalHotkeyEnabledChange = useCallback(
     (value: boolean) => {
       setGlobalHotkeyEnabled(value);
@@ -547,10 +523,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden">
+      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
         <div className="flex h-[85vh]">
           {/* Vertical sidebar navigation */}
-          <div className="w-52 border-r border-border bg-muted/30 py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
+          <div className="w-52 border-r border-border bg-[#1c1c1c] py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
             <DialogHeader className="px-3 pb-4">
               <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
               <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
@@ -564,8 +540,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 disabled={isBusy}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
                   activeTab === item.key
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-background text-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
                 } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -731,7 +707,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                                 'User'}
                             </div>
                             <div className="text-sm text-muted-foreground">{accountData.email}</div>
-                            <div className="mt-1 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">
+                            <div className="mt-1 inline-flex items-center rounded bg-muted/40 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-foreground">
                               {accountData.planDisplayName || 'Free'}
                             </div>
                           </div>
@@ -741,7 +717,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                           <div className="space-y-3 mb-6">
                             {accountData.credits.daily_limit_cents !== undefined &&
                               accountData.credits.daily_limit_cents > 0 && (
-                                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                <div className="rounded-lg border border-border bg-card p-4">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-medium">Daily Credits</span>
                                     <span className="text-sm text-muted-foreground">
@@ -765,7 +741,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                               )}
                             {accountData.credits.allocated_cents &&
                               accountData.credits.allocated_cents > 0 && (
-                                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                <div className="rounded-lg border border-border bg-card p-4">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-medium">Monthly Credits</span>
                                     <span className="text-sm text-muted-foreground">
@@ -921,43 +897,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                                 checked={ollamaEnabled}
                                 onCheckedChange={handleOllamaEnabledChange}
                               />
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <h4 className="text-base font-semibold">Model Configuration</h4>
-                            <div className="space-y-3">
-                              <div className="space-y-2">
-                                <Label htmlFor="temperature">
-                                  Temperature ({resolvedLLMConfig.temperature?.toFixed(1) ?? '0.7'})
-                                </Label>
-                                <input
-                                  id="temperature"
-                                  type="range"
-                                  min="0"
-                                  max="2"
-                                  step="0.1"
-                                  value={resolvedLLMConfig.temperature ?? 0.7}
-                                  onChange={(e) => handleTemperatureChange(e.target.value)}
-                                  className="w-full"
-                                />
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Precise</span>
-                                  <span>Creative</span>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="maxTokens">Max Tokens</Label>
-                                <input
-                                  id="maxTokens"
-                                  type="number"
-                                  value={resolvedLLMConfig.maxTokens ?? 4096}
-                                  onChange={(e) => handleMaxTokensChange(e.target.value)}
-                                  min={1}
-                                  max={200000}
-                                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                              </div>
                             </div>
                           </div>
 
@@ -1347,8 +1286,8 @@ function DataPrivacyTab() {
       <div className="space-y-6">
         <div className="rounded-lg border border-border bg-card p-6">
           <div className="flex items-start gap-4">
-            <div className="rounded-md bg-primary/10 p-3">
-              <Download className="h-6 w-6 text-primary" />
+            <div className="rounded-md bg-muted p-3">
+              <Download className="h-6 w-6 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <h4 className="font-semibold mb-2">Export Your Data</h4>
@@ -1482,7 +1421,7 @@ function DataPrivacyTab() {
                   disabled={savingCrashReporting}
                   onChange={(e) => void handleToggleCrashReporting(e.target.checked)}
                 />
-                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-primary peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
+                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-ring peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
               </label>
             </div>
           </div>
