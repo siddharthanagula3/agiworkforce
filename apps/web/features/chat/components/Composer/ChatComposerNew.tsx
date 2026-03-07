@@ -2,11 +2,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  ArrowUp,
   Plus,
   Paperclip,
   X,
-  Loader2,
   Image as ImageIcon,
   Video,
   FileText,
@@ -15,6 +13,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
+import { FocusModeButtons, type FocusMode } from './FocusModeButtons';
+import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
+import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
+import { SendButton } from './SendButton';
+import { ComposerFooter } from './ComposerFooter';
+import { InputFooter } from './InputFooter';
+import { DragDropOverlay } from './DragDropOverlay';
 
 interface ChatComposerProps {
   onSend: (content: string, attachments?: File[], skillId?: string) => void;
@@ -29,6 +34,21 @@ const TOOLS = [
   { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
   { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
 ];
+
+const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
+  web: [{ id: 'web-search', label: 'Web Search', color: 'teal' }],
+  academic: [
+    { id: 'research', label: 'Research', color: 'blue' },
+    { id: 'reasoning', label: 'Reasoning', color: 'indigo' },
+  ],
+  code: [{ id: 'coding', label: 'Coding', color: 'green' }],
+  writing: [{ id: 'writing-assist', label: 'Writing', color: 'purple' }],
+  research: [
+    { id: 'deep-research', label: 'Research', color: 'blue' },
+    { id: 'web-search-r', label: 'Web Search', color: 'teal' },
+    { id: 'reasoning-r', label: 'Reasoning', color: 'indigo' },
+  ],
+};
 
 export function ChatComposerNew({
   onSend,
@@ -45,22 +65,25 @@ export function ChatComposerNew({
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
-  const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() => {
-    // Start with sync defaults, then load real data
-    return ChatAIService.getAvailableSkillsSync();
-  });
+  const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() =>
+    ChatAIService.getAvailableSkillsSync(),
+  );
+  const [focusMode, setFocusMode] = useState<FocusMode>(null);
+  const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
+  const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
 
   // Load real skills data on mount
   useEffect(() => {
     ChatAIService.getAvailableSkills()
       .then((skills) => {
         if (skills.length > 0) {
-          // Prepend the "Auto-Select" option
           setAvailableSkills([
             {
               id: 'auto',
@@ -73,7 +96,7 @@ export function ChatComposerNew({
         }
       })
       .catch(() => {
-        // Skills loading failed — keep default sync skills
+        // Keep sync defaults on failure
       });
   }, []);
 
@@ -100,15 +123,34 @@ export function ChatComposerNew({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle @mention detection
+  // Sync tags when focus mode changes
+  const handleFocusModeChange = useCallback((mode: FocusMode) => {
+    setFocusMode(mode);
+    setActiveTags(mode ? FOCUS_MODE_TAGS[mode] : []);
+  }, []);
+
+  const handleTagDismiss = useCallback((id: string) => {
+    setActiveTags((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Handle input change: detect @mention and /command
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart || 0;
     setMessage(value);
 
+    // Slash command detection: only when message starts with /
+    if (value.startsWith('/') && !value.includes(' ')) {
+      setShowSlashMenu(true);
+      setSlashQuery(value.slice(1));
+      setShowMentions(false);
+      return;
+    }
+    setShowSlashMenu(false);
+
+    // @mention detection
     const textBeforeCursor = value.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-
     if (lastAtIndex !== -1) {
       const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
       if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
@@ -128,7 +170,7 @@ export function ChatComposerNew({
         skill.description.toLowerCase().includes(mentionQuery.toLowerCase()) ||
         skill.id.toLowerCase().includes(mentionQuery.toLowerCase()),
     )
-    .slice(0, 12); // Cap at 12 results for performance
+    .slice(0, 12);
 
   const handleMentionSelect = useCallback(
     (skill: SkillInfo) => {
@@ -145,11 +187,26 @@ export function ChatComposerNew({
     [message, mentionStartIndex],
   );
 
+  const handleSlashSelect = useCallback((commandId: string) => {
+    setMessage('');
+    setShowSlashMenu(false);
+    // Append command prefix as a tool tag
+    const toolMap: Record<string, string> = {
+      search: 'search',
+      image: 'image',
+      doc: 'document',
+    };
+    const toolId = toolMap[commandId];
+    if (toolId) {
+      setSelectedTools((prev) => (prev.includes(toolId) ? prev : [...prev, toolId]));
+    }
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
 
-    // Build tool prefix
     const toolPrefixes: Record<string, string> = {
       image: '[Generate Image] ',
       video: '[Generate Video] ',
@@ -164,7 +221,6 @@ export function ChatComposerNew({
     setSelectedTools([]);
     setSelectedSkill(null);
 
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -172,6 +228,14 @@ export function ChatComposerNew({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Forward navigation keys to SlashCommandMenu when open
+      if (showSlashMenu) {
+        const consumed = slashMenuRef.current?.handleKey(e.key);
+        if (consumed) {
+          e.preventDefault();
+          return;
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
         e.preventDefault();
         handleSubmit();
@@ -179,9 +243,10 @@ export function ChatComposerNew({
       if (e.key === 'Escape') {
         setShowMentions(false);
         setShowTools(false);
+        setShowSlashMenu(false);
       }
     },
-    [handleSubmit, showMentions],
+    [handleSubmit, showMentions, showSlashMenu],
   );
 
   const toggleTool = (toolId: string) => {
@@ -195,9 +260,23 @@ export function ChatComposerNew({
   };
 
   const canSend = (message.trim() || attachments.length > 0) && !isLoading && !disabled;
+  const footerHint = showSlashMenu
+    ? 'Tab to accept · Esc to dismiss'
+    : 'Enter to send · Shift+Enter for newline';
+
+  const handleFileDrop = useCallback((files: File[]) => {
+    setAttachments((prev) => [...prev, ...files]);
+  }, []);
 
   return (
     <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
+      <DragDropOverlay onDrop={handleFileDrop} />
+      {/* Focus Mode Pills */}
+      <FocusModeButtons activeMode={focusMode} onChange={handleFocusModeChange} />
+
+      {/* Active Mode Tags */}
+      <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
+
       {/* Selected Skill Badge */}
       {selectedSkill && (
         <div className="mb-2 flex items-center gap-1.5">
@@ -265,13 +344,23 @@ export function ChatComposerNew({
         </div>
       )}
 
-      {/* Main Input Container — pill shaped */}
+      {/* Main Input Container */}
       <div
         className={cn(
           'relative rounded-2xl border bg-card/80 shadow-sm backdrop-blur-xl transition-all duration-200',
           isFocused ? 'border-border/80 shadow-md ring-1 ring-ring/20' : 'border-border/40',
         )}
       >
+        {/* Slash Command Menu */}
+        {showSlashMenu && (
+          <SlashCommandMenu
+            ref={slashMenuRef}
+            query={slashQuery}
+            onSelect={handleSlashSelect}
+            onClose={() => setShowSlashMenu(false)}
+          />
+        )}
+
         {/* @Mention Dropdown */}
         {showMentions && filteredSkills.length > 0 && (
           <div
@@ -389,24 +478,12 @@ export function ChatComposerNew({
             aria-label="Message input"
           />
 
-          {/* Send Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={!canSend}
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200',
-              canSend
-                ? 'bg-foreground text-background hover:bg-foreground/90'
-                : 'bg-muted/40 text-muted-foreground/40',
-            )}
-            aria-label={isLoading ? 'Sending message' : 'Send message'}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ArrowUp className="h-4 w-4" />
-            )}
-          </button>
+          {/* 3-State Send Button */}
+          <SendButton
+            mode={isLoading ? 'stop' : 'send'}
+            onClick={isLoading ? () => {} : handleSubmit}
+            disabled={!canSend && !isLoading}
+          />
         </div>
 
         {/* Hidden file input */}
@@ -424,26 +501,11 @@ export function ChatComposerNew({
         />
       </div>
 
-      {/* Helper text */}
-      <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-muted-foreground/50">
-        <span>
-          Type{' '}
-          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
-            @
-          </kbd>{' '}
-          to mention a skill
-        </span>
-        <span className="hidden sm:inline">
-          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
-            Enter
-          </kbd>{' '}
-          to send,{' '}
-          <kbd className="rounded border border-border/30 bg-muted/30 px-1 font-mono text-[10px]">
-            Shift+Enter
-          </kbd>{' '}
-          for new line
-        </span>
-      </div>
+      {/* Footer row 1: keyboard hint + credit usage bar */}
+      <InputFooter hint={footerHint} />
+
+      {/* Footer row 2: model selector */}
+      <ComposerFooter showModelSelector />
     </div>
   );
 }

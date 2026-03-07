@@ -1,11 +1,12 @@
 import { logger } from '@shared/lib/logger';
 /**
  * Chat AI Service
- * Bridges the chat UI to the real /api/llm/completion backend with SSE streaming.
+ * Bridges the chat UI to the /api/llm/v1/chat/completions backend with SSE streaming.
  * Provides methods for sending messages, listing skills, and auto-detecting skills.
  */
 
 import { createClient } from '@/utils/supabase/client';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import {
@@ -122,7 +123,7 @@ function extractContentFromSSE(line: string): string | null {
 
 export class ChatAIService {
   /**
-   * Send a message and get a streamed response via /api/llm/completion.
+   * Send a message and get a streamed response via /api/llm/v1/chat/completions.
    * Uses SSE streaming with native fetch + ReadableStream.
    */
   static async sendMessage(params: {
@@ -155,17 +156,20 @@ export class ChatAIService {
         temperature: 0.7,
       };
 
-      // Pass skillId as metadata if a specific skill was chosen
-      if (skillId && skillId !== 'auto') {
-        requestBody['metadata'] = { skillId };
-      }
+      // Always include model in metadata; also pass skillId when a specific skill was chosen
+      requestBody['metadata'] = {
+        model: modelId,
+        ...(skillId && skillId !== 'auto' ? { skillId } : {}),
+      };
 
-      const response = await fetch('/api/llm/completion', {
+      const headers = await addCsrfHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      });
+
+      const response = await fetch('/api/llm/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify(requestBody),
       });
 
