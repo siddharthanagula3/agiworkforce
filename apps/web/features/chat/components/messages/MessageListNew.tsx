@@ -3,10 +3,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Check, User, Bot, MoreHorizontal, RefreshCw, Trash2 } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import {
+  Copy,
+  Check,
+  User,
+  Bot,
+  MoreHorizontal,
+  RefreshCw,
+  Trash2,
+  FileCode,
+  Plus,
+  Minus,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ChatMessage } from '../../stores/chat-store';
 import type { Components } from 'react-markdown';
+import { ReasoningAccordion } from './ReasoningAccordion';
+import { ToolTimeline } from './ToolTimeline';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -16,18 +31,49 @@ interface MessageListProps {
 }
 
 // ---------------------------------------------------------------------------
-// Code block with copy
+// Code block with syntax highlighting (matches desktop CodeBlock)
 // ---------------------------------------------------------------------------
+
+function detectDiff(code: string): boolean {
+  const lines = code.split('\n');
+  let markers = 0;
+  for (const line of lines) {
+    if (
+      line.startsWith('@@') ||
+      line.startsWith('---') ||
+      line.startsWith('+++') ||
+      line.startsWith('+') ||
+      line.startsWith('-')
+    )
+      markers++;
+  }
+  return lines.length > 0 && markers / lines.length > 0.2;
+}
+
+function getDiffStats(code: string) {
+  let additions = 0,
+    deletions = 0;
+  for (const line of code.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+    else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+  }
+  return { additions, deletions };
+}
 
 function CodeBlock({ className, children }: { className?: string; children: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const codeString = String(children).replace(/\n$/, '');
+  const lineCount = codeString.split('\n').length;
+  const shouldCollapse = lineCount > 10;
+  const isDiff = language === 'diff' || detectDiff(codeString);
+  const diffStats = isDiff ? getDiffStats(codeString) : null;
 
   if (!match) {
     return (
-      <code className="rounded bg-muted/60 px-1.5 py-0.5 text-[13px] text-foreground">
+      <code className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-[13px] font-mono text-zinc-200">
         {children}
       </code>
     );
@@ -40,23 +86,124 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
   };
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/40">
-      <div className="flex items-center justify-between bg-muted/30 px-4 py-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {language}
-        </span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground opacity-0 transition-all hover:bg-muted/60 hover:text-foreground group-hover/code:opacity-100"
-          aria-label={copied ? 'Copied' : 'Copy code'}
-        >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-zinc-700/50 bg-zinc-900">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-zinc-700/50 bg-zinc-800/60 px-4 py-2">
+        <div className="flex items-center gap-2">
+          <FileCode className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-[11px] font-medium text-zinc-400">
+            {isDiff ? 'diff' : language}
+          </span>
+          {isDiff && diffStats && (
+            <div className="flex items-center gap-2 ml-1">
+              {diffStats.additions > 0 && (
+                <span className="flex items-center gap-0.5 text-[11px] text-emerald-400">
+                  <Plus className="h-3 w-3" />
+                  {diffStats.additions}
+                </span>
+              )}
+              {diffStats.deletions > 0 && (
+                <span className="flex items-center gap-0.5 text-[11px] text-red-400">
+                  <Minus className="h-3 w-3" />
+                  {diffStats.deletions}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {shouldCollapse && (
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              className="rounded px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 transition-colors"
+            >
+              {collapsed ? `Show all (${lineCount} lines)` : 'Collapse'}
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-zinc-400 opacity-0 transition-all hover:bg-zinc-700/60 hover:text-zinc-200 group-hover/code:opacity-100"
+            aria-label={copied ? 'Copied' : 'Copy'}
+          >
+            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </div>
-      <pre className="overflow-x-auto bg-[#0d0d0d] p-4 text-[13px] leading-relaxed">
-        <code className={className}>{children}</code>
-      </pre>
+
+      {/* Content */}
+      <div
+        className={cn(
+          'relative overflow-hidden transition-[max-height] duration-300',
+          shouldCollapse && collapsed && 'max-h-[200px]',
+        )}
+      >
+        {isDiff ? (
+          <div className="overflow-x-auto p-4 font-mono text-[13px] leading-[1.6]">
+            {codeString.split('\n').map((line, idx) => {
+              let bg = 'transparent',
+                color = 'text-zinc-300';
+              if (line.startsWith('+++') || line.startsWith('---')) {
+                bg = 'rgba(59,130,246,0.1)';
+                color = 'text-blue-400';
+              } else if (line.startsWith('@@')) {
+                bg = 'rgba(139,92,246,0.1)';
+                color = 'text-purple-400';
+              } else if (line.startsWith('+')) {
+                bg = 'rgba(34,197,94,0.15)';
+                color = 'text-emerald-300';
+              } else if (line.startsWith('-')) {
+                bg = 'rgba(239,68,68,0.15)';
+                color = 'text-red-300';
+              }
+              return (
+                <div key={idx} className={cn('flex', color)} style={{ backgroundColor: bg }}>
+                  <span
+                    className="select-none pr-4 text-right text-zinc-600"
+                    style={{ minWidth: '2.5em' }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="flex-1 whitespace-pre">{line}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              background: 'transparent',
+              fontSize: '13px',
+              lineHeight: '1.6',
+            }}
+            showLineNumbers={lineCount > 3}
+            lineNumberStyle={{
+              minWidth: '2.5em',
+              paddingRight: '1em',
+              color: '#4b5563',
+              userSelect: 'none',
+            }}
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        )}
+
+        {/* Expand button when collapsed */}
+        {shouldCollapse && collapsed && (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-transparent pt-8 pb-2 text-center">
+            <button
+              onClick={() => setCollapsed(false)}
+              className="rounded-full bg-zinc-700/80 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-600 transition-colors"
+            >
+              Show {lineCount} lines
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -121,6 +268,9 @@ function MessageItem({
   const isUser = message.role === 'user';
   const actionsRef = useRef<HTMLDivElement>(null);
 
+  const hasThinkingSteps =
+    message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
@@ -161,7 +311,7 @@ function MessageItem({
 
         {/* Content */}
         <div className={cn('min-w-0 flex-1', isUser && 'text-right')}>
-          {/* Name + time */}
+          {/* Name + time + model badge */}
           <div
             className={cn('mb-1.5 flex items-center gap-2 text-sm', isUser && 'flex-row-reverse')}
           >
@@ -172,31 +322,66 @@ function MessageItem({
                 minute: '2-digit',
               })}
             </span>
+            {!isUser && message.metadata?.model && (
+              <span className="opacity-0 transition-opacity group-hover:opacity-100 inline-flex items-center rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {message.metadata.model}
+              </span>
+            )}
           </div>
 
-          {/* Message body */}
-          <div
-            className={cn(
-              'prose prose-sm dark:prose-invert max-w-none text-[15px]',
-              isUser && 'prose-p:text-right',
-            )}
-          >
-            {message.isStreaming && !message.content.trim() ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
-                <span className="text-sm">Thinking...</span>
+          {/* Reasoning accordion — shown before message content */}
+          {!isUser && hasThinkingSteps && (
+            <div className="mb-3">
+              <ReasoningAccordion
+                steps={message.metadata!.thinkingSteps!}
+                isStreaming={message.isStreaming}
+              />
+            </div>
+          )}
+
+          {/* User message bubble or assistant prose */}
+          {isUser ? (
+            <div className="inline-block rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-3 text-[15px] text-foreground text-left">
+              {message.content}
+            </div>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none text-[15px]">
+              {message.isStreaming && !message.content.trim() ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+                  <span className="text-sm">Thinking...</span>
+                </div>
+              ) : (
+                <>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {message.content}
+                  </ReactMarkdown>
+                  {message.isStreaming && message.content.trim() && (
+                    <span className="ml-0.5 inline-block animate-pulse text-primary">▋</span>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Tool timeline — shown after content for assistant messages */}
+          {!isUser &&
+            message.metadata &&
+            'tools' in message.metadata &&
+            Array.isArray((message.metadata as Record<string, unknown>)['tools']) && (
+              <div className="mt-3">
+                <ToolTimeline
+                  tools={
+                    (message.metadata as Record<string, unknown>)['tools'] as Array<{
+                      name: string;
+                      status: 'running' | 'completed' | 'failed';
+                      durationMs?: number;
+                      args?: string;
+                    }>
+                  }
+                />
               </div>
-            ) : (
-              <>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                  {message.content}
-                </ReactMarkdown>
-                {message.isStreaming && message.content.trim() && (
-                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-                )}
-              </>
             )}
-          </div>
 
           {/* Actions (hover) */}
           {!message.isStreaming && (
@@ -286,11 +471,13 @@ function TypingIndicator() {
 
 export function MessageListNew({ messages, isLoading, onRegenerate, onDelete }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMessage = messages[messages.length - 1];
+  const lastIsStreaming = lastMessage?.isStreaming ?? false;
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages or while streaming
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, isLoading]);
+  }, [messages.length, isLoading, lastIsStreaming]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">

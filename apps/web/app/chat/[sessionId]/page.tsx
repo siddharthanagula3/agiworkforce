@@ -2,14 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useChatStore, getGreetingTime, type ChatMessage } from '@features/chat/stores/chat-store';
+import { useChatStore, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { MessageListNew } from '@features/chat/components/messages/MessageListNew';
-import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
 import {
   ArtifactsPanel,
   ArtifactsToggleButton,
@@ -35,8 +33,6 @@ export default function ChatSessionPage() {
   const {
     sessions,
     messages: allMessages,
-    sidebarOpen,
-    setSidebarOpen,
     createSession,
     deleteSession,
     renameSession,
@@ -53,8 +49,30 @@ export default function ChatSessionPage() {
   const { extractArtifactsFromContent, clearArtifacts } = useArtifactsStore();
 
   const [mounted, setMounted] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('chat-sidebar-collapsed') === 'true';
+  });
+
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
+  }, []);
+
+  // Persist collapse state
+  useEffect(() => {
+    localStorage.setItem('chat-sidebar-collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  // Keyboard shortcut Cmd/Ctrl+Shift+S
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   const messages = useMemo(
@@ -246,13 +264,6 @@ export default function ChatSessionPage() {
     [sessionId, deleteMessage],
   );
 
-  const handleSuggestedPrompt = useCallback(
-    (prompt: string) => {
-      handleSend(prompt);
-    },
-    [handleSend],
-  );
-
   if (!mounted) {
     return <div className="flex h-full items-center justify-center bg-background" />;
   }
@@ -261,51 +272,28 @@ export default function ChatSessionPage() {
     return <div className="flex h-full items-center justify-center bg-background" />;
   }
 
-  const greeting = getGreetingTime();
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="relative flex h-full bg-background">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm sm:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Chat conversation sidebar */}
-      <div
+    <div className="flex h-full overflow-hidden bg-[#faf9f7] dark:bg-[#0f0f13]">
+      {/* Sidebar — desktop only (hidden on mobile) */}
+      <aside
         className={cn(
-          'border-r border-border/30 bg-card/30 backdrop-blur-sm transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 sm:relative sm:z-auto' : 'w-0',
-          !sidebarOpen && 'overflow-hidden',
+          'hidden lg:flex lg:flex-col shrink-0 transition-[width] duration-200 ease-in-out',
+          sidebarCollapsed ? 'w-16' : 'w-[280px]',
         )}
       >
-        {sidebarOpen && (
-          <ChatSidebarNew
-            sessions={sessions}
-            onNewChat={handleNewChat}
-            onDeleteSession={handleDeleteSession}
-            onRenameSession={renameSession}
-            onToggleSidebar={() => setSidebarOpen(false)}
-          />
-        )}
-      </div>
-
-      {/* Sidebar toggle + artifacts toggle (when sidebar closed) */}
-      {!sidebarOpen && (
-        <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        <ChatSidebarNew
+          sessions={sessions}
+          activeSessionId={sessionId}
+          onNewChat={handleNewChat}
+          onSelectSession={(id) => router.push(`/chat/${id}`)}
+          onDeleteSession={handleDeleteSession}
+          onRenameSession={renameSession}
+          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+          collapsed={sidebarCollapsed}
+        />
+      </aside>
 
       {/* Artifacts toggle (always visible, top right) */}
       <div className="absolute right-3 top-3 z-20">
@@ -313,12 +301,12 @@ export default function ChatSessionPage() {
       </div>
 
       {/* Main chat area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {hasMessages ? (
           <>
-            {/* Message list with top scroll fade */}
+            {/* Message list */}
             <div className="relative flex-1 overflow-hidden">
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[#faf9f7] dark:from-[#0f0f13] to-transparent" />
               <MessageListNew
                 messages={messages}
                 isLoading={isLoading}
@@ -326,60 +314,17 @@ export default function ChatSessionPage() {
               />
             </div>
 
-            {/* Suggested follow-ups after last AI message */}
-            {messages.length > 0 &&
-              messages[messages.length - 1]?.role === 'assistant' &&
-              !messages[messages.length - 1]?.isStreaming &&
-              !isLoading && (
-                <div className="flex flex-wrap justify-center gap-2 px-4 py-3">
-                  {[
-                    'Tell me more about this',
-                    'Can you give an example?',
-                    'How would I implement this?',
-                  ].map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => handleSend(suggestion)}
-                      className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-
             {/* Composer */}
-            <div className="pb-2 pt-2">
-              <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
-            </div>
+            <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
           </>
         ) : (
           <>
-            {/* Empty session state */}
-            <div className="flex flex-1 flex-col items-center justify-center px-4">
-              <div className="w-full max-w-2xl">
-                <div className="mb-8 text-center">
-                  <div className="mb-3 flex items-center justify-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500/20 to-emerald-500/20">
-                      <Sparkles className="h-6 w-6 text-teal-400" />
-                    </div>
-                  </div>
-                  <h1 className="text-2xl font-semibold text-foreground">Good {greeting}</h1>
-                  <p className="mt-1 text-muted-foreground">What can I help you with today?</p>
-                </div>
-                <div className="mb-8">
-                  <SuggestedPrompts onSelect={handleSuggestedPrompt} />
-                </div>
-              </div>
-            </div>
-
-            {/* Composer */}
-            <div className="pb-2 pt-2">
-              <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
-            </div>
+            {/* Empty session — space above composer */}
+            <div className="flex-1 min-h-[40vh]" />
+            <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
           </>
         )}
-      </div>
+      </main>
 
       {/* Artifacts panel (slides in from right) */}
       <ArtifactsPanel />
