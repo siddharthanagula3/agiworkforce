@@ -7,8 +7,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
-export const runtime = 'edge';
-
 // Map Tauri targets to GitHub asset keywords
 // We assume standard Tauri build artifacts:
 // - macOS: .app.tar.gz (and .sig)
