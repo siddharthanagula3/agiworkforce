@@ -1,3 +1,6 @@
+// SAFETY: UI Automation action invocation requires unsafe COM FFI calls.
+#![allow(unsafe_code)]
+
 use super::*;
 use crate::automation::uia::patterns::{
     get_expand_collapse_pattern, get_grid_pattern, get_invoke_pattern, get_scroll_pattern,
