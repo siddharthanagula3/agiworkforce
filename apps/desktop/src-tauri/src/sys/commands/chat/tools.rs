@@ -1012,6 +1012,151 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["output_path", "headers", "rows"]
             }),
         },
+
+        // ── grep_search — regex content search ────────────────────────────────
+        ToolDefinition {
+            name: "grep_search".to_string(),
+            description: "Search file contents using a regular expression. Returns file path, \
+                line number, and the matching line. Use `include_pattern` to restrict file types \
+                (e.g. \"*.ts\", \"*.rs\"). Skips node_modules, target, .git, and binary files \
+                automatically. Prefer this over reading many files manually.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regular expression pattern to search for"
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Root directory to search in (defaults to project folder)"
+                    },
+                    "include_pattern": {
+                        "type": "string",
+                        "description": "Glob to restrict file types, e.g. \"*.rs\" or \"*.ts\""
+                    },
+                    "case_insensitive": {
+                        "type": "boolean",
+                        "description": "Case-insensitive search (default false)",
+                        "default": false
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        },
+
+        // ── glob_search — file pattern search ─────────────────────────────────
+        ToolDefinition {
+            name: "glob_search".to_string(),
+            description: "Find files matching a glob pattern. Examples: \"**/*.ts\", \
+                \"src/**/*.rs\", \"*.json\". Results sorted by modification time (newest first). \
+                Skips node_modules, target, .git automatically. Use this to discover \
+                which files exist before reading them.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern, e.g. \"**/*.ts\" or \"src/**/*.rs\""
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Root directory (defaults to project folder)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 200, max 1000)",
+                        "default": 200
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        },
+
+        // ── file_read_range — read with line offset ────────────────────────────
+        ToolDefinition {
+            name: "file_read_range".to_string(),
+            description: "Read a file starting from a specific line number. Each line is \
+                prefixed with its 1-based line number, e.g. \"42: content\". Use `offset` to \
+                start from a specific line and `limit` to control how many lines to return \
+                (default 2000). Essential for navigating large files. When a file has more \
+                lines, set has_more=true so you should call again with a higher offset.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute or relative path to the file"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "1-indexed line to start from (default 1)",
+                        "default": 1
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max lines to return (default 2000, max 5000)",
+                        "default": 2000
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+
+        // ── format_file — auto-formatter ───────────────────────────────────────
+        ToolDefinition {
+            name: "format_file".to_string(),
+            description: "Run the code formatter appropriate for the file extension after \
+                writing or editing a file. Detects prettier, biome, rustfmt, ruff, black, \
+                gofmt, clang-format, shfmt, and more. Always call this after editing code.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the file to format"
+                    },
+                    "project_root": {
+                        "type": "string",
+                        "description": "Project root for detecting project-local formatters (optional)"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+
+        // ── test_run — run tests and get structured results ────────────────────
+        ToolDefinition {
+            name: "test_run".to_string(),
+            description: "Run the project's test suite and return structured pass/fail results. \
+                Auto-detects runner (cargo test, pytest, jest, vitest, go test, rspec, bun). \
+                Returns pass_count, fail_count, and a list of failures with name + message. \
+                Use `filter` to run a specific test. Iterate: fix failures → call again → repeat \
+                until all pass.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "project_root": {
+                        "type": "string",
+                        "description": "Project root directory (defaults to active project folder)"
+                    },
+                    "runner": {
+                        "type": "string",
+                        "description": "Force runner: cargo, pytest, jest, vitest, go, rspec, bun"
+                    },
+                    "filter": {
+                        "type": "string",
+                        "description": "Test name filter (runs a subset of tests)"
+                    },
+                    "timeout_secs": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default 120)",
+                        "default": 120
+                    }
+                },
+                "required": []
+            }),
+        },
     ]
 }
 

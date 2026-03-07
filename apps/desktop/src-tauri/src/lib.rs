@@ -1558,6 +1558,21 @@ pub fn run() {
             crate::sys::commands::file_read_binary,
             crate::sys::commands::file_write_binary,
             crate::sys::commands::file_get_metadata,
+            crate::sys::commands::file_read_range,
+
+            // Code search (Grep + Glob + Formatter pipeline)
+            crate::sys::commands::grep_search,
+            crate::sys::commands::glob_search,
+            crate::sys::commands::format_file,
+            crate::sys::commands::format_detect,
+
+            // Test runner integration
+            crate::sys::commands::test_run,
+            crate::sys::commands::test_detect_runner,
+
+            // Project instruction files (CLAUDE.md / AGENTS.md auto-load)
+            crate::sys::commands::project_load_instructions,
+            crate::sys::commands::project_has_instructions,
 
 
             crate::sys::commands::terminal_detect_shells,

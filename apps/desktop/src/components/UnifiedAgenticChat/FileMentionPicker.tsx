@@ -1,13 +1,21 @@
 /**
  * FileMentionPicker Component
  *
- * Dropdown picker that appears when the user types "@file:" or a path-like
- * pattern after "@" in the chat input. Shows a filtered list of files and
- * folders with keyboard navigation support.
+ * Dropdown picker that appears when the user types `@file:query` or `@path.ext`
+ * in the chat input. Shows a filtered list of files with keyboard navigation.
+ *
+ * Search strategy:
+ * - If query is empty or no project folder set: lists the project root directory.
+ * - If query contains a `/` or `\`: drills into that directory path.
+ * - Otherwise: uses `glob_search` to find files matching `**‌/<query>*` across
+ *   the whole project (same as OpenCode's `@` file mention).
+ *
+ * Selected files are injected into the chat as `@path/to/file.ts` tokens, which
+ * the context builder reads and includes as file content in the system prompt.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { File, FileText, Folder, Loader2 } from 'lucide-react';
+import { File, FileText, Folder, Loader2, Search } from 'lucide-react';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { useProjectStore, selectCurrentFolder } from '../../stores/projectStore';
@@ -20,7 +28,7 @@ export interface MentionFile {
 }
 
 interface FileMentionPickerProps {
-  /** Text after the @file: prefix used to filter files */
+  /** Text typed after the @ prefix, used to filter files */
   query: string;
   /** Called when a file is selected */
   onSelect: (file: MentionFile) => void;
@@ -36,12 +44,25 @@ interface DirEntry {
   size: number;
 }
 
-const MAX_RESULTS = 10;
+interface GlobMatch {
+  path: string;
+  relativePath: string;
+  isFile: boolean;
+  sizeBytes: number;
+  modifiedSecs: number;
+}
+
+interface GlobSearchResult {
+  matches: GlobMatch[];
+  truncated: boolean;
+}
+
+const MAX_RESULTS = 12;
 
 function getFileIcon(entry: MentionFile) {
-  if (entry.isDir) return <Folder size={14} className="text-blue-400 shrink-0" />;
+  if (entry.isDir) return <Folder size={14} className="shrink-0 text-blue-400" />;
   const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
-  const textExts = [
+  const codeExts = [
     'ts',
     'tsx',
     'js',
@@ -50,20 +71,20 @@ function getFileIcon(entry: MentionFile) {
     'rs',
     'go',
     'java',
-    'md',
-    'txt',
-    'json',
-    'yaml',
-    'yml',
-    'toml',
-    'css',
-    'html',
-    'xml',
-    'sh',
-    'sql',
+    'kt',
+    'c',
+    'cpp',
+    'h',
+    'rb',
+    'php',
+    'swift',
+    'dart',
+    'zig',
   ];
-  if (textExts.includes(ext)) return <FileText size={14} className="text-gray-400 shrink-0" />;
-  return <File size={14} className="text-gray-400 shrink-0" />;
+  const textExts = ['md', 'txt', 'json', 'yaml', 'yml', 'toml', 'css', 'html', 'xml', 'sh'];
+  if (codeExts.includes(ext)) return <FileText size={14} className="shrink-0 text-emerald-400" />;
+  if (textExts.includes(ext)) return <FileText size={14} className="shrink-0 text-gray-400" />;
+  return <File size={14} className="shrink-0 text-gray-400" />;
 }
 
 function formatSize(bytes: number): string {
@@ -71,6 +92,13 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function shortPath(fullPath: string, projectRoot: string | null): string {
+  if (projectRoot && fullPath.startsWith(projectRoot)) {
+    return fullPath.slice(projectRoot.length).replace(/^[/\\]/, '');
+  }
+  return fullPath;
 }
 
 export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
@@ -86,7 +114,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const isMountedRef = useRef(true);
   const currentFolder = useProjectStore(selectCurrentFolder);
 
-  // Refs for keyboard handler to avoid stale closures
+  // Refs for keyboard handler (avoids stale closures)
   const filteredRef = useRef<MentionFile[]>([]);
   const selectedIndexRef = useRef(0);
 
@@ -97,10 +125,48 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     };
   }, []);
 
-  // Determine the directory to list based on the query
   const rootPath = browsePath ?? currentFolder ?? null;
 
-  const loadEntries = useCallback(async (path: string) => {
+  // ── Glob-based search for non-empty queries ────────────────────────────────
+  const searchByGlob = useCallback(
+    async (searchQuery: string, root: string) => {
+      setIsLoading(true);
+      try {
+        // Build a glob pattern that matches the query anywhere in the path.
+        const cleanQuery = searchQuery.replace(/^[@/\\]+/, '');
+        const globPattern = cleanQuery.includes('/') ? `**/${cleanQuery}*` : `**/*${cleanQuery}*`;
+
+        const result = await invoke<GlobSearchResult>('glob_search', {
+          pattern: globPattern,
+          root,
+          limit: MAX_RESULTS,
+        });
+
+        if (!isMountedRef.current) return;
+
+        const mapped: MentionFile[] = result.matches.map((m) => ({
+          name: m.path.split('/').pop() ?? m.path,
+          path: m.path,
+          isDir: !m.isFile,
+          size: m.sizeBytes,
+        }));
+
+        setEntries(mapped);
+      } catch {
+        if (isMountedRef.current) {
+          // Fallback to directory listing if glob_search isn't available yet.
+          await loadDirEntries(root);
+        }
+      } finally {
+        if (isMountedRef.current) setIsLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // ── Directory listing for empty query or explicit directory browse ─────────
+  const loadDirEntries = useCallback(async (path: string) => {
     setIsLoading(true);
     try {
       const results = await invoke<DirEntry[]>('dir_list', { path });
@@ -114,7 +180,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           size: e.size ?? 0,
         }))
         .sort((a, b) => {
-          // Directories first, then alphabetically
           if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
@@ -126,30 +191,37 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     }
   }, []);
 
+  // ── Effect: load entries when query or browsePath changes ──────────────────
   useEffect(() => {
     if (!rootPath) {
       setEntries([]);
       return;
     }
-    void loadEntries(rootPath);
-  }, [rootPath, loadEntries]);
+    // Strip the "file:" prefix if present (legacy @file: trigger).
+    const cleanQuery = query.startsWith('file:') ? query.slice(5) : query;
 
-  // Filter by query
-  const filtered = entries
-    .filter((e) => {
-      if (!query) return true;
-      return e.name.toLowerCase().includes(query.toLowerCase());
-    })
-    .slice(0, MAX_RESULTS);
+    if (browsePath) {
+      // Explicit directory browse — always do a directory listing.
+      void loadDirEntries(browsePath);
+    } else if (cleanQuery.trim().length > 0) {
+      // Query present — use glob search.
+      void searchByGlob(cleanQuery, rootPath);
+    } else {
+      // No query — list project root.
+      void loadDirEntries(rootPath);
+    }
+  }, [rootPath, query, browsePath, loadDirEntries, searchByGlob]);
 
-  // Keep refs in sync for keyboard handler
-  filteredRef.current = filtered;
+  // Client-side filter on top of server results (for instant response on dir listing).
+  const displayEntries = entries.slice(0, MAX_RESULTS);
+
+  // Keep refs in sync for keyboard handler.
+  filteredRef.current = displayEntries;
   selectedIndexRef.current = selectedIndex;
 
-  // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
-  }, [filtered.length, query]);
+  }, [displayEntries.length, query]);
 
   const handleEntryActivate = useCallback(
     (entry: MentionFile) => {
@@ -162,7 +234,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     [onSelect],
   );
 
-  // Keyboard navigation — uses refs to avoid stale closures
+  // Keyboard navigation.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const currentFiltered = filteredRef.current;
@@ -189,7 +261,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [onClose, handleEntryActivate]);
 
-  // Scroll selected item into view
+  // Scroll selected item into view.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -208,11 +280,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         )}
       >
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Select a project folder first to browse files.
+          Select a project folder first to use @file mentions.
         </p>
       </div>
     );
   }
+
+  const cleanQuery = query.startsWith('file:') ? query.slice(5) : query;
+  const isSearchMode = cleanQuery.trim().length > 0 && !browsePath;
 
   return (
     <div
@@ -225,9 +300,17 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       role="listbox"
       aria-label="File mentions"
     >
-      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Files — type to filter
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {isSearchMode ? (
+            <>
+              <Search size={10} />
+              Files matching "{cleanQuery}"
+            </>
+          ) : (
+            'Files — type to search'
+          )}
         </span>
         {browsePath && (
           <button
@@ -240,37 +323,45 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         )}
       </div>
 
+      {/* Results */}
       {isLoading ? (
         <div className="flex items-center gap-2 px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
           <Loader2 size={14} className="animate-spin" />
-          <span>Loading...</span>
+          <span>Searching…</span>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">No files found</div>
+      ) : displayEntries.length === 0 ? (
+        <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">
+          {cleanQuery ? `No files matching "${cleanQuery}"` : 'No files found'}
+        </div>
       ) : (
-        filtered.map((entry, i) => (
+        displayEntries.map((entry, i) => (
           <button
             key={entry.path}
             role="option"
             aria-selected={i === selectedIndex}
             className={cn(
-              'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors text-sm',
+              'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
               i === selectedIndex
                 ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-charcoal-800',
+                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-charcoal-800',
             )}
             onClick={() => handleEntryActivate(entry)}
             onMouseEnter={() => setSelectedIndex(i)}
           >
             {getFileIcon(entry)}
-            <span className="font-medium truncate flex-1">{entry.name}</span>
-            {!entry.isDir && entry.size > 0 && (
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">
+            <span className="flex-1 truncate font-medium">{entry.name}</span>
+            {isSearchMode && (
+              <span className="shrink-0 max-w-[120px] truncate text-[10px] text-gray-400 dark:text-gray-500">
+                {shortPath(entry.path, currentFolder)}
+              </span>
+            )}
+            {!entry.isDir && !isSearchMode && entry.size > 0 && (
+              <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">
                 {formatSize(entry.size)}
               </span>
             )}
             {entry.isDir && (
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">/</span>
+              <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">/</span>
             )}
           </button>
         ))
