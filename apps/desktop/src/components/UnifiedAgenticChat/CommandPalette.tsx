@@ -62,10 +62,10 @@ interface PaletteResult {
 
 type DateGroup = 'Today' | 'Yesterday' | 'This week' | 'Older';
 
-function getDateGroup(date: Date | undefined): DateGroup {
+function getDateGroup(date: Date | string | undefined): DateGroup {
   if (!date) return 'Older';
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = now.getTime() - new Date(date).getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays < 1) return 'Today';
   if (diffDays < 2) return 'Yesterday';
@@ -73,9 +73,10 @@ function getDateGroup(date: Date | undefined): DateGroup {
   return 'Older';
 }
 
-function formatRelativeTime(date: Date): string {
+function formatRelativeTime(date: Date | string): string {
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const d = new Date(date);
+  const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -85,7 +86,7 @@ function formatRelativeTime(date: Date): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
 
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -200,7 +201,11 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
 
       const recentConvs: PaletteResult[] = conversations
         .slice()
-        .sort((a, b) => (b.updatedAt?.valueOf() ?? 0) - (a.updatedAt?.valueOf() ?? 0))
+        .sort(
+          (a, b) =>
+            (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) -
+            (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
+        )
         .slice(0, 8)
         .map((conv) => ({
           kind: 'conversation' as const,
