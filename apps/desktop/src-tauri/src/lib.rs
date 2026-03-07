@@ -1884,6 +1884,11 @@ pub fn run() {
             crate::sys::commands::messaging::messaging_get_status,
             crate::sys::commands::messaging::messaging_disconnect,
 
+            // Global fn-key Push-to-Talk (system-wide, works outside the app window)
+            crate::sys::commands::voice_global::voice_start_global_ptt,
+            crate::sys::commands::voice_global::voice_stop_global_ptt,
+            crate::sys::commands::voice_global::voice_inject_text,
+
             // Voice (TTS, Wake Word, PTT)
             crate::sys::commands::voice::voice_get_capabilities,
             crate::sys::commands::voice::voice_tts_speak,

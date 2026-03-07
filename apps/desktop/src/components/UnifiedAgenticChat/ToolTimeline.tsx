@@ -2,8 +2,29 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
-import { ToolLabel, type ToolLabelEntry } from './ToolLabel';
+import { type ToolLabelEntry } from './ToolLabel';
+import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
 import { cn } from '../../lib/utils';
+
+/** Map ToolLabelEntry status to ToolCallCard status */
+function toToolCallStatus(status: ToolLabelEntry['status']): ToolCallStatus {
+  switch (status) {
+    case 'running':
+      return 'running';
+    case 'completed':
+      return 'complete';
+    case 'error':
+      return 'error';
+    default:
+      return 'pending';
+  }
+}
+
+/** Build a minimal args record from a displayArgs string, if present. */
+function argsFromDisplayArgs(displayArgs: string): Record<string, unknown> | undefined {
+  if (!displayArgs) return undefined;
+  return { input: displayArgs };
+}
 
 interface ToolTimelineProps {
   entries: ToolLabelEntry[];
@@ -106,7 +127,7 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-2 space-y-0.5 border-t border-border/20">
+            <div className="px-3 pb-2 space-y-1.5 border-t border-border/20 pt-2">
               {groupedEntries.map((group) => {
                 const isParallelGroup =
                   group.parallelGroup !== undefined && group.entries.length > 1;
@@ -115,7 +136,7 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
                   return (
                     <div
                       key={group.parallelGroup}
-                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-0.5"
+                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5"
                     >
                       {/* Parallel chip */}
                       <div className="flex items-center gap-1 mb-0.5">
@@ -123,14 +144,30 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
                         <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
                       </div>
                       {group.entries.map((entry) => (
-                        <ToolLabel key={entry.id} entry={entry} />
+                        <ToolCallCard
+                          key={entry.id}
+                          toolName={entry.displayName}
+                          args={argsFromDisplayArgs(entry.displayArgs)}
+                          error={entry.error}
+                          status={toToolCallStatus(entry.status)}
+                          elapsedMs={entry.durationMs}
+                        />
                       ))}
                     </div>
                   );
                 }
 
                 // Single standalone entry (parallelGroup absent, or only one entry in group).
-                return group.entries.map((entry) => <ToolLabel key={entry.id} entry={entry} />);
+                return group.entries.map((entry) => (
+                  <ToolCallCard
+                    key={entry.id}
+                    toolName={entry.displayName}
+                    args={argsFromDisplayArgs(entry.displayArgs)}
+                    error={entry.error}
+                    status={toToolCallStatus(entry.status)}
+                    elapsedMs={entry.durationMs}
+                  />
+                ));
               })}
             </div>
           </motion.div>
