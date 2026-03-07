@@ -8,8 +8,6 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/utils/env';
 
-export const runtime = 'edge';
-
 // Valid platforms for desktop releases
 const VALID_PLATFORMS = [
   'darwin-aarch64',
