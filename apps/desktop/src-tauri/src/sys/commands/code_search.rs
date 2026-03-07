@@ -138,7 +138,8 @@ fn resolve_root(root_hint: Option<String>) -> PathBuf {
             return p;
         }
     }
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    std::env::current_dir()
+        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
 }
 
 /// Naively detect if a file looks binary (contains NUL bytes in the first 8 KB).

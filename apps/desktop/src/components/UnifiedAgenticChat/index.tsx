@@ -173,7 +173,8 @@ const PendingMessagesBubbles: React.FC = () => {
  */
 const BudgetTracker: React.FC = () => {
   const budget = useBillingUsageStore(selectBudget);
-  const messages = useUnifiedChatStore((state) => state.messages);
+  // BUG-IX-05 fix: use useChatStore (canonical source) instead of useUnifiedChatStore for messages
+  const messages = useChatStore((state) => state.messages);
   const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
@@ -1079,7 +1080,8 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ id: string; content: string; timestamp: string; conversation_id?: number }>(
           'chat:pending-message-added',
           ({ payload }) => {
-            useUnifiedChatStore.getState().addPendingMessage(payload);
+            // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
+            useChatStore.getState().addPendingMessage(payload);
           },
         ),
       );
@@ -1088,14 +1090,16 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ message: { id: string; content: string }; remaining: number }>(
           'chat:pending-message-consumed',
           ({ payload }) => {
-            useUnifiedChatStore.getState().removePendingMessage(payload.message.id);
+            // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
+            useChatStore.getState().removePendingMessage(payload.message.id);
           },
         ),
       );
 
       registerListener(
         listen<{ count: number }>('chat:pending-messages-cleared', () => {
-          useUnifiedChatStore.getState().clearPendingMessages();
+          // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
+          useChatStore.getState().clearPendingMessages();
         }),
       );
 
@@ -1268,10 +1272,13 @@ export const UnifiedAgenticChat: React.FC<{
             chatState.clearThinkingContent(targetMessageId);
           } else if (payload.event_type === 'delta' && payload.content) {
             chatState.appendThinkingContent(targetMessageId, payload.content);
-          } else if (payload.event_type === 'complete' && payload.content) {
-            // On complete, replace accumulated content with the final authoritative string
+          } else if (payload.event_type === 'complete') {
+            // On complete, always clear first, then append the final authoritative string
+            // (even if payload.content is empty, the clear ensures no stale content remains)
             chatState.clearThinkingContent(targetMessageId);
-            chatState.appendThinkingContent(targetMessageId, payload.content);
+            if (payload.content) {
+              chatState.appendThinkingContent(targetMessageId, payload.content);
+            }
           }
         }),
       );
@@ -1862,6 +1869,11 @@ export const UnifiedAgenticChat: React.FC<{
   }, [loadOverview]);
 
   const handleSendMessage = async (content: string, options: SendOptions = {}) => {
+    // BUG-IX-04 fix: track whether this invocation is a slash command early-return so the
+    // watchdog finally-block can skip scheduling a 120s timeout for commands that never
+    // start a stream (e.g. /terminal, /browser, or any other builtin/project command).
+    let isSlashCommand = false;
+
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
     let customSlashInstructions: string | undefined;
@@ -1889,6 +1901,7 @@ export const UnifiedAgenticChat: React.FC<{
             content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
             metadata: { streaming: false },
           });
+          isSlashCommand = true;
           return;
         }
 
@@ -1907,10 +1920,22 @@ export const UnifiedAgenticChat: React.FC<{
         if (slashCommand.commandPath) {
           customSlashMetadata.commandPath = slashCommand.commandPath;
         }
+        // BUG-IX-03 fix: return early after project-command processing is complete.
+        // Without this return, execution falls through to the code below the if/else block
+        // which calls addMessage() for the user turn — this is a duplicate when the
+        // project-command path has already added a user message via its own addMessage call
+        // in the validation-error branch. The return ensures both paths (validation error
+        // and normal) exit before reaching the outer message-send flow.
+        isSlashCommand = true;
+        return;
       } else {
+        // BUG-IX-02 fix: declare userMessageId at the top of the enclosing else-block scope
+        // so it is always defined in both the try body and the catch block.
+        let userMessageId: string | undefined;
+
         // Validate command arguments first
         if (!validateSlashCommandArgs(slashCommand.command, slashCommand.args)) {
-          const userMessageId = addMessage({
+          userMessageId = addMessage({
             role: 'user',
             content: slashCommand.rawInput,
             slashCommand,
@@ -1921,11 +1946,12 @@ export const UnifiedAgenticChat: React.FC<{
             content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
             metadata: { streaming: false },
           });
+          isSlashCommand = true;
           return;
         }
 
         // Create user message with slash command metadata
-        const userMessageId = addMessage({
+        userMessageId = addMessage({
           role: 'user',
           content: slashCommand.rawInput,
           slashCommand,
@@ -2043,10 +2069,13 @@ export const UnifiedAgenticChat: React.FC<{
           useUnifiedChatStore.getState().addInlinePanel(userMessageId, panel);
         } catch (error) {
           const errorMessage = getSimpleErrorMessage(error);
-          updateMessage(userMessageId, {
-            error: errorMessage,
-          });
+          if (userMessageId) {
+            updateMessage(userMessageId, {
+              error: errorMessage,
+            });
+          }
         }
+        isSlashCommand = true;
         return;
       }
     }
@@ -2507,66 +2536,73 @@ export const UnifiedAgenticChat: React.FC<{
       // Fix 2 (supabase.ts graceful degradation + .env.production) resolves Bug 3.
       // If stream_watchdog_timeout recurs without Bug 2 present, check the Rust-side
       // 30-second stream connection timeout in llm_router.rs (stream_timeout variable).
-      const WATCHDOG_TIMEOUT_MS = 120 * 1000; // 120 seconds — covers reasoning models (o3, DeepSeek-R1, extended thinking) that take 30-90s before first token
-      markStreamActivity();
 
-      const scheduleWatchdog = () => {
+      // BUG-IX-04 fix: skip watchdog scheduling for slash command early-returns.
+      // Slash commands never start a stream, so the 120-second watchdog timeout would
+      // fire spuriously and attempt to clean up a streaming state that was never set.
+      // Note: cannot use `return` inside finally (no-unsafe-finally), so use a guard.
+      if (!isSlashCommand) {
+        const WATCHDOG_TIMEOUT_MS = 120 * 1000; // 120 seconds — covers reasoning models (o3, DeepSeek-R1, extended thinking) that take 30-90s before first token
+        markStreamActivity();
+
+        const scheduleWatchdog = () => {
+          if (streamWatchdogTimeoutRef.current) {
+            clearTimeout(streamWatchdogTimeoutRef.current);
+          }
+          streamWatchdogTimeoutRef.current = setTimeout(() => {
+            const state = useUnifiedChatStore.getState();
+            const idleMs = Date.now() - lastStreamActivityAtRef.current;
+
+            // If there was recent activity, extend watchdog instead of forcing cleanup.
+            if (idleMs < WATCHDOG_TIMEOUT_MS) {
+              scheduleWatchdog();
+              return;
+            }
+
+            // If there are active tool executions (e.g. image/video generation that takes 30-90s),
+            // keep extending the watchdog rather than killing the stream prematurely.
+            // Covers both: chat-path tools (toolExecutionTimeoutsRef) and AGI-path tools (activeToolStreams).
+            if (toolExecutionTimeoutsRef.current.size > 0 || state.activeToolStreams.size > 0) {
+              scheduleWatchdog();
+              return;
+            }
+
+            if (state.isLoading || state.currentStreamingMessageId) {
+              console.warn(
+                '[UnifiedAgenticChat] AUDIT-STREAM-059: Inactivity watchdog triggered - cleaning up stale streaming state',
+                { idleMs, messageId: assistantMessageId },
+              );
+
+              clearQueuedStreamUpdates(assistantMessageId);
+              state.setIsLoading(false);
+              state.setStreamingMessage(null);
+              toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+                clearTimeout(timeoutEntry.softTimeoutId);
+                clearTimeout(timeoutEntry.hardTimeoutId);
+              });
+              toolExecutionTimeoutsRef.current.clear();
+
+              const message = state.messages.find((m) => m.id === assistantMessageId);
+              const hasContent = Boolean(message?.content?.trim());
+              updateMessage(assistantMessageId, {
+                metadata: { streaming: false },
+                ...(hasContent
+                  ? {}
+                  : {
+                      content: 'Response timed out. Please try again.',
+                      error: 'stream_watchdog_timeout',
+                    }),
+              });
+            }
+            streamWatchdogTimeoutRef.current = null;
+          }, WATCHDOG_TIMEOUT_MS);
+        };
+
         if (streamWatchdogTimeoutRef.current) {
           clearTimeout(streamWatchdogTimeoutRef.current);
         }
-        streamWatchdogTimeoutRef.current = setTimeout(() => {
-          const state = useUnifiedChatStore.getState();
-          const idleMs = Date.now() - lastStreamActivityAtRef.current;
-
-          // If there was recent activity, extend watchdog instead of forcing cleanup.
-          if (idleMs < WATCHDOG_TIMEOUT_MS) {
-            scheduleWatchdog();
-            return;
-          }
-
-          // If there are active tool executions (e.g. image/video generation that takes 30-90s),
-          // keep extending the watchdog rather than killing the stream prematurely.
-          // Covers both: chat-path tools (toolExecutionTimeoutsRef) and AGI-path tools (activeToolStreams).
-          if (toolExecutionTimeoutsRef.current.size > 0 || state.activeToolStreams.size > 0) {
-            scheduleWatchdog();
-            return;
-          }
-
-          if (state.isLoading || state.currentStreamingMessageId) {
-            console.warn(
-              '[UnifiedAgenticChat] AUDIT-STREAM-059: Inactivity watchdog triggered - cleaning up stale streaming state',
-              { idleMs, messageId: assistantMessageId },
-            );
-
-            clearQueuedStreamUpdates(assistantMessageId);
-            state.setIsLoading(false);
-            state.setStreamingMessage(null);
-            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-              clearTimeout(timeoutEntry.softTimeoutId);
-              clearTimeout(timeoutEntry.hardTimeoutId);
-            });
-            toolExecutionTimeoutsRef.current.clear();
-
-            const message = state.messages.find((m) => m.id === assistantMessageId);
-            const hasContent = Boolean(message?.content?.trim());
-            updateMessage(assistantMessageId, {
-              metadata: { streaming: false },
-              ...(hasContent
-                ? {}
-                : {
-                    content: 'Response timed out. Please try again.',
-                    error: 'stream_watchdog_timeout',
-                  }),
-            });
-          }
-          streamWatchdogTimeoutRef.current = null;
-        }, WATCHDOG_TIMEOUT_MS);
-      };
-
-      if (streamWatchdogTimeoutRef.current) {
-        clearTimeout(streamWatchdogTimeoutRef.current);
-      }
-      scheduleWatchdog();
+        scheduleWatchdog();
+      } // end if (!isSlashCommand)
     }
   };
 

@@ -1,6 +1,6 @@
 # AI Memory — AGI Workforce
 
-Updated: 2026-03-07 — MASTER SPRINT PLAN v2 (Research-backed)
+Updated: 2026-03-07 — BUG FIX MEGA-SPRINT v3 (170+ bugs fixed)
 
 ## Architecture Decisions (Locked)
 
@@ -10,20 +10,6 @@ Updated: 2026-03-07 — MASTER SPRINT PLAN v2 (Research-backed)
 - **MCP Protocol version**: `2025-11-25` (latest). Streamable HTTP replaces SSE.
 - **Cloud model routing**: Internal auto-routing; Custom Models = user-provided endpoints only
 - **camelCase IPC**: ALL Tauri invoke() calls use camelCase params. snake_case = silent fail.
-
-## Confirmed Bugs (to fix)
-
-| #   | File                                   | Line     | Bug                     | Fix         |
-| --- | -------------------------------------- | -------- | ----------------------- | ----------- |
-| 1   | `src/api/reflection.ts`                | 208      | `goal_id: goalId`       | `goalId`    |
-| 2   | `src/api/ollama.ts`                    | 170      | `model_name: modelName` | `modelName` |
-| 3   | `src/hooks/useMCP.ts`                  | 370      | `new_config: newConfig` | `newConfig` |
-| 4   | `src-tauri/src/core/llm/llm_router.rs` | 10 spots | `"gpt-5.2"`             | `"gpt-4o"`  |
-
-**Previously reported as bugs but CONFIRMED CLEAN:**
-useTerminal.ts, agi_checkpoint.ts, memory.ts, automation.ts, automationEnhanced.ts,
-mcp.ts, workflow.ts, accountApi.ts, productivityStore.ts, useApprovalActions.ts,
-backgroundTasks.ts, chat.ts — ALL use camelCase correctly.
 
 ## Research Findings (March 2026)
 
@@ -69,118 +55,136 @@ Phase 5: ANSWER    → text_delta → normal streaming text
 - VS Code MCP: `.vscode/mcp.json` config, or register via `mcp.servers`
 - Required MCP servers: filesystem, git, fetch, memory, sequential-thinking, playwright
 
-### Agent UX Patterns from OpenCode/Claude Code
+### Real Model Strings (March 2026 — use these, not future fake ones)
 
-- Color-code each agent (hex color in UI)
-- `steps: N` budget shown in UI (progress toward limit)
-- Background agents need pre-approval before backgrounding
-- Session hierarchy: parent → child sessions, navigable with breadcrumbs
-- Custom statusMessage per hook (semantic spinner text)
-- `/thinking` toggle for visibility
-- Tab key to switch between Build/Plan modes
+| Provider  | Model ID                                                                            |
+| --------- | ----------------------------------------------------------------------------------- |
+| OpenAI    | `gpt-4o`, `gpt-4o-mini`, `o3`, `o1`                                                 |
+| Anthropic | `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229` |
+| Google    | `gemini-2.0-flash`, `gemini-2.0-pro-exp`, `gemini-2.0-flash-thinking-exp`           |
+| xAI       | `grok-2-1212`                                                                       |
+| Mistral   | `mistral-large-latest`, `mistral-medium-latest`, `mistral-small-latest`             |
+| Moonshot  | `moonshot-v1-8k`                                                                    |
 
-### VS Code Extension State (from reading extension.ts)
+## COMPLETED SPRINTS
 
-- `agentModeProvider.ts` (847 lines) — full multi-file agent webview exists
-- `planMode` config property is declared but NOT wired in extension.ts
-- `mcp.enabled` config property declared but NOT wired
-- Desktop bridge: exists in `desktopBridge.ts`, off by default (port 8787)
-- Chat participant `@agi` is fully implemented with streaming
-- Inline completions: implemented with debounce + cache
+### SPRINT 1 (prev session): Foundation Bug Fixes + 8 Feature Tracks ✅
 
-### Chrome Extension State (from reading source)
+- reflection.ts, ollama.ts, useMCP.ts: IPC snake_case → camelCase ✓
+- llm_router.rs: `gpt-5.2` → `gpt-4o` (original 10 occurrences) ✓
+- ThinkingBlock, ToolCallCard, AgentStepTimeline components built ✓
+- voice_global.rs Rust module + useGlobalVoicePTT.ts hook ✓
+- Chrome extension full sidebar (876 lines) ✓
+- VS Code extension planMode + mcp.enabled + git/test commands ✓
+- Mobile VoicePTT unified + Deepgram Nova-3 ✓
+- Web streaming chat parity (ThinkingBlock, ArtifactBlock, ToolCallCard web versions) ✓
 
-- `background.ts`: 964 lines, native messaging, context menu "Ask AGI Workforce"
-- `content.ts`: 1231 lines, 15 automation action types, floating overlay FAB
-- `side_panel.ts`: 146 lines, ONLY shows message queue — NO chat interface yet
-- Missing: Full AI chat in side panel, web search display, voice input
+### SPRINT 2 (this session): 170-Bug Mega-Fix ✅ DONE 2026-03-07
 
-### Mobile Chat Components (from reading source)
+#### Critical/High fixes applied:
 
-- `ReasoningAccordion.tsx` — EXISTS (auto-expand during streaming, auto-collapse after)
-- `ToolCallCard.tsx` — EXISTS (status border, tool icon mapping, expandable I/O)
-- `StatusStep.tsx` — EXISTS (agent step cards with pulsing indicator)
-- `ApprovalCard.tsx` — EXISTS (risk-level, countdown, haptics)
-- Missing: Voice pipeline wired end-to-end, @file mentions, MCP tools via API
+**Slash Command Handlers** (`slashCommandHandlers.ts`) — 28 wrong IPC command names fixed:
 
-### Web App State (from reading source)
+- `vision_capture_screen` → `vision_analyze_screenshot`
+- `project_memory_search` → `search_project_memories`
+- `project_memory_add_context` → `save_project_context`
+- `project_memory_get_all_contexts` → `get_project_memories`
+- `chat_memory_search` → `chat_search_memories`
+- `background_agent_start` → `background_agent_push`
+- `git_create_commit` → `git_commit` (+ `path: '.'`)
+- `git_get_log` → `git_log` (+ `path: '.'`)
+- `git_get_status` → `git_status` (+ `path: '.'`)
+- `scheduler_list_tasks` → `scheduler_list_jobs`
+- `scheduler_create_task` → `scheduler_add_job`
+- `voice_synthesize` → `voice_tts_speak`
+- `ocr_capture_and_extract` → `ocr_process_image`
+- `notification_clear_all` → `notification_cancel_all`
+- `notification_list_recent` → `notification_list`
+- `lsp_search_symbols` → `lsp_workspace_symbol`
+- `metrics_get_usage` → `metrics_get_system`
+- `marketplace_install_workflow` → `clone_marketplace_workflow`
+- `marketplace_list_featured` → `search_marketplace_workflows`
+- `document_create_docx` → `document_create_word`
+- `document_create_xlsx` → `document_create_excel`
+- `prompt_enhance_prompt` → `enhance_prompt`
+- `automation_stop_recording` → `automation_record_stop`
+- `automation_start_recording` → `automation_record_start`
+- browser commands: added `browserId` param
 
-- `features/chat/` has components/, hooks/, services/, stores/, types/, utils/
-- `app/chat/[sessionId]/` exists with layout
-- Marketing page (app/page.tsx) 368 lines — good landing page
-- Missing: Full streaming chat parity with desktop, voice, tool display
+**useGlobalVoicePTT.ts**: imports changed from `@tauri-apps/api/*` to `../../lib/tauri-mock`; `isTauri` guard added
 
-## SPRINT STATUS — ALL 8 TRACKS COMPLETE ✅ (2026-03-07)
+**tauri-mock.ts**: added mocks for `voice_start_global_ptt`, `voice_stop_global_ptt`, `voice_inject_text`, `glob_search`, `dir_list`, `extension_status`
 
-### TRACK 1: BUG FIXES ✅ DONE
+**llm_router.rs**: 74 fake future model strings replaced with real current model IDs
 
-- reflection.ts:208 `goal_id` → `goalId` ✓
-- ollama.ts:170 `model_name` → `modelName` ✓
-- useMCP.ts:370 `new_config` → `newConfig` ✓
-- llm_router.rs: 9× `"gpt-5.2"` → `"gpt-4o"`, 1× `"gpt-5.2-codex-high"` → `"o3"` ✓
+**AgentModeSwitcher.tsx**: `ElementType` import added; `handleModeChange` wrapped in try/catch
 
-### TRACK 2: REASONING + TOOL STATUS UI ✅ DONE
+**BudgetAlertsPanel.tsx**: null guard for `alertConfig`, `budgetAlerts`, dismiss `type="button"`
 
-- `ThinkingBlock.tsx` — collapsible, Brain icon, auto-collapse after streaming, AnimatePresence
-- `ToolCallCard.tsx` — 4-state (pending/running/complete/error), live elapsed timer, collapsible result
-- `AgentStepTimeline.tsx` — vertical timeline, color-coded agent types, click to expand steps
-- `ToolTimeline.tsx` — updated to render ToolCallCard for each tool call entry
-- `chatStore.ts` — added `thinkingByMessage` state + `appendThinkingContent` / `clearThinkingContent` actions
-- `ChatStream.tsx` — wired ThinkingBlock above assistant messages when thinking content exists
-- `index.tsx` (main chat) — `thinking:event` Tauri listener wired
+**index.tsx**: fixed `userMessageId` scope, project-command early return, thinking:event guard, watchdog isSlashCommand flag, `useUnifiedChatStore` → `useChatStore`
 
-### TRACK 3: VOICE GLOBAL LAYER ✅ DONE
+**CommandPalette.tsx**: `useUnifiedChatStore` → `useChatStore`; mutable `flatIdx` → `flatResults.indexOf()`; FTS5 i64 → UUID via `dbIdToUuid`
 
-- `voice_global.rs` — Rust module: `voice_start_global_ptt`, `voice_stop_global_ptt`, `voice_inject_text`
-  - Uses `rdev` for OS-level fn-key hook; `enigo` for text injection into focused field
-  - Requires macOS Accessibility permission (already in-app)
-- `useGlobalVoicePTT.ts` — TypeScript hook: starts Rust listener, handles `voice:ptt-start`/`voice:ptt-stop` events
-- Web voice: `VoiceInputButton.tsx` — Web Speech API, 3 states, graceful degradation
-- Mobile voice: `VoicePTT.tsx` — hold-to-record, Deepgram Nova-3, haptics, animated ring
+**Stores fixed**:
 
-### TRACK 4: VS CODE EXTENSION ✅ DONE
+- `browserStore.ts`: `closeBrowser` now calls `invoke('browser_close')`
+- `automationStore.ts`: `startRecording`/`stopRecording` now call backend
+- `authOrchestrator.ts`: early-return moved before try block, `isProcessingAuthChange` unstuck
+- `billingUsage.ts`: 7 `trackX` functions `throw` → `return` on null customer
 
-- `agentModeProvider.ts` — added `setPlanMode(bool)` method, posts `planModeChanged` to webview
-- `extension.ts` — wired planMode config → agentModeProvider; mcp.enabled → desktopBridge connect/disconnect; new commands: `agi.git.status`, `agi.git.diff`, `agi.git.commit`, `agi.test.run`
-- `package.json` — desktop bridge default changed to `true`; new commands registered
+**ChatInputToolbar.tsx**: incognito toggle now calls `updateConversation` with `{ incognito: !current }` instead of creating new conversation; aria attributes added
 
-### TRACK 5: CHROME EXTENSION FULL SIDEBAR ✅ DONE
+**ApprovalModal.tsx**: `isResolved` ref prevents double timeout rejections; `alwaysAllow` resets on approval change; ESC key triggers `handleReject`
 
-- `side_panel.ts` — completely replaced (876 lines): full streaming chat UI, markdown renderer, page context capture, Web Speech API voice, dark theme
-- `side_panel.html` — simplified shell
-- `types.ts` — added `CHAT_MESSAGE`, `CHAT_CHUNK` message types
-- `background.ts` — added `handleChatMessage()`: streams via localhost:8765, falls back to native messaging
+**ProjectSettingsDialog.tsx**: `useUnifiedChatStore` → `useChatStore`; `autoSaveMemories` loaded + saved; "Add Files" uses real `@tauri-apps/plugin-dialog`; save error shows toast; icon picker renders Lucide icons
 
-### TRACK 6: WEB — STREAMING CHAT PARITY ✅ DONE
+**Sidebar.tsx**: search overlay calls `setActiveView('chat')`; rename on empty title cancels properly; keyboard guard prevents sidebar keystrokes when input focused; collapsed search button expands sidebar first
 
-- `ToolCallCard.tsx` — web-native 4-state tool card (Tailwind, no Tauri/framer deps)
-- `VoiceInputButton.tsx` — Web Speech API voice input, 3 states, graceful degradation
-- `ThinkingBlock.tsx` — CSS-transition version (no framer-motion), auto-collapse
-- `ArtifactBlock.tsx` — detects + renders html/csv/json/mermaid/code blocks
-- `ChatComposer.tsx` — VoiceInputButton wired in toolbar
-- `MessageBubble.tsx` — ThinkingBlock + ArtifactBlock wired into message render
+**SendButton.tsx**: stop button shown even when `onStop=undefined` (disabled); send button disabled when `isSending=true`
 
-### TRACK 7: MOBILE — VOICE + PARITY ✅ DONE
+**FileMentionPicker.tsx**: `querySelectorAll('[data-mention-item]')` fixes off-by-header scroll
 
-- `VoicePTT.tsx` — hold-to-record, expo-av recording, Deepgram Nova-3 STT, haptics
-- `useVoicePlayback.ts` — expo-speech TTS wrapper (speak/stop)
-- `ChatInput.tsx` — VoicePTT wired in input row
-- `[id].tsx` — useVoicePlayback wired: auto-reads each new assistant message; stops on send/back
-- **Note**: Two mic buttons now visible (VoiceInputButton + VoicePTT) — consider unifying; add `EXPO_PUBLIC_DEEPGRAM_API_KEY` env var
+**ShareConversationDialog.tsx**: separate `isCopying`/`isSaving` flags; split backend vs clipboard error messages; dialog auto-closes after successful save
 
-### TRACK 8: DESKTOP UX — REASONING DISPLAY ✅ DONE
+**ThinkingBlock.tsx**: `userExpanded` ref prevents auto-collapse overriding manual expand; `content` null guard; duplicate `flex-1` removed
 
-- ThinkingBlock + ToolCallCard both wired into ChatStream/ToolTimeline (covered in Track 2 above)
+**ToolCallCard.tsx**: unique `key` per CollapsibleSection; timer resets on status → `running`
+
+**MessageContextMenu.tsx**: click-away handler deferred with `setTimeout(0)`; viewport boundary clamping
+
+**useVoiceTranscription.ts**: `isRecordingRef` prevents concurrent sessions; `MediaRecorder.stop()` on unmount; `configureImpl` doesn't override user-set provider; `isSupported` checks SpeechRecognition too
+
+**useAgenticEvents.ts**: `rejectionReason ?? rejection_reason` handles both camelCase and snake_case from Rust
+
+**Rust mod.rs**: `pub use voice_global::*;` added
+
+**Rust test_runner.rs**: `_name` silences unused var; actual `timeout` enforced via channel recv_timeout
+
+**Rust code_search.rs**: fallback to `dirs::home_dir()` instead of `PathBuf::from(".")`
+
+**AgentStepTimeline.tsx**: dead ternary fixed; `<div role="button">` → `<button type="button">`; stagger delay capped at 500ms
+
+**InputFooter.tsx**: `role="progressbar"` + `aria-value*`; `creditPercentage` clamped to 100; `hasTokenUsage` guards `tokenMax > 0`
+
+**ToolTimeline.tsx**: `aria-expanded` added to toggle button
+
+**MessageActions.tsx**: `type="button"` on all 11 buttons
 
 ## NEXT SPRINT IDEAS
 
-- Unify mobile voice buttons (one mic, two backends)
-- Add EXPO_PUBLIC_DEEPGRAM_API_KEY to env setup docs
-- System tray "Hold fn to speak" quick action
-- Push notifications for agent task completion (mobile)
-- Share session links UI (web) — API exists at /api/share
+- MessageBubble: `renderToolCall` uses `useSettingsStore.getState()` — convert to reactive selector
+- MessageBubble: `useMcpAppStore.getState().registerApp()` called during render — move to useEffect
+- MessageBubble: `useEffect` for sidecar depends on full `message` object — narrow deps
+- MessageBubble: `parseInt(message.id, 10)` silently fails for UUID IDs
+- useCreditRefresh: `isRefreshing`/`error` from refs — not reactive
+- useMCP.ts: event listener cleanup not awaited
+- useAgenticEvents.ts: 60+ listeners in sequential effect
+- Rust BUG-5: `rdev::listen` callback `return` doesn't stop the thread
+- BUG-MB-009: `parseInt(message.id)` fails for UUIDs
 - MultiAgentStatusPanel (parallel agent display)
 - Agent color coding in AgentStepTimeline
+- System tray "Hold fn to speak" quick action
+- Push notifications for agent task completion (mobile)
 
 ## Build Commands
 
@@ -204,4 +208,4 @@ pnpm lint && cargo clippy  # Full lint
 | Web mode crash        | Check import is from lib/tauri-mock not @tauri-apps directly        |
 | Voice not working     | Check mic permissions + Whisper model downloaded                    |
 | Reasoning not showing | Check thinking: {type: "enabled", budget_tokens: 10000} in API call |
-| gpt-5.2 error         | Replace with "gpt-4o" in llm_router.rs                              |
+| Model 404 error       | Check llm_router.rs — use real model IDs from table above           |

@@ -25,18 +25,29 @@ import { Badge } from '../ui/Badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import {
   FolderPlus,
+  Folder,
+  Code,
+  FileText,
+  Star,
+  Briefcase,
+  Rocket,
+  BookOpen,
+  Lightbulb,
   File,
   MessageSquare,
-  FileText,
   Settings,
   Palette,
   Trash2,
   Plus,
   Upload,
   Brain,
+  type LucideIcon,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import { useProjectStore, type Project, type ProjectFile } from '../../stores/projectStore';
-import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
+import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { MemoryManager } from '../Memory/MemoryManager';
 
@@ -68,6 +79,18 @@ const PROJECT_ICONS = [
   { name: 'Lightbulb', value: 'lightbulb' },
 ] as const;
 
+// BUG-PS-05: Icon name → Lucide component lookup map
+const ICON_COMPONENT_MAP: Record<string, LucideIcon> = {
+  folder: Folder,
+  code: Code,
+  document: FileText,
+  star: Star,
+  briefcase: Briefcase,
+  rocket: Rocket,
+  book: BookOpen,
+  lightbulb: Lightbulb,
+};
+
 interface ProjectSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -96,10 +119,13 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   // Store actions
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
-  const conversations = useUnifiedChatStore((state) => state.conversations);
+  // BUG-PS-04: replaced deprecated useUnifiedChatStore with useChatStore
+  const conversations = useChatStore((state) => state.conversations);
 
   // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
   const projectId = project?.id ?? null;
+  // BUG-PS-01: load project settings (including autoSaveMemories) from store on open
+  const getProjectSettings = useProjectStore((state) => state.getProjectSettings);
   useEffect(() => {
     if (open) {
       if (mode === 'edit' && project != null) {
@@ -110,6 +136,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(project.icon || DEFAULT_ICON);
         setFiles(project.files);
         setConversationIds(project.conversationIds);
+        // BUG-PS-01: load persisted autoSaveMemories from project settings
+        const settings = getProjectSettings(project.id);
+        setAutoSaveMemories(settings.autoSaveMemories ?? false);
       } else {
         // Reset for create mode
         setName('');
@@ -119,11 +148,15 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(DEFAULT_ICON);
         setFiles([]);
         setConversationIds([]);
+        setAutoSaveMemories(false);
       }
       setActiveTab('general');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, projectId]);
+
+  // BUG-PS-01: also grab updateProjectSettings so autoSaveMemories can be persisted
+  const updateProjectSettings = useProjectStore((state) => state.updateProjectSettings);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -133,7 +166,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     setIsSaving(true);
     try {
       if (mode === 'create') {
-        await createProject({
+        const newProject = await createProject({
           name: name.trim(),
           description: description.trim(),
           customInstructions: customInstructions.trim(),
@@ -143,6 +176,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           conversationIds,
           isArchived: false,
         });
+        // BUG-PS-01: persist autoSaveMemories for newly created project
+        await updateProjectSettings(newProject.id, { autoSaveMemories });
       } else if (project) {
         await updateProject(project.id, {
           name: name.trim(),
@@ -153,26 +188,42 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           files,
           conversationIds,
         });
+        // BUG-PS-01: persist autoSaveMemories for edited project
+        await updateProjectSettings(project.id, { autoSaveMemories });
       }
       onOpenChange(false);
     } catch (error) {
       console.error('[ProjectSettingsDialog] Failed to save project:', error);
+      // BUG-PS-03: show user-visible error instead of silent console.error only
+      toast.error('Failed to save project settings');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleAddFile = useCallback(() => {
-    // In a real implementation, this would open a file picker
-    // For now, we'll add a placeholder
-    const newFile: ProjectFile = {
-      id: crypto.randomUUID(),
-      name: 'New File',
-      path: '/path/to/file',
-      type: 'file',
-      addedAt: new Date().toISOString(),
-    };
-    setFiles((prev) => [...prev, newFile]);
+  // BUG-PS-02: real file picker via @tauri-apps/plugin-dialog
+  const handleAddFile = useCallback(async () => {
+    if (!isTauri) {
+      toast.error('File picker is only available in the desktop app');
+      return;
+    }
+    try {
+      const selected = await openFilePicker({ multiple: true, directory: false });
+      if (selected) {
+        const fileArray = Array.isArray(selected) ? selected : [selected];
+        const newFiles: ProjectFile[] = fileArray.map((filePath) => ({
+          id: crypto.randomUUID(),
+          name: filePath.split('/').pop() ?? filePath,
+          path: filePath,
+          type: 'file',
+          addedAt: new Date().toISOString(),
+        }));
+        setFiles((prev) => [...prev, ...newFiles]);
+      }
+    } catch (err) {
+      console.error('[ProjectSettingsDialog] File picker error:', err);
+      toast.error('Failed to open file picker');
+    }
   }, []);
 
   const handleRemoveFile = useCallback((fileId: string) => {
@@ -284,19 +335,27 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               <div className="space-y-2">
                 <Label className="text-zinc-300">Icon</Label>
                 <div className="flex gap-2 flex-wrap">
-                  {PROJECT_ICONS.map((i) => (
-                    <button
-                      key={i.value}
-                      onClick={() => setIcon(i.value)}
-                      className={cn(
-                        'w-10 h-10 rounded-md bg-zinc-800 flex items-center justify-center transition-all text-zinc-400 hover:text-white',
-                        icon === i.value && 'ring-2 ring-blue-500 text-white',
-                      )}
-                      title={i.name}
-                    >
-                      <span className="text-sm capitalize">{i.value.charAt(0)}</span>
-                    </button>
-                  ))}
+                  {PROJECT_ICONS.map((i) => {
+                    // BUG-PS-05: render actual Lucide icon; fall back to first letter if not in map
+                    const IconComponent = ICON_COMPONENT_MAP[i.value];
+                    return (
+                      <button
+                        key={i.value}
+                        onClick={() => setIcon(i.value)}
+                        className={cn(
+                          'w-10 h-10 rounded-md bg-zinc-800 flex items-center justify-center transition-all text-zinc-400 hover:text-white',
+                          icon === i.value && 'ring-2 ring-blue-500 text-white',
+                        )}
+                        title={i.name}
+                      >
+                        {IconComponent ? (
+                          <IconComponent className="w-4 h-4" />
+                        ) : (
+                          <span className="text-sm capitalize">{i.value.charAt(0)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </TabsContent>
