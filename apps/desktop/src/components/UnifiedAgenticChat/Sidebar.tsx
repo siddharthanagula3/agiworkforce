@@ -588,11 +588,15 @@ export function Sidebar({
 
   const handleRename = useCallback(
     (id: string) => {
-      if (editingTitle.trim() && editingId === id) {
-        renameConversation(id, editingTitle);
+      if (editingId !== id) return;
+      if (!editingTitle.trim()) {
         setEditingId(null);
         setEditingTitle('');
+        return;
       }
+      renameConversation(id, editingTitle);
+      setEditingId(null);
+      setEditingTitle('');
     },
     [editingId, editingTitle, renameConversation],
   );
@@ -654,6 +658,12 @@ export function Sidebar({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Guard: don't steal keystrokes from text inputs or editable elements
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
       // Handle Escape - close search and reset state
       if (e.key === 'Escape') {
         setShowSearch(false);
@@ -761,7 +771,10 @@ export function Sidebar({
             <Plus className="h-4 w-4" />
           </Button>
           <Button
-            onClick={() => setShowSearch(!showSearch)}
+            onClick={() => {
+              if (onToggleCollapse) onToggleCollapse();
+              setShowSearch(true);
+            }}
             variant="ghost"
             size="icon"
             className="text-gray-600 dark:text-gray-400"
@@ -844,6 +857,7 @@ export function Sidebar({
                         key={conv.id}
                         onClick={() => {
                           selectConversationFn(conv.id);
+                          setActiveView('chat');
                           setShowSearch(false);
                           setSearchQuery('');
                         }}
@@ -912,7 +926,9 @@ export function Sidebar({
             <Search className="h-4 w-4" />
             <span>Search</span>
             <div className="ml-auto flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">{modKeySymbol}</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">
+                {modKeySymbol}
+              </kbd>
               <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
             </div>
           </button>

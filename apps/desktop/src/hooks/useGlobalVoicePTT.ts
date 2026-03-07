@@ -25,8 +25,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invoke, isTauri } from '../../lib/tauri-mock';
+import { listen, UnlistenFn } from '../../lib/tauri-mock';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,6 +84,8 @@ export function useGlobalVoicePTT({
 
   // Start/stop the backend listener when `enabled` changes or on mount/unmount.
   useEffect(() => {
+    if (!isTauri) return;
+
     let unlistenStart: UnlistenFn | null = null;
     let unlistenStop: UnlistenFn | null = null;
     let mounted = true;

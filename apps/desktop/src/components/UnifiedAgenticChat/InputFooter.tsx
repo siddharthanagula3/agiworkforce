@@ -38,7 +38,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
       ? Math.min((tokenCurrent / tokenMax) * 100, 100)
       : 0;
 
-  const hasTokenUsage = tokenCurrent != null && tokenMax != null;
+  const hasTokenUsage = tokenCurrent != null && tokenMax != null && tokenMax > 0;
 
   return (
     <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700/50">
@@ -58,7 +58,13 @@ export const InputFooter: React.FC<InputFooterProps> = ({
           className="flex items-center gap-2"
           title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
         >
-          <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+          <div
+            className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.min(creditPercentage, 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
@@ -68,7 +74,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
                     ? 'bg-amber-500'
                     : 'bg-green-500',
               )}
-              style={{ width: `${creditPercentage}%` }}
+              style={{ width: `${Math.min(creditPercentage, 100)}%` }}
             />
           </div>
           <span
@@ -84,7 +90,13 @@ export const InputFooter: React.FC<InputFooterProps> = ({
         </div>
       ) : !isSimpleMode && hasTokenUsage ? (
         <div className="flex items-center gap-2" title="Context Window Usage">
-          <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+          <div
+            className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={tokenPercentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
