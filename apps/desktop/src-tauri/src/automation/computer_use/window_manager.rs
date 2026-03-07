@@ -1,3 +1,6 @@
+// SAFETY: Window management requires unsafe Win32 API calls (GetForegroundWindow, EnumWindows, etc.)
+#![allow(unsafe_code)]
+
 //! Window Manager for Computer Use.
 //!
 //! This module provides cross-app window management capabilities:
