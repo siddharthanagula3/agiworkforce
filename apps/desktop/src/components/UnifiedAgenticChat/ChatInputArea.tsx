@@ -729,10 +729,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       promptCompletion.clear();
     }
 
-    // Detect @mention — differentiate @file: from skill mentions
-    const fileMentionMatch = value.match(/@file:([\w./\\-]*)$/);
-    if (fileMentionMatch && !isSlashInput) {
-      setFileMentionQuery(fileMentionMatch[1] ?? '');
+    // Detect @mention:
+    //   @file:<query>  → explicit file mention (legacy)
+    //   @<query>       → opens file picker when query looks like a filename/path
+    //                    (contains a dot, slash, or matches a known extension)
+    //                    otherwise opens skill/agent picker
+    const fileMentionExplicit = value.match(/@file:([\w./\\-]*)$/);
+    // Also trigger file picker for @word.ext patterns (e.g. @index.ts, @src/)
+    const atWordMatch = value.match(/@([\w./\\-]*)$/);
+    const isFileLikeQuery =
+      atWordMatch &&
+      (atWordMatch[1].includes('.') ||
+        atWordMatch[1].includes('/') ||
+        atWordMatch[1].includes('\\'));
+
+    if ((fileMentionExplicit || isFileLikeQuery) && !isSlashInput) {
+      const query = fileMentionExplicit ? (fileMentionExplicit[1] ?? '') : (atWordMatch?.[1] ?? '');
+      setFileMentionQuery(query);
       setMentionQuery(null);
     } else {
       setFileMentionQuery(null);
