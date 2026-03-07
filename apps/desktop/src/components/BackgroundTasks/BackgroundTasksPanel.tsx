@@ -69,8 +69,8 @@ function getStatusBadgeVariant(
 function formatElapsedTime(startedAt?: Date, completedAt?: Date): string {
   if (!startedAt) return '--';
 
-  const endTime = completedAt ?? new Date();
-  const elapsedMs = endTime.getTime() - startedAt.getTime();
+  const endTime = completedAt ? new Date(completedAt) : new Date();
+  const elapsedMs = endTime.getTime() - new Date(startedAt).getTime();
 
   // Use formatDuration from utils if available, otherwise fallback
   if (typeof formatDuration === 'function') {
@@ -214,7 +214,7 @@ export function BackgroundTasksPanel({
       if (!aActive && bActive) return 1;
 
       // Then by creation date (newest first)
-      return b.createdAt.getTime() - a.createdAt.getTime();
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [tasks]);
 
