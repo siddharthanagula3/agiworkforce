@@ -53,10 +53,8 @@ import { InstructionFilesSettings } from './InstructionFilesSettings';
 import { CustomModelsSettings } from './CustomModelsSettings';
 import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 import { MCPToolsSettings } from './MCPToolsSettings';
-import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
-import { OAuthCredentialsPanel } from './OAuthCredentialsPanel';
 import { VoiceSettings } from './VoiceSettings';
 import { MemoryPanel } from '../Memory/MemoryPanel';
 
@@ -77,6 +75,88 @@ const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }
   { key: 'extensions', label: 'Extensions', icon: Puzzle },
   { key: 'notifications', label: 'Notifications', icon: Bell },
 ];
+
+const BYOK_PROVIDERS = [
+  { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...' },
+  { id: 'openai', name: 'OpenAI', placeholder: 'sk-...' },
+  { id: 'google', name: 'Google (Gemini)', placeholder: 'AIza...' },
+  { id: 'xai', name: 'xAI (Grok)', placeholder: 'xai-...' },
+  { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...' },
+  { id: 'mistral', name: 'Mistral', placeholder: 'API key...' },
+  { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...' },
+  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...' },
+] as const;
+
+function BYOKApiKeysSection() {
+  const [keys, setKeys] = React.useState<Record<string, string>>({});
+  const [statuses, setStatuses] = React.useState<
+    Record<string, 'idle' | 'saving' | 'saved' | 'error'>
+  >({});
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  const handleSave = React.useCallback(
+    async (providerId: string) => {
+      const key = keys[providerId]?.trim();
+      if (!key) return;
+      setStatuses((s) => ({ ...s, [providerId]: 'saving' }));
+      setErrors((e) => ({ ...e, [providerId]: '' }));
+      try {
+        await invoke('save_api_key', { provider: providerId, key });
+        setStatuses((s) => ({ ...s, [providerId]: 'saved' }));
+        setKeys((k) => ({ ...k, [providerId]: '' }));
+        setTimeout(() => setStatuses((s) => ({ ...s, [providerId]: 'idle' })), 2500);
+      } catch (err) {
+        setStatuses((s) => ({ ...s, [providerId]: 'error' }));
+        setErrors((e) => ({ ...e, [providerId]: String(err) }));
+      }
+    },
+    [keys],
+  );
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-1">API Keys (BYOK)</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Enter your own API keys for each AI provider. Keys are encrypted and stored locally.
+      </p>
+      <div className="rounded-lg border border-border bg-card divide-y divide-border">
+        {BYOK_PROVIDERS.map(({ id, name, placeholder }) => {
+          const status = statuses[id] ?? 'idle';
+          return (
+            <div key={id} className="flex items-center gap-3 px-4 py-3">
+              <span className="w-36 shrink-0 text-sm font-medium">{name}</span>
+              <input
+                type="password"
+                value={keys[id] ?? ''}
+                onChange={(e) => setKeys((k) => ({ ...k, [id]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleSave(id);
+                }}
+                placeholder={placeholder}
+                className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <button
+                type="button"
+                disabled={!keys[id]?.trim() || status === 'saving'}
+                onClick={() => void handleSave(id)}
+                className="shrink-0 h-8 px-3 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {status === 'saving' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : status === 'saved' ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  'Save'
+                )}
+              </button>
+              {errors[id] && <p className="absolute text-xs text-destructive mt-1">{errors[id]}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function stableSerialize(value: unknown): string {
   const sortRecursively = (input: unknown): unknown => {
@@ -769,23 +849,15 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   )}
 
                   {/* Connectors Tab */}
-                  {activeTab === 'connectors' && (
-                    <>
-                      <ConnectorsGallery />
-                      <div className="pt-6 border-t border-border">
-                        <OAuthCredentialsPanel />
-                      </div>
-                    </>
-                  )}
+                  {activeTab === 'connectors' && <ConnectorsGallery />}
 
                   {/* API Keys Tab */}
                   {activeTab === 'api-keys' && (
                     <>
-                      <div>
-                        <h3 className="text-lg font-semibold mb-4">AI Provider</h3>
-                        <p className="text-sm text-muted-foreground mb-6">
-                          Your AI requests are handled through your subscription plan
-                        </p>
+                      <BYOKApiKeysSection />
+
+                      <div className="pt-6 border-t border-border">
+                        <h3 className="text-lg font-semibold mb-4">Local Models</h3>
                         <div className="space-y-6">
                           <div className="rounded-lg border border-border bg-card p-6">
                             <div className="flex items-start justify-between gap-4">
@@ -891,7 +963,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
                           <FavoriteModelsSelector />
                           <CustomModelsSettings />
-                          <TaskRoutingSettings />
                         </div>
                       </div>
 

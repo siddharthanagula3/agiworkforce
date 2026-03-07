@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, isTauri } from '@/lib/tauri-mock';
+import { invoke, isTauri, listen } from '@/lib/tauri-mock';
 
 export interface AgentStatus {
   id: string;
@@ -387,7 +387,6 @@ export async function initializeAgentStatusListener() {
 
   try {
     await bootstrapAgentStatuses();
-    const { listen } = await import('@tauri-apps/api/event');
     await listen<AgentStatusPayload>('agent:status:update', (event) => {
       applyAgentStatusUpdate(event.payload);
     });
