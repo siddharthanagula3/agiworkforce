@@ -1,3 +1,6 @@
+// SAFETY: UI Automation tree traversal requires unsafe COM FFI calls.
+#![allow(unsafe_code)]
+
 use super::*;
 
 use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
