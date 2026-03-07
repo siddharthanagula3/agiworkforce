@@ -340,7 +340,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
             />
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+          <div className="rounded-lg border border-border bg-[#222222] p-3 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Capabilities
             </p>
@@ -490,7 +490,7 @@ export function CustomModelsSettings() {
           {customModels.map((model) => (
             <div
               key={model.id}
-              className="rounded-lg border border-border bg-card p-4 flex items-center gap-4"
+              className="rounded-lg border border-border bg-[#242424] p-4 flex items-center gap-4"
             >
               <div className="rounded-md bg-muted p-2 shrink-0">
                 <Server className="h-4 w-4 text-muted-foreground" />

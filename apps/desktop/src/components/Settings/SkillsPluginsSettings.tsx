@@ -151,7 +151,7 @@ function SectionHeader({
 }) {
   return (
     <button
-      className="flex items-center justify-between w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors"
+      className="flex items-center justify-between w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors"
       onClick={onToggle}
     >
       <div className="flex items-center gap-2">
@@ -198,7 +198,7 @@ function PluginRow({
   return (
     <div className="border-b border-border last:border-0">
       <button
-        className="flex items-start gap-3 w-full text-left px-4 py-3 hover:bg-muted/20 transition-colors"
+        className="flex items-start gap-3 w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
         <Package className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -318,7 +318,7 @@ function EntryRow({
 }) {
   const displayName = entry.name.replace(/\.(md|mdc|yaml|yml)$/, '');
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
       <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium">
@@ -625,7 +625,7 @@ export function SkillsPluginsSettings() {
       </div>
 
       {isNonTauri && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card rounded-md p-3">
           <AlertCircle className="h-4 w-4 shrink-0" />
           Plugin discovery requires the desktop app.
         </div>

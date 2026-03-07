@@ -213,7 +213,10 @@ export class StripeService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('Billing feature is not enabled')) {
+      const isBillingUnconfigured =
+        message.includes('Billing feature is not enabled') ||
+        message.includes('Stripe service not initialized');
+      if (isBillingUnconfigured) {
         // Common in dev/local builds where billing/Stripe integration isn't configured.
         if (import.meta.env.DEV) {
           console.debug('[StripeService] Usage unavailable (billing disabled)');

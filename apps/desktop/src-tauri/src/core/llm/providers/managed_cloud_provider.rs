@@ -683,6 +683,19 @@ impl LLMProvider for ManagedCloudProvider {
                 std::io::ErrorKind::PermissionDenied,
                 auth_failed_message(),
             ))),
+            403 => {
+                let mut detail_suffix = String::new();
+                if let Some(detail) = Self::extract_error_detail(res).await {
+                    detail_suffix = format!(": {}", detail);
+                }
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!(
+                        "API key rejected (403 Forbidden). Check your API key in Settings \u{2192} Models for the selected provider{}",
+                        detail_suffix
+                    ),
+                )))
+            }
             405 => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::ConnectionRefused,
                 method_not_allowed_message(),
@@ -761,6 +774,18 @@ impl LLMProvider for ManagedCloudProvider {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
                     auth_failed_message(),
+                )));
+            } else if status == 403 {
+                let mut detail_suffix = String::new();
+                if let Some(detail) = Self::extract_error_detail(res).await {
+                    detail_suffix = format!(": {}", detail);
+                }
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!(
+                        "API key rejected (403 Forbidden). Check your API key in Settings \u{2192} Models for the selected provider{}",
+                        detail_suffix
+                    ),
                 )));
             } else if status == 405 {
                 return Err(Box::new(std::io::Error::new(

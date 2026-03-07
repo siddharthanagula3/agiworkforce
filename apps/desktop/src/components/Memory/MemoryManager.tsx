@@ -182,11 +182,11 @@ export const MemoryManager = memo(function MemoryManager({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-zinc-700">
+      <div className="flex items-center justify-between pb-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-blue-400" />
-          <h2 className="text-lg font-semibold text-white">Memory Manager</h2>
-          <span className="text-sm text-zinc-400">({memories.length} memories)</span>
+          <Brain className="h-5 w-5 text-foreground" />
+          <h2 className="text-lg font-semibold text-foreground">Memory Manager</h2>
+          <span className="text-sm text-muted-foreground">({memories.length} memories)</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ export const MemoryManager = memo(function MemoryManager({
                 size="sm"
                 onClick={handleExport}
                 disabled={memories.length === 0}
-                className="h-8 text-zinc-400 hover:text-white"
+                className="h-8 text-muted-foreground hover:text-foreground"
                 title="Export memories as JSON"
               >
                 <Download className="h-4 w-4 mr-1" />
@@ -211,7 +211,7 @@ export const MemoryManager = memo(function MemoryManager({
             size="sm"
             onClick={handleRefresh}
             disabled={isLoading}
-            className="h-8 text-zinc-400 hover:text-white"
+            className="h-8 text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className={cn('h-4 w-4 mr-1', isLoading && 'animate-spin')} />
             Refresh
@@ -228,13 +228,13 @@ export const MemoryManager = memo(function MemoryManager({
           placeholder="Search by topic, content, or category..."
         />
         <Select value={sortBy} onValueChange={handleSortChange}>
-          <SelectTrigger className="w-[180px] bg-zinc-800 border-zinc-700 text-white">
+          <SelectTrigger className="w-[180px]">
             <ArrowUpDown className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
-          <SelectContent className="bg-zinc-800 border-zinc-700">
+          <SelectContent>
             {SORT_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value} className="text-white">
+              <SelectItem key={option.value} value={option.value}>
                 <div className="flex items-center gap-2">
                   {option.icon}
                   {option.label}
@@ -265,15 +265,15 @@ export const MemoryManager = memo(function MemoryManager({
 
       {/* Tabs and Content */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-        <TabsList className="w-full justify-start bg-zinc-800 border-b border-zinc-700 rounded-none">
+        <TabsList className="w-full justify-start bg-card border-b border-border rounded-none">
           {TAB_OPTIONS.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="flex items-center gap-1.5 data-[state=active]:bg-zinc-700 text-zinc-300 data-[state=active]:text-white"
+              className="flex items-center gap-1.5 data-[state=active]:bg-background text-muted-foreground data-[state=active]:text-foreground"
             >
               {tab.label}
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-400">
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
                 {categoryCounts[tab.value]}
               </span>
             </TabsTrigger>
@@ -322,11 +322,11 @@ function EmptyState({
   if (query) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
-          <Brain className="h-6 w-6 text-zinc-500" />
+        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Brain className="h-6 w-6 text-muted-foreground" />
         </div>
-        <h3 className="font-medium text-white mb-1">No matching memories</h3>
-        <p className="text-sm text-zinc-400 max-w-sm">
+        <h3 className="font-medium text-foreground mb-1">No matching memories</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
           No memories found matching &quot;{query}&quot;. Try a different search term.
         </p>
       </div>
@@ -336,11 +336,11 @@ function EmptyState({
   if (!hasMemories) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
-          <Brain className="h-6 w-6 text-zinc-500" />
+        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Brain className="h-6 w-6 text-muted-foreground" />
         </div>
-        <h3 className="font-medium text-white mb-1">No memories yet</h3>
-        <p className="text-sm text-zinc-400 max-w-sm">
+        <h3 className="font-medium text-foreground mb-1">No memories yet</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
           Start saving memories to help AGI Workforce remember important details across sessions.
         </p>
       </div>
@@ -357,11 +357,11 @@ function EmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
-        <Brain className="h-6 w-6 text-zinc-500" />
+      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+        <Brain className="h-6 w-6 text-muted-foreground" />
       </div>
-      <h3 className="font-medium text-white mb-1">No {categoryLabels[category]}</h3>
-      <p className="text-sm text-zinc-400 max-w-sm">
+      <h3 className="font-medium text-foreground mb-1">No {categoryLabels[category]}</h3>
+      <p className="text-sm text-muted-foreground max-w-sm">
         No {categoryLabels[category]} found. Create one to help remember important details.
       </p>
     </div>
