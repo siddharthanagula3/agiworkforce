@@ -84,7 +84,7 @@ export function AgentsSettings() {
 
             <div className="space-y-2">
               {/* Ask before actions */}
-              <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+              <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
                 <input
                   type="radio"
                   name="approvalMode"
@@ -105,7 +105,7 @@ export function AgentsSettings() {
               </label>
 
               {/* Auto-approve safe */}
-              <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+              <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
                 <input
                   type="radio"
                   name="approvalMode"

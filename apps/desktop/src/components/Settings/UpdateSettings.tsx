@@ -52,19 +52,19 @@ export function UpdateSettings() {
         return {
           title: 'Checking for Updates...',
           description: 'Please wait while we check for available updates.',
-          icon: <Loader2 className="h-6 w-6 text-primary animate-spin" />,
+          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
         };
       case 'available':
         return {
           title: 'Update Available',
           description: `Version ${updateInfo?.version} is available for download.`,
-          icon: <Download className="h-6 w-6 text-primary" />,
+          icon: <Download className="h-6 w-6 text-muted-foreground" />,
         };
       case 'downloading':
         return {
           title: 'Downloading Update...',
           description: `Downloading version ${updateInfo?.version}... ${downloadProgress?.percent || 0}%`,
-          icon: <Loader2 className="h-6 w-6 text-primary animate-spin" />,
+          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
         };
       case 'downloaded':
         return {
@@ -76,7 +76,7 @@ export function UpdateSettings() {
         return {
           title: 'Installing Update...',
           description: 'Restarting the application to apply the update.',
-          icon: <Loader2 className="h-6 w-6 text-primary animate-spin" />,
+          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
         };
       case 'error':
         return {
@@ -108,7 +108,7 @@ export function UpdateSettings() {
       {/* Update Status Card */}
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-start gap-4">
-          <div className="rounded-md bg-primary/10 p-3">{statusInfo.icon}</div>
+          <div className="rounded-md bg-muted p-3">{statusInfo.icon}</div>
           <div className="flex-1 space-y-4">
             <div>
               <h4 className="font-semibold mb-1">{statusInfo.title}</h4>

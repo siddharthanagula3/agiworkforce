@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { Menu, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useChatStore, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
@@ -13,9 +14,85 @@ import {
   ArtifactsToggleButton,
 } from '@features/chat/components/artifacts/ArtifactsPanel';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { useModelStore } from '@shared/stores/model-store';
+import { useModelStore, AVAILABLE_MODELS } from '@shared/stores/model-store';
 import { ChatAIService } from '@features/chat/services/chat-ai-service';
 import { logger } from '@shared/lib/logger';
+
+const POPULAR_MODEL_IDS = [
+  'claude-sonnet-4-6',
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gemini-2.0-flash',
+  'claude-haiku-4-5-20251001',
+  'deepseek-chat',
+  'mistral-large-latest',
+];
+
+function ModelSelectorButton({
+  selectedModelId,
+  onSelect,
+}: {
+  selectedModelId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const popularModels = AVAILABLE_MODELS.filter((m) => POPULAR_MODEL_IDS.includes(m.id));
+  const currentModel = AVAILABLE_MODELS.find((m) => m.id === selectedModelId);
+  const displayName = currentModel?.name ?? selectedModelId;
+  const truncated = displayName.length > 20 ? displayName.slice(0, 20) + '…' : displayName;
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return undefined;
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 hover:border-border transition-colors"
+        aria-label="Select model"
+      >
+        <span>{truncated}</span>
+        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+          {popularModels.map((model) => (
+            <button
+              key={model.id}
+              onClick={() => {
+                onSelect(model.id);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs hover:bg-muted/60 transition-colors"
+            >
+              <Check
+                className={cn(
+                  'h-3 w-3 shrink-0',
+                  model.id === selectedModelId ? 'text-primary' : 'opacity-0',
+                )}
+              />
+              <div className="min-w-0 text-left">
+                <div className="truncate font-medium text-foreground">{model.name}</div>
+                <div className="truncate text-[10px] text-muted-foreground">{model.provider}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ChatSessionPage() {
   const router = useRouter();
@@ -53,6 +130,7 @@ export default function ChatSessionPage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('chat-sidebar-collapsed') === 'true';
   });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -274,9 +352,45 @@ export default function ChatSessionPage() {
 
   const hasMessages = messages.length > 0;
 
+  const currentSession = sessions.find((s) => s.id === sessionId);
+  const sessionTitle = currentSession?.title || 'New Chat';
+
   return (
     <div className="flex h-full overflow-hidden bg-[#faf9f7] dark:bg-[#0f0f13]">
-      {/* Sidebar — desktop only (hidden on mobile) */}
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile sidebar */}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex flex-col lg:hidden w-[280px] shadow-2xl bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07] transform transition-transform duration-200 ease-in-out',
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <ChatSidebarNew
+          sessions={sessions}
+          activeSessionId={sessionId}
+          onNewChat={() => {
+            setMobileSidebarOpen(false);
+            handleNewChat();
+          }}
+          onSelectSession={(id) => {
+            setMobileSidebarOpen(false);
+            router.push(`/chat/${id}`);
+          }}
+          onDeleteSession={handleDeleteSession}
+          onRenameSession={renameSession}
+          onToggleSidebar={() => setMobileSidebarOpen(false)}
+          collapsed={false}
+        />
+      </div>
+
+      {/* Desktop sidebar */}
       <aside
         className={cn(
           'hidden lg:flex lg:flex-col shrink-0 transition-[width] duration-200 ease-in-out',
@@ -302,6 +416,24 @@ export default function ChatSessionPage() {
 
       {/* Main chat area */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Sticky header bar — mobile hamburger + session title + model selector */}
+        <div className="flex items-center gap-2 border-b border-black/[0.06] dark:border-white/[0.06] px-3 py-2 sticky top-0 z-10 bg-[#faf9f7] dark:bg-[#0f0f13]">
+          <button
+            onClick={() => setMobileSidebarOpen(true)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors lg:hidden"
+            aria-label="Open sidebar"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <ModelSelectorButton
+            selectedModelId={selectedModelId}
+            onSelect={(id) => useModelStore.getState().setSelectedModelId(id)}
+          />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+            {sessionTitle}
+          </span>
+        </div>
+
         {hasMessages ? (
           <>
             {/* Message list */}

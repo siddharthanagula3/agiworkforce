@@ -138,7 +138,7 @@ export const CreateMemoryDialog = memo(function CreateMemoryDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
+            <Brain className="h-5 w-5 text-foreground" />
             Create Memory
           </DialogTitle>
           <DialogDescription>
