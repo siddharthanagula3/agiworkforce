@@ -48,6 +48,7 @@ import type { Artifact, ResearchTask } from '../../types/chat';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { toast } from '../../hooks/useToast';
+import { toast as sonnerToast } from 'sonner';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import {
@@ -1725,6 +1726,13 @@ export const UnifiedAgenticChat: React.FC<{
               streaming: true,
             },
           });
+        }),
+      );
+
+      // Agent mode tool-blocked events — notify user when a tool is blocked by the current mode
+      registerListener(
+        listen<{ tool_name: string; mode: string }>('tool:blocked_by_mode', ({ payload }) => {
+          sonnerToast.error(`Tool "${payload.tool_name}" is blocked in Safe mode`);
         }),
       );
     };
