@@ -603,6 +603,153 @@ pub fn project_context_list_files_internal_sync(
     Ok(files)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Project instruction file auto-load  (CLAUDE.md / AGENTS.md / MEMORY.md)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Names of instruction files we look for, in priority order.
+/// First found wins (per directory level).
+const INSTRUCTION_FILE_NAMES: &[&str] = &[
+    "CLAUDE.md",
+    "AGENTS.md",
+    "MEMORY.md",
+    ".cursorrules",
+    "COPILOT_INSTRUCTIONS.md",
+];
+
+/// A loaded project instruction file.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectInstructionFile {
+    /// Absolute path to the file.
+    pub path: String,
+    /// Filename (e.g. "CLAUDE.md").
+    pub filename: String,
+    /// Full content of the file.
+    pub content: String,
+    /// Source scope ("workspace" | "global").
+    pub scope: String,
+}
+
+/// Load project instruction files (CLAUDE.md / AGENTS.md / MEMORY.md) from:
+/// 1. The active project folder (workspace-local, highest priority)
+/// 2. `~/.config/agiworkforce/` (global fallback)
+/// 3. `~/.claude/` (Claude Code compatibility)
+/// 4. `~/.codex/` (Codex compatibility)
+///
+/// This mirrors OpenCode's behaviour of injecting `AGENTS.md` as agent context.
+/// The caller (LLM router / context builder) should prepend these contents to
+/// the system prompt so the agent understands the project's conventions.
+#[tauri::command]
+pub async fn project_load_instructions(
+    state: tauri::State<'_, ProjectContextState>,
+) -> Result<Vec<ProjectInstructionFile>, String> {
+    let folder = state.get_folder().await;
+    let mut results: Vec<ProjectInstructionFile> = Vec::new();
+
+    // 1. Workspace-local — walk from project root up to git root (max 5 levels).
+    if let Some(ref project_dir) = folder {
+        let mut current = PathBuf::from(project_dir);
+        let mut levels = 0;
+        loop {
+            for name in INSTRUCTION_FILE_NAMES {
+                let candidate = current.join(name);
+                if candidate.is_file() {
+                    if let Ok(content) = std::fs::read_to_string(&candidate) {
+                        if !content.trim().is_empty() {
+                            // Avoid duplicates (same path already added from a child dir).
+                            let path_str = candidate.to_string_lossy().to_string();
+                            if !results.iter().any(|r| r.path == path_str) {
+                                results.push(ProjectInstructionFile {
+                                    path: path_str,
+                                    filename: name.to_string(),
+                                    content,
+                                    scope: "workspace".to_string(),
+                                });
+                            }
+                        }
+                    }
+                    break; // Only one file per directory level.
+                }
+            }
+
+            // Stop at git root or after 5 levels.
+            if current.join(".git").exists() || levels >= 5 {
+                break;
+            }
+
+            match current.parent() {
+                Some(p) => {
+                    current = p.to_path_buf();
+                    levels += 1;
+                }
+                None => break,
+            }
+        }
+    }
+
+    // 2. Global config directories.
+    let global_dirs: Vec<(PathBuf, &str)> = {
+        let mut dirs = Vec::new();
+        if let Some(home) = dirs::home_dir() {
+            dirs.push((home.join(".config").join("agiworkforce"), "global"));
+            dirs.push((home.join(".claude"), "global"));
+            dirs.push((home.join(".codex"), "global"));
+        }
+        dirs
+    };
+
+    for (dir, scope) in &global_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+        for name in INSTRUCTION_FILE_NAMES {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                if let Ok(content) = std::fs::read_to_string(&candidate) {
+                    if !content.trim().is_empty() {
+                        let path_str = candidate.to_string_lossy().to_string();
+                        if !results.iter().any(|r| r.path == path_str) {
+                            results.push(ProjectInstructionFile {
+                                path: path_str,
+                                filename: name.to_string(),
+                                content,
+                                scope: scope.to_string(),
+                            });
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    info!(
+        "[project_load_instructions] loaded {} instruction file(s)",
+        results.len()
+    );
+
+    Ok(results)
+}
+
+/// Check whether a project instruction file exists in the current project folder.
+/// Useful for the frontend to show a badge or prompt the user to create one.
+#[tauri::command]
+pub async fn project_has_instructions(
+    state: tauri::State<'_, ProjectContextState>,
+) -> Result<bool, String> {
+    let folder = state.get_folder().await;
+    if let Some(ref dir) = folder {
+        let root = PathBuf::from(dir);
+        for name in INSTRUCTION_FILE_NAMES {
+            if root.join(name).is_file() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

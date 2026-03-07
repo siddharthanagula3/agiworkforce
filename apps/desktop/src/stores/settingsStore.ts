@@ -29,7 +29,15 @@ import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
 export type Language = 'en' | 'es';
-export type AgentMode = 'safe' | 'build' | 'autopilot';
+/**
+ * Agent operating modes:
+ * - 'safe'     — minimal tool use, always confirms before acting
+ * - 'plan'     — READ-ONLY: reads files, searches, analyses, but NEVER writes/edits/executes.
+ *                Shows a plan before asking user to switch to 'build' to apply it.
+ * - 'build'    — full tool access, can write/edit files and run shell commands (default)
+ * - 'autopilot'— full tool access, skips all confirmation dialogs
+ */
+export type AgentMode = 'safe' | 'plan' | 'build' | 'autopilot';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
 
@@ -633,7 +641,11 @@ export const useSettingsStore = create<SettingsState>()(
               chatPreferences: {
                 ...state.chatPreferences,
                 agentMode: mode,
+                // autopilot skips all confirmations; plan mode forces read-only
                 autoApproveTools: mode === 'autopilot',
+                // plan mode implies "always use agent mode" so the LLM can explore
+                alwaysUseAgentMode:
+                  mode === 'plan' ? true : state.chatPreferences.alwaysUseAgentMode,
               },
             }),
             undefined,
