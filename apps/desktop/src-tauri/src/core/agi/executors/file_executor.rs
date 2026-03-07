@@ -88,8 +88,15 @@ impl FileExecutor {
 
         // SECURITY: Canonicalize the path to resolve symlinks and prevent path traversal attacks
         // This converts relative paths to absolute and resolves "..", ".", and symlinks
-        let canonical_path = std::fs::canonicalize(path)
-            .map_err(|e| anyhow!("Invalid or inaccessible path '{}': {}", path.display(), e))?;
+        let canonical_path = std::fs::canonicalize(path).map_err(|e| {
+            // Log full details internally; return generic message to avoid leaking filesystem structure
+            tracing::error!(
+                "[FileExecutor] Failed to canonicalize path '{}': {}",
+                path.display(),
+                e
+            );
+            anyhow!("Invalid or inaccessible path")
+        })?;
 
         // SECURITY: Validate the canonicalized path is within allowed directories
         // This prevents path traversal attacks like "../../../etc/passwd"
