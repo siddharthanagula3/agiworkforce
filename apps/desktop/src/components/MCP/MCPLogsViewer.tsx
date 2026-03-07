@@ -92,7 +92,7 @@ export function MCPLogsViewer({ serverName, open, onClose }: MCPLogsViewerProps)
           <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded">{error}</div>
         )}
 
-        <ScrollArea className="flex-1 border rounded-md bg-muted/30 p-4">
+        <ScrollArea className="flex-1 border rounded-md bg-[#2a2a2a] p-4">
           {loading && logs.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />

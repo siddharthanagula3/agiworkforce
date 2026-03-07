@@ -1,6 +1,7 @@
-import { View, Pressable } from 'react-native';
+import { useState } from 'react';
+import { View, Pressable, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Settings, Smartphone } from 'lucide-react-native';
+import { Settings, Smartphone, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { SidebarHeader } from './SidebarHeader';
 import { ConversationList } from './ConversationList';
@@ -11,10 +12,34 @@ import { colors } from '@/lib/theme';
  * Renders inside expo-router Drawer as the drawerContent prop.
  */
 export function SidebarContent() {
+  const [searchQuery, setSearchQuery] = useState('');
+
   return (
     <View className="flex-1" style={{ backgroundColor: '#131514' }}>
       <SidebarHeader />
-      <ConversationList />
+      <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.06)',
+            borderRadius: 10,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            gap: 8,
+          }}
+        >
+          <Search size={15} color="rgba(255,255,255,0.3)" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search conversations..."
+            placeholderTextColor="rgba(255,255,255,0.25)"
+            style={{ flex: 1, color: 'white', fontSize: 14 }}
+          />
+        </View>
+      </View>
+      <ConversationList searchQuery={searchQuery} />
       <SidebarFooter />
     </View>
   );

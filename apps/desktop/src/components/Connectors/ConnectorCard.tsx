@@ -72,7 +72,7 @@ export function ConnectorCard({
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                   aria-label="Connector options"
                 >
                   <MoreHorizontal className="h-4 w-4" />
@@ -80,7 +80,7 @@ export function ConnectorCard({
               </PopoverTrigger>
               <PopoverContent align="end" className="w-40 p-1">
                 <button
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent transition-colors"
                   onClick={onConfigure ?? onConnect}
                 >
                   <Settings className="h-3.5 w-3.5" />
@@ -99,7 +99,7 @@ export function ConnectorCard({
           <button
             onClick={onConnect}
             className="flex items-center justify-center h-7 w-7 rounded-full border border-border
-              hover:bg-muted hover:border-foreground/20 transition-colors text-muted-foreground hover:text-foreground"
+              hover:bg-accent hover:border-foreground/20 transition-colors text-muted-foreground hover:text-foreground"
             aria-label={`Connect ${connector.name}`}
           >
             <Plus className="h-3.5 w-3.5" />
