@@ -46,6 +46,7 @@ import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
 import { AttachmentPreview } from './AttachmentPreview';
 import { ContextDisplay } from './ContextDisplay';
 import { DragOverlay } from './DragOverlay';
+import { AgentModeSwitcher } from './AgentModeSwitcher';
 import { FocusModeButtons, getFocusModePlaceholder } from './FocusModeButtons';
 import { InputFooter } from './InputFooter';
 import { InlineSuggestion } from './InlineSuggestion';
@@ -1409,6 +1410,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           {/* Toolbar row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             <div className="flex items-center gap-1">
+              <AgentModeSwitcher />
               <PlusMenu
                 disabled={isAttachmentInteractionDisabled}
                 onAttachClick={() => fileInputRef.current?.click()}
