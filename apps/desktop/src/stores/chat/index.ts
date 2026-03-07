@@ -108,6 +108,7 @@ export {
   selectNonArchivedConversations,
   selectPinnedConversations,
   selectToolTimelineByMessage,
+  selectThinkingByMessage,
   selectAgenticLoopStatus,
   dbIdToUuid,
   uuidToDbId,
