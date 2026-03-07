@@ -182,6 +182,23 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 admin security actions per minute
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  // Session sharing endpoints
+  'share-create': {
+    limit: 5,
+    window: '1 m', // 5 share creations per minute (prevents share spam)
+    failClosed: false,
+  },
+  'share-view': {
+    limit: 60,
+    window: '1 m', // 60 share views per minute (public read endpoint)
+    failClosed: false,
+  },
+  // GitHub webhook endpoint
+  'github-webhook': {
+    limit: 200,
+    window: '1 m', // 200 webhook events per minute per IP (generous for real GitHub traffic)
+    failClosed: false, // Allow webhooks through if Redis fails - business critical
+  },
   // Stripe webhook endpoint - generous limit since real Stripe events are legitimate
   'stripe-webhook': {
     limit: 100,
