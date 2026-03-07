@@ -36,14 +36,24 @@ import {
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import type { ChatSession } from '../../stores/chat-store';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
+/** Minimal session shape accepted by ChatSidebar — compatible with both chat-store.ChatSession and shared/types.ChatSession */
+export interface SessionLike {
+  id: string;
+  title: string;
+  preview?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  messageCount?: number;
+  userId?: string;
+}
+
 export interface ChatSidebarProps {
-  sessions: ChatSession[];
+  sessions: SessionLike[];
   activeSessionId?: string;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
@@ -77,14 +87,14 @@ function getTimeGroup(date: Date): string {
 
 const GROUP_ORDER = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
 
-function groupSessions(sessions: ChatSession[]): Map<string, ChatSession[]> {
-  const groups = new Map<string, ChatSession[]>();
+function groupSessions(sessions: SessionLike[]): Map<string, SessionLike[]> {
+  const groups = new Map<string, SessionLike[]>();
   for (const key of GROUP_ORDER) {
     groups.set(key, []);
   }
   for (const session of sessions) {
-    const d =
-      session.updatedAt instanceof Date ? session.updatedAt : new Date(session.updatedAt || 0);
+    const raw = session.updatedAt;
+    const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
     const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
     const group = getTimeGroup(safeDate);
     const arr = groups.get(group);
@@ -107,7 +117,7 @@ const SessionItem = React.memo(function SessionItem({
   onDelete,
   onRename,
 }: {
-  session: ChatSession;
+  session: SessionLike;
   isActive: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
@@ -133,8 +143,8 @@ const SessionItem = React.memo(function SessionItem({
   }, [renameValue, session.title, session.id, onRename]);
 
   const timestamp = useMemo(() => {
-    const d =
-      session.updatedAt instanceof Date ? session.updatedAt : new Date(session.updatedAt || 0);
+    const raw = session.updatedAt;
+    const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
     if (isNaN(d.getTime())) return '';
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
