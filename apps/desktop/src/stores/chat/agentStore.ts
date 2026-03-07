@@ -69,7 +69,9 @@ function evictStaleBackgroundTasks(tasks: BackgroundTask[]): BackgroundTask[] {
     if (t.status !== 'completed' && t.status !== 'failed') {
       return true;
     }
-    const completedTime = t.completedAt?.getTime() ?? t.createdAt.getTime();
+    const completedTime = t.completedAt
+      ? new Date(t.completedAt).getTime()
+      : new Date(t.createdAt).getTime();
     return completedTime > cutoff;
   });
 }

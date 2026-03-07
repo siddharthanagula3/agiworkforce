@@ -34,15 +34,22 @@ const secureStorage = {
   },
 };
 
-const supabaseClient = createClient<Database>(supabaseUrl || '', supabaseAnonKey || '', {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',
-    storage: secureStorage,
+// Use a placeholder URL when env vars are missing so createClient doesn't throw
+// at module load time (empty string is rejected by the Supabase SDK).
+// All auth operations will fail gracefully at call-time instead of at startup.
+const supabaseClient = createClient<Database>(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
+      storage: secureStorage,
+    },
   },
-});
+);
 
 export const supabase = supabaseClient;
 
