@@ -125,18 +125,15 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
       {/* Right: content */}
       <div className={cn('flex-1 min-w-0', isLast ? 'pb-0' : compact ? 'pb-2' : 'pb-3')}>
         {/* Row: badge + label + duration */}
-        <div
-          className={cn('flex flex-wrap items-center gap-1.5', hasDetails && 'cursor-pointer')}
+        <button
+          type="button"
+          className={cn(
+            'flex flex-wrap items-center gap-1.5 w-full text-left',
+            hasDetails ? 'cursor-pointer' : 'cursor-default',
+          )}
           onClick={hasDetails ? () => setExpanded((v) => !v) : undefined}
-          role={hasDetails ? 'button' : undefined}
-          tabIndex={hasDetails ? 0 : undefined}
-          onKeyDown={
-            hasDetails
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setExpanded((v) => !v);
-                }
-              : undefined
-          }
+          disabled={!hasDetails}
+          tabIndex={hasDetails ? 0 : -1}
         >
           {/* Agent type badge */}
           <span
@@ -176,7 +173,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
               <ChevronDown className="w-3 h-3" />
             </motion.div>
           )}
-        </div>
+        </button>
 
         {/* Details (expandable) */}
         <AnimatePresence initial={false}>
@@ -211,13 +208,13 @@ export function AgentStepTimeline({ steps, compact = false }: AgentStepTimelineP
   if (steps.length === 0) return null;
 
   return (
-    <div className={cn('flex flex-col', compact ? 'gap-0' : 'gap-0')}>
+    <div className={cn('flex flex-col', 'gap-0')}>
       {steps.map((step, index) => (
         <motion.div
           key={step.id}
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.2, delay: index * 0.04 }}
+          transition={{ duration: 0.2, delay: Math.min(index * 0.05, 0.5) }}
         >
           <StepItem step={step} isLast={index === steps.length - 1} compact={compact} />
         </motion.div>

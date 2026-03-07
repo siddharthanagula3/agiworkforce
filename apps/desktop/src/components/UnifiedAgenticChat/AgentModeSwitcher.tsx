@@ -1,3 +1,4 @@
+import { type ElementType } from 'react';
 import { Lock, Hammer, Zap, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -6,7 +7,7 @@ import type { AgentMode } from '../../stores/settingsStore';
 const modes: Array<{
   id: AgentMode;
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
   color: 'emerald' | 'violet' | 'blue' | 'amber';
   description: string;
 }> = [
@@ -74,13 +75,18 @@ export function AgentModeSwitcher() {
   const setAgentMode = useSettingsStore((state) => state.setAgentMode);
 
   const handleModeChange = async (mode: AgentMode) => {
-    if (mode === 'autopilot') {
-      toast.warning('Autopilot mode: all tools are auto-approved. Use with caution.');
+    try {
+      if (mode === 'autopilot') {
+        toast.warning('Autopilot mode: all tools are auto-approved. Use with caution.');
+      }
+      if (mode === 'plan') {
+        toast.info('Plan mode: the agent will analyse and plan — no files will be written.');
+      }
+      await setAgentMode(mode);
+    } catch (err) {
+      console.error('[AgentModeSwitcher] Failed to change agent mode:', err);
+      toast.error('Failed to switch agent mode. Please try again.');
     }
-    if (mode === 'plan') {
-      toast.info('Plan mode: the agent will analyse and plan — no files will be written.');
-    }
-    await setAgentMode(mode);
   };
 
   return (

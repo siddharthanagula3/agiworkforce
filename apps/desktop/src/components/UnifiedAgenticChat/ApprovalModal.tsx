@@ -33,6 +33,17 @@ export const ApprovalModal = () => {
 
   const currentApproval = pendingApprovals.find((a) => a.status === 'pending');
 
+  // BUG-AM-001 fix: track whether the current approval has already been
+  // resolved so that stale timeout callbacks cannot trigger a second rejection.
+  const isResolved = useRef(false);
+
+  // BUG-AM-001 fix: reset isResolved whenever the active approval changes.
+  // BUG-AM-006 fix: also reset alwaysAllow whenever the active approval changes.
+  useEffect(() => {
+    isResolved.current = false;
+    setAlwaysAllow(false);
+  }, [currentApproval?.id]);
+
   // Calculate timeout
   const timeoutSeconds = useMemo(() => {
     if (!currentApproval) return null;
@@ -44,9 +55,12 @@ export const ApprovalModal = () => {
 
   // Handle timeout rejection - memoized to be stable for use in effect
   const handleTimeoutReject = useCallback(async () => {
+    // BUG-AM-001 fix: bail out if the approval was already resolved by the user.
+    if (isResolved.current) return;
     if (!currentApproval || isRejecting || isApproving) return;
     if (timeoutRejectInProgressRef.current) return;
 
+    isResolved.current = true;
     timeoutRejectInProgressRef.current = true;
     setIsRejecting(true);
     try {
@@ -71,6 +85,68 @@ export const ApprovalModal = () => {
       timeoutRejectInProgressRef.current = false;
     }
   }, [currentApproval, isRejecting, isApproving, resolveApproval, showError]);
+
+  const handleApprove = useCallback(async () => {
+    if (!currentApproval) return;
+
+    // BUG-AM-001 fix: mark resolved before awaiting so the timeout callback
+    // cannot race and fire a duplicate rejection.
+    isResolved.current = true;
+    setIsApproving(true);
+    try {
+      await resolveApproval(currentApproval, 'approve', { trust: alwaysAllow });
+    } catch (error) {
+      console.error('[ApprovalModal] Failed to approve:', error);
+      showError(
+        'APPROVAL_ERROR',
+        'Failed to approve operation',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+    } finally {
+      setIsApproving(false);
+    }
+  }, [currentApproval, alwaysAllow, resolveApproval, showError]);
+
+  // BUG-AM-003 fix: handleReject is defined before any effect that references
+  // it, and is wrapped in useCallback so the ESC key effect has a stable dep.
+  const handleReject = useCallback(async () => {
+    if (!currentApproval) return;
+
+    // BUG-AM-001 fix: mark resolved before awaiting so the timeout callback
+    // cannot race and fire a duplicate rejection.
+    isResolved.current = true;
+    setIsRejecting(true);
+    try {
+      await resolveApproval(currentApproval, 'reject', {
+        reason: 'User rejected from approval modal',
+      });
+    } catch (error) {
+      console.error('[ApprovalModal] Failed to reject:', error);
+      showError(
+        'APPROVAL_ERROR',
+        'Failed to reject operation',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [currentApproval, resolveApproval, showError]);
+
+  // BUG-AM-003 fix: treat ESC key as an explicit rejection so the user gets
+  // feedback (the dialog stays open until the rejection resolves, then closes
+  // naturally when the approval is removed from pendingApprovals).
+  useEffect(() => {
+    if (!currentApproval) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isRejecting && !isApproving) {
+        void handleReject();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [currentApproval, isRejecting, isApproving, handleReject]);
 
   // Initialize and run countdown timer
   useEffect(() => {
@@ -118,46 +194,6 @@ export const ApprovalModal = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleApprove = async () => {
-    if (!currentApproval) return;
-
-    setIsApproving(true);
-    try {
-      await resolveApproval(currentApproval, 'approve', { trust: alwaysAllow });
-      setAlwaysAllow(false);
-    } catch (error) {
-      console.error('[ApprovalModal] Failed to approve:', error);
-      showError(
-        'APPROVAL_ERROR',
-        'Failed to approve operation',
-        error instanceof Error ? error.message : 'Unknown error',
-      );
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!currentApproval) return;
-
-    setIsRejecting(true);
-    try {
-      await resolveApproval(currentApproval, 'reject', {
-        reason: 'User rejected from approval modal',
-      });
-      setAlwaysAllow(false);
-    } catch (error) {
-      console.error('[ApprovalModal] Failed to reject:', error);
-      showError(
-        'APPROVAL_ERROR',
-        'Failed to reject operation',
-        error instanceof Error ? error.message : 'Unknown error',
-      );
-    } finally {
-      setIsRejecting(false);
-    }
   };
 
   const getRiskIcon = (level: string) => {

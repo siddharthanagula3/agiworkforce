@@ -3,26 +3,21 @@ import { EyeOff, Hand, Zap } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
+import { useChatStore } from '../../stores/chat/chatStore';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { QuickModelSelector } from './QuickModelSelector';
 
 export const ChatInputToolbar = () => {
-  const {
-    conversationMode,
-    setConversationMode,
-    createConversation,
-    activeConversationId,
-    conversations,
-  } = useUnifiedChatStore(
-    useShallow((s) => ({
-      conversationMode: s.conversationMode,
-      setConversationMode: s.setConversationMode,
-      createConversation: s.createConversation,
-      activeConversationId: s.activeConversationId,
-      conversations: s.conversations,
-    })),
-  );
+  const { conversationMode, setConversationMode, activeConversationId, conversations } =
+    useUnifiedChatStore(
+      useShallow((s) => ({
+        conversationMode: s.conversationMode,
+        setConversationMode: s.setConversationMode,
+        activeConversationId: s.activeConversationId,
+        conversations: s.conversations,
+      })),
+    );
 
   const activeConvo = conversations.find((c) => c.id === activeConversationId);
   const isIncognito = activeConvo?.incognito ?? false;
@@ -32,13 +27,19 @@ export const ChatInputToolbar = () => {
     setConversationMode(newMode);
   }, [conversationMode, setConversationMode]);
 
+  // BUG-CIT-01 fix: toggle incognito on the current conversation instead of
+  // creating a new one. Uses useChatStore.setState directly since there is no
+  // generic updateConversation action on the store.
   const handleIncognitoToggle = useCallback(() => {
-    if (isIncognito) {
-      createConversation('New chat');
-    } else {
-      createConversation('Incognito chat', { incognito: true });
-    }
-  }, [isIncognito, createConversation]);
+    if (!activeConversationId) return;
+    useChatStore.setState((state) => {
+      const convo = state.conversations.find((c) => c.id === activeConversationId);
+      if (convo) {
+        convo.incognito = !convo.incognito;
+        convo.updatedAt = new Date();
+      }
+    });
+  }, [activeConversationId]);
 
   const isAutoMode = conversationMode === 'auto';
 
@@ -85,6 +86,8 @@ export const ChatInputToolbar = () => {
             isAutoMode && 'bg-emerald-500 hover:bg-emerald-600 text-white',
           )}
           title={isAutoMode ? 'Auto: Agent acts autonomously' : 'Manual: Agent asks permission'}
+          aria-label="Toggle auto mode"
+          aria-pressed={isAutoMode}
         >
           {isAutoMode ? (
             <>

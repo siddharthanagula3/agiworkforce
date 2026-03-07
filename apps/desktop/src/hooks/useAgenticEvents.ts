@@ -1507,10 +1507,12 @@ export function useAgenticEvents() {
         'agi:approval_denied',
         (event) => {
           if (!isMountedRef.current) return;
-          handlersRef.current.rejectOperation(
-            event.payload.approval.id,
-            event.payload.approval.rejectionReason,
-          );
+          const approval = event.payload.approval as typeof event.payload.approval & {
+            rejection_reason?: string;
+          };
+          // BUG-AE-02: Rust may send snake_case rejection_reason; fall back through both forms
+          const reason = approval.rejectionReason ?? approval.rejection_reason ?? 'Approval denied';
+          handlersRef.current.rejectOperation(approval.id, reason);
         },
       );
       push(unlistenApprovalDenied);

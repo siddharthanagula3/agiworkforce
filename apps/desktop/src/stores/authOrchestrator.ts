@@ -151,28 +151,30 @@ let pendingAuthState: AuthState | null = null;
  * This is the core function that coordinates all store updates.
  */
 async function processAuthStateChange(authState: AuthState): Promise<void> {
-  // If already processing, queue this state for after current processing completes
+  // BUG-007 fix: guard check and early returns BEFORE the try/finally so that
+  // early-returning code paths never set isProcessingAuthChange = true and then
+  // skip the finally block that resets it back to false.
   if (isProcessingAuthChange) {
     pendingAuthState = authState;
     console.debug('[AuthOrchestrator] Auth change queued (already processing)');
     return;
   }
 
+  // Skip if still loading - wait for complete state
+  if (authState.isLoading) {
+    console.debug('[AuthOrchestrator] Auth is loading, waiting...');
+    return;
+  }
+
+  // Skip if subscription is still being fetched
+  if (authState.subscriptionFetchStatus === 'fetching') {
+    console.debug('[AuthOrchestrator] Subscription fetch in progress, waiting...');
+    return;
+  }
+
   isProcessingAuthChange = true;
 
   try {
-    // Skip if still loading - wait for complete state
-    if (authState.isLoading) {
-      console.debug('[AuthOrchestrator] Auth is loading, waiting...');
-      return;
-    }
-
-    // Skip if subscription is still being fetched
-    if (authState.subscriptionFetchStatus === 'fetching') {
-      console.debug('[AuthOrchestrator] Subscription fetch in progress, waiting...');
-      return;
-    }
-
     console.debug('[AuthOrchestrator] Processing auth state change:', {
       hasUser: !!authState.user,
       hasSession: !!authState.session,

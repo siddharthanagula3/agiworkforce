@@ -221,10 +221,13 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
     await invoke<void>('browser_navigate', { browserId, url });
 
     // Get page title
-    const title = await invoke<string>('browser_get_title', {});
+    const title = await invoke<string>('browser_get_title', { browserId: browserId ?? '' });
 
     // Take screenshot
-    const screenshot = await invoke<string>('browser_screenshot', { selector: null });
+    const screenshot = await invoke<string>('browser_screenshot', {
+      browserId: browserId ?? '',
+      selector: null,
+    });
 
     panel.content.browser = {
       url,
@@ -870,9 +873,9 @@ export async function executeVisionCommand(args: string): Promise<InlinePanel> {
     let response: Record<string, unknown>;
 
     if (!args.trim()) {
-      response = await invoke<Record<string, unknown>>('vision_capture_screen');
+      response = await invoke<Record<string, unknown>>('vision_analyze_screenshot');
     } else {
-      response = await invoke<Record<string, unknown>>('vision_analyze_image', {
+      response = await invoke<Record<string, unknown>>('vision_analyze_screenshot', {
         path: args.trim(),
       });
     }
@@ -974,12 +977,12 @@ export async function executeMemoryCommand(args: string): Promise<InlinePanel> {
 
     if (trimmed.toLowerCase().startsWith('search ')) {
       const query = trimmed.slice('search '.length).trim();
-      response = await invoke<Record<string, unknown>>('project_memory_search', { query });
+      response = await invoke<Record<string, unknown>>('search_project_memories', { query });
     } else if (trimmed.toLowerCase().startsWith('save ')) {
       const context = trimmed.slice('save '.length).trim();
-      response = await invoke<Record<string, unknown>>('project_memory_add_context', { context });
+      response = await invoke<Record<string, unknown>>('save_project_context', { context });
     } else {
-      response = await invoke<Record<string, unknown>>('project_memory_get_all_contexts');
+      response = await invoke<Record<string, unknown>>('get_project_memories');
     }
 
     panel.content.data = { ...response };
@@ -1021,7 +1024,7 @@ export async function executeRecallCommand(topic: string): Promise<InlinePanel> 
   };
 
   try {
-    const response = await invoke<Record<string, unknown>>('chat_memory_search', {
+    const response = await invoke<Record<string, unknown>>('chat_search_memories', {
       query: topic,
       limit: 5,
     });
@@ -1072,7 +1075,7 @@ export async function executeAgentsCommand(args: string): Promise<InlinePanel> {
 
     if (trimmed.toLowerCase().startsWith('push ')) {
       const goal = trimmed.slice('push '.length).trim();
-      response = await invoke<Record<string, unknown>>('background_agent_start', { goal });
+      response = await invoke<Record<string, unknown>>('background_agent_push', { goal });
     } else {
       response = await invoke<Record<string, unknown>>('background_agent_list');
     }
@@ -1125,12 +1128,12 @@ export async function executeGitCommand(args: string): Promise<InlinePanel> {
       response = await invoke<Record<string, unknown>>('git_diff');
     } else if (trimmed.startsWith('commit ')) {
       const msg = args.trim().slice('commit '.length).trim();
-      response = await invoke<Record<string, unknown>>('git_create_commit', { message: msg });
+      response = await invoke<Record<string, unknown>>('git_commit', { message: msg, path: '.' });
     } else if (trimmed === 'log') {
-      response = await invoke<Record<string, unknown>>('git_get_log');
+      response = await invoke<Record<string, unknown>>('git_log', { path: '.' });
     } else {
       // Default: "status" or empty
-      response = await invoke<Record<string, unknown>>('git_get_status');
+      response = await invoke<Record<string, unknown>>('git_status', { path: '.' });
     }
 
     panel.content.data = { ...response };
@@ -1176,9 +1179,9 @@ export async function executeScheduleCommand(args: string): Promise<InlinePanel>
     let response: Record<string, unknown>;
 
     if (!args.trim()) {
-      response = await invoke<Record<string, unknown>>('scheduler_list_tasks');
+      response = await invoke<Record<string, unknown>>('scheduler_list_jobs');
     } else {
-      response = await invoke<Record<string, unknown>>('scheduler_create_task', {
+      response = await invoke<Record<string, unknown>>('scheduler_add_job', {
         description: args.trim(),
       });
     }
@@ -1228,7 +1231,7 @@ export async function executeVoiceCommand(args: string): Promise<InlinePanel> {
 
     if (trimmed.toLowerCase().startsWith('tts ')) {
       const text = trimmed.slice('tts '.length).trim();
-      response = await invoke<Record<string, unknown>>('voice_synthesize', { text });
+      response = await invoke<Record<string, unknown>>('voice_tts_speak', { text });
     } else {
       // No args — trigger voice input recording
       response = await invoke<Record<string, unknown>>('speech_start_recording');
@@ -1388,12 +1391,12 @@ export async function executeDocsCommand(args: string): Promise<InlinePanel> {
     let format: string;
 
     if (trimmedArgs.endsWith('.docx') || trimmedArgs.includes('docx')) {
-      response = await invoke<Record<string, unknown>>('document_create_docx', {
+      response = await invoke<Record<string, unknown>>('document_create_word', {
         content: args.trim(),
       });
       format = 'DOCX';
     } else if (trimmedArgs.endsWith('.xlsx') || trimmedArgs.includes('xlsx')) {
-      response = await invoke<Record<string, unknown>>('document_create_xlsx', {
+      response = await invoke<Record<string, unknown>>('document_create_excel', {
         content: args.trim(),
       });
       format = 'XLSX';
@@ -1475,11 +1478,11 @@ export async function executeRecordCommand(args: string): Promise<InlinePanel> {
     let resultText: string;
 
     if (trimmed === 'stop') {
-      response = await invoke<Record<string, unknown>>('automation_stop_recording');
+      response = await invoke<Record<string, unknown>>('automation_record_stop');
       resultText =
         `Recording stopped.\n${(response['message'] as string | undefined) ?? ''}`.trim();
     } else {
-      response = await invoke<Record<string, unknown>>('automation_start_recording');
+      response = await invoke<Record<string, unknown>>('automation_record_start');
       resultText =
         `Recording started.\n${(response['message'] as string | undefined) ?? ''}`.trim();
     }
@@ -1546,7 +1549,7 @@ export async function executeMetricsCommand(): Promise<InlinePanel> {
 
   try {
     const startTime = Date.now();
-    const response = await invoke<Record<string, unknown>>('metrics_get_usage');
+    const response = await invoke<Record<string, unknown>>('metrics_get_system');
     const duration = Date.now() - startTime;
 
     const lines: string[] = ['=== Usage Metrics ===', ''];
@@ -1614,11 +1617,11 @@ export async function executeMarketplaceCommand(args: string): Promise<InlinePan
 
     if (trimmed.toLowerCase().startsWith('install ')) {
       const workflowId = trimmed.slice('install '.length).trim();
-      response = await invoke<Record<string, unknown>>('marketplace_install_workflow', {
+      response = await invoke<Record<string, unknown>>('clone_marketplace_workflow', {
         id: workflowId,
       });
     } else {
-      response = await invoke<Record<string, unknown>>('marketplace_list_featured');
+      response = await invoke<Record<string, unknown>>('search_marketplace_workflows');
     }
 
     panel.content.data = { ...response };
@@ -1696,7 +1699,7 @@ export async function executeOCRCommand(args: string): Promise<InlinePanel> {
   };
 
   try {
-    const response = await invoke<Record<string, unknown>>('ocr_capture_and_extract', {
+    const response = await invoke<Record<string, unknown>>('ocr_process_image', {
       path: args.trim() || null,
     });
 
@@ -1754,11 +1757,11 @@ export async function executeNotifyCommand(args: string): Promise<InlinePanel> {
     let resultText: string;
 
     if (trimmed === 'clear') {
-      response = await invoke<Record<string, unknown>>('notification_clear_all');
+      response = await invoke<Record<string, unknown>>('notification_cancel_all');
       resultText =
         `All notifications cleared.\n${(response['message'] as string | undefined) ?? ''}`.trim();
     } else {
-      response = await invoke<Record<string, unknown>>('notification_list_recent');
+      response = await invoke<Record<string, unknown>>('notification_list');
       const items = response['notifications'] as unknown[] | undefined;
 
       if (Array.isArray(items) && items.length > 0) {
@@ -1828,7 +1831,7 @@ export async function executeLSPCommand(args: string): Promise<InlinePanel> {
 
     if (trimmed.toLowerCase().startsWith('symbols ')) {
       const query = trimmed.slice('symbols '.length).trim();
-      response = await invoke<Record<string, unknown>>('lsp_search_symbols', { query });
+      response = await invoke<Record<string, unknown>>('lsp_workspace_symbol', { query });
     } else {
       // "diagnostics" subcommand, or default when no recognised subcommand
       response = await invoke<Record<string, unknown>>('lsp_get_diagnostics');
@@ -1883,7 +1886,7 @@ export async function executeEnhanceCommand(lastMessage: string): Promise<Inline
 
   try {
     const startTime = Date.now();
-    const response = await invoke<Record<string, unknown>>('prompt_enhance_prompt', {
+    const response = await invoke<Record<string, unknown>>('enhance_prompt', {
       prompt: lastMessage,
     });
 
@@ -1998,6 +2001,7 @@ export async function executeMessageCommand(args: string): Promise<InlinePanel> 
 
     if (slackMatch) {
       const [, channel, text] = slackMatch;
+      // TODO: Verify 'slack_send_message' exists on the Rust side before renaming
       response = await invoke<Record<string, unknown>>('slack_send_message', { channel, text });
       resultText =
         `Message sent to ${channel ?? 'channel'}.\n${(response['message'] as string | undefined) ?? ''}`.trim();

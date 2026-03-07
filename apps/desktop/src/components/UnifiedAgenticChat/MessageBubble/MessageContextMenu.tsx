@@ -49,10 +49,15 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       if (e.key === 'Escape') onClose();
     };
 
-    window.addEventListener('click', handleClick);
+    // BUG-MCM-003: Defer click listener registration so the right-click that opened
+    // the menu doesn't immediately bubble up and close it in the same tick.
+    const timerId = setTimeout(() => {
+      window.addEventListener('click', handleClick);
+    }, 0);
     window.addEventListener('keydown', handleEscape);
 
     return () => {
+      clearTimeout(timerId);
       window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleEscape);
     };
@@ -68,12 +73,18 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
 
   if (!position) return null;
 
+  // BUG-MCM-001: Clamp the menu position so it never overflows the viewport edges
+  const menuWidth = 200;
+  const menuHeight = 150;
+  const clampedLeft = Math.min(position.x, window.innerWidth - menuWidth - 8);
+  const clampedTop = Math.min(position.y, window.innerHeight - menuHeight - 8);
+
   return (
     <div
       role="menu"
       aria-label="Message actions"
       className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-800/95 backdrop-blur-xs py-1 shadow-xl"
-      style={{ left: position.x, top: position.y }}
+      style={{ left: clampedLeft, top: clampedTop }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Copy */}
