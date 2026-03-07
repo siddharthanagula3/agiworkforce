@@ -301,6 +301,7 @@ export interface ChatSession {
   id: string;
   title: string;
   summary?: string;
+  preview?: string;
   createdAt: Date | string;
   updatedAt: Date | string;
   messageCount: number;
