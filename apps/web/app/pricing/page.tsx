@@ -591,6 +591,13 @@ function PricingContent() {
                   <tbody>
                     {[
                       {
+                        feature: 'Data Privacy',
+                        hobby: 'Local only',
+                        pro: 'Local only',
+                        max: 'Local only',
+                        emerald: true,
+                      },
+                      {
                         feature: 'Local LLMs (Ollama)',
                         hobby: true,
                         pro: true,
@@ -679,7 +686,15 @@ function PricingContent() {
                               <span className="text-zinc-600">—</span>
                             )
                           ) : (
-                            <span className="text-zinc-300">{row.hobby}</span>
+                            <span
+                              className={
+                                'emerald' in row && row.emerald
+                                  ? 'text-emerald-400'
+                                  : 'text-zinc-300'
+                              }
+                            >
+                              {row.hobby}
+                            </span>
                           )}
                         </td>
                         <td className="text-center py-4 px-4">
@@ -690,7 +705,15 @@ function PricingContent() {
                               <span className="text-zinc-600">—</span>
                             )
                           ) : (
-                            <span className="text-zinc-300">{row.pro}</span>
+                            <span
+                              className={
+                                'emerald' in row && row.emerald
+                                  ? 'text-emerald-400'
+                                  : 'text-zinc-300'
+                              }
+                            >
+                              {row.pro}
+                            </span>
                           )}
                         </td>
                         <td className="text-center py-4 px-4">
@@ -701,7 +724,15 @@ function PricingContent() {
                               <span className="text-zinc-600">—</span>
                             )
                           ) : (
-                            <span className="text-zinc-300">{row.max}</span>
+                            <span
+                              className={
+                                'emerald' in row && row.emerald
+                                  ? 'text-emerald-400'
+                                  : 'text-zinc-300'
+                              }
+                            >
+                              {row.max}
+                            </span>
                           )}
                         </td>
                       </tr>
