@@ -29,6 +29,7 @@ import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
 export type Language = 'en' | 'es';
+export type AgentMode = 'safe' | 'build' | 'autopilot';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
 
@@ -75,6 +76,8 @@ export interface ChatPreferences {
   autoApproveTools: boolean;
   /** Enable automatic skill injection based on message intent */
   autoInjectSkills?: boolean;
+  /** Agent execution mode — controls which tools are allowed and whether approval dialogs appear */
+  agentMode: AgentMode;
 }
 
 export interface ExecutionPreferences {
@@ -151,6 +154,7 @@ interface SettingsState {
   setCompactMode: (enabled: boolean) => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
+  setAgentMode: (mode: AgentMode) => Promise<void>;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;
@@ -219,6 +223,7 @@ const defaultSettings: Pick<
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
     autoApproveTools: false, // Off by default - show confirmation dialogs
     autoInjectSkills: true, // Auto-inject relevant skills based on message intent
+    agentMode: 'build' as AgentMode, // Default to Build mode
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
@@ -261,7 +266,8 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v10: Added customModels for user-defined OpenAI-compatible endpoints
 // v11: Added features for capability toggles
 // v12: Added autoInjectSkills to chatPreferences
-const SETTINGS_STORE_VERSION = 12;
+// v13: Added agentMode to chatPreferences
+const SETTINGS_STORE_VERSION = 13;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -619,6 +625,25 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAutoApproveTools',
           );
+        },
+
+        setAgentMode: async (mode: AgentMode) => {
+          set(
+            (state) => ({
+              chatPreferences: {
+                ...state.chatPreferences,
+                agentMode: mode,
+                autoApproveTools: mode === 'autopilot',
+              },
+            }),
+            undefined,
+            'settings/setAgentMode',
+          );
+          try {
+            await invoke('set_agent_mode', { mode });
+          } catch (error) {
+            console.error('Failed to sync agent mode to backend:', error);
+          }
         },
 
         addAllowedDirectory: (path: string) => {
@@ -1040,6 +1065,7 @@ export const useSettingsStore = create<SettingsState>()(
                 alwaysUseAgentMode: false,
                 compactMode: true,
                 autoApproveTools: false,
+                agentMode: 'build',
               };
             } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
               state.chatPreferences.alwaysUseAgentMode = false;
@@ -1125,6 +1151,15 @@ export const useSettingsStore = create<SettingsState>()(
           if (version < 12) {
             if (state.chatPreferences && state.chatPreferences.autoInjectSkills === undefined) {
               state.chatPreferences.autoInjectSkills = true;
+            }
+          }
+
+          // Migration from v12 to v13: Add agentMode derived from autoApproveTools
+          if (version < 13) {
+            if (state.chatPreferences && state.chatPreferences.agentMode === undefined) {
+              state.chatPreferences.agentMode = state.chatPreferences.autoApproveTools
+                ? 'autopilot'
+                : 'build';
             }
           }
 
