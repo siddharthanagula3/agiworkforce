@@ -11,6 +11,7 @@ import {
   Loader2,
   Plug,
   Puzzle,
+  Share2,
   Wrench,
   Server,
   Settings2,
@@ -52,6 +53,7 @@ import { AgentsSettings } from './AgentsSettings';
 import { InstructionFilesSettings } from './InstructionFilesSettings';
 import { CustomModelsSettings } from './CustomModelsSettings';
 import { SkillsPluginsSettings } from './SkillsPluginsSettings';
+import { MCPServerSettings } from './MCPServerSettings';
 import { MCPToolsSettings } from './MCPToolsSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
@@ -72,6 +74,7 @@ const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }
   { key: 'connectors', label: 'Connectors', icon: Plug },
   { key: 'api-keys', label: 'API Keys', icon: Server },
   { key: 'mcp', label: 'MCP & Skills', icon: Wrench },
+  { key: 'mcp-server', label: 'MCP Server', icon: Share2 },
   { key: 'extensions', label: 'Extensions', icon: Puzzle },
   { key: 'notifications', label: 'Notifications', icon: Bell },
 ];
@@ -361,7 +364,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-  const requiresDeferredSave = activeTab !== 'mcp' && activeTab !== 'extensions';
+  const requiresDeferredSave =
+    activeTab !== 'mcp' && activeTab !== 'mcp-server' && activeTab !== 'extensions';
   const accountData = useAccountStore((state) => state.account);
 
   useEffect(() => {
@@ -1029,6 +1033,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       </div>
                     </div>
                   )}
+
+                  {/* MCP Server Tab */}
+                  {activeTab === 'mcp-server' && <MCPServerSettings />}
 
                   {/* Extensions Tab */}
                   {activeTab === 'extensions' && <ExtensionsSettings />}
