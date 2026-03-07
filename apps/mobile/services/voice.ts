@@ -239,3 +239,44 @@ function clearMeteringInterval() {
     meteringInterval = null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Deepgram direct transcription (client-side, no server round-trip)
+// ---------------------------------------------------------------------------
+const DEEPGRAM_ENDPOINT = 'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true';
+
+/**
+ * Transcribe a local audio URI directly via Deepgram's pre-recorded API.
+ * Used for hold-to-record PTT when a Deepgram API key is available.
+ *
+ * @param uri   - Local file URI (m4a) from stopRecording()
+ * @param apiKey - Deepgram API key
+ * @returns Transcript string (empty string on silence/failure)
+ */
+export async function transcribeWithDeepgram(uri: string, apiKey: string): Promise<string> {
+  const formData = new FormData();
+  // React Native FormData accepts { uri, type, name } for file blobs.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formData.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
+
+  const response = await fetch(DEEPGRAM_ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Deepgram error ${response.status}: ${body}`);
+  }
+
+  const data = (await response.json()) as {
+    results?: {
+      channels?: Array<{
+        alternatives?: Array<{ transcript?: string }>;
+      }>;
+    };
+  };
+
+  return data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
+}
