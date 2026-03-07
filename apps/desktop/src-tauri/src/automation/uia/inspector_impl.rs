@@ -1,3 +1,6 @@
+// SAFETY: UI Automation element inspection requires unsafe COM FFI calls.
+#![allow(unsafe_code)]
+
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
