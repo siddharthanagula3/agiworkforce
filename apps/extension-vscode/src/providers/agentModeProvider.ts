@@ -88,16 +88,19 @@ export class AgentModePanel {
   private editHistory: EditBatch[] = [];
   private isProcessing = false;
   private diffProviderDisposables: vscode.Disposable[] = [];
+  private _planMode = false;
 
   public static createOrShow(
     extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
     context: vscode.ExtensionContext,
+    planMode = false,
   ): void {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
 
     if (AgentModePanel.currentPanel !== undefined) {
       AgentModePanel.currentPanel.panel.reveal(column);
+      AgentModePanel.currentPanel.setPlanMode(planMode);
       return;
     }
 
@@ -112,7 +115,15 @@ export class AgentModePanel {
       },
     );
 
-    AgentModePanel.currentPanel = new AgentModePanel(panel, extensionUri, secrets, context);
+    const instance = new AgentModePanel(panel, extensionUri, secrets, context);
+    instance.setPlanMode(planMode);
+    AgentModePanel.currentPanel = instance;
+  }
+
+  public setPlanMode(enabled: boolean): void {
+    this._planMode = enabled;
+    // Notify webview so it can update UI if desired
+    this.postMessage({ type: 'planModeChanged', enabled });
   }
 
   private constructor(
@@ -162,7 +173,7 @@ export class AgentModePanel {
   }
 
   private buildSystemPrompt(): string {
-    return [
+    const lines = [
       'You are AGI Workforce Agent, an AI coding assistant with multi-file editing capabilities.',
       '',
       'You can read and edit files in the workspace. Use these formats:',
@@ -179,7 +190,17 @@ export class AgentModePanel {
       'Always read files before editing them to understand the current content.',
       'When editing, provide the complete file content, not just the changed parts.',
       'Explain your changes clearly before providing edit blocks.',
-    ].join('\n');
+    ];
+
+    if (this._planMode) {
+      lines.push(
+        '',
+        'PLAN MODE is active: Before making any edits, first output a numbered plan describing',
+        'all changes you intend to make. Wait for the user to confirm before applying any edits.',
+      );
+    }
+
+    return lines.join('\n');
   }
 
   private async handleUserMessage(text: string): Promise<void> {

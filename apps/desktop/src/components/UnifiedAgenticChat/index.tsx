@@ -1239,6 +1239,43 @@ export const UnifiedAgenticChat: React.FC<{
         }),
       );
 
+      // Listen for extended thinking events (thinking:event from ThinkingState)
+      // event_type: "start" | "delta" | "complete"
+      registerListener(
+        listen<{
+          event_type: 'start' | 'delta' | 'complete';
+          content: string;
+          message_id?: string | null;
+          tokens?: number | null;
+          timestamp: number;
+        }>('thinking:event', ({ payload }) => {
+          if (!isMountedRef.current) return;
+          markStreamActivity();
+
+          // Resolve which message this thinking belongs to
+          const activeStreamValues = [...activeStreamSessionsRef.current.values()];
+          const targetMessageId =
+            (payload.message_id ? String(payload.message_id) : null) ??
+            (activeStreamValues.length > 0
+              ? activeStreamValues[activeStreamValues.length - 1]!
+              : null);
+
+          if (!targetMessageId) return;
+
+          const chatState = useChatStore.getState();
+
+          if (payload.event_type === 'start') {
+            chatState.clearThinkingContent(targetMessageId);
+          } else if (payload.event_type === 'delta' && payload.content) {
+            chatState.appendThinkingContent(targetMessageId, payload.content);
+          } else if (payload.event_type === 'complete' && payload.content) {
+            // On complete, replace accumulated content with the final authoritative string
+            chatState.clearThinkingContent(targetMessageId);
+            chatState.appendThinkingContent(targetMessageId, payload.content);
+          }
+        }),
+      );
+
       // AUDIT-APPROVAL-047 fix: Removed duplicate tool:confirmation_required handler.
       // The tool confirmation flow is now handled exclusively by useAgenticEvents which
       // adds approvals to pendingApprovals store. The ApprovalModal then handles

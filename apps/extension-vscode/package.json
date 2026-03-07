@@ -106,6 +106,26 @@
         "command": "agi-workforce.syncContextToDesktop",
         "title": "AGI Workforce: Sync Workspace Context to Desktop",
         "icon": "$(sync)"
+      },
+      {
+        "command": "agi.git.status",
+        "title": "AGI: Git Status",
+        "icon": "$(source-control)"
+      },
+      {
+        "command": "agi.git.diff",
+        "title": "AGI: Git Diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "agi.git.commit",
+        "title": "AGI: Git Commit",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "agi.test.run",
+        "title": "AGI: Run Tests",
+        "icon": "$(beaker)"
       }
     ],
     "chatParticipants": [
@@ -318,7 +338,7 @@
         },
         "agiWorkforce.desktopBridge.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Connect to AGI Workforce desktop app for extended agent capabilities"
         },
         "agiWorkforce.desktopBridge.port": {

@@ -13,6 +13,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useAgentStore } from '@/stores/agentStore';
+import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { colors } from '@/lib/theme';
 
 /**
@@ -53,12 +54,49 @@ export default function ChatScreen() {
     };
   }, [id, setCurrentConversationId, loadMessages]);
 
+  // ---------------------------------------------------------------------------
+  // Voice playback — speak completed assistant messages aloud.
+  // Declared early so handleSend / handleBack can reference stopSpeaking.
+  // ---------------------------------------------------------------------------
+  const { speak, stop: stopSpeaking } = useVoicePlayback();
+
+  /**
+   * Track the ID of the last assistant message we started speaking so we
+   * don't re-trigger TTS on every re-render or when unrelated state changes.
+   */
+  const lastSpokenIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const lastMsg = conversationMessages[conversationMessages.length - 1];
+
+    // Only speak completed (non-streaming) assistant messages with content.
+    if (
+      lastMsg &&
+      lastMsg.role === 'assistant' &&
+      !lastMsg.isStreaming &&
+      lastMsg.content.trim() &&
+      lastMsg.id !== lastSpokenIdRef.current
+    ) {
+      lastSpokenIdRef.current = lastMsg.id;
+      speak(lastMsg.content);
+    }
+  }, [conversationMessages, speak]);
+
+  // Stop any ongoing speech when the user navigates away from this screen.
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, [stopSpeaking]);
+
   const handleSend = useCallback(
     (text: string) => {
       if (!id) return;
+      // Interrupt any ongoing TTS when the user sends a new message.
+      stopSpeaking();
       sendMessage(id, text, selectedModel);
     },
-    [id, selectedModel, sendMessage],
+    [id, selectedModel, sendMessage, stopSpeaking],
   );
 
   const handleStop = useCallback(() => {
@@ -78,12 +116,13 @@ export default function ChatScreen() {
   }, [id, loadMessages]);
 
   const handleBack = useCallback(() => {
+    stopSpeaking();
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(app)');
     }
-  }, [router]);
+  }, [router, stopSpeaking]);
 
   if (!id) {
     return (
