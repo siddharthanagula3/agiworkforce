@@ -1311,7 +1311,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5.2".to_string(),
+                        model: "gpt-4o".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1579,7 +1579,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2".to_string(),
+                                model: "gpt-4o".to_string(),
                                 reason: "auto-balanced-performance",
                             },
                             RouteCandidate {
@@ -1621,7 +1621,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
+                                model: "gpt-4o".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1673,7 +1673,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2".to_string(), // Fast inference: 187 tok/s, 88.1% GPQA
+                                model: "gpt-4o".to_string(), // Fast inference: 187 tok/s, 88.1% GPQA
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1712,7 +1712,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2".to_string(),
+                                model: "gpt-4o".to_string(),
                                 reason: "auto-premium-quality",
                             },
                             RouteCandidate {
@@ -1782,7 +1782,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-codex-high".to_string(), // Best code generation
+                                model: "o3".to_string(), // Best code generation
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
@@ -1857,7 +1857,7 @@ impl LLMRouter {
         match provider {
             Provider::OpenAI => match task {
                 TaskCategory::Simple => "gpt-5-nano".to_string(),
-                TaskCategory::Complex => "gpt-5.2".to_string(),
+                TaskCategory::Complex => "gpt-4o".to_string(),
                 TaskCategory::Creative => "gpt-5-nano".to_string(),
             },
             Provider::Anthropic => match task {
@@ -1910,8 +1910,8 @@ impl LLMRouter {
             },
             Provider::ManagedCloud => match task {
                 TaskCategory::Simple => "gpt-5-nano".to_string(),
-                TaskCategory::Complex => "gpt-5.2".to_string(),
-                TaskCategory::Creative => "gpt-5.2".to_string(),
+                TaskCategory::Complex => "gpt-4o".to_string(),
+                TaskCategory::Creative => "gpt-4o".to_string(),
             },
         }
     }
@@ -1945,7 +1945,7 @@ impl LLMRouter {
                 } else if token_count < 4000 {
                     "claude-sonnet-4-5".to_string() // $3/$15 per 1M - excellent quality
                 } else {
-                    "gpt-5.2".to_string() // Strong OpenAI balanced model
+                    "gpt-4o".to_string() // Strong OpenAI balanced model
                 }
             }
             RoutingStrategy::AutoPremium => {

@@ -495,6 +495,12 @@ async function handleMessageAsync(
       }
     }
 
+    case 'CHAT_MESSAGE': {
+      const chatMsg = message as import('./types').ChatMessageMessage;
+      void handleChatMessage(chatMsg, sender);
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'open_side_panel': {
       let resolvedTabId = tabId;
       if (chrome.sidePanel && !resolvedTabId) {
@@ -916,6 +922,138 @@ async function captureCurrentPage(): Promise<void> {
     });
   } catch (error) {
     logger.error('Failed to capture page', error);
+  }
+}
+
+/**
+ * Handle a CHAT_MESSAGE from the side panel.
+ * Calls the AGI Workforce API with streaming and forwards CHAT_CHUNK messages
+ * back to all extension views (the side panel listens via chrome.runtime.onMessage).
+ */
+async function handleChatMessage(
+  message: import('./types').ChatMessageMessage,
+  _sender: chrome.runtime.MessageSender,
+): Promise<void> {
+  const { id, text, pageContext, conversationHistory = [] } = message;
+
+  const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
+    const chunk: import('./types').ChatChunkMessage = {
+      type: 'CHAT_CHUNK',
+      id,
+      text: chunkText,
+      done,
+      error,
+    };
+    // Send to all extension views — side panel receives this via onMessage
+    chrome.runtime.sendMessage(chunk).catch(() => {
+      // Side panel may not be open; ignore
+    });
+  };
+
+  // Build message array for the API
+  const messages: Array<{ role: string; content: string }> = [
+    ...conversationHistory.map((h) => ({ role: h.role, content: h.content })),
+  ];
+
+  // Append page context to the user message if provided
+  const userContent = pageContext
+    ? `${text}\n\n<page_context>\n${pageContext}\n</page_context>`
+    : text;
+
+  messages.push({ role: 'user', content: userContent });
+
+  try {
+    // Attempt to stream via the AGI Workforce API.
+    // The desktop app may expose an HTTP endpoint; fall back to native if unavailable.
+    const AGI_API_BASE = 'http://localhost:8765';
+    let streamed = false;
+
+    try {
+      const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, stream: true }),
+        signal: AbortSignal.timeout(60000),
+      });
+
+      if (resp.ok && resp.body) {
+        streamed = true;
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const raw = decoder.decode(value, { stream: true });
+          // Handle SSE format: lines starting with "data: "
+          for (const line of raw.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === 'data: [DONE]') continue;
+            const dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
+            try {
+              const parsed = JSON.parse(dataStr) as {
+                choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
+                content?: string;
+                done?: boolean;
+              };
+              const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
+              if (delta) {
+                accumulated += delta;
+                broadcastChunk(delta, false);
+              }
+              if (parsed.done || parsed.choices?.[0]?.finish_reason === 'stop') {
+                broadcastChunk('', true);
+                return;
+              }
+            } catch {
+              // Non-JSON line — skip
+            }
+          }
+        }
+        broadcastChunk('', true);
+        return;
+      }
+    } catch {
+      // Network error or local API unavailable — fall through
+    }
+
+    if (!streamed) {
+      // Fall back: forward to native desktop app via existing queue_message path
+      if (state.isNativeConnected && state.nativePort) {
+        try {
+          const nativeResp = (await withTimeout(
+            sendNativeRequest({
+              type: 'chat_message',
+              id,
+              text: userContent,
+              conversationHistory,
+              timestamp: Date.now(),
+            }),
+            30000,
+          )) as unknown as { success?: boolean; reply?: string; error?: string };
+
+          if (nativeResp?.reply) {
+            broadcastChunk(nativeResp.reply, false);
+          }
+          broadcastChunk('', true);
+          return;
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Native request failed';
+          broadcastChunk('', true, errMsg);
+          return;
+        }
+      }
+
+      // Nothing available — send a helpful offline message
+      const offlineMsg =
+        'The AGI Workforce desktop app is not running. Please start it and try again.';
+      broadcastChunk(offlineMsg, true);
+    }
+  } catch (error) {
+    logger.error('handleChatMessage error', error);
+    const errText = error instanceof Error ? error.message : 'Unknown error';
+    broadcastChunk('', true, errText);
   }
 }
 

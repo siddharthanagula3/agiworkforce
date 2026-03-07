@@ -56,6 +56,8 @@ import { SearchResults } from '../search/SearchResults';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
+import { ThinkingBlock } from '../ThinkingBlock';
+import { ArtifactBlock } from '../ArtifactBlock';
 
 interface Attachment {
   id: string;
@@ -91,6 +93,10 @@ interface Message {
     cost?: number;
     selectionReason?: string;
     thinkingSteps?: string[];
+    /** Raw extended thinking text (used by ThinkingBlock) */
+    thinkingContent?: string;
+    /** True while the thinking content is still streaming */
+    isThinkingStreaming?: boolean;
     isThinking?: boolean;
     isStreaming?: boolean;
     isCollaboration?: boolean;
@@ -318,6 +324,17 @@ export const MessageBubble = React.memo(function MessageBubble({
           {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
         </div>
 
+        {/* ThinkingBlock — extended reasoning content (shown above the main reply) */}
+        {!isUser && message.metadata?.thinkingContent && (
+          <div className="mb-3">
+            <ThinkingBlock
+              content={message.metadata.thinkingContent}
+              isStreaming={message.metadata.isThinkingStreaming ?? false}
+              defaultExpanded={message.metadata.isThinkingStreaming ?? false}
+            />
+          </div>
+        )}
+
         {/* Message Content */}
         <div className={cn('prose prose-sm dark:prose-invert max-w-none', isUser && 'text-right')}>
           {message.isStreaming && !cleanedContent.trim() ? (
@@ -340,6 +357,13 @@ export const MessageBubble = React.memo(function MessageBubble({
             </>
           )}
         </div>
+
+        {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
+        {!isUser && cleanedContent.trim() && (
+          <div className="mt-1">
+            <ArtifactBlock content={cleanedContent} />
+          </div>
+        )}
 
         {/* Artifacts */}
         {!isUser && artifacts.length > 0 && (

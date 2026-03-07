@@ -367,7 +367,7 @@ export function useMCP(): UseMCPReturn {
       setIsLoading(true);
       setError(null);
       try {
-        await invoke<string>('mcp_update_config', { new_config: newConfig });
+        await invoke<string>('mcp_update_config', { newConfig });
         setConfig(newConfig);
         await listServers();
       } catch (err) {

@@ -205,7 +205,7 @@ export async function getReflectionInsights(goalId: string): Promise<ReflectionI
 
   try {
     const result = await invoke<ReflectionInsight | null>('agi_get_reflection_insights', {
-      goal_id: goalId,
+      goalId,
     });
     return result;
   } catch (error) {

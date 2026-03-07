@@ -28,7 +28,9 @@ export type NativeMessageType =
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO'
   | 'AUTO_FILL_JOB_APPLICATION'
-  | 'queue_message';
+  | 'queue_message'
+  | 'CHAT_MESSAGE'
+  | 'CHAT_CHUNK';
 
 // Base message structure
 export interface BaseMessage {
@@ -406,6 +408,29 @@ export interface QueueMessageMessage extends BaseMessage {
   timestamp: number;
 }
 
+// Chat message — sent from side panel to background to stream an AI response
+export interface ChatMessageMessage extends BaseMessage {
+  type: 'CHAT_MESSAGE';
+  id: string;
+  text: string;
+  pageContext?: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+}
+
+// Chat chunk — sent from background to side panel as streaming response arrives
+export interface ChatChunkMessage {
+  type: 'CHAT_CHUNK';
+  id: string;
+  text: string;
+  done: boolean;
+  error?: string;
+}
+
+export interface ChatMessageResponse {
+  success: boolean;
+  error?: string;
+}
+
 // Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
 export interface OpenSidePanelMessage {
   type: 'open_side_panel';
@@ -438,6 +463,7 @@ export type ExtensionMessage =
   | GetElementInfoMessage
   | AutoFillJobApplicationMessage
   | QueueMessageMessage
+  | ChatMessageMessage
   | OpenSidePanelMessage;
 
 export type ExtensionResponse =
@@ -459,7 +485,8 @@ export type ExtensionResponse =
   | TabReadyResponse
   | RunPageActionsResponse
   | ElementInfoResponse
-  | AutoFillJobApplicationResponse;
+  | AutoFillJobApplicationResponse
+  | ChatMessageResponse;
 
 // Popup state
 export interface PopupState {
