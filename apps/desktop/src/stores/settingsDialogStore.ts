@@ -8,6 +8,7 @@ export type SettingsTab =
   | 'connectors'
   | 'api-keys'
   | 'mcp'
+  | 'mcp-server'
   | 'extensions'
   | 'notifications';
 
