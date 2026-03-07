@@ -1,3 +1,6 @@
+// SAFETY: Checking UI element state via COM interface requires unsafe FFI.
+#![allow(unsafe_code)]
+
 use super::*;
 use anyhow::{anyhow, Result};
 use std::time::{Duration, Instant};

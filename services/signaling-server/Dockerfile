@@ -25,7 +25,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN pnpm install --frozen-lockfile=false
+RUN pnpm install --frozen-lockfile
 
 # =============================================================================
 # Stage 2: Build
@@ -59,7 +59,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile=false && \
+RUN pnpm install --prod --frozen-lockfile && \
     pnpm store prune
 
 # =============================================================================
