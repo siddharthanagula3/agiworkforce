@@ -6,6 +6,7 @@ pub mod auth;
 pub mod auth_db;
 pub mod command_validator;
 pub mod dm_protection;
+pub mod log_redaction;
 pub mod encryption;
 pub mod guardrails;
 pub mod machine_key;
