@@ -1,0 +1,119 @@
+// apps/desktop/src/components/UnifiedAgenticChat/ThinkingBlock.tsx
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Brain, ChevronDown } from 'lucide-react';
+import { cn } from '../../lib/utils';
+
+interface ThinkingBlockProps {
+  content: string;
+  isStreaming: boolean;
+  defaultExpanded?: boolean;
+}
+
+export function ThinkingBlock({
+  content,
+  isStreaming,
+  defaultExpanded = true,
+}: ThinkingBlockProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  // Auto-collapse when streaming finishes
+  useEffect(() => {
+    if (!isStreaming) {
+      setExpanded(false);
+    }
+  }, [isStreaming]);
+
+  // Single-line preview: first non-empty line, truncated
+  const preview =
+    content
+      .split('\n')
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? '';
+
+  const headerLabel = isStreaming ? 'Thinking...' : 'Thought';
+
+  return (
+    <div className={cn('bg-slate-900/30 border border-slate-700/30 rounded-lg overflow-hidden')}>
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/30 transition-colors"
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning`}
+      >
+        {/* Brain icon — pulses while streaming */}
+        <Brain
+          className={cn(
+            'w-3.5 h-3.5 shrink-0 text-slate-400',
+            isStreaming && 'animate-pulse text-slate-300',
+          )}
+        />
+
+        {/* "Reasoning" label in small caps */}
+        <span
+          className="text-[10px] tracking-widest text-slate-400"
+          style={{ fontVariant: 'small-caps' }}
+        >
+          Reasoning
+        </span>
+
+        {/* Streaming / done label */}
+        <span className={cn('text-xs', isStreaming ? 'text-slate-300' : 'text-slate-500')}>
+          {headerLabel}
+        </span>
+
+        {/* Collapsed preview */}
+        {!expanded && preview && (
+          <span className="flex-1 text-xs text-slate-500 truncate min-w-0 italic font-mono">
+            {preview}
+          </span>
+        )}
+
+        {/* Spacer */}
+        <span className="flex-1" />
+
+        {/* Chevron toggle */}
+        <motion.div
+          animate={{ rotate: expanded ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0 text-slate-500"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </motion.div>
+      </button>
+
+      {/* Collapsible body */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="thinking-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{
+              height: { duration: 0.25, ease: 'easeInOut' },
+              opacity: { duration: 0.15 },
+            }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-slate-700/30 px-4 py-3">
+              <p
+                className={cn(
+                  'text-xs text-slate-400/70 font-mono italic leading-relaxed whitespace-pre-wrap',
+                )}
+              >
+                {content}
+                {/* Blinking cursor at end while streaming */}
+                {isStreaming && (
+                  <span className="inline-block w-1.5 h-3 bg-slate-400/50 ml-0.5 animate-pulse align-middle" />
+                )}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

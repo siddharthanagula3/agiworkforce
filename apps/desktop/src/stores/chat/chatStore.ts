@@ -262,6 +262,9 @@ export interface ChatState {
   // Tool timeline: per-message list of tool executions (for ToolTimeline component)
   toolTimelineByMessage: Record<string, ToolLabelEntry[]>;
 
+  // Thinking content: per-message accumulated thinking/reasoning text (for ThinkingBlock component)
+  thinkingByMessage: Record<string, string>;
+
   // Agentic loop status (updated by tool event listener)
   agenticLoopStatus: {
     active: boolean;
@@ -360,6 +363,10 @@ export interface ChatState {
     updates: Partial<ToolLabelEntry>,
   ) => void;
 
+  // Actions - Thinking content
+  appendThinkingContent: (messageId: string, delta: string) => void;
+  clearThinkingContent: (messageId: string) => void;
+
   // Actions - Agentic loop status
   setAgenticLoopStatus: (status: ChatState['agenticLoopStatus']) => void;
 
@@ -437,6 +444,7 @@ export const useChatStore = create<ChatState>()(
           showMessageTimestamps: true,
           selectedMessage: null,
           toolTimelineByMessage: {},
+          thinkingByMessage: {},
           agenticLoopStatus: null,
           activeBranchId: DEFAULT_BRANCH_ID,
           branches: [] as BranchSummary[],
@@ -1565,6 +1573,26 @@ export const useChatStore = create<ChatState>()(
               'chat/updateToolTimelineEntry',
             ),
 
+          // Thinking content
+          appendThinkingContent: (messageId, delta) =>
+            set(
+              (state) => {
+                state.thinkingByMessage[messageId] =
+                  (state.thinkingByMessage[messageId] ?? '') + delta;
+              },
+              undefined,
+              'chat/appendThinkingContent',
+            ),
+
+          clearThinkingContent: (messageId) =>
+            set(
+              (state) => {
+                delete state.thinkingByMessage[messageId];
+              },
+              undefined,
+              'chat/clearThinkingContent',
+            ),
+
           // Agentic loop status
           setAgenticLoopStatus: (status) =>
             set(
@@ -1708,6 +1736,7 @@ export const useChatStore = create<ChatState>()(
                 state.isStreaming = false;
                 state.currentStreamingMessageId = null;
                 state.toolTimelineByMessage = {};
+                state.thinkingByMessage = {};
                 state.agenticLoopStatus = null;
                 state.citations = [];
                 state.focusMode = null;
@@ -1763,6 +1792,7 @@ export const useChatStore = create<ChatState>()(
                 state.editingMessageId = null;
                 state.selectedMessage = null;
                 state.toolTimelineByMessage = {};
+                state.thinkingByMessage = {};
                 state.agenticLoopStatus = null;
                 state.activeBranchId = DEFAULT_BRANCH_ID;
                 state.branches = [];
@@ -1830,6 +1860,7 @@ export const selectPinnedConversations = (state: ChatState) =>
   state.conversations.filter((c) => c.pinned && !c.archived);
 
 export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimelineByMessage;
+export const selectThinkingByMessage = (state: ChatState) => state.thinkingByMessage;
 export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;
 
 // Cross-store subscription: update tokenUsage.max when the selected model changes

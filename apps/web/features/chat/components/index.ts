@@ -38,3 +38,17 @@ export * from './Tools';
 
 // Branch Navigation
 export { BranchNavigator, BranchIndicator, MessageBranchIndicator } from './BranchNavigator';
+
+// ── New feature components ────────────────────────────────────────────────────
+// Feature 1: ToolCallCard — web-native tool call display (pending/running/complete/error)
+export { ToolCallCard } from './ToolCallCard';
+export type { ToolCall, ToolCallStatus } from './ToolCallCard';
+
+// Feature 2: VoiceInputButton — Web Speech API voice-to-text input
+export { VoiceInputButton } from './VoiceInputButton';
+
+// Feature 3a: ThinkingBlock — collapsible extended reasoning display (no framer-motion)
+export { ThinkingBlock } from './ThinkingBlock';
+
+// Feature 3b: ArtifactBlock — detect and render code blocks (html/csv/json/mermaid/generic)
+export { ArtifactBlock } from './ArtifactBlock';

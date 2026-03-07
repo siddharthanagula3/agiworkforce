@@ -101,6 +101,7 @@ pub mod tutorials;
 pub mod undo;
 pub mod vision;
 pub mod voice;
+pub mod voice_global;
 pub mod window;
 pub mod workspace;
 
