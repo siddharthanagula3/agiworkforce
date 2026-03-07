@@ -2,118 +2,112 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { cn } from '@shared/lib/utils';
-import { DashboardHeader } from '@shared/components/layout/DashboardHeader';
-import { DashboardSidebar } from '@shared/components/layout/DashboardSidebar';
-import { Button } from '@shared/ui/button';
-import { X } from 'lucide-react';
 
-export default function ChatLayoutShell({ children }: { children: React.ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+export interface ChatLayoutShellProps {
+  children: React.ReactNode;
+  sidebar?: React.ReactNode;
+  className?: string;
+}
 
-  const closeMobileMenu = useCallback(() => {
-    setMobileMenuOpen(false);
+export default function ChatLayoutShell({ children, sidebar, className }: ChatLayoutShellProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('chat-sidebar-collapsed') === 'true';
+  });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Persist collapse state
+  useEffect(() => {
+    localStorage.setItem('chat-sidebar-collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  const closeMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(false);
   }, []);
 
+  // Lock body scroll when mobile sidebar is open
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarCollapsed(true);
-        setMobileMenuOpen(false);
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (mobileMenuOpen) {
+    if (mobileSidebarOpen) {
       document.body.style.overflow = 'hidden';
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') closeMobileMenu();
-      };
-      document.addEventListener('keydown', handleEscape);
       return () => {
         document.body.style.overflow = '';
-        document.removeEventListener('keydown', handleEscape);
       };
     }
     return undefined;
-  }, [mobileMenuOpen, closeMobileMenu]);
+  }, [mobileSidebarOpen]);
+
+  // Keyboard shortcut: Cmd/Ctrl+Shift+S toggles sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+      if (e.key === 'Escape' && mobileSidebarOpen) {
+        closeMobileSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileSidebarOpen, closeMobileSidebar]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile Overlay */}
-      {mobileMenuOpen && (
+    <div
+      className={cn(
+        'flex h-screen w-full overflow-hidden bg-[#faf9f7] dark:bg-[#0f0f13]',
+        className,
+      )}
+    >
+      {/* Mobile backdrop */}
+      {mobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={closeMobileMenu}
-          role="button"
-          tabIndex={0}
-          aria-label="Close navigation menu"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'Enter') closeMobileMenu();
-          }}
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={closeMobileSidebar}
+          aria-hidden="true"
         />
       )}
 
-      {/* Header */}
-      <DashboardHeader onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
+      {/* Left panel — conversation list sidebar */}
+      {sidebar && (
+        <>
+          {/* Desktop sidebar */}
+          <aside
+            className={cn(
+              'hidden lg:flex lg:flex-col shrink-0',
+              'transition-[width] duration-200 ease-in-out',
+              'bg-[#f5f4f1] dark:bg-[#0b0c14]',
+              'border-r border-black/[0.08] dark:border-white/[0.07]',
+              sidebarCollapsed ? 'w-16' : 'w-[280px]',
+            )}
+            aria-label="Conversation list"
+          >
+            {sidebar}
+          </aside>
 
-      <div className="relative flex pt-14">
-        {/* Desktop Sidebar */}
-        <aside
-          className={cn(
-            'fixed bottom-0 left-0 top-14 z-30 hidden lg:flex lg:flex-col',
-            'transition-[width] duration-200 ease-in-out',
-            sidebarCollapsed ? 'w-[60px]' : 'w-[240px]',
-          )}
-          aria-label="Main navigation"
-        >
-          <DashboardSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          />
-        </aside>
+          {/* Mobile sidebar — slides in as overlay */}
+          <aside
+            className={cn(
+              'fixed inset-y-0 left-0 z-50 flex flex-col lg:hidden',
+              'w-[280px] shadow-2xl',
+              'bg-[#f5f4f1] dark:bg-[#0b0c14]',
+              'border-r border-black/[0.08] dark:border-white/[0.07]',
+              'transform transition-transform duration-200 ease-in-out',
+              mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full',
+            )}
+            aria-label="Conversation list"
+            aria-hidden={!mobileSidebarOpen}
+          >
+            {sidebar}
+          </aside>
+        </>
+      )}
 
-        {/* Mobile Sidebar */}
-        <aside
-          className={cn(
-            'fixed inset-y-0 left-0 z-50 w-[260px] lg:hidden',
-            'transform transition-transform duration-200 ease-in-out',
-            'flex flex-col shadow-2xl',
-            mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
-          )}
-          aria-label="Mobile navigation"
-          aria-hidden={!mobileMenuOpen}
-        >
-          <div className="flex items-center justify-end border-b border-white/[0.06] bg-black/40 px-2 py-2 backdrop-blur-xl">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={closeMobileMenu}
-              className="h-8 w-8 text-muted-foreground"
-              aria-label="Close menu"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-          <DashboardSidebar collapsed={false} className="flex-1" />
-        </aside>
+      {/* Main content area */}
+      <main className="flex flex-1 flex-col min-h-0 overflow-hidden">{children}</main>
 
-        {/* Main Content */}
-        <main
-          id="main-content"
-          className={cn(
-            'relative flex-1 transition-[margin] duration-200 ease-in-out',
-            sidebarCollapsed ? 'lg:ml-[60px]' : 'lg:ml-[240px]',
-          )}
-        >
-          <div className="h-[calc(100vh-3.5rem)]">{children}</div>
-        </main>
-      </div>
+      {/* Bottom gradient fade — matches desktop AppLayout */}
+      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#faf9f7] via-[#faf9f7]/80 to-transparent dark:from-[#0f0f13] dark:via-[#0f0f13]/80 pointer-events-none z-10" />
     </div>
   );
 }

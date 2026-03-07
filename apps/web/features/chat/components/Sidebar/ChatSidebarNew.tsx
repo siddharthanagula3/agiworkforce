@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus,
   Search,
@@ -11,16 +11,45 @@ import {
   Trash2,
   PanelLeftClose,
   X,
+  Settings,
+  LogOut,
+  ChevronUp,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { ScrollArea } from '@shared/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@shared/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@shared/ui/alert-dialog';
 import type { ChatSession } from '../../stores/chat-store';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
+  activeSessionId?: string;
   onNewChat: () => void;
+  onSelectSession: (id: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, title: string) => void;
-  onToggleSidebar: () => void;
+  onToggleSidebar?: () => void;
+  collapsed?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -29,38 +58,40 @@ interface ChatSidebarProps {
 
 function getTimeGroup(date: Date): string {
   const now = new Date();
-  const diffMs = now.getTime() - new Date(date).getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays <= 7) return 'Previous 7 Days';
-  if (diffDays <= 30) return 'Previous 30 Days';
+  const d = new Date(date);
+  if (d >= today) return 'Today';
+  if (d >= yesterday) return 'Yesterday';
+  if (d >= sevenDaysAgo) return 'Last 7 Days';
+  if (d >= thirtyDaysAgo) return 'Last 30 Days';
   return 'Older';
 }
 
+const GROUP_ORDER = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
+
 function groupSessions(sessions: ChatSession[]): Map<string, ChatSession[]> {
   const groups = new Map<string, ChatSession[]>();
-  const order = ['Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days', 'Older'];
-
-  // Initialize in order
-  for (const key of order) {
+  for (const key of GROUP_ORDER) {
     groups.set(key, []);
   }
-
   for (const session of sessions) {
-    const group = getTimeGroup(session.updatedAt);
+    const d =
+      session.updatedAt instanceof Date ? session.updatedAt : new Date(session.updatedAt || 0);
+    const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
+    const group = getTimeGroup(safeDate);
     const arr = groups.get(group);
-    if (arr) {
-      arr.push(session);
-    }
+    if (arr) arr.push(session);
   }
-
-  // Remove empty groups
   for (const [key, value] of groups) {
     if (value.length === 0) groups.delete(key);
   }
-
   return groups;
 }
 
@@ -71,19 +102,19 @@ function groupSessions(sessions: ChatSession[]): Map<string, ChatSession[]> {
 function SessionItem({
   session,
   isActive,
+  onSelect,
   onDelete,
   onRename,
 }: {
   session: ChatSession;
   isActive: boolean;
+  onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
 }) {
-  const router = useRouter();
-  const [showMenu, setShowMenu] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -93,173 +124,315 @@ function SessionItem({
     }
   }, [isRenaming]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    }
-    if (showMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return undefined;
-  }, [showMenu]);
-
-  const handleRenameSubmit = () => {
+  const handleRenameSubmit = useCallback(() => {
     if (renameValue.trim() && renameValue !== session.title) {
       onRename(session.id, renameValue.trim());
     }
     setIsRenaming(false);
-  };
+  }, [renameValue, session.title, session.id, onRename]);
+
+  const timestamp = useMemo(() => {
+    const d =
+      session.updatedAt instanceof Date ? session.updatedAt : new Date(session.updatedAt || 0);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'now';
+    if (diffMins < 60) return `${diffMins}m`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs}h`;
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays}d`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }, [session.updatedAt]);
 
   return (
-    <div
-      className={cn(
-        'group relative flex items-center rounded-lg px-3 py-2.5 transition-all duration-200',
-        isActive
-          ? 'bg-muted/60 text-foreground'
-          : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground',
-      )}
-    >
-      {isRenaming ? (
-        <input
-          ref={inputRef}
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRenameSubmit();
-            if (e.key === 'Escape') setIsRenaming(false);
-          }}
-          onBlur={handleRenameSubmit}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-        />
-      ) : (
-        <button
-          onClick={() => router.push(`/chat/${session.id}`)}
-          className="min-w-0 flex-1 text-left"
-        >
-          <div className="truncate text-sm">{session.title}</div>
-        </button>
-      )}
-
-      {/* More button */}
-      <div className="relative" ref={menuRef}>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMenu(!showMenu);
-          }}
-          className={cn(
-            'ml-1 flex h-6 w-6 items-center justify-center rounded-md transition-opacity',
-            'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-            showMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-          )}
-          aria-label="Session actions"
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
-
-        {showMenu && (
-          <div className="absolute right-0 top-full z-50 mt-1 min-w-[140px] rounded-lg border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-            <button
-              onClick={() => {
-                setIsRenaming(true);
-                setShowMenu(false);
-              }}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs hover:bg-muted/60"
-            >
-              <Pencil className="h-3 w-3" /> Rename
-            </button>
-            <button
-              onClick={() => {
-                onDelete(session.id);
-                setShowMenu(false);
-              }}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-3 w-3" /> Delete
-            </button>
-          </div>
+    <>
+      <div
+        className={cn(
+          'group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1 cursor-pointer transition-colors',
+          isActive
+            ? 'bg-black/[0.06] dark:bg-white/[0.08]'
+            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
         )}
+        onClick={() => !isRenaming && onSelect(session.id)}
+      >
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameSubmit();
+              if (e.key === 'Escape') setIsRenaming(false);
+            }}
+            onBlur={handleRenameSubmit}
+            className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+            {session.title || 'Untitled'}
+          </span>
+        )}
+
+        {!isRenaming && (
+          <>
+            <span className="shrink-0 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+              {timestamp}
+            </span>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground"
+                  aria-label="Session actions"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsRenaming(true);
+                  }}
+                >
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteOpen(true);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+      </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{session.title || 'Untitled'}&rdquo; will be permanently deleted. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setDeleteOpen(false);
+                onDelete(session.id);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// User Profile (bottom)
+// ---------------------------------------------------------------------------
+
+function UserProfileArea() {
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
+
+  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
+  const initial = displayName.charAt(0).toUpperCase();
+
+  return (
+    <div className="border-t border-black/[0.08] dark:border-white/[0.07]">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {initial}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+              {user?.email && (
+                <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+              )}
+            </div>
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-52 mb-1">
+          <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={handleLogout}
+            className="text-destructive focus:text-destructive"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Collapsed Sidebar (icon strip — 64px)
+// ---------------------------------------------------------------------------
+
+function CollapsedSidebar({
+  onNewChat,
+  onToggleSidebar,
+}: {
+  onNewChat: () => void;
+  onToggleSidebar?: () => void;
+}) {
+  return (
+    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07] py-3">
+      {onToggleSidebar && (
+        <button
+          onClick={onToggleSidebar}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      )}
+      <button
+        onClick={onNewChat}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+        aria-label="New chat"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+      <button
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+        aria-label="Search"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+      <div className="mt-2">
+        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/30" />
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar
+// Main Sidebar
 // ---------------------------------------------------------------------------
 
 export function ChatSidebarNew({
   sessions,
+  activeSessionId,
   onNewChat,
+  onSelectSession,
   onDeleteSession,
   onRenameSession,
   onToggleSidebar,
+  collapsed = false,
 }: ChatSidebarProps) {
-  const params = useParams();
-  const activeSessionId = params?.['sessionId'] as string | undefined;
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSearchQuery('');
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
     const q = searchQuery.toLowerCase();
     return sessions.filter(
-      (s) => s.title.toLowerCase().includes(q) || s.preview.toLowerCase().includes(q),
+      (s) =>
+        s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
     );
   }, [sessions, searchQuery]);
 
   const grouped = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
 
+  if (collapsed) {
+    return <CollapsedSidebar onNewChat={onNewChat} onToggleSidebar={onToggleSidebar} />;
+  }
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07]">
       {/* Header */}
-      <div className="flex items-center justify-between p-3">
-        <button
-          onClick={onToggleSidebar}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-          aria-label="Close sidebar"
-        >
-          <PanelLeftClose className="h-4 w-4" />
-        </button>
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+            aria-label="Close sidebar"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
+        <span className="text-[13px] font-semibold text-foreground">AGI Workforce</span>
+      </div>
+
+      {/* New Chat button */}
+      <div className="px-3 pb-1">
         <button
           onClick={onNewChat}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-          aria-label="New chat"
+          className="flex w-full items-center gap-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-sm font-medium transition-colors"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 shrink-0" />
+          New Chat
         </button>
       </div>
 
       {/* Search */}
-      <div className="px-3 pb-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search chats..."
-            className="h-8 w-full rounded-lg border border-border/30 bg-muted/20 pl-8 pr-8 text-sm outline-none placeholder:text-muted-foreground/40 focus:border-border/60 focus:ring-1 focus:ring-ring/20"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+      <div className="mx-2 my-2 flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search conversations..."
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="shrink-0 text-muted-foreground/50 hover:text-foreground transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Sessions list */}
-      <div className="flex-1 overflow-y-auto px-2">
+      {/* Session list */}
+      <ScrollArea className="flex-1">
         {filteredSessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <MessageSquare className="mb-2 h-8 w-8 text-muted-foreground/30" />
+          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+            <MessageSquare className="mb-2 h-7 w-7 text-muted-foreground/25" />
             <p className="text-sm text-muted-foreground/50">
               {searchQuery ? 'No matching chats' : 'No conversations yet'}
             </p>
@@ -271,25 +444,27 @@ export function ChatSidebarNew({
           </div>
         ) : (
           Array.from(grouped.entries()).map(([group, groupSessions]) => (
-            <div key={group} className="mb-3">
-              <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            <div key={group}>
+              <div className="px-3 py-1 mt-3 mb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
                 {group}
               </div>
-              <div className="space-y-0.5">
-                {groupSessions.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    isActive={session.id === activeSessionId}
-                    onDelete={onDeleteSession}
-                    onRename={onRenameSession}
-                  />
-                ))}
-              </div>
+              {groupSessions.map((session) => (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === activeSessionId}
+                  onSelect={onSelectSession}
+                  onDelete={onDeleteSession}
+                  onRename={onRenameSession}
+                />
+              ))}
             </div>
           ))
         )}
-      </div>
+      </ScrollArea>
+
+      {/* User profile */}
+      <UserProfileArea />
     </div>
   );
 }
