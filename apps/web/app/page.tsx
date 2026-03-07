@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AGI Workforce | AI Agent for Desktop',
     description:
-      'A native AI agent desktop app with chat, browser automation, and multi-provider model support. Now in Public Beta.',
+      'A native AI agent desktop app with chat, browser automation, and multi-provider model support. Now in Public ALPHA.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI Workforce | AI Agent for Desktop',
     description:
-      'Native AI agent desktop app with chat, browser automation, and multi-provider LLM support. Now in Public Beta.',
+      'Native AI agent desktop app with chat, browser automation, and multi-provider LLM support. Now in Public ALPHA.',
     images: ['/app-preview.png'],
   },
 };
@@ -61,7 +61,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AGI Workforce',
   description:
-    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — now in public beta.',
+    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — now in public ALPHA.',
   url: 'https://agiworkforce.com',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -134,11 +134,12 @@ export default function Home() {
             <div className="container relative mx-auto px-4 text-center">
               <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
                 <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500" />
-                Now in Public Beta
+                Now in Public ALPHA
               </div>
-              <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-white md:text-7xl lg:text-8xl">
-                Your AI Agent. <br className="hidden md:block" />
-                <span className="text-blue-400">Any Model. Any Tool.</span>
+              <h1 className="mx-auto max-w-5xl text-6xl font-bold tracking-tight md:text-8xl lg:text-9xl">
+                <span className="bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent">
+                  AGI WORKFORCE
+                </span>
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
                 A native desktop AI agent with chat, browser automation, multi-provider model

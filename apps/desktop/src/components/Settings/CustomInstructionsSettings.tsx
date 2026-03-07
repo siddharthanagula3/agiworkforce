@@ -59,7 +59,7 @@ export function CustomInstructionsSettings() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
+          <Sparkles className="h-5 w-5 text-foreground" />
           Custom Instructions
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
@@ -68,11 +68,11 @@ export function CustomInstructionsSettings() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+      <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <Info className="h-5 w-5 text-foreground mt-0.5 shrink-0" />
           <div className="text-sm">
-            <p className="font-medium text-primary mb-1">Instruction Priority</p>
+            <p className="font-medium text-foreground mb-1">Instruction Priority</p>
             <p className="text-muted-foreground">
               When multiple instructions exist, they are applied in this order:
             </p>
@@ -167,23 +167,23 @@ export function CustomInstructionsSettings() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-muted bg-muted/30 p-4 space-y-3">
+      <div className="rounded-lg border border-muted bg-card p-4 space-y-3">
         <h4 className="font-medium text-sm">Tips for Effective Instructions</h4>
         <ul className="text-sm text-muted-foreground space-y-2">
           <li className="flex gap-2">
-            <span className="text-primary">*</span>
+            <span className="text-foreground">*</span>
             <span>Be specific about the behavior you want</span>
           </li>
           <li className="flex gap-2">
-            <span className="text-primary">*</span>
+            <span className="text-foreground">*</span>
             <span>Use clear, action-oriented language</span>
           </li>
           <li className="flex gap-2">
-            <span className="text-primary">*</span>
+            <span className="text-foreground">*</span>
             <span>Include examples when helpful</span>
           </li>
           <li className="flex gap-2">
-            <span className="text-primary">*</span>
+            <span className="text-foreground">*</span>
             <span>Keep instructions concise - they count toward your token usage</span>
           </li>
         </ul>

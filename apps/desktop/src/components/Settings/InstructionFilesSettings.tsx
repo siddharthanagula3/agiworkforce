@@ -177,14 +177,14 @@ export function InstructionFilesSettings() {
       </div>
 
       {isNonTauri && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-[#222222] rounded-md p-3">
           <AlertCircle className="h-4 w-4 shrink-0" />
           File detection requires the desktop app. Shown for preview only.
         </div>
       )}
 
       <div className="rounded-lg border border-border overflow-hidden">
-        <div className="bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground border-b grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
+        <div className="bg-[#222222] px-4 py-2 text-xs font-medium text-muted-foreground border-b grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
           <span>File</span>
           <span>Source</span>
           <span>Status</span>
@@ -200,7 +200,7 @@ export function InstructionFilesSettings() {
             return (
               <div
                 key={p.pattern}
-                className="px-4 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center hover:bg-muted/30 transition-colors"
+                className="px-4 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center hover:bg-[#222222] transition-colors"
               >
                 {/* File name */}
                 <div className="flex items-center gap-2 min-w-0">

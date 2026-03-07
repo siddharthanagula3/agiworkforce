@@ -56,13 +56,20 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
     .map((label) => ({ label, conversations: groups[label] }));
 }
 
+interface ConversationListProps {
+  searchQuery?: string;
+}
+
 /**
  * Sidebar conversation list.
  * Groups conversations by recency and renders ConversationItem rows.
  * Pull to refresh loads from server.
  */
-export function ConversationList() {
-  const conversations = useChatStore((s) => s.conversations);
+export function ConversationList({ searchQuery }: ConversationListProps) {
+  const allConversations = useChatStore((s) => s.conversations);
+  const conversations = searchQuery
+    ? allConversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allConversations;
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);

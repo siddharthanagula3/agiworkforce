@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { View, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { NetworkBadge } from '@/components/ui/NetworkBadge';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -68,6 +69,14 @@ export default function ChatScreen() {
     modelPickerRef.current?.snapToIndex(0);
   }, []);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    if (!id) return;
+    setRefreshing(true);
+    await loadMessages(id);
+    setRefreshing(false);
+  }, [id, loadMessages]);
+
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -118,6 +127,9 @@ export default function ChatScreen() {
             {title}
           </Text>
 
+          {/* Network badge */}
+          <NetworkBadge />
+
           {/* Drawer toggle */}
           <Pressable
             onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
@@ -140,6 +152,8 @@ export default function ChatScreen() {
             messages={conversationMessages}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            onRefresh={handleRefresh}
+            refreshing={refreshing}
           />
         )}
 

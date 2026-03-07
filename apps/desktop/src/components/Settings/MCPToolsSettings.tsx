@@ -106,7 +106,7 @@ export function MCPToolsSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs break-all">
+          <div className="rounded-md border bg-card px-3 py-2 font-mono text-xs break-all">
             {configLocation?.path || 'Resolving MCP config path...'}
           </div>
           {configLocation?.source !== 'project' && (

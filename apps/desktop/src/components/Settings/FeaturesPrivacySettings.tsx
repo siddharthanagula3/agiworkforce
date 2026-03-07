@@ -121,7 +121,7 @@ export function FeaturesPrivacySettings() {
       {/* Capability Toggles */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <Zap className="h-5 w-5 text-primary" />
+          <Zap className="h-5 w-5 text-white" />
           <h3 className="text-lg font-semibold">Capability Toggles</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
@@ -129,7 +129,7 @@ export function FeaturesPrivacySettings() {
           completely unavailable to agents regardless of approval mode.
         </p>
 
-        <div className="rounded-lg border border-border bg-card divide-y divide-border">
+        <div className="rounded-lg border border-border bg-[#242424] divide-y divide-border">
           {CAPABILITIES.map((cap) => (
             <div key={cap.key} className="flex items-start justify-between gap-4 px-5 py-4">
               <div className="space-y-0.5 flex-1">
