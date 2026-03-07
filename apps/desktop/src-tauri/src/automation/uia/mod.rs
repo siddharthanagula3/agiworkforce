@@ -1,3 +1,6 @@
+// SAFETY: This module wraps Windows UI Automation COM interfaces which require unsafe FFI calls.
+#![allow(unsafe_code)]
+
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use std::collections::HashMap;

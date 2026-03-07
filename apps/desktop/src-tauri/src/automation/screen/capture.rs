@@ -1,3 +1,6 @@
+// SAFETY: Screen capture on Windows requires unsafe Win32 API calls (EnumWindows, DwmGetWindowAttribute).
+#![allow(unsafe_code)]
+
 use anyhow::{anyhow, Context, Result};
 use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};

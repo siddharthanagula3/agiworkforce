@@ -4,6 +4,7 @@ use crate::features::terminal::{
 use crate::sys::security::command_validator::{
     validate_command, validate_interactive_input, ValidationConfig,
 };
+use crate::sys::security::log_redaction::redact_secrets;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
@@ -56,7 +57,7 @@ pub async fn execute_terminal_command(
 
     tracing::info!(
         correlation_id = %correlation_id,
-        command = %command,
+        command = %redact_secrets(&command),
         "Executing independent terminal command"
     );
 
