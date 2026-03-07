@@ -182,7 +182,9 @@ pub async fn db_execute_prepared(
     connection_id: String,
     sql: String,
     params: Vec<serde_json::Value>,
+    app: tauri::AppHandle,
     state: State<'_, Mutex<DatabaseState>>,
+    confirmation_state: State<'_, ToolConfirmationState>,
 ) -> Result<serde_json::Value, String> {
     if connection_id.trim().is_empty() {
         return Err("Connection ID cannot be empty".to_string());
@@ -218,6 +220,48 @@ pub async fn db_execute_prepared(
             "Only SELECT, INSERT, UPDATE, DELETE, and WITH statements are allowed in prepared statements. Got: {}",
             &sql[..sql.len().min(50)]
         ));
+    }
+
+    // SECURITY: Require user confirmation for write operations (INSERT/UPDATE/DELETE).
+    // SELECT and WITH (read-only) queries proceed without confirmation.
+    let is_write_operation = sql_upper.starts_with("INSERT")
+        || sql_upper.starts_with("UPDATE")
+        || sql_upper.starts_with("DELETE");
+
+    if is_write_operation {
+        let preview = if sql.len() > 200 {
+            format!("{}...", &sql[..200])
+        } else {
+            sql.clone()
+        };
+
+        let confirmation_request = ToolConfirmationRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            tool_name: "db_execute_prepared".to_string(),
+            tool_description: format!(
+                "Execute {} on connection '{}'",
+                sql_upper.split_whitespace().next().unwrap_or("SQL"),
+                connection_id
+            ),
+            arguments: serde_json::json!({
+                "sql": preview,
+                "connection_id": connection_id,
+                "param_count": params.len(),
+            }),
+            risk_level: RiskLevel::Medium,
+            safety_tier: ToolSafetyTier::RequiresConfirmation,
+            risk_factors: vec![
+                "This operation modifies database data".to_string(),
+                format!("Statement type: {}", sql_upper.split_whitespace().next().unwrap_or("UNKNOWN")),
+            ],
+        };
+
+        let approved = request_tool_confirmation(&app, &confirmation_state, confirmation_request, 60)
+            .await?;
+
+        if !approved {
+            return Err("Database write operation denied by user".to_string());
+        }
     }
 
     let state = state.lock().await;

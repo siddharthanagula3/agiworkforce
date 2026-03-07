@@ -1,3 +1,6 @@
+// SAFETY: Pattern extraction from Windows UI Automation COM interfaces requires unsafe FFI.
+#![allow(unsafe_code)]
+
 use super::*;
 use serde::{Deserialize, Serialize};
 use windows::Win32::UI::Accessibility::{
