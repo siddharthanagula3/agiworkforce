@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import {
   ArrowRight,
   Bot,
+  Lock,
   Shield,
-  Sparkles,
   CheckCircle2,
   Users,
   Plug,
@@ -19,11 +19,15 @@ import { MarketingFooter } from '../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'AGI Workforce | AI Agent for Desktop',
   description:
-    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — available on macOS, Windows, and Linux.',
+    'AGI Workforce is a privacy-first native desktop AI agent. All processing happens locally — conversations, files, and API keys never leave your machine. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
   keywords: [
     'AI agent',
     'AI automation',
     'desktop AI app',
+    'privacy-first AI',
+    'local AI',
+    'BYOK AI',
+    'offline AI',
     'browser automation',
     'Tauri desktop app',
     'Ollama',
@@ -31,6 +35,7 @@ export const metadata: Metadata = {
     'Anthropic',
     'Gemini',
     'Claude',
+    'data privacy',
   ],
   openGraph: {
     title: 'AGI Workforce | AI Agent for Desktop',
@@ -75,6 +80,9 @@ const jsonLd = {
       'Parallel AI agent orchestration',
       '9+ LLM providers including local models',
       'Mobile companion with live agent dashboard',
+      'Privacy-first: all processing happens locally',
+      'Bring Your Own Keys (BYOK) — AES-256 encrypted',
+      'Run fully offline with Ollama or LM Studio',
     ],
   },
 };
@@ -111,10 +119,10 @@ const features = [
     href: '/features/ai-chat',
   },
   {
-    icon: Sparkles,
-    title: 'Multi-Provider LLMs',
-    desc: 'Connect OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama, and more. Bring your own keys, run fully offline with local models.',
-    href: null,
+    icon: Lock,
+    title: 'Privacy-First Design',
+    desc: 'All processing happens locally on your machine. Conversations, files, and API keys never pass through our servers. BYOK means you own every token.',
+    href: '/security',
   },
 ];
 
@@ -161,7 +169,7 @@ export default function Home() {
                 </Link>
               </div>
 
-              <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
+              <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:flex-wrap md:justify-center">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   <span>Available on macOS, Windows, and Linux</span>
@@ -173,6 +181,10 @@ export default function Home() {
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   <span>Browser automation, file management, and terminal tools</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <span>Your data never leaves your machine</span>
                 </div>
               </div>
 
@@ -255,45 +267,41 @@ export default function Home() {
             <div className="container mx-auto px-4">
               <div className="flex flex-col items-center gap-16 md:flex-row">
                 <div className="flex-1 space-y-8">
-                  <div className="mb-2 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Security and Safety Features in Code
+                  <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-400">
+                    <Lock className="mr-2 h-4 w-4" />
+                    Privacy-First Architecture
                   </div>
                   <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                    Built-In Protections and Controls
+                    Your Code Never Leaves Your Machine
                   </h2>
                   <div className="space-y-6">
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
+                      <Lock className="h-6 w-6 shrink-0 text-emerald-500" />
                       <div>
-                        <h3 className="mb-2 text-xl font-semibold">
-                          Encrypted Local Secrets Code Paths
-                        </h3>
+                        <h3 className="mb-2 text-xl font-semibold">Local Processing Only</h3>
                         <p className="text-zinc-400">
-                          The desktop Rust backend includes keyring and encryption dependencies
-                          (`keyring`, `aes-gcm`, `argon2`) for local credential handling.
+                          Every conversation is processed on your machine using your own API keys.
+                          Zero data passes through AGI Workforce servers.
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
+                      <Shield className="h-6 w-6 shrink-0 text-emerald-500" />
                       <div>
-                        <h3 className="mb-2 text-xl font-semibold">Undo Operations API</h3>
+                        <h3 className="mb-2 text-xl font-semibold">Bring Your Own Keys</h3>
                         <p className="text-zinc-400">
-                          Desktop TypeScript APIs expose undo summary, change listing, and undo
-                          execution commands backed by Tauri invokes.
+                          API keys are encrypted locally with AES-256. You own your API
+                          relationships and control every token.
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
+                      <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500" />
                       <div>
-                        <h3 className="mb-2 text-xl font-semibold">
-                          Updater Signing Configuration
-                        </h3>
+                        <h3 className="mb-2 text-xl font-semibold">Run Fully Offline</h3>
                         <p className="text-zinc-400">
-                          Tauri updater configuration is present with a public key and website
-                          endpoint for desktop release manifests.
+                          Connect Ollama or LM Studio for 100% offline operation. Zero internet
+                          required for local models.
                         </p>
                       </div>
                     </div>
@@ -301,32 +309,32 @@ export default function Home() {
                 </div>
                 <div className="flex-1">
                   <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xs">
-                    <div className="absolute inset-0 -z-10 bg-blue-500/10 blur-3xl" />
-                    <div className="space-y-4 font-mono text-sm text-zinc-400">
-                      <div className="flex items-center gap-2 text-green-400">
-                        <Shield className="h-4 w-4" />
-                        <span>Release Config Snapshot</span>
-                      </div>
-                      <div className="h-px bg-white/10" />
-                      <div className="flex justify-between">
-                        <span>Desktop Version</span>
-                        <span className="text-white">1.1.3</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Tauri Bundle</span>
-                        <span className="text-white">active: true</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Targets</span>
-                        <span className="text-white">all</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Updater</span>
-                        <span className="text-white">Configured</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Release API Routes</span>
-                        <span className="text-white">Present</span>
+                    <div className="absolute inset-0 -z-10 bg-emerald-500/10 blur-3xl" />
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                      <h4 className="mb-4 text-sm font-semibold text-white">
+                        Where Your Data Lives
+                      </h4>
+                      <div className="space-y-3">
+                        {[
+                          { item: 'Conversations', location: 'Your machine only' },
+                          { item: 'API Keys', location: 'Encrypted locally (AES-256)' },
+                          { item: 'Files & Documents', location: 'Your machine only' },
+                          { item: 'Model Calls', location: 'Direct to provider API' },
+                          { item: 'AGI Workforce servers', location: 'None' },
+                        ].map(({ item, location }) => (
+                          <div key={item} className="flex items-center justify-between text-sm">
+                            <span className="text-white/60">{item}</span>
+                            <span
+                              className={
+                                location === 'None'
+                                  ? 'font-medium text-emerald-400'
+                                  : 'text-white/80'
+                              }
+                            >
+                              {location}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

@@ -59,6 +59,7 @@ describe('settingsStore', () => {
         alwaysUseAgentMode: false,
         compactMode: true,
         autoApproveTools: false,
+        agentMode: 'build',
       },
       allowedDirectories: [],
       loading: false,

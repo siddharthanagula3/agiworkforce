@@ -29,11 +29,15 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'request_automation_permission':
     case 'set_auto_approve_all':
+    case 'set_agent_mode':
     case 'sync_capabilities':
       return undefined as T;
 
     case 'get_auto_approve_all':
       return false as T;
+
+    case 'get_agent_mode':
+      return 'build' as T;
 
     case 'get_capabilities':
       return {} as T;

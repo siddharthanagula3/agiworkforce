@@ -18,6 +18,25 @@ use tauri::{Emitter, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
 
+/// Agent execution mode controlling which tools are permitted.
+///
+/// - **Safe**: Only read-only, non-destructive tools are allowed.
+/// - **Build**: All tools allowed, but destructive ones require user confirmation.
+/// - **Autopilot**: All tools allowed, auto-approved without prompts.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMode {
+    Safe,
+    Build,
+    Autopilot,
+}
+
+impl Default for AgentMode {
+    fn default() -> Self {
+        AgentMode::Build
+    }
+}
+
 /// State for managing pending tool confirmation requests
 pub struct ToolConfirmationState {
     /// Map of request_id to oneshot sender for confirmation response
@@ -29,6 +48,8 @@ pub struct ToolConfirmationState {
     /// Global auto-approve flag — when true, all tool confirmations are auto-approved
     /// without showing the user a dialog. Equivalent to "God Mode" / trust-all.
     auto_approve_all: Arc<AtomicBool>,
+    /// Current agent execution mode (Safe / Build / Autopilot)
+    agent_mode: Arc<Mutex<AgentMode>>,
 }
 
 impl ToolConfirmationState {
@@ -38,6 +59,7 @@ impl ToolConfirmationState {
             remembered_choices: Arc::new(Mutex::new(HashMap::new())),
             tool_guard: Arc::new(ToolExecutionGuard::new()),
             auto_approve_all: Arc::new(AtomicBool::new(false)),
+            agent_mode: Arc::new(Mutex::new(AgentMode::default())),
         }
     }
 
@@ -53,6 +75,50 @@ impl ToolConfirmationState {
     /// Get the current global auto-approve flag
     pub fn is_auto_approve_all(&self) -> bool {
         self.auto_approve_all.load(Ordering::Relaxed)
+    }
+
+    /// Set the current agent execution mode
+    pub fn set_agent_mode(&self, mode: AgentMode) {
+        let mut lock = self.agent_mode.lock();
+        *lock = mode;
+        info!(
+            "[ToolConfirmation] Agent mode set to: {:?}",
+            mode
+        );
+    }
+
+    /// Get the current agent execution mode
+    pub fn get_agent_mode(&self) -> AgentMode {
+        *self.agent_mode.lock()
+    }
+
+    /// Check whether a tool is permitted under the given agent mode.
+    ///
+    /// In **Safe** mode only read-only / non-destructive tools are allowed.
+    /// **Build** and **Autopilot** modes permit all tools (confirmation gating
+    /// is handled separately by the auto-approve flag and dialog system).
+    pub fn is_tool_permitted_for_mode(tool_name: &str, mode: AgentMode) -> bool {
+        match mode {
+            AgentMode::Safe => {
+                matches!(
+                    tool_name,
+                    "file_read"
+                        | "file_list"
+                        | "search_web"
+                        | "browser_get_text"
+                        | "browser_get_url"
+                        | "browser_get_title"
+                        | "ui_screenshot"
+                        | "image_analyze"
+                        | "email_fetch"
+                        | "calendar_list_events"
+                        | "db_query"
+                        | "document_read"
+                        | "code_analyze"
+                )
+            }
+            AgentMode::Build | AgentMode::Autopilot => true,
+        }
     }
 
     /// Check if user has a remembered choice for this tool
@@ -356,6 +422,24 @@ pub fn get_auto_approve_all(state: State<'_, ToolConfirmationState>) -> Result<b
     Ok(state.is_auto_approve_all())
 }
 
+/// Set the agent execution mode (Safe / Build / Autopilot).
+#[tauri::command]
+pub fn set_agent_mode(
+    mode: AgentMode,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.set_agent_mode(mode);
+    Ok(())
+}
+
+/// Get the current agent execution mode.
+#[tauri::command]
+pub fn get_agent_mode(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<AgentMode, String> {
+    Ok(state.get_agent_mode())
+}
+
 /// Resolve a pending autonomous-agent task approval.
 ///
 /// Called by the frontend when the user approves or rejects a task that is
@@ -418,6 +502,26 @@ pub async fn request_tool_confirmation(
 ) -> Result<bool, String> {
     let request_id = request.request_id.clone();
     let tool_name = request.tool_name.clone();
+
+    // Agent mode gate — block tools not permitted in the current mode
+    let current_mode = state.get_agent_mode();
+    if !ToolConfirmationState::is_tool_permitted_for_mode(&tool_name, current_mode) {
+        warn!(
+            "[ToolConfirmation] Tool '{}' blocked by agent mode {:?}",
+            tool_name, current_mode
+        );
+        let _ = app_handle.emit(
+            "tool:blocked_by_mode",
+            serde_json::json!({
+                "tool_name": tool_name,
+                "mode": format!("{:?}", current_mode).to_lowercase(),
+            }),
+        );
+        return Err(format!(
+            "Tool '{}' is not permitted in {:?} mode",
+            tool_name, current_mode
+        ));
+    }
 
     // Global auto-approve bypass — skip all dialogs when trust-all is enabled
     if state.is_auto_approve_all() {
@@ -602,5 +706,42 @@ mod tests {
         assert_eq!(summary.tool_display_name, "File Write");
         assert!(summary.parameters_summary.contains("path"));
         assert!(summary.parameters_summary.contains("content"));
+    }
+
+    #[test]
+    fn test_agent_mode_default() {
+        let state = ToolConfirmationState::new();
+        assert_eq!(state.get_agent_mode(), AgentMode::Build);
+    }
+
+    #[test]
+    fn test_agent_mode_set_get() {
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(AgentMode::Safe);
+        assert_eq!(state.get_agent_mode(), AgentMode::Safe);
+        state.set_agent_mode(AgentMode::Autopilot);
+        assert_eq!(state.get_agent_mode(), AgentMode::Autopilot);
+    }
+
+    #[test]
+    fn test_tool_permitted_safe_mode() {
+        // Safe mode allows only read-only tools
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_read", AgentMode::Safe));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("search_web", AgentMode::Safe));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_read", AgentMode::Safe));
+
+        // Safe mode blocks write/destructive tools
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Safe));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Safe));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("browser_navigate", AgentMode::Safe));
+    }
+
+    #[test]
+    fn test_tool_permitted_build_autopilot() {
+        // Build and Autopilot modes allow everything
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Build));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Build));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Autopilot));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Autopilot));
     }
 }
