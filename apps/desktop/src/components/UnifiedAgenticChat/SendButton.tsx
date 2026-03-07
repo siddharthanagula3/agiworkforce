@@ -38,15 +38,20 @@ export const SendButton: React.FC<SendButtonProps> = ({
   onSend,
   onStop,
 }) => {
-  if (showStopButton && onStop) {
+  // BUG-SB-01: Always render the stop button when showStopButton is true,
+  // even if onStop is undefined (disable it rather than silently fall through
+  // to the send button, which would mislead the user during generation).
+  if (showStopButton) {
     return (
       <button
         type="button"
         onClick={onStop}
+        disabled={!onStop}
         className={cn(
           'p-2 rounded-lg transition-all duration-200',
-          'bg-red-500 hover:bg-red-600 text-white',
+          'bg-red-500 text-white',
           'shadow-lg shadow-red-500/25',
+          onStop ? 'hover:bg-red-600' : 'opacity-50 cursor-not-allowed',
         )}
         title="Stop generation"
         aria-label="Stop the current response"
@@ -60,7 +65,8 @@ export const SendButton: React.FC<SendButtonProps> = ({
     <button
       type="button"
       onClick={onSend}
-      disabled={disabled || !hasContent}
+      // BUG-SB-01 (send side): also disable while isSending to prevent double-submits.
+      disabled={isSending || disabled || !hasContent}
       className={cn(
         'p-2 rounded-lg transition-all duration-200',
         hasContent && !disabled

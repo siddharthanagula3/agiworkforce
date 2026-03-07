@@ -335,15 +335,40 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         startRecording: async () => {
-          set(
-            { isRecording: true, currentRecording: null },
-            undefined,
-            'automation/startRecording',
-          );
+          // BUG-003 fix: call backend to start recording and store the returned recordingId
+          try {
+            const result = await invoke<{ recordingId: string }>('automation_record_start');
+            const recordingSession: RecordingSession = {
+              sessionId: result.recordingId,
+              startTime: Date.now(),
+              isRecording: true,
+            };
+            set(
+              { isRecording: true, currentRecording: recordingSession },
+              undefined,
+              'automation/startRecording',
+            );
+          } catch (error) {
+            console.error('[automationStore] Failed to start recording on backend:', error);
+            set({ error: String(error) }, undefined, 'automation/startRecording/error');
+            throw error;
+          }
         },
 
         stopRecording: async () => {
-          set({ isRecording: false }, undefined, 'automation/stopRecording');
+          // BUG-003 fix: call backend to stop recording before clearing state
+          const { currentRecording } = get();
+          try {
+            await invoke('automation_record_stop', { recordingId: currentRecording?.sessionId });
+          } catch (error) {
+            console.error('[automationStore] Failed to stop recording on backend:', error);
+            // Continue so UI state is still cleared even if backend call fails
+          }
+          set(
+            { isRecording: false, currentRecording: null },
+            undefined,
+            'automation/stopRecording',
+          );
           return null;
         },
 

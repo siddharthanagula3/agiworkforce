@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Clock, MessageSquare, FileText, X, Loader2, TrendingUp, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Fuse from 'fuse.js';
-import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { useChatStore, dbIdToUuid, type ConversationSummary } from '../../stores/chat/chatStore';
 import { cn } from '../../lib/utils';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -100,8 +100,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   const ftsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
-  const conversations = useUnifiedChatStore((state) => state.conversations);
-  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const conversations = useChatStore((state) => state.conversations);
+  const selectConversation = useChatStore((state) => state.selectConversation);
 
   // Load recent commands on open
   useEffect(() => {
@@ -175,10 +175,14 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         return;
       }
       if (result.ftsResult) {
-        // FTS5 returns conversation_id as i64 (number). Map it to the UUID string used by the store.
-        const convIdStr = String(result.ftsResult.conversation_id);
-        const conv = conversations.find((c) => c.id === convIdStr || String(c.id) === convIdStr);
-        if (conv) selectConversation(conv.id);
+        // FTS5 returns conversation_id as an i64 SQLite row ID, but the store uses UUID strings.
+        // Use dbIdToUuid to translate the numeric DB ID to the frontend UUID, then look it up.
+        const uuid = dbIdToUuid(result.ftsResult.conversation_id);
+        const conv = conversations.find((c) => c.id === uuid);
+        if (conv) {
+          selectConversation(conv.id);
+        }
+        // If no mapping exists (conversation not yet loaded into the store), silently skip.
       } else if (result.kind === 'conversation' && result.conversation) {
         selectConversation(result.conversation.id);
       }
@@ -467,8 +471,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
 
   if (!isOpen) return null;
 
-  let flatIdx = 0;
-
   return (
     <AnimatePresence>
       <div
@@ -557,10 +559,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                     <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
                       {section.heading}
                     </div>
-                    {section.items.map((result) => {
-                      const idx = flatIdx++;
-                      return renderItem(result, idx);
-                    })}
+                    {section.items.map((result) => renderItem(result, flatResults.indexOf(result)))}
                   </div>
                 ))}
               </div>

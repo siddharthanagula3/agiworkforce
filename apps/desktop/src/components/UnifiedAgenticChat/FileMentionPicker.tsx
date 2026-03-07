@@ -262,11 +262,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [onClose, handleEntryActivate]);
 
   // Scroll selected item into view.
+  // BUG-FMP-04: list.children[selectedIndex] was off-by-header because the
+  // first child is the header <div>, not a file item. Use a targeted selector
+  // on the data-mention-item attribute instead.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const selected = list.children[selectedIndex] as HTMLElement | undefined;
-    selected?.scrollIntoView({ block: 'nearest' });
+    const items = list.querySelectorAll<HTMLElement>('[data-mention-item]');
+    items[selectedIndex]?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
 
   if (!rootPath) {
@@ -337,6 +340,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         displayEntries.map((entry, i) => (
           <button
             key={entry.path}
+            data-mention-item
             role="option"
             aria-selected={i === selectedIndex}
             className={cn(

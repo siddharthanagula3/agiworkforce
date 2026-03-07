@@ -167,6 +167,8 @@ export function useVoiceTranscription(
   const streamRef = useRef<MediaStream | null>(null);
   // HKS-005 fix: Track mount state to prevent setState after unmount
   const isMountedRef = useRef(true);
+  // BUG-VT-02: Ref mirror of isRecording for stale-closure-safe concurrent session guard
+  const isRecordingRef = useRef(false);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     let timeoutId: number | undefined;
@@ -208,7 +210,9 @@ export function useVoiceTranscription(
     async (settings: Partial<VoiceSettings>): Promise<void> => {
       try {
         await invoke('voice_configure', {
-          provider: settings.provider || 'cloud',
+          // BUG-VT-05: Only forward provider when explicitly set by the caller;
+          // do not override with 'cloud' when the caller omits the field (e.g. language-only updates).
+          ...(settings.provider !== undefined ? { provider: settings.provider } : {}),
           model: settings.model,
           language: settings.language,
         });
@@ -239,11 +243,13 @@ export function useVoiceTranscription(
 
   // Check browser support on mount
   useEffect(() => {
+    // BUG-VT-06: isSupported reflects MediaRecorder OR any SpeechRecognition availability
     const supported =
-      typeof navigator !== 'undefined' &&
-      navigator.mediaDevices &&
-      typeof navigator.mediaDevices.getUserMedia === 'function' &&
-      typeof MediaRecorder !== 'undefined';
+      typeof MediaRecorder !== 'undefined' ||
+      typeof (window as typeof globalThis & { SpeechRecognition?: unknown }).SpeechRecognition !==
+        'undefined' ||
+      typeof (window as typeof globalThis & { webkitSpeechRecognition?: unknown })
+        .webkitSpeechRecognition !== 'undefined';
 
     setIsSupported(supported);
 
@@ -266,6 +272,14 @@ export function useVoiceTranscription(
           speechRecognitionRef.current.stop();
         } catch {
           // Ignore speech recognition shutdown failures
+        }
+      }
+      // BUG-VT-04: Stop MediaRecorder on unmount so the OS recording indicator clears
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // Ignore stop errors during cleanup
         }
       }
     };
@@ -349,7 +363,8 @@ export function useVoiceTranscription(
         return;
       }
 
-      if (state.isRecording) {
+      // BUG-VT-02: Use ref guard to avoid stale closure capturing old isRecording state
+      if (isRecordingRef.current) {
         return;
       }
 
@@ -408,6 +423,8 @@ export function useVoiceTranscription(
         const speechEvent = event as Event & { error?: string };
         const errorCode = speechEvent.error || 'unknown';
         const errorMessage = `Speech recognition error: ${errorCode}`;
+        // BUG-VT-02: Keep ref in sync
+        isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -419,6 +436,8 @@ export function useVoiceTranscription(
       };
 
       recognition.onend = () => {
+        // BUG-VT-02: Keep ref in sync
+        isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -432,6 +451,8 @@ export function useVoiceTranscription(
       try {
         speechRecognitionRef.current = recognition;
         recognition.start();
+        // BUG-VT-02: Keep ref in sync
+        isRecordingRef.current = true;
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -444,6 +465,8 @@ export function useVoiceTranscription(
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'Failed to start speech recognition';
+        // BUG-VT-02: Keep ref in sync
+        isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -463,7 +486,8 @@ export function useVoiceTranscription(
       return;
     }
 
-    if (state.isRecording) {
+    // BUG-VT-02: Use ref guard instead of stale state value
+    if (isRecordingRef.current) {
       return;
     }
 
@@ -494,6 +518,8 @@ export function useVoiceTranscription(
 
       mediaRecorder.onerror = (event) => {
         const errorMessage = `Recording error: ${(event as ErrorEvent).message || 'Unknown error'}`;
+        // BUG-VT-02: Keep ref in sync
+        isRecordingRef.current = false;
         setState((prev) => ({
           ...prev,
           isRecording: false,
@@ -505,6 +531,8 @@ export function useVoiceTranscription(
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(100); // Collect data every 100ms
 
+      // BUG-VT-02: Keep ref in sync
+      isRecordingRef.current = true;
       setState((prev) => ({
         ...prev,
         isRecording: true,
@@ -515,6 +543,8 @@ export function useVoiceTranscription(
       onRecordingStart?.();
     } catch (err) {
       const errorMessage = getMediaErrorMessage(err);
+      // BUG-VT-02: Keep ref in sync
+      isRecordingRef.current = false;
       setState((prev) => ({
         ...prev,
         isRecording: false,
@@ -526,7 +556,6 @@ export function useVoiceTranscription(
     preferWhisperCloud,
     language,
     isSupported,
-    state.isRecording,
     getMimeType,
     onError,
     onRecordingStart,
@@ -548,6 +577,8 @@ export function useVoiceTranscription(
         // noop
       }
       const final = speechFinalTranscriptRef.current.trim();
+      // BUG-VT-02: Keep ref in sync
+      isRecordingRef.current = false;
       if (isMountedRef.current) {
         setState((prev) => ({
           ...prev,
@@ -559,7 +590,8 @@ export function useVoiceTranscription(
       return final;
     }
 
-    if (!state.isRecording || !mediaRecorderRef.current) {
+    // BUG-VT-02: Use ref guard for accurate current value
+    if (!isRecordingRef.current || !mediaRecorderRef.current) {
       return state.transcript;
     }
 
@@ -679,7 +711,6 @@ export function useVoiceTranscription(
   }, [
     preferWhisperCloud,
     language,
-    state.isRecording,
     state.transcript,
     onResult,
     onError,
