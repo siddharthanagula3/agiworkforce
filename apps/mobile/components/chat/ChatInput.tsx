@@ -5,7 +5,6 @@ import { AutoApproveToggle } from './AutoApproveToggle';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
-import { VoicePTT } from './VoicePTT';
 import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 import { colors } from '@/lib/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -16,11 +15,6 @@ interface ChatInputProps {
   onStop?: () => void;
   onOpenModelPicker?: () => void;
   onOpenVoiceMode?: () => void;
-  /**
-   * Deepgram API key forwarded to VoicePTT for direct (client-side) STT.
-   * When omitted, VoicePTT falls back to a "[voice input]" placeholder.
-   */
-  deepgramApiKey?: string;
 }
 
 export function ChatInput({
@@ -29,7 +23,6 @@ export function ChatInput({
   onStop,
   onOpenModelPicker,
   onOpenVoiceMode,
-  deepgramApiKey,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -91,19 +84,12 @@ export function ChatInput({
           accessibilityHint="Type your message to the AI assistant"
         />
 
-        {/* Voice input button — tap-to-toggle, long-press for full voice mode */}
+        {/* Unified voice button — tap to toggle (Whisper), hold for PTT (Deepgram), long-press for voice mode */}
         <VoiceInputButton
           onTranscription={handleTranscription}
           onRecordingStart={() => {}}
           onRecordingStop={() => {}}
           onLongPress={onOpenVoiceMode}
-          disabled={isStreaming}
-        />
-
-        {/* VoicePTT — hold-to-record, Deepgram direct transcription */}
-        <VoicePTT
-          onTranscript={handleTranscription}
-          deepgramApiKey={deepgramApiKey}
           disabled={isStreaming}
         />
 
