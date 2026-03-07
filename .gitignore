@@ -136,6 +136,7 @@ $RECYCLE.BIN/
 
 # --- Application data ---
 apps/desktop/src-tauri/agiworkforce.db
+apps/desktop/src-tauri/test.db
 agiworkforce.db*
 
 # --- Generated files ---
@@ -152,6 +153,10 @@ debug/
 *.crt
 *.p12
 *.pfx
+
+# --- Tauri update signing keys (never commit private keys) ---
+apps/desktop/src-tauri/tauri-signing
+apps/desktop/src-tauri/tauri-signing.pub
 
 # --- MCP Configuration (contains sensitive credentials) ---
 .mcp.json
@@ -190,3 +195,4 @@ leads/
 
 # --- Supabase temp files ---
 **/.temp/
+.worktrees/
