@@ -90,3 +90,11 @@ export async function listen<T = unknown>(
   console.warn(`[tauri-mock] Called listen('${event}') in web environment.`);
   return () => {};
 }
+
+/**
+ * Stub for Tauri's emit() — no-op in web environment.
+ * Desktop uses Tauri's event bus; web components that call emit() are no-ops here.
+ */
+export async function emit(event: string, _payload?: unknown): Promise<void> {
+  console.warn(`[tauri-mock] Called emit('${event}') in web environment.`);
+}
