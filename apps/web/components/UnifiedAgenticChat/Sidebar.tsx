@@ -345,7 +345,6 @@ export function Sidebar({
   const exportConversationToMarkdown = useChatStore((state) => state.exportConversationToMarkdown);
   const createConversation = useChatStore((state) => state.createConversation);
   const setActiveView = useChatStore((state) => state.setActiveView);
-  const ensureActiveConversation = useChatStore((state) => state.ensureActiveConversation);
   const getConversationStats = useChatStore((state) => state.getConversationStats);
 
   // Message loading functions
@@ -416,10 +415,12 @@ export function Sidebar({
     [conversations],
   );
 
-  // Run once on mount - ensureActiveConversation is a stable store function
-  useEffect(() => {
-    ensureActiveConversation();
-  }, [ensureActiveConversation]);
+  // NOTE: ensureActiveConversation is intentionally NOT called on mount.
+  // Auto-creating conversations on page load causes duplicate "New Chat" entries
+  // every time the user navigates to /chat (especially in React StrictMode which
+  // double-invokes effects). Conversations are created only on explicit user action
+  // (clicking "New Chat" or sending a message). If a conversation was active in a
+  // previous session, it is restored from persisted store state automatically.
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
