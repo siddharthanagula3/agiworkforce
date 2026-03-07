@@ -791,6 +791,7 @@ export default defineConfig({
   // --------------------------------------------------------------------------
 
   private saveToStorage(): void {
+    if (typeof window === 'undefined') return;
     try {
       // Note: This stores non-sensitive workspace metadata (file names, paths, and
       // user-authored code content for the vibe editor). No secrets, API keys, or
@@ -810,6 +811,7 @@ export default defineConfig({
   }
 
   private loadFromStorage(): void {
+    if (typeof window === 'undefined') return;
     try {
       const stored = localStorage.getItem(this.storageKey);
       if (!stored) return;
@@ -836,7 +838,7 @@ export default defineConfig({
   }
 
   clearStorage(reinitialize: boolean = true): void {
-    localStorage.removeItem(this.storageKey);
+    if (typeof window !== 'undefined') localStorage.removeItem(this.storageKey);
     this.files.clear();
     this.openFiles.clear();
     this.dirtyFiles.clear();
