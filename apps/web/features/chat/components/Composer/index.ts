@@ -1,1 +1,11 @@
 export { ChatComposer } from './ChatComposer';
+export { ChatComposerNew } from './ChatComposerNew';
+export { FocusModeButtons } from './FocusModeButtons';
+export { ActiveModeTags } from './ActiveModeTags';
+export { SlashCommandMenu } from './SlashCommandMenu';
+export { SendButton } from './SendButton';
+export { ComposerFooter } from './ComposerFooter';
+export { InputFooter } from './InputFooter';
+export type { FocusMode } from './FocusModeButtons';
+export type { ModeTag } from './ActiveModeTags';
+export type { SendButtonMode } from './SendButton';

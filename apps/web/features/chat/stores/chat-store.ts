@@ -18,6 +18,12 @@ export interface ChatMessage {
     model?: string;
     tokensUsed?: number;
     thinkingSteps?: string[];
+    tools?: Array<{
+      name: string;
+      status: 'running' | 'completed' | 'failed';
+      durationMs?: number;
+      args?: string;
+    }>;
   };
 }
 
