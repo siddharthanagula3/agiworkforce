@@ -91,6 +91,8 @@ pub mod templates;
 pub mod terminal;
 pub mod thinking;
 
+pub mod code_search; // Grep + Glob + Formatter pipeline (OpenCode parity)
+pub mod test_runner; // Test runner integration (cargo / pytest / jest / etc.)
 pub mod swarm; // Added in Phase 26
 pub mod system_permissions;
 pub mod tool_confirmation;
@@ -196,6 +198,8 @@ pub use settings_v2::*;
 pub use shortcuts::*;
 pub use skills::*;
 pub use subscription::*;
+pub use code_search::*;
+pub use test_runner::*;
 pub use swarm::*; // Added in Phase 26
 pub use system_permissions::*;
 pub use task_persistence::*;

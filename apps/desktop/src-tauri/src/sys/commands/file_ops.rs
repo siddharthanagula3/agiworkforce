@@ -1004,8 +1004,102 @@ pub async fn dir_traverse(
                     }
                     Err(e) => {
                         warn!("Glob error: {}", e);
-                    }
-                }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// file_read_range — Read with line-number offset + limit (OpenCode parity)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Response for a ranged file read.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileReadRangeResult {
+    /// The lines requested (joined with newlines), prefixed with line numbers.
+    pub content: String,
+    /// 1-indexed line number of the first returned line.
+    pub start_line: usize,
+    /// 1-indexed line number of the last returned line.
+    pub end_line: usize,
+    /// Total number of lines in the file.
+    pub total_lines: usize,
+    /// True when there are more lines beyond `end_line`.
+    pub has_more: bool,
+}
+
+/// Read a file with a line-number offset and limit.
+///
+/// Each returned line is prefixed with its 1-based line number: `"42: <content>"`.
+/// This matches the OpenCode `Read(path, offset, limit)` tool signature and lets
+/// the agent navigate large files without loading them entirely into context.
+///
+/// # Arguments
+/// * `path`   — Absolute or relative path to the file.
+/// * `offset` — 1-indexed line number to start from (default 1).
+/// * `limit`  — Maximum number of lines to return (default 2000, max 5000).
+#[tauri::command]
+pub async fn file_read_range(
+    app: AppHandle,
+    path: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<FileReadRangeResult, String> {
+    debug!("Reading file with range: {} offset={:?} limit={:?}", path, offset, limit);
+
+    let _ = validate_path_security(&path)?;
+
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if metadata.len() > 100_000_000 {
+                return Err(format!(
+                    "File too large: {} bytes. Maximum is 100MB for safety",
+                    metadata.len()
+                ));
+            }
+            if !metadata.is_file() {
+                return Err(format!("Path is not a file: {}", path));
+            }
+        }
+        Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
+    }
+
+    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
+        return Err("Permission denied".to_string());
+    }
+
+    let content_str =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
+
+    let all_lines: Vec<&str> = content_str.lines().collect();
+    let total_lines = all_lines.len();
+
+    // Clamp offset to valid range (1-indexed input → 0-indexed internal).
+    let start_0 = offset.unwrap_or(1).saturating_sub(1).min(total_lines);
+    let max_limit = 5000usize;
+    let take = limit.unwrap_or(2000).min(max_limit);
+
+    let end_exclusive = (start_0 + take).min(total_lines);
+    let selected = &all_lines[start_0..end_exclusive];
+
+    // Prefix each line with its 1-based line number.
+    let content = selected
+        .iter()
+        .enumerate()
+        .map(|(i, line)| format!("{}: {}", start_0 + i + 1, line))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(FileReadRangeResult {
+        content,
+        start_line: start_0 + 1,
+        end_line: end_exclusive,
+        total_lines,
+        has_more: end_exclusive < total_lines,
+    })
+}
             }
         }
         Err(e) => {

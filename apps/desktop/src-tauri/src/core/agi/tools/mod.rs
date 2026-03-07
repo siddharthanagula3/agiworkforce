@@ -2695,6 +2695,220 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // ── Grep — regex content search ──────────────────────────────────────
+        self.register_tool(Tool {
+            id: "grep_search".to_string(),
+            name: "Grep (Content Search)".to_string(),
+            description: "Search file contents using a regular expression. Skips binary files, \
+                node_modules, and other noise. Use `include_pattern` to filter by file type \
+                (e.g. \"*.ts\"). Returns file path, line number, and the matching line."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileRead, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "pattern".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Regular expression pattern to search for".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "root".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Root directory to search in (defaults to project folder)"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "include_pattern".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Glob to restrict file types (e.g. \"*.rs\", \"*.ts\")"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "case_insensitive".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Case-insensitive search (default false)".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 30.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Glob — file pattern search ───────────────────────────────────────
+        self.register_tool(Tool {
+            id: "glob_search".to_string(),
+            name: "Glob (File Pattern Search)".to_string(),
+            description: "Find files matching a glob pattern. Examples: \"**/*.ts\", \
+                \"src/**/*.rs\", \"*.json\". Results are sorted by modification time \
+                (most recent first). Skips node_modules, target, .git automatically."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileRead, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "pattern".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Glob pattern (e.g. \"**/*.ts\", \"src/**/*.rs\")".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "root".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Root directory (defaults to project folder)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Max results (default 200, max 1000)".to_string(),
+                    default: Some(serde_json::json!(200)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Read with line ranges ─────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "file_read_range".to_string(),
+            name: "Read File (with line range)".to_string(),
+            description: "Read a file starting from a specific line number. Each line is \
+                prefixed with its 1-based line number (e.g. \"42: content\"). Use `offset` \
+                to start from a specific line and `limit` to control how many lines to return. \
+                Essential for navigating large files without loading them fully into context."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileRead, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Absolute or relative path to the file".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "offset".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "1-indexed line to start from (default 1)".to_string(),
+                    default: Some(serde_json::json!(1)),
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Max lines to return (default 2000, max 5000)".to_string(),
+                    default: Some(serde_json::json!(2000)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Format file ───────────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "format_file".to_string(),
+            name: "Format File".to_string(),
+            description: "Run the appropriate code formatter on a file after editing. \
+                Detects the formatter from the file extension and project config \
+                (prettier, biome, rustfmt, ruff, black, gofmt, clang-format, shfmt, etc.). \
+                Always call this after writing or editing code files."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Absolute path to the file to format".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "project_root".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Project root (used to detect project-local formatters)"
+                        .to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 20.0,
+                memory_mb: 100,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Test Runner ───────────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "test_run".to_string(),
+            name: "Run Tests".to_string(),
+            description: "Run the project's test suite and return structured pass/fail results. \
+                Auto-detects the runner (cargo test, pytest, jest, vitest, go test, rspec, bun). \
+                Use `filter` to run a specific test. After fixing a failure, call this again \
+                to confirm the fix. The agent should iterate until all tests pass."
+                .to_string(),
+            capabilities: vec![ToolCapability::CodeExecution, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "project_root".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Project root directory (defaults to active project folder)"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "runner".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Force a specific runner: cargo, pytest, jest, vitest, go, rspec, bun (auto-detects if omitted)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "filter".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Test name filter to run a subset of tests".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_secs".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Timeout in seconds (default 120)".to_string(),
+                    default: Some(serde_json::json!(120)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 50.0,
+                memory_mb: 256,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         Ok(())
     }
 
