@@ -6,6 +6,7 @@ import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
 import { cn } from '../../lib/utils';
 import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../../stores/projectStore';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 interface PlusMenuProps {
   disabled?: boolean;
@@ -27,6 +28,7 @@ export function PlusMenu({
   visionSupported = true,
 }: PlusMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   // Folder selection
   const currentFolder = useProjectStore(selectCurrentFolder);
@@ -132,6 +134,10 @@ export function PlusMenu({
         {/* Connectors */}
         <button
           type="button"
+          onClick={() => {
+            setIsOpen(false);
+            openSettings('connectors');
+          }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
         >
           <Link className="h-4 w-4 shrink-0" />
@@ -141,6 +147,10 @@ export function PlusMenu({
         {/* Skills */}
         <button
           type="button"
+          onClick={() => {
+            setIsOpen(false);
+            openSettings('mcp');
+          }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
         >
           <Brain className="h-4 w-4 shrink-0" />

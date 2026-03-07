@@ -56,7 +56,11 @@ export function ConnectorCard({
 
       {/* Action area */}
       <div className="shrink-0 flex items-center gap-1.5">
-        {loading ? (
+        {connector.comingSoon ? (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+            Coming Soon
+          </span>
+        ) : loading ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : connected ? (
           <>
