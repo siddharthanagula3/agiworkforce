@@ -37,6 +37,7 @@ import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
 import { ToolRationaleDisplay } from './ToolRationaleDisplay';
 import { ToolTimeline } from './ToolTimeline';
+import { ThinkingBlock } from './ThinkingBlock';
 import { useChatStore } from '../../stores/chat/chatStore';
 
 interface ChatStreamProps {
@@ -231,6 +232,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
   );
 
   const toolTimelineByMessage = useChatStore((state) => state.toolTimelineByMessage);
+  const thinkingByMessage = useChatStore((state) => state.thinkingByMessage);
 
   const items = useMemo(() => messages ?? [], [messages]);
 
@@ -728,11 +730,20 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             }
 
             const toolEntries = toolTimelineByMessage[message.id];
+            const thinkingContent = thinkingByMessage[message.id];
 
             return (
               <React.Fragment key={message.id}>
                 {message.role === 'assistant' && toolEntries && toolEntries.length > 0 && (
                   <ToolTimeline entries={toolEntries} className="mx-4 mb-1" />
+                )}
+                {message.role === 'assistant' && thinkingContent && (
+                  <div className="mx-4 mb-1">
+                    <ThinkingBlock
+                      content={thinkingContent}
+                      isStreaming={Boolean(message.metadata?.streaming) && isStreaming}
+                    />
+                  </div>
                 )}
                 <ChatMessageItem
                   message={message}

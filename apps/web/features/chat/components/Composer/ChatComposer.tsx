@@ -32,6 +32,7 @@ import { cn } from '@shared/lib/utils';
 import type { ChatMode, Tool } from '../../types';
 import type { AIEmployeeBasic } from '@shared/types';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import { VoiceInputButton } from '../VoiceInputButton';
 
 /**
  * Extended employee type for composer with color property
@@ -521,7 +522,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
             </TooltipProvider>
           </div>
 
-          {/* Right side: char count + send */}
+          {/* Right side: char count + voice + send */}
           <div className="flex items-center gap-2">
             {/* Character count — only shown when approaching limit */}
             {charCount > 0 && (
@@ -537,6 +538,14 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
                 {charCount.toLocaleString()}
               </span>
             )}
+
+            {/* Voice input button */}
+            <VoiceInputButton
+              onTranscript={(transcript) =>
+                setMessage((prev) => (prev ? prev + ' ' + transcript : transcript))
+              }
+              disabled={isLoading}
+            />
 
             {/* Send button */}
             <TooltipProvider delayDuration={300}>

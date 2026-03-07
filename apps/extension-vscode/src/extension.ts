@@ -11,6 +11,8 @@
 
 import * as vscode from 'vscode';
 import * as net from 'net';
+import * as fs from 'fs';
+import * as path from 'path';
 import { registerChatParticipant } from './providers/chatParticipant';
 import { SidebarProvider } from './providers/sidebarProvider';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from './providers/codeActionProvider';
@@ -46,6 +48,18 @@ export function activate(context: vscode.ExtensionContext): void {
       `AGI Workforce: Desktop bridge failed to initialize — ${errMsg}. ` +
         'Some features may be unavailable.',
     );
+  }
+
+  // ── 0c. MCP enabled → ensure bridge connects on startup ────────────────────
+  {
+    const mcpEnabled =
+      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('mcp.enabled') ?? false;
+    if (mcpEnabled) {
+      const bridge = getDesktopBridge();
+      if (bridge !== undefined && bridge.status === 'disconnected') {
+        void bridge.connect();
+      }
+    }
   }
 
   // ── 1. Chat participant (@agi in VS Code Chat) ──────────────────────────────
@@ -115,7 +129,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi-workforce.agentMode ──────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.agentMode', () => {
-      AgentModePanel.createOrShow(context.extensionUri, context.secrets, context);
+      const planMode =
+        vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.planMode') ?? false;
+      AgentModePanel.createOrShow(context.extensionUri, context.secrets, context, planMode);
     }),
 
     // ── agi-workforce.explain ─────────────────────────────────────────────────
@@ -393,6 +409,74 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       }
     }),
+
+    // ── agi.git.status ───────────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi.git.status', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage('No workspace open');
+        return;
+      }
+      const terminal = vscode.window.createTerminal('AGI Git');
+      terminal.show();
+      terminal.sendText('git status');
+    }),
+
+    // ── agi.git.diff ─────────────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi.git.diff', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage('No workspace open');
+        return;
+      }
+      const terminal = vscode.window.createTerminal('AGI Git');
+      terminal.show();
+      terminal.sendText('git diff');
+    }),
+
+    // ── agi.git.commit ───────────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi.git.commit', async () => {
+      const msg = await vscode.window.showInputBox({
+        prompt: 'Commit message',
+        placeHolder: 'feat: ...',
+      });
+      if (!msg) return;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) return;
+      const terminal = vscode.window.createTerminal('AGI Git');
+      terminal.show();
+      terminal.sendText(`git add -A && git commit -m "${msg.replace(/"/g, '\\"')}"`);
+    }),
+
+    // ── agi.test.run ─────────────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi.test.run', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage('No workspace open');
+        return;
+      }
+
+      // Auto-detect test runner
+      let testCmd = 'npm test';
+      if (fs.existsSync(path.join(workspaceRoot, 'package.json'))) {
+        const pkg = JSON.parse(
+          fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'),
+        ) as { scripts?: Record<string, string> };
+        if (pkg.scripts?.['test']) testCmd = 'npm test';
+        if (fs.existsSync(path.join(workspaceRoot, 'pnpm-lock.yaml'))) testCmd = 'pnpm test';
+        if (fs.existsSync(path.join(workspaceRoot, 'yarn.lock'))) testCmd = 'yarn test';
+      }
+      if (fs.existsSync(path.join(workspaceRoot, 'Cargo.toml'))) testCmd = 'cargo test';
+      if (
+        fs.existsSync(path.join(workspaceRoot, 'pytest.ini')) ||
+        fs.existsSync(path.join(workspaceRoot, 'pyproject.toml'))
+      )
+        testCmd = 'pytest';
+
+      const terminal = vscode.window.createTerminal('AGI Tests');
+      terminal.show();
+      terminal.sendText(testCmd);
+    }),
   );
 
   // ── Status bar item ──────────────────────────────────────────────────────
@@ -448,6 +532,27 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {
         void validateAdvancedFeatureFlags(context);
+      }
+
+      // ── planMode → agentModeProvider ────────────────────────────────────
+      if (e.affectsConfiguration('agiWorkforce.agent.planMode')) {
+        const planMode =
+          vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.planMode') ?? false;
+        AgentModePanel.currentPanel?.setPlanMode(planMode);
+      }
+
+      // ── mcp.enabled → desktop bridge ────────────────────────────────────
+      if (e.affectsConfiguration('agiWorkforce.mcp.enabled')) {
+        const mcpEnabled =
+          vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('mcp.enabled') ?? false;
+        const bridge = getDesktopBridge();
+        if (bridge !== undefined) {
+          if (mcpEnabled && bridge.status === 'disconnected') {
+            void bridge.connect();
+          } else if (!mcpEnabled && bridge.status === 'connected') {
+            bridge.disconnect();
+          }
+        }
       }
     }),
   );

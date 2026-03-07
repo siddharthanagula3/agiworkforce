@@ -167,7 +167,7 @@ export async function ollamaGetModelInfo(modelName: string): Promise<OllamaModel
 
   try {
     return await invokeWithTimeout<OllamaModel>('ollama_get_model_info', {
-      model_name: modelName,
+      modelName,
     });
   } catch (error) {
     throw new Error(`Failed to get model info for '${modelName}': ${error}`);
