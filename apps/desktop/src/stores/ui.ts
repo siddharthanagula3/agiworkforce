@@ -244,7 +244,7 @@ const cleanOldDrafts = (drafts: Map<number | null, DraftMessage>) => {
   const cleaned = new Map(drafts);
 
   for (const [key, draft] of cleaned.entries()) {
-    if (now - draft.timestamp.getTime() > MAX_DRAFT_AGE_MS) {
+    if (now - new Date(draft.timestamp).getTime() > MAX_DRAFT_AGE_MS) {
       cleaned.delete(key);
     }
   }
