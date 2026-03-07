@@ -399,25 +399,20 @@ export const useChatStore = create<ChatState>()(
           ensureActiveConversation: () =>
             set(
               (state) => {
+                // Only restore messages from the persisted message map into the
+                // active messages array. Do NOT auto-create a new conversation —
+                // that would produce spurious "New Chat" entries on every page
+                // load (and double in React StrictMode). New conversations must
+                // only be created by an explicit user action (New Chat button /
+                // sending the first message).
                 if (state.activeConversationId) {
                   const existing = state.messagesByConversation[state.activeConversationId];
                   if (existing && state.messages.length === 0) {
                     state.messages = existing.slice();
                   }
-                  return;
                 }
-                const id = crypto.randomUUID();
-                const created: ConversationSummary = {
-                  id,
-                  title: 'New chat',
-                  pinned: false,
-                  lastMessage: '',
-                  updatedAt: new Date(),
-                };
-                state.conversations.unshift(created);
-                state.activeConversationId = id;
-                state.messagesByConversation[id] = [];
-                state.messages = [];
+                // If there is no active conversation, leave state as-is — the
+                // landing/empty state UI is shown and the user can start one.
               },
               undefined,
               'chat/ensureActiveConversation',
