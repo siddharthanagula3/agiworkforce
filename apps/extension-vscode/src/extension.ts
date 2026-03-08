@@ -462,7 +462,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!workspaceRoot) return;
       const terminal = vscode.window.createTerminal('AGI Git');
       terminal.show();
-      terminal.sendText(`git add -A && git commit -m "${msg.replace(/"/g, '\\"')}"`);
+      // Use `git add -u` (tracks modified/deleted only) instead of `git add -A`
+      // to avoid accidentally staging untracked sensitive or large binary files.
+      terminal.sendText(`git add -u && git commit -m "${msg.replace(/"/g, '\\"')}"`);
     }),
 
     // ── agi.test.run ─────────────────────────────────────────────────────────

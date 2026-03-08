@@ -349,6 +349,27 @@ function registerBridgeHandlersTracked(
         const commandId = msg.payload['command'] as string | undefined;
         const args = msg.payload['args'] as unknown[] | undefined;
         if (commandId) {
+          // Allowlist of commands the desktop bridge is permitted to trigger.
+          // Any commandId not in this set is blocked and logged — a compromised
+          // or misbehaving desktop app cannot invoke arbitrary VS Code commands.
+          const ALLOWED_BRIDGE_COMMANDS = new Set([
+            'agi-workforce.chat',
+            'agi-workforce.agentMode',
+            'agi-workforce.explain',
+            'agi-workforce.fix',
+            'agi-workforce.refactor',
+            'agi-workforce.generateTests',
+            'agi-workforce.selectModel',
+            'agi-workforce.openConversation',
+            'agi-workforce.sendToDesktop',
+            'agi-workforce.syncContextToDesktop',
+            'workbench.action.openSettings',
+            'workbench.action.files.openFile',
+          ]);
+          if (!ALLOWED_BRIDGE_COMMANDS.has(commandId)) {
+            console.warn(`[AGI Workforce Bridge] blocked disallowed command: ${commandId}`);
+            break;
+          }
           void vscode.commands.executeCommand(commandId, ...(args ?? []));
         }
         break;
