@@ -92,6 +92,11 @@ export class AgentModePanel {
   private _originalContents = new Map<string, string>();
   private _modifiedContents = new Map<string, string>();
 
+  /** Counts autonomous continuation iterations for the current agent session. */
+  private _iterationCount = 0;
+  /** Default max iterations — overridden by agiWorkforce.agent.maxIterations setting. */
+  private static readonly DEFAULT_MAX_ITERATIONS = 25;
+
   public static createOrShow(
     extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
@@ -165,6 +170,7 @@ export class AgentModePanel {
           case 'clearHistory':
             this.messages = [];
             this.editHistory = [];
+            this._iterationCount = 0;
             this.postMessage({ type: 'cleared' });
             break;
         }
@@ -224,6 +230,9 @@ export class AgentModePanel {
   private async handleUserMessage(text: string): Promise<void> {
     if (this.isProcessing) return;
     this.isProcessing = true;
+
+    // Reset iteration counter on each new user message (new agent session).
+    this._iterationCount = 0;
 
     this.postMessage({ type: 'userMessage', text });
     this.postMessage({ type: 'thinking', active: true });
@@ -312,6 +321,35 @@ export class AgentModePanel {
 
   private async handleAgentContinue(): Promise<void> {
     if (this.isProcessing) return;
+
+    // Enforce per-session iteration cap to prevent runaway autonomous loops.
+    this._iterationCount += 1;
+    const maxIterations =
+      vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .get<number>('agent.maxIterations') ?? AgentModePanel.DEFAULT_MAX_ITERATIONS;
+
+    if (this._iterationCount > maxIterations) {
+      const choice = await vscode.window.showWarningMessage(
+        `AGI Workforce Agent has reached ${maxIterations} autonomous iterations. ` +
+          'Continue running? This may consume significant API credits.',
+        { modal: false },
+        'Continue',
+        'Stop',
+      );
+      if (choice !== 'Continue') {
+        this.postMessage({
+          type: 'systemMessage',
+          text: `Agent stopped after ${maxIterations} iterations. Send a new message to continue.`,
+        });
+        this.isProcessing = false;
+        return;
+      }
+      // User approved — reset counter so they get another N iterations before
+      // the next warning rather than being prompted on every subsequent call.
+      this._iterationCount = 1;
+    }
+
     this.isProcessing = true;
 
     this.postMessage({ type: 'thinking', active: true });
