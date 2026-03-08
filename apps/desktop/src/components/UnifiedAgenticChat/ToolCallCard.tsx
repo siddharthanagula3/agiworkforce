@@ -1,5 +1,5 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ToolCallCard.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle, ChevronDown, Wrench } from 'lucide-react';
 import { cn } from '../../lib/utils';

@@ -9,6 +9,15 @@ import { useMissionStore } from '@shared/stores/mission-control-store';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import type { AIEmployee } from '@core/types/ai-employee';
 
+// Browser-safe logger shim (avoids importing pino in client bundles)
+const clientLogger = {
+  error: (msg: string, ...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[collaboration] ${msg}`, ...args);
+    }
+  },
+};
+
 export interface CollaborationOptions {
   sessionId?: string;
   userId?: string;
@@ -85,7 +94,7 @@ export function useAgentCollaboration(
         setAvailableAgents(agents);
         setIsInitialized(true);
       } catch (err) {
-        console.error('Failed to load agents:', err);
+        clientLogger.error('Failed to load agents:', err);
         toast.error('Failed to load available agents');
       }
     };
@@ -169,14 +178,13 @@ export function useAgentCollaboration(
       }
 
       try {
-        // Skills-based model: collaboration is handled via direct API calls
-        const response = await fetch('/api/llm/completion', {
+        // Use the dedicated collaboration endpoint for multi-agent coordination
+        const response = await fetch('/api/agents/collaboration', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId,
-            input: task,
-            mode: 'mission',
+            task,
             sessionId,
             agents: collaborativeAgents,
           }),
@@ -186,6 +194,14 @@ export function useAgentCollaboration(
           throw new Error('Collaboration failed to start');
         }
 
+        const data = (await response.json()) as {
+          agents?: string[];
+          collaborationId?: string;
+          status?: string;
+        };
+        clientLogger.error(
+          `Collaboration started: ${data.collaborationId ?? 'unknown'}, status: ${data.status ?? 'unknown'}`,
+        );
         toast.success('Collaboration started successfully');
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to start collaboration';

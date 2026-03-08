@@ -15,8 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://agiworkforce.com'), //agiworkforce.com'),
+  metadataBase: new URL(APP_URL),
   title: {
     default: 'AGI Workforce | Your On-Demand AI Workforce',
     template: '%s | AGI Workforce',
@@ -47,7 +49,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://agiworkforce.com',
+    url: APP_URL,
     siteName: 'AGI Workforce',
     title: 'AGI Workforce | Your On-Demand AI Workforce',
     description:
@@ -92,8 +94,8 @@ export default async function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'AGI Workforce',
-    url: 'https://agiworkforce.com',
-    logo: 'https://agiworkforce.com/logo.png',
+    url: APP_URL,
+    logo: `${APP_URL}/logo.png`,
     description:
       'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support.',
     sameAs: ['https://twitter.com/agiworkforce', 'https://github.com/agiworkforce'],
@@ -117,7 +119,7 @@ export default async function RootLayout({
       price: '0',
       priceCurrency: 'USD',
     },
-    url: 'https://agiworkforce.com',
+    url: APP_URL,
   };
 
   // JSON-LD Schema for WebSite with SearchAction
@@ -125,12 +127,12 @@ export default async function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: 'AGI Workforce',
-    url: 'https://agiworkforce.com',
+    url: APP_URL,
     potentialAction: {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: 'https://agiworkforce.com/search?q={search_term_string}',
+        urlTemplate: `${APP_URL}/search?q={search_term_string}`,
       },
       'query-input': 'required name=search_term_string',
     },

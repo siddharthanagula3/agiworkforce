@@ -208,7 +208,7 @@ pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
     }
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(86400))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -218,7 +218,7 @@ pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
             "name": model_name,
             "stream": false
         }))
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(86400))
         .send()
         .await
         .map_err(|e| format!("Failed to initiate model pull: {}", e))?;

@@ -225,21 +225,40 @@ const AIConfigurationPageContent: React.FC = () => {
     setTestResults((prev) => ({ ...prev, [provider]: 'pending' }));
 
     try {
-      // Simulate API test
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Read auth token from localStorage (same pattern used elsewhere in the app)
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
 
-      // In a real implementation, you would test the actual API
-      const isWorking = Math.random() > 0.3; // Simulate 70% success rate
+      // Read CSRF token from cookie
+      const csrfToken =
+        typeof document !== 'undefined'
+          ? (document.cookie
+              .split('; ')
+              .find((row) => row.startsWith('csrf-token='))
+              ?.split('=')[1] ?? '')
+          : '';
+
+      const response = await fetch('/api/settings/test-provider', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ provider }),
+      });
+
+      const data = (await response.json()) as { success: boolean; error?: string };
 
       setTestResults((prev) => ({
         ...prev,
-        [provider]: isWorking ? 'success' : 'error',
+        [provider]: data.success ? 'success' : 'error',
       }));
 
-      if (isWorking) {
+      if (data.success) {
         toast.success(`${provider} API test successful!`);
       } else {
-        toast.error(`${provider} API test failed. Check your API key.`);
+        toast.error(`${provider} API test failed: ${data.error ?? 'Unknown error'}`);
       }
     } catch (_error) {
       setTestResults((prev) => ({ ...prev, [provider]: 'error' }));
@@ -275,7 +294,7 @@ const AIConfigurationPageContent: React.FC = () => {
       }
     } catch (error) {
       toast.error('Failed to save AI preferences');
-      console.error('Error saving AI preferences:', error);
+      // Error already shown via toast; no need to log to console in production
     } finally {
       setIsSavingPreferences(false);
     }

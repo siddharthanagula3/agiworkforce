@@ -16,110 +16,22 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 
 /**
- * Model tier requirements - maps models to minimum required subscription tier
- * Models not listed here are available to all paid tiers (hobby+)
- *
- * Tier hierarchy:
- * - hobby/free: Economy models only (< $1/1M tokens)
- * - pro: Economy + balanced models ($1-15/1M tokens)
- * - max/enterprise: All models including flagships
- *
- * Model IDs MUST match frontend constants/llm.ts TIER_ALLOWED_MODELS
- */
-const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
-  // =========================================================================
-  // PREMIUM/MAX TIER ONLY - Flagship models
-  // =========================================================================
-  'claude-opus-4.6': ['max', 'enterprise'],
-  'claude-opus-4.5': ['max', 'enterprise'],
-  'gpt-5-pro': ['max', 'enterprise'],
-  'gemini-3-ultra': ['max', 'enterprise'],
-  o3: ['max', 'enterprise'],
-  'grok-4': ['max', 'enterprise'],
-  'deepseek-r1': ['max', 'enterprise'],
-
-  // =========================================================================
-  // PRO TIER AND ABOVE - Mid-tier quality/cost balance
-  // =========================================================================
-  'gpt-5.2': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
-  'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
-  'kimi-k2.5': ['pro', 'max', 'enterprise'],
-  'qwen-max': ['pro', 'max', 'enterprise'],
-  'qwen-coder-plus': ['pro', 'max', 'enterprise'],
-  'sonar-pro': ['pro', 'max', 'enterprise'],
-  'sonar-reasoning': ['pro', 'max', 'enterprise'],
-  'sonar-deep-research': ['pro', 'max', 'enterprise'],
-
-  // =========================================================================
-  // HOBBY/ECONOMY TIER - All paid users have access
-  // Models NOT in this list are restricted to Pro+ by the checkModelTierAccess function
-  // Economy models: gemini-3-flash-preview, glm-4.7, deepseek-chat, glm-4.6v, glm-4.6v-flash,
-  // kimi-k2.5-thinking, grok-4-fast-reasoning, claude-haiku-4.5, qwen-coder-flash,
-  // grok-4-mini, qwen-turbo, qwen-flash, gpt-5-nano, sonar
-  // =========================================================================
-};
-
-/**
- * Economy tier models - available to all paid users (hobby+)
- * These are budget-friendly models under $1/1M output tokens
- */
-const ECONOMY_MODELS = new Set([
-  'gemini-3-flash-preview',
-  'glm-4.7',
-  'deepseek-chat',
-  'glm-4.6v',
-  'glm-4.6v-flash',
-  'kimi-k2.5-thinking',
-  'grok-4-fast-reasoning',
-  'claude-haiku-4.5',
-  'qwen-coder-flash',
-  'grok-4-mini',
-  'qwen-turbo',
-  'qwen-flash',
-  'gpt-5-nano',
-  'sonar',
-]);
-
-/**
- * Check if a subscription tier allows access to a model
- *
- * Tier hierarchy:
- * - free: No access to cloud models
- * - hobby: Economy models only
- * - pro: Economy + Pro tier models
- * - max/enterprise: All models
+ * Check if a subscription tier allows access to a model.
+ * Delegates to the shared canAccessModel() from lib/model-tiers.ts.
+ * Unknown models are denied and logged here for traceability.
  */
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
-  const modelLower = model.toLowerCase();
-  const tierLower = subscriptionTier.toLowerCase();
-
-  // Free tier has no model access through this API
-  if (tierLower === 'free') {
-    return false;
+  const allowed = canAccessModel(model, subscriptionTier);
+  if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
+    logger.warn(
+      { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
+      'Model access denied — not in economy or tier requirements map',
+    );
   }
-
-  // Check if model has tier requirements (pro/max only)
-  const requiredTiers = MODEL_TIER_REQUIREMENTS[modelLower];
-
-  if (requiredTiers) {
-    // Model requires specific tier - check if user has it
-    return requiredTiers.includes(tierLower as 'pro' | 'max' | 'enterprise');
-  }
-
-  // Model not in requirements map - check if it's an economy model
-  if (ECONOMY_MODELS.has(modelLower)) {
-    // Economy models available to all paid tiers (hobby+)
-    return true;
-  }
-
-  // Unknown model - deny by default for safety
-  // This prevents access to new models until they're properly categorized
-  logger.warn({ model: modelLower, tier: tierLower }, 'Unknown model requested, denying access');
-  return false;
+  return allowed;
 }
 
 /**

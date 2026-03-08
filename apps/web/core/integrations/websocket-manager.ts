@@ -10,6 +10,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { logger } from '@shared/lib/logger';
 
 // WebSocket connection states
 export enum WebSocketState {
@@ -131,7 +132,7 @@ export class WebSocketManager {
     if (this.connections.has(connectionId)) {
       const conn = this.connections.get(connectionId)!;
       if (conn.state === WebSocketState.CONNECTED) {
-        console.log(`[WebSocket] Connection ${connectionId} already connected`);
+        logger.debug(`[WebSocket] Connection ${connectionId} already connected`);
         return;
       }
     }
@@ -176,9 +177,9 @@ export class WebSocketManager {
       // Process queued messages
       this.processMessageQueue(connection);
 
-      console.log(`[WebSocket] Connected: ${connectionId}`);
+      logger.info(`[WebSocket] Connected: ${connectionId}`);
     } catch (error) {
-      console.error(`[WebSocket] Connection failed: ${connectionId}`, error);
+      logger.error(`[WebSocket] Connection failed: ${connectionId}`, error);
       this.handleConnectionError(connection, error);
     }
   }
@@ -247,20 +248,20 @@ export class WebSocketManager {
             const message = JSON.parse(event.data) as WebSocketMessage;
             this.handleMessage(connection, message);
           } catch (error) {
-            console.error('[WebSocket] Failed to parse message', error);
+            logger.error('[WebSocket] Failed to parse message', error);
             connection.metrics.errors++;
           }
         };
 
         ws.onerror = (error) => {
-          console.error('[WebSocket] Error', error);
+          logger.error('[WebSocket] Error', error);
           connection.metrics.errors++;
           this.emitEvent(connection.id, 'error', { error });
           reject(error);
         };
 
         ws.onclose = (event) => {
-          console.log(`[WebSocket] Closed: ${connection.id}`, event.code, event.reason);
+          logger.info(`[WebSocket] Closed: ${connection.id}`, event.code, event.reason);
           this.handleConnectionClose(connection, event.code, event.reason);
         };
       } catch (error) {
@@ -275,7 +276,7 @@ export class WebSocketManager {
   async disconnect(connectionId: string): Promise<void> {
     const connection = this.connections.get(connectionId);
     if (!connection) {
-      console.warn(`[WebSocket] Connection not found: ${connectionId}`);
+      logger.warn(`[WebSocket] Connection not found: ${connectionId}`);
       return;
     }
 
@@ -317,7 +318,7 @@ export class WebSocketManager {
 
     // Remove from pool
     this.connections.delete(connectionId);
-    console.log(`[WebSocket] Disconnected: ${connectionId}`);
+    logger.info(`[WebSocket] Disconnected: ${connectionId}`);
   }
 
   /**
@@ -343,11 +344,11 @@ export class WebSocketManager {
     if (connection.state !== WebSocketState.CONNECTED) {
       if (connection.messageQueue.length < this.config.messageQueueSize) {
         connection.messageQueue.push(fullMessage);
-        console.log(
+        logger.debug(
           `[WebSocket] Message queued: ${connection.id}, queue size: ${connection.messageQueue.length}`,
         );
       } else {
-        console.warn(`[WebSocket] Message queue full: ${connection.id}`);
+        logger.warn(`[WebSocket] Message queue full: ${connection.id}`);
       }
       return;
     }
@@ -369,7 +370,7 @@ export class WebSocketManager {
 
       connection.metrics.messagesSent++;
     } catch (error) {
-      console.error('[WebSocket] Failed to send message', error);
+      logger.error('[WebSocket] Failed to send message', error);
       connection.metrics.errors++;
 
       // Queue the message for retry
@@ -387,7 +388,7 @@ export class WebSocketManager {
   async broadcast(message: Omit<WebSocketMessage, 'id' | 'timestamp'>): Promise<void> {
     const promises = Array.from(this.connections.keys()).map((connectionId) =>
       this.send(connectionId, message).catch((error) =>
-        console.error(`Failed to broadcast to ${connectionId}`, error),
+        logger.error(`Failed to broadcast to ${connectionId}`, error),
       ),
     );
 
@@ -415,7 +416,7 @@ export class WebSocketManager {
         try {
           handler(message);
         } catch (error) {
-          console.error('[WebSocket] Message handler error', error);
+          logger.error('[WebSocket] Message handler error', error);
         }
       });
     }
@@ -444,7 +445,7 @@ export class WebSocketManager {
       this.emitEvent(connection.id, 'stateChange', {
         state: WebSocketState.FAILED,
       });
-      console.error(`[WebSocket] Max reconnect attempts reached: ${connection.id}`);
+      logger.error(`[WebSocket] Max reconnect attempts reached: ${connection.id}`);
     }
   }
 
@@ -487,13 +488,13 @@ export class WebSocketManager {
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s
     const delay =
       this.config.reconnectInterval * Math.pow(2, connection.metrics.reconnectAttempts - 1);
-    console.log(
+    logger.info(
       `[WebSocket] Scheduling reconnect for ${connection.id} in ${delay}ms (attempt ${connection.metrics.reconnectAttempts})`,
     );
 
     connection.reconnectTimer = setTimeout(() => {
       this.connect(connection.id).catch((error) => {
-        console.error('[WebSocket] Reconnection failed', error);
+        logger.error('[WebSocket] Reconnection failed', error);
       });
     }, delay);
   }
@@ -512,7 +513,7 @@ export class WebSocketManager {
           type: MessageType.HEARTBEAT,
           payload: { ping: true },
         }).catch((error) => {
-          console.error('[WebSocket] Heartbeat failed', error);
+          logger.error('[WebSocket] Heartbeat failed', error);
         });
       }
     }, this.config.heartbeatInterval);
@@ -526,7 +527,7 @@ export class WebSocketManager {
       return;
     }
 
-    console.log(`[WebSocket] Processing ${connection.messageQueue.length} queued messages`);
+    logger.info(`[WebSocket] Processing ${connection.messageQueue.length} queued messages`);
 
     // Sort by priority (high > normal > low)
     connection.messageQueue.sort((a, b) => {
@@ -542,7 +543,7 @@ export class WebSocketManager {
       try {
         await this.send(connection.id, message);
       } catch (error) {
-        console.error('[WebSocket] Failed to send queued message', error);
+        logger.error('[WebSocket] Failed to send queued message', error);
         // Re-queue if send failed
         connection.messageQueue.unshift(message);
         break;
@@ -613,7 +614,7 @@ export class WebSocketManager {
   ): () => void {
     const connection = this.connections.get(connectionId);
     if (!connection) {
-      console.warn(`[WebSocket] Connection not found: ${connectionId}`);
+      logger.warn(`[WebSocket] Connection not found: ${connectionId}`);
       return () => {};
     }
 
@@ -673,7 +674,7 @@ export class WebSocketManager {
           try {
             handler(event);
           } catch (error) {
-            console.error('[WebSocket] Event handler error', error);
+            logger.error('[WebSocket] Event handler error', error);
           }
         });
       }
@@ -686,7 +687,7 @@ export class WebSocketManager {
         try {
           handler(event);
         } catch (error) {
-          console.error('[WebSocket] Global event handler error', error);
+          logger.error('[WebSocket] Global event handler error', error);
         }
       });
     }
@@ -746,7 +747,7 @@ export class WebSocketManager {
     await Promise.allSettled(promises);
     this.messageHandlers.clear();
     this.globalListeners.clear();
-    console.log('[WebSocket] Cleanup complete');
+    logger.info('[WebSocket] Cleanup complete');
   }
 }
 

@@ -25,8 +25,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke, isTauri } from '../../lib/tauri-mock';
-import { listen, UnlistenFn } from '../../lib/tauri-mock';
+import { invoke, isTauri } from '../lib/tauri-mock';
+import { listen, UnlistenFn } from '../lib/tauri-mock';
 
 // ---------------------------------------------------------------------------
 // Types

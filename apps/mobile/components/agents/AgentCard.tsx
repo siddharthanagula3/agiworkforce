@@ -4,6 +4,7 @@ import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentStatusBadge } from './AgentStatusBadge';
 import { colors } from '@/lib/theme';
+import { formatRelativeTime } from '@agiworkforce/utils';
 import type { Agent } from '@/stores/agentStore';
 
 interface AgentCardProps {
@@ -18,17 +19,6 @@ const STATUS_BAR_COLOR: Record<Agent['status'], string> = {
   failed: colors.agentError,
   waiting: colors.agentWarning,
 };
-
-function formatRelativeTime(isoString: string): string {
-  const diff = Date.now() - new Date(isoString).getTime();
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 export function AgentCard({ agent, index, onPress }: AgentCardProps) {
   const barColor = STATUS_BAR_COLOR[agent.status];

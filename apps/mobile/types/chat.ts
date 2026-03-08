@@ -5,6 +5,8 @@
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export type MessageType = 'text' | 'image';
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -25,6 +27,26 @@ export interface ChatMessage {
   isStreaming?: boolean;
   /** Model used for this message */
   model?: string;
+  /** Message type — 'image' when the assistant generated an image */
+  type?: MessageType;
+  /** URL of a generated image */
+  imageUrl?: string;
+  /** Revised prompt returned by the image generation model */
+  revisedPrompt?: string;
+  /** Whether an image is currently being generated for this message */
+  isGeneratingImage?: boolean;
+  /** Image generation progress (0–100) */
+  imageGenProgress?: number;
+  /** Image generation status */
+  imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';
+  /** Estimated seconds remaining for image generation */
+  imageGenEstimatedTime?: number;
+  /** Error message if image generation failed */
+  imageGenError?: string;
+  /** Image generation prompt */
+  imageGenPrompt?: string;
+  /** Citations from RAG or web search */
+  citations?: Array<{ url: string; title?: string; snippet?: string }>;
 }
 
 export interface ConversationSummary {

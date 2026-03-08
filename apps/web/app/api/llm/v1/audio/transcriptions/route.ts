@@ -14,7 +14,7 @@ async function handleTranscriptions(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'default');
+  const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
   const authHeader = request.headers.get('authorization');

@@ -177,6 +177,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 ghost-text completions per minute (debounced on client side)
     failClosed: false, // Non-critical: missing completions is acceptable
   },
+  'audio-transcription': {
+    limit: 20,
+    window: '1 m', // 20 transcription requests per minute (audio processing is resource-intensive)
+    failClosed: true, // Security-sensitive: transcription involves external API billing
+  },
   'admin-security': {
     limit: 10,
     window: '1 m', // 10 admin security actions per minute

@@ -1,33 +1,17 @@
 /**
- * api.test.ts — Tests for API utility functions (secret storage, error types)
+ * api.test.ts — Tests for API utility functions
  *
- * Network calls (httpsPost, httpsPostStream) are not tested here since they
- * depend on Node http/https modules and the real VS Code SecretStorage.
- * We test the pure logic: secret storage wrappers, error class, retry logic.
+ * Tests the exported AgiWorkforceApiError class, secret storage wrappers,
+ * retry logic, and request structure patterns.
+ * Imports real source code via the vscode mock alias in vitest.config.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockSecretStorage } from './vscode.mock';
-
-// We cannot directly import from api.ts since it imports 'vscode'.
-// Instead, we test the exported contract by reimplementing the testable parts.
-// For a real VS Code extension test suite, you would use @vscode/test-electron.
-// These tests validate the logic patterns used in api.ts.
+import { AgiWorkforceApiError, getApiKey, setApiKey, clearApiKey, pingApi } from '../utils/api';
+import { ExtensionContext } from './__mocks__/vscode';
 
 describe('AgiWorkforceApiError', () => {
   it('creates an error with message, statusCode, and code', () => {
-    // Replicate the error class behavior
-    class AgiWorkforceApiError extends Error {
-      constructor(
-        message: string,
-        public readonly statusCode?: number,
-        public readonly code?: string,
-      ) {
-        super(message);
-        this.name = 'AgiWorkforceApiError';
-      }
-    }
-
     const err = new AgiWorkforceApiError('Not found', 404, 'NOT_FOUND');
     expect(err.message).toBe('Not found');
     expect(err.statusCode).toBe(404);
@@ -37,53 +21,129 @@ describe('AgiWorkforceApiError', () => {
   });
 
   it('works without statusCode and code', () => {
-    class AgiWorkforceApiError extends Error {
-      constructor(
-        message: string,
-        public readonly statusCode?: number,
-        public readonly code?: string,
-      ) {
-        super(message);
-        this.name = 'AgiWorkforceApiError';
-      }
-    }
-
     const err = new AgiWorkforceApiError('Generic error');
     expect(err.statusCode).toBeUndefined();
     expect(err.code).toBeUndefined();
   });
+
+  it('is instanceof Error', () => {
+    const err = new AgiWorkforceApiError('test', 500, 'HTTP_ERROR');
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(AgiWorkforceApiError);
+  });
 });
 
-describe('SecretStorage wrapper pattern', () => {
-  let secrets: ReturnType<typeof createMockSecretStorage>;
+describe('SecretStorage wrapper — getApiKey / setApiKey / clearApiKey', () => {
+  let ctx: InstanceType<typeof ExtensionContext>;
 
   beforeEach(() => {
-    secrets = createMockSecretStorage();
+    ctx = new ExtensionContext();
   });
 
   it('getApiKey returns undefined when no key stored', async () => {
-    const result = await secrets.get('agiWorkforce.apiKey');
+    const result = await getApiKey(ctx.secrets as unknown as import('vscode').SecretStorage);
     expect(result).toBeUndefined();
   });
 
-  it('setApiKey stores and retrieves a key', async () => {
-    await secrets.store('agiWorkforce.apiKey', 'sk-test-123');
-    const result = await secrets.get('agiWorkforce.apiKey');
+  it('setApiKey stores and getApiKey retrieves a key', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-test-123');
+    const result = await getApiKey(secrets);
     expect(result).toBe('sk-test-123');
   });
 
   it('clearApiKey removes the stored key', async () => {
-    await secrets.store('agiWorkforce.apiKey', 'sk-test-123');
-    await secrets.delete('agiWorkforce.apiKey');
-    const result = await secrets.get('agiWorkforce.apiKey');
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-test-123');
+    await clearApiKey(secrets);
+    const result = await getApiKey(secrets);
     expect(result).toBeUndefined();
   });
 
   it('overwriting a key replaces the previous value', async () => {
-    await secrets.store('agiWorkforce.apiKey', 'sk-old');
-    await secrets.store('agiWorkforce.apiKey', 'sk-new');
-    const result = await secrets.get('agiWorkforce.apiKey');
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-old');
+    await setApiKey(secrets, 'sk-new');
+    const result = await getApiKey(secrets);
     expect(result).toBe('sk-new');
+  });
+});
+
+describe('getApiKey / setApiKey / clearApiKey round-trip', () => {
+  let ctx: InstanceType<typeof ExtensionContext>;
+
+  beforeEach(() => {
+    ctx = new ExtensionContext();
+  });
+
+  it('getApiKey returns value set by setApiKey', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-round-trip-test');
+    expect(await getApiKey(secrets)).toBe('sk-round-trip-test');
+  });
+
+  it('clearApiKey removes the key so getApiKey returns undefined', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-to-clear');
+    await clearApiKey(secrets);
+    expect(await getApiKey(secrets)).toBeUndefined();
+  });
+
+  it('clearApiKey is idempotent when no key is stored', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    // Should not throw even when nothing is stored
+    await expect(clearApiKey(secrets)).resolves.toBeUndefined();
+    expect(await getApiKey(secrets)).toBeUndefined();
+  });
+});
+
+describe('pingApi — uses GET not POST', () => {
+  let ctx: InstanceType<typeof ExtensionContext>;
+
+  beforeEach(() => {
+    ctx = new ExtensionContext();
+  });
+
+  it('returns false when no API key is stored', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    // No key stored → should return false without making a network call
+    const result = await pingApi(secrets);
+    expect(result).toBe(false);
+  });
+
+  it('pingApi always resolves to a boolean (never throws)', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-ping-test');
+    // pingApi uses httpsGet (HTTP GET method) internally — it catches all
+    // errors and resolves to a boolean. In a test environment this may
+    // resolve true or false depending on network; we only assert it is a boolean.
+    const result = await pingApi(secrets);
+    expect(typeof result).toBe('boolean');
+  });
+
+  it('pingApi does not reject even when network is unavailable', async () => {
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    await setApiKey(secrets, 'sk-network-fail');
+    // Should resolve (not reject) regardless of network state
+    await expect(pingApi(secrets)).resolves.toSatisfy((v: unknown) => typeof v === 'boolean');
+  });
+
+  it('uses GET not POST — httpsGet endpoint path is /models', async () => {
+    // Verify at code-structure level: pingApi calls httpsGet which uses
+    // method: 'GET'. We inspect the api.ts source to confirm this invariant.
+    // This is a documentation test — it will fail if someone changes the method.
+    const { readFileSync } = await import('fs');
+    const { resolve } = await import('path');
+    const src = readFileSync(resolve(__dirname, '../utils/api.ts'), 'utf8');
+    // pingApi should use httpsGet (not httpsPost) and hit /models endpoint
+    expect(src).toContain('httpsGet');
+    expect(src).toContain('/models');
+    // Confirm there is no httpsPost call inside pingApi function body
+    const pingApiFn = src.slice(src.indexOf('export async function pingApi'));
+    const nextFnIndex = pingApiFn.indexOf('\nexport ');
+    const pingApiBody = nextFnIndex > 0 ? pingApiFn.slice(0, nextFnIndex) : pingApiFn;
+    expect(pingApiBody).not.toContain('httpsPost');
+    expect(pingApiBody).toContain('httpsGet');
   });
 });
 

@@ -205,6 +205,68 @@ impl CostCalculator {
         pricing.cost(input_tokens, output_tokens)
     }
 
+    /// Calculate cost with cache discount applied.
+    /// - Anthropic: cache_creation tokens billed at 1.25× input rate, cache_read at 0.1× input rate
+    /// - OpenAI: cached_prompt tokens billed at 0.5× input rate
+    pub fn calculate_with_cache(
+        &self,
+        provider: Provider,
+        model: &str,
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        cache_read_tokens: u32,
+        cache_creation_tokens: u32,
+    ) -> f64 {
+        if prompt_tokens == 0 && completion_tokens == 0 {
+            return 0.0;
+        }
+
+        let key = (provider, model.to_string());
+        let pricing = self
+            .pricing
+            .get(&key)
+            .or_else(|| {
+                if provider == Provider::ManagedCloud {
+                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
+                        .iter()
+                        .find_map(|&p| self.pricing.get(&(p, model.to_string())))
+                } else {
+                    None
+                }
+            })
+            .or_else(|| self.provider_defaults.get(&provider))
+            .cloned()
+            .unwrap_or(Pricing {
+                input_per_million: 1.0,
+                output_per_million: 1.0,
+            });
+
+        let input_rate = pricing.input_per_million / 1_000_000.0;
+        let output_rate = pricing.output_per_million / 1_000_000.0;
+
+        match provider {
+            Provider::Anthropic => {
+                // cache_read at 0.1×, cache_creation at 1.25×, rest at 1.0×
+                let regular_input =
+                    prompt_tokens.saturating_sub(cache_read_tokens + cache_creation_tokens);
+                let input_cost = (regular_input as f64 * input_rate)
+                    + (cache_creation_tokens as f64 * input_rate * 1.25)
+                    + (cache_read_tokens as f64 * input_rate * 0.1);
+                let output_cost = completion_tokens as f64 * output_rate;
+                input_cost + output_cost
+            }
+            Provider::OpenAI | Provider::ManagedCloud => {
+                // cached tokens at 0.5× input rate
+                let regular_input = prompt_tokens.saturating_sub(cache_read_tokens);
+                let input_cost = (regular_input as f64 * input_rate)
+                    + (cache_read_tokens as f64 * input_rate * 0.5);
+                let output_cost = completion_tokens as f64 * output_rate;
+                input_cost + output_cost
+            }
+            _ => self.calculate(provider, model, prompt_tokens, completion_tokens),
+        }
+    }
+
     /// Calculates the cost for a media generation operation.
     ///
     /// - For images: `units` is the number of images generated.

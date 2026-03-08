@@ -45,7 +45,8 @@ export default function RootLayout() {
     if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const inOnboarding = segments[0] === 'onboarding';
+    // segments[0] is typed based on known routes; cast to string for onboarding comparison
+    const inOnboarding = (segments[0] as string) === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -53,7 +54,8 @@ export default function RootLayout() {
       // Check if user has completed onboarding
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
-        router.replace('/onboarding');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/onboarding' as any);
       } else {
         router.replace('/(app)');
       }
@@ -61,7 +63,8 @@ export default function RootLayout() {
       // Already in app — ensure onboarding is done
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
-        router.replace('/onboarding');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/onboarding' as any);
       }
     }
   }, [session, isInitialized, segments, router]);

@@ -8,8 +8,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { randomUUID } from 'crypto';
 
 /**
  * Image Generation API
@@ -635,6 +637,77 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // Pre-calculate conservative cost estimate for credit pre-check.
+  // We use the per-image cost for the chosen provider * requested image count.
+  // The model isn't determined until after generation, so we use the most expensive
+  // model for the provider as the upper bound estimate.
+  const providerCostMap = COST_ESTIMATES[provider];
+  const maxProviderCost = Math.max(...Object.values(providerCostMap));
+  const estimatedCostCents = maxProviderCost * n;
+
+  // Check credits BEFORE invoking the provider (402 if insufficient)
+  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  if (!hasCredits) {
+    const balance = await CreditService.getBalance(user.id);
+    logger.warn(
+      { userId: user.id, estimatedCostCents, balance },
+      'Insufficient credits for image generation',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Insufficient credits for image generation. Please upgrade your plan or add credits.',
+          type: 'insufficient_quota',
+          code: 'insufficient_credits',
+          credits_required: estimatedCostCents,
+          credits_remaining: balance?.credits_remaining_cents ?? 0,
+        },
+      },
+      {
+        status: 402,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
+  // Reserve credits before generation to prevent race conditions
+  const requestId = randomUUID();
+  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reserveResult = await CreditService.deductCredits(
+    user.id,
+    estimatedCostCents,
+    `Credit reservation: image generation (${provider})`,
+    { provider, type: 'reservation', requestId, imageCount: n },
+    reservationKey,
+  );
+
+  if (!reserveResult.success) {
+    logger.warn(
+      { userId: user.id, estimatedCostCents, reserveResult },
+      'Failed to reserve image credits',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Insufficient credits for image generation.',
+          type: 'insufficient_quota',
+          code: reserveResult.code ?? 'insufficient_credits',
+        },
+      },
+      {
+        status: 402,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
   // Generate images
   let result: { images: GeneratedImage[]; model: string };
   try {
@@ -672,13 +745,23 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Image generation completed',
     );
   } catch (error) {
+    // Refund the reserved credits on generation failure
+    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    await CreditService.deductCredits(
+      user.id,
+      -estimatedCostCents,
+      `Refund: image generation failed (${provider})`,
+      { provider, type: 'refund', reason: 'generation_failure', requestId },
+      refundKey,
+    );
+
     logger.error(
       {
         error: error instanceof Error ? error.message : String(error),
         userId: user.id,
         provider,
       },
-      'Image generation failed',
+      'Image generation failed — credits refunded',
     );
 
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
@@ -723,10 +806,40 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Calculate cost estimate
-  const providerCosts = COST_ESTIMATES[provider];
-  const baseCost = providerCosts[result.model] ?? 3; // Default 3 cents
-  const costEstimate = baseCost * result.images.length;
+  // Calculate actual cost and reconcile with the reservation
+  const actualBaseCost = providerCostMap[result.model] ?? 3;
+  const costEstimate = actualBaseCost * result.images.length;
+  const costDifference = costEstimate - estimatedCostCents;
+
+  if (costDifference !== 0) {
+    // Adjust credits: positive diff = additional charge, negative = refund
+    const reconciliationKey = CreditService.generateIdempotencyKey(
+      user.id,
+      'reconciliation',
+      requestId,
+    );
+    await CreditService.deductCredits(
+      user.id,
+      costDifference,
+      costDifference > 0
+        ? `Additional charge: image generation (${provider}/${result.model})`
+        : `Credit adjustment: image generation (${provider}/${result.model})`,
+      {
+        provider,
+        model: result.model,
+        type: 'reconciliation',
+        estimatedCostCents,
+        actualCostCents: costEstimate,
+        requestId,
+      },
+      reconciliationKey,
+    );
+  }
+
+  logger.info(
+    { userId: user.id, provider, model: result.model, costEstimate, estimatedCostCents },
+    'Image generation credits deducted',
+  );
 
   const response: ImageGenerationResponse = {
     success: true,

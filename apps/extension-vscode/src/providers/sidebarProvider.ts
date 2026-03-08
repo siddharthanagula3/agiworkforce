@@ -25,6 +25,8 @@ import {
   AgiWorkforceApiError,
   type ChatMessage,
 } from '../utils/api';
+import { type ConversationStore } from '../storage/conversationStore';
+import { type ConversationTreeProvider } from './conversationTreeProvider';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -660,6 +662,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _secrets: vscode.SecretStorage,
+    private readonly _conversationStore?: ConversationStore,
+    private readonly _conversationTreeProvider?: ConversationTreeProvider,
   ) {}
 
   public resolveWebviewView(
@@ -773,6 +777,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
               content: full,
             });
             this._post({ type: 'done' });
+
+            // Persist conversation to store
+            if (
+              this._conversationStore !== undefined &&
+              this._conversationTreeProvider !== undefined
+            ) {
+              const userText = text;
+              const conv = this._conversationStore.create(
+                userText.slice(0, 60).replace(/\n/g, ' '),
+                model ??
+                  vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ??
+                  'auto-balanced',
+              );
+              // Replace the auto-created empty messages with the full history (excluding system)
+              const now = Date.now();
+              conv.messages = this._conversationHistory
+                .filter((m) => m.role !== 'system')
+                .map((m) => ({ ...m, timestamp: now }));
+              this._conversationStore.save(conv);
+              this._conversationTreeProvider.refresh();
+            }
           },
           onError: (err) => {
             this._post({
