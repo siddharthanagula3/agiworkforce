@@ -8,7 +8,12 @@ import { format, parse, setHours, setMinutes } from 'date-fns';
 import { Bell, Calendar, Clock, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ActionType, ScheduledJob, ScheduleType } from '@/stores/schedulerStore';
+import type { ScheduledJob } from '@/stores/schedulerStore';
+
+/** UI-friendly action types for the reminder dialog (mapped to Rust types by parent) */
+type ReminderActionType = 'reminder' | 'briefing' | 'agent_task' | 'custom';
+/** Schedule type for preview display */
+type ScheduleType = 'cron' | 'interval' | 'once';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Input } from '../ui/Input';
@@ -179,7 +184,7 @@ function generateSchedule(
 export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: ReminderDialogProps) {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
-  const [actionType, setActionType] = useState<ActionType>('reminder');
+  const [actionType, setActionType] = useState<ReminderActionType>('reminder');
   const [repeatOption, setRepeatOption] = useState<RepeatOption>('once');
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
@@ -193,43 +198,46 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
       if (existingJob) {
         setName(existingJob.name);
 
-        // Parse action data
-        try {
-          const actionData = JSON.parse(existingJob.action_data);
-          setMessage(actionData.message || actionData.prompt || existingJob.action_data);
-        } catch {
-          setMessage(existingJob.action_data);
+        // Parse action data (now an object from Rust, not a JSON string)
+        const actionData = existingJob.action_data;
+        if (actionData && typeof actionData === 'object') {
+          setMessage(
+            ((actionData as Record<string, unknown>)['message'] as string) ||
+              ((actionData as Record<string, unknown>)['prompt'] as string) ||
+              JSON.stringify(actionData),
+          );
+        } else {
+          setMessage(String(actionData ?? ''));
         }
 
-        setActionType(existingJob.action_type);
+        // Map Rust action_type to UI-friendly type
+        const rustToUiType: Record<string, ReminderActionType> = {
+          notification: 'reminder',
+          agi_task: 'agent_task',
+          workflow: 'agent_task',
+          shell_command: 'custom',
+          webhook: 'custom',
+          script: 'custom',
+        };
+        setActionType(rustToUiType[existingJob.action_type] ?? 'reminder');
 
-        // Parse schedule
-        if (existingJob.schedule_type === 'once' && existingJob.run_at) {
-          setRepeatOption('once');
-          const runAt = new Date(existingJob.run_at);
-          setTime(format(runAt, 'HH:mm'));
-          setDate(format(runAt, 'yyyy-MM-dd'));
-        } else if (existingJob.schedule_type === 'interval' && existingJob.interval_seconds) {
-          setRepeatOption('custom');
-          setCustomInterval((existingJob.interval_seconds / 60).toString());
-        } else if (existingJob.schedule_type === 'cron' && existingJob.cron_expression) {
-          const cronParts = existingJob.cron_expression.split(' ');
-          if (cronParts.length >= 5) {
-            const minute = cronParts[0] ?? '0';
-            const hour = cronParts[1] ?? '9';
-            const dow = cronParts[4] ?? '*';
-            const parsedTime = setHours(
-              setMinutes(new Date(), parseInt(minute, 10)),
-              parseInt(hour, 10),
-            );
-            setTime(format(parsedTime, 'HH:mm'));
+        // Parse cron schedule from `schedule` field (cron expression string)
+        const cronParts = existingJob.schedule.split(' ');
+        if (cronParts.length >= 5) {
+          const minute = cronParts[0] ?? '0';
+          const hour = cronParts[1] ?? '9';
+          const dow = cronParts[4] ?? '*';
+          const parsedTime = setHours(
+            setMinutes(new Date(), parseInt(minute, 10)),
+            parseInt(hour, 10),
+          );
+          setTime(format(parsedTime, 'HH:mm'));
 
-            if (dow === '*') {
-              setRepeatOption('daily');
-            } else {
-              setRepeatOption('weekly');
-              setDayOfWeek(dow);
-            }
+          if (dow === '*') {
+            setRepeatOption('daily');
+          } else {
+            setRepeatOption('weekly');
+            setDayOfWeek(dow);
           }
         }
       } else {
@@ -334,7 +342,10 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
           {/* Action Type */}
           <div className="space-y-2">
             <Label htmlFor="actionType">Type</Label>
-            <Select value={actionType} onValueChange={(v) => setActionType(v as ActionType)}>
+            <Select
+              value={actionType}
+              onValueChange={(v) => setActionType(v as ReminderActionType)}
+            >
               <SelectTrigger id="actionType">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
