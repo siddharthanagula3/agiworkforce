@@ -548,6 +548,9 @@ pub async fn scheduler_run_job_now(
         }
     };
 
+    // Record the start time before dispatching so history timestamps are accurate
+    let started_at = chrono::Utc::now();
+
     let execution_result = dispatch_job_action(
         &job.action_type,
         &job.action_data,
@@ -556,24 +559,28 @@ pub async fn scheduler_run_job_now(
     )
     .await;
 
+    let completed_at = chrono::Utc::now();
+    let duration_ms = (completed_at - started_at).num_milliseconds();
     let success = execution_result.is_ok();
 
     if let Err(ref e) = execution_result {
         tracing::error!(
-            "[Scheduler] Job '{}' (id={}) action dispatch failed: {}",
+            "[Scheduler] Job '{}' (id={}) action dispatch failed after {}ms: {}",
             job.name,
             id,
+            duration_ms,
             e
         );
     } else {
         tracing::info!(
-            "[Scheduler] Job '{}' (id={}) action dispatched successfully",
+            "[Scheduler] Job '{}' (id={}) action dispatched successfully in {}ms",
             job.name,
-            id
+            id,
+            duration_ms
         );
     }
 
-    // Record execution history
+    // Record execution history with accurate timestamps and duration
     {
         let mut history = state.execution_history.write().map_err(|e| {
             Error::Generic(format!("Failed to acquire history write lock: {}", e))
@@ -582,15 +589,15 @@ pub async fn scheduler_run_job_now(
         let record = JobExecutionRecord {
             id: history.len() as i64 + 1,
             job_id: id.clone(),
-            started_at: chrono::Utc::now().to_rfc3339(),
-            completed_at: Some(chrono::Utc::now().to_rfc3339()),
+            started_at: started_at.to_rfc3339(),
+            completed_at: Some(completed_at.to_rfc3339()),
             status: if success {
                 ExecutionStatus::Completed
             } else {
                 ExecutionStatus::Failed
             },
             error: execution_result.err().map(|e| e.to_string()),
-            duration_ms: Some(0), // Instantaneous dispatch
+            duration_ms: Some(duration_ms),
         };
 
         history.push(record);
