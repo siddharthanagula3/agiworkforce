@@ -44,66 +44,38 @@ interface ReminderCardProps {
  * Returns a human-readable description of the schedule.
  */
 function getScheduleDescription(job: ScheduledJob): string {
-  if (job.schedule_type === 'once' && job.run_at) {
-    const runDate = parseISO(job.run_at);
-    if (isPast(runDate)) {
-      return 'Already ran';
-    }
-    return `Once on ${format(runDate, 'MMM d, yyyy')} at ${format(runDate, 'h:mm a')}`;
+  const cron = job.schedule;
+  if (!cron) return 'Custom schedule';
+
+  // Parse common cron patterns for user-friendly display
+  // Daily at specific time (min hour * * *)
+  const dailyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$/);
+  if (dailyMatch && dailyMatch[1] && dailyMatch[2]) {
+    const minute = dailyMatch[1];
+    const hour = dailyMatch[2];
+    const time = new Date();
+    time.setHours(parseInt(hour, 10), parseInt(minute, 10));
+    return `Daily at ${format(time, 'h:mm a')}`;
   }
 
-  if (job.schedule_type === 'interval' && job.interval_seconds) {
-    const seconds = job.interval_seconds;
-    if (seconds < 60) {
-      return `Every ${seconds} second${seconds !== 1 ? 's' : ''}`;
-    }
-    if (seconds < 3600) {
-      const minutes = Math.floor(seconds / 60);
-      return `Every ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-    }
-    if (seconds < 86400) {
-      const hours = Math.floor(seconds / 3600);
-      return `Every ${hours} hour${hours !== 1 ? 's' : ''}`;
-    }
-    const days = Math.floor(seconds / 86400);
-    return `Every ${days} day${days !== 1 ? 's' : ''}`;
+  // Weekly (min hour * * dayOfWeek)
+  const weeklyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(\d)$/);
+  if (weeklyMatch && weeklyMatch[1] && weeklyMatch[2] && weeklyMatch[3]) {
+    const minute = weeklyMatch[1];
+    const hour = weeklyMatch[2];
+    const dayOfWeek = weeklyMatch[3];
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const time = new Date();
+    time.setHours(parseInt(hour, 10), parseInt(minute, 10));
+    return `Every ${days[parseInt(dayOfWeek, 10)]} at ${format(time, 'h:mm a')}`;
   }
 
-  if (job.schedule_type === 'cron' && job.cron_expression) {
-    // Parse common cron patterns for user-friendly display
-    const cron = job.cron_expression;
-
-    // Daily at specific time
-    const dailyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$/);
-    if (dailyMatch && dailyMatch[1] && dailyMatch[2]) {
-      const minute = dailyMatch[1];
-      const hour = dailyMatch[2];
-      const time = new Date();
-      time.setHours(parseInt(hour, 10), parseInt(minute, 10));
-      return `Daily at ${format(time, 'h:mm a')}`;
-    }
-
-    // Weekly
-    const weeklyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(\d)$/);
-    if (weeklyMatch && weeklyMatch[1] && weeklyMatch[2] && weeklyMatch[3]) {
-      const minute = weeklyMatch[1];
-      const hour = weeklyMatch[2];
-      const dayOfWeek = weeklyMatch[3];
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const time = new Date();
-      time.setHours(parseInt(hour, 10), parseInt(minute, 10));
-      return `Every ${days[parseInt(dayOfWeek, 10)]} at ${format(time, 'h:mm a')}`;
-    }
-
-    // Hourly
-    if (cron.match(/^(\d+)\s+\*\s+\*\s+\*\s+\*$/)) {
-      return 'Every hour';
-    }
-
-    return `Cron: ${cron}`;
+  // Hourly (min * * * *)
+  if (cron.match(/^(\d+)\s+\*\s+\*\s+\*\s+\*$/)) {
+    return 'Every hour';
   }
 
-  return 'Custom schedule';
+  return `Cron: ${cron}`;
 }
 
 /**
@@ -163,7 +135,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
   const handlePauseResume = async () => {
     setIsLoading(true);
     try {
-      if (job.enabled) {
+      if (job.status === 'active') {
         await onPause(job.id);
       } else {
         await onResume(job.id);
@@ -182,20 +154,16 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
     }
   };
 
-  // Parse action data for display
-  let actionMessage = '';
-  try {
-    const actionData = JSON.parse(job.action_data);
-    actionMessage = actionData.message || actionData.prompt || '';
-  } catch {
-    actionMessage = job.action_data;
-  }
+  // Parse action data for display (now an object, not a JSON string)
+  const actionData = job.action_data;
+  const actionMessage =
+    (actionData?.['message'] as string) || (actionData?.['prompt'] as string) || '';
 
   return (
     <Card
       className={cn(
         'transition-all duration-200 hover:shadow-md',
-        !job.enabled && 'opacity-60 bg-muted/30',
+        job.status !== 'active' && 'opacity-60 bg-muted/30',
       )}
     >
       <CardContent className="p-4">
@@ -207,7 +175,9 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
               <div
                 className={cn(
                   'flex h-10 w-10 items-center justify-center rounded-full',
-                  job.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+                  job.status === 'active'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-muted text-muted-foreground',
                 )}
               >
                 <ActionIcon className="h-5 w-5" />
@@ -216,7 +186,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
               <div
                 className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-                  job.enabled ? 'bg-green-500' : 'bg-gray-400',
+                  job.status === 'active' ? 'bg-green-500' : 'bg-gray-400',
                 )}
               />
             </div>
@@ -248,7 +218,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
 
               {/* Next/Last run info */}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {job.enabled && nextRunDisplay && (
+                {job.status === 'active' && nextRunDisplay && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -283,10 +253,14 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
                     onClick={handlePauseResume}
                     disabled={isLoading}
                   >
-                    {job.enabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {job.status === 'active' ? (
+                      <Pause className="h-4 w-4" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{job.enabled ? 'Pause' : 'Resume'}</TooltipContent>
+                <TooltipContent>{job.status === 'active' ? 'Pause' : 'Resume'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
@@ -303,7 +277,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handlePauseResume}>
-                  {job.enabled ? (
+                  {job.status === 'active' ? (
                     <>
                       <Pause className="mr-2 h-4 w-4" />
                       Pause
