@@ -96,17 +96,17 @@
       "label": "xAI",
       "sseDelimiter": "\n\n",
       "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.0 },
+      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
       "defaultModel": "grok-4",
       "taskRouting": {
-        "fast_completion": "grok-4-fast",
-        "code_generation": "grok-4",
-        "complex_reasoning": "grok-4-fast-reasoning",
-        "chat": "grok-4",
+        "fast_completion": "grok-4-1-fast-reasoning",
+        "code_generation": "grok-4-1-fast-reasoning",
+        "complex_reasoning": "grok-4-1-fast-reasoning",
+        "chat": "grok-4-1-fast-reasoning",
         "vision": "grok-4",
-        "long_context": "grok-4"
+        "long_context": "grok-4-1-fast-reasoning"
       },
       "canonicalization": {
         "grok-4": "grok-4-0709"
@@ -1198,6 +1198,35 @@
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context"],
       "released": "January 2026"
     },
+    "grok-4-1-fast-reasoning": {
+      "id": "grok-4-1-fast-reasoning",
+      "apiModelId": "grok-4-1-fast-reasoning",
+      "name": "Grok 4.1 Fast Reasoning",
+      "provider": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 2000000,
+      "inputCost": 0.2,
+      "outputCost": 0.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context", "Vision"],
+      "released": "March 2026"
+    },
     "grok-4-mini": {
       "id": "grok-4-mini",
       "apiModelId": "grok-4-mini",
@@ -1589,13 +1618,13 @@
     },
     "mistral-large-3": {
       "id": "mistral-large-3",
-      "apiModelId": "mistral-large-3",
+      "apiModelId": "mistral-large-2512",
       "name": "Mistral Large 3",
       "provider": "mistral",
       "modelType": "reasoning",
       "contextWindow": 131072,
-      "inputCost": 0.5,
-      "outputCost": 1.5,
+      "inputCost": 2.0,
+      "outputCost": 6.0,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1625,8 +1654,8 @@
     },
     "mistral-medium-3": {
       "id": "mistral-medium-3",
-      "apiModelId": "mistral-medium-3",
-      "name": "Mistral Medium 3",
+      "apiModelId": "mistral-medium-2508",
+      "name": "Mistral Medium 3.1",
       "provider": "mistral",
       "modelType": "chat",
       "contextWindow": 131072,
@@ -1661,8 +1690,8 @@
     },
     "mistral-small-3": {
       "id": "mistral-small-3",
-      "apiModelId": "mistral-small-3",
-      "name": "Mistral Small 3",
+      "apiModelId": "mistral-small-2506",
+      "name": "Mistral Small 3.2",
       "provider": "mistral",
       "modelType": "chat",
       "contextWindow": 131072,
@@ -2452,6 +2481,7 @@
       "deepseek-chat",
       "glm-4.6v",
       "glm-4.6v-flash",
+      "grok-4-1-fast-reasoning",
       "grok-4-fast-reasoning",
       "claude-haiku-4.5",
       "grok-4-fast-non-reasoning",
@@ -2518,6 +2548,7 @@
       { "value": "gemini-3.1-flash-image", "label": "Gemini 3.1 Flash Image" }
     ],
     "xai": [
+      { "value": "grok-4-1-fast-reasoning", "label": "Grok 4.1 Fast Reasoning" },
       { "value": "grok-4", "label": "Grok 4" },
       { "value": "grok-4-fast-reasoning", "label": "Grok 4 Fast Reasoning" },
       { "value": "grok-4-fast-non-reasoning", "label": "Grok 4 Fast (Non-Reasoning)" },

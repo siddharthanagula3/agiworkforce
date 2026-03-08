@@ -258,7 +258,7 @@
         },
         {
           "command": "agi-workforce.fix",
-          "when": "editorIsOpen"
+          "when": "editorTextFocus"
         }
       ]
     },
@@ -359,14 +359,14 @@
       },
       {
         "command": "agi-workforce.explain",
-        "key": "ctrl+shift+e",
-        "mac": "cmd+shift+e",
+        "key": "ctrl+shift+alt+e",
+        "mac": "cmd+shift+alt+e",
         "when": "editorHasSelection"
       },
       {
         "command": "agi-workforce.agentMode",
-        "key": "ctrl+shift+g",
-        "mac": "cmd+shift+g"
+        "key": "ctrl+shift+alt+g",
+        "mac": "cmd+shift+alt+g"
       }
     ]
   },
@@ -381,10 +381,13 @@
     "prebuild": "pnpm run clean && pnpm run typecheck",
     "build": "pnpm run compile"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.95.0",
+    "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vscode/test-cli": "^0.0.10",

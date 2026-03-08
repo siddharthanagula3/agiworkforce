@@ -1,12 +1,16 @@
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
+// Note: `Vibrate` was removed from Lucide in some intermediate versions but
+// was re-added and is present in lucide-react-native ≥ 0.460. Confirmed
+// available in the project's installed version (^0.474.0).
 import { Menu, LogOut, Bell, Vibrate, ExternalLink, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { api } from '@/services/api';
 import { colors } from '@/lib/theme';
 
 function SettingRow({
@@ -45,6 +49,27 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      // Try to get a dynamic billing portal URL from the API first
+      const data = await api.post<{ url: string }>('/api/billing/portal');
+      if (data.url) {
+        await Linking.openURL(data.url);
+        return;
+      }
+    } catch {
+      // Fall back to the static billing page if API is unavailable
+    }
+    try {
+      await Linking.openURL('https://agiworkforce.com/billing');
+    } catch {
+      Alert.alert(
+        'Error',
+        'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
+      );
+    }
   };
 
   return (
@@ -98,9 +123,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon={ExternalLink}
             label="Manage Subscription"
-            onPress={() => {
-              /* Open agiworkforce.com/billing */
-            }}
+            onPress={handleManageSubscription}
           />
         </Card>
 

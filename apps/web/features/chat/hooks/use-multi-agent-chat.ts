@@ -137,10 +137,44 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
       const messageMode = opts.forceMode || missionMode;
 
       try {
-        // Skills-based model: send message via direct API call
-        const apiResponse = await fetch('/api/llm/completion', {
+        // Determine the correct endpoint based on the mode
+        const endpoint = messageMode === 'mission' ? '/api/mission' : '/api/llm/completion';
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+        // Attach Supabase access token if available (browser environment)
+        if (typeof window !== 'undefined') {
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key?.includes('-auth-token')) {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  const parsed = JSON.parse(raw) as { access_token?: string };
+                  if (parsed.access_token) {
+                    headers['Authorization'] = `Bearer ${parsed.access_token}`;
+                  }
+                }
+                break;
+              }
+            }
+          } catch {
+            // localStorage may be unavailable
+          }
+
+          // Attach CSRF token from cookie
+          const csrfToken = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('csrf-token='))
+            ?.split('=')[1];
+          if (csrfToken) {
+            headers['x-csrf-token'] = csrfToken;
+          }
+        }
+
+        const apiResponse = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             userId,
             input: content,
@@ -151,10 +185,30 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
         });
 
         if (!apiResponse.ok) {
-          throw new Error('Failed to process message');
+          let errorMessage = 'Failed to process message';
+          try {
+            const errData = (await apiResponse.json()) as { error?: { message?: string } };
+            if (errData?.error?.message) {
+              errorMessage = errData.error.message;
+            }
+          } catch {
+            // ignore
+          }
+          throw new Error(errorMessage);
         }
 
-        const responseData = await apiResponse.json();
+        const responseData = (await apiResponse.json()) as {
+          chatResponse?: string;
+          missionId?: string;
+          plan?: unknown[];
+          agents?: string[];
+          // LLM completion response fields
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+
+        // Extract the assistant text from either response format
+        const assistantText =
+          responseData.chatResponse ?? responseData.choices?.[0]?.message?.content ?? '';
 
         // Add user message to conversation history
         conversationHistoryRef.current.push({
@@ -163,10 +217,10 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
         });
 
         // Add assistant response to conversation history
-        if (responseData.chatResponse) {
+        if (assistantText) {
           conversationHistoryRef.current.push({
             role: 'assistant',
-            content: responseData.chatResponse,
+            content: assistantText,
           });
         }
 

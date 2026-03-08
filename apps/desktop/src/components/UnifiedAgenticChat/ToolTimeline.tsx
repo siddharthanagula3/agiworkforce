@@ -147,6 +147,7 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
                       {group.entries.map((entry) => (
                         <ToolCallCard
                           key={entry.id}
+                          toolCallId={entry.id}
                           toolName={entry.displayName}
                           args={argsFromDisplayArgs(entry.displayArgs)}
                           error={entry.error}
@@ -162,6 +163,7 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
                 return group.entries.map((entry) => (
                   <ToolCallCard
                     key={entry.id}
+                    toolCallId={entry.id}
                     toolName={entry.displayName}
                     args={argsFromDisplayArgs(entry.displayArgs)}
                     error={entry.error}

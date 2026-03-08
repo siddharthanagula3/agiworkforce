@@ -119,6 +119,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return {
         message_count: 0,
         total_tokens: 0,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
         total_cost: 0,
       } as T;
 
@@ -445,6 +447,30 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'voice_start_global_ptt':
     case 'voice_stop_global_ptt':
     case 'voice_inject_text':
+      return undefined as T;
+
+    // LLM provider/model commands
+    case 'llm_check_provider_status':
+      return {
+        provider: (args?.['provider'] as string | undefined) ?? 'anthropic',
+        available: false,
+        configured: false,
+      } as T;
+
+    case 'llm_get_usage_stats':
+      return {
+        totalTokens: 0,
+        totalCost: 0,
+        messageCount: 0,
+        byProvider: {},
+        byModel: {},
+      } as T;
+
+    case 'llm_get_available_models':
+      return [] as T;
+
+    case 'llm_set_default_provider':
+    case 'llm_configure_provider':
       return undefined as T;
 
     // File picker commands

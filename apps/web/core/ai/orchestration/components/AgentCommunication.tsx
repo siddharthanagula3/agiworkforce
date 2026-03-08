@@ -23,6 +23,114 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+
+// ---------------------------------------------------------------------------
+// Real API-backed inter-agent communication service
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch agent messages from the server.
+ * Calls GET /api/agents/communication?agentId=<id>
+ */
+async function fetchAgentMessages(agentId: string): Promise<AgentMessage[]> {
+  const response = await fetch(`/api/agents/communication?agentId=${encodeURIComponent(agentId)}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 404) return [];
+    throw new Error(`Failed to fetch agent messages: ${response.statusText}`);
+  }
+  const data = (await response.json()) as { messages?: AgentMessage[] };
+  return (data.messages ?? []).map((m) => ({
+    ...m,
+    timestamp: new Date(m.timestamp),
+    createdAt: m.createdAt ? new Date(m.createdAt) : undefined,
+  }));
+}
+
+/**
+ * Fetch agent delegations from the server.
+ * Calls GET /api/agents/communication?agentId=<id>&type=delegations
+ */
+async function fetchAgentDelegations(agentId: string): Promise<AgentDelegation[]> {
+  const response = await fetch(
+    `/api/agents/communication?agentId=${encodeURIComponent(agentId)}&type=delegations`,
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 404) return [];
+    throw new Error(`Failed to fetch agent delegations: ${response.statusText}`);
+  }
+  const data = (await response.json()) as { delegations?: AgentDelegation[] };
+  return (data.delegations ?? []).map((d) => ({
+    ...d,
+    timestamp: new Date(d.timestamp),
+    task: {
+      ...d.task,
+      deadline: d.task.deadline ? new Date(d.task.deadline) : undefined,
+    },
+  }));
+}
+
+/**
+ * Send a message from one agent to another.
+ * Calls POST /api/agents/communication
+ */
+async function sendAgentMessage(msg: { from: string; to: string; content: string }): Promise<void> {
+  // Retrieve CSRF token from cookie for state-changing request
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('csrf-token='))
+    ?.split('=')[1];
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (csrfToken) headers['x-csrf-token'] = csrfToken;
+
+  const response = await fetch('/api/agents/communication', {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ type: 'message', ...msg }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to send message: ${response.statusText}`);
+  }
+}
+
+/**
+ * Respond to a delegation request (accept or reject).
+ * Calls PUT /api/agents/communication/<delegationId>
+ */
+async function respondToDelegationRequest(
+  delegationId: string,
+  delegationResponse: string,
+  accepted: boolean,
+): Promise<void> {
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('csrf-token='))
+    ?.split('=')[1];
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (csrfToken) headers['x-csrf-token'] = csrfToken;
+
+  const response = await fetch(`/api/agents/communication/${encodeURIComponent(delegationId)}`, {
+    method: 'PUT',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ response: delegationResponse, accepted }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to respond to delegation: ${response.statusText}`);
+  }
+}
+
 // Types for inter-agent communication
 interface AgentMessage {
   id: string;
@@ -58,12 +166,18 @@ interface AgentDelegation {
   result?: { output: string };
 }
 
-// Stub service until inter-agent-service is implemented
+// Real API-backed inter-agent service
 const interAgentService = {
-  getMessagesForAgent: async (_agentId: string): Promise<AgentMessage[]> => [],
-  getDelegationsForAgent: async (_agentId: string): Promise<AgentDelegation[]> => [],
-  sendMessage: async (_msg: { from: string; to: string; content: string }) => ({}),
-  respondToDelegation: async (_id: string, _response: string, _accept: boolean) => ({}),
+  getMessagesForAgent: fetchAgentMessages,
+  getDelegationsForAgent: fetchAgentDelegations,
+  sendMessage: async (msg: { from: string; to: string; content: string }) => {
+    await sendAgentMessage(msg);
+    return {};
+  },
+  respondToDelegation: async (id: string, response: string, accept: boolean) => {
+    await respondToDelegationRequest(id, response, accept);
+    return {};
+  },
 };
 
 interface AgentCommunicationProps {

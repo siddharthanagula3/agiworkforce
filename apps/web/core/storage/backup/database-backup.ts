@@ -9,6 +9,7 @@ import { supabase } from '@shared/lib/supabase-client';
 
 const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { monitoringService } from '@core/monitoring/system-monitor';
+import { logger } from '@shared/lib/logger';
 
 interface BackupConfig {
   enableAutomatedBackups: boolean;
@@ -74,7 +75,7 @@ class BackupService {
     this.loadBackupHistory();
     this.isInitialized = true;
 
-    console.log('BackupService initialized with config:', this.config);
+    logger.info('BackupService initialized with config:', this.config);
 
     monitoringService.trackEvent(
       'backup_service_initialized',
@@ -92,7 +93,7 @@ class BackupService {
       this.performBackup('incremental');
     }, intervalMs);
 
-    console.log(`Automated backups scheduled every ${this.config.backupFrequency}`);
+    logger.info(`Automated backups scheduled every ${this.config.backupFrequency}`);
   }
 
   /**
@@ -195,7 +196,7 @@ class BackupService {
 
       return data.map((row: Record<string, unknown>) => row['table_name'] as string);
     } catch (error) {
-      console.error('Error getting tables to backup:', error);
+      logger.error('Error getting tables to backup:', error);
       return [];
     }
   }
@@ -214,7 +215,7 @@ class BackupService {
 
         backupData[table] = data || [];
       } catch (error) {
-        console.error(`Error backing up table ${table}:`, error);
+        logger.error(`Error backing up table ${table}:`, error);
         backupData[table] = [];
       }
     }
@@ -281,10 +282,10 @@ class BackupService {
       });
 
       if (error) {
-        console.warn('Could not save backup metadata (table may not exist):', error);
+        logger.warn('Could not save backup metadata (table may not exist):', error);
       }
     } catch (error) {
-      console.warn('Error saving backup metadata:', error);
+      logger.warn('Error saving backup metadata:', error);
     }
   }
 
@@ -316,14 +317,14 @@ class BackupService {
           normalizedMessage.includes('table');
 
         if (isMissingTable) {
-          console.info(
+          logger.info(
             'Backup metadata table not found yet; skipping backup history load until the first successful backup runs.',
           );
           this.backups = [];
           return;
         }
 
-        console.error('Unexpected Supabase error while loading backup history:', error);
+        logger.error('Unexpected Supabase error while loading backup history:', error);
         this.backups = [];
         return;
       }
@@ -339,7 +340,7 @@ class BackupService {
         location: row['location'] as string,
       }));
     } catch (error) {
-      console.debug(
+      logger.debug(
         'Backup history could not be loaded (likely due to Supabase connectivity during init).',
         error,
       );
@@ -372,7 +373,7 @@ class BackupService {
       const backupDataContent = (backupDataTyped['data'] || {}) as Record<string, unknown[]>;
 
       if (dryRun) {
-        console.log('Dry run restore - would restore:', {
+        logger.info('Dry run restore - would restore:', {
           backupId,
           tables: tables || Object.keys(backupDataContent),
           pointInTime,
@@ -418,7 +419,7 @@ class BackupService {
 
       return data;
     } catch (error) {
-      console.error('Error loading backup data:', error);
+      logger.error('Error loading backup data:', error);
       return null;
     }
   }
@@ -443,9 +444,9 @@ class BackupService {
         if (insertError) throw insertError;
       }
 
-      console.log(`Restored ${data.length} records to table ${tableName}`);
+      logger.info(`Restored ${data.length} records to table ${tableName}`);
     } catch (error) {
-      console.error(`Error restoring table ${tableName}:`, error);
+      logger.error(`Error restoring table ${tableName}:`, error);
       throw error;
     }
   }
@@ -474,9 +475,9 @@ class BackupService {
         // Delete metadata
         await db.from('backup_metadata').delete().eq('id', backup.id);
 
-        console.log(`Cleaned up old backup: ${backup.id}`);
+        logger.info(`Cleaned up old backup: ${backup.id}`);
       } catch (error) {
-        console.error(`Error cleaning up backup ${backup.id}:`, error);
+        logger.error(`Error cleaning up backup ${backup.id}:`, error);
       }
     }
 
@@ -568,7 +569,7 @@ class BackupService {
 
       return true;
     } catch (error) {
-      console.error('Backup/restore test failed:', error);
+      logger.error('Backup/restore test failed:', error);
       return false;
     }
   }

@@ -180,9 +180,10 @@ interface AgentCardProps {
 function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  // Mock approval requests — in production these come from the desktop via control messages
-  // The agent store would hold these; for now we derive from chat types
-  const pendingApprovals: ApprovalRequest[] = [];
+  // Approval requests from the agent store, filtered to pending ones for this context
+  const pendingApprovals = useAgentStore((state) =>
+    state.pendingApprovals.filter((r) => r.status === 'pending'),
+  );
 
   const handleCommand = useCallback(
     (command: 'pause' | 'resume' | 'cancel') => {

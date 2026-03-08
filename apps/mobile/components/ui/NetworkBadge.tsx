@@ -1,27 +1,30 @@
 import { useEffect, useState } from 'react';
-import { View, AppState } from 'react-native';
+import { View } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from './text';
 
 /**
  * Shows a red "Offline" badge when the device has no network connectivity.
- * Uses the browser-standard navigator.onLine API (available in React Native's
- * JS environment) with AppState to re-check when the app comes to foreground.
+ * Uses @react-native-community/netinfo for reliable network state detection
+ * in React Native (navigator.onLine is not reliable on native platforms).
  * Returns null when online, so it renders nothing in the normal case.
  */
 export function NetworkBadge() {
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
-    const check = () => setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
-
-    check();
-
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') check();
+    // Initial fetch of network state
+    NetInfo.fetch().then((state) => {
+      setIsOnline(state.isConnected ?? true);
     });
 
-    return () => subscription.remove();
+    // Subscribe to network state changes
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOnline(state.isConnected ?? true);
+    });
+
+    return unsubscribe;
   }, []);
 
   if (isOnline) return null;

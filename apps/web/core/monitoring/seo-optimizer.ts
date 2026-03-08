@@ -1,4 +1,5 @@
 import { monitoringService } from './system-monitor';
+import { logger } from '@/lib/logger';
 
 interface SEOData {
   title: string;
@@ -68,7 +69,7 @@ class SEOService {
     this.setupSitemapGeneration();
 
     this.isInitialized = true;
-    console.log('✅ SEO service initialized');
+    logger.info('SEO service initialized');
   }
 
   /**

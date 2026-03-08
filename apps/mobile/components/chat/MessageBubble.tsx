@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { memo, useCallback, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
@@ -10,6 +10,9 @@ import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallCard } from './ToolCallCard';
 import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
+import { GeneratedImage } from './GeneratedImage';
+import { ImageGenProgress } from './ImageGenProgress';
+import { ImageFullScreen } from './ImageFullScreen';
 import { colors } from '@/lib/theme';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
@@ -165,6 +168,8 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
+  const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
     setExpandedArtifact(artifact);
@@ -181,7 +186,18 @@ export const MessageBubble = memo(function MessageBubble({
     [onReject],
   );
 
+  const handleImagePress = useCallback((url: string) => {
+    setFullScreenImageUrl(url);
+  }, []);
+
+  const handleCloseFullScreenImage = useCallback(() => {
+    setFullScreenImageUrl(null);
+  }, []);
+
   const contentElements = renderMarkdownContent(message.content);
+
+  // Compute image display width: full bubble width minus avatar + gap + padding
+  const imageWidth = Math.min(width - 80, 320);
 
   return (
     <Animated.View
@@ -250,9 +266,30 @@ export const MessageBubble = memo(function MessageBubble({
               {contentElements}
               {message.isStreaming && <StreamingIndicator />}
             </View>
-          ) : message.isStreaming ? (
+          ) : message.isStreaming && !message.isGeneratingImage ? (
             <StreamingIndicator />
           ) : null}
+
+          {/* Image generation progress indicator */}
+          {isAssistant && message.isGeneratingImage && (
+            <ImageGenProgress
+              prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
+              progress={message.imageGenProgress ?? 0}
+              status={message.imageGenStatus ?? 'generating'}
+              estimatedTime={message.imageGenEstimatedTime}
+              errorMessage={message.imageGenError}
+            />
+          )}
+
+          {/* Generated image */}
+          {isAssistant && (message.type === 'image' || message.imageUrl) && message.imageUrl && (
+            <GeneratedImage
+              imageUrl={message.imageUrl}
+              revisedPrompt={message.revisedPrompt}
+              width={imageWidth}
+              onPress={() => handleImagePress(message.imageUrl!)}
+            />
+          )}
 
           {/* Inline artifacts */}
           {isAssistant && message.artifacts && message.artifacts.length > 0 ? (
@@ -274,6 +311,13 @@ export const MessageBubble = memo(function MessageBubble({
         artifact={expandedArtifact}
         visible={expandedArtifact !== null}
         onClose={handleCloseArtifact}
+      />
+
+      {/* Full-screen image viewer */}
+      <ImageFullScreen
+        imageUrl={fullScreenImageUrl}
+        visible={fullScreenImageUrl !== null}
+        onClose={handleCloseFullScreenImage}
       />
     </Animated.View>
   );

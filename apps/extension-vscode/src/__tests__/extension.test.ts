@@ -6,6 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ── commandLabel helper ──────────────────────────────────────────────────────
 
@@ -109,27 +111,61 @@ describe('isLocalPortReachable pattern', () => {
 
 // ── Activation commands registration ─────────────────────────────────────────
 
-describe('extension command registration', () => {
-  const EXPECTED_COMMANDS = [
-    'agi-workforce.chat',
-    'agi-workforce.explain',
-    'agi-workforce.fix',
-    'agi-workforce.refactor',
-    'agi-workforce.generateTests',
-    'agi-workforce.setApiKey',
-    'agi-workforce.clearApiKey',
-    'agi-workforce.selectModel',
-    'agi-workforce.openConversation',
-    'agi-workforce.deleteConversation',
-    'agi-workforce.refreshConversations',
-  ];
+/**
+ * Derive the command list dynamically from package.json so this test never
+ * goes stale when commands are added or removed.
+ */
+function getPackageJsonCommands(): string[] {
+  const pkgPath = path.resolve(__dirname, '../../package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
+    contributes?: { commands?: Array<{ command: string }> };
+  };
+  return (pkg.contributes?.commands ?? []).map((c) => c.command);
+}
 
-  it('should register all expected commands', () => {
-    // Verify the extension contributes all required commands
-    expect(EXPECTED_COMMANDS).toHaveLength(11);
-    expect(EXPECTED_COMMANDS).toContain('agi-workforce.chat');
-    expect(EXPECTED_COMMANDS).toContain('agi-workforce.setApiKey');
-    expect(EXPECTED_COMMANDS).toContain('agi-workforce.selectModel');
+describe('extension command registration', () => {
+  const PACKAGE_COMMANDS = getPackageJsonCommands();
+
+  it('reads commands from package.json', () => {
+    expect(PACKAGE_COMMANDS.length).toBeGreaterThan(0);
+  });
+
+  it('includes all core agi-workforce commands', () => {
+    const REQUIRED = [
+      'agi-workforce.chat',
+      'agi-workforce.agentMode',
+      'agi-workforce.explain',
+      'agi-workforce.fix',
+      'agi-workforce.refactor',
+      'agi-workforce.generateTests',
+      'agi-workforce.setApiKey',
+      'agi-workforce.clearApiKey',
+      'agi-workforce.selectModel',
+      'agi-workforce.openConversation',
+      'agi-workforce.deleteConversation',
+      'agi-workforce.refreshConversations',
+      'agi-workforce.sendToDesktop',
+      'agi-workforce.syncContextToDesktop',
+    ];
+    for (const cmd of REQUIRED) {
+      expect(PACKAGE_COMMANDS).toContain(cmd);
+    }
+  });
+
+  it('includes git and test utility commands', () => {
+    expect(PACKAGE_COMMANDS).toContain('agi.git.status');
+    expect(PACKAGE_COMMANDS).toContain('agi.git.diff');
+    expect(PACKAGE_COMMANDS).toContain('agi.git.commit');
+    expect(PACKAGE_COMMANDS).toContain('agi.test.run');
+  });
+
+  it('has at least 18 commands registered', () => {
+    expect(PACKAGE_COMMANDS.length).toBeGreaterThanOrEqual(18);
+  });
+
+  it('has no duplicate command ids', () => {
+    const unique = new Set(PACKAGE_COMMANDS);
+    expect(unique.size).toBe(PACKAGE_COMMANDS.length);
   });
 });
 
