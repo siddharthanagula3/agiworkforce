@@ -1330,21 +1330,226 @@ function handleBuildAccessibilityTree(): ExtensionResponse {
   }
 }
 
+// ─── Recording helpers ────────────────────────────────────────────────────────
+
+/**
+ * A recorded user action with a human-friendly shape.
+ * Stored separately from the legacy RecordedAction interface in types.ts so
+ * the DOM recorder can use precise 'click' | 'input' | 'scroll' | 'navigate'
+ * strings without fighting the NativeMessageType union.
+ */
+interface UserRecordedAction {
+  type: 'click' | 'input' | 'scroll' | 'navigate';
+  selector: string;
+  value?: string;
+  timestamp: number;
+}
+
+/** Recorded user actions accumulated during a recording session. */
+const _userRecordedActions: UserRecordedAction[] = [];
+
+/** References to the listener functions added during recording (for cleanup). */
+let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
+let _recordingInputListener: ((e: Event) => void) | null = null;
+let _recordingScrollListener: (() => void) | null = null;
+let _recordingNavListener: (() => void) | null = null;
+let _recordingIndicatorHost: HTMLElement | null = null;
+
+/**
+ * Build a short CSS selector that uniquely identifies an element.
+ * Prefers id > [data-testid] > tag+class combo. Falls back to tag name.
+ */
+function buildCssSelector(el: Element): string {
+  if (el.id) {
+    return `#${CSS.escape(el.id)}`;
+  }
+  const testId = el.getAttribute('data-testid');
+  if (testId) {
+    return `[data-testid="${CSS.escape(testId)}"]`;
+  }
+  const name = el.getAttribute('name');
+  if (name && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) {
+    return `${el.tagName.toLowerCase()}[name="${CSS.escape(name)}"]`;
+  }
+  // Tag + first class
+  const base = el.tagName.toLowerCase();
+  const firstClass = el.classList[0] ? `.${CSS.escape(el.classList[0])}` : '';
+  return `${base}${firstClass}`;
+}
+
+/** Inject a pulsing red dot indicator while recording is active. */
+function showRecordingIndicator(): void {
+  if (_recordingIndicatorHost) return;
+  if (!document.body) return;
+
+  const host = document.createElement('div');
+  host.setAttribute('data-agi-workforce-recording', 'true');
+  host.style.cssText =
+    'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;';
+
+  const shadow = host.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
+  style.textContent = `
+    .agi-rec-dot {
+      display:inline-flex;align-items:center;gap:6px;
+      background:rgba(30,10,10,0.88);color:#f87171;
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      font-size:12px;font-weight:600;letter-spacing:0.04em;
+      padding:5px 12px;border-radius:20px;
+      border:1px solid rgba(220,38,38,0.5);
+      user-select:none;
+    }
+    .agi-rec-circle {
+      width:9px;height:9px;border-radius:50%;
+      background:#ef4444;flex-shrink:0;
+      animation:agi-rec-pulse 1.1s ease-in-out infinite;
+    }
+    @keyframes agi-rec-pulse {
+      0%,100%{opacity:1;transform:scale(1);}
+      50%{opacity:0.4;transform:scale(0.75);}
+    }
+  `;
+  const badge = document.createElement('div');
+  badge.className = 'agi-rec-dot';
+  badge.innerHTML = '<div class="agi-rec-circle"></div>REC';
+  shadow.appendChild(style);
+  shadow.appendChild(badge);
+  document.body.appendChild(host);
+  _recordingIndicatorHost = host;
+}
+
+/** Remove the recording indicator. */
+function hideRecordingIndicator(): void {
+  if (_recordingIndicatorHost && _recordingIndicatorHost.parentNode) {
+    _recordingIndicatorHost.parentNode.removeChild(_recordingIndicatorHost);
+  }
+  _recordingIndicatorHost = null;
+}
+
+/** Attach DOM event listeners that capture user interactions. */
+function attachRecordingListeners(): void {
+  _recordingClickListener = (e: MouseEvent) => {
+    if (!automationState.isRecording) return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    _userRecordedActions.push({
+      type: 'click',
+      selector: buildCssSelector(target),
+      timestamp: Date.now(),
+    });
+  };
+
+  _recordingInputListener = (e: Event) => {
+    if (!automationState.isRecording) return;
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement) &&
+        !(target instanceof HTMLTextAreaElement) &&
+        !(target instanceof HTMLSelectElement)) return;
+    _userRecordedActions.push({
+      type: 'input',
+      selector: buildCssSelector(target),
+      value: target.value,
+      timestamp: Date.now(),
+    });
+  };
+
+  // Throttle scroll recording — at most one entry per 500 ms.
+  let _lastScrollTs = 0;
+  _recordingScrollListener = () => {
+    if (!automationState.isRecording) return;
+    const now = Date.now();
+    if (now - _lastScrollTs < 500) return;
+    _lastScrollTs = now;
+    _userRecordedActions.push({
+      type: 'scroll',
+      selector: 'window',
+      value: `${window.scrollX},${window.scrollY}`,
+      timestamp: now,
+    });
+  };
+
+  _recordingNavListener = () => {
+    if (!automationState.isRecording) return;
+    _userRecordedActions.push({
+      type: 'navigate',
+      selector: 'window.location',
+      value: window.location.href,
+      timestamp: Date.now(),
+    });
+  };
+
+  document.addEventListener('click', _recordingClickListener, { capture: true });
+  document.addEventListener('change', _recordingInputListener, { capture: true });
+  window.addEventListener('scroll', _recordingScrollListener, { passive: true, capture: true });
+  window.addEventListener('popstate', _recordingNavListener);
+}
+
+/** Remove DOM event listeners attached during recording. */
+function detachRecordingListeners(): void {
+  if (_recordingClickListener) {
+    document.removeEventListener('click', _recordingClickListener, { capture: true });
+    _recordingClickListener = null;
+  }
+  if (_recordingInputListener) {
+    document.removeEventListener('change', _recordingInputListener, { capture: true });
+    _recordingInputListener = null;
+  }
+  if (_recordingScrollListener) {
+    window.removeEventListener('scroll', _recordingScrollListener, { capture: true });
+    _recordingScrollListener = null;
+  }
+  if (_recordingNavListener) {
+    window.removeEventListener('popstate', _recordingNavListener);
+    _recordingNavListener = null;
+  }
+}
+
 // ─── Recording handlers ───────────────────────────────────────────────────────
 
 function handleStartRecording(): ExtensionResponse {
+  // Reset and start fresh
   automationState.isRecording = true;
   automationState.recordedActions = [];
+  _userRecordedActions.length = 0;
+
+  // Attach DOM listeners so we actually capture user interactions
+  detachRecordingListeners(); // defensive cleanup in case of double-start
+  attachRecordingListeners();
+
+  // Show recording indicator
+  showRecordingIndicator();
+
   return { success: true, recording: true } as ExtensionResponse;
 }
 
 function handleStopRecording(): ExtensionResponse {
   automationState.isRecording = false;
-  return { success: true, recording: false } as ExtensionResponse;
+
+  // Detach DOM listeners
+  detachRecordingListeners();
+
+  // Remove recording indicator
+  hideRecordingIndicator();
+
+  // Save recorded actions to chrome.storage.local
+  const actions = [..._userRecordedActions];
+  chrome.storage.local.set({ agi_recorded_actions: actions }).catch(() => {
+    // Storage errors are non-fatal
+  });
+
+  // Forward to background/desktop app so the session can replay or inspect the recording
+  chrome.runtime.sendMessage({
+    type: 'STOP_RECORDING',
+    actions,
+  }).catch(() => {
+    // Background may not be listening — not fatal
+  });
+
+  return { success: true, recording: false, actions } as ExtensionResponse;
 }
 
 function handleGetRecordedActions(): ExtensionResponse {
-  return { success: true, actions: automationState.recordedActions } as ExtensionResponse;
+  return { success: true, actions: _userRecordedActions } as ExtensionResponse;
 }
 
 /**

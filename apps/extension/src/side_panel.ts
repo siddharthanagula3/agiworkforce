@@ -31,10 +31,15 @@ let currentStreamId: string | null = null;
 // Track how many messages have already been rendered to avoid full DOM rebuilds.
 let lastRenderedCount = 0;
 
+// Auth state
+let currentApiKey: string | null = null;
+let isConnected = false;
+
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
+const API_KEY_STORAGE_KEY = 'agi_api_key';
 
 /** Persist current messages array to chrome.storage.local (capped at 50). */
 function saveMessages(): void {
@@ -61,6 +66,30 @@ async function loadMessages(): Promise<void> {
 /** Clear persisted messages from chrome.storage.local. */
 function clearStoredMessages(): void {
   chrome.storage.local.remove(STORAGE_KEY).catch(() => {
+    // Ignore storage errors.
+  });
+}
+
+/** Save the API key to chrome.storage.local under agi_api_key. */
+function saveApiKey(key: string): void {
+  chrome.storage.local.set({ [API_KEY_STORAGE_KEY]: key }).catch(() => {
+    // Storage errors must not surface to the user.
+  });
+}
+
+/** Load the API key from chrome.storage.local. Returns null if not set. */
+async function loadApiKey(): Promise<string | null> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(API_KEY_STORAGE_KEY, (result) => {
+      const key = result[API_KEY_STORAGE_KEY] as string | undefined;
+      resolve(key && key.trim() ? key.trim() : null);
+    });
+  });
+}
+
+/** Remove the stored API key. */
+function clearStoredApiKey(): void {
+  chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {
     // Ignore storage errors.
   });
 }
@@ -395,6 +424,127 @@ function injectStyles(): void {
     }
     #sp-send-btn:hover:not(:disabled) { background: #3730a3; transform: scale(1.05); }
     #sp-send-btn:disabled { background: #1e1e2e; color: #334155; cursor: not-allowed; transform: none; }
+
+    /* ── Settings bar ── */
+    #sp-settings-bar {
+      display: none; /* shown when settings are open */
+      flex-direction: column;
+      gap: 5px;
+      padding: 6px 10px 8px;
+      background: #0a0a10;
+      border-bottom: 1px solid #1e1e2e;
+      flex-shrink: 0;
+    }
+    #sp-settings-bar.open { display: flex; }
+    .sp-settings-label {
+      font-size: 10px;
+      color: #475569;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .sp-settings-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .sp-settings-input {
+      flex: 1;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 11px;
+      padding: 5px 9px;
+      outline: none;
+      font-family: 'SF Mono', Consolas, monospace;
+      transition: border-color 0.15s;
+      min-width: 0;
+    }
+    .sp-settings-input:focus { border-color: #4338ca; }
+    .sp-settings-input::placeholder { color: #334155; }
+    .sp-settings-btn {
+      background: #1e1e2e;
+      color: #94a3b8;
+      border: 1px solid #2d2d40;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .sp-settings-btn:hover { color: #e2e8f0; border-color: #4338ca; }
+
+    /* ── Auth bar ── */
+    #sp-auth-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #0d0d14;
+      border-bottom: 1px solid #1e1e2e;
+      flex-shrink: 0;
+    }
+    #sp-auth-input {
+      flex: 1;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 11px;
+      padding: 5px 9px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+      min-width: 0;
+    }
+    #sp-auth-input:focus { border-color: #4338ca; }
+    #sp-auth-input::placeholder { color: #334155; }
+    #sp-auth-save-btn {
+      background: #4338ca;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    #sp-auth-save-btn:hover { background: #3730a3; }
+
+    /* ── Connection status pill ── */
+    #sp-status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      border-radius: 10px;
+      padding: 3px 8px;
+      flex-shrink: 0;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+    #sp-status-pill.connected {
+      background: #052e16;
+      color: #86efac;
+      border: 1px solid #166534;
+    }
+    #sp-status-pill.disconnected {
+      background: #1c0505;
+      color: #f87171;
+      border: 1px solid #7f1d1d;
+    }
+    .sp-status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #sp-status-pill.connected .sp-status-dot { background: #22c55e; }
+    #sp-status-pill.disconnected .sp-status-dot { background: #ef4444; }
   `;
   document.head.appendChild(style);
 }
@@ -717,6 +867,7 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
+      apiKey: currentApiKey ?? undefined,
     },
     () => {
       // Acknowledge — streaming chunks arrive via onMessage
@@ -742,6 +893,34 @@ function handleStreamError(id: string, errorText: string): void {
   isStreaming = false;
   currentStreamId = null;
   updateSendButton();
+}
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+/** Update the connection status pill based on current auth state. */
+function updateConnectionStatus(): void {
+  const pill = document.getElementById('sp-status-pill');
+  if (!pill) return;
+  if (isConnected) {
+    pill.className = 'connected';
+    pill.innerHTML = '<span class="sp-status-dot"></span>Connected';
+  } else {
+    pill.className = 'disconnected';
+    pill.innerHTML = '<span class="sp-status-dot"></span>Not Connected';
+  }
+}
+
+/** Validate a key by testing connectivity to the desktop bridge. */
+async function validateAndSaveApiKey(key: string): Promise<void> {
+  const trimmed = key.trim();
+  if (!trimmed) return;
+
+  currentApiKey = trimmed;
+  saveApiKey(trimmed);
+
+  // Optimistically mark connected — real validation happens when a message is sent
+  isConnected = true;
+  updateConnectionStatus();
 }
 
 // ─── Update helpers ───────────────────────────────────────────────────────────
@@ -804,9 +983,110 @@ function buildUI(): void {
     updateSendButton();
     renderMessages();
   });
+  const settingsToggleBtn = el(
+    'button',
+    { class: 'sp-icon-btn', id: 'sp-settings-btn', title: 'Settings' },
+    '⚙',
+  );
+  settingsToggleBtn.addEventListener('click', () => {
+    const bar = document.getElementById('sp-settings-bar');
+    if (bar) bar.classList.toggle('open');
+  });
+  headerRight.appendChild(settingsToggleBtn);
   headerRight.appendChild(clearBtn);
   header.appendChild(headerRight);
   document.body.appendChild(header);
+
+  // Settings bar (hidden by default, toggled via header button)
+  const settingsBar = el('div', { id: 'sp-settings-bar' });
+
+  const bridgeUrlLabel = el('div', { class: 'sp-settings-label' }, 'Bridge URL');
+  const bridgeUrlRow = el('div', { class: 'sp-settings-row' });
+
+  const bridgeUrlInput = el('input', {
+    class: 'sp-settings-input',
+    id: 'sp-bridge-url-input',
+    type: 'text',
+    placeholder: 'ws://localhost:8765',
+    spellcheck: 'false',
+  }) as HTMLInputElement;
+
+  const bridgeUrlSaveBtn = el('button', { class: 'sp-settings-btn' }, 'Apply');
+
+  bridgeUrlRow.appendChild(bridgeUrlInput);
+  bridgeUrlRow.appendChild(bridgeUrlSaveBtn);
+  settingsBar.appendChild(bridgeUrlLabel);
+  settingsBar.appendChild(bridgeUrlRow);
+  document.body.appendChild(settingsBar);
+
+  // Pre-fill the current bridge URL from storage
+  chrome.storage.local.get('agi_bridge_url', (result) => {
+    const stored = result['agi_bridge_url'] as string | undefined;
+    if (stored && bridgeUrlInput instanceof HTMLInputElement) {
+      bridgeUrlInput.value = stored;
+    }
+  });
+
+  // Save bridge URL and reconnect
+  const saveBridgeUrl = (): void => {
+    const raw = (bridgeUrlInput as HTMLInputElement).value.trim();
+    if (!raw) {
+      chrome.storage.local.remove('agi_bridge_url');
+    } else {
+      chrome.storage.local.set({ agi_bridge_url: raw }).catch(() => {});
+    }
+    // Notify background to reconnect with new URL
+    chrome.runtime.sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw }).catch(() => {});
+    const bar = document.getElementById('sp-settings-bar');
+    if (bar) bar.classList.remove('open');
+  };
+
+  bridgeUrlSaveBtn.addEventListener('click', saveBridgeUrl);
+  bridgeUrlInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') saveBridgeUrl();
+  });
+
+  // Auth bar (API key entry + connection status)
+  const authBar = el('div', { id: 'sp-auth-bar' });
+
+  const authInput = el('input', {
+    id: 'sp-auth-input',
+    type: 'password',
+    placeholder: 'API key (stored locally)',
+    autocomplete: 'off',
+    spellcheck: 'false',
+  }) as HTMLInputElement;
+
+  const authSaveBtn = el('button', { id: 'sp-auth-save-btn' }, 'Save');
+
+  const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
+  statusPill.innerHTML = '<span class="sp-status-dot"></span>Not Connected';
+
+  authBar.appendChild(authInput);
+  authBar.appendChild(authSaveBtn);
+  authBar.appendChild(statusPill);
+  document.body.appendChild(authBar);
+
+  // Wire auth save button
+  const saveKey = (): void => {
+    const val = authInput.value.trim();
+    if (!val) {
+      // Clear key
+      currentApiKey = null;
+      isConnected = false;
+      clearStoredApiKey();
+      authInput.value = '';
+      updateConnectionStatus();
+      return;
+    }
+    void validateAndSaveApiKey(val);
+    authInput.value = '';
+  };
+
+  authSaveBtn.addEventListener('click', saveKey);
+  authInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') saveKey();
+  });
 
   // Messages area
   const msgsArea = el('div', { id: 'sp-messages' });
@@ -944,9 +1224,20 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 injectStyles();
 buildUI();
 
-// Load persisted messages after UI is built so the DOM is ready for renderMessages().
-loadMessages().then(() => {
-  if (messages.length > 0) {
-    renderMessages();
-  }
+// Load persisted API key and messages after UI is ready.
+Promise.all([
+  loadApiKey().then((key) => {
+    if (key) {
+      currentApiKey = key;
+      isConnected = true;
+      updateConnectionStatus();
+    }
+  }),
+  loadMessages().then(() => {
+    if (messages.length > 0) {
+      renderMessages();
+    }
+  }),
+]).catch(() => {
+  // Boot errors must not surface to the user.
 });
