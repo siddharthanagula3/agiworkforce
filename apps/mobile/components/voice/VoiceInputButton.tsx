@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Mic, Loader } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { colors } from '@/lib/theme';
 import { DEEPGRAM_API_KEY } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -153,11 +154,10 @@ export function VoiceInputButton({
   // ---------------------------------------------------------------------------
   // PTT path (hold-to-record → Deepgram or Whisper fallback)
   // ---------------------------------------------------------------------------
-  const pttRecordingRef = useRef<import('expo-av').Audio.Recording | null>(null);
+  const pttRecordingRef = useRef<Audio.Recording | null>(null);
 
   const startPTTRecording = useCallback(async () => {
     try {
-      const { Audio } = await import('expo-av');
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       const { status } = await Audio.requestPermissionsAsync();
@@ -197,7 +197,6 @@ export function VoiceInputButton({
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       onRecordingStop?.();
 
-      const { Audio } = await import('expo-av');
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
 
@@ -218,7 +217,6 @@ export function VoiceInputButton({
     } catch (err) {
       setState('idle');
       try {
-        const { Audio } = await import('expo-av');
         await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
       } catch {
         // ignore cleanup error

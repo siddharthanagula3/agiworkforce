@@ -713,6 +713,12 @@ impl OpenAIAdapter {
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        // Resolve the wire API model ID: catalog keys like "mistral-medium-3" must be
+        // translated to the actual API string ("mistral-medium-2508") before being sent
+        // to the provider.  get_api_model_id returns the apiModelId from models.json when
+        // set, otherwise returns the model string unchanged.
+        let wire_model = super::models_config::get_api_model_id(&request.model);
+
         // Process messages for multimodal content (vision)
         let mut processed_messages = Vec::new();
         for msg in &request.messages {
@@ -733,7 +739,7 @@ impl OpenAIAdapter {
         }
 
         let mut api_request = serde_json::json!({
-            "model": request.model,
+            "model": wire_model,
             "messages": processed_messages,
         });
 
@@ -1449,11 +1455,113 @@ impl ProviderAdapter for AnthropicAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let canonical_model = Self::canonicalize_model(&request.model);
 
+        // ── Build messages array, handling multimodal content ────────
+        // Anthropic requires images encoded as content-block arrays with
+        // source.type = "base64".  Plain text messages are passed through
+        // as-is; messages that carry `multimodal_content` are converted
+        // into the Anthropic multi-block format.
+        let messages: Vec<Value> = {
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
+            let mut out = Vec::with_capacity(request.messages.len());
+            for msg in &request.messages {
+                if let Some(parts) = &msg.multimodal_content {
+                    let mut content_blocks: Vec<Value> = Vec::new();
+                    for part in parts {
+                        match part {
+                            super::ContentPart::Image { image } => {
+                                let base64_data = STANDARD.encode(&image.data);
+                                let media_type = image.format.mime_type();
+                                content_blocks.push(serde_json::json!({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                            super::ContentPart::Text { text } => {
+                                content_blocks.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": text
+                                }));
+                            }
+                            super::ContentPart::Document { document } => {
+                                let base64_data = STANDARD.encode(&document.data);
+                                let media_type = match document.format {
+                                    super::DocumentFormat::Pdf => "application/pdf",
+                                    super::DocumentFormat::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    super::DocumentFormat::Html => "text/html",
+                                    super::DocumentFormat::Md | super::DocumentFormat::Txt => "text/plain",
+                                };
+                                let mut doc_block = serde_json::json!({
+                                    "type": "document",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": base64_data
+                                    }
+                                });
+                                if let Some(name) = &document.name {
+                                    doc_block["title"] = serde_json::json!(name);
+                                }
+                                content_blocks.push(doc_block);
+                            }
+                            super::ContentPart::ToolUse { tool_use } => {
+                                content_blocks.push(serde_json::json!({
+                                    "type": "tool_use",
+                                    "id": tool_use.id,
+                                    "name": tool_use.name,
+                                    "input": tool_use.input
+                                }));
+                            }
+                            super::ContentPart::ToolResult { tool_result } => {
+                                content_blocks.push(serde_json::json!({
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_result.tool_use_id,
+                                    "content": tool_result.content,
+                                    "is_error": tool_result.is_error
+                                }));
+                            }
+                            _ => {
+                                tracing::warn!(
+                                    "[Anthropic] Unsupported content part type in multimodal message, skipping"
+                                );
+                            }
+                        }
+                    }
+                    // If the plain text content is non-empty and no Text block
+                    // was added from parts, append it so nothing is lost.
+                    if !msg.content.is_empty()
+                        && !content_blocks
+                            .iter()
+                            .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                    {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": msg.content
+                        }));
+                    }
+                    out.push(serde_json::json!({
+                        "role": msg.role,
+                        "content": content_blocks
+                    }));
+                } else {
+                    // Plain text message – pass through verbatim
+                    out.push(serde_json::json!({
+                        "role": msg.role,
+                        "content": msg.content
+                    }));
+                }
+            }
+            out
+        };
+
         // Anthropic uses Messages API format with flat tool definitions
         let mut anthropic_request = serde_json::json!({
             "model": canonical_model,
             "max_tokens": request.max_tokens.unwrap_or(4096),
-            "messages": request.messages,
+            "messages": messages,
         });
 
         // ── System prompt with prompt caching ────────────────────────
@@ -1553,6 +1661,7 @@ impl ProviderAdapter for AnthropicAdapter {
         // Extract content - Anthropic returns content blocks array
         let mut content = String::new();
         let mut tool_calls_vec = Vec::new();
+        let mut reasoning_content: Option<String> = None;
 
         if let Some(content_blocks) = response["content"].as_array() {
             for block in content_blocks {
@@ -1623,9 +1732,17 @@ impl ProviderAdapter for AnthropicAdapter {
 
                     // ── Thinking blocks ──────────────────────────────
                     Some("thinking") => {
-                        // Extended thinking content – not included in the
-                        // main response content; could be surfaced via a
-                        // separate field in the future.
+                        // Capture extended thinking content into reasoning_content
+                        // (same field used by DeepSeek), so callers can display
+                        // or log the model's chain-of-thought.
+                        if let Some(thinking_text) = block.get("thinking").and_then(|v| v.as_str())
+                        {
+                            if reasoning_content.is_none() {
+                                reasoning_content = Some(thinking_text.to_string());
+                            } else if let Some(ref mut rc) = reasoning_content {
+                                rc.push_str(thinking_text);
+                            }
+                        }
                     }
 
                     _ => {}
@@ -1668,6 +1785,7 @@ impl ProviderAdapter for AnthropicAdapter {
             model: response["model"].as_str().unwrap_or("").to_string(),
             tool_calls,
             finish_reason,
+            reasoning_content,
             ..LLMResponse::default()
         })
     }

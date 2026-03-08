@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Pressable } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +12,12 @@ interface SwitchProps {
 export function Switch({ value, onValueChange }: SwitchProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const translateX = useSharedValue(value ? 20 : 2);
+
+  // Sync thumb position when the `value` prop changes externally
+  // (e.g. when the parent re-renders with a new value from a store).
+  useEffect(() => {
+    translateX.value = withSpring(value ? 20 : 2, { damping: 15, stiffness: 200 });
+  }, [value, translateX]);
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

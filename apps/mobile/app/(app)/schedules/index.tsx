@@ -42,12 +42,12 @@ export default function SchedulesScreen() {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.push('/schedules/create');
+    router.push('/(app)/schedules/create');
   }, [hapticsEnabled, router]);
 
   const handlePress = useCallback(
     (id: string) => {
-      router.push({ pathname: '/schedules/create', params: { id } });
+      router.push({ pathname: '/(app)/schedules/create', params: { id } });
     },
     [router],
   );

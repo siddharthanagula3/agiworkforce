@@ -3,6 +3,8 @@
 
 import type { AIEmployee } from '@core/types/ai-employee';
 import { logger } from '@shared/lib/logger';
+import { toolInvocationService } from '@core/ai/tools/tool-invocation-handler';
+import { aiEmployeeService } from '@core/ai/employees/employee-management';
 
 interface ToolResult {
   data: unknown;
@@ -19,28 +21,6 @@ interface Job {
   title: string;
   description: string;
 }
-
-// Stub service references — these modules are not yet implemented
-const toolInvocationService = {
-  executeTool: async (
-    _toolId: string,
-    _params: Record<string, unknown>,
-    _context: ExecutionContext,
-  ) =>
-    ({ result: null, success: true, error: null }) as {
-      result: unknown;
-      success: boolean;
-      error: string | null;
-    },
-};
-
-const aiEmployeeService = {
-  getEmployeePerformance: async (_id: string) => ({
-    data: null as Record<string, unknown> | null,
-    error: null,
-  }),
-  updateEmployeePerformance: async (_id: string, _perf: unknown) => ({ data: null, error: null }),
-};
 
 export interface TaskExecutionResult {
   success: boolean;

@@ -424,6 +424,10 @@ importers:
         version: 4.0.18(@types/node@25.3.0)(@vitest/ui@4.0.18)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.31.1)(msw@2.12.10(@types/node@25.3.0)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   apps/extension-vscode:
+    dependencies:
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -431,6 +435,9 @@ importers:
       '@types/vscode':
         specifier: ^1.95.0
         version: 1.109.0
+      '@types/ws':
+        specifier: ^8.18.0
+        version: 8.18.1
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.0.0
         version: 8.56.1(@typescript-eslint/parser@8.56.1(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
@@ -473,6 +480,9 @@ importers:
       '@gorhom/bottom-sheet':
         specifier: ^5.1.2
         version: 5.2.8(@types/react@18.3.28)(react-native-gesture-handler@2.20.2(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1))(react-native-reanimated@3.16.7(@babel/core@7.29.0)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
+      '@react-native-community/netinfo':
+        specifier: ^12.0.1
+        version: 12.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
       '@react-navigation/drawer':
         specifier: ^7.3.2
         version: 7.9.2(v3mcouukenov35s32llaoxkhhi)
@@ -800,7 +810,7 @@ importers:
         version: 11.12.3
       next:
         specifier: ^16.1.6
-        version: 16.1.6(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 16.1.6(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3284,7 +3294,7 @@ packages:
       {
         integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==,
       }
-    engines: { '0': node >=0.10.0 }
+    engines: { node: '>=0.10.0' }
 
   '@expo/cli@0.22.28':
     resolution:
@@ -5242,6 +5252,15 @@ packages:
       }
     peerDependencies:
       react: '>=16.8'
+
+  '@react-native-community/netinfo@12.0.1':
+    resolution:
+      {
+        integrity: sha512-P/3caXIvfYSJG8AWJVefukg+ZGRPs+M4Lp3pNJtgcTYoJxCjWrKQGNnCkj/Cz//zWa/avGed0i/wzm0T8vV2IQ==,
+      }
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.59'
 
   '@react-native/assets-registry@0.76.9':
     resolution:
@@ -22963,6 +22982,11 @@ snapshots:
     dependencies:
       react: 19.2.4
 
+  '@react-native-community/netinfo@12.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+      react-native: 0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1)
+
   '@react-native/assets-registry@0.76.9': {}
 
   '@react-native/babel-plugin-codegen@0.76.9(@babel/preset-env@7.29.0(@babel/core@7.29.0))':
@@ -26499,7 +26523,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.1.6
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.2(jiti@2.6.1))
@@ -26533,7 +26557,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3(supports-color@8.1.1)
@@ -26563,14 +26587,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@4.4.4)(eslint@9.39.2(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -26596,7 +26620,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@4.4.4)(eslint@9.39.2(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -29910,7 +29934,7 @@ snapshots:
 
   next-tick@1.1.0: {}
 
-  next@16.1.6(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@16.1.6(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.1.6
       '@swc/helpers': 0.5.15
@@ -29919,7 +29943,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(react@19.2.4)
+      styled-jsx: 5.1.6(@babel/core@7.28.6)(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.1.6
       '@next/swc-darwin-x64': 16.1.6
@@ -31893,10 +31917,12 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  styled-jsx@5.1.6(react@19.2.4):
+  styled-jsx@5.1.6(@babel/core@7.28.6)(react@19.2.4):
     dependencies:
       client-only: 0.0.1
       react: 19.2.4
+    optionalDependencies:
+      '@babel/core': 7.28.6
 
   stylis@4.2.0: {}
 

@@ -232,6 +232,21 @@ pub fn get_token_multiplier(provider: &Provider) -> f64 {
         .unwrap_or(1.0)
 }
 
+/// Resolve the wire API model ID for a given catalog model ID.
+///
+/// If the catalog entry has an `apiModelId` field set (e.g. `"mistral-medium-2508"` for
+/// the internal key `"mistral-medium-3"`), that wire string is returned so it can be sent
+/// directly in the HTTP request body.  Falls back to the input unchanged when no entry or
+/// no `apiModelId` is found.
+pub fn get_api_model_id(model_id: &str) -> String {
+    if let Some(entry) = CONFIG.models.get(model_id) {
+        if let Some(api_id) = &entry.api_model_id {
+            return api_id.clone();
+        }
+    }
+    model_id.to_string()
+}
+
 /// Canonicalize a model ID using the provider's canonicalization map.
 /// If the model is not found in the map, returns the input unchanged.
 pub fn get_canonicalized_id(model_id: &str) -> String {

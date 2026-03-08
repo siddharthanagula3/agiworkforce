@@ -15,6 +15,7 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -91,65 +92,6 @@ const ChatCompletionRequestSchema = z.object({
   use_prompt_cache: z.boolean().optional(),
 });
 
-// Model tier requirements — synced with app/api/llm/completion/route.ts
-const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
-  // Max tier only — flagship models
-  'claude-opus-4.6': ['max', 'enterprise'],
-  'claude-opus-4-6-20251101': ['max', 'enterprise'],
-  'claude-opus-4.5': ['max', 'enterprise'],
-  'claude-opus-4.5-20251101': ['max', 'enterprise'],
-  'gpt-5-pro': ['max', 'enterprise'],
-  'gemini-3-ultra': ['max', 'enterprise'],
-  o3: ['max', 'enterprise'],
-  'o3-pro': ['max', 'enterprise'],
-  'grok-4': ['max', 'enterprise'],
-  'deepseek-r1': ['max', 'enterprise'],
-  // Pro tier and above
-  'gpt-5.2': ['pro', 'max', 'enterprise'],
-  'gpt-5.2-pro': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4-6-20251029': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4': ['pro', 'max', 'enterprise'],
-  'claude-sonnet-4-20250514': ['pro', 'max', 'enterprise'],
-  'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
-  'kimi-k2.5-turbo': ['pro', 'max', 'enterprise'],
-  'qwen-max': ['pro', 'max', 'enterprise'],
-  'qwen-coder-plus': ['pro', 'max', 'enterprise'],
-  'sonar-pro': ['pro', 'max', 'enterprise'],
-  'sonar-reasoning': ['pro', 'max', 'enterprise'],
-  'sonar-deep-research': ['pro', 'max', 'enterprise'],
-};
-
-// Economy models available to all paid tiers (hobby+)
-// Synced with app/api/llm/completion/route.ts ECONOMY_MODELS
-const ECONOMY_MODELS = new Set([
-  'gemini-3-flash-preview',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'deepseek-chat',
-  'kimi-k2.5-thinking',
-  'grok-4-fast-reasoning',
-  'grok-4-fast-non-reasoning',
-  'grok-4-mini',
-  'grok-code-fast-1',
-  'claude-haiku-4.5',
-  'claude-haiku-4-5-20251001',
-  'claude-3-haiku',
-  'qwen-coder-flash',
-  'qwen-turbo',
-  'qwen-flash',
-  'qwen-plus',
-  'gpt-5-nano',
-  'gpt-5-mini',
-  'gpt-4o-mini',
-  'sonar',
-  'glm-4.7',
-  'glm-4.6v',
-  'glm-4.6v-flash',
-]);
-
 // Auto model tier mappings - translate tier-based model selections to actual models
 const AUTO_MODEL_MAPPINGS: Record<string, string> = {
   'auto-economy': 'gpt-5-nano', // Fast, cost-effective
@@ -176,30 +118,19 @@ function resolveAutoModel(model: string, subscriptionTier?: string): string {
   return mapped;
 }
 
+/**
+ * Check if a subscription tier allows access to a model.
+ * Delegates to the shared canAccessModel() from lib/model-tiers.ts.
+ */
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
-  const modelLower = model.toLowerCase();
-  const tierLower = subscriptionTier.toLowerCase();
-
-  if (tierLower === 'free') return false;
-
-  const requiredTiers = MODEL_TIER_REQUIREMENTS[modelLower];
-  if (requiredTiers) {
-    return requiredTiers.includes(tierLower as 'pro' | 'max' | 'enterprise');
+  const allowed = canAccessModel(model, subscriptionTier);
+  if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
+    logger.warn(
+      { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
+      'Model access denied — not in economy or tier requirements map',
+    );
   }
-
-  // Economy models available to all paid tiers (hobby+)
-  if (ECONOMY_MODELS.has(modelLower)) {
-    return true;
-  }
-
-  // Auto models are always allowed (they resolve to actual models later)
-  if (modelLower.startsWith('auto-')) {
-    return true;
-  }
-
-  // Unknown model — deny by default for safety
-  logger.warn({ model: modelLower, tier: tierLower }, 'Unknown model requested, denying access');
-  return false;
+  return allowed;
 }
 
 function findCheaperFallbackModel(

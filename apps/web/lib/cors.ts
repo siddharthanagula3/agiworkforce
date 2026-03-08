@@ -104,7 +104,7 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
   const origin = request.headers.get('origin');
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Request-ID',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Request-ID, x-csrf-token',
     'Access-Control-Max-Age': '86400', // 24 hours
   };
 
