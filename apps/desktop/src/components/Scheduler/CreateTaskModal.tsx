@@ -4,8 +4,8 @@ import { toast } from 'sonner';
 import {
   type ScheduledTask,
   type TaskSchedule,
-  useScheduledTaskStore,
-} from '../../stores/scheduledTaskStore';
+  useSchedulerStore,
+} from '../../stores/schedulerStore';
 import { MODEL_PRESETS } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { TaskScheduleInput } from './TaskScheduleInput';
@@ -41,8 +41,8 @@ function fieldClass(extra?: string) {
 }
 
 export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModalProps) {
-  const createTask = useScheduledTaskStore((s) => s.createTask);
-  const updateTask = useScheduledTaskStore((s) => s.updateTask);
+  const createTask = useSchedulerStore((s) => s.createTask);
+  const updateTask = useSchedulerStore((s) => s.updateTask);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
