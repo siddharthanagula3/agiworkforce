@@ -2,7 +2,7 @@ import { CalendarClock, ListTodo, PlusCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
-import { useScheduledTaskStore } from '../../stores/scheduledTaskStore';
+import { useSchedulerStore } from '../../stores/schedulerStore';
 import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
 import { AgentTaskCreator } from './AgentTaskCreator';
 import { AgentTaskMonitor } from './AgentTaskMonitor';
@@ -12,7 +12,7 @@ type Tab = 'create' | 'monitor' | 'scheduled';
 export function AgentTaskPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('create');
   const taskCount = useAgentTaskStore((s) => s.tasks.length);
-  const scheduledCount = useScheduledTaskStore(
+  const scheduledCount = useSchedulerStore(
     (s) => s.tasks.filter((t) => t.status === 'active').length,
   );
 
