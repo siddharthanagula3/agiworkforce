@@ -198,6 +198,12 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 share views per minute (public read endpoint)
     failClosed: false,
   },
+  // Model catalog endpoint - public, cached, generous limits
+  'model-catalog': {
+    limit: 120,
+    window: '1 m', // 120 catalog fetches per minute per IP (cached on client anyway)
+    failClosed: false, // Public endpoint: allow through if Redis fails
+  },
   // GitHub webhook endpoint
   'github-webhook': {
     limit: 200,
