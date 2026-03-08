@@ -1994,6 +1994,7 @@ pub fn run() {
             crate::sys::commands::scheduler_get_next_runs,
             crate::sys::commands::scheduler_toggle_job,
             crate::sys::commands::scheduler_run_job_now,
+            crate::sys::commands::scheduler_get_history,
             crate::sys::commands::scheduler_update_job,
 
             // Research (multi-source investigation with citations)
@@ -2309,6 +2310,8 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::set_agent_mode,
             crate::sys::commands::tool_confirmation::get_agent_mode,
             crate::sys::commands::tool_confirmation::resolve_task_approval,
+            crate::sys::commands::tool_confirmation::set_tool_approval_policy,
+            crate::sys::commands::tool_confirmation::get_tool_approval_policy,
 
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,

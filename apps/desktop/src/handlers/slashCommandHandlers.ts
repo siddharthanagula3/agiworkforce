@@ -1181,8 +1181,12 @@ export async function executeScheduleCommand(args: string): Promise<InlinePanel>
     if (!args.trim()) {
       response = await invoke<Record<string, unknown>>('scheduler_list_jobs');
     } else {
+      // Rust expects: name (String), schedule (Value), actionType (Option<String>), prompt (Option<String>)
       response = await invoke<Record<string, unknown>>('scheduler_add_job', {
-        description: args.trim(),
+        name: args.trim(),
+        schedule: '0 0 9 * * *', // default: daily at 9 AM
+        actionType: 'agi_task',
+        prompt: args.trim(),
       });
     }
 
@@ -2120,6 +2124,40 @@ export async function executeSettingsCommand(args: string): Promise<InlinePanel>
 
     panel.metadata = { status: 'error' };
   }
+
+  return panel;
+}
+
+/**
+ * Attempts to redo the last undone action.
+ * Handles the /redo slash command for re-applying a previously undone change.
+ *
+ * @returns An InlinePanel (terminal style) with a "not yet available" notice
+ *
+ * @example
+ * const panel = await executeRedoCommand();
+ */
+export async function executeRedoCommand(): Promise<InlinePanel> {
+  const panelId = `redo-${crypto.randomUUID()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal',
+    content: {
+      terminal: {
+        command: '/redo',
+        status: 'error',
+        stdout: '',
+        stderr: 'Redo is not yet available. The undo system does not maintain a redo stack.',
+        exitCode: 1,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'error',
+    },
+  };
 
   return panel;
 }
