@@ -86,16 +86,18 @@ export interface NextRunEntry {
 }
 
 /**
- * Job execution history entry
+ * Job execution history entry.
+ * Matches Rust JobExecutionRecord (serde rename_all = "camelCase")
+ * with ExecutionStatus (serde rename_all = "lowercase"): "running" | "completed" | "failed" | "cancelled"
  */
 export interface JobHistoryEntry {
-  id: string;
-  job_id: string;
-  started_at: string;
-  completed_at?: string;
-  success: boolean;
+  id: number;
+  jobId: string;
+  startedAt: string;
+  completedAt?: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
   error?: string;
-  duration_ms?: number;
+  durationMs?: number;
 }
 
 /**
@@ -125,50 +127,25 @@ export interface UpdateJobParams {
 // ============================================================================
 
 /**
- * Map a store job to the hook's ScheduledJob type
+ * Map a store job to the hook's ScheduledJob type.
+ * Now that the store type matches the Rust wire format, this is a direct mapping
+ * with only null→undefined conversions for optional fields.
  */
 function mapStoreJobToScheduledJob(storeJob: StoreScheduledJob): ScheduledJob {
-  // Parse action_data from string to object
-  let actionData: Record<string, unknown> = {};
-  try {
-    actionData = JSON.parse(storeJob.action_data);
-  } catch {
-    // If it's not valid JSON, wrap it
-    actionData = { raw: storeJob.action_data };
-  }
-
-  // Map action type (store uses 'briefing', 'reminder', etc., backend uses 'notification', etc.)
-  const actionTypeMap: Record<string, SchedulerActionType> = {
-    briefing: 'agi_task',
-    reminder: 'notification',
-    agent_task: 'agi_task',
-    custom: 'script',
-    workflow: 'workflow',
-    agi_task: 'agi_task',
-    shell_command: 'shell_command',
-    notification: 'notification',
-    webhook: 'webhook',
-    script: 'script',
-  };
-  const actionType = actionTypeMap[storeJob.action_type] || 'notification';
-
-  // Map status (store uses 'enabled' boolean, we use status enum)
-  const status: JobStatus = storeJob.enabled ? 'active' : 'paused';
-
   return {
     id: storeJob.id,
     name: storeJob.name,
-    schedule: storeJob.cron_expression || storeJob.run_at || `${storeJob.interval_seconds}s`,
-    action_type: actionType,
-    action_data: actionData,
-    status,
+    schedule: storeJob.schedule,
+    action_type: storeJob.action_type as SchedulerActionType,
+    action_data: storeJob.action_data,
+    status: storeJob.status as JobStatus,
     created_at: storeJob.created_at,
-    updated_at: storeJob.created_at, // Store doesn't track updated_at
-    last_run: storeJob.last_run,
-    next_run: storeJob.next_run,
-    run_count: 0, // Store doesn't track run_count
-    failure_count: 0, // Store doesn't track failure_count
-    description: actionData['description'] as string | undefined,
+    updated_at: storeJob.updated_at,
+    last_run: storeJob.last_run ?? undefined,
+    next_run: storeJob.next_run ?? undefined,
+    run_count: storeJob.run_count,
+    failure_count: storeJob.failure_count,
+    description: storeJob.description ?? undefined,
   };
 }
 
@@ -311,15 +288,19 @@ export function useScheduler() {
   );
 
   /**
-   * Get job execution history
-   * Note: This would require a backend command
+   * Get job execution history from the backend
    */
   const getHistory = useCallback(
     async (jobId?: string, limit?: number): Promise<JobHistoryEntry[]> => {
-      console.debug('[useScheduler] Getting history for job:', jobId, 'limit:', limit);
-      // The backend would need a `scheduler_get_history` command
-      // For now, return an empty array
-      return [];
+      try {
+        const records = await invoke<JobHistoryEntry[]>('scheduler_get_history', {
+          jobId: jobId ?? null,
+        });
+        return limit ? records.slice(0, limit) : records;
+      } catch (error) {
+        console.error('[useScheduler] Failed to get history:', error);
+        return [];
+      }
     },
     [],
   );
