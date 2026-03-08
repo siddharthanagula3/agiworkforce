@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tauri::{command, State};
 
+use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::sys::error::{Error, Result};
 
 /// The type of action a scheduled job should perform
@@ -300,12 +301,15 @@ impl Default for ProactiveScheduler {
 /// State wrapper for the ProactiveScheduler
 pub struct SchedulerState {
     pub scheduler: Arc<ProactiveScheduler>,
+    /// In-memory execution history for recently dispatched jobs
+    pub execution_history: RwLock<Vec<JobExecutionRecord>>,
 }
 
 impl SchedulerState {
     pub fn new() -> Self {
         Self {
             scheduler: Arc::new(ProactiveScheduler::new()),
+            execution_history: RwLock::new(Vec::new()),
         }
     }
 }
@@ -519,18 +523,332 @@ pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) 
 
 /// Immediately trigger a scheduled job to run
 ///
-/// Marks the job as having run and updates run count and timestamps.
-/// The actual execution is recorded but the job action itself is not
-/// executed here — this allows the frontend to track the run.
+/// Retrieves the job's action configuration, dispatches the appropriate action
+/// (shell command, AGI task, workflow, notification, webhook, or script), then
+/// marks the job as having run with success/failure status.
 ///
 /// # Arguments
 /// * `id` - The unique identifier of the job to run
+/// * `app_handle` - Tauri app handle for emitting events
 ///
 /// # Returns
-/// `true` if the job was found and marked as run
+/// `true` if the job was found and executed
 #[command]
-pub async fn scheduler_run_job_now(id: String, state: State<'_, SchedulerState>) -> Result<bool> {
-    state.scheduler.mark_job_run(&id, true)
+pub async fn scheduler_run_job_now(
+    id: String,
+    state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
+) -> Result<bool> {
+    // Retrieve job info (action_type + action_data) before execution
+    let job = {
+        let found = state.scheduler.get_job(&id)?;
+        match found {
+            Some(j) => j,
+            None => return Err(Error::Generic(format!("Job not found: {}", id))),
+        }
+    };
+
+    let execution_result = dispatch_job_action(
+        &job.action_type,
+        &job.action_data,
+        &job.name,
+        &app_handle,
+    )
+    .await;
+
+    let success = execution_result.is_ok();
+
+    if let Err(ref e) = execution_result {
+        tracing::error!(
+            "[Scheduler] Job '{}' (id={}) action dispatch failed: {}",
+            job.name,
+            id,
+            e
+        );
+    } else {
+        tracing::info!(
+            "[Scheduler] Job '{}' (id={}) action dispatched successfully",
+            job.name,
+            id
+        );
+    }
+
+    // Record execution history
+    {
+        let mut history = state.execution_history.write().map_err(|e| {
+            Error::Generic(format!("Failed to acquire history write lock: {}", e))
+        })?;
+
+        let record = JobExecutionRecord {
+            id: history.len() as i64 + 1,
+            job_id: id.clone(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: Some(chrono::Utc::now().to_rfc3339()),
+            status: if success {
+                ExecutionStatus::Completed
+            } else {
+                ExecutionStatus::Failed
+            },
+            error: execution_result.err().map(|e| e.to_string()),
+            duration_ms: Some(0), // Instantaneous dispatch
+        };
+
+        history.push(record);
+    }
+
+    // Mark the job run in the scheduler (updates last_run, next_run, counters)
+    state.scheduler.mark_job_run(&id, success)
+}
+
+/// Dispatch the actual job action based on type and data.
+///
+/// This executes the job's configured action:
+/// - ShellCommand: runs via `tokio::process::Command`
+/// - AgiTask: emits a `scheduler:agi-task` event for the chat/agent loop to pick up
+/// - Workflow: emits a `scheduler:workflow-execute` event for the workflow engine
+/// - Notification: emits a desktop notification via `scheduler:notification` event
+/// - Webhook: sends an HTTP POST request
+/// - Script: runs a script file via the system shell
+async fn dispatch_job_action(
+    action_type: &SchedulerActionType,
+    action_data: &serde_json::Value,
+    job_name: &str,
+    app_handle: &tauri::AppHandle,
+) -> std::result::Result<(), String> {
+    use tauri::Emitter;
+
+    match action_type {
+        SchedulerActionType::ShellCommand => {
+            let command = action_data
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if command.is_empty() {
+                return Err("Shell command is empty".to_string());
+            }
+
+            tracing::info!("[Scheduler] Executing shell command: {}", command);
+
+            let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
+                "cmd"
+            } else {
+                "sh"
+            })
+            .args(if cfg!(target_os = "windows") {
+                vec!["/C", command]
+            } else {
+                vec!["-c", command]
+            })
+            .output()
+            .await
+            .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!(
+                    "Command exited with status {}: {}",
+                    output.status, stderr
+                ));
+            }
+
+            Ok(())
+        }
+
+        SchedulerActionType::AgiTask => {
+            let prompt = action_data
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if prompt.is_empty() {
+                return Err("AGI task prompt is empty".to_string());
+            }
+
+            tracing::info!("[Scheduler] Dispatching AGI task: {}", prompt);
+
+            // Emit event for the chat/agent system to pick up
+            app_handle
+                .emit(
+                    "scheduler:agi-task",
+                    serde_json::json!({
+                        "prompt": prompt,
+                        "job_name": job_name,
+                        "source": "scheduler"
+                    }),
+                )
+                .map_err(|e| format!("Failed to emit AGI task event: {}", e))?;
+
+            Ok(())
+        }
+
+        SchedulerActionType::Workflow => {
+            let workflow_id = action_data
+                .get("workflow_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if workflow_id.is_empty() {
+                return Err("Workflow ID is empty".to_string());
+            }
+
+            tracing::info!(
+                "[Scheduler] Dispatching workflow execution: {}",
+                workflow_id
+            );
+
+            app_handle
+                .emit(
+                    "scheduler:workflow-execute",
+                    serde_json::json!({
+                        "workflow_id": workflow_id,
+                        "job_name": job_name,
+                        "source": "scheduler"
+                    }),
+                )
+                .map_err(|e| format!("Failed to emit workflow event: {}", e))?;
+
+            Ok(())
+        }
+
+        SchedulerActionType::Notification => {
+            let message = action_data
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Scheduled notification");
+
+            let title = action_data
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or(job_name);
+
+            tracing::info!("[Scheduler] Sending notification: {} - {}", title, message);
+
+            app_handle
+                .emit(
+                    "scheduler:notification",
+                    serde_json::json!({
+                        "title": title,
+                        "message": message,
+                        "job_name": job_name,
+                        "source": "scheduler"
+                    }),
+                )
+                .map_err(|e| format!("Failed to emit notification event: {}", e))?;
+
+            Ok(())
+        }
+
+        SchedulerActionType::Webhook => {
+            let url = action_data
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if url.is_empty() {
+                return Err("Webhook URL is empty".to_string());
+            }
+
+            let payload = action_data
+                .get("payload")
+                .cloned()
+                .unwrap_or(serde_json::json!({ "job_name": job_name }));
+
+            tracing::info!("[Scheduler] Sending webhook to: {}", url);
+
+            let client = reqwest::Client::new();
+            let response = client
+                .post(url)
+                .json(&payload)
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await
+                .map_err(|e| format!("Webhook request failed: {}", e))?;
+
+            if !response.status().is_success() {
+                return Err(format!(
+                    "Webhook returned non-success status: {}",
+                    response.status()
+                ));
+            }
+
+            Ok(())
+        }
+
+        SchedulerActionType::Script => {
+            let script = action_data
+                .get("script")
+                .or_else(|| action_data.get("command"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if script.is_empty() {
+                return Err("Script content is empty".to_string());
+            }
+
+            tracing::info!("[Scheduler] Executing script for job: {}", job_name);
+
+            let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
+                "cmd"
+            } else {
+                "sh"
+            })
+            .args(if cfg!(target_os = "windows") {
+                vec!["/C", script]
+            } else {
+                vec!["-c", script]
+            })
+            .output()
+            .await
+            .map_err(|e| format!("Failed to execute script: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!(
+                    "Script exited with status {}: {}",
+                    output.status, stderr
+                ));
+            }
+
+            Ok(())
+        }
+    }
+}
+
+/// Get execution history for scheduled jobs
+///
+/// Returns a list of past job execution records, optionally filtered by job ID.
+///
+/// # Arguments
+/// * `job_id` - Optional job ID to filter history for a specific job
+///
+/// # Returns
+/// A vector of JobExecutionRecord entries sorted by most recent first
+#[command]
+pub async fn scheduler_get_history(
+    job_id: Option<String>,
+    state: State<'_, SchedulerState>,
+) -> Result<Vec<JobExecutionRecord>> {
+    let history = state
+        .execution_history
+        .read()
+        .map_err(|e| Error::Generic(format!("Failed to acquire history read lock: {}", e)))?;
+
+    let filtered: Vec<JobExecutionRecord> = if let Some(ref target_id) = job_id {
+        history
+            .iter()
+            .filter(|record| record.job_id == *target_id)
+            .cloned()
+            .collect()
+    } else {
+        history.clone()
+    };
+
+    // Return most recent first
+    let mut result = filtered;
+    result.reverse();
+
+    Ok(result)
 }
 
 /// Partial update payload for a scheduled job
