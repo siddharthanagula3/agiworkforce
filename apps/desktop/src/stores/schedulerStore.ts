@@ -1,8 +1,13 @@
 /**
  * Scheduler Store
  *
- * Manages scheduled jobs for automated tasks including briefings, reminders,
- * agent tasks, and custom actions.
+ * Manages scheduled jobs and tasks for automated actions including briefings,
+ * reminders, agent tasks, and custom actions.
+ *
+ * This is the single consolidated scheduler store. It was merged from the former
+ * scheduledTaskStore (task-oriented, UI-friendly) and the original schedulerStore
+ * (job-oriented, Tauri-event-driven). Both called the same Rust scheduler commands,
+ * creating duplicate state and potential race conditions.
  *
  * Uses Zustand v5 best practices:
  * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
@@ -17,7 +22,7 @@ import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zus
 import { toast } from 'sonner';
 
 // ============================================================================
-// Types
+// Types — Job-oriented (backend wire format)
 // ============================================================================
 
 export type ScheduleType = 'cron' | 'interval' | 'once';
@@ -44,51 +49,133 @@ export interface NextRunInfo {
   next_run: string;
 }
 
-interface SchedulerState {
-  jobs: ScheduledJob[];
-  isLoading: boolean;
-  error: string | null;
+// ============================================================================
+// Types — Task-oriented (UI-friendly, formerly in scheduledTaskStore)
+// ============================================================================
 
-  // Actions
-  addJob: (
-    name: string,
-    schedule: string,
-    actionType: string,
-    actionData: string,
-  ) => Promise<string>;
-  removeJob: (jobId: string) => Promise<boolean>;
-  pauseJob: (jobId: string) => Promise<boolean>;
-  resumeJob: (jobId: string) => Promise<boolean>;
-  listJobs: () => Promise<void>;
-  getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
+export type TaskInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom';
+export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
 
-  // Additional actions
-  toggleJob: (jobId: string) => Promise<boolean>;
-  runJobNow: (jobId: string) => Promise<boolean>;
-  updateJobOnBackend: (
-    jobId: string,
-    updates: {
-      name?: string;
-      description?: string;
-      schedule?: unknown;
-      status?: string;
-      prompt?: string;
-    },
-  ) => Promise<boolean>;
+export interface TaskSchedule {
+  type: 'once' | 'recurring';
+  runAt?: number; // Unix timestamp (ms) for 'once'
+  interval?: TaskInterval;
+  cronExpression?: string; // for 'custom' interval
+  timezone?: string;
+}
 
-  // Internal actions
-  updateJob: (job: ScheduledJob) => void;
-  setError: (error: string | null) => void;
-  clearError: () => void;
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  schedule: TaskSchedule;
+  status: TaskStatus;
+  lastRunAt: number | null;
+  nextRunAt: number | null;
+  runCount: number;
+  lastOutput: string | null;
+  modelId?: string;
+  createdAt: number;
+}
 
-  // Event listener management
-  _unlistenFns: UnlistenFn[];
-  initEventListeners: () => Promise<void>;
-  cleanupEventListeners: () => void;
+export type CreateTaskInput = Omit<
+  ScheduledTask,
+  'id' | 'createdAt' | 'runCount' | 'lastRunAt' | 'nextRunAt' | 'lastOutput'
+>;
 
-  // Hydration tracking
-  _hasHydrated: boolean;
-  setHasHydrated: (state: boolean) => void;
+// ============================================================================
+// Task helper utilities (formerly in scheduledTaskStore)
+// ============================================================================
+
+/** Compute the next run timestamp from a schedule (client-side approximation). */
+function computeNextRunAt(schedule: TaskSchedule): number | null {
+  const now = Date.now();
+
+  if (schedule.type === 'once') {
+    if (schedule.runAt && schedule.runAt > now) {
+      return schedule.runAt;
+    }
+    return null;
+  }
+
+  // recurring
+  switch (schedule.interval) {
+    case 'hourly':
+      return now + 60 * 60 * 1000;
+    case 'daily':
+      return now + 24 * 60 * 60 * 1000;
+    case 'weekly':
+      return now + 7 * 24 * 60 * 60 * 1000;
+    case 'monthly': {
+      const APPROX_DAYS_PER_MONTH = 30;
+      return now + APPROX_DAYS_PER_MONTH * 24 * 60 * 60 * 1000;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Persist scheduled tasks to localStorage as a fallback when Tauri isn't available. */
+const TASKS_STORAGE_KEY = 'agiworkforce-scheduled-tasks-fallback';
+
+function persistTasksToStorage(tasks: ScheduledTask[]): void {
+  try {
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadTasksFromStorage(): ScheduledTask[] {
+  try {
+    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ScheduledTask[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+const INTERVAL_LABELS: Record<TaskInterval, string> = {
+  hourly: 'Every hour',
+  daily: 'Every day',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  custom: 'Custom schedule',
+};
+
+export function getScheduleSummary(schedule: TaskSchedule): string {
+  if (schedule.type === 'once') {
+    if (schedule.runAt) {
+      return `Once: ${new Date(schedule.runAt).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`;
+    }
+    return 'Run once (no time set)';
+  }
+  if (schedule.interval === 'custom' && schedule.cronExpression) {
+    return `Custom: ${schedule.cronExpression}`;
+  }
+  return INTERVAL_LABELS[schedule.interval ?? 'daily'];
+}
+
+export function getRelativeTimeDisplay(timestamp: number | null): string {
+  if (timestamp === null) return 'Never';
+  const diff = timestamp - Date.now();
+  const absDiff = Math.abs(diff);
+  const past = diff < 0;
+
+  const seconds = Math.floor(absDiff / 1000);
+  if (seconds < 60) return past ? 'just now' : 'in a moment';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return past ? `${hours}h ago` : `in ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return past ? `${days}d ago` : `in ${days}d`;
 }
 
 // ============================================================================
@@ -113,6 +200,63 @@ const storageFallback: Storage = {
 const SCHEDULER_STORE_VERSION = 1;
 
 // ============================================================================
+// Combined store state interface
+// ============================================================================
+
+interface SchedulerState {
+  // ── Job state (backend wire format) ──────────────────────────────────────
+  jobs: ScheduledJob[];
+  isLoading: boolean;
+  error: string | null;
+
+  // Job actions
+  addJob: (
+    name: string,
+    schedule: string,
+    actionType: string,
+    actionData: string,
+  ) => Promise<string>;
+  removeJob: (jobId: string) => Promise<boolean>;
+  pauseJob: (jobId: string) => Promise<boolean>;
+  resumeJob: (jobId: string) => Promise<boolean>;
+  listJobs: () => Promise<void>;
+  getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
+  toggleJob: (jobId: string) => Promise<boolean>;
+  runJobNow: (jobId: string) => Promise<boolean>;
+  updateJobOnBackend: (
+    jobId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      schedule?: unknown;
+      status?: string;
+      prompt?: string;
+    },
+  ) => Promise<boolean>;
+  updateJob: (job: ScheduledJob) => void;
+  setError: (error: string | null) => void;
+  clearError: () => void;
+
+  // Event listener management
+  _unlistenFns: UnlistenFn[];
+  initEventListeners: () => Promise<void>;
+  cleanupEventListeners: () => void;
+
+  // Hydration tracking
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
+
+  // ── Task state (UI-friendly, formerly scheduledTaskStore) ─────────────────
+  tasks: ScheduledTask[];
+  createTask: (task: CreateTaskInput) => Promise<void>;
+  updateTask: (id: string, updates: Partial<ScheduledTask>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  toggleTask: (id: string) => Promise<void>;
+  runNow: (id: string) => Promise<void>;
+  fetchTasks: () => Promise<void>;
+}
+
+// ============================================================================
 // Store implementation
 // ============================================================================
 
@@ -120,15 +264,21 @@ export const useSchedulerStore = create<SchedulerState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
+        // ── Job state ──────────────────────────────────────────────────────
         jobs: [],
         isLoading: false,
         error: null,
         _unlistenFns: [],
         _hasHydrated: false,
 
+        // ── Task state ─────────────────────────────────────────────────────
+        tasks: [],
+
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'scheduler/setHasHydrated');
         },
+
+        // ── Job actions ────────────────────────────────────────────────────
 
         addJob: async (
           name: string,
@@ -421,20 +571,23 @@ export const useSchedulerStore = create<SchedulerState>()(
             unlistenFns.push(unlistenJobExecuted);
 
             // Listen for job added events
-            const unlistenJobAdded = await listen<ScheduledJob>('scheduler:job_added', (event) => {
-              console.debug('[schedulerStore] Job added:', event.payload);
-              set(
-                (state) => {
-                  // Avoid duplicates
-                  if (state.jobs.some((j) => j.id === event.payload.id)) {
-                    return state;
-                  }
-                  return { jobs: [...state.jobs, event.payload] };
-                },
-                undefined,
-                'scheduler/event/jobAdded',
-              );
-            });
+            const unlistenJobAdded = await listen<ScheduledJob>(
+              'scheduler:job_added',
+              (event) => {
+                console.debug('[schedulerStore] Job added:', event.payload);
+                set(
+                  (state) => {
+                    // Avoid duplicates
+                    if (state.jobs.some((j) => j.id === event.payload.id)) {
+                      return state;
+                    }
+                    return { jobs: [...state.jobs, event.payload] };
+                  },
+                  undefined,
+                  'scheduler/event/jobAdded',
+                );
+              },
+            );
             unlistenFns.push(unlistenJobAdded);
 
             // Listen for job removed events
@@ -487,6 +640,130 @@ export const useSchedulerStore = create<SchedulerState>()(
           _unlistenFns.forEach((fn) => fn());
           set({ _unlistenFns: [] }, undefined, 'scheduler/cleanupEventListeners');
         },
+
+        // ── Task actions (formerly scheduledTaskStore) ─────────────────────
+
+        fetchTasks: async () => {
+          set({ isLoading: true }, undefined, 'scheduler/fetchTasks/start');
+          try {
+            const tasks = await invoke<ScheduledTask[]>('scheduler_list_jobs');
+            set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/success');
+          } catch {
+            // Tauri command not available — fall back to localStorage
+            const tasks = loadTasksFromStorage();
+            set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/fallback');
+          }
+        },
+
+        createTask: async (input: CreateTaskInput) => {
+          const now = Date.now();
+          const newTask: ScheduledTask = {
+            ...input,
+            id: crypto.randomUUID(),
+            createdAt: now,
+            runCount: 0,
+            lastRunAt: null,
+            nextRunAt: computeNextRunAt(input.schedule),
+            lastOutput: null,
+          };
+
+          try {
+            const id = await invoke<string>('scheduler_add_job', {
+              name: input.name,
+              prompt: input.prompt,
+              schedule: input.schedule,
+            });
+            const taskWithBackendId: ScheduledTask = { ...newTask, id };
+            set((state) => {
+              const tasks = [taskWithBackendId, ...state.tasks];
+              persistTasksToStorage(tasks);
+              return { tasks };
+            }, undefined, 'scheduler/createTask/success');
+          } catch {
+            // Fallback: store locally
+            set((state) => {
+              const tasks = [newTask, ...state.tasks];
+              persistTasksToStorage(tasks);
+              return { tasks };
+            }, undefined, 'scheduler/createTask/fallback');
+          }
+        },
+
+        updateTask: async (id: string, updates: Partial<ScheduledTask>) => {
+          try {
+            await invoke('scheduler_update_job', { id, updates });
+          } catch {
+            // Fallback: update locally only
+          }
+          set((state) => {
+            const tasks = state.tasks.map((t) =>
+              t.id === id
+                ? {
+                    ...t,
+                    ...updates,
+                    nextRunAt:
+                      updates.schedule != null ? computeNextRunAt(updates.schedule) : t.nextRunAt,
+                  }
+                : t,
+            );
+            persistTasksToStorage(tasks);
+            return { tasks };
+          }, undefined, 'scheduler/updateTask');
+        },
+
+        deleteTask: async (id: string) => {
+          try {
+            await invoke('scheduler_remove_job', { id });
+          } catch {
+            // Fallback: delete locally
+          }
+          set((state) => {
+            const tasks = state.tasks.filter((t) => t.id !== id);
+            persistTasksToStorage(tasks);
+            return { tasks };
+          }, undefined, 'scheduler/deleteTask');
+        },
+
+        toggleTask: async (id: string) => {
+          const task = get().tasks.find((t) => t.id === id);
+          if (!task) return;
+
+          const newStatus: TaskStatus = task.status === 'active' ? 'paused' : 'active';
+
+          try {
+            await invoke('scheduler_toggle_job', { id });
+          } catch {
+            // Fallback: toggle locally
+          }
+          set((state) => {
+            const tasks = state.tasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t));
+            persistTasksToStorage(tasks);
+            return { tasks };
+          }, undefined, 'scheduler/toggleTask');
+        },
+
+        runNow: async (id: string) => {
+          try {
+            await invoke('scheduler_run_job_now', { id });
+          } catch {
+            // Fallback: record local run attempt
+          }
+          const now = Date.now();
+          set((state) => {
+            const tasks = state.tasks.map((t) =>
+              t.id === id
+                ? {
+                    ...t,
+                    lastRunAt: now,
+                    runCount: t.runCount + 1,
+                    nextRunAt: computeNextRunAt(t.schedule),
+                  }
+                : t,
+            );
+            persistTasksToStorage(tasks);
+            return { tasks };
+          }, undefined, 'scheduler/runNow');
+        },
       })),
       {
         name: 'agiworkforce-scheduler',
@@ -496,12 +773,14 @@ export const useSchedulerStore = create<SchedulerState>()(
         ),
         partialize: (state) => ({
           jobs: state.jobs,
+          tasks: state.tasks,
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SchedulerState> | undefined;
           return {
             ...currentState,
             jobs: persisted?.jobs ?? currentState.jobs,
+            tasks: persisted?.tasks ?? currentState.tasks,
           };
         },
         onRehydrateStorage: () => (state) => {
@@ -541,7 +820,7 @@ export function waitForSchedulerHydration(): Promise<void> {
 }
 
 // ============================================================================
-// Selectors
+// Selectors — Job-oriented
 // ============================================================================
 
 export const selectJobs = (state: SchedulerState) => state.jobs;
@@ -572,3 +851,17 @@ export const selectUpcomingJobs = (state: SchedulerState) =>
       if (!b.next_run) return -1;
       return new Date(a.next_run).getTime() - new Date(b.next_run).getTime();
     });
+
+// ============================================================================
+// Selectors — Task-oriented
+// ============================================================================
+
+export const selectTasks = (state: SchedulerState) => state.tasks;
+export const selectActiveTasks = (state: SchedulerState) =>
+  state.tasks.filter((t) => t.status === 'active');
+export const selectTaskById = (id: string) => (state: SchedulerState) =>
+  state.tasks.find((t) => t.id === id);
+
+// Re-export the formerly-separate store as an alias so any code that
+// grabbed useScheduledTaskStore directly still works during migration.
+export { useSchedulerStore as useScheduledTaskStore };
