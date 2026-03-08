@@ -52,6 +52,13 @@ impl ApprovalManager {
             return Ok(approved);
         }
 
+        // SAFETY GATE: Dangerous operations ALWAYS require explicit approval,
+        // even when auto_approve is true. This prevents automated deletion,
+        // command execution, and database mutations without human confirmation.
+        if self.has_dangerous_operations(task)? {
+            return Ok(false);
+        }
+
         if task.auto_approve {
             return Ok(true);
         }
@@ -70,10 +77,6 @@ impl ApprovalManager {
             if self.matches_rule(rule, task)? {
                 return Ok(true);
             }
-        }
-
-        if self.has_dangerous_operations(task)? {
-            return Ok(false);
         }
 
         Ok(self.config.auto_approve)
@@ -130,6 +133,9 @@ impl ApprovalManager {
             "reset",
             "shutdown",
             "restart",
+            "drop table",
+            "drop database",
+            "truncate",
         ];
 
         let description_lower = task.description.to_lowercase();
@@ -137,15 +143,32 @@ impl ApprovalManager {
             .iter()
             .any(|pattern| description_lower.contains(pattern));
 
-        let has_file_deletion = task.steps.iter().any(|step| {
-            if let Action::ExecuteCommand { command, .. } = &step.action {
-                command.contains("del") || command.contains("rm") || command.contains("remove")
-            } else {
-                false
+        // Check for dangerous step actions:
+        // - Any ExecuteCommand is inherently dangerous (terminal_execute, db_execute)
+        // - WriteFile to system/root paths is dangerous
+        let has_dangerous_step = task.steps.iter().any(|step| {
+            match &step.action {
+                Action::ExecuteCommand { .. } => {
+                    // All command execution is dangerous — this covers
+                    // terminal_execute and db_execute tool categories
+                    true
+                }
+                Action::WriteFile { path, .. } => {
+                    // Writing to system-critical paths requires approval
+                    let p = path.to_lowercase();
+                    p.starts_with("/etc")
+                        || p.starts_with("/usr")
+                        || p.starts_with("/bin")
+                        || p.starts_with("/sbin")
+                        || p.starts_with("/system")
+                        || p.starts_with("c:\\windows")
+                        || p.starts_with("c:\\program files")
+                }
+                _ => false,
             }
         });
 
-        Ok(has_dangerous_keyword || has_file_deletion)
+        Ok(has_dangerous_keyword || has_dangerous_step)
     }
 
     pub fn approve_task(&mut self, task_id: &str) {
