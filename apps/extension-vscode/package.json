@@ -108,6 +108,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "agi-workforce.triggerAgentAction",
+        "title": "AGI Workforce: Trigger Agent Action on Desktop",
+        "icon": "$(play)"
+      },
+      {
         "command": "agi.git.status",
         "title": "AGI: Git Status",
         "icon": "$(source-control)"
@@ -330,6 +335,13 @@
           "type": "boolean",
           "default": false,
           "description": "Show a plan before executing agent tasks (requires confirmation)"
+        },
+        "agiWorkforce.agent.maxIterations": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of autonomous continuation iterations per agent session before prompting for confirmation (default: 25)"
         },
         "agiWorkforce.mcp.enabled": {
           "type": "boolean",
