@@ -122,7 +122,7 @@ async function handleTestProvider(request: NextRequest) {
 }
 
 export function OPTIONS(request: NextRequest) {
-  return handleCorsPreflightRequest(request);
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
 
 export const POST = withErrorHandler(handleTestProvider);
