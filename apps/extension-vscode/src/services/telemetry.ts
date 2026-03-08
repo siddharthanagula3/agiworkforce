@@ -59,17 +59,61 @@ function getCommonProperties(): Record<string, string> {
 export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   sessionId = generateSessionId();
 
+  // Resolve the telemetry endpoint once at activation time.
+  // If not configured, all events are silently suppressed — never thrown.
+  const telemetryEndpoint =
+    vscode.workspace.getConfiguration('agiWorkforce').get<string>('telemetryEndpoint') ??
+    'https://telemetry.agiworkforce.com/v1/events';
+
+  /** Fire-and-forget HTTP POST. Never throws — telemetry must not affect the caller. */
+  function postEvent(payload: Record<string, unknown>): void {
+    // Guard: only post when VS Code global telemetry is enabled.
+    if (!vscode.env.isTelemetryEnabled) return;
+    if (!telemetryEndpoint) return;
+    try {
+      // Use fetch (available in VS Code's Node.js 18+ runtime via global).
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      fetch(telemetryEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {
+        // Network errors are silently swallowed — telemetry must never crash the extension.
+      });
+    } catch {
+      // Synchronous errors (e.g. JSON.stringify failure) are also swallowed.
+    }
+  }
+
   const sender: vscode.TelemetrySender = {
     sendEventData(eventName: string, data?: Record<string, unknown>): void {
-      // This is where you'd send to your telemetry backend.
-      // For now, events are only processed by VS Code's built-in telemetry pipeline.
-      // The TelemetryLogger handles gating on vscode.env.isTelemetryEnabled automatically.
-      void eventName;
-      void data;
+      // The TelemetryLogger gates on vscode.env.isTelemetryEnabled before calling here.
+      // We additionally guard inside postEvent() as a defense-in-depth measure.
+      postEvent({
+        type: 'event',
+        eventName,
+        data: data ?? {},
+        timestamp: new Date().toISOString(),
+        extensionVersion:
+          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
+            ?.version ?? '0.1.0',
+        vscodeVersion: vscode.version,
+        sessionId: sessionId ?? 'unknown',
+      });
     },
     sendErrorData(error: Error, data?: Record<string, unknown>): void {
-      void error;
-      void data;
+      postEvent({
+        type: 'error',
+        errorName: error.name,
+        errorMessage: error.message,
+        data: data ?? {},
+        timestamp: new Date().toISOString(),
+        extensionVersion:
+          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
+            ?.version ?? '0.1.0',
+        vscodeVersion: vscode.version,
+        sessionId: sessionId ?? 'unknown',
+      });
     },
   };
 

@@ -26,12 +26,12 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "appleId": "APPLE_ID_REQUIRED",
+        "ascAppId": "ASC_APP_ID_REQUIRED",
+        "appleTeamId": "APPLE_TEAM_ID_REQUIRED"
       },
       "android": {
-        "serviceAccountKeyPath": "",
+        "serviceAccountKeyPath": "./google-services.json",
         "track": "internal"
       }
     }
