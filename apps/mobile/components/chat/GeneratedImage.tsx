@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Pressable, Share } from 'react-native';
+import { View, Pressable, Share, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -35,7 +35,13 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
   const handleLongPress = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await Share.share({ url: imageUrl, message: revisedPrompt ?? '' });
+      // Android does not support the `url` field in Share.share — use `message` instead.
+      // iOS supports `url` natively for sharing image links.
+      await Share.share({
+        title: 'Generated Image',
+        message: Platform.OS === 'android' ? imageUrl : (revisedPrompt ?? ''),
+        url: Platform.OS !== 'android' ? imageUrl : undefined,
+      });
     } catch {
       // User cancelled or share failed silently
     }

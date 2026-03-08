@@ -4,7 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { vi, type MockInstance } from 'vitest';
 
 interface AllTheProvidersProps {
-  children: React.ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  children: any;
 }
 
 function AllTheProviders({ children }: AllTheProvidersProps) {

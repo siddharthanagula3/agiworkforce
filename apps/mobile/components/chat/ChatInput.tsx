@@ -6,8 +6,11 @@ import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
+import { RecordingOverlay } from '@/components/voice/RecordingOverlay';
+import * as VoiceService from '@/services/voice';
 import { colors } from '@/lib/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
+import type { VoiceMeteringEvent } from '@/services/voice';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -26,7 +29,12 @@ export function ChatInput({
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
   const inputRef = useRef<TextInput>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -45,14 +53,84 @@ export function ChatInput({
   }, []);
 
   const handleTranscription = useCallback((transcribedText: string) => {
+    setIsRecording(false);
+    setRecordingDurationMs(0);
+    setAudioLevel(0);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
     setText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
     inputRef.current?.focus();
+  }, []);
+
+  const handleRecordingStart = useCallback(() => {
+    setIsRecording(true);
+    setRecordingDurationMs(0);
+    recordingStartTimeRef.current = Date.now();
+    durationIntervalRef.current = setInterval(() => {
+      setRecordingDurationMs(Date.now() - recordingStartTimeRef.current);
+    }, 100);
+  }, []);
+
+  const handleRecordingStop = useCallback(() => {
+    // Duration timer stays until transcription completes (handled in handleTranscription)
+  }, []);
+
+  const handleMetering = useCallback((event: VoiceMeteringEvent) => {
+    const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
+    setAudioLevel(normalized);
+  }, []);
+
+  const handleOverlayCancel = useCallback(() => {
+    setIsRecording(false);
+    setRecordingDurationMs(0);
+    setAudioLevel(0);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (VoiceService.isRecording()) {
+      VoiceService.cancelRecording().catch(() => {
+        // ignore cleanup errors
+      });
+    }
+  }, []);
+
+  const handleOverlaySend = useCallback(async () => {
+    setIsRecording(false);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (!VoiceService.isRecording()) return;
+    try {
+      const uri = await VoiceService.stopRecording();
+      const result = await VoiceService.transcribe(uri);
+      if (result.text.trim()) {
+        setText((prev) => (prev ? `${prev} ${result.text.trim()}` : result.text.trim()));
+        inputRef.current?.focus();
+      }
+    } catch {
+      // ignore transcription errors from overlay send
+    }
+    setRecordingDurationMs(0);
+    setAudioLevel(0);
   }, []);
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
 
   return (
     <View className="px-4 pb-4 pt-2">
+      {/* Recording overlay — shown while recording is active */}
+      <RecordingOverlay
+        visible={isRecording}
+        audioLevel={audioLevel}
+        durationMs={recordingDurationMs}
+        onCancel={handleOverlayCancel}
+        onSend={handleOverlaySend}
+      />
+
       {/* Attachment preview strip */}
       <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
 
@@ -87,8 +165,9 @@ export function ChatInput({
         {/* Unified voice button — tap to toggle (Whisper), hold for PTT (Deepgram), long-press for voice mode */}
         <VoiceInputButton
           onTranscription={handleTranscription}
-          onRecordingStart={() => {}}
-          onRecordingStop={() => {}}
+          onRecordingStart={handleRecordingStart}
+          onRecordingStop={handleRecordingStop}
+          onMetering={handleMetering}
           onLongPress={onOpenVoiceMode}
           disabled={isStreaming}
         />

@@ -89,6 +89,8 @@ export class AgentModePanel {
   private isProcessing = false;
   private diffProviderDisposables: vscode.Disposable[] = [];
   private _planMode = false;
+  private _originalContents = new Map<string, string>();
+  private _modifiedContents = new Map<string, string>();
 
   public static createOrShow(
     extensionUri: vscode.Uri,
@@ -122,6 +124,12 @@ export class AgentModePanel {
 
   public setPlanMode(enabled: boolean): void {
     this._planMode = enabled;
+    // Rebuild system prompt now that _planMode is set correctly
+    if (this.messages.length > 0 && this.messages[0]?.role === 'system') {
+      this.messages[0] = { role: 'system', content: this.buildSystemPrompt() };
+    } else {
+      this.messages.unshift({ role: 'system', content: this.buildSystemPrompt() });
+    }
     // Notify webview so it can update UI if desired
     this.postMessage({ type: 'planModeChanged', enabled });
   }
@@ -163,6 +171,16 @@ export class AgentModePanel {
       },
       null,
       this.disposables,
+    );
+
+    // Register diff content providers once — keyed by URI string
+    this.disposables.push(
+      vscode.workspace.registerTextDocumentContentProvider('agi-original', {
+        provideTextDocumentContent: (uri) => this._originalContents.get(uri.toString()) ?? '',
+      }),
+      vscode.workspace.registerTextDocumentContentProvider('agi-modified', {
+        provideTextDocumentContent: (uri) => this._modifiedContents.get(uri.toString()) ?? '',
+      }),
     );
 
     // Initialize system prompt
@@ -362,12 +380,6 @@ export class AgentModePanel {
     const batchId = `batch-${Date.now()}`;
     const descriptions: string[] = [];
 
-    // Dispose previous diff content providers before registering new ones
-    for (const d of this.diffProviderDisposables) {
-      d.dispose();
-    }
-    this.diffProviderDisposables = [];
-
     for (const edit of edits) {
       descriptions.push(edit.filePath);
 
@@ -375,21 +387,9 @@ export class AgentModePanel {
       const originalUri = edit.uri.with({ scheme: 'agi-original', query: batchId });
       const modifiedUri = edit.uri.with({ scheme: 'agi-modified', query: batchId });
 
-      // Register temp content providers — tracked separately for cleanup between batches
-      const originalProvider = vscode.workspace.registerTextDocumentContentProvider(
-        'agi-original',
-        {
-          provideTextDocumentContent: () => edit.originalContent,
-        },
-      );
-      const modifiedProvider = vscode.workspace.registerTextDocumentContentProvider(
-        'agi-modified',
-        {
-          provideTextDocumentContent: () => edit.newContent,
-        },
-      );
-
-      this.diffProviderDisposables.push(originalProvider, modifiedProvider);
+      // Populate the shared content maps (providers registered once in constructor)
+      this._originalContents.set(originalUri.toString(), edit.originalContent);
+      this._modifiedContents.set(modifiedUri.toString(), edit.newContent);
 
       await vscode.commands.executeCommand(
         'vscode.diff',
@@ -569,10 +569,8 @@ export class AgentModePanel {
   private dispose(): void {
     AgentModePanel.currentPanel = undefined;
     this.panel.dispose();
-    for (const d of this.diffProviderDisposables) {
-      d.dispose();
-    }
-    this.diffProviderDisposables = [];
+    this._originalContents.clear();
+    this._modifiedContents.clear();
     for (const d of this.disposables) {
       d.dispose();
     }
@@ -847,6 +845,34 @@ export class AgentModePanel {
           messagesEl.innerHTML = '';
           sendBtn.disabled = false;
           break;
+        case 'planModeChanged': {
+          var headerEl = document.querySelector('.header h2');
+          var existingBadge = document.getElementById('planModeBadge');
+          if (msg.enabled) {
+            if (!existingBadge) {
+              var badge = document.createElement('span');
+              badge.id = 'planModeBadge';
+              badge.title = 'Plan Mode active — agent will propose a plan before editing';
+              badge.style.cssText = [
+                'display:inline-block',
+                'margin-left:8px',
+                'padding:1px 7px',
+                'background:var(--vscode-badge-background,#0e639c)',
+                'color:var(--vscode-badge-foreground,#fff)',
+                'border-radius:10px',
+                'font-size:11px',
+                'font-weight:600',
+                'vertical-align:middle',
+                'letter-spacing:.03em'
+              ].join(';');
+              badge.textContent = 'PLAN';
+              if (headerEl) { headerEl.appendChild(badge); }
+            }
+          } else {
+            if (existingBadge) { existingBadge.remove(); }
+          }
+          break;
+        }
       }
     });
 

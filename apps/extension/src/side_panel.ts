@@ -28,6 +28,8 @@ const messages: ChatMessage[] = [];
 let pendingPageContext: string | null = null;
 let isStreaming = false;
 let currentStreamId: string | null = null;
+// Track how many messages have already been rendered to avoid full DOM rebuilds.
+let lastRenderedCount = 0;
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 
@@ -409,11 +411,11 @@ function renderMarkdown(text: string): string {
   // Ordered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-  // Links [text](url)
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>',
-  );
+  // Links [text](url) — sanitize URL to block javascript: and other non-http schemes
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+    const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  });
 
   // Paragraphs — double newlines become paragraph breaks
   html = html
@@ -485,18 +487,27 @@ function renderMessages(): void {
 
   if (messages.length === 0) {
     empty.style.display = 'flex';
-    // Remove all message nodes
+    // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
+    lastRenderedCount = 0;
     return;
   }
 
   empty.style.display = 'none';
 
-  // Rebuild from scratch (simple enough for chat — messages rarely exceed dozens)
-  container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
-  for (const msg of messages) {
-    container.appendChild(buildBubble(msg));
+  // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
+  // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
+  if (lastRenderedCount > messages.length) {
+    // Messages were cleared — rebuild from scratch
+    container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
+    lastRenderedCount = 0;
   }
+
+  for (let i = lastRenderedCount; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg) container.appendChild(buildBubble(msg));
+  }
+  lastRenderedCount = messages.length;
 
   scrollToBottom();
 }
@@ -586,8 +597,7 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
     return;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let recognition: any = null;
+  let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
 
   micBtn.addEventListener('click', () => {
@@ -608,8 +618,7 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
       micBtn.title = 'Listening… click to stop';
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: { results: Array<Array<{ transcript: string }>> }) => {
       const transcript = (event.results[0]?.[0]?.transcript ?? '') as string;
       if (transcript) {
         inputEl.value = inputEl.value ? `${inputEl.value} ${transcript}` : transcript;
@@ -623,9 +632,12 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
 
     recognition.onend = () => {
       listening = false;
-      micBtn.classList.remove('active');
-      micBtn.innerHTML = '🎤';
-      micBtn.title = 'Voice input';
+      // Memory-leak guard: only update DOM if document is still active
+      if (document.body) {
+        micBtn.classList.remove('active');
+        micBtn.innerHTML = '🎤';
+        micBtn.title = 'Voice input';
+      }
       recognition = null;
     };
 
@@ -747,6 +759,7 @@ function buildUI(): void {
   );
   clearBtn.addEventListener('click', () => {
     messages.length = 0;
+    lastRenderedCount = 0;
     isStreaming = false;
     currentStreamId = null;
     pendingPageContext = null;

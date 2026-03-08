@@ -28,13 +28,26 @@ interface UseMessageReactionsReturn {
 /**
  * Default reaction configurations
  */
+
 const REACTION_CONFIGS: ReactionConfig[] = [
-  { type: 'thumbsUp', icon: React.createElement(ThumbsUp, { size: 14 }), label: 'Like' },
-  { type: 'thumbsDown', icon: React.createElement(ThumbsDown, { size: 14 }), label: 'Dislike' },
-  { type: 'heart', icon: React.createElement(Heart, { size: 14 }), label: 'Love' },
-  { type: 'laugh', icon: React.createElement(Laugh, { size: 14 }), label: 'Funny' },
-  { type: 'thinking', icon: React.createElement(Lightbulb, { size: 14 }), label: 'Insightful' },
-  { type: 'celebrate', icon: React.createElement(PartyPopper, { size: 14 }), label: 'Celebrate' },
+  { type: 'thumbsUp', icon: React.createElement(ThumbsUp, { size: 14 }) as any, label: 'Like' },
+  {
+    type: 'thumbsDown',
+    icon: React.createElement(ThumbsDown, { size: 14 }) as any,
+    label: 'Dislike',
+  },
+  { type: 'heart', icon: React.createElement(Heart, { size: 14 }) as any, label: 'Love' },
+  { type: 'laugh', icon: React.createElement(Laugh, { size: 14 }) as any, label: 'Funny' },
+  {
+    type: 'thinking',
+    icon: React.createElement(Lightbulb, { size: 14 }) as any,
+    label: 'Insightful',
+  },
+  {
+    type: 'celebrate',
+    icon: React.createElement(PartyPopper, { size: 14 }) as any,
+    label: 'Celebrate',
+  },
 ];
 
 export function useMessageReactions({

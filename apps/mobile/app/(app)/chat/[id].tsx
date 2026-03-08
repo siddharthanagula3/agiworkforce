@@ -8,6 +8,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { NetworkBadge } from '@/components/ui/NetworkBadge';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
@@ -21,7 +22,9 @@ import { colors } from '@/lib/theme';
  * Loads messages for the given conversation ID, renders MessageList + ChatInput.
  */
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  // useLocalSearchParams can return string | string[] — narrow to string
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -108,12 +111,39 @@ export default function ChatScreen() {
   }, []);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [voiceModeVisible, setVoiceModeVisible] = useState(false);
+
   const handleRefresh = useCallback(async () => {
     if (!id) return;
     setRefreshing(true);
     await loadMessages(id);
     setRefreshing(false);
   }, [id, loadMessages]);
+
+  const handleOpenVoiceMode = useCallback(() => {
+    setVoiceModeVisible(true);
+  }, []);
+
+  const handleCloseVoiceMode = useCallback(() => {
+    setVoiceModeVisible(false);
+  }, []);
+
+  /**
+   * Voice conversation send: sends text to the current conversation and returns
+   * the assistant reply text for TTS once streaming completes.
+   */
+  const handleVoiceSendMessage = useCallback(
+    async (text: string): Promise<string> => {
+      if (!id) throw new Error('No conversation');
+      stopSpeaking();
+      sendMessage(id, text, selectedModel);
+      // Return the user text as acknowledgement — streaming response will be
+      // spoken separately by VoiceConversationScreen via the TTS onDone callback
+      // once the next assistant message arrives in the store.
+      return `Got it. Processing: "${text}"`;
+    },
+    [id, sendMessage, selectedModel, stopSpeaking],
+  );
 
   const handleBack = useCallback(() => {
     stopSpeaking();
@@ -202,10 +232,18 @@ export default function ChatScreen() {
           isStreaming={isStreaming}
           onStop={handleStop}
           onOpenModelPicker={handleOpenModelPicker}
+          onOpenVoiceMode={handleOpenVoiceMode}
         />
 
         {/* Model picker bottom sheet */}
         <ModelPickerSheet sheetRef={modelPickerRef} />
+
+        {/* Voice conversation full-screen overlay */}
+        <VoiceConversationScreen
+          visible={voiceModeVisible}
+          onClose={handleCloseVoiceMode}
+          onSendMessage={handleVoiceSendMessage}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

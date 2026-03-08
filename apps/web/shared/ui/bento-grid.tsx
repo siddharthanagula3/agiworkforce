@@ -108,7 +108,7 @@ export const BentoCard: React.FC<BentoCardProps> = ({
             transition={{ duration: 0.6 }}
             aria-hidden="true"
           >
-            {icon}
+            <>{icon}</>
           </motion.div>
         )}
 

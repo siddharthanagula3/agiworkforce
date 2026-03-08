@@ -13,12 +13,14 @@
     "nativeMessaging",
     "alarms",
     "contextMenus",
-    "sidePanel"
+    "sidePanel",
+    "scripting",
+    "cookies"
   ],
   "optional_permissions": ["downloads", "bookmarks", "history"],
   "host_permissions": ["<all_urls>"],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
   },
   "background": {
     "service_worker": "src/background.js",

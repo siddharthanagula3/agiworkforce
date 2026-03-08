@@ -62,12 +62,25 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  // ── 3. Conversation history tree view (must be created before sidebar/chat) ─
+  const conversationStore = new ConversationStore(context);
+  const conversationTreeProvider = new ConversationTreeProvider(conversationStore);
+
   // ── 1. Chat participant (@agi in VS Code Chat) ──────────────────────────────
-  const chatParticipant = registerChatParticipant(context);
+  const chatParticipant = registerChatParticipant(
+    context,
+    conversationStore,
+    conversationTreeProvider,
+  );
   context.subscriptions.push(chatParticipant);
 
   // ── 2. Sidebar webview ──────────────────────────────────────────────────────
-  const sidebarProvider = new SidebarProvider(context.extensionUri, context.secrets);
+  const sidebarProvider = new SidebarProvider(
+    context.extensionUri,
+    context.secrets,
+    conversationStore,
+    conversationTreeProvider,
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, sidebarProvider, {
@@ -75,10 +88,6 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
-
-  // ── 3. Conversation history tree view ───────────────────────────────────────
-  const conversationStore = new ConversationStore(context);
-  const conversationTreeProvider = new ConversationTreeProvider(conversationStore);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.conversations', conversationTreeProvider),
@@ -123,8 +132,16 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     // ── agi-workforce.chat ────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.chat', async () => {
-      // Open the Chat panel pre-populated with @agi
-      await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+      // Open the Chat panel — try generic chat first, then Copilot, then our sidebar
+      try {
+        await vscode.commands.executeCommand('workbench.action.chat.open');
+      } catch {
+        try {
+          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+        } catch {
+          await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+        }
+      }
     }),
 
     // ── agi-workforce.agentMode ──────────────────────────────────────────────
@@ -277,7 +294,7 @@ export function activate(context: vscode.ExtensionContext): void {
       ];
 
       const config = vscode.workspace.getConfiguration('agiWorkforce');
-      const currentModel = config.get<string>('model') ?? 'auto';
+      const currentModel = config.get<string>('model') ?? 'auto-balanced';
 
       // Mark the current selection
       const items = models.map((m) => ({
@@ -487,7 +504,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function updateStatusBar(): void {
     const config = vscode.workspace.getConfiguration('agiWorkforce');
-    const model = config.get<string>('model') ?? 'auto';
+    const model = config.get<string>('model') ?? 'auto-balanced';
     const chips: string[] = [];
 
     if (config.get<boolean>('agent.planMode') ?? false) {
@@ -739,16 +756,74 @@ async function validateAdvancedFeatureFlags(context: vscode.ExtensionContext): P
   }
 
   if (desktopBridgeEnabled) {
-    const reachable = await isLocalPortReachable(desktopBridgePort, 800);
-    if (!reachable) {
-      void vscode.window.showWarningMessage(
-        `AGI Workforce desktop bridge is enabled but not reachable on localhost:${desktopBridgePort}.`,
-      );
-    }
+    // Show a live status bar item instead of a one-shot warning so it clears
+    // automatically when the bridge reconnects.
+    updateBridgeReachabilityStatus(context, desktopBridgePort);
+  } else {
+    // Bridge disabled — clear any existing reachability item
+    clearBridgeReachabilityStatus();
   }
 }
 
-function isLocalPortReachable(port: number, timeoutMs: number): Promise<boolean> {
+// ─── Bridge reachability status bar item ─────────────────────────────────────
+
+let _bridgeStatusItem: vscode.StatusBarItem | undefined;
+let _bridgeReachabilityDisposable: vscode.Disposable | undefined;
+
+function clearBridgeReachabilityStatus(): void {
+  _bridgeStatusItem?.dispose();
+  _bridgeStatusItem = undefined;
+  _bridgeReachabilityDisposable?.dispose();
+  _bridgeReachabilityDisposable = undefined;
+}
+
+function updateBridgeReachabilityStatus(context: vscode.ExtensionContext, port: number): void {
+  // Re-create item if port changed or first time
+  if (_bridgeStatusItem === undefined) {
+    _bridgeStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
+    _bridgeStatusItem.command = 'agi-workforce.syncContextToDesktop';
+    context.subscriptions.push(_bridgeStatusItem);
+  }
+
+  const bridge = getDesktopBridge();
+
+  const refresh = (): void => {
+    if (_bridgeStatusItem === undefined) return;
+    const currentBridge = getDesktopBridge();
+    if (currentBridge === undefined) {
+      _bridgeStatusItem.text = '$(warning) AGI Bridge: offline';
+      _bridgeStatusItem.tooltip = `Desktop bridge not reachable on localhost:${port}. Start the AGI Workforce desktop app.`;
+      _bridgeStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      _bridgeStatusItem.show();
+    } else if (currentBridge.status === 'connected') {
+      _bridgeStatusItem.text = '$(plug) AGI Bridge: connected';
+      _bridgeStatusItem.tooltip = `Desktop bridge connected on localhost:${port}`;
+      _bridgeStatusItem.backgroundColor = undefined;
+      _bridgeStatusItem.show();
+    } else if (currentBridge.status === 'connecting') {
+      _bridgeStatusItem.text = '$(sync~spin) AGI Bridge: connecting…';
+      _bridgeStatusItem.tooltip = `Connecting to desktop bridge on localhost:${port}`;
+      _bridgeStatusItem.backgroundColor = undefined;
+      _bridgeStatusItem.show();
+    } else {
+      _bridgeStatusItem.text = '$(warning) AGI Bridge: offline';
+      _bridgeStatusItem.tooltip = `Desktop bridge not reachable on localhost:${port}. Start the AGI Workforce desktop app.`;
+      _bridgeStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      _bridgeStatusItem.show();
+    }
+  };
+
+  // Subscribe to status changes so the item auto-clears on reconnect
+  _bridgeReachabilityDisposable?.dispose();
+  if (bridge !== undefined) {
+    _bridgeReachabilityDisposable = bridge.onStatusChange(() => refresh());
+    context.subscriptions.push(_bridgeReachabilityDisposable);
+  }
+
+  refresh();
+}
+
+function _isLocalPortReachable(port: number, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     const finish = (value: boolean): void => {

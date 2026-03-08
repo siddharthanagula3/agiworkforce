@@ -4,6 +4,23 @@ import { mmkvStorage } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
+
+/** RTCConfiguration is defined internally in react-native-webrtc but not re-exported. */
+interface RTCConfiguration {
+  iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
+  iceTransportPolicy?: 'all' | 'relay';
+  bundlePolicy?: 'balanced' | 'max-bundle' | 'max-compat';
+  rtcpMuxPolicy?: 'require' | 'negotiate';
+  iceCandidatePoolSize?: number;
+}
+
+/** RTCIceCandidateInit is defined internally in react-native-webrtc but not re-exported. */
+interface RTCIceCandidateInit {
+  candidate?: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+}
 import { WS_URL } from '@/lib/constants';
 import { useAgentStore } from './agentStore';
 import type { Agent } from './agentStore';
@@ -51,7 +68,7 @@ type RTCDataChannelType = ReturnType<RTCPeerConnection['createDataChannel']>;
 /** SDP init dict for RTCSessionDescription constructor */
 interface RTCSessionDescriptionInit {
   sdp: string;
-  type: string | null;
+  type: string;
 }
 
 /** WebRTC data channel for control messages */

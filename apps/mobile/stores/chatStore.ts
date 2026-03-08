@@ -339,7 +339,14 @@ export const useChatStore = create<ChatState>()(
           );
         } catch {
           // Handle synchronous errors from streamChat (e.g., network failure before stream starts)
-          if (controller.signal.aborted) return;
+          // Always clean up streaming state, even on abort
+          abortControllers.delete(conversationId);
+          streamingConversationId = null;
+
+          if (controller.signal.aborted) {
+            // Aborted intentionally (stop button) — streaming state was already cleared by stopStreaming
+            return;
+          }
 
           const state = get();
           const msgs = state.messages[conversationId] ?? [];
@@ -361,9 +368,6 @@ export const useChatStore = create<ChatState>()(
             streamingReasoning: '',
             messages: { ...state.messages, [conversationId]: updatedMsgs },
           });
-
-          abortControllers.delete(conversationId);
-          streamingConversationId = null;
         }
       },
 

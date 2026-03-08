@@ -50,9 +50,23 @@ export const TIMEOUTS = {
 /** Maximum lines in multiline chat input */
 export const MAX_INPUT_LINES = 6;
 
-/** Conversation grouping thresholds (ms) */
+/**
+ * Conversation grouping thresholds in milliseconds.
+ * These represent the maximum age (from start-of-today) for each group:
+ *   - TODAY:     messages updated today (age < 0 from start-of-today, i.e. after midnight)
+ *   - YESTERDAY: updated within the past 24h from start-of-today (age < 86400000)
+ *   - THIS_WEEK: updated within the past 7 days (age < 604800000)
+ *
+ * Comparisons use the age relative to start-of-today:
+ *   age = startOfToday - updatedAt (ms)
+ *   age < 0          → Today  (updated since midnight)
+ *   age < YESTERDAY  → Yesterday
+ *   age < THIS_WEEK  → This Week
+ *   else             → Older
+ */
 export const TIME_GROUPS = {
-  TODAY: 0,
-  YESTERDAY: 86_400_000,
-  THIS_WEEK: 604_800_000,
+  /** 24 hours — upper bound (exclusive) for the "Yesterday" bucket */
+  YESTERDAY: 24 * 60 * 60 * 1000,
+  /** 7 days — upper bound (exclusive) for the "This Week" bucket */
+  THIS_WEEK: 7 * 24 * 60 * 60 * 1000,
 } as const;
