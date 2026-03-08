@@ -144,7 +144,7 @@ export default function Home() {
                 <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500" />
                 Now in Public ALPHA
               </div>
-              <h1 className="mx-auto max-w-5xl whitespace-nowrap text-6xl font-bold tracking-tight md:text-8xl lg:text-9xl">
+              <h1 className="mx-auto max-w-5xl whitespace-nowrap text-5xl font-bold tracking-tight md:text-7xl lg:text-8xl">
                 <span className="bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent">
                   AGI
                 </span>{' '}
