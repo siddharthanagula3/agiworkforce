@@ -427,6 +427,65 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    // ── agi-workforce.triggerAgentAction ─────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.triggerAgentAction', async () => {
+      const bridge = getDesktopBridge();
+      if (bridge === undefined || bridge.status !== 'connected') {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
+        );
+        return;
+      }
+
+      const AGENT_ACTIONS: vscode.QuickPickItem[] = [
+        {
+          label: 'open-chat',
+          description: 'Open the AGI Workforce chat panel on the desktop',
+        },
+        {
+          label: 'run-task',
+          description: 'Trigger an autonomous task run on the desktop agent',
+        },
+        {
+          label: 'open-tool',
+          description: 'Open a specific tool in the desktop app',
+        },
+      ];
+
+      const picked = await vscode.window.showQuickPick(AGENT_ACTIONS, {
+        title: 'AGI Workforce — Trigger Agent Action',
+        placeHolder: 'Select an action to trigger on the desktop app',
+        matchOnDescription: true,
+      });
+
+      if (picked === undefined) return;
+
+      // Collect optional parameters for actions that need them
+      let params: Record<string, unknown> = {};
+      if (picked.label === 'run-task') {
+        const taskDescription = await vscode.window.showInputBox({
+          title: 'AGI Workforce — Task Description',
+          prompt: 'Describe the task for the desktop agent to run',
+          placeHolder: 'e.g. Summarize the open project and suggest improvements',
+          ignoreFocusOut: true,
+          validateInput: (v) => (v.trim() === '' ? 'Task description cannot be empty.' : undefined),
+        });
+        if (taskDescription === undefined) return;
+        params = { description: taskDescription.trim() };
+      }
+
+      const result = await bridge.triggerAgentAction(picked.label, params);
+      if (result.ok) {
+        vscode.window.showInformationMessage(
+          `AGI Workforce: Agent action "${picked.label}" sent to desktop.`,
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          `AGI Workforce: ${result.error ?? `Failed to trigger action "${picked.label}".`}`,
+        );
+      }
+    }),
+
     // ── agi.git.status ───────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.git.status', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
