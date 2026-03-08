@@ -1369,50 +1369,76 @@ async function checkConnectionStatus(): Promise<void> {
 /**
  * Add automation indicator to page
  */
+// Shadow host for the automation indicator — kept in module scope so
+// updateIndicatorStatus() can reach the inner element without touching the page DOM.
+let _indicatorShadow: ShadowRoot | null = null;
+
+/**
+ * Add automation indicator to page using a shadow DOM container.
+ * Shadow DOM prevents page CSS/JS from hiding, restyling, or detecting it via
+ * the predictable #agi-workforce-indicator selector.
+ */
 function addAutomationIndicator(): void {
   if (!document.body) return;
 
-  const indicator = document.createElement('div');
-  indicator.id = 'agi-workforce-indicator';
-  indicator.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    background: radial-gradient(circle, #667eea 0%, #764ba2 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
-    z-index: 2147483647;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    font-family: system-ui, -apple-system, sans-serif;
-    user-select: none;
+  // Use a data attribute for deduplication — avoids a predictable element ID.
+  if (document.querySelector('[data-agi-workforce-indicator]')) return;
+
+  const host = document.createElement('div');
+  host.setAttribute('data-agi-workforce-indicator', 'true');
+  // Host sits in the stacking context at max z-index but has no visible styles itself.
+  host.style.cssText =
+    'position:fixed;bottom:72px;right:20px;z-index:2147483647;pointer-events:none;';
+
+  const shadow = host.attachShadow({ mode: 'closed' });
+  _indicatorShadow = shadow;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .agi-indicator {
+      width: 40px;
+      height: 40px;
+      background: radial-gradient(circle, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      font-family: system-ui, -apple-system, sans-serif;
+      user-select: none;
+      pointer-events: all;
+      transition: background 0.3s;
+    }
   `;
 
+  const indicator = document.createElement('div');
+  indicator.className = 'agi-indicator';
   indicator.textContent = '⚙';
   indicator.title = 'AGI Workforce Extension';
 
-  // Update indicator on click
+  // Use console.log instead of alert() so we never block the browser event loop
+  // or freeze the automation pipeline.
   indicator.addEventListener('click', () => {
     const isConnected = automationState.connectionStatus === 'connected';
-    alert(
-      `AGI Workforce Extension\n\nStatus: ${isConnected ? 'Connected' : 'Disconnected'}\n\nURL: ${window.location.href}`,
+    console.log(
+      `[AGI Workforce] Status: ${isConnected ? 'Connected' : 'Disconnected'} | URL: ${window.location.href}`,
     );
   });
 
-  document.body?.appendChild(indicator);
+  shadow.appendChild(style);
+  shadow.appendChild(indicator);
+  document.body?.appendChild(host);
 }
 
 /**
- * Update automation indicator status
+ * Update automation indicator status color via the shadow DOM inner element.
  */
 function updateIndicatorStatus(): void {
-  const indicator = document.getElementById('agi-workforce-indicator');
+  if (!_indicatorShadow) return;
+  const indicator = _indicatorShadow.querySelector<HTMLElement>('.agi-indicator');
   if (indicator) {
     const isConnected = automationState.connectionStatus === 'connected';
     indicator.style.background = isConnected
