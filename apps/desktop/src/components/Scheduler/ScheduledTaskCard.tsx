@@ -18,8 +18,8 @@ import {
   type TaskStatus,
   getRelativeTimeDisplay,
   getScheduleSummary,
-  useScheduledTaskStore,
-} from '../../stores/scheduledTaskStore';
+  useSchedulerStore,
+} from '../../stores/schedulerStore';
 import { cn } from '../../lib/utils';
 
 interface ScheduledTaskCardProps {
@@ -56,9 +56,9 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const deleteTask = useScheduledTaskStore((s) => s.deleteTask);
-  const toggleTask = useScheduledTaskStore((s) => s.toggleTask);
-  const runNow = useScheduledTaskStore((s) => s.runNow);
+  const deleteTask = useSchedulerStore((s) => s.deleteTask);
+  const toggleTask = useSchedulerStore((s) => s.toggleTask);
+  const runNow = useSchedulerStore((s) => s.runNow);
 
   const statusCfg = STATUS_CONFIG[task.status];
   const truncatedName = task.name.length > 50 ? task.name.slice(0, 47) + '...' : task.name;
