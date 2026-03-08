@@ -1,5 +1,5 @@
 import { Calendar, Clock, Info, RefreshCw } from 'lucide-react';
-import { type TaskInterval, type TaskSchedule } from '../../stores/scheduledTaskStore';
+import { type TaskInterval, type TaskSchedule } from '../../stores/schedulerStore';
 import { cn } from '../../lib/utils';
 
 export interface TaskScheduleInputProps {
