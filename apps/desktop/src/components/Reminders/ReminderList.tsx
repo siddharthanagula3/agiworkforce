@@ -67,22 +67,14 @@ export function ReminderList({
   const filteredJobs = useMemo(() => {
     switch (activeFilter) {
       case 'reminders':
-        return jobs.filter((job) => job.action_type === 'reminder');
+        return jobs.filter((job) => job.action_type === 'notification');
 
       case 'recurring':
-        return jobs.filter(
-          (job) => job.schedule_type === 'cron' || job.schedule_type === 'interval',
-        );
+        // All cron-based jobs are recurring
+        return jobs.filter((job) => job.schedule);
 
       case 'completed':
-        return jobs.filter((job) => {
-          // One-time jobs that have already run
-          if (job.schedule_type === 'once' && job.last_run) {
-            return true;
-          }
-          // Disabled jobs
-          return !job.enabled;
-        });
+        return jobs.filter((job) => job.status === 'completed' || job.status === 'failed');
 
       case 'all':
       default:
@@ -93,9 +85,11 @@ export function ReminderList({
   // Sort jobs: enabled first, then by next_run
   const sortedJobs = useMemo(() => {
     return [...filteredJobs].sort((a, b) => {
-      // Enabled jobs first
-      if (a.enabled !== b.enabled) {
-        return a.enabled ? -1 : 1;
+      // Active jobs first
+      const aActive = a.status === 'active';
+      const bActive = b.status === 'active';
+      if (aActive !== bActive) {
+        return aActive ? -1 : 1;
       }
 
       // Then by next_run
@@ -169,11 +163,9 @@ export function ReminderList({
   const counts = useMemo(
     () => ({
       all: jobs.length,
-      reminders: jobs.filter((j) => j.action_type === 'reminder').length,
-      recurring: jobs.filter((j) => j.schedule_type === 'cron' || j.schedule_type === 'interval')
-        .length,
-      completed: jobs.filter((j) => (j.schedule_type === 'once' && j.last_run) || !j.enabled)
-        .length,
+      reminders: jobs.filter((j) => j.action_type === 'notification').length,
+      recurring: jobs.filter((j) => j.schedule).length,
+      completed: jobs.filter((j) => j.status === 'completed' || j.status === 'failed').length,
     }),
     [jobs],
   );
@@ -187,7 +179,7 @@ export function ReminderList({
           <h2 className="text-lg font-semibold">Reminders</h2>
           {jobs.length > 0 && (
             <span className="text-sm text-muted-foreground">
-              ({jobs.filter((j) => j.enabled).length} active)
+              ({jobs.filter((j) => j.status === 'active').length} active)
             </span>
           )}
         </div>
