@@ -440,6 +440,74 @@ pub fn get_agent_mode(
     Ok(state.get_agent_mode())
 }
 
+/// Per-tool approval policy: "ask", "always_allow", or "always_deny".
+///
+/// Stored as a remembered choice in the `ToolConfirmationState`.
+/// - `"always_allow"` → remembered as approved
+/// - `"always_deny"` → remembered as denied
+/// - `"ask"` → removes any remembered choice so the dialog appears
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolApprovalPolicy {
+    pub tool_name: String,
+    pub policy: String,
+}
+
+/// Set the approval policy for a specific tool.
+///
+/// Valid policies: `"ask"`, `"always_allow"`, `"always_deny"`.
+#[tauri::command]
+pub fn set_tool_approval_policy(
+    tool_name: String,
+    policy: String,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    match policy.as_str() {
+        "always_allow" => {
+            state.remember_choice(&tool_name, true);
+            info!(
+                "[ToolConfirmation] Set policy for '{}': always_allow",
+                tool_name
+            );
+        }
+        "always_deny" => {
+            state.remember_choice(&tool_name, false);
+            info!(
+                "[ToolConfirmation] Set policy for '{}': always_deny",
+                tool_name
+            );
+        }
+        "ask" => {
+            state.remembered_choices.lock().remove(&tool_name);
+            info!(
+                "[ToolConfirmation] Set policy for '{}': ask (cleared remembered choice)",
+                tool_name
+            );
+        }
+        other => {
+            return Err(format!(
+                "Invalid policy '{}'. Valid options: ask, always_allow, always_deny",
+                other
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Get the current approval policy for a specific tool.
+///
+/// Returns `"always_allow"`, `"always_deny"`, or `"ask"`.
+#[tauri::command]
+pub fn get_tool_approval_policy(
+    tool_name: String,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<String, String> {
+    match state.get_remembered_choice(&tool_name) {
+        Some(true) => Ok("always_allow".to_string()),
+        Some(false) => Ok("always_deny".to_string()),
+        None => Ok("ask".to_string()),
+    }
+}
+
 /// Resolve a pending autonomous-agent task approval.
 ///
 /// Called by the frontend when the user approves or rejects a task that is
