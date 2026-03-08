@@ -328,22 +328,24 @@ pub async fn voice_transcribe_blob(
 
 #[tauri::command]
 pub async fn voice_configure(
-    provider: String,
+    provider: Option<String>,
     model: Option<String>,
     language: Option<String>,
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<(), String> {
-    tracing::info!("Configuring voice input: provider={}", provider);
+    tracing::info!("Configuring voice input: provider={:?}", provider);
 
     let voice_state = state.lock().await;
     let mut settings = voice_state.settings.lock().await;
 
-    settings.provider = match provider.as_str() {
-        "cloud" | "managed_cloud" | "managedcloud" => VoiceProvider::Cloud,
-        "webspeech" => VoiceProvider::WebSpeech,
-        "local" => VoiceProvider::Local,
-        _ => return Err(format!("Unknown provider: {}", provider)),
-    };
+    if let Some(ref p) = provider {
+        settings.provider = match p.as_str() {
+            "cloud" | "managed_cloud" | "managedcloud" => VoiceProvider::Cloud,
+            "webspeech" => VoiceProvider::WebSpeech,
+            "local" => VoiceProvider::Local,
+            _ => return Err(format!("Unknown provider: {}", p)),
+        };
+    }
 
     if let Some(m) = model {
         settings.model = m;
