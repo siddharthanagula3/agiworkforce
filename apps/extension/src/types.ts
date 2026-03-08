@@ -450,6 +450,8 @@ export interface ChatMessageMessage extends BaseMessage {
   text: string;
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** API key forwarded from the side panel's chrome.storage.local agi_api_key. */
+  apiKey?: string;
 }
 
 // Chat chunk — sent from background to side panel as streaming response arrives
