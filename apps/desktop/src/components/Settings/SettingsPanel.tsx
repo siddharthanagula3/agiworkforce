@@ -8,6 +8,7 @@ import {
   CreditCard,
   Database,
   Download,
+  FlaskConical,
   Loader2,
   Plug,
   Puzzle,
@@ -17,6 +18,7 @@ import {
   Settings2,
   Shield,
   Sparkles,
+  TerminalSquare,
   X,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -59,6 +61,8 @@ import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
 import { VoiceSettings } from './VoiceSettings';
 import { MemoryPanel } from '../Memory/MemoryPanel';
+import { ResearchSettings } from './ResearchSettings';
+import { ToolsPanel } from '../Tools/ToolsPanel';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -77,6 +81,8 @@ const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }
   { key: 'mcp-server', label: 'MCP Server', icon: Share2 },
   { key: 'extensions', label: 'Extensions', icon: Puzzle },
   { key: 'notifications', label: 'Notifications', icon: Bell },
+  { key: 'tools', label: 'Tools', icon: TerminalSquare },
+  { key: 'research', label: 'Research', icon: FlaskConical },
 ];
 
 const BYOK_PROVIDERS = [
@@ -365,7 +371,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const requiresDeferredSave =
-    activeTab !== 'mcp' && activeTab !== 'mcp-server' && activeTab !== 'extensions';
+    activeTab !== 'mcp' &&
+    activeTab !== 'mcp-server' &&
+    activeTab !== 'extensions' &&
+    activeTab !== 'tools' &&
+    activeTab !== 'research';
   const accountData = useAccountStore((state) => state.account);
 
   useEffect(() => {
@@ -1095,6 +1105,16 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       )}
                     </div>
                   )}
+
+                  {/* Tools Tab */}
+                  {activeTab === 'tools' && (
+                    <div className="h-full flex flex-col min-h-0">
+                      <ToolsPanel />
+                    </div>
+                  )}
+
+                  {/* Research Tab */}
+                  {activeTab === 'research' && <ResearchSettings />}
                 </div>
               )}
             </div>
