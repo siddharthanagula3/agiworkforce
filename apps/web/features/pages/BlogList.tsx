@@ -258,10 +258,13 @@ const BlogPage: React.FC = () => {
                   aria-pressed={selectedCategory === category.slug}
                 >
                   {}
-                  {React.createElement(IconComponent as React.ComponentType<LucideProps>, {
-                    size: 16,
-                    'aria-hidden': 'true',
-                  })}
+                  {}
+                  {
+                    React.createElement(IconComponent as React.ComponentType<LucideProps>, {
+                      size: 16,
+                      'aria-hidden': 'true',
+                    }) as any
+                  }
                   {category.name}
                 </motion.button>
               );

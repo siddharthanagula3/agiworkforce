@@ -231,6 +231,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const researchTasks = useExecutionStore((state) => state.researchTasks);
 
+  // Reactive settings (replaces getState() inside render functions)
+  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+  // Reactive MCP app store (replaces getState() calls inside renderToolCall)
+  const mcpApps = useMcpAppStore((state) => state.apps);
+  const registerMcpApp = useMcpAppStore((state) => state.registerApp);
+
   // Tool Call Actions ID - Hoisted for store access
   const actionId =
     message.metadata?.actionId || (message.metadata?.action_id as string | undefined);
@@ -439,7 +445,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   // Pre-render tool call content to share between standalone and dual-mode (thinking + tool)
   const renderToolCall = (embedded = false) => {
-    const compactMode = useSettingsStore.getState().chatPreferences.compactMode;
+    // compactMode is read from the reactive hook defined at the component scope above
 
     // In compact mode, show simple status message
     if (compactMode) {
@@ -694,20 +700,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
               if (mcpAppPayload && success) {
                 // Register the app in the store (idempotent via actionId key check)
-                const registerApp = useMcpAppStore.getState().registerApp;
-                const existingApps = useMcpAppStore.getState().apps;
+                // Uses reactive mcpApps / registerMcpApp hoisted at component scope
                 // Access mcpServer via unknown cast since it's not in the typed interface
                 const metaRecord = (message.metadata ?? {}) as Record<string, unknown>;
                 const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
                 // Avoid duplicate registrations for the same tool call
-                const existingEntry = Object.values(existingApps).find(
+                const existingEntry = Object.values(mcpApps).find(
                   (a) => a.toolName === String(toolName || '') && a.mcpServer === mcpServerName,
                 );
                 const appId = existingEntry
                   ? existingEntry.id
-                  : registerApp(String(toolName || 'mcp_tool'), mcpServerName, mcpAppPayload);
+                  : registerMcpApp(String(toolName || 'mcp_tool'), mcpServerName, mcpAppPayload);
 
-                const app = useMcpAppStore.getState().apps[appId];
+                const app = mcpApps[appId];
                 if (app) {
                   return (
                     <div className="mt-3">

@@ -51,6 +51,10 @@ export type ArtifactType =
   | 'presentation'
   | 'html'
   | 'image'
+  | 'video'
+  | 'audio'
+  | 'music'
+  | 'search'
   | 'document';
 
 export interface Artifact {
@@ -133,9 +137,17 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   /** Custom instructions to include in the system prompt */
   customInstructions?: string;
   /** Enable extended thinking/reasoning mode for supported models */
-  enable_thinking?: boolean;
+  enableThinking?: boolean;
+  /** Token budget for extended thinking (0 = off, >0 = enabled with that budget) */
+  thinkingBudget?: number;
+  /** OpenAI o-series reasoning effort: "low" | "medium" | "high" */
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  /** Override model temperature (0.0–2.0) */
+  temperature?: number;
+  /** Override max output tokens */
+  maxOutputTokens?: number;
   /** Whether the user explicitly selected a specific model (not an auto mode) */
-  is_explicit_model_selection?: boolean;
+  isExplicitModelSelection?: boolean;
 }
 
 export interface CreditsInfo {

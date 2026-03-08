@@ -68,6 +68,10 @@ export function SendButton({ state, onPress, disabled }: SendButtonProps) {
   return (
     <AnimatedPressable
       onPress={onPress}
+      // Intentional: `disabled` only blocks sending (idle state).
+      // When streaming, the button becomes a "Stop" control and must
+      // remain pressable regardless of the `disabled` prop so the user
+      // can always interrupt a running generation.
       disabled={disabled && state === 'idle'}
       style={[
         {

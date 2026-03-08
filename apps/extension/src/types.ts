@@ -30,7 +30,42 @@ export type NativeMessageType =
   | 'AUTO_FILL_JOB_APPLICATION'
   | 'queue_message'
   | 'CHAT_MESSAGE'
-  | 'CHAT_CHUNK';
+  | 'open_side_panel'
+  // Cookie operations
+  | 'GET_COOKIES'
+  | 'SET_COOKIE'
+  | 'CLEAR_COOKIES'
+  // Tab management
+  | 'GET_ALL_TABS'
+  | 'CREATE_TAB'
+  | 'CLOSE_TAB'
+  | 'SWITCH_TAB'
+  // Accessibility
+  | 'GET_ACCESSIBILITY_TREE'
+  // Recording
+  | 'START_RECORDING'
+  | 'STOP_RECORDING'
+  | 'GET_RECORDED_ACTIONS'
+  // Element interactions (handled by content script)
+  | 'SELECT_OPTION'
+  | 'CHECK'
+  | 'UNCHECK'
+  | 'FOCUS'
+  | 'BLUR'
+  | 'HOVER'
+  | 'SCROLL'
+  | 'DRAG_DROP'
+  | 'CLICK_AT_COORDINATES'
+  // Internal content-script alias for GET_ACCESSIBILITY_TREE
+  | 'BUILD_ACCESSIBILITY_TREE';
+
+/**
+ * Internal-only messages that travel between extension contexts (background ↔ side panel).
+ * These are NOT sent to the native host.
+ */
+export type InternalMessageType = 'CHAT_CHUNK';
+
+export type InternalMessage = ChatChunkMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -432,10 +467,198 @@ export interface ChatMessageResponse {
 }
 
 // Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
-export interface OpenSidePanelMessage {
+export interface OpenSidePanelMessage extends BaseMessage {
   type: 'open_side_panel';
-  timestamp?: number;
-  tabId?: number;
+}
+
+// ─── Cookie messages ─────────────────────────────────────────────────────────
+
+export interface GetCookiesMessage extends BaseMessage {
+  type: 'GET_COOKIES';
+  url: string;
+}
+
+export interface GetCookiesResponse {
+  success: boolean;
+  data?: chrome.cookies.Cookie[];
+  error?: string;
+}
+
+export interface CookieDetails {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  url?: string;
+}
+
+export interface SetCookieMessage extends BaseMessage {
+  type: 'SET_COOKIE';
+  cookie: CookieDetails;
+}
+
+export interface SetCookieResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface ClearCookiesMessage extends BaseMessage {
+  type: 'CLEAR_COOKIES';
+  url: string;
+}
+
+export interface ClearCookiesResponse {
+  success: boolean;
+  cleared?: number;
+  error?: string;
+}
+
+// ─── Tab management messages ──────────────────────────────────────────────────
+
+export interface GetAllTabsMessage extends BaseMessage {
+  type: 'GET_ALL_TABS';
+}
+
+export interface TabInfo {
+  id?: number;
+  url?: string;
+  title?: string;
+  favIconUrl?: string;
+  active?: boolean;
+  windowId?: number;
+  status?: string;
+}
+
+export interface GetAllTabsResponse {
+  success: boolean;
+  data?: TabInfo[];
+  error?: string;
+}
+
+export interface CreateTabMessage extends BaseMessage {
+  type: 'CREATE_TAB';
+  url: string;
+  active?: boolean;
+}
+
+export interface CreateTabResponse {
+  success: boolean;
+  data?: TabInfo;
+  error?: string;
+}
+
+export interface CloseTabMessage extends BaseMessage {
+  type: 'CLOSE_TAB';
+  tabId: number;
+}
+
+export interface CloseTabResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface SwitchTabMessage extends BaseMessage {
+  type: 'SWITCH_TAB';
+  tabId: number;
+}
+
+export interface SwitchTabResponse {
+  success: boolean;
+  error?: string;
+}
+
+// ─── Accessibility tree ───────────────────────────────────────────────────────
+
+export interface GetAccessibilityTreeMessage extends BaseMessage {
+  type: 'GET_ACCESSIBILITY_TREE';
+}
+
+export interface BuildAccessibilityTreeMessage extends BaseMessage {
+  type: 'BUILD_ACCESSIBILITY_TREE';
+}
+
+export interface GetAccessibilityTreeResponse {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+// ─── Recording messages ───────────────────────────────────────────────────────
+
+export interface StartRecordingMessage extends BaseMessage {
+  type: 'START_RECORDING';
+}
+
+export interface StopRecordingMessage extends BaseMessage {
+  type: 'STOP_RECORDING';
+}
+
+export interface GetRecordedActionsMessage extends BaseMessage {
+  type: 'GET_RECORDED_ACTIONS';
+}
+
+export interface RecordingResponse {
+  success: boolean;
+  recording?: boolean;
+  actions?: RecordedAction[];
+  error?: string;
+}
+
+// ─── Element interaction messages (forwarded to content script) ───────────────
+
+export interface SelectOptionMessage extends BaseMessage {
+  type: 'SELECT_OPTION';
+  selector: string;
+  value: string;
+}
+
+export interface CheckMessage extends BaseMessage {
+  type: 'CHECK';
+  selector: string;
+}
+
+export interface UncheckMessage extends BaseMessage {
+  type: 'UNCHECK';
+  selector: string;
+}
+
+export interface FocusMessage extends BaseMessage {
+  type: 'FOCUS';
+  selector: string;
+}
+
+export interface BlurMessage extends BaseMessage {
+  type: 'BLUR';
+  selector: string;
+}
+
+export interface HoverMessage extends BaseMessage {
+  type: 'HOVER';
+  selector: string;
+}
+
+export interface ScrollMessage extends BaseMessage {
+  type: 'SCROLL';
+  selector?: string;
+  x?: number;
+  y?: number;
+  deltaX?: number;
+  deltaY?: number;
+}
+
+export interface DragDropMessage extends BaseMessage {
+  type: 'DRAG_DROP';
+  sourceSelector: string;
+  targetSelector: string;
+}
+
+export interface ClickAtCoordinatesMessage extends BaseMessage {
+  type: 'CLICK_AT_COORDINATES';
+  x: number;
+  y: number;
+  button?: 'left' | 'middle' | 'right';
 }
 
 // Union types for all messages
@@ -464,7 +687,33 @@ export type ExtensionMessage =
   | AutoFillJobApplicationMessage
   | QueueMessageMessage
   | ChatMessageMessage
-  | OpenSidePanelMessage;
+  | OpenSidePanelMessage
+  // Cookie operations
+  | GetCookiesMessage
+  | SetCookieMessage
+  | ClearCookiesMessage
+  // Tab management
+  | GetAllTabsMessage
+  | CreateTabMessage
+  | CloseTabMessage
+  | SwitchTabMessage
+  // Accessibility
+  | GetAccessibilityTreeMessage
+  | BuildAccessibilityTreeMessage
+  // Recording
+  | StartRecordingMessage
+  | StopRecordingMessage
+  | GetRecordedActionsMessage
+  // Element interactions
+  | SelectOptionMessage
+  | CheckMessage
+  | UncheckMessage
+  | FocusMessage
+  | BlurMessage
+  | HoverMessage
+  | ScrollMessage
+  | DragDropMessage
+  | ClickAtCoordinatesMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -486,7 +735,20 @@ export type ExtensionResponse =
   | RunPageActionsResponse
   | ElementInfoResponse
   | AutoFillJobApplicationResponse
-  | ChatMessageResponse;
+  | ChatMessageResponse
+  // Cookie responses
+  | GetCookiesResponse
+  | SetCookieResponse
+  | ClearCookiesResponse
+  // Tab management responses
+  | GetAllTabsResponse
+  | CreateTabResponse
+  | CloseTabResponse
+  | SwitchTabResponse
+  // Accessibility
+  | GetAccessibilityTreeResponse
+  // Recording
+  | RecordingResponse;
 
 // Popup state
 export interface PopupState {

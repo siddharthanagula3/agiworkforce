@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import WebSocket from 'ws';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -320,6 +321,53 @@ export function getDesktopBridge(): DesktopBridge | undefined {
 }
 
 /**
+ * Register built-in message handlers on the given bridge instance.
+ * Returns the disposable so callers can track and dispose it explicitly.
+ * Also pushes onto context.subscriptions as a safety net.
+ */
+function registerBridgeHandlersTracked(
+  instance: DesktopBridge,
+  context: vscode.ExtensionContext,
+): vscode.Disposable {
+  const disposable = instance.onDesktopMessage((msg) => {
+    switch (msg.type) {
+      case 'desktop:open-file': {
+        const filePath = msg.payload['filePath'] as string | undefined;
+        if (filePath) {
+          void vscode.window.showTextDocument(vscode.Uri.file(filePath));
+        }
+        break;
+      }
+      case 'desktop:show-message': {
+        const text = msg.payload['text'] as string | undefined;
+        if (text) {
+          void vscode.window.showInformationMessage(`AGI Workforce: ${text}`);
+        }
+        break;
+      }
+      case 'desktop:run-command': {
+        const commandId = msg.payload['command'] as string | undefined;
+        const args = msg.payload['args'] as unknown[] | undefined;
+        if (commandId) {
+          void vscode.commands.executeCommand(commandId, ...(args ?? []));
+        }
+        break;
+      }
+    }
+  });
+  context.subscriptions.push(disposable);
+  return disposable;
+}
+
+/**
+ * Register built-in message handlers on the given bridge instance.
+ * Must be called every time a new DesktopBridge instance is created.
+ */
+function registerBridgeHandlers(instance: DesktopBridge, context: vscode.ExtensionContext): void {
+  registerBridgeHandlersTracked(instance, context);
+}
+
+/**
  * Initialize the desktop bridge based on user settings. Call once during activation.
  * Returns a Disposable that cleans up the bridge on deactivation.
  */
@@ -332,40 +380,17 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
     _instance = new DesktopBridge(port);
     context.subscriptions.push(_instance);
 
-    // Listen for desktop messages and handle built-in types
-    context.subscriptions.push(
-      _instance.onDesktopMessage((msg) => {
-        switch (msg.type) {
-          case 'desktop:open-file': {
-            const filePath = msg.payload['filePath'] as string | undefined;
-            if (filePath) {
-              void vscode.window.showTextDocument(vscode.Uri.file(filePath));
-            }
-            break;
-          }
-          case 'desktop:show-message': {
-            const text = msg.payload['text'] as string | undefined;
-            if (text) {
-              void vscode.window.showInformationMessage(`AGI Workforce: ${text}`);
-            }
-            break;
-          }
-          case 'desktop:run-command': {
-            const commandId = msg.payload['command'] as string | undefined;
-            const args = msg.payload['args'] as unknown[] | undefined;
-            if (commandId) {
-              void vscode.commands.executeCommand(commandId, ...(args ?? []));
-            }
-            break;
-          }
-        }
-      }),
-    );
+    // Register built-in message handlers
+    registerBridgeHandlers(_instance, context);
 
     void _instance.connect();
   }
 
   // React to config changes
+  // We keep a reference to the current bridge-handler disposable so we can
+  // dispose it before creating a new bridge instance (prevents accumulation).
+  let currentHandlerDisposable: vscode.Disposable | undefined;
+
   const configListener = vscode.workspace.onDidChangeConfiguration((e) => {
     if (
       e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
@@ -376,11 +401,16 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
       const nowPort = cfg.get<number>('desktopBridge.port') ?? 8787;
 
       if (!nowEnabled && _instance !== undefined) {
+        currentHandlerDisposable?.dispose();
+        currentHandlerDisposable = undefined;
         _instance.dispose();
         _instance = undefined;
       } else if (nowEnabled && _instance === undefined) {
         _instance = new DesktopBridge(nowPort);
         context.subscriptions.push(_instance);
+        // Dispose old handler subscription before registering on the new instance
+        currentHandlerDisposable?.dispose();
+        currentHandlerDisposable = registerBridgeHandlersTracked(_instance, context);
         void _instance.connect();
       } else if (nowEnabled && _instance !== undefined) {
         _instance.updatePort(nowPort);
@@ -390,6 +420,8 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
 
   return new vscode.Disposable(() => {
     configListener.dispose();
+    currentHandlerDisposable?.dispose();
+    currentHandlerDisposable = undefined;
     if (_instance !== undefined) {
       _instance.dispose();
       _instance = undefined;

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Pressable, Modal, Share, useWindowDimensions } from 'react-native';
+import { View, Pressable, Modal, Share, Platform, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { X, Share2, Download } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -100,7 +100,13 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
     if (!imageUrl) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await Share.share({ url: imageUrl, message: prompt ?? '' });
+      // Android does not support the `url` field in Share.share — use `message` instead.
+      // iOS supports `url` natively for sharing image links.
+      await Share.share({
+        title: 'Generated Image',
+        message: Platform.OS === 'android' ? imageUrl : (prompt ?? ''),
+        url: Platform.OS !== 'android' ? imageUrl : undefined,
+      });
     } catch {
       // User cancelled
     }

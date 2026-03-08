@@ -14,6 +14,8 @@
 
 import * as vscode from 'vscode';
 import { streamChatCompletion, AgiWorkforceApiError, type ChatMessage } from '../utils/api';
+import { type ConversationStore } from '../storage/conversationStore';
+import { type ConversationTreeProvider } from './conversationTreeProvider';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -272,7 +274,11 @@ function historyToMessages(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatRequestHandler {
+export function createChatHandler(
+  secrets: vscode.SecretStorage,
+  conversationStore?: ConversationStore,
+  conversationTreeProvider?: ConversationTreeProvider,
+): vscode.ChatRequestHandler {
   return async (
     request: vscode.ChatRequest,
     context: vscode.ChatContext,
@@ -315,6 +321,7 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
     const fallbackEnabled = config.get<boolean>('fallbackToVscodeLm') ?? true;
 
     let usedFallback = false;
+    const responseTokens: string[] = [];
 
     if (planOnly) {
       stream.markdown(
@@ -327,9 +334,29 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
         secrets,
         messages,
         {
-          onToken: (t) => stream.markdown(t),
+          onToken: (t) => {
+            responseTokens.push(t);
+            stream.markdown(t);
+          },
           onDone: () => {
-            // nothing — stream.markdown handles it incrementally
+            // Persist completed conversation to store
+            if (conversationStore !== undefined && conversationTreeProvider !== undefined) {
+              const fullResponse = responseTokens.join('');
+              const title = userMessage.slice(0, 60).replace(/\n/g, ' ');
+              const model =
+                vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ??
+                'auto-balanced';
+              const conv = conversationStore.create(title, model);
+              const now = Date.now();
+              conv.messages = [
+                ...messages
+                  .filter((m) => m.role !== 'system')
+                  .map((m) => ({ ...m, timestamp: now })),
+                { role: 'assistant' as const, content: fullResponse, timestamp: now },
+              ];
+              conversationStore.save(conv);
+              conversationTreeProvider.refresh();
+            }
           },
           onError: (err) => {
             throw err;
@@ -391,8 +418,12 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
 /**
  * Register the @agi chat participant and return a disposable.
  */
-export function registerChatParticipant(context: vscode.ExtensionContext): vscode.Disposable {
-  const handler = createChatHandler(context.secrets);
+export function registerChatParticipant(
+  context: vscode.ExtensionContext,
+  conversationStore?: ConversationStore,
+  conversationTreeProvider?: ConversationTreeProvider,
+): vscode.Disposable {
+  const handler = createChatHandler(context.secrets, conversationStore, conversationTreeProvider);
 
   const participant = vscode.chat.createChatParticipant('agiworkforce.agi', handler);
 

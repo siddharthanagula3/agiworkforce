@@ -86,7 +86,7 @@ const pendingRequests = new Map<
   {
     resolve: (value: ExtensionResponse) => void;
     reject: (reason: unknown) => void;
-    timeout: NodeJS.Timeout;
+    timeout: ReturnType<typeof setTimeout>;
   }
 >();
 const lastPageContextSyncByTab = new Map<number, { fingerprint: string; at: number }>();
@@ -183,16 +183,7 @@ function initialize(): void {
   // Check initial connection status via native messaging heartbeat
   checkDesktopConnection();
 
-  // Periodic connection check — skip if we have given up (prevents macOS popup storms)
-  setInterval(() => {
-    if (nativeReconnectGaveUp) {
-      return;
-    }
-    checkDesktopConnection();
-    if (!state.isNativeConnected) {
-      connectToNativeHost();
-    }
-  }, 30000);
+  // Periodic connection check is handled by the 'keep-alive' alarm (see below)
 
   logger.info('Background service worker initialized');
 }
@@ -216,7 +207,7 @@ function connectToNativeHost(): void {
     port.onDisconnect.addListener(handleNativeDisconnect);
 
     state.nativePort = port;
-    state.isNativeConnected = true;
+    state.isNativeConnected = false; // Not connected until handshake succeeds
     state.lastNativeError = null;
     nativeHandshakeInFlight = true;
 
@@ -237,11 +228,13 @@ function connectToNativeHost(): void {
           throw new Error(pingResult?.error ?? 'Native ping failed');
         }
 
+        // Handshake succeeded — only now mark as connected
+        state.isNativeConnected = true;
         nativeReconnectAttempt = 0;
         nativeReconnectGaveUp = false; // Reset so future disconnects can retry
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
-        notifyConnectionStatusChange();
+        void notifyConnectionStatusChange();
       } catch (error) {
         logger.warn('Native host handshake failed', error);
         try {
@@ -253,7 +246,7 @@ function connectToNativeHost(): void {
         state.connectionStatus = 'disconnected';
         state.nativePort = null;
         state.lastNativeError = error instanceof Error ? error.message : 'Native handshake failed';
-        notifyConnectionStatusChange();
+        void notifyConnectionStatusChange();
         scheduleNativeReconnect('handshake_failed');
       } finally {
         nativeHandshakeInFlight = false;
@@ -268,7 +261,7 @@ function connectToNativeHost(): void {
     state.nativePort = null;
     state.connectionStatus = 'disconnected';
     state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
-    notifyConnectionStatusChange();
+    void notifyConnectionStatusChange();
     scheduleNativeReconnect('connect_failed');
   }
 }
@@ -280,7 +273,9 @@ function createRequestId(): string {
 function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
   return new Promise((resolve, reject) => {
     void (async () => {
-      if (!state.nativePort || !state.isNativeConnected) {
+      // Allow sending during handshake (port exists but isNativeConnected not yet true)
+      const portReadyForHandshake = !!state.nativePort && nativeHandshakeInFlight;
+      if (!portReadyForHandshake && (!state.nativePort || !state.isNativeConnected)) {
         if (!nativeReconnectGaveUp) {
           connectToNativeHost();
         }
@@ -352,15 +347,20 @@ function handleNativeDisconnect(): void {
   state.connectionStatus = 'disconnected';
   state.lastNativeError = error;
 
-  notifyConnectionStatusChange();
+  void notifyConnectionStatusChange();
 
   // Stop retrying immediately for permanent errors (host not installed, or macOS
   // access denied) — these will never resolve without user action and would cause
   // repeated macOS permission prompts on every reconnect attempt.
+  //
+  // Deliberately narrow patterns to avoid false positives:
+  //   - 'not found' is too broad (matches transient messages)
+  //   - 'com.agiworkforce.browser' always matches since it's the host name
   const isPermanentError =
-    error.includes('not found') ||
-    error.includes('not allowed') ||
-    error.includes('com.agiworkforce.browser');
+    error.includes('Native host not found') ||
+    error.includes('Specified native messaging host not found') ||
+    error.includes('Access to the specified native messaging host is forbidden') ||
+    error.includes('not allowed');
   if (isPermanentError) {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
     nativeReconnectGaveUp = true;
@@ -435,7 +435,7 @@ async function handleMessageAsync(
           state.connectionStatus = 'disconnected';
           state.nativePort = null;
           state.lastNativeError = error instanceof Error ? error.message : 'Native ping failed';
-          notifyConnectionStatusChange();
+          void notifyConnectionStatusChange();
           scheduleNativeReconnect('status_ping_failed');
         });
       }
@@ -560,6 +560,91 @@ async function handleMessageAsync(
       }
     }
 
+    // ── Cookie handlers ────────────────────────────────────────────────────
+    case 'GET_COOKIES': {
+      const cookieMsg = message as import('./types').GetCookiesMessage;
+      return handleGetCookies(cookieMsg);
+    }
+
+    case 'SET_COOKIE': {
+      const cookieMsg = message as import('./types').SetCookieMessage;
+      return handleSetCookie(cookieMsg);
+    }
+
+    case 'CLEAR_COOKIES': {
+      const cookieMsg = message as import('./types').ClearCookiesMessage;
+      return handleClearCookies(cookieMsg);
+    }
+
+    // ── Tab management handlers ────────────────────────────────────────────
+    case 'GET_ALL_TABS': {
+      return handleGetAllTabs();
+    }
+
+    case 'CREATE_TAB': {
+      const tabMsg = message as import('./types').CreateTabMessage;
+      return handleCreateTab(tabMsg);
+    }
+
+    case 'CLOSE_TAB': {
+      const tabMsg = message as import('./types').CloseTabMessage;
+      return handleCloseTab(tabMsg);
+    }
+
+    case 'SWITCH_TAB': {
+      const tabMsg = message as import('./types').SwitchTabMessage;
+      return handleSwitchTab(tabMsg);
+    }
+
+    // ── Accessibility ──────────────────────────────────────────────────────
+    case 'GET_ACCESSIBILITY_TREE': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID for accessibility tree' } as ExtensionResponse;
+      }
+      return handleGetAccessibilityTree(resolvedTabId);
+    }
+
+    // ── Recording handlers (delegated to content script) ──────────────────
+    case 'START_RECORDING':
+    case 'STOP_RECORDING':
+    case 'GET_RECORDED_ACTIONS': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      }
+      return forwardToContentScript(resolvedTabId, message);
+    }
+
+    // ── Element interaction handlers (forwarded to content script) ─────────
+    case 'SELECT_OPTION':
+    case 'CHECK':
+    case 'UNCHECK':
+    case 'FOCUS':
+    case 'BLUR':
+    case 'HOVER':
+    case 'SCROLL':
+    case 'DRAG_DROP':
+    case 'CLICK_AT_COORDINATES': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      }
+      return forwardToContentScript(resolvedTabId, message);
+    }
+
     default: {
       // Forward other messages to content script
       let resolvedTabId = tabId;
@@ -576,6 +661,237 @@ async function handleMessageAsync(
     }
   }
 }
+
+// ─── Cookie domain security ───────────────────────────────────────────────────
+
+/** Domains where cookie operations are blocked (sensitive sites). */
+const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
+  /bank/i,
+  /paypal/i,
+  /venmo/i,
+  /chase/i,
+  /wellsfargo/i,
+  /citibank/i,
+  /\.gov$/i,
+  /healthcare/i,
+  /medical/i,
+  /health\.com/i,
+];
+
+function isCookieDomainAllowed(urlOrDomain: string): boolean {
+  if (!urlOrDomain) return false;
+  const domain = urlOrDomain.replace(/^https?:\/\//, '').split('/')[0] ?? '';
+  return !BLOCKED_COOKIE_DOMAINS.some((pattern) => pattern.test(domain));
+}
+
+// ─── Cookie handlers ──────────────────────────────────────────────────────────
+
+async function handleGetCookies(
+  message: import('./types').GetCookiesMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { url } = message;
+    if (!url) {
+      return {
+        success: false,
+        error: 'Must specify a URL. Getting all cookies is disabled for security.',
+      } as ExtensionResponse;
+    }
+    if (!isCookieDomainAllowed(url)) {
+      return {
+        success: false,
+        error: 'Cookie access for this domain is blocked for security.',
+      } as ExtensionResponse;
+    }
+    const cookies = await chrome.cookies.getAll({ url });
+    return { success: true, data: cookies } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to get cookies', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get cookies',
+    } as ExtensionResponse;
+  }
+}
+
+async function handleSetCookie(
+  message: import('./types').SetCookieMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { name, value, domain, path, secure, httpOnly, url } = message.cookie;
+    const targetUrl = url || (domain ? `https://${domain}` : undefined);
+    if (!targetUrl) {
+      return {
+        success: false,
+        error: 'Must specify url or domain for cookie.',
+      } as ExtensionResponse;
+    }
+    if (!isCookieDomainAllowed(targetUrl)) {
+      return {
+        success: false,
+        error: 'Setting cookies for this domain is blocked for security.',
+      } as ExtensionResponse;
+    }
+    await chrome.cookies.set({
+      url: targetUrl,
+      name,
+      value,
+      domain,
+      path: path || '/',
+      secure: secure !== false,
+      httpOnly: httpOnly !== false,
+    });
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to set cookie', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to set cookie',
+    } as ExtensionResponse;
+  }
+}
+
+async function handleClearCookies(
+  message: import('./types').ClearCookiesMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { url } = message;
+    if (!url) {
+      return {
+        success: false,
+        error: 'Must specify a URL. Clearing all cookies is disabled for security.',
+      } as ExtensionResponse;
+    }
+    if (!isCookieDomainAllowed(url)) {
+      return {
+        success: false,
+        error: 'Cookie access for this domain is blocked for security.',
+      } as ExtensionResponse;
+    }
+    const cookies = await chrome.cookies.getAll({ url });
+    for (const cookie of cookies) {
+      await chrome.cookies.remove({
+        url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain}${cookie.path}`,
+        name: cookie.name,
+      });
+    }
+    return { success: true, cleared: cookies.length } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to clear cookies', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to clear cookies',
+    } as ExtensionResponse;
+  }
+}
+
+// ─── Tab management handlers ──────────────────────────────────────────────────
+
+async function handleGetAllTabs(): Promise<ExtensionResponse> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const tabsInfo = tabs.map((tab) => ({
+      id: tab.id,
+      url: tab.url,
+      title: tab.title,
+      favIconUrl: tab.favIconUrl,
+      active: tab.active,
+      windowId: tab.windowId,
+      status: tab.status,
+    }));
+    return { success: true, data: tabsInfo } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to get all tabs', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get tabs',
+    } as ExtensionResponse;
+  }
+}
+
+async function handleCreateTab(
+  message: import('./types').CreateTabMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const tab = await chrome.tabs.create({
+      url: message.url,
+      active: message.active !== false,
+    });
+    return {
+      success: true,
+      data: {
+        id: tab.id,
+        url: tab.url,
+        title: tab.title,
+      },
+    } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to create tab', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create tab',
+    } as ExtensionResponse;
+  }
+}
+
+async function handleCloseTab(
+  message: import('./types').CloseTabMessage,
+): Promise<ExtensionResponse> {
+  try {
+    await chrome.tabs.remove(message.tabId);
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to close tab', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to close tab',
+    } as ExtensionResponse;
+  }
+}
+
+async function handleSwitchTab(
+  message: import('./types').SwitchTabMessage,
+): Promise<ExtensionResponse> {
+  try {
+    await chrome.tabs.update(message.tabId, { active: true });
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to switch tab', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to switch tab',
+    } as ExtensionResponse;
+  }
+}
+
+// ─── Accessibility tree handler ───────────────────────────────────────────────
+
+async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionResponse> {
+  try {
+    const response = (await forwardToContentScript(tabId, {
+      type: 'GET_ACCESSIBILITY_TREE',
+    } as ExtensionMessage)) as unknown as { success?: boolean; data?: unknown };
+
+    // Forward tree to native host if connected
+    if (state.isNativeConnected && state.nativePort && response.success) {
+      void sendNativeMessage({
+        type: 'accessibility_tree',
+        tab_id: tabId,
+        tree: response.data,
+      });
+    }
+
+    return response as ExtensionResponse;
+  } catch (error) {
+    logger.error('Failed to get accessibility tree', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get accessibility tree',
+    } as ExtensionResponse;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function syncTabContextWithDesktop(
   tabId: number,
@@ -717,9 +1033,13 @@ async function forwardToContentScript(
  */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
-    if (!nativeReconnectGaveUp) {
+    if (!nativeReconnectGaveUp && !nativeHandshakeInFlight) {
       connectToNativeHost();
+      // A connection attempt was initiated — don't also schedule a reconnect below
+      return;
     }
+    // Already in-flight or gave up — nothing to do
+    return;
   }
 
   if (state.nativePort && state.isNativeConnected) {
@@ -732,7 +1052,7 @@ async function checkDesktopConnection(): Promise<void> {
       }
       if (state.connectionStatus !== 'connected') {
         state.connectionStatus = 'connected';
-        notifyConnectionStatusChange();
+        void notifyConnectionStatusChange();
       }
       await storageUtils.setItem('connectedToDesktop', true);
       return;
@@ -745,7 +1065,7 @@ async function checkDesktopConnection(): Promise<void> {
   state.isNativeConnected = false;
   if (state.connectionStatus !== 'disconnected') {
     state.connectionStatus = 'disconnected';
-    notifyConnectionStatusChange();
+    void notifyConnectionStatusChange();
   }
   await storageUtils.setItem('connectedToDesktop', false);
   scheduleNativeReconnect('ping_failed');
@@ -1072,11 +1392,15 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 // Initialize on service worker start
 initialize();
 
-// Handle service worker keep-alive
-chrome.alarms.create('keep-alive', { periodInMinutes: 1 });
+// Handle service worker keep-alive and periodic connection checks
+chrome.alarms.create('keep-alive', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
+    // Periodic connection check (replaces setInterval which is lost on MV3 suspension)
+    if (!nativeReconnectGaveUp && !state.isNativeConnected) {
+      void connectToNativeHost();
+    }
   }
 });
 

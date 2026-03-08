@@ -35,7 +35,7 @@ function extractCompletionText(raw: string, maxLength: number): string {
 export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   private cache: CachedCompletion | undefined;
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  private pendingResolve: ((value: vscode.InlineCompletionItem[] | undefined) => void) | undefined;
+  private pendingResolve: (() => void) | undefined;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -102,7 +102,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       this.debounceTimer = undefined;
     }
     if (this.pendingResolve !== undefined) {
-      this.pendingResolve([]);
+      this.pendingResolve();
       this.pendingResolve = undefined;
     }
 

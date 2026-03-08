@@ -2464,6 +2464,9 @@ export const UnifiedAgenticChat: React.FC<{
             taskMetadata,
             thinkingMode: useModelStore.getState().thinkingModeEnabled,
             enableThinking: useModelStore.getState().thinkingModeEnabled,
+            thinkingBudget: useModelStore.getState().thinkingBudget ?? 0,
+            temperature: useSettingsStore.getState().llmConfig?.temperature,
+            maxOutputTokens: useSettingsStore.getState().llmConfig?.maxTokens,
             isExplicitModelSelection,
             preferCloudCredits: true,
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination

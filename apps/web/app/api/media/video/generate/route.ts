@@ -9,8 +9,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { storeVideoTask } from '@/lib/video-task-store';
+import { randomUUID } from 'crypto';
 
 /**
  * Video Generation API
@@ -38,6 +40,14 @@ const VideoGenerationRequestSchema = z.object({
 
 // Provider type
 type VideoProvider = 'runway' | 'google';
+
+// Cost estimates in cents per video generation task
+// Runway Gen4 Turbo: ~$0.05/s generated video ($0.25 for 5s)
+// Google Veo: ~$0.06/s generated video ($0.30 for 5s)
+const VIDEO_COST_CENTS: Record<VideoProvider, number> = {
+  runway: 25, // ~$0.25 per task (conservative estimate)
+  google: 30, // ~$0.30 per task (conservative estimate)
+};
 
 // Response types
 interface VideoGenerationResponse {
@@ -379,6 +389,41 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   // Determine provider
   const provider = getVideoProvider(requestedProvider);
 
+  // Cost pre-check: verify the user has enough credits before starting the task
+  const estimatedCostCents = VIDEO_COST_CENTS[provider];
+  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  if (!hasCredits) {
+    const balance = await CreditService.getBalance(user.id);
+    logger.warn(
+      { userId: user.id, provider, estimatedCostCents, balance },
+      'Insufficient credits for video generation',
+    );
+    throw createError.forbidden(
+      `Insufficient credits for video generation. You need at least ${estimatedCostCents} credits. Please upgrade your plan or add credits.`,
+    );
+  }
+
+  // Reserve credits before invoking the provider to prevent race conditions
+  const requestId = randomUUID();
+  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reserveResult = await CreditService.deductCredits(
+    user.id,
+    estimatedCostCents,
+    `Credit reservation: video generation (${provider})`,
+    { provider, type: 'reservation', requestId },
+    reservationKey,
+  );
+
+  if (!reserveResult.success) {
+    logger.warn(
+      { userId: user.id, estimatedCostCents, reserveResult },
+      'Failed to reserve video generation credits',
+    );
+    throw createError.forbidden(
+      `Insufficient credits for video generation (${reserveResult.code ?? 'credit_error'}).`,
+    );
+  }
+
   logger.info(
     {
       userId: user.id,
@@ -405,6 +450,20 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       estimatedDuration = result.estimatedDuration;
     }
   } catch (error) {
+    // Refund the reserved credits since the task was never created
+    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    await CreditService.deductCredits(
+      user.id,
+      -estimatedCostCents,
+      `Refund: video generation failed (${provider})`,
+      { provider, type: 'refund', reason: 'task_creation_failure', requestId },
+      refundKey,
+    );
+    logger.warn(
+      { userId: user.id, provider, requestId },
+      'Video task creation failed — credits refunded',
+    );
+
     // Re-throw AppError instances (from createError.*)
     if (error && typeof error === 'object' && 'statusCode' in error) {
       throw error;
@@ -417,6 +476,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   // This allows the status endpoint to verify the requesting user owns the task.
   // In a distributed/serverless deployment, replace with Redis or Supabase persistence.
   storeVideoTask(taskId, user.id);
+
+  logger.info(
+    { userId: user.id, provider, taskId, estimatedCostCents, requestId },
+    'Video generation credits reserved',
+  );
 
   const response: VideoGenerationResponse = {
     success: true,

@@ -1,4 +1,5 @@
 import { monitoringService } from './system-monitor';
+import { logger } from '@/lib/logger';
 
 // Google Analytics 4 integration
 declare global {
@@ -131,7 +132,7 @@ class AnalyticsService {
       send_page_view: false, // We'll handle page views manually
     });
 
-    console.log(`Google Analytics initialized with tracking ID: ${this.trackingId}`);
+    logger.info(`Google Analytics initialized with tracking ID: ${this.trackingId}`);
   }
 
   /**

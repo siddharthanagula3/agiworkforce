@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import { Menu, Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -12,6 +13,7 @@ import { colors } from '@/lib/theme';
 
 export default function AgentsScreen() {
   const navigation = useNavigation();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const numColumns = isTablet ? 3 : 2;
@@ -25,9 +27,9 @@ export default function AgentsScreen() {
   const handleAgentPress = useCallback(
     (id: string) => {
       selectAgent(id);
-      // Future: navigate to agent detail screen
+      router.push(`/(app)/agents/${id}` as Parameters<typeof router.push>[0]);
     },
-    [selectAgent],
+    [selectAgent, router],
   );
 
   const sendControl = useConnectionStore((s) => s.sendControl);

@@ -56,7 +56,7 @@ function getCommonProperties(): Record<string, string> {
  * Initialize the telemetry service. Call once during extension activation.
  * Returns a Disposable that cleans up the logger.
  */
-export function activate(context: vscode.ExtensionContext): vscode.Disposable {
+export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   sessionId = generateSessionId();
 
   const sender: vscode.TelemetrySender = {
@@ -78,7 +78,9 @@ export function activate(context: vscode.ExtensionContext): vscode.Disposable {
     ignoreUnhandledErrors: true,
   });
 
-  context.subscriptions.push(logger);
+  // Note: do NOT push to context.subscriptions here — extension.ts pushes the
+  // returned Disposable, which is this same logger. Pushing twice would cause
+  // double-disposal on deactivation.
 
   // Log activation event
   logEvent(TelemetryEvents.EXTENSION_ACTIVATED, {
