@@ -31,6 +31,40 @@ let currentStreamId: string | null = null;
 // Track how many messages have already been rendered to avoid full DOM rebuilds.
 let lastRenderedCount = 0;
 
+// ─── Persistence helpers ──────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'agi_side_panel_messages';
+const MAX_STORED_MESSAGES = 50;
+
+/** Persist current messages array to chrome.storage.local (capped at 50). */
+function saveMessages(): void {
+  const toSave = messages.slice(-MAX_STORED_MESSAGES);
+  chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch(() => {
+    // Storage errors must not surface to the user.
+  });
+}
+
+/** Load persisted messages from chrome.storage.local into the messages array. */
+async function loadMessages(): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(STORAGE_KEY, (result) => {
+      const stored = result[STORAGE_KEY] as ChatMessage[] | undefined;
+      if (Array.isArray(stored) && stored.length > 0) {
+        messages.push(...stored.slice(-MAX_STORED_MESSAGES));
+        lastRenderedCount = 0;
+      }
+      resolve();
+    });
+  });
+}
+
+/** Clear persisted messages from chrome.storage.local. */
+function clearStoredMessages(): void {
+  chrome.storage.local.remove(STORAGE_KEY).catch(() => {
+    // Ignore storage errors.
+  });
+}
+
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 
 function injectStyles(): void {
@@ -657,6 +691,7 @@ function sendMessage(text: string): void {
     timestamp: Date.now(),
   };
   messages.push(userMsg);
+  saveMessages();
   renderMessages();
 
   const pageCtx = pendingPageContext;
@@ -702,6 +737,7 @@ function handleStreamError(id: string, errorText: string): void {
     timestamp: Date.now(),
   };
   messages.push(assistantMsg);
+  saveMessages();
   renderMessages();
   isStreaming = false;
   currentStreamId = null;
@@ -763,6 +799,7 @@ function buildUI(): void {
     isStreaming = false;
     currentStreamId = null;
     pendingPageContext = null;
+    clearStoredMessages();
     updateContextButton();
     updateSendButton();
     renderMessages();
@@ -896,7 +933,8 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     isStreaming = false;
     currentStreamId = null;
     updateSendButton();
-    // Final render to remove cursor
+    // Persist completed conversation turn, then do final render to remove cursor.
+    saveMessages();
     renderMessages();
   }
 });
@@ -905,3 +943,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 buildUI();
+
+// Load persisted messages after UI is built so the DOM is ready for renderMessages().
+loadMessages().then(() => {
+  if (messages.length > 0) {
+    renderMessages();
+  }
+});
