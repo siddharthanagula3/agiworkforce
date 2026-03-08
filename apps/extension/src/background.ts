@@ -645,6 +645,16 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
+    case 'BRIDGE_URL_CHANGED': {
+      // The side panel has updated agi_bridge_url in chrome.storage.local.
+      // The new URL will be picked up automatically on the next handleChatMessage()
+      // call because getAgiBridgeBaseUrl() reads from storage at invocation time.
+      // Log for debugging and acknowledge.
+      const changedMsg = message as ExtensionMessage & { url?: string };
+      logger.info('Bridge URL updated', { url: changedMsg.url ?? '(default)' });
+      return { success: true } as ExtensionResponse;
+    }
+
     default: {
       // Forward other messages to content script
       let resolvedTabId = tabId;
@@ -1250,11 +1260,36 @@ async function captureCurrentPage(): Promise<void> {
  * Calls the AGI Workforce API with streaming and forwards CHAT_CHUNK messages
  * back to all extension views (the side panel listens via chrome.runtime.onMessage).
  */
+/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
+const DEFAULT_AGI_BRIDGE_URL = 'ws://localhost:8765';
+
+/**
+ * Resolve the configured bridge URL from storage, falling back to the default.
+ * Returns a base HTTP(S) URL derived from the stored ws:// or http:// value.
+ */
+async function getAgiBridgeBaseUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('agi_bridge_url', (result) => {
+      const raw = (result['agi_bridge_url'] as string | undefined)?.trim();
+      if (!raw) {
+        resolve('http://localhost:8765');
+        return;
+      }
+      // Accept ws://, wss://, http://, https:// — normalise to http(s)://
+      const normalized = raw
+        .replace(/^wss:\/\//, 'https://')
+        .replace(/^ws:\/\//, 'http://');
+      // Strip trailing slash
+      resolve(normalized.replace(/\/$/, ''));
+    });
+  });
+}
+
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
 ): Promise<void> {
-  const { id, text, pageContext, conversationHistory = [] } = message;
+  const { id, text, pageContext, conversationHistory = [], apiKey } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
     const chunk: import('./types').ChatChunkMessage = {
@@ -1282,16 +1317,37 @@ async function handleChatMessage(
 
   messages.push({ role: 'user', content: userContent });
 
+  // Resolve the bridge URL at call time so it picks up any in-session changes.
+  const AGI_API_BASE = await getAgiBridgeBaseUrl();
+
+  // Resolve the API key: prefer the value forwarded from the side panel,
+  // then fall back to chrome.storage.local so background-initiated requests work too.
+  const resolvedApiKey: string | null = await new Promise((resolve) => {
+    if (apiKey) {
+      resolve(apiKey);
+      return;
+    }
+    chrome.storage.local.get('agi_api_key', (result) => {
+      const stored = (result['agi_api_key'] as string | undefined)?.trim();
+      resolve(stored ?? null);
+    });
+  });
+
   try {
     // Attempt to stream via the AGI Workforce API.
     // The desktop app may expose an HTTP endpoint; fall back to native if unavailable.
-    const AGI_API_BASE = 'http://localhost:8765';
     let streamed = false;
+
+    // Build request headers — include Authorization if we have a key
+    const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (resolvedApiKey) {
+      fetchHeaders['Authorization'] = `Bearer ${resolvedApiKey}`;
+    }
 
     try {
       const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: fetchHeaders,
         body: JSON.stringify({ messages, stream: true }),
         signal: AbortSignal.timeout(60000),
       });
