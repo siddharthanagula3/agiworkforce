@@ -1,9 +1,9 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, type MotionProps } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 
 interface AnimatedGradientTextProps {
-  children: React.ReactNode;
+  children: MotionProps['children'];
   className?: string;
   animate?: boolean;
 }

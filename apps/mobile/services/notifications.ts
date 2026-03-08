@@ -93,6 +93,43 @@ async function sendTokenToBackend(token: string): Promise<void> {
   }
 }
 
+// --- App-ready guard for navigation ---
+
+/**
+ * Whether the app navigator is ready to accept push calls.
+ * Must be set to true by the root layout after the navigator mounts.
+ * Prevents "navigate before navigator is ready" crashes on cold-start
+ * notification taps.
+ */
+let _navigatorReady = false;
+
+export function setNavigatorReady(ready: boolean): void {
+  _navigatorReady = ready;
+}
+
+/**
+ * Safe wrapper around router.push.
+ * If the navigator is not yet ready, queues the navigation to run on the
+ * next tick (giving the layout time to mount). If it still fails, the
+ * error is caught and logged rather than crashing the app.
+ */
+function safeNavigate(route: Parameters<typeof router.push>[0]): void {
+  const attemptPush = () => {
+    try {
+      router.push(route);
+    } catch (err) {
+      console.warn('[notifications] Navigation failed:', err);
+    }
+  };
+
+  if (_navigatorReady) {
+    attemptPush();
+  } else {
+    // Defer until after the current JS turn so the navigator can finish mounting
+    setTimeout(attemptPush, 100);
+  }
+}
+
 // --- Notification response handler (user tapped a notification) ---
 
 function handleNotificationResponse(response: Notifications.NotificationResponse): void {
@@ -102,35 +139,35 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   switch (data.type) {
     case 'agent_approval_needed':
       // Navigate to companion/desktop view for approval
-      router.push('/(app)/companion');
+      safeNavigate('/(app)/companion');
       break;
 
     case 'task_completed':
       // Navigate to the relevant chat if a route is provided
       if (data.route && typeof data.route === 'string') {
-        router.push(data.route as '/(app)');
+        safeNavigate(data.route as '/(app)');
       } else {
-        router.push('/(app)');
+        safeNavigate('/(app)');
       }
       break;
 
     case 'schedule_triggered':
-      router.push('/(app)/schedules');
+      safeNavigate('/(app)/schedules');
       break;
 
     case 'companion_connected':
-      router.push('/(app)/companion');
+      safeNavigate('/(app)/companion');
       break;
 
     case 'chat_message':
       if (data.route && typeof data.route === 'string') {
-        router.push(data.route as '/(app)');
+        safeNavigate(data.route as '/(app)');
       }
       break;
 
     default:
       // Unknown type — open app home
-      router.push('/(app)');
+      safeNavigate('/(app)');
       break;
   }
 }

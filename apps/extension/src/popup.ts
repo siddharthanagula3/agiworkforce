@@ -291,15 +291,19 @@ async function handleRefresh(): Promise<void> {
 }
 
 /**
- * Increment action count
+ * Increment action count.
+ * Reads storage first to avoid a race condition where concurrent callers might
+ * each read a stale in-memory value and both write the same incremented count.
  */
 async function incrementActionCount(): Promise<void> {
-  popupState.actionCount++;
-  await storageUtils.setItem('stats', { actionCount: popupState.actionCount });
+  const stats = await storageUtils.getItem<{ actionCount: number }>('stats', { actionCount: 0 });
+  const newCount = (stats?.actionCount ?? 0) + 1;
+  await storageUtils.setItem('stats', { actionCount: newCount });
+  popupState.actionCount = newCount;
 
   const actionCountEl = document.getElementById('actionCount') as HTMLElement | null;
   if (actionCountEl) {
-    actionCountEl.textContent = String(popupState.actionCount);
+    actionCountEl.textContent = String(newCount);
   }
 }
 

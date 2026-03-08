@@ -70,8 +70,9 @@ function initialize(): void {
 
   // Check connection status
   void checkConnectionStatus();
+  // notifyTabReady() sends TAB_READY which triggers syncTabContextWithDesktop() in background.ts,
+  // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
-  void syncPageContext('content_init');
 
   logger.info('Content script initialized');
 }
@@ -174,6 +175,46 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
       return handleAutoFillJobApplication(message as AutoFillJobApplicationMessage);
+
+    case 'SELECT_OPTION':
+      return handleSelectOption(message as import('./types').SelectOptionMessage);
+
+    case 'CHECK':
+      return handleCheck(message as import('./types').CheckMessage, true);
+
+    case 'UNCHECK':
+      return handleCheck(message as import('./types').UncheckMessage, false);
+
+    case 'FOCUS':
+      return handleFocusBlur(message as import('./types').FocusMessage, 'focus');
+
+    case 'BLUR':
+      return handleFocusBlur(message as import('./types').BlurMessage, 'blur');
+
+    case 'HOVER':
+      return handleHover(message as import('./types').HoverMessage);
+
+    case 'SCROLL':
+      return handleScroll(message as import('./types').ScrollMessage);
+
+    case 'DRAG_DROP':
+      return handleDragDrop(message as import('./types').DragDropMessage);
+
+    case 'CLICK_AT_COORDINATES':
+      return handleClickAtCoordinates(message as import('./types').ClickAtCoordinatesMessage);
+
+    case 'GET_ACCESSIBILITY_TREE':
+    case 'BUILD_ACCESSIBILITY_TREE':
+      return handleBuildAccessibilityTree();
+
+    case 'START_RECORDING':
+      return handleStartRecording();
+
+    case 'STOP_RECORDING':
+      return handleStopRecording();
+
+    case 'GET_RECORDED_ACTIONS':
+      return handleGetRecordedActions();
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
@@ -1049,6 +1090,263 @@ async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionRe
   }
 }
 
+// ─── Element interaction handlers ────────────────────────────────────────────
+
+async function handleSelectOption(
+  message: import('./types').SelectOptionMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { selector, value } = message;
+    if (!validators.isValidSelector(selector)) {
+      return { success: false, error: 'Invalid selector for select_option' };
+    }
+    const element = domUtils.querySelector(selector) as HTMLSelectElement | null;
+    if (!element || element.tagName.toLowerCase() !== 'select') {
+      return { success: false, error: `Select element not found: ${selector}` };
+    }
+    element.value = value;
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    return { success: true, value } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleCheck(
+  message: import('./types').CheckMessage | import('./types').UncheckMessage,
+  checked: boolean,
+): Promise<ExtensionResponse> {
+  try {
+    const { selector } = message;
+    if (!validators.isValidSelector(selector)) {
+      return { success: false, error: `Invalid selector for ${checked ? 'check' : 'uncheck'}` };
+    }
+    const element = domUtils.querySelector(selector) as HTMLInputElement | null;
+    if (!element) {
+      return { success: false, error: `Element not found: ${selector}` };
+    }
+    element.checked = checked;
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    return { success: true, checked } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleFocusBlur(
+  message: import('./types').FocusMessage | import('./types').BlurMessage,
+  action: 'focus' | 'blur',
+): Promise<ExtensionResponse> {
+  try {
+    const { selector } = message;
+    if (!validators.isValidSelector(selector)) {
+      return { success: false, error: `Invalid selector for ${action}` };
+    }
+    const element = domUtils.querySelector(selector) as HTMLElement | null;
+    if (!element) {
+      return { success: false, error: `Element not found: ${selector}` };
+    }
+    if (action === 'focus' && typeof element.focus === 'function') {
+      element.focus();
+    } else if (action === 'blur' && typeof element.blur === 'function') {
+      element.blur();
+    }
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleHover(message: import('./types').HoverMessage): Promise<ExtensionResponse> {
+  try {
+    const { selector } = message;
+    if (!validators.isValidSelector(selector)) {
+      return { success: false, error: 'Invalid selector for hover' };
+    }
+    const element = domUtils.querySelector(selector);
+    if (!element) {
+      return { success: false, error: `Element not found: ${selector}` };
+    }
+    element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }));
+    element.dispatchEvent(
+      new MouseEvent('mousemove', { bubbles: true, cancelable: true, view: window }),
+    );
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleScroll(message: import('./types').ScrollMessage): Promise<ExtensionResponse> {
+  try {
+    const { selector, x = 0, y = 0, deltaX = 0, deltaY = 0 } = message;
+    if (selector) {
+      if (!validators.isValidSelector(selector)) {
+        return { success: false, error: 'Invalid selector for scroll' };
+      }
+      const element = domUtils.querySelector(selector);
+      if (!element) {
+        return { success: false, error: `Element not found: ${selector}` };
+      }
+      element.scrollBy({ left: deltaX, top: deltaY, behavior: 'smooth' });
+    } else if (deltaX !== 0 || deltaY !== 0) {
+      window.scrollBy({ left: deltaX, top: deltaY, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ left: x, top: y, behavior: 'smooth' });
+    }
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleDragDrop(
+  message: import('./types').DragDropMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { sourceSelector, targetSelector } = message;
+    if (!validators.isValidSelector(sourceSelector)) {
+      return { success: false, error: 'Invalid source selector for drag_drop' };
+    }
+    if (!validators.isValidSelector(targetSelector)) {
+      return { success: false, error: 'Invalid target selector for drag_drop' };
+    }
+    const source = domUtils.querySelector(sourceSelector);
+    const target = domUtils.querySelector(targetSelector);
+    if (!source) {
+      return { success: false, error: `Source element not found: ${sourceSelector}` };
+    }
+    if (!target) {
+      return { success: false, error: `Target element not found: ${targetSelector}` };
+    }
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const baseOpts: EventInit = { bubbles: true, cancelable: true };
+    const dragInit: DragEventInit = { ...baseOpts, view: window, dataTransfer: new DataTransfer() };
+    source.dispatchEvent(new MouseEvent('mousedown', { ...baseOpts, view: window }));
+    source.dispatchEvent(new DragEvent('dragstart', dragInit));
+    target.dispatchEvent(new DragEvent('dragenter', { ...dragInit, dataTransfer: null }));
+    target.dispatchEvent(new DragEvent('dragover', { ...dragInit, dataTransfer: null }));
+    target.dispatchEvent(
+      new DragEvent('drop', {
+        ...dragInit,
+        dataTransfer: null,
+        clientX: targetRect.x,
+        clientY: targetRect.y,
+      }),
+    );
+    source.dispatchEvent(
+      new DragEvent('dragend', {
+        ...dragInit,
+        dataTransfer: null,
+        clientX: sourceRect.x,
+        clientY: sourceRect.y,
+      }),
+    );
+    return { success: true } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleClickAtCoordinates(
+  message: import('./types').ClickAtCoordinatesMessage,
+): Promise<ExtensionResponse> {
+  try {
+    const { x, y, button = 'left' } = message;
+    const buttonIndex = button === 'right' ? 2 : button === 'middle' ? 1 : 0;
+    const target = document.elementFromPoint(x, y);
+    if (!target) {
+      return { success: false, error: `No element at coordinates (${x}, ${y})` };
+    }
+    const opts: MouseEventInit = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      button: buttonIndex,
+    };
+    target.dispatchEvent(new MouseEvent('mousedown', opts));
+    target.dispatchEvent(new MouseEvent('mouseup', opts));
+    target.dispatchEvent(new MouseEvent('click', opts));
+    return {
+      success: true,
+      element: {
+        tag: target.tagName.toLowerCase(),
+        id: target.id || undefined,
+      },
+    } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// ─── Accessibility tree ───────────────────────────────────────────────────────
+
+function buildAccessibilityNode(element: Element, depth: number = 0): Record<string, unknown> {
+  const rect = element.getBoundingClientRect();
+  const role = element.getAttribute('role') || element.tagName.toLowerCase();
+  const label =
+    element.getAttribute('aria-label') ||
+    element.getAttribute('alt') ||
+    (element as HTMLElement).innerText?.slice(0, 80) ||
+    null;
+
+  const node: Record<string, unknown> = {
+    role,
+    label,
+    id: element.id || null,
+    visible: rect.width > 0 && rect.height > 0,
+    rect: {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+    },
+    children: [],
+  };
+
+  if (depth < 8) {
+    const childNodes: Record<string, unknown>[] = [];
+    for (const child of Array.from(element.children)) {
+      childNodes.push(buildAccessibilityNode(child, depth + 1));
+    }
+    node['children'] = childNodes;
+  }
+
+  return node;
+}
+
+function handleBuildAccessibilityTree(): ExtensionResponse {
+  try {
+    const root = document.body || document.documentElement;
+    const tree = buildAccessibilityNode(root);
+    return { success: true, data: tree } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// ─── Recording handlers ───────────────────────────────────────────────────────
+
+function handleStartRecording(): ExtensionResponse {
+  automationState.isRecording = true;
+  automationState.recordedActions = [];
+  return { success: true, recording: true } as ExtensionResponse;
+}
+
+function handleStopRecording(): ExtensionResponse {
+  automationState.isRecording = false;
+  return { success: true, recording: false } as ExtensionResponse;
+}
+
+function handleGetRecordedActions(): ExtensionResponse {
+  return { success: true, actions: automationState.recordedActions } as ExtensionResponse;
+}
+
 /**
  * Check connection status with background script
  */
@@ -1072,6 +1370,8 @@ async function checkConnectionStatus(): Promise<void> {
  * Add automation indicator to page
  */
 function addAutomationIndicator(): void {
+  if (!document.body) return;
+
   const indicator = document.createElement('div');
   indicator.id = 'agi-workforce-indicator';
   indicator.style.cssText = `
@@ -1105,7 +1405,7 @@ function addAutomationIndicator(): void {
     );
   });
 
-  document.body.appendChild(indicator);
+  document.body?.appendChild(indicator);
 }
 
 /**
@@ -1188,8 +1488,8 @@ function injectFloatingOverlay(): void {
  * Validate message structure
  */
 // [H9 fix] Allowlist of known message types — prevents unknown type strings from being processed
+// Note: CAPTURE_SCREENSHOT is intentionally excluded — it is handled in background.ts, not here.
 const VALID_MESSAGE_TYPES = new Set([
-  'CAPTURE_SCREENSHOT',
   'CLICK',
   'DOUBLE_CLICK',
   'RIGHT_CLICK',
@@ -1212,6 +1512,23 @@ const VALID_MESSAGE_TYPES = new Set([
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
   'open_side_panel',
+  // Element interaction messages forwarded from background
+  'SELECT_OPTION',
+  'CHECK',
+  'UNCHECK',
+  'FOCUS',
+  'BLUR',
+  'HOVER',
+  'SCROLL',
+  'DRAG_DROP',
+  'CLICK_AT_COORDINATES',
+  // Accessibility
+  'GET_ACCESSIBILITY_TREE',
+  'BUILD_ACCESSIBILITY_TREE',
+  // Recording
+  'START_RECORDING',
+  'STOP_RECORDING',
+  'GET_RECORDED_ACTIONS',
 ]);
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

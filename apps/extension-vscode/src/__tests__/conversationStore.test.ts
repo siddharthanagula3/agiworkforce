@@ -2,93 +2,19 @@
  * conversationStore.test.ts — Tests for ConversationStore logic
  *
  * Tests the conversation CRUD operations, pruning, and auto-title behavior
- * using a mock ExtensionContext.
+ * using the real ConversationStore with a mock ExtensionContext.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMockExtensionContext } from './vscode.mock';
-
-// Reimplement the store logic for testing since we cannot import vscode-dependent code directly
-const STORAGE_KEY = 'agiWorkforce.conversations';
-const MAX_CONVERSATIONS = 50;
-
-interface StoredMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-}
-
-interface StoredConversation {
-  id: string;
-  title: string;
-  messages: StoredMessage[];
-  model: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-class TestConversationStore {
-  private data: StoredConversation[] = [];
-
-  getAll(): StoredConversation[] {
-    return this.data.slice().sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-
-  get(id: string): StoredConversation | undefined {
-    return this.data.find((c) => c.id === id);
-  }
-
-  save(conversation: StoredConversation): void {
-    const idx = this.data.findIndex((c) => c.id === conversation.id);
-    if (idx >= 0) {
-      this.data[idx] = conversation;
-    } else {
-      this.data.push(conversation);
-    }
-    this.data = this.data
-      .slice()
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, MAX_CONVERSATIONS);
-  }
-
-  delete(id: string): void {
-    this.data = this.data.filter((c) => c.id !== id);
-  }
-
-  create(title: string, model: string): StoredConversation {
-    const now = Date.now();
-    const conversation: StoredConversation = {
-      id: now.toString(36) + Math.random().toString(36).slice(2),
-      title,
-      messages: [],
-      model,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.save(conversation);
-    return conversation;
-  }
-
-  addMessage(id: string, message: StoredMessage): void {
-    const conversation = this.get(id);
-    if (conversation === undefined) return;
-
-    conversation.messages.push(message);
-    conversation.updatedAt = Date.now();
-
-    if (conversation.title === 'New Chat' && message.role === 'user') {
-      conversation.title = message.content.slice(0, 60).replace(/\n/g, ' ');
-    }
-
-    this.save(conversation);
-  }
-}
+import { ConversationStore } from '../storage/conversationStore';
+import { ExtensionContext } from './__mocks__/vscode';
 
 describe('ConversationStore', () => {
-  let store: TestConversationStore;
+  let store: ConversationStore;
 
   beforeEach(() => {
-    store = new TestConversationStore();
+    const ctx = new ExtensionContext();
+    store = new ConversationStore(ctx as unknown as import('vscode').ExtensionContext);
   });
 
   describe('create', () => {
@@ -250,7 +176,66 @@ describe('ConversationStore', () => {
         store.save(conv);
       }
 
-      expect(store.getAll().length).toBeLessThanOrEqual(MAX_CONVERSATIONS);
+      expect(store.getAll().length).toBeLessThanOrEqual(50);
+    });
+  });
+
+  describe('save / get persistence', () => {
+    it('persists conversation via save() and retrieves it via get()', () => {
+      const conv = store.create('Persisted Chat', 'gpt-5-pro');
+      // Mutate and explicitly save
+      conv.title = 'Updated Title';
+      store.save(conv);
+
+      const found = store.get(conv.id);
+      expect(found).toBeDefined();
+      expect(found?.title).toBe('Updated Title');
+    });
+
+    it('get() returns the same data that was saved', () => {
+      const conv = store.create('Data Check', 'auto-balanced');
+      conv.messages.push({ role: 'user', content: 'hello', timestamp: 1000 });
+      store.save(conv);
+
+      const loaded = store.get(conv.id);
+      expect(loaded?.messages).toHaveLength(1);
+      expect(loaded?.messages[0].content).toBe('hello');
+    });
+  });
+
+  describe('delete', () => {
+    it('delete() prevents get() from finding the removed conversation', () => {
+      const conv = store.create('To Be Deleted', 'auto');
+      store.delete(conv.id);
+      expect(store.get(conv.id)).toBeUndefined();
+    });
+
+    it('delete() removes the item from getAll()', () => {
+      const conv1 = store.create('Keep Me', 'auto');
+      const conv2 = store.create('Remove Me', 'auto');
+      store.delete(conv2.id);
+      const ids = store.getAll().map((c) => c.id);
+      expect(ids).toContain(conv1.id);
+      expect(ids).not.toContain(conv2.id);
+    });
+  });
+
+  describe('duplicate title handling', () => {
+    it('creates two conversations with the same title successfully', () => {
+      // create() does not enforce title uniqueness — callers are responsible
+      const conv1 = store.create('Duplicate Title', 'auto');
+      const conv2 = store.create('Duplicate Title', 'auto');
+      // Both should exist with distinct ids
+      expect(conv1.id).not.toBe(conv2.id);
+      expect(store.get(conv1.id)?.title).toBe('Duplicate Title');
+      expect(store.get(conv2.id)?.title).toBe('Duplicate Title');
+    });
+
+    it('getAll() includes both conversations with the same title', () => {
+      store.create('Same Title', 'auto');
+      store.create('Same Title', 'auto');
+      const matches = store.getAll().filter((c) => c.title === 'Same Title');
+      expect(matches.length).toBe(2);
     });
   });
 });

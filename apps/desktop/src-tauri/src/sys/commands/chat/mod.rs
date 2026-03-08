@@ -565,6 +565,8 @@ fn compute_conversation_stats(
     Ok(ConversationStats {
         message_count: messages.len(),
         total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+        total_input_tokens: 0,
+        total_output_tokens: 0,
         total_cost: messages.iter().filter_map(|m| m.cost).sum(),
     })
 }
@@ -654,6 +656,8 @@ fn compute_or_skip_stats(
         Ok(ConversationStats {
             message_count: 0,
             total_tokens: 0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
             total_cost: 0.0,
         })
     } else {
@@ -3004,6 +3008,8 @@ pub fn chat_get_conversation_stats(
     Ok(ConversationStats {
         message_count,
         total_tokens,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
         total_cost,
     })
 }
@@ -3511,12 +3517,32 @@ pub async fn chat_send_message(
     };
 
     // For Claude Opus 4.6+, default to adaptive thinking for tool use workflows
-    // unless the user explicitly set a thinking mode.
-    let thinking = if is_claude_model
+    // unless the user explicitly set a thinking mode or thinking_budget.
+    let thinking = if request.thinking_mode == Some(true) {
+        // User explicitly enabled thinking — use Budget when a budget is provided.
+        let budget = request.thinking_budget.unwrap_or(0);
+        if budget > 0 {
+            Some(crate::core::llm::ThinkingParameter::Budget {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: budget,
+            })
+        } else {
+            // thinking_mode true but no budget: fall back to adaptive for Claude Opus,
+            // or a simple Enabled(true) for other models.
+            if is_claude_model && model.contains("opus-4") {
+                Some(crate::core::llm::ThinkingParameter::Adaptive {
+                    thinking_type: "adaptive".to_string(),
+                })
+            } else {
+                Some(crate::core::llm::ThinkingParameter::Enabled(true))
+            }
+        }
+    } else if is_claude_model
         && model.contains("opus-4")
         && chat_tools.is_some()
         && request.thinking_mode.is_none()
     {
+        // Default adaptive thinking for Claude Opus 4.x tool workflows
         Some(crate::core::llm::ThinkingParameter::Adaptive {
             thinking_type: "adaptive".to_string(),
         })
@@ -3524,17 +3550,24 @@ pub async fn chat_send_message(
         None
     };
 
+    // Resolve temperature and max_tokens: prefer values forwarded from the frontend,
+    // fall back to module-level defaults.
+    let resolved_temperature = request.temperature.unwrap_or(DEFAULT_TEMPERATURE);
+    let resolved_max_tokens = request.max_output_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
+
     let llm_request = LLMRequest {
         messages: llm_messages,
         model: model.clone(),
-        temperature: Some(DEFAULT_TEMPERATURE),
-        max_tokens: Some(DEFAULT_MAX_TOKENS),
+        temperature: Some(resolved_temperature),
+        max_tokens: Some(resolved_max_tokens),
         stream: request.stream.unwrap_or(false),
         tools: chat_tools.clone(),
         tool_choice: tool_choice.clone(),
         thinking_mode: request.thinking_mode,
         cache_control,
         thinking,
+        // Forward reasoning effort (OpenAI o-series) when provided by the frontend
+        effort: request.reasoning_effort.clone(),
         ..Default::default()
     };
 
@@ -3779,6 +3812,8 @@ pub async fn chat_send_message(
                 stats: ConversationStats {
                     message_count: 0,
                     total_tokens: 0,
+                    total_input_tokens: 0,
+                    total_output_tokens: 0,
                     total_cost: 0.0,
                 },
                 last_message: None,
@@ -4133,6 +4168,8 @@ pub async fn chat_send_message(
                 stats: ConversationStats {
                     message_count: 0,
                     total_tokens: 0,
+                    total_input_tokens: 0,
+                    total_output_tokens: 0,
                     total_cost: 0.0,
                 },
                 last_message: None,
@@ -5033,6 +5070,8 @@ Please confirm the tool permissions or try a different approach.",
             stats: ConversationStats {
                 message_count: 0,
                 total_tokens: 0,
+                total_input_tokens: 0,
+                total_output_tokens: 0,
                 total_cost: 0.0,
             },
             last_message: None,

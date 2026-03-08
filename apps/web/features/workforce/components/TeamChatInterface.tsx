@@ -27,23 +27,74 @@ interface WorkforceResponse {
   plan?: unknown[];
 }
 
-// Skills-based model: execute via direct API call instead of workforce orchestrator
+/**
+ * Execute a workforce mission via the Mission Control API.
+ * The endpoint returns { missionId, plan, chatResponse, agents }.
+ */
 async function executeWorkforce(userId: string, input: string): Promise<WorkforceResponse> {
   try {
-    const response = await fetch('/api/llm/completion', {
+    // Retrieve the Supabase session token from localStorage (set by Supabase Auth client)
+    let authToken: string | null = null;
+    try {
+      // Supabase stores sessions under keys like "sb-<project>-auth-token"
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.includes('-auth-token')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { access_token?: string };
+            authToken = parsed.access_token ?? null;
+          }
+          break;
+        }
+      }
+    } catch {
+      // localStorage may be unavailable in some environments
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    // Retrieve CSRF token from cookie if present
+    const csrfToken = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('csrf-token='))
+      ?.split('=')[1];
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+
+    const response = await fetch('/api/mission', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, input, mode: 'mission' }),
+      headers,
+      body: JSON.stringify({ userId, input, mode: 'mission' as const }),
     });
 
     if (!response.ok) {
-      return { success: false, error: `API request failed: ${response.statusText}` };
+      let errorMsg = `Mission API request failed: ${response.statusText}`;
+      try {
+        const errData = (await response.json()) as { error?: { message?: string } };
+        if (errData?.error?.message) {
+          errorMsg = errData.error.message;
+        }
+      } catch {
+        // ignore JSON parse errors on error responses
+      }
+      return { success: false, error: errorMsg };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      missionId?: string;
+      plan?: unknown[];
+      chatResponse?: string;
+      agents?: string[];
+    };
+
     return {
       success: true,
-      chatResponse: data.response || data.chatResponse || 'Request processed.',
+      chatResponse: data.chatResponse ?? 'Mission plan created.',
       missionId: data.missionId,
       plan: data.plan,
     };

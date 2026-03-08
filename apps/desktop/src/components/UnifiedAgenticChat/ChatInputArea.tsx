@@ -739,6 +739,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const atWordMatch = value.match(/@([\w./\\-]*)$/);
     const isFileLikeQuery =
       atWordMatch &&
+      atWordMatch[1] !== undefined &&
       (atWordMatch[1].includes('.') ||
         atWordMatch[1].includes('/') ||
         atWordMatch[1].includes('\\'));

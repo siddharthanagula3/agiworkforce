@@ -143,6 +143,26 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "thinkingMode")]
     pub thinking_mode: Option<bool>,
 
+    /// Token budget for extended thinking; 0 means disabled.
+    /// Maps to LLMRequest.thinking as ThinkingParameter::Budget when > 0 and thinking_mode is true.
+    #[serde(default, alias = "thinkingBudget")]
+    pub thinking_budget: Option<u32>,
+
+    /// OpenAI o-series reasoning effort level: "low", "medium", or "high".
+    /// Maps to LLMRequest.effort.
+    #[serde(default, alias = "reasoningEffort")]
+    pub reasoning_effort: Option<String>,
+
+    /// Temperature override from frontend settings (0.0–2.0).
+    /// When present, overrides the backend DEFAULT_TEMPERATURE constant.
+    #[serde(default, alias = "temperature")]
+    pub temperature: Option<f32>,
+
+    /// Max output tokens override from frontend settings.
+    /// When present, overrides the backend DEFAULT_MAX_TOKENS constant.
+    #[serde(default, alias = "maxOutputTokens")]
+    pub max_output_tokens: Option<u32>,
+
     #[serde(default, alias = "enableAgentMode")]
     pub enable_agent_mode: Option<bool>,
     #[serde(default, alias = "preferCloudCredits")]
@@ -177,6 +197,12 @@ pub struct ChatSendMessageRequest {
     /// system prompt based on message content analysis.
     #[serde(default = "default_auto_inject_skills", alias = "autoInjectSkills")]
     pub auto_inject_skills: Option<bool>,
+
+    /// Whether the user explicitly selected a specific model (not an auto-routed selection).
+    /// Passed through from the frontend; currently informational — the backend does not
+    /// alter routing based on this flag, but it is preserved for analytics and future use.
+    #[serde(default, alias = "isExplicitModelSelection")]
+    pub is_explicit_model_selection: Option<bool>,
 }
 
 /// Subset of model capabilities passed from the frontend to control tool filtering.
@@ -269,6 +295,14 @@ pub struct ChatSendMessageResponse {
 pub struct ConversationStats {
     pub message_count: usize,
     pub total_tokens: i32,
+    /// Total input (prompt) tokens across all messages in the conversation.
+    /// Serializes to `total_input_tokens` to match the TypeScript `ConversationStats` interface.
+    #[serde(rename = "total_input_tokens")]
+    pub total_input_tokens: i32,
+    /// Total output (completion) tokens across all messages in the conversation.
+    /// Serializes to `total_output_tokens` to match the TypeScript `ConversationStats` interface.
+    #[serde(rename = "total_output_tokens")]
+    pub total_output_tokens: i32,
     pub total_cost: f64,
 }
 

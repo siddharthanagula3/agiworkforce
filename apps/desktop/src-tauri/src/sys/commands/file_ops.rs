@@ -1004,7 +1004,15 @@ pub async fn dir_traverse(
                     }
                     Err(e) => {
                         warn!("Glob error: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("Glob search failed: {}", e));
+        }
     }
+    Ok(results)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1099,17 +1107,6 @@ pub async fn file_read_range(
         total_lines,
         has_more: end_exclusive < total_lines,
     })
-}
-            }
-        }
-        Err(e) => {
-            return Err(format!("Invalid glob pattern: {}", e));
-        }
-    }
-
-    log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
-    info!("Found {} files matching pattern", results.len());
-    Ok(results)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,5 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ThinkingBlock.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';

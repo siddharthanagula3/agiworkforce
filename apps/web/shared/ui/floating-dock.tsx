@@ -67,7 +67,7 @@ const DockItem: React.FC<DockItemProps> = ({ item, index, hoveredIndex, setHover
           onClick={item.onClick}
           whileTap={{ scale: 0.95 }}
         >
-          {item.icon}
+          <>{item.icon}</>
         </motion.button>
       </TooltipTrigger>
       <TooltipContent>

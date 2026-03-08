@@ -798,7 +798,7 @@ fn timed_command(
     // We use std::process::Command (blocking). The calling function already
     // runs inside spawn_blocking so this is fine.
     // Spawn the child process and enforce the timeout via a background thread.
-    let mut child = Command::new(cmd)
+    let child = Command::new(cmd)
         .args(args)
         .current_dir(cwd)
         .stdout(std::process::Stdio::piped())
