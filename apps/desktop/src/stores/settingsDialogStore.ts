@@ -10,7 +10,9 @@ export type SettingsTab =
   | 'mcp'
   | 'mcp-server'
   | 'extensions'
-  | 'notifications';
+  | 'notifications'
+  | 'tools'
+  | 'research';
 
 interface SettingsDialogState {
   settingsOpen: boolean;
