@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ScheduledTask,
   type TaskStatus,
-  useScheduledTaskStore,
-} from '../../stores/scheduledTaskStore';
+  useSchedulerStore,
+} from '../../stores/schedulerStore';
 import { cn } from '../../lib/utils';
 import { CreateTaskModal } from './CreateTaskModal';
 import { ScheduledTaskCard } from './ScheduledTaskCard';
@@ -41,10 +41,10 @@ const EXAMPLE_TASKS: Array<{ name: string; prompt: string; emoji: string }> = [
 ];
 
 export function ScheduledTasksPanel() {
-  const tasks = useScheduledTaskStore((s) => s.tasks);
-  const isLoading = useScheduledTaskStore((s) => s.isLoading);
-  const fetchTasks = useScheduledTaskStore((s) => s.fetchTasks);
-  const createTask = useScheduledTaskStore((s) => s.createTask);
+  const tasks = useSchedulerStore((s) => s.tasks);
+  const isLoading = useSchedulerStore((s) => s.isLoading);
+  const fetchTasks = useSchedulerStore((s) => s.fetchTasks);
+  const createTask = useSchedulerStore((s) => s.createTask);
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
