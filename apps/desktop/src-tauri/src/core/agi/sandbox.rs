@@ -492,9 +492,18 @@ impl Sandbox {
             if let Some(stdout) = stdout {
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
-                while reader.read_line(&mut line).await.unwrap_or(0) > 0 {
-                    output.push_str(&line);
-                    line.clear();
+                loop {
+                    match reader.read_line(&mut line).await {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            output.push_str(&line);
+                            line.clear();
+                        }
+                        Err(e) => {
+                            tracing::warn!("Error reading sandbox stdout: {e}");
+                            break;
+                        }
+                    }
                 }
             }
             output
@@ -505,9 +514,18 @@ impl Sandbox {
             if let Some(stderr) = stderr {
                 let mut reader = BufReader::new(stderr);
                 let mut line = String::new();
-                while reader.read_line(&mut line).await.unwrap_or(0) > 0 {
-                    output.push_str(&line);
-                    line.clear();
+                loop {
+                    match reader.read_line(&mut line).await {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            output.push_str(&line);
+                            line.clear();
+                        }
+                        Err(e) => {
+                            tracing::warn!("Error reading sandbox stderr: {e}");
+                            break;
+                        }
+                    }
                 }
             }
             output
@@ -527,17 +545,31 @@ impl Sandbox {
         };
 
         // Collect output (with a short timeout to avoid hanging)
-        let stdout_result = tokio::time::timeout(Duration::from_secs(1), stdout_handle)
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .unwrap_or_default();
+        let stdout_result = match tokio::time::timeout(Duration::from_secs(1), stdout_handle).await
+        {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                tracing::warn!("Sandbox stdout collection task panicked: {e}");
+                String::new()
+            }
+            Err(_) => {
+                tracing::warn!("Sandbox stdout collection timed out, output may be truncated");
+                String::new()
+            }
+        };
 
-        let stderr_result = tokio::time::timeout(Duration::from_secs(1), stderr_handle)
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .unwrap_or_default();
+        let stderr_result = match tokio::time::timeout(Duration::from_secs(1), stderr_handle).await
+        {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                tracing::warn!("Sandbox stderr collection task panicked: {e}");
+                String::new()
+            }
+            Err(_) => {
+                tracing::warn!("Sandbox stderr collection timed out, output may be truncated");
+                String::new()
+            }
+        };
 
         Ok((stdout_result, stderr_result, exit_code, timed_out))
     }
