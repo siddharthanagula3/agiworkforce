@@ -57,7 +57,9 @@ export type NativeMessageType =
   | 'DRAG_DROP'
   | 'CLICK_AT_COORDINATES'
   // Internal content-script alias for GET_ACCESSIBILITY_TREE
-  | 'BUILD_ACCESSIBILITY_TREE';
+  | 'BUILD_ACCESSIBILITY_TREE'
+  // Side panel → background: notify that the bridge URL was updated in storage
+  | 'BRIDGE_URL_CHANGED';
 
 /**
  * Internal-only messages that travel between extension contexts (background ↔ side panel).
@@ -663,6 +665,12 @@ export interface ClickAtCoordinatesMessage extends BaseMessage {
   button?: 'left' | 'middle' | 'right';
 }
 
+// Bridge URL changed (side panel → background)
+export interface BridgeUrlChangedMessage extends BaseMessage {
+  type: 'BRIDGE_URL_CHANGED';
+  url?: string;
+}
+
 // Union types for all messages
 export type ExtensionMessage =
   | CaptureScreenshotMessage
@@ -715,7 +723,8 @@ export type ExtensionMessage =
   | HoverMessage
   | ScrollMessage
   | DragDropMessage
-  | ClickAtCoordinatesMessage;
+  | ClickAtCoordinatesMessage
+  | BridgeUrlChangedMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse

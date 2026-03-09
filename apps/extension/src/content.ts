@@ -1442,9 +1442,12 @@ function attachRecordingListeners(): void {
   _recordingInputListener = (e: Event) => {
     if (!automationState.isRecording) return;
     const target = e.target;
-    if (!(target instanceof HTMLInputElement) &&
-        !(target instanceof HTMLTextAreaElement) &&
-        !(target instanceof HTMLSelectElement)) return;
+    if (
+      !(target instanceof HTMLInputElement) &&
+      !(target instanceof HTMLTextAreaElement) &&
+      !(target instanceof HTMLSelectElement)
+    )
+      return;
     _userRecordedActions.push({
       type: 'input',
       selector: buildCssSelector(target),
@@ -1538,12 +1541,14 @@ function handleStopRecording(): ExtensionResponse {
   });
 
   // Forward to background/desktop app so the session can replay or inspect the recording
-  chrome.runtime.sendMessage({
-    type: 'STOP_RECORDING',
-    actions,
-  }).catch(() => {
-    // Background may not be listening — not fatal
-  });
+  chrome.runtime
+    .sendMessage({
+      type: 'STOP_RECORDING',
+      actions,
+    })
+    .catch(() => {
+      // Background may not be listening — not fatal
+    });
 
   return { success: true, recording: false, actions } as ExtensionResponse;
 }
