@@ -862,4 +862,179 @@ mod tests {
         let last_run = summarizer.get_last_run().await.unwrap();
         assert_eq!(last_run.status, SummarizationStatus::Completed);
     }
+
+    // =========================================================================
+    // Embedding fallback chain integration tests
+    //
+    // These test the 3-tier fallback contract:
+    //   Tier 1: Ollama local → returns Ollama embedding
+    //   Tier 2: Ollama fails, OpenAI succeeds → returns OpenAI embedding
+    //   Tier 3: Both fail → returns None (NOT zero vectors)
+    // =========================================================================
+
+    /// Mock that simulates Tier 1 success: Ollama returns an embedding.
+    struct MockOllamaSucceeds;
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockOllamaSucceeds {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            Ok(ExtractionResult {
+                memories: Vec::new(),
+                summary: String::new(),
+            })
+        }
+
+        async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
+            if text.trim().is_empty() {
+                return Ok(None);
+            }
+            // Simulate Ollama returning a 768-dim embedding
+            Ok(Some(vec![0.1; 768]))
+        }
+    }
+
+    /// Mock that simulates Tier 2: Ollama fails, OpenAI succeeds.
+    struct MockOllamaFailsOpenAISucceeds;
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockOllamaFailsOpenAISucceeds {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            Ok(ExtractionResult {
+                memories: Vec::new(),
+                summary: String::new(),
+            })
+        }
+
+        async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
+            if text.trim().is_empty() {
+                return Ok(None);
+            }
+            // Simulate: Ollama failed, fell back to OpenAI 1536-dim embedding
+            Ok(Some(vec![0.2; 1536]))
+        }
+    }
+
+    /// Mock that simulates Tier 3: Both Ollama and OpenAI fail.
+    /// MUST return None, NOT zero vectors.
+    struct MockBothFail;
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockBothFail {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            Ok(ExtractionResult {
+                memories: Vec::new(),
+                summary: String::new(),
+            })
+        }
+
+        async fn generate_embedding(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+            // Both tiers failed — return None, never zero vectors
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_embedding_fallback_tier1_ollama_succeeds() {
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockOllamaSucceeds);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+
+        assert!(embedding.is_some(), "Tier 1: Ollama should return an embedding");
+        let vec = embedding.unwrap();
+        assert_eq!(vec.len(), 768, "Ollama nomic-embed-text produces 768-dim vectors");
+        assert!(
+            vec.iter().any(|&v| v != 0.0),
+            "Embedding must not be all zeros"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_embedding_fallback_tier2_openai_succeeds() {
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockOllamaFailsOpenAISucceeds);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+
+        assert!(
+            embedding.is_some(),
+            "Tier 2: When Ollama fails, OpenAI should provide embedding"
+        );
+        let vec = embedding.unwrap();
+        assert_eq!(
+            vec.len(),
+            1536,
+            "OpenAI text-embedding-3-small produces 1536-dim vectors"
+        );
+        assert!(
+            vec.iter().any(|&v| v != 0.0),
+            "Embedding must not be all zeros"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_embedding_fallback_tier3_both_fail_returns_none() {
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockBothFail);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+
+        assert!(
+            embedding.is_none(),
+            "Tier 3: When both Ollama and OpenAI fail, must return None (not zero vectors)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_embedding_fallback_empty_text_returns_none() {
+        // All tiers should skip empty text and return None.
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockOllamaSucceeds);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        let embedding = summarizer.llm.generate_embedding("").await.unwrap();
+        assert!(
+            embedding.is_none(),
+            "Empty text should return None regardless of provider availability"
+        );
+
+        let embedding_spaces = summarizer.llm.generate_embedding("   ").await.unwrap();
+        assert!(
+            embedding_spaces.is_none(),
+            "Whitespace-only text should return None"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_normalize_embedding_dim() {
+        // Test padding shorter vectors
+        let short = vec![1.0, 2.0, 3.0];
+        let normalized = normalize_embedding_dim(short, 5);
+        assert_eq!(normalized, vec![1.0, 2.0, 3.0, 0.0, 0.0]);
+
+        // Test truncating longer vectors
+        let long = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let normalized = normalize_embedding_dim(long, 3);
+        assert_eq!(normalized, vec![1.0, 2.0, 3.0]);
+
+        // Test exact-length passthrough
+        let exact = vec![1.0, 2.0, 3.0];
+        let normalized = normalize_embedding_dim(exact, 3);
+        assert_eq!(normalized, vec![1.0, 2.0, 3.0]);
+    }
 }

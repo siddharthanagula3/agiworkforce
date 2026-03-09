@@ -110,6 +110,11 @@ pub struct EmbeddingMetadata {
     pub start_line: u32,
     pub end_line: u32,
     pub created_at: i64,
+    /// Identifier of the embedding model that produced the vector.
+    /// Embeddings from different models live in incompatible vector spaces
+    /// and must not be compared against each other.
+    #[serde(default)]
+    pub model_id: Option<String>,
 }
 
 impl EmbeddingMetadata {
@@ -133,7 +138,15 @@ impl EmbeddingMetadata {
             start_line,
             end_line,
             created_at: chrono::Utc::now().timestamp(),
+            model_id: None,
         }
+    }
+
+    /// Set the model_id for this metadata, identifying which embedding model
+    /// produced the associated vector.
+    pub fn with_model_id(mut self, model_id: String) -> Self {
+        self.model_id = Some(model_id);
+        self
     }
 }
 
@@ -156,6 +169,8 @@ pub async fn generate_code_embeddings(
     let similarity = service.similarity();
     let mut similarity_guard = similarity.lock().await;
 
+    let current_model_id = generator_guard.model_id();
+
     let mut count = 0;
     for chunk in chunks {
         let embedding = generator_guard
@@ -170,7 +185,8 @@ pub async fn generate_code_embeddings(
             chunk.language,
             chunk.start_line,
             chunk.end_line,
-        );
+        )
+        .with_model_id(current_model_id.clone());
 
         let metadata_id = metadata.id.clone();
 
@@ -200,13 +216,17 @@ pub async fn semantic_search_codebase(
         .await
         .map_err(|e| format!("Failed to generate query embedding: {}", e))?;
 
+    // Only compare against embeddings from the same model to avoid
+    // cross-model vector space contamination.
+    let current_model_id = generator_guard.model_id();
+
     drop(generator_guard);
 
     let similarity = service.similarity();
     let similarity_guard = similarity.lock().await;
 
     let results = similarity_guard
-        .search(query_embedding, limit.unwrap_or(10))
+        .search_with_model(query_embedding, limit.unwrap_or(10), Some(&current_model_id))
         .map_err(|e| format!("Failed to search: {}", e))?;
 
     Ok(results)
