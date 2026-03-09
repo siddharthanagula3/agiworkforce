@@ -38,6 +38,8 @@ async function secureSet(key: string, value: string): Promise<void> {
       // Clean up any stale chunked data from a previous larger write.
       await secureRemoveChunks(key);
     } else {
+      // Remove any existing chunks to prevent orphans when new value has fewer chunks.
+      await secureRemoveChunks(key);
       // Split into chunks.
       const count = Math.ceil(value.length / CHUNK_SIZE);
       for (let i = 0; i < count; i++) {
