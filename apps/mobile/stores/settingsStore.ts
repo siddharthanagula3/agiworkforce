@@ -12,11 +12,14 @@ interface SettingsState {
   notificationsEnabled: boolean;
   /** Enable voice features */
   voiceEnabled: boolean;
+  /** Enable background fetch for agent status polling */
+  backgroundFetchEnabled: boolean;
 
   setAutoApproveMode: (mode: AutoApproveMode) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
+  setBackgroundFetchEnabled: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -26,11 +29,13 @@ export const useSettingsStore = create<SettingsState>()(
       hapticsEnabled: true,
       notificationsEnabled: true,
       voiceEnabled: true,
+      backgroundFetchEnabled: true,
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
+      setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
     }),
     {
       name: 'settings-store',
