@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ToolCall {
@@ -52,12 +53,12 @@ export function SharedSessionViewer({ session }: { session: SharedSession }) {
               </span>
             </div>
           </div>
-          <a
+          <Link
             href="/"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             Open in AGI Workforce
-          </a>
+          </Link>
         </div>
       </div>
 

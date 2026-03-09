@@ -292,7 +292,7 @@ const AIConfigurationPageContent: React.FC = () => {
       } else {
         toast.success('AI preferences saved successfully!');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to save AI preferences');
       // Error already shown via toast; no need to log to console in production
     } finally {

@@ -4,36 +4,38 @@ import { render, screen } from '@testing-library/react';
 import React from 'react';
 
 // Mock framer-motion (AnimatePresence + motion)
-vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: React.forwardRef<HTMLDivElement, Record<string, unknown>>(
-      ({ children, ...props }, ref) => {
-        // Filter out framer-motion-specific props that cause React warnings
-        const domProps: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(props)) {
-          if (
-            !key.startsWith('animate') &&
-            !key.startsWith('initial') &&
-            !key.startsWith('exit') &&
-            !key.startsWith('transition') &&
-            !key.startsWith('variants') &&
-            key !== 'whileHover' &&
-            key !== 'whileTap' &&
-            key !== 'layout'
-          ) {
-            domProps[key] = value;
-          }
-        }
-        return (
-          <div ref={ref} {...domProps}>
-            {children as React.ReactNode}
-          </div>
-        );
-      },
-    ),
-  },
-}));
+vi.mock('framer-motion', () => {
+  const MotionDiv = React.forwardRef<HTMLDivElement, Record<string, unknown>>(function MotionDiv(
+    { children, ...props },
+    ref,
+  ) {
+    const domProps: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (
+        !key.startsWith('animate') &&
+        !key.startsWith('initial') &&
+        !key.startsWith('exit') &&
+        !key.startsWith('transition') &&
+        !key.startsWith('variants') &&
+        key !== 'whileHover' &&
+        key !== 'whileTap' &&
+        key !== 'layout'
+      ) {
+        domProps[key] = value;
+      }
+    }
+    return (
+      <div ref={ref} {...domProps}>
+        {children as React.ReactNode}
+      </div>
+    );
+  });
+  MotionDiv.displayName = 'motion.div';
+  return {
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    motion: { div: MotionDiv },
+  };
+});
 
 // Mock zustand store — must return the full shape the component destructures
 vi.mock('@/stores/unified/unifiedChatStore', () => ({
