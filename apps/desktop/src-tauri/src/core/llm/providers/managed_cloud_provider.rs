@@ -63,15 +63,19 @@ impl Default for ManagedCloudProvider {
 
 impl ManagedCloudProvider {
     fn canonicalize_cloud_model(model: &str) -> String {
-        let normalized = model.trim().to_lowercase();
-        match normalized.as_str() {
-            // Normalize all gpt-5.2-codex effort variants to the canonical OpenAI model ID.
-            "gpt-5.2-codex" | "gpt-5-codex" => "gpt-5.2-codex".to_string(),
+        let trimmed = model.trim().to_lowercase();
+
+        // Delegate to the centralized models.json canonicalization maps first.
+        let canonical = super::super::models_config::get_canonicalized_id(&trimmed);
+        if canonical != trimmed {
+            return canonical;
+        }
+
+        // Cloud-specific aliases not in models.json (pattern-based rules that
+        // cannot be expressed as simple key-value pairs in the JSON map).
+        match trimmed.as_str() {
             m if m.starts_with("gpt-5.2-codex-") => "gpt-5.2-codex".to_string(),
-            // Normalize legacy gpt-5-pro internal IDs to canonical OpenAI API model ID.
-            "gpt-5-pro" | "gpt-5-pro-2026-01" => "gpt-5.2-pro".to_string(),
-            // Normalize generic grok-4 alias to versioned xAI model ID.
-            "grok-4" => "grok-4-0709".to_string(),
+            m if m.starts_with("gpt-5.3-codex-") => "gpt-5.3-codex".to_string(),
             // Keep user-selected model ID when no alias is needed.
             _ => model.to_string(),
         }
