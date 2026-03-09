@@ -463,6 +463,17 @@ struct OpenAIEmbeddingData {
     embedding: Vec<f32>,
 }
 
+/// Ollama chat completion response (for extract_memories)
+#[derive(Debug, Deserialize)]
+struct OllamaChatResponse {
+    message: Option<OllamaChatMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaChatMessage {
+    content: String,
+}
+
 /// Production SummaryLLM implementation that generates real embeddings via HTTP.
 ///
 /// Uses a 3-tier fallback strategy:
@@ -574,22 +585,122 @@ impl HttpSummaryLLM {
 impl SummaryLLM for HttpSummaryLLM {
     async fn extract_memories(
         &self,
-        _prompt: &str,
-        _conversation_content: &str,
+        prompt: &str,
+        conversation_content: &str,
     ) -> Result<ExtractionResult> {
-        // Memory extraction requires a full LLM call which is handled separately
-        // by the chat pipeline. This implementation focuses on embeddings.
-        Ok(ExtractionResult {
-            memories: Vec::new(),
-            summary: String::new(),
-        })
+        let full_prompt = format!("{}\n{}", prompt, conversation_content);
+
+        // Try Ollama local LLM first (no API key needed)
+        let ollama_result = self
+            .http_client
+            .post(format!("{}/api/chat", self.ollama_url))
+            .json(&serde_json::json!({
+                "model": "llama3.2",
+                "messages": [{"role": "user", "content": full_prompt}],
+                "stream": false,
+                "format": "json"
+            }))
+            .timeout(StdDuration::from_secs(60))
+            .send()
+            .await;
+
+        let llm_response = match ollama_result {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.json::<OllamaChatResponse>().await {
+                    Ok(chat) => chat.message.map(|m| m.content),
+                    Err(e) => {
+                        tracing::debug!("Failed to parse Ollama chat response: {}", e);
+                        None
+                    }
+                }
+            }
+            Ok(resp) => {
+                tracing::debug!("Ollama chat returned status {}", resp.status());
+                None
+            }
+            Err(e) => {
+                tracing::debug!("Ollama chat unavailable: {}", e);
+                None
+            }
+        };
+
+        // Fallback to OpenAI if Ollama didn't work
+        let llm_response = match llm_response {
+            Some(r) => r,
+            None => {
+                if let Some(api_key) = &self.openai_api_key {
+                    let resp = self
+                        .http_client
+                        .post("https://api.openai.com/v1/chat/completions")
+                        .header("Authorization", format!("Bearer {}", api_key))
+                        .json(&serde_json::json!({
+                            "model": "gpt-4o-mini",
+                            "messages": [{"role": "user", "content": full_prompt}],
+                            "response_format": {"type": "json_object"}
+                        }))
+                        .timeout(StdDuration::from_secs(30))
+                        .send()
+                        .await;
+
+                    match resp {
+                        Ok(r) if r.status().is_success() => {
+                            let body: serde_json::Value = r.json().await.unwrap_or_default();
+                            body["choices"][0]["message"]["content"]
+                                .as_str()
+                                .unwrap_or("")
+                                .to_string()
+                        }
+                        Ok(r) => {
+                            tracing::warn!("OpenAI chat returned status {}", r.status());
+                            return Ok(ExtractionResult {
+                                memories: Vec::new(),
+                                summary: String::new(),
+                            });
+                        }
+                        Err(e) => {
+                            tracing::warn!("OpenAI chat failed: {}", e);
+                            return Ok(ExtractionResult {
+                                memories: Vec::new(),
+                                summary: String::new(),
+                            });
+                        }
+                    }
+                } else {
+                    tracing::warn!("No LLM available for memory extraction");
+                    return Ok(ExtractionResult {
+                        memories: Vec::new(),
+                        summary: String::new(),
+                    });
+                }
+            }
+        };
+
+        // Parse the JSON response from the LLM
+        match serde_json::from_str::<ExtractionResult>(&llm_response) {
+            Ok(result) => {
+                tracing::debug!(
+                    "Extracted {} memories from conversation",
+                    result.memories.len()
+                );
+                Ok(result)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to parse LLM extraction response: {}", e);
+                Ok(ExtractionResult {
+                    memories: Vec::new(),
+                    summary: llm_response.chars().take(500).collect(),
+                })
+            }
+        }
     }
 
-    /// Generate embeddings with 3-tier fallback:
-    /// 1. Ollama local (nomic-embed-text, 768-dim)
+    /// Generate embeddings with 3-tier fallback, normalized to DEFAULT_EMBEDDING_DIM.
+    /// 1. Ollama local (nomic-embed-text, 768-dim → padded to 1536)
     /// 2. OpenAI cloud (text-embedding-3-small, 1536-dim)
     /// 3. None (no embedding available — honest, no zero vectors)
     async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
+        use super::memory_persistence::DEFAULT_EMBEDDING_DIM;
+
         if text.trim().is_empty() {
             tracing::debug!("Skipping embedding generation for empty text");
             return Ok(None);
@@ -598,11 +709,12 @@ impl SummaryLLM for HttpSummaryLLM {
         // Tier 1: Try Ollama local embeddings
         match self.generate_ollama_embedding(text).await {
             Ok(embedding) => {
+                let normalized = normalize_embedding_dim(embedding, DEFAULT_EMBEDDING_DIM);
                 tracing::debug!(
-                    "Generated Ollama embedding ({} dimensions)",
-                    embedding.len()
+                    "Generated Ollama embedding (normalized to {} dimensions)",
+                    normalized.len()
                 );
-                return Ok(Some(embedding));
+                return Ok(Some(normalized));
             }
             Err(e) => {
                 tracing::debug!("Ollama embedding unavailable, trying OpenAI: {}", e);
@@ -612,11 +724,12 @@ impl SummaryLLM for HttpSummaryLLM {
         // Tier 2: Try OpenAI embeddings
         match self.generate_openai_embedding(text).await {
             Ok(embedding) => {
+                let normalized = normalize_embedding_dim(embedding, DEFAULT_EMBEDDING_DIM);
                 tracing::debug!(
-                    "Generated OpenAI embedding ({} dimensions)",
-                    embedding.len()
+                    "Generated OpenAI embedding (normalized to {} dimensions)",
+                    normalized.len()
                 );
-                return Ok(Some(embedding));
+                return Ok(Some(normalized));
             }
             Err(e) => {
                 tracing::debug!("OpenAI embedding unavailable: {}", e);
@@ -629,6 +742,21 @@ impl SummaryLLM for HttpSummaryLLM {
         );
         Ok(None)
     }
+}
+
+/// Normalize an embedding vector to the target dimension.
+/// If shorter, pads with zeros. If longer, truncates.
+/// This ensures all stored embeddings have consistent dimensions for cosine similarity.
+fn normalize_embedding_dim(mut embedding: Vec<f32>, target_dim: usize) -> Vec<f32> {
+    if embedding.len() == target_dim {
+        return embedding;
+    }
+    if embedding.len() < target_dim {
+        embedding.resize(target_dim, 0.0);
+    } else {
+        embedding.truncate(target_dim);
+    }
+    embedding
 }
 
 // =============================================================================
