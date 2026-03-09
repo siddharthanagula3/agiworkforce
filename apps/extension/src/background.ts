@@ -1331,13 +1331,13 @@ async function handleChatMessage(
           logger.warn('Failed to read API key from session storage', {
             error: chrome.runtime.lastError.message,
           });
-          resolve(null);
-          return;
-        }
-        const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
-        if (sessionStored) {
-          resolve(sessionStored);
-          return;
+          // Fall through to local storage on session storage error
+        } else {
+          const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
+          if (sessionStored) {
+            resolve(sessionStored);
+            return;
+          }
         }
         // Fallback: check local storage for a key saved by an older version.
         try {
