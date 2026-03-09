@@ -176,17 +176,23 @@ impl AgentOrchestrator {
     }
 
     pub async fn spawn_agent(&self, goal: Goal) -> Result<String> {
-        let mut agents = self.agents.lock().await;
+        // Phase 1: Acquire lock only for capacity check and ID generation,
+        // then release before any awaits to avoid holding mutex across await points.
+        let (agent_id, agent_name) = {
+            let agents = self.agents.lock().await;
 
-        if agents.len() >= self.max_agents {
-            return Err(anyhow!(
-                "Maximum agent capacity ({}) reached. Cancel or wait for existing agents to complete.",
-                self.max_agents
-            ));
-        }
+            if agents.len() >= self.max_agents {
+                return Err(anyhow!(
+                    "Maximum agent capacity ({}) reached. Cancel or wait for existing agents to complete.",
+                    self.max_agents
+                ));
+            }
 
-        let agent_id = format!("agent_{}", &Uuid::new_v4().to_string()[..8]);
-        let agent_name = format!("Agent {}", agents.len() + 1);
+            let agent_id = format!("agent_{}", &Uuid::new_v4().to_string()[..8]);
+            let agent_name = format!("Agent {}", agents.len() + 1);
+            (agent_id, agent_name)
+            // Lock released here
+        };
 
         tracing::info!(
             "[Orchestrator] Spawning agent {} for goal: {}",
@@ -219,6 +225,7 @@ impl AgentOrchestrator {
             error: None,
         };
 
+        // Perform awaits outside the lock to prevent deadlocks
         self.knowledge_base.add_goal(&goal).await?;
 
         if let Some(ref app) = self.app_handle {
@@ -237,6 +244,8 @@ impl AgentOrchestrator {
             status,
         };
 
+        // Phase 2: Reacquire lock for insertion and goal submission
+        let mut agents = self.agents.lock().await;
         agents.insert(agent_id.clone(), agent);
 
         // AUDIT-P3-005: Use ok_or_else instead of unwrap() for map access
