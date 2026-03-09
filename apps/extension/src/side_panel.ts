@@ -70,25 +70,51 @@ function clearStoredMessages(): void {
   });
 }
 
-/** Save the API key to chrome.storage.local under agi_api_key. */
+/**
+ * Save the API key to chrome.storage.session (cleared on browser close).
+ * Falls back to chrome.storage.local if session storage is unavailable.
+ */
 function saveApiKey(key: string): void {
-  chrome.storage.local.set({ [API_KEY_STORAGE_KEY]: key }).catch(() => {
-    // Storage errors must not surface to the user.
-  });
-}
-
-/** Load the API key from chrome.storage.local. Returns null if not set. */
-async function loadApiKey(): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(API_KEY_STORAGE_KEY, (result) => {
-      const key = result[API_KEY_STORAGE_KEY] as string | undefined;
-      resolve(key && key.trim() ? key.trim() : null);
+  chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: key }).catch(() => {
+    // Fallback to local if session storage is unavailable.
+    chrome.storage.local.set({ [API_KEY_STORAGE_KEY]: key }).catch(() => {
+      // Storage errors must not surface to the user.
     });
   });
 }
 
-/** Remove the stored API key. */
+/**
+ * Load the API key from chrome.storage.session.
+ * Migrates from chrome.storage.local if a legacy key is found there.
+ * Returns null if not set.
+ */
+async function loadApiKey(): Promise<string | null> {
+  return new Promise((resolve) => {
+    chrome.storage.session.get(API_KEY_STORAGE_KEY, (result) => {
+      const sessionKey = result[API_KEY_STORAGE_KEY] as string | undefined;
+      if (sessionKey && sessionKey.trim()) {
+        resolve(sessionKey.trim());
+        return;
+      }
+      // Fallback: check local storage for a key saved by an older version.
+      chrome.storage.local.get(API_KEY_STORAGE_KEY, (localResult) => {
+        const localKey = localResult[API_KEY_STORAGE_KEY] as string | undefined;
+        if (localKey && localKey.trim()) {
+          // Migrate to session storage and remove from local storage.
+          chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: localKey.trim() }).catch(() => {});
+          chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {});
+          resolve(localKey.trim());
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  });
+}
+
+/** Remove the stored API key from both session and local storage. */
 function clearStoredApiKey(): void {
+  chrome.storage.session.remove(API_KEY_STORAGE_KEY).catch(() => {});
   chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {
     // Ignore storage errors.
   });
@@ -549,6 +575,101 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
+// ─── HTML sanitizer (browser-native, no deps) ────────────────────────────────
+
+/** Dangerous element tag names that must be stripped from rendered HTML. */
+const DANGEROUS_TAGS = new Set([
+  'script',
+  'iframe',
+  'object',
+  'embed',
+  'form',
+  'link',
+  'meta',
+  'base',
+  'applet',
+  'math',
+  'svg',
+]);
+
+/** Event handler attribute prefixes that must be removed. */
+const EVENT_ATTR_RE = /^on/i;
+
+/** Attributes whose values can contain executable expressions. */
+const DANGEROUS_ATTR_RE = /^(srcdoc|formaction|xlink:href|data)$/i;
+
+/** Protocols allowed in href/src attributes; everything else is stripped. */
+const SAFE_URL_RE = /^(https?:|mailto:|#|\/)/i;
+
+/**
+ * Sanitize an HTML string using the browser's DOMParser.
+ * Strips dangerous elements (script, iframe, object, embed, form, etc.),
+ * removes event-handler attributes (onclick, onerror, …), and blocks
+ * javascript:/data: URLs in href/src/action attributes.
+ */
+function sanitizeHtml(dirty: string): string {
+  const doc = new DOMParser().parseFromString(dirty, 'text/html');
+
+  const walk = (root: Element): void => {
+    // Iterate children in reverse so removals don't shift indices
+    const children = Array.from(root.children);
+    for (const child of children) {
+      // Remove dangerous elements entirely
+      if (DANGEROUS_TAGS.has(child.tagName.toLowerCase())) {
+        child.remove();
+        continue;
+      }
+
+      // Strip <style> elements that could contain CSS expressions
+      if (child.tagName.toLowerCase() === 'style') {
+        child.remove();
+        continue;
+      }
+
+      // Sanitize attributes
+      const attrs = Array.from(child.attributes);
+      for (const attr of attrs) {
+        const name = attr.name.toLowerCase();
+
+        // Remove event handlers (onclick, onerror, onload, …)
+        if (EVENT_ATTR_RE.test(name)) {
+          child.removeAttribute(attr.name);
+          continue;
+        }
+
+        // Remove dangerous attributes
+        if (DANGEROUS_ATTR_RE.test(name)) {
+          child.removeAttribute(attr.name);
+          continue;
+        }
+
+        // Sanitize URL-bearing attributes
+        if (name === 'href' || name === 'src' || name === 'action') {
+          // eslint-disable-next-line no-control-regex -- intentional: strip ASCII control chars from URLs for security
+          const val = attr.value.trim().replace(/[\x00-\x1f]/g, '');
+          if (!SAFE_URL_RE.test(val)) {
+            child.removeAttribute(attr.name);
+          }
+        }
+
+        // Remove style attributes that may contain expression() or url()
+        if (name === 'style') {
+          const val = attr.value.toLowerCase();
+          if (/expression\s*\(|url\s*\(/i.test(val)) {
+            child.removeAttribute(attr.name);
+          }
+        }
+      }
+
+      // Recurse into children
+      walk(child);
+    }
+  };
+
+  walk(doc.body);
+  return doc.body.innerHTML;
+}
+
 // ─── Markdown renderer (regex-based, no deps) ────────────────────────────────
 
 function renderMarkdown(text: string): string {
@@ -589,7 +710,7 @@ function renderMarkdown(text: string): string {
   html = html.replace(/^---+$/gm, '<hr>');
 
   // Unordered lists
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
 
   // Ordered lists
@@ -655,7 +776,7 @@ function buildBubble(msg: ChatMessage): HTMLElement {
   if (isUser) {
     bubble.textContent = msg.content;
   } else {
-    bubble.innerHTML = renderMarkdown(msg.content);
+    bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
   }
 
   const ts = el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp));
@@ -718,7 +839,7 @@ function removeThinking(): void {
 function updateStreamingBubble(id: string, fullText: string, done: boolean): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
-  bubble.innerHTML = renderMarkdown(fullText);
+  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
   if (done) {
     bubble.classList.remove('sp-cursor');
   } else {
@@ -1033,10 +1154,16 @@ function buildUI(): void {
     if (!raw) {
       chrome.storage.local.remove('agi_bridge_url');
     } else {
-      chrome.storage.local.set({ agi_bridge_url: raw }).catch(() => {});
+      chrome.storage.local
+        .set({ agi_bridge_url: raw })
+        .catch((err: unknown) => console.warn('[SidePanel] Failed to save bridge URL:', err));
     }
     // Notify background to reconnect with new URL
-    chrome.runtime.sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw }).catch(() => {});
+    chrome.runtime
+      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw })
+      .catch((err: unknown) =>
+        console.warn('[SidePanel] Failed to notify bridge URL change:', err),
+      );
     const bar = document.getElementById('sp-settings-bar');
     if (bar) bar.classList.remove('open');
   };
