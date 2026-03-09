@@ -146,10 +146,10 @@ fn is_auth_error(error: &str) -> bool {
         || e.contains("permission_denied")
 }
 
-/// Normalizes model IDs to a canonical format for routing.
+/// Normalizes model IDs to a canonical format for routing and API payloads.
 ///
-/// This is used for matching/routing logic — the original ID is preserved
-/// for API payloads to the provider.  Delegates to the centralized
+/// The normalized (lowercased, canonicalized) ID is used end-to-end for both
+/// routing decisions and provider API payloads.  Delegates to the centralized
 /// canonicalization maps in `models.json` via `models_config::get_canonicalized_id`,
 /// then applies additional routing-only aliases not covered by the per-provider
 /// maps (e.g. dot-versioned shorthand that shouldn't change the API payload).
