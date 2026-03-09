@@ -302,16 +302,113 @@ impl Default for ProactiveScheduler {
 /// State wrapper for the ProactiveScheduler
 pub struct SchedulerState {
     pub scheduler: Arc<ProactiveScheduler>,
-    /// In-memory execution history for recently dispatched jobs
-    pub execution_history: RwLock<Vec<JobExecutionRecord>>,
+    /// In-memory execution history for recently dispatched jobs.
+    /// Wrapped in Arc so the background polling loop can share it.
+    pub execution_history: Arc<RwLock<Vec<JobExecutionRecord>>>,
 }
 
 impl SchedulerState {
     pub fn new() -> Self {
         Self {
             scheduler: Arc::new(ProactiveScheduler::new()),
-            execution_history: RwLock::new(Vec::new()),
+            execution_history: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    /// Spawn a background tokio task that polls for due jobs every 30 seconds
+    /// and dispatches their actions via `dispatch_job_action`.
+    ///
+    /// This is the core scheduling loop — without it jobs are stored but never
+    /// automatically triggered. Call this once from `lib.rs` during app setup.
+    pub fn start_background_loop(
+        scheduler: Arc<ProactiveScheduler>,
+        execution_history: Arc<RwLock<Vec<JobExecutionRecord>>>,
+        app_handle: tauri::AppHandle,
+    ) {
+        tauri::async_runtime::spawn(async move {
+            tracing::info!("[Scheduler] Background loop started — polling every 30 seconds");
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+                // Collect jobs that are Active and whose next_run is in the past
+                let due_jobs: Vec<(String, SchedulerActionType, serde_json::Value, String)> = {
+                    match scheduler.jobs.read() {
+                        Ok(jobs) => {
+                            let now = chrono::Utc::now();
+                            jobs.values()
+                                .filter(|job| {
+                                    job.status == JobStatus::Active
+                                        && job.next_run.map_or(false, |nr| nr <= now)
+                                })
+                                .map(|job| {
+                                    (
+                                        job.id.clone(),
+                                        job.action_type.clone(),
+                                        job.action_data.clone(),
+                                        job.name.clone(),
+                                    )
+                                })
+                                .collect()
+                        }
+                        Err(e) => {
+                            tracing::error!("[Scheduler] Failed to read jobs: {}", e);
+                            continue;
+                        }
+                    }
+                };
+
+                for (job_id, action_type, action_data, job_name) in due_jobs {
+                    tracing::info!(
+                        "[Scheduler] Firing due job '{}' (id={})",
+                        job_name,
+                        job_id
+                    );
+
+                    let started_at = chrono::Utc::now();
+                    let result =
+                        dispatch_job_action(&action_type, &action_data, &job_name, &app_handle)
+                            .await;
+                    let completed_at = chrono::Utc::now();
+                    let success = result.is_ok();
+                    let duration_ms = (completed_at - started_at).num_milliseconds();
+
+                    if let Err(ref e) = result {
+                        tracing::error!(
+                            "[Scheduler] Job '{}' (id={}) failed: {}",
+                            job_name,
+                            job_id,
+                            e
+                        );
+                    }
+
+                    // Record to history
+                    if let Ok(mut hist) = execution_history.write() {
+                        let record_id = hist.len() as i64 + 1;
+                        hist.push(JobExecutionRecord {
+                            id: record_id,
+                            job_id: job_id.clone(),
+                            started_at: started_at.to_rfc3339(),
+                            completed_at: Some(completed_at.to_rfc3339()),
+                            status: if success {
+                                ExecutionStatus::Completed
+                            } else {
+                                ExecutionStatus::Failed
+                            },
+                            error: result.err(),
+                            duration_ms: Some(duration_ms),
+                        });
+                        // Cap history at 500 entries
+                        if hist.len() > 500 {
+                            let drain_to = hist.len() - 500;
+                            hist.drain(0..drain_to);
+                        }
+                    }
+
+                    // Update job state (last_run, next_run, counters)
+                    scheduler.mark_job_run(&job_id, success).ok();
+                }
+            }
+        });
     }
 }
 

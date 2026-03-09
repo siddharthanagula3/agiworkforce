@@ -670,6 +670,92 @@ pub async fn request_tool_confirmation(
     }
 }
 
+/// Request confirmation for a user-initiated action, bypassing the agent-mode
+/// gate. Use this for configuration actions (e.g., MCP server connect from
+/// Settings) that should work regardless of the current agent mode.
+///
+/// Still respects auto-approve-all, remembered choices, and the 120-second
+/// confirmation dialog — just skips the Safe/Build/Autopilot mode check.
+pub async fn request_tool_confirmation_no_mode_gate(
+    app_handle: &tauri::AppHandle,
+    state: &ToolConfirmationState,
+    request: ToolConfirmationRequest,
+    timeout_secs: u64,
+) -> Result<bool, String> {
+    let request_id = request.request_id.clone();
+    let tool_name = request.tool_name.clone();
+
+    // Global auto-approve bypass
+    if state.is_auto_approve_all() {
+        debug!(
+            "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
+            tool_name
+        );
+        return Ok(true);
+    }
+
+    // Check for remembered choice
+    if let Some(remembered) = state.get_remembered_choice(&tool_name) {
+        debug!(
+            "[ToolConfirmation] Using remembered choice for '{}': {}",
+            tool_name, remembered
+        );
+        return Ok(remembered);
+    }
+
+    // Register the pending confirmation
+    let rx = state.register_pending(request_id.clone());
+
+    // Create summary for frontend
+    let summary = ToolConfirmationSummary::from(&request);
+
+    // Emit the confirmation request event
+    if let Err(e) = app_handle.emit("tool:confirmation_required", &summary) {
+        state.cancel_pending(&request_id);
+        return Err(format!("Failed to emit confirmation event: {}", e));
+    }
+
+    info!(
+        "[ToolConfirmation] Waiting for user confirmation for '{}' (request_id: {})",
+        tool_name, request_id
+    );
+
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+        Ok(Ok(response)) => {
+            if response.remember_choice {
+                state.remember_choice(&tool_name, response.approved);
+            }
+            if response.approved {
+                info!("[ToolConfirmation] Tool '{}' approved by user", tool_name);
+            } else {
+                warn!(
+                    "[ToolConfirmation] Tool '{}' denied by user: {:?}",
+                    tool_name, response.reason
+                );
+            }
+            Ok(response.approved)
+        }
+        Ok(Err(_)) => {
+            state.cancel_pending(&request_id);
+            Err("Confirmation channel closed unexpectedly".to_string())
+        }
+        Err(_) => {
+            state.cancel_pending(&request_id);
+            let _ = app_handle.emit(
+                "tool:confirmation_timeout",
+                serde_json::json!({
+                    "request_id": request_id,
+                    "tool_name": tool_name,
+                }),
+            );
+            Err(format!(
+                "User did not respond within {} seconds",
+                timeout_secs
+            ))
+        }
+    }
+}
+
 /// Request confirmation from user for a tool execution (Simplified version).
 /// Automatically retrieves state and constructs the request.
 pub async fn request_confirmation_simple(

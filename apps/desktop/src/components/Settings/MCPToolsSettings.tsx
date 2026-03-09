@@ -1,5 +1,5 @@
 import { AlertCircle, FileCode2, FolderOpen, RefreshCw, Server, Wrench } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import MCPConfigEditor from '../MCP/MCPConfigEditor';
 import MCPCredentialManager from '../MCP/MCPCredentialManager';
@@ -41,8 +41,20 @@ export function MCPToolsSettings() {
     void refreshConfigLocation();
   }, [initialize, isInitialized, refreshConfigLocation]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const handleRefreshAll = useCallback(async () => {
-    await Promise.all([refreshServers(), refreshTools(), refreshStats(), refreshConfigLocation()]);
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refreshServers(),
+        refreshTools(),
+        refreshStats(),
+        refreshConfigLocation(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [refreshConfigLocation, refreshServers, refreshStats, refreshTools]);
 
   const handleSearch = useCallback(
@@ -70,8 +82,14 @@ export function MCPToolsSettings() {
             Configure and manage Model Context Protocol servers, tools, and credentials.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void handleRefreshAll()} disabled={isLoading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        <Button
+          variant="outline"
+          onClick={() => void handleRefreshAll()}
+          disabled={isLoading || isRefreshing}
+        >
+          <RefreshCw
+            className={`mr-2 h-4 w-4 ${isRefreshing || isLoading ? 'animate-spin' : ''}`}
+          />
           Refresh
         </Button>
       </div>

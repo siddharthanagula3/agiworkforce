@@ -14,13 +14,27 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::sleep;
 
-/// Sanitizes a string for safe interpolation into AppleScript or shell arguments.
-/// Removes double quotes, backslashes, and other characters that could break out
-/// of string literals in AppleScript. Trims to max 200 chars to prevent abuse.
+/// Sanitizes a string for safe interpolation into AppleScript string literals.
+/// Removes double quotes, backslashes, and single quotes that could break out of
+/// AppleScript string literals or trigger code injection. Trims to max 200 chars.
 fn sanitize_applescript_string(input: &str) -> String {
     input
         .chars()
-        .filter(|c| *c != '"' && *c != '\\' && *c != '\'')
+        .filter(|c| *c != '"' && *c != '\\' && *c != '\'' && *c != '\0')
+        .take(200)
+        .collect()
+}
+
+/// Sanitizes a window title for use as a direct argument to external commands
+/// (e.g. wmctrl) where the value is passed as a separate argv element rather than
+/// through a shell. Strips null bytes (which would truncate argv) and enforces a
+/// length limit to prevent excessively long arguments.
+// Only used on non-Windows/non-macOS (Linux) — suppress dead_code on other platforms.
+#[cfg_attr(any(target_os = "windows", target_os = "macos"), allow(dead_code))]
+fn sanitize_window_title_arg(input: &str) -> String {
+    input
+        .chars()
+        .filter(|c| *c != '\0')
         .take(200)
         .collect()
 }
@@ -733,7 +747,10 @@ impl WindowCoordinator {
     /// Closes a window by title (Linux).
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     pub async fn close_window(&self, title: &str) -> Result<()> {
-        let safe_title = sanitize_applescript_string(title);
+        // Use sanitize_window_title_arg (not sanitize_applescript_string) since wmctrl
+        // receives the title as a direct argv element — no shell interpolation occurs.
+        // We only need to strip null bytes and enforce a length cap.
+        let safe_title = sanitize_window_title_arg(title);
 
         std::process::Command::new("wmctrl")
             .args(["-c", &safe_title])
