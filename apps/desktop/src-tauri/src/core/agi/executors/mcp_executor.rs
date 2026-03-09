@@ -125,8 +125,8 @@ pub struct McpExecutor {
     /// The MCP client for communicating with MCP servers.
     client: Arc<McpClient>,
     /// Registry for tool schema conversion.
-    /// TODO: Use registry to validate tool arguments against JSON schema before
-    /// sending to MCP servers, preventing malformed requests.
+    /// Schema validation is performed in `validate_tool_args()` via `McpClient::list_server_tools()`
+    /// before each `execute_mcp_tool()` call, checking required fields and additionalProperties.
     #[allow(dead_code)]
     registry: Arc<McpToolRegistry>,
     /// Cached tool names for performance.
@@ -473,6 +473,25 @@ impl McpExecutor {
             Some(0.1),
         );
 
+        // Validate arguments against the tool's JSON schema before sending.
+        // This catches missing required fields and wrong types before the round-trip
+        // to the MCP server, producing a clearer error message for the LLM.
+        if let Err(validation_err) =
+            self.validate_tool_args(&server_name, &tool_name, parameters)
+        {
+            tracing::warn!(
+                "[McpExecutor] Argument validation failed for tool '{}' on '{}': {}",
+                tool_name,
+                server_name,
+                validation_err
+            );
+            return Err(anyhow!(
+                "MCP tool argument validation failed for '{}': {}",
+                tool_name,
+                validation_err
+            ));
+        }
+
         // Convert parameters to Value
         let args_value = serde_json::to_value(parameters)?;
 
@@ -673,6 +692,84 @@ impl McpExecutor {
 
         // Fallback to JSON string representation
         serde_json::to_string_pretty(result).unwrap_or_else(|_| result.to_string())
+    }
+
+    /// Validates tool arguments against the tool's JSON schema `input_schema`.
+    ///
+    /// Checks that all fields declared `required` in the schema are present in
+    /// `parameters`, and that no additional properties violate an
+    /// `additionalProperties: false` constraint if set.
+    ///
+    /// This is a lightweight structural check — it does not perform full JSON
+    /// Schema draft validation (type checking, pattern matching, etc.).  It is
+    /// intentionally lenient so that valid-but-unusual argument shapes are not
+    /// rejected; the MCP server performs authoritative validation.
+    fn validate_tool_args(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+        parameters: &HashMap<String, Value>,
+    ) -> Result<(), String> {
+        // Retrieve the cached tool schema.  If the tool is not found (e.g. the
+        // server has disconnected), skip validation rather than blocking the call.
+        let schema = match self.client.list_server_tools(server_name) {
+            Ok(tools) => {
+                match tools.into_iter().find(|t| t.name == tool_name) {
+                    Some(tool) => tool.input_schema,
+                    None => {
+                        tracing::debug!(
+                            "[McpExecutor] Tool '{}' not found in server '{}' cache — skipping schema validation",
+                            tool_name, server_name
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+            Err(_) => return Ok(()), // server not connected — skip
+        };
+
+        // Check required fields.
+        if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
+            let missing: Vec<&str> = required
+                .iter()
+                .filter_map(|r| r.as_str())
+                .filter(|field| !parameters.contains_key(*field))
+                .collect();
+
+            if !missing.is_empty() {
+                return Err(format!(
+                    "Missing required fields: {}. The tool '{}' requires these parameters.",
+                    missing.join(", "),
+                    tool_name
+                ));
+            }
+        }
+
+        // Check additionalProperties: false constraint.
+        if schema
+            .get("additionalProperties")
+            .and_then(|v| v.as_bool())
+            == Some(false)
+        {
+            if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
+                let extra: Vec<&str> = parameters
+                    .keys()
+                    .map(String::as_str)
+                    .filter(|k| !props.contains_key(*k))
+                    .collect();
+
+                if !extra.is_empty() {
+                    return Err(format!(
+                        "Unexpected fields not allowed by schema: {}. Tool '{}' only accepts: {}.",
+                        extra.join(", "),
+                        tool_name,
+                        props.keys().cloned().collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

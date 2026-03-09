@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Folder, FolderOpen, Plus, Paperclip, Link, Brain, Globe, Check } from 'lucide-react';
+import { Folder, FolderOpen, Plus, Paperclip, Link, Brain, Globe, Check, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
@@ -34,6 +34,14 @@ export function PlusMenu({
   const currentFolder = useProjectStore(selectCurrentFolder);
   const setCurrentFolder = useProjectStore((s) => s.setCurrentFolder);
   const folderDisplayName = currentFolder ? formatFolderPath(currentFolder) : null;
+
+  const handleClearFolder = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setCurrentFolder(null);
+    },
+    [setCurrentFolder],
+  );
 
   const handleSelectFolder = useCallback(async () => {
     setIsOpen(false);
@@ -125,7 +133,26 @@ export function PlusMenu({
           ) : (
             <Folder className="h-4 w-4 shrink-0" />
           )}
-          <span className="flex-1 text-left truncate">{folderDisplayName ?? 'Select folder'}</span>
+          <div className="flex-1 text-left min-w-0">
+            {currentFolder ? (
+              <>
+                <div className="text-xs text-white/40 leading-tight">Project folder</div>
+                <div className="truncate leading-tight">{folderDisplayName}</div>
+              </>
+            ) : (
+              <span>Select folder</span>
+            )}
+          </div>
+          {currentFolder && (
+            <button
+              type="button"
+              onClick={handleClearFolder}
+              className="shrink-0 rounded p-0.5 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+              aria-label="Clear project folder"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </button>
 
         {/* Separator */}
