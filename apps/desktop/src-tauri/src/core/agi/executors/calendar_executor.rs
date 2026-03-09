@@ -326,7 +326,7 @@ mod tests {
         if let Ok(EventDateTime::DateTime { timezone, .. }) = result {
             assert_eq!(timezone, "America/New_York");
         } else {
-            panic!("Expected DateTime variant");
+            panic!("Expected DateTime variant, got: {:?}", result);
         }
     }
 
@@ -338,7 +338,7 @@ mod tests {
         if let Ok(EventDateTime::Date { date }) = result {
             assert_eq!(date, "2024-01-15");
         } else {
-            panic!("Expected Date variant");
+            panic!("Expected Date variant, got: {:?}", result);
         }
     }
 
@@ -350,7 +350,7 @@ mod tests {
         if let Ok(EventDateTime::DateTime { timezone, .. }) = result {
             assert_eq!(timezone, "UTC");
         } else {
-            panic!("Expected DateTime variant");
+            panic!("Expected DateTime variant, got: {:?}", result);
         }
     }
 
