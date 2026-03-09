@@ -175,6 +175,17 @@ impl EmbeddingGenerator {
     pub fn dimensions(&self) -> usize {
         self.config.model.dimensions()
     }
+
+    /// Returns a stable identifier for the current embedding model.
+    /// Used to tag stored embeddings so they are only compared within
+    /// the same vector space.
+    pub fn model_id(&self) -> String {
+        match &self.config.model {
+            EmbeddingModel::OllamaNomicEmbedText => "ollama:nomic-embed-text".to_string(),
+            EmbeddingModel::OllamaMxbaiEmbedLarge => "ollama:mxbai-embed-large".to_string(),
+            EmbeddingModel::FastembedAllMiniLM => "fastembed:all-MiniLM-L6-v2".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
