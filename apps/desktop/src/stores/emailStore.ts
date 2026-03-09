@@ -182,7 +182,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       return;
     }
     try {
-      const folders = await invoke<string[]>('email_list_folders', { account_id: id });
+      const folders = await invoke<string[]>('email_list_folders', { accountId: id });
       set({ folders });
 
       if (!folders.includes(get().selectedFolder)) {
@@ -207,7 +207,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     set({ loading: true, error: null, filter });
     try {
       const emails = await invoke<EmailMessage[]>('email_fetch_inbox', {
-        account_id: accountId,
+        accountId,
         folder,
         limit: 100,
         filter,
@@ -248,7 +248,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     }
     try {
       await invoke('email_mark_read', {
-        account_id: selectedAccountId,
+        accountId: selectedAccountId,
         uid,
         read,
       });
@@ -282,7 +282,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
     try {
       await invoke('email_delete', {
-        account_id: selectedAccountId,
+        accountId: selectedAccountId,
         uid,
       });
       set((state) => ({
@@ -301,7 +301,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     try {
       const messageId = await invoke<string>('email_send', {
         request: {
-          account_id: payload.account_id,
+          accountId: payload.account_id,
           to: payload.to,
           cc: payload.cc ?? [],
           bcc: payload.bcc ?? [],
@@ -336,10 +336,10 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
     try {
       const filePath = await invoke<string>('email_download_attachment', {
-        account_id: accountId,
+        accountId,
         folder: message.folder,
         uid: message.uid,
-        attachment_index: attachmentIndex,
+        attachmentIndex,
       });
 
       const applyAttachmentUpdate = (email: EmailMessage): EmailMessage => {
