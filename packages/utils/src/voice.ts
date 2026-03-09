@@ -41,6 +41,14 @@ export function formatTranscriptionDuration(ms: number): string {
   return `${totalSeconds}s`;
 }
 
+/** Format a duration in milliseconds to a timer string (e.g., "1:23") */
+export function formatVoiceDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 /**
  * Check whether the current environment supports any voice input API.
  *
@@ -78,9 +86,6 @@ export function isVoiceSupported(): boolean {
  * - Ensures the text ends with a sentence-ending punctuation mark
  * - Collapses multiple spaces into one
  *
- * This does NOT remove filler words or apply AI cleanup — those are
- * platform-specific post-processing steps handled in each surface.
- *
  * @param text - Raw transcription text
  * @returns Normalized transcription text
  *
@@ -106,4 +111,11 @@ export function normalizeTranscription(text: string): string {
   }
 
   return `${capitalized}.`;
+}
+
+/** Convert decibel metering value to a normalized 0-1 amplitude */
+export function meteringToAmplitude(db: number): number {
+  // Typical range: -160 dB (silence) to 0 dB (max)
+  const clamped = Math.max(-60, Math.min(0, db));
+  return (clamped + 60) / 60;
 }
