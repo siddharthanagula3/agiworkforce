@@ -139,7 +139,7 @@ mod h13_resolve_model_for_strategy {
             10000,
             "fallback-model",
         );
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-2.0-flash");
     }
 
     #[test]
@@ -159,7 +159,7 @@ mod h13_resolve_model_for_strategy {
             2000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-sonnet-4-5");
+        assert_eq!(model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod h13_resolve_model_for_strategy {
             5000,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.2");
+        assert_eq!(model, "gpt-5");
     }
 
     #[test]
@@ -236,14 +236,14 @@ mod h13_resolve_model_for_strategy {
         // token_count == 8000 should NOT pick deepseek (< 8000)
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 8000, "fallback");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-2.0-flash");
     }
 
     #[test]
     fn auto_balanced_boundary_at_500() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 500, "fallback");
-        assert_eq!(model, "claude-sonnet-4-5");
+        assert_eq!(model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod h13_resolve_model_for_strategy {
     fn auto_balanced_boundary_at_4000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 4000, "fallback");
-        assert_eq!(model, "gpt-5.2");
+        assert_eq!(model, "gpt-5");
     }
 
     #[test]
