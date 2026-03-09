@@ -202,6 +202,12 @@ export async function validateCsrfFromRequest(
     return true; // GET requests don't need CSRF protection
   }
 
+  // Bearer token requests are not vulnerable to CSRF — skip validation.
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return true;
+  }
+
   const token = request.headers.get(CSRF_HEADER);
   const sid = sessionId || (await getSessionIdFromRequest(request));
 
@@ -226,6 +232,15 @@ export async function requireCsrfToken(
   const method = request.method.toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     return null; // GET requests don't need CSRF protection
+  }
+
+  // CSRF is a browser-session attack vector. Bearer token requests (e.g. from
+  // the native desktop app) are not vulnerable to CSRF because an attacker
+  // cannot read the token from a cross-origin context. Skip CSRF validation
+  // when the request is authenticated via Bearer token.
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return null;
   }
 
   const token = request.headers.get(CSRF_HEADER);
