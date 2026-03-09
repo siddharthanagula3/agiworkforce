@@ -72,8 +72,7 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     if (!telemetryEndpoint) return;
     try {
       // Use fetch (available in VS Code's Node.js 18+ runtime via global).
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetch(telemetryEndpoint, {
+      void fetch(telemetryEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -95,8 +94,8 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
         data: data ?? {},
         timestamp: new Date().toISOString(),
         extensionVersion:
-          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
-            ?.version ?? '0.1.0',
+          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
+          '0.1.0',
         vscodeVersion: vscode.version,
         sessionId: sessionId ?? 'unknown',
       });
@@ -109,8 +108,8 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
         data: data ?? {},
         timestamp: new Date().toISOString(),
         extensionVersion:
-          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
-            ?.version ?? '0.1.0',
+          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
+          '0.1.0',
         vscodeVersion: vscode.version,
         sessionId: sessionId ?? 'unknown',
       });
