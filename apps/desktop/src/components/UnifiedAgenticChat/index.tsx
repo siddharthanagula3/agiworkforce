@@ -2090,7 +2090,7 @@ export const UnifiedAgenticChat: React.FC<{
         const pendingMsg = await ipcInvoke<PendingUserMessage>('chat_add_pending_message', {
           request: {
             content,
-            conversation_id: conversationDbId,
+            conversationId: conversationDbId,
           },
         });
         useChatStore.getState().addPendingMessage(pendingMsg);
@@ -2447,7 +2447,7 @@ export const UnifiedAgenticChat: React.FC<{
           request: {
             content,
             userId,
-            conversation_id: conversationDbId,
+            conversationId: conversationDbId,
             attachments: enrichedOptions.attachments?.map((att) => ({
               id: att.id,
               type: att.type,

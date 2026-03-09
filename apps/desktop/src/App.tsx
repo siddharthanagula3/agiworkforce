@@ -452,7 +452,7 @@ const DesktopShell = () => {
             await invoke('chat_add_pending_message', {
               request: {
                 content: query,
-                conversation_id: conversationDbId,
+                conversationId: conversationDbId,
               },
             });
             return;
