@@ -146,6 +146,36 @@ fn is_auth_error(error: &str) -> bool {
         || e.contains("permission_denied")
 }
 
+/// Normalizes model IDs to a canonical format for routing.
+///
+/// This is used for matching/routing logic — the original ID is preserved
+/// for API payloads to the provider.  Delegates to the centralized
+/// canonicalization maps in `models.json` via `models_config::get_canonicalized_id`,
+/// then applies additional routing-only aliases not covered by the per-provider
+/// maps (e.g. dot-versioned shorthand that shouldn't change the API payload).
+fn normalize_model_id(id: &str) -> String {
+    let trimmed = id.trim().to_lowercase();
+
+    // First, delegate to the models.json canonicalization maps (single source of truth).
+    let canonical = super::models_config::get_canonicalized_id(&trimmed);
+    if canonical != trimmed {
+        return canonical;
+    }
+
+    // Additional routing-only aliases not covered by models.json.
+    // These map dot-versioned shorthand forms to their canonical hyphenated
+    // equivalents so that prefix matching and provider selection work correctly.
+    match trimmed.as_str() {
+        // Zhipu GLM dot-versioned aliases
+        "glm-4.7" => "glm-4.7".to_string(), // GLM keeps dots in real API IDs — pass through
+        // Moonshot Kimi dot-versioned aliases
+        "kimi-k2.5" => "kimi-k2.5".to_string(),
+        "kimi-k2.5-thinking" => "kimi-k2.5-thinking".to_string(),
+        // Pass through if no alias match
+        _ => trimmed,
+    }
+}
+
 /// Rewrite an auth error into a user-friendly message that tells the user
 /// exactly what to do (check their key in Settings).
 fn rewrite_auth_error(error: &str, provider_name: &str) -> String {
@@ -308,14 +338,16 @@ impl LLMRouter {
         // If TypeScript has already selected a model via intelligent routing, use it directly
         if let Some(selected_model) = &context.selected_model {
             if !selected_model.is_empty() {
-                let provider = self.infer_provider_from_model(selected_model);
+                let normalized = normalize_model_id(selected_model);
+                let provider = self.infer_provider_from_model(&normalized);
                 let reason = context
                     .routing_reason
                     .clone()
-                    .unwrap_or_else(|| format!("Intelligent routing selected: {}", selected_model));
+                    .unwrap_or_else(|| format!("Intelligent routing selected: {}", normalized));
 
                 tracing::info!(
-                    "Using intelligent routing: model={}, provider={:?}, intent={:?}, confidence={:?}",
+                    "Using intelligent routing: model={} (normalized from {}), provider={:?}, intent={:?}, confidence={:?}",
+                    normalized,
                     selected_model,
                     provider,
                     context.intent_type,
@@ -326,7 +358,7 @@ impl LLMRouter {
                 if self.has_provider(provider) {
                     return RouterSuggestion {
                         provider,
-                        model: selected_model.clone(),
+                        model: normalized,
                         reason,
                     };
                 }
@@ -768,7 +800,8 @@ impl LLMRouter {
                     provider: preferred,
                     model: preferences
                         .model
-                        .clone()
+                        .as_deref()
+                        .map(normalize_model_id)
                         .unwrap_or_else(|| self.default_model(preferred, TaskCategory::Simple)),
                     reason: "user-preference",
                 });
