@@ -372,6 +372,7 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
       }),
     );
     ws.close();
+    return;
   }
 }
 

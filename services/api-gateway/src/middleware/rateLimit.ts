@@ -67,6 +67,12 @@ export const rateLimitConfigs = {
   // SECURITY: Push token updates are infrequent, 30/min is sufficient
   'mobile-push-token': { windowMs: 60_000, max: 30 },
 
+  // MCP endpoints: moderate limits for tool interactions
+  // SECURITY: Listing tools is read-only, allow 30/min
+  'mcp-list': { windowMs: 60_000, max: 30 },
+  // SECURITY: Calling tools can be resource-intensive, limit to 20/min
+  'mcp-call': { windowMs: 60_000, max: 20 },
+
   // Health/default: lenient for monitoring
   // SECURITY: Health checks from monitoring systems, allow 100/min
   health: { windowMs: 60_000, max: 100 },
