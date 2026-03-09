@@ -101,7 +101,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
           const pendingMsg = await invoke<PendingUserMessage>('chat_add_pending_message', {
             request: {
               content: messageContent,
-              conversation_id: conversationId ?? null,
+              conversationId: conversationId ?? null,
             },
           });
 

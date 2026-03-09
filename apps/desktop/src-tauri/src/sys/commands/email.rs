@@ -399,6 +399,7 @@ impl EmailAccountRecord {
 
 #[derive(Debug, Deserialize)]
 pub struct SendEmailRequest {
+    #[serde(alias = "accountId")]
     pub account_id: i64,
     pub to: Vec<EmailAddress>,
     #[serde(default)]
