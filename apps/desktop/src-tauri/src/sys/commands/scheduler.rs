@@ -31,7 +31,7 @@ use crate::sys::error::{Error, Result};
 
 /// The type of action a scheduled job should perform
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum SchedulerActionType {
     /// Execute a workflow by ID
     Workflow,
@@ -51,8 +51,8 @@ impl std::fmt::Display for SchedulerActionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SchedulerActionType::Workflow => write!(f, "workflow"),
-            SchedulerActionType::AgiTask => write!(f, "agi_task"),
-            SchedulerActionType::ShellCommand => write!(f, "shell_command"),
+            SchedulerActionType::AgiTask => write!(f, "agiTask"),
+            SchedulerActionType::ShellCommand => write!(f, "shellCommand"),
             SchedulerActionType::Notification => write!(f, "notification"),
             SchedulerActionType::Webhook => write!(f, "webhook"),
             SchedulerActionType::Script => write!(f, "script"),
@@ -62,7 +62,7 @@ impl std::fmt::Display for SchedulerActionType {
 
 /// Status of a scheduled job
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum JobStatus {
     /// Job is active and will run at scheduled times
     Active,
@@ -76,6 +76,7 @@ pub enum JobStatus {
 
 /// A scheduled job definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScheduledJob {
     /// Unique identifier for the job
     pub id: String,
@@ -466,6 +467,7 @@ pub async fn scheduler_get_job(
 
 /// Serializable next run entry for frontend consumption
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NextRunEntry {
     pub job_id: String,
     pub next_run: DateTime<Utc>,
@@ -862,6 +864,7 @@ pub async fn scheduler_get_history(
 ///
 /// All fields are optional — only provided fields will be applied.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScheduledJobUpdate {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -898,7 +901,7 @@ pub async fn scheduler_update_job(
             job.description = Some(description);
         }
         if let Some(status_str) = updates.status {
-            match status_str.as_str() {
+            match status_str.to_lowercase().as_str() {
                 "active" => job.status = JobStatus::Active,
                 "paused" => job.status = JobStatus::Paused,
                 "completed" => job.status = JobStatus::Completed,
@@ -933,17 +936,22 @@ pub async fn scheduler_update_job(
     }
 }
 
-/// Parse action type string to SchedulerActionType enum
+/// Parse action type string to SchedulerActionType enum.
+///
+/// Accepts camelCase (canonical), snake_case (legacy), and kebab-case variants
+/// to remain backwards-compatible with existing frontend stores.
 fn parse_action_type(action_type: &str) -> Result<SchedulerActionType> {
     match action_type.to_lowercase().as_str() {
         "workflow" => Ok(SchedulerActionType::Workflow),
-        "agi_task" | "agitask" | "agi-task" => Ok(SchedulerActionType::AgiTask),
-        "shell_command" | "shellcommand" | "shell-command" | "shell" => Ok(SchedulerActionType::ShellCommand),
+        "agitask" | "agi_task" | "agi-task" => Ok(SchedulerActionType::AgiTask),
+        "shellcommand" | "shell_command" | "shell-command" | "shell" => {
+            Ok(SchedulerActionType::ShellCommand)
+        }
         "notification" | "notify" => Ok(SchedulerActionType::Notification),
         "webhook" => Ok(SchedulerActionType::Webhook),
         "script" => Ok(SchedulerActionType::Script),
         _ => Err(Error::Generic(format!(
-            "Invalid action type: {}. Valid options: workflow, agi_task, shell_command, notification, webhook, script",
+            "Invalid action type: {}. Valid options: workflow, agiTask, shellCommand, notification, webhook, script",
             action_type
         ))),
     }

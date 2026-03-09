@@ -405,6 +405,24 @@ pub fn run() {
                 }
             }
 
+            // Conversation summarizer state for automatic memory extraction
+            {
+                use crate::sys::commands::memory::ConversationSummarizerState;
+                match ConversationSummarizerState::new(&db_path.to_string_lossy(), None) {
+                    Ok(summarizer_state) => {
+                        app.manage(summarizer_state);
+                        tracing::info!("ConversationSummarizer initialized");
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to initialize ConversationSummarizer: {}. Summarization features will be degraded.",
+                            e
+                        );
+                        app.manage(ConversationSummarizerState::new_degraded());
+                    }
+                }
+            }
+
             // Knowledge base state
             app.manage(crate::sys::commands::knowledge::KnowledgeState::new());
 

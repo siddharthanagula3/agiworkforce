@@ -91,6 +91,8 @@ impl IncrementalIndexer {
 
         similarity.delete_file_embeddings(&file_path_str)?;
 
+        let current_model_id = generator.model_id();
+
         for chunk in chunks {
             let embedding = generator.generate(&chunk.content).await?;
 
@@ -101,7 +103,8 @@ impl IncrementalIndexer {
                 chunk.language,
                 chunk.start_line,
                 chunk.end_line,
-            );
+            )
+            .with_model_id(current_model_id.clone());
 
             let metadata_id = metadata.id.clone();
             similarity.add_embedding(&metadata_id, embedding, metadata)?;
