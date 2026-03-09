@@ -246,7 +246,11 @@ test.describe('Windows: File Dialogs', () => {
     // the Win32 GetOpenFileName API.  We invoke it through the Tauri bridge and
     // confirm it either returns a result or is cancelled gracefully (null/undefined).
     const result = await page.evaluate(async () => {
-      const tauri = (window as unknown as { __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }).__TAURI__;
+      const tauri = (
+        window as unknown as {
+          __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+        }
+      ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
         // dialog:open returns the selected path(s) or null if cancelled.
@@ -266,13 +270,17 @@ test.describe('Windows: File Dialogs', () => {
     // Result is either null (user cancelled) or a path string — both are valid.
     expect(
       (result as { success: boolean }).success === true ||
-      typeof (result as { error?: string }).error === 'string',
+        typeof (result as { error?: string }).error === 'string',
     ).toBe(true);
   });
 
   test('save-file dialog can be triggered via Tauri invoke without crashing', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const tauri = (window as unknown as { __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }).__TAURI__;
+      const tauri = (
+        window as unknown as {
+          __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+        }
+      ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
         const path = await tauri.invoke('plugin:dialog|save', {
@@ -288,7 +296,7 @@ test.describe('Windows: File Dialogs', () => {
 
     expect(
       (result as { success: boolean }).success === true ||
-      typeof (result as { error?: string }).error === 'string',
+        typeof (result as { error?: string }).error === 'string',
     ).toBe(true);
   });
 
@@ -341,7 +349,11 @@ test.describe('Windows: Keyboard Shortcuts', () => {
     const palette = page
       .getByRole('dialog', { name: /command/i })
       .or(page.getByTestId('command-palette'))
-      .or(page.locator('[data-testid="command-palette"], [role="dialog"]').filter({ hasText: /search|commands/i }))
+      .or(
+        page
+          .locator('[data-testid="command-palette"], [role="dialog"]')
+          .filter({ hasText: /search|commands/i }),
+      )
       .first();
 
     const paletteVisible = await palette.isVisible({ timeout: 3000 }).catch(() => false);
@@ -382,9 +394,7 @@ test.describe('Windows: Keyboard Shortcuts', () => {
     await page.keyboard.press('Control+k');
     await page.waitForTimeout(300);
 
-    const palette = page
-      .locator('[data-testid="command-palette"], [role="dialog"]')
-      .first();
+    const palette = page.locator('[data-testid="command-palette"], [role="dialog"]').first();
 
     const wasOpen = await palette.isVisible({ timeout: 2000 }).catch(() => false);
     if (wasOpen) {
@@ -624,7 +634,11 @@ test.describe('Windows: Terminal Component', () => {
 
   test('Tauri invoke create_terminal_session uses PowerShell on Windows', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const tauri = (window as unknown as { __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }).__TAURI__;
+      const tauri = (
+        window as unknown as {
+          __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+        }
+      ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
         const session = await tauri.invoke('create_terminal_session', {
@@ -642,7 +656,7 @@ test.describe('Windows: Terminal Component', () => {
     // both are non-crash outcomes.
     expect(
       (result as { success: boolean }).success === true ||
-      typeof (result as { error?: string }).error === 'string',
+        typeof (result as { error?: string }).error === 'string',
     ).toBe(true);
   });
 
@@ -701,7 +715,11 @@ test.describe('Windows: Toast Notifications', () => {
     test.skip(process.platform !== 'win32', 'Windows only');
 
     const result = await page.evaluate(async () => {
-      const tauri = (window as unknown as { __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }).__TAURI__;
+      const tauri = (
+        window as unknown as {
+          __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+        }
+      ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
         await tauri.invoke('send_notification', {
@@ -718,7 +736,7 @@ test.describe('Windows: Toast Notifications', () => {
 
     expect(
       (result as { success: boolean }).success === true ||
-      typeof (result as { error?: string }).error === 'string',
+        typeof (result as { error?: string }).error === 'string',
     ).toBe(true);
   });
 });
@@ -755,11 +773,14 @@ test.describe('Windows: Deep Links', () => {
         );
 
         // Manually replay the URL through the handler logic.
-        const url = 'agiworkforce://auth/callback?access_token=mock-token&refresh_token=mock-refresh&type=recovery';
+        const url =
+          'agiworkforce://auth/callback?access_token=mock-token&refresh_token=mock-refresh&type=recovery';
         try {
           const parsed = new URL(url);
           const queryParams = Object.fromEntries(parsed.searchParams.entries());
-          window.dispatchEvent(new CustomEvent('agi-deep-link', { detail: { url, ...queryParams } }));
+          window.dispatchEvent(
+            new CustomEvent('agi-deep-link', { detail: { url, ...queryParams } }),
+          );
         } catch {
           // ignore
         }
@@ -848,8 +869,7 @@ test.describe('Windows: Theme Rendering', () => {
       (htmlTheme ?? '').includes('dark') ||
       (bodyClass ?? '').includes('dark');
 
-    const isLight =
-      (htmlClass ?? '').includes('light') && !(htmlClass ?? '').includes('dark');
+    const isLight = (htmlClass ?? '').includes('light') && !(htmlClass ?? '').includes('dark');
 
     // Confirm the app isn't stuck in a broken/blank state
     await expect(page.locator('#root')).toBeVisible();
@@ -874,10 +894,15 @@ test.describe('Windows: Theme Rendering', () => {
       await themeSelect.selectOption('light');
       await page.waitForTimeout(400);
 
-      const htmlClass = await page.locator('html').getAttribute('class').catch(() => '');
-      const htmlTheme = await page.locator('html').getAttribute('data-theme').catch(() => '');
-      const lightApplied =
-        (htmlClass ?? '').includes('light') || (htmlTheme ?? '') === 'light';
+      const htmlClass = await page
+        .locator('html')
+        .getAttribute('class')
+        .catch(() => '');
+      const htmlTheme = await page
+        .locator('html')
+        .getAttribute('data-theme')
+        .catch(() => '');
+      const lightApplied = (htmlClass ?? '').includes('light') || (htmlTheme ?? '') === 'light';
       expect(lightApplied).toBe(true);
     }
     expect(true).toBe(true);
@@ -897,10 +922,15 @@ test.describe('Windows: Theme Rendering', () => {
       await themeSelect.selectOption('dark');
       await page.waitForTimeout(400);
 
-      const htmlClass = await page.locator('html').getAttribute('class').catch(() => '');
-      const htmlTheme = await page.locator('html').getAttribute('data-theme').catch(() => '');
-      const darkApplied =
-        (htmlClass ?? '').includes('dark') || (htmlTheme ?? '') === 'dark';
+      const htmlClass = await page
+        .locator('html')
+        .getAttribute('class')
+        .catch(() => '');
+      const htmlTheme = await page
+        .locator('html')
+        .getAttribute('data-theme')
+        .catch(() => '');
+      const darkApplied = (htmlClass ?? '').includes('dark') || (htmlTheme ?? '') === 'dark';
       expect(darkApplied).toBe(true);
     }
     expect(true).toBe(true);
@@ -914,9 +944,12 @@ test.describe('Windows: Theme Rendering', () => {
 
     // Dispatch rapid theme toggle events
     for (let i = 0; i < 5; i++) {
-      await page.evaluate((theme) => {
-        window.dispatchEvent(new CustomEvent('agi:set-theme', { detail: { theme } }));
-      }, i % 2 === 0 ? 'dark' : 'light');
+      await page.evaluate(
+        (theme) => {
+          window.dispatchEvent(new CustomEvent('agi:set-theme', { detail: { theme } }));
+        },
+        i % 2 === 0 ? 'dark' : 'light',
+      );
       await page.waitForTimeout(100);
     }
 
@@ -1021,10 +1054,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
     expect(true).toBe(true);
   });
 
-  test('non-Windows OS does not highlight the Windows download card', async ({
-    page,
-    context,
-  }) => {
+  test('non-Windows OS does not highlight the Windows download card', async ({ page, context }) => {
     // Simulate macOS
     await context.setExtraHTTPHeaders({
       'user-agent':

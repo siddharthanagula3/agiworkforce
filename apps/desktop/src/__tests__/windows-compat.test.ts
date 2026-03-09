@@ -618,8 +618,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('creates a PowerShell session and invokes the correct command', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-pwsh-001');
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -638,8 +638,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('creates a cmd.exe session', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-cmd-001');
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -658,8 +658,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('creates a Git Bash session on Windows', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-gitbash-001');
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -678,8 +678,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('creates a WSL session on Windows', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-wsl-001');
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -698,8 +698,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('detectShells returns Windows-specific shell list', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
 
     const windowsShells = [
       {
@@ -740,8 +740,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('sends a Windows dir command to the terminal session', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce(undefined);
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -758,8 +758,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('sets USERPROFILE environment variable in a Windows terminal session', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce(undefined);
 
     const { useTerminal } = await import('../hooks/useTerminal');
@@ -777,8 +777,8 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 
   it('resizes terminal to standard Windows console dimensions', async () => {
-    const { invoke } = await import('../lib/tauri-mock');
-    const mockInvoke = vi.mocked(invoke);
+    const coreMod = await import('@tauri-apps/api/core');
+    const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce(undefined);
 
     const { useTerminal } = await import('../hooks/useTerminal');

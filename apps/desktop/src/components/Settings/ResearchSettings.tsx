@@ -73,8 +73,7 @@ async function loadResearchPrefs(): Promise<ResearchPrefs> {
       ? Number(sourcesResult.value.value)
       : 10;
 
-  const perplexityKeySet: boolean =
-    keyResult.status === 'fulfilled' ? keyResult.value : false;
+  const perplexityKeySet: boolean = keyResult.status === 'fulfilled' ? keyResult.value : false;
 
   return { mode, maxSources, perplexityKeySet };
 }
@@ -147,25 +146,28 @@ export function ResearchSettings() {
     }
   }, []);
 
-  const savePrefs = useCallback(async (updated: Partial<ResearchPrefs>) => {
-    const next = { ...prefs, ...updated };
-    setPrefs(next);
-    setPrefStatus('saving');
-    try {
-      await Promise.all([
-        invoke('set_user_preference', { key: 'research_mode', value: next.mode }),
-        invoke('set_user_preference', {
-          key: 'research_max_sources',
-          value: String(next.maxSources),
-        }),
-      ]);
-      setPrefStatus('saved');
-      setTimeout(() => setPrefStatus('idle'), 2000);
-    } catch (err) {
-      setPrefStatus('error');
-      console.error('[ResearchSettings] Failed to save prefs:', err);
-    }
-  }, [prefs]);
+  const savePrefs = useCallback(
+    async (updated: Partial<ResearchPrefs>) => {
+      const next = { ...prefs, ...updated };
+      setPrefs(next);
+      setPrefStatus('saving');
+      try {
+        await Promise.all([
+          invoke('set_user_preference', { key: 'research_mode', value: next.mode }),
+          invoke('set_user_preference', {
+            key: 'research_max_sources',
+            value: String(next.maxSources),
+          }),
+        ]);
+        setPrefStatus('saved');
+        setTimeout(() => setPrefStatus('idle'), 2000);
+      } catch (err) {
+        setPrefStatus('error');
+        console.error('[ResearchSettings] Failed to save prefs:', err);
+      }
+    },
+    [prefs],
+  );
 
   if (loading) {
     return (
@@ -205,7 +207,8 @@ export function ResearchSettings() {
         <div>
           <h4 className="text-sm font-semibold mb-0.5">Perplexity API Key</h4>
           <p className="text-xs text-muted-foreground">
-            Required to use web-grounded research. Keys are encrypted via SecretManager (Argon2id + AES-GCM) and never stored in plaintext.
+            Required to use web-grounded research. Keys are encrypted via SecretManager (Argon2id +
+            AES-GCM) and never stored in plaintext.
           </p>
         </div>
 
@@ -244,11 +247,7 @@ export function ResearchSettings() {
                 disabled={!keyInput.trim() || keyStatus === 'saving'}
                 className="shrink-0 h-9 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {keyStatus === 'saving' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Save'
-                )}
+                {keyStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
               </button>
             </div>
             {keyError && (

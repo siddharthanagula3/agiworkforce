@@ -11,7 +11,7 @@ vi.mock('sonner', () => ({
 
 const invokeMock = vi.fn();
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('../../lib/tauri-mock', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
@@ -69,10 +69,10 @@ describe('emailStore downloadAttachment', () => {
 
     expect(path).toBe('C:/tmp/report.pdf');
     expect(invokeMock).toHaveBeenCalledWith('email_download_attachment', {
-      account_id: 1,
+      accountId: 1,
       folder: 'INBOX',
       uid: 10,
-      attachment_index: 0,
+      attachmentIndex: 0,
     });
 
     const state = useEmailStore.getState();

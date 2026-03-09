@@ -90,12 +90,7 @@ function FieldInput({
       );
 
     case 'toggle':
-      return (
-        <Switch
-          checked={value as boolean}
-          onCheckedChange={(checked) => onChange(checked)}
-        />
-      );
+      return <Switch checked={value as boolean} onCheckedChange={(checked) => onChange(checked)} />;
 
     default:
       return (
@@ -239,20 +234,14 @@ export function ToolInvoker({ tool }: ToolInvokerProps) {
                   <span className="font-medium text-destructive">Error</span>
                 </>
               )}
-              {elapsed !== null && (
-                <span className="text-muted-foreground">({elapsed}ms)</span>
-              )}
+              {elapsed !== null && <span className="text-muted-foreground">({elapsed}ms)</span>}
             </div>
             <button
               type="button"
               onClick={() => void handleCopyOutput()}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              {copied ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>

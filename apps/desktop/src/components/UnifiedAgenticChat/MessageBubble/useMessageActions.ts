@@ -72,7 +72,7 @@ export function useMessageActions({
       setCopied(true);
 
       toast.success('Message copied', {
-        icon: React.createElement(Check, { className: 'h-4 w-4' }) as any,
+        icon: React.createElement(Check, { className: 'h-4 w-4' }) as React.ReactNode,
         duration: 2000,
       });
       // AUDIT-005-001 fix: Clear previous timeout before setting new one
@@ -96,7 +96,7 @@ export function useMessageActions({
     toast.success(bookmarked ? 'Bookmark removed' : 'Message bookmarked', {
       icon: (bookmarked
         ? React.createElement(Bookmark, { className: 'h-4 w-4' })
-        : React.createElement(BookmarkCheck, { className: 'h-4 w-4' })) as any,
+        : React.createElement(BookmarkCheck, { className: 'h-4 w-4' })) as React.ReactNode,
       duration: 2000,
     });
   }, [messageId, bookmarked, toggleMessageBookmark]);
