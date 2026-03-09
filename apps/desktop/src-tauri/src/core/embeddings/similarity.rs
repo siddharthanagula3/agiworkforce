@@ -52,6 +52,27 @@ impl SimilaritySearch {
             [],
         )?;
 
+        // Migration: add model_id column if missing (existing databases
+        // created before model tracking was introduced).
+        let has_model_id: bool = self
+            .db
+            .prepare("PRAGMA table_info(embeddings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|col| col == "model_id");
+
+        if !has_model_id {
+            self.db
+                .execute("ALTER TABLE embeddings ADD COLUMN model_id TEXT", [])?;
+        }
+
+        // Index on model_id for efficient same-model filtering during search.
+        // Must come AFTER the column migration above.
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_embeddings_model_id ON embeddings(model_id)",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -68,8 +89,8 @@ impl SimilaritySearch {
         self.db.execute(
             "INSERT OR REPLACE INTO embeddings
             (id, file_path, chunk_index, content, language, symbol_name, start_line, end_line,
-             embedding, dimensions, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             embedding, dimensions, created_at, updated_at, model_id)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 id,
                 metadata.file_path,
@@ -83,22 +104,56 @@ impl SimilaritySearch {
                 dimensions,
                 metadata.created_at,
                 now,
+                metadata.model_id,
             ],
         )?;
 
         Ok(())
     }
 
-    pub fn search(&self, query_embedding: Vector, limit: usize) -> Result<Vec<SearchResult>> {
-        let mut stmt = self.db.prepare(
-            "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, embedding, created_at
-             FROM embeddings",
-        )?;
+    /// Search for embeddings similar to the query vector.
+    ///
+    /// When `model_id` is `Some`, only embeddings produced by that model are
+    /// compared.  Different embedding models produce incompatible vector spaces,
+    /// so cross-model comparison is meaningless.  When `model_id` is `None`
+    /// (e.g. for legacy data), all embeddings are searched.
+    pub fn search(
+        &self,
+        query_embedding: Vector,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>> {
+        self.search_with_model(query_embedding, limit, None)
+    }
+
+    /// Search for embeddings, optionally restricting to a specific model.
+    pub fn search_with_model(
+        &self,
+        query_embedding: Vector,
+        limit: usize,
+        model_id: Option<&str>,
+    ) -> Result<Vec<SearchResult>> {
+        let (sql, has_param) = if model_id.is_some() {
+            (
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings
+                 WHERE model_id = ?1",
+                true,
+            )
+        } else {
+            (
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings",
+                false,
+            )
+        };
+
+        let mut stmt = self.db.prepare(sql)?;
 
         let mut results: Vec<SearchResult> = Vec::new();
 
-        let rows = stmt.query_map([], |row| {
+        let row_mapper = |row: &rusqlite::Row| {
             let id: String = row.get(0)?;
             let file_path: String = row.get(1)?;
             let chunk_index: i32 = row.get(2)?;
@@ -109,6 +164,7 @@ impl SimilaritySearch {
             let end_line: u32 = row.get(7)?;
             let embedding_blob: Vec<u8> = row.get(8)?;
             let created_at: i64 = row.get(9)?;
+            let row_model_id: Option<String> = row.get(10)?;
 
             Ok((
                 id,
@@ -121,8 +177,16 @@ impl SimilaritySearch {
                 end_line,
                 embedding_blob,
                 created_at,
+                row_model_id,
             ))
-        })?;
+        };
+
+        let rows: Vec<_> = if has_param {
+            stmt.query_map(params![model_id], row_mapper)?
+                .collect()
+        } else {
+            stmt.query_map([], row_mapper)?.collect()
+        };
 
         for row in rows {
             let (
@@ -136,6 +200,7 @@ impl SimilaritySearch {
                 end_line,
                 embedding_blob,
                 created_at,
+                row_model_id,
             ) = row?;
 
             let embedding = deserialize_vector(&embedding_blob)?;
@@ -152,6 +217,7 @@ impl SimilaritySearch {
                     start_line,
                     end_line,
                     created_at,
+                    model_id: row_model_id,
                 },
                 similarity,
             });
@@ -176,7 +242,7 @@ impl SimilaritySearch {
     ) -> Result<Vec<SearchResult>> {
         let mut stmt = self.db.prepare(
             "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, embedding, created_at
+                    start_line, end_line, embedding, created_at, model_id
              FROM embeddings
              WHERE file_path = ?1",
         )?;
@@ -194,6 +260,7 @@ impl SimilaritySearch {
             let end_line: u32 = row.get(7)?;
             let embedding_blob: Vec<u8> = row.get(8)?;
             let created_at: i64 = row.get(9)?;
+            let row_model_id: Option<String> = row.get(10)?;
 
             Ok((
                 id,
@@ -206,6 +273,7 @@ impl SimilaritySearch {
                 end_line,
                 embedding_blob,
                 created_at,
+                row_model_id,
             ))
         })?;
 
@@ -221,6 +289,7 @@ impl SimilaritySearch {
                 end_line,
                 embedding_blob,
                 created_at,
+                row_model_id,
             ) = row?;
 
             let embedding = deserialize_vector(&embedding_blob)?;
@@ -237,6 +306,7 @@ impl SimilaritySearch {
                     start_line,
                     end_line,
                     created_at,
+                    model_id: row_model_id,
                 },
                 similarity,
             });
@@ -273,7 +343,7 @@ impl SimilaritySearch {
     pub fn get_file_embeddings(&self, file_path: &str) -> Result<Vec<EmbeddingMetadata>> {
         let mut stmt = self.db.prepare(
             "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, created_at
+                    start_line, end_line, created_at, model_id
              FROM embeddings
              WHERE file_path = ?1
              ORDER BY chunk_index",
@@ -291,6 +361,7 @@ impl SimilaritySearch {
                     start_line: row.get(6)?,
                     end_line: row.get(7)?,
                     created_at: row.get(8)?,
+                    model_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

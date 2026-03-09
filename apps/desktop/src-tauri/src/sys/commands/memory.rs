@@ -61,6 +61,53 @@ impl MemoryState {
     }
 }
 
+/// State wrapper for the ConversationSummarizer (shared application-wide).
+///
+/// Uses `HttpSummaryLLM` as the concrete LLM backend, which implements a
+/// 3-tier fallback: Ollama local -> OpenAI cloud -> None.
+pub struct ConversationSummarizerState {
+    pub summarizer: Arc<
+        crate::core::agi::conversation_summarizer::ConversationSummarizer<
+            crate::core::agi::conversation_summarizer::HttpSummaryLLM,
+        >,
+    >,
+}
+
+impl ConversationSummarizerState {
+    /// Create a new summarizer state backed by a real MemoryStore database path.
+    pub fn new(db_path: &str, openai_api_key: Option<String>) -> Result<Self> {
+        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
+        use crate::core::agi::memory_persistence::MemoryStore;
+
+        let store = Arc::new(MemoryStore::new(db_path)?);
+        let llm = Arc::new(HttpSummaryLLM::new(openai_api_key));
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        Ok(Self {
+            summarizer: Arc::new(summarizer),
+        })
+    }
+
+    /// Create a degraded summarizer state backed by an in-memory database.
+    /// Summarization will function but without persistence across restarts.
+    pub fn new_degraded() -> Self {
+        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
+        use crate::core::agi::memory_persistence::MemoryStore;
+
+        // Use in-memory store — will not persist but won't panic either.
+        let store = Arc::new(
+            MemoryStore::new(":memory:")
+                .expect("in-memory MemoryStore should never fail to construct"),
+        );
+        let llm = Arc::new(HttpSummaryLLM::new(None));
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        Self {
+            summarizer: Arc::new(summarizer),
+        }
+    }
+}
+
 /// Store or update a memory
 ///
 /// If a memory with the same category+topic already exists, it will be updated.
