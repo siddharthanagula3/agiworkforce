@@ -656,7 +656,7 @@ mod tests {
             assert_eq!(data.file_extension, "rs");
             assert!(data.executable);
         } else {
-            panic!("Expected Code render data");
+            panic!("Expected Code render data, got: {:?}", rendered.rendered_content);
         }
 
         assert!(rendered.available_actions.contains(&ArtifactAction::Run));
@@ -686,7 +686,7 @@ mod tests {
             assert_eq!(data.row_count, 2);
             assert_eq!(data.columns.len(), 3);
         } else {
-            panic!("Expected Spreadsheet render data");
+            panic!("Expected Spreadsheet render data, got: {:?}", rendered.rendered_content);
         }
     }
 
@@ -715,7 +715,7 @@ mod tests {
             assert_eq!(data.chart_type, "bar");
             assert_eq!(data.data.len(), 2);
         } else {
-            panic!("Expected Chart render data");
+            panic!("Expected Chart render data, got: {:?}", rendered.rendered_content);
         }
     }
 }

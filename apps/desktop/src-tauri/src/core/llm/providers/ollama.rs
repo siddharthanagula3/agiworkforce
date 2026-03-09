@@ -623,7 +623,7 @@ mod tests {
                 );
             }
             Err(e) => {
-                panic!("Ollama connection FAILED: {}", e);
+                panic!("Ollama connection FAILED: {:?}", e);
             }
         }
     }
