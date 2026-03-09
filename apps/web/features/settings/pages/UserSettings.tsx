@@ -513,6 +513,7 @@ const SettingsPageContent: React.FC = () => {
                         <InteractiveHoverCard>
                           <Avatar className="h-20 w-20 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
                             {}
+                            {}
                             <AvatarImage src={profileForm.watch('avatar_url')} />
                             <AvatarFallback className="bg-accent text-lg text-foreground">
                               {profileForm

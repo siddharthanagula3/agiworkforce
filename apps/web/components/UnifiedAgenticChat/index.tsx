@@ -1140,7 +1140,11 @@ export const UnifiedAgenticChat: React.FC<{
 
           // Update billing store with new credit info
           if (payload.credits) {
-            useBillingStore.getState().updateCredits(payload.credits);
+            useBillingStore.getState().updateCredits({
+              balance_cents: payload.credits.remaining_cents,
+              daily_limit_cents: payload.credits.daily_limit ?? null,
+              daily_usage_cents: payload.credits.daily_used ?? 0,
+            });
           }
 
           const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
@@ -2390,7 +2394,11 @@ export const UnifiedAgenticChat: React.FC<{
 
         // However, for non-streaming fallback or future mixed modes, we check for credits here too
         if (response.credits) {
-          useBillingStore.getState().updateCredits(response.credits);
+          useBillingStore.getState().updateCredits({
+            balance_cents: response.credits.remaining_cents,
+            daily_limit_cents: response.credits.daily_limit ?? null,
+            daily_usage_cents: response.credits.daily_used ?? 0,
+          });
         }
 
         // Trigger a credit refresh after message is sent to update UI with fresh balance

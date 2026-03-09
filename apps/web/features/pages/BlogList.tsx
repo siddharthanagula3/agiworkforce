@@ -259,12 +259,10 @@ const BlogPage: React.FC = () => {
                 >
                   {}
                   {}
-                  {
-                    React.createElement(IconComponent as React.ComponentType<LucideProps>, {
-                      size: 16,
-                      'aria-hidden': 'true',
-                    }) as any
-                  }
+                  {React.createElement(IconComponent as React.ComponentType<LucideProps>, {
+                    size: 16,
+                    'aria-hidden': 'true',
+                  })}
                   {category.name}
                 </motion.button>
               );
