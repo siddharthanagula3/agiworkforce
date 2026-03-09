@@ -14,6 +14,56 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::sleep;
 
+/// Sanitizes a string for safe interpolation into AppleScript or shell arguments.
+/// Removes double quotes, backslashes, and other characters that could break out
+/// of string literals in AppleScript. Trims to max 200 chars to prevent abuse.
+fn sanitize_applescript_string(input: &str) -> String {
+    input
+        .chars()
+        .filter(|c| *c != '"' && *c != '\\' && *c != '\'')
+        .take(200)
+        .collect()
+}
+
+/// Validates an application name to prevent arbitrary binary execution.
+/// Only allows alphanumeric characters, hyphens, spaces, and dots.
+/// Rejects path separators and shell metacharacters.
+fn validate_app_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        return Err(anyhow!("Application name cannot be empty"));
+    }
+
+    // Reject path separators — prevents launching arbitrary binaries by path
+    if name.contains('/') || name.contains('\\') {
+        return Err(anyhow!(
+            "Application name must not contain path separators: '{}'",
+            name
+        ));
+    }
+
+    // Reject shell metacharacters
+    let forbidden = [';', '|', '&', '$', '`', '(', ')', '{', '}', '<', '>', '!', '#', '*', '?', '[', ']', '~'];
+    for ch in &forbidden {
+        if name.contains(*ch) {
+            return Err(anyhow!(
+                "Application name contains forbidden character '{}': '{}'",
+                ch,
+                name
+            ));
+        }
+    }
+
+    // Only allow alphanumeric + hyphens + spaces + dots
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == ' ' || c == '.') {
+        return Err(anyhow!(
+            "Application name contains invalid characters (only alphanumeric, hyphens, spaces, dots allowed): '{}'",
+            name
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 #[cfg(target_os = "windows")]
@@ -557,6 +607,8 @@ impl WindowCoordinator {
     pub async fn launch_application(&self, name: &str) -> Result<()> {
         use std::process::Command;
 
+        validate_app_name(name)?;
+
         // Try to run directly first
         let result = Command::new(name).spawn();
 
@@ -578,6 +630,8 @@ impl WindowCoordinator {
     /// Launches an application by name (macOS).
     #[cfg(target_os = "macos")]
     pub async fn launch_application(&self, name: &str) -> Result<()> {
+        validate_app_name(name)?;
+
         Command::new("open")
             .args(["-a", name])
             .spawn()
@@ -590,6 +644,8 @@ impl WindowCoordinator {
     /// Launches an application by name (Linux).
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     pub async fn launch_application(&self, name: &str) -> Result<()> {
+        validate_app_name(name)?;
+
         std::process::Command::new(name)
             .spawn()
             .context("Failed to launch application")?;
@@ -647,12 +703,14 @@ impl WindowCoordinator {
     /// Closes a window by title (macOS).
     #[cfg(target_os = "macos")]
     pub async fn close_window(&self, title: &str) -> Result<()> {
+        let safe_title = sanitize_applescript_string(title);
+
         let script = format!(
             r#"tell application "System Events"
                 set targetWindow to first window of (first process whose frontmost is true) whose name contains "{}"
                 click button 1 of targetWindow
             end tell"#,
-            title
+            safe_title
         );
 
         Command::new("osascript")
@@ -667,8 +725,10 @@ impl WindowCoordinator {
     /// Closes a window by title (Linux).
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     pub async fn close_window(&self, title: &str) -> Result<()> {
+        let safe_title = sanitize_applescript_string(title);
+
         std::process::Command::new("wmctrl")
-            .args(["-c", title])
+            .args(["-c", &safe_title])
             .status()
             .context("Failed to close window")?;
 
@@ -728,5 +788,52 @@ mod tests {
         assert_eq!(config.activation_timeout, Duration::from_secs(5));
         assert!(config.auto_bring_to_front);
         assert_eq!(config.activation_retries, 3);
+    }
+
+    #[test]
+    fn test_sanitize_applescript_string_removes_quotes_and_backslashes() {
+        assert_eq!(
+            sanitize_applescript_string(r#"My "Window" Title"#),
+            "My Window Title"
+        );
+        assert_eq!(
+            sanitize_applescript_string(r#"test\" ; do shell script"#),
+            "test ; do shell script"
+        );
+        assert_eq!(sanitize_applescript_string("normal title"), "normal title");
+    }
+
+    #[test]
+    fn test_sanitize_applescript_string_truncates_long_input() {
+        let long_input = "a".repeat(300);
+        assert_eq!(sanitize_applescript_string(&long_input).len(), 200);
+    }
+
+    #[test]
+    fn test_validate_app_name_rejects_path_separators() {
+        assert!(validate_app_name("/usr/bin/evil").is_err());
+        assert!(validate_app_name("..\\evil.exe").is_err());
+    }
+
+    #[test]
+    fn test_validate_app_name_rejects_shell_metacharacters() {
+        assert!(validate_app_name("app; rm -rf /").is_err());
+        assert!(validate_app_name("app | cat /etc/passwd").is_err());
+        assert!(validate_app_name("app & bg").is_err());
+        assert!(validate_app_name("$(whoami)").is_err());
+        assert!(validate_app_name("app`id`").is_err());
+    }
+
+    #[test]
+    fn test_validate_app_name_allows_valid_names() {
+        assert!(validate_app_name("Firefox").is_ok());
+        assert!(validate_app_name("Google Chrome").is_ok());
+        assert!(validate_app_name("code").is_ok());
+        assert!(validate_app_name("my-app.exe").is_ok());
+    }
+
+    #[test]
+    fn test_validate_app_name_rejects_empty() {
+        assert!(validate_app_name("").is_err());
     }
 }
