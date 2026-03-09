@@ -1,5 +1,6 @@
 use super::*;
 use crate::automation::{
+    browser::PlaywrightBridge,
     input::{lock_enigo, KeyboardSimulator, MouseSimulator},
     AutomationService,
 };
@@ -9,6 +10,7 @@ use anyhow::Result;
 use enigo::Key;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::Mutex as TokioMutex;
 use tokio::time::timeout;
 
 /// Open a URL in the system default browser using the platform-appropriate command.
@@ -40,11 +42,21 @@ fn open_url_with_platform(url: &str) -> Result<()> {
 
 pub struct TaskExecutor {
     automation: Arc<AutomationService>,
+    /// Optional CDP-controlled browser bridge for navigating within the same
+    /// browser instance that subsequent click/type actions will target.
+    /// When `None`, navigation falls back to OS-level `open` (BUG-07 fallback).
+    browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
 }
 
 impl TaskExecutor {
-    pub fn new(automation: Arc<AutomationService>) -> Result<Self> {
-        Ok(Self { automation })
+    pub fn new(
+        automation: Arc<AutomationService>,
+        browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            automation,
+            browser_bridge,
+        })
     }
 
     pub async fn execute_step(
@@ -115,11 +127,8 @@ impl TaskExecutor {
                 Ok(format!("Typed: {}", text))
             }
             Action::Navigate { url } => {
-                // BUG-07 fix: validate URL before handing to OS open to prevent
+                // BUG-07 fix: validate URL before navigation to prevent
                 // command injection and ensure the call is to a real web URL.
-                // NOTE: Full CDP-controlled navigation requires wiring PlaywrightBridge
-                // into the executor. OS-level open is the current fallback and must
-                // at least be sanitised.
                 let parsed =
                     url::Url::parse(url).map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
                 if !matches!(parsed.scheme(), "http" | "https") {
@@ -130,16 +139,36 @@ impl TaskExecutor {
                 }
                 let safe_url = parsed.as_str();
 
-                tracing::warn!(
-                    "[Executor] Navigate uses OS-level open; \
-                     subsequent CDP actions will target a different window. \
-                     Wire PlaywrightBridge into TaskExecutor to fix BUG-07 fully."
-                );
+                // Try CDP-controlled navigation first so subsequent actions
+                // (click, type, screenshot) target the same browser page.
+                if let Some(ref bridge) = self.browser_bridge {
+                    let bridge_guard = bridge.lock().await;
+                    match bridge_guard.navigate(safe_url).await {
+                        Ok(()) => {
+                            tracing::info!(
+                                "[Executor] Navigated via CDP: {}",
+                                safe_url
+                            );
+                            return Ok(format!("Navigated (CDP): {}", safe_url));
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "[Executor] CDP navigation failed ({}), \
+                                 falling back to OS open",
+                                e
+                            );
+                            // Fall through to OS-level open below
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "[Executor] No PlaywrightBridge available, \
+                         falling back to OS open"
+                    );
+                }
 
-                // M18 fix: delegate to shared helper instead of triplicating platform blocks.
                 open_url_with_platform(safe_url)?;
-
-                Ok(format!("Opened browser to {}", safe_url))
+                Ok(format!("Navigated (OS fallback): {}", safe_url))
             }
             Action::WaitForElement {
                 target,
