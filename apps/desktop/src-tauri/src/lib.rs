@@ -525,8 +525,16 @@ pub fn run() {
 
             // Scheduler state for proactive task scheduling
             let scheduler_state = SchedulerState::new();
+            // Start the background polling loop so scheduled jobs fire automatically.
+            // The loop polls every 30 seconds and dispatches any jobs whose next_run
+            // is in the past. Without this, jobs are stored but never auto-executed.
+            SchedulerState::start_background_loop(
+                scheduler_state.scheduler.clone(),
+                scheduler_state.execution_history.clone(),
+                app.handle().clone(),
+            );
             app.manage(scheduler_state);
-            tracing::info!("Scheduler initialized");
+            tracing::info!("Scheduler initialized with background execution loop");
 
             // Skills manager for AGI skill context
             app.manage(SkillsState::default());

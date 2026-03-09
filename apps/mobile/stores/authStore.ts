@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { secureStorage } from '@/lib/secureStorage';
 import { supabase } from '@/services/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -152,7 +152,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-store',
-      storage: createJSONStorage(() => mmkvStorage),
+      // Use OS keychain (expo-secure-store) for auth tokens — encrypts at rest on both
+      // iOS (Keychain) and Android (Keystore). MMKV is used for non-sensitive stores.
+      storage: createJSONStorage(() => secureStorage),
       partialize: (state) => ({
         // Only persist session — everything else is derived
         session: state.session,

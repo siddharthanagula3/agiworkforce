@@ -36,6 +36,12 @@ const COMMAND_TIMEOUTS: Record<string, number> = {
   execute_command: 120000,
 
   get_onboarding_status: 5000,
+
+  // Chat commands: blocking until the full LLM response (including agentic
+  // loops and SSE streaming) completes before returning. Use a 10-minute
+  // ceiling to cover deep-research and multi-step agentic sessions.
+  chat_send_message: 600000,
+  chat_continue_generation: 600000,
 };
 
 const RETRYABLE_COMMANDS = new Set([
