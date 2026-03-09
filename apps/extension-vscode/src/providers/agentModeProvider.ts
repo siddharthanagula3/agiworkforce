@@ -325,9 +325,8 @@ export class AgentModePanel {
     // Enforce per-session iteration cap to prevent runaway autonomous loops.
     this._iterationCount += 1;
     const maxIterations =
-      vscode.workspace
-        .getConfiguration('agiWorkforce')
-        .get<number>('agent.maxIterations') ?? AgentModePanel.DEFAULT_MAX_ITERATIONS;
+      vscode.workspace.getConfiguration('agiWorkforce').get<number>('agent.maxIterations') ??
+      AgentModePanel.DEFAULT_MAX_ITERATIONS;
 
     if (this._iterationCount > maxIterations) {
       const choice = await vscode.window.showWarningMessage(

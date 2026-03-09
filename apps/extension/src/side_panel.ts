@@ -599,7 +599,7 @@ const EVENT_ATTR_RE = /^on/i;
 const DANGEROUS_ATTR_RE = /^(srcdoc|formaction|xlink:href|data)$/i;
 
 /** Protocols allowed in href/src attributes; everything else is stripped. */
-const SAFE_URL_RE = /^(https?:|mailto:|#|\/)/i;
+const SAFE_URL_RE = /^(https?:|mailto:|#|\/(?!\/))/i;
 
 /**
  * Sanitize an HTML string using the browser's DOMParser.
