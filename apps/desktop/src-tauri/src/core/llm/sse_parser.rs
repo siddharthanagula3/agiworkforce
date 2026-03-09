@@ -953,7 +953,7 @@ mod stream_tests {
                     }
                 }
                 Err(e) => {
-                    panic!("Error in parser: {}", e);
+                    panic!("Error in parser: {:?}", e);
                 }
             }
         }
