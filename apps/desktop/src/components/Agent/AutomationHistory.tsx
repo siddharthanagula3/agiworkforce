@@ -224,7 +224,9 @@ export function AutomationHistory({ className }: AutomationHistoryProps) {
                       {run.completedAt && (
                         <span>
                           Duration:{' '}
-                          {formatDuration(new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime())}
+                          {formatDuration(
+                            new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime(),
+                          )}
                         </span>
                       )}
                       <span>{run.steps.length} steps</span>

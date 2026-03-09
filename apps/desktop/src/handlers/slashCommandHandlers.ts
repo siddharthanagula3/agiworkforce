@@ -139,8 +139,8 @@ export async function executeTerminalCommand(
     command,
     cwd: null,
     shell: null,
-    stream_id: streamId,
-    emit_events: true,
+    streamId,
+    emitEvents: true,
   })
     .then((response) => {
       const isSuccess = (response.exitCode ?? 0) === 0;

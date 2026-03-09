@@ -37,16 +37,16 @@ function ToolCard({ tool, onClick, isActive }: ToolCardProps) {
       className={cn(
         'group flex flex-col gap-3 rounded-xl border p-4 text-left transition-all',
         'hover:border-primary/50 hover:shadow-sm hover:bg-accent/30',
-        isActive
-          ? 'border-primary bg-primary/5 shadow-sm'
-          : 'border-border bg-card',
+        isActive ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-card',
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-            isActive ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary',
+            isActive
+              ? 'bg-primary/15 text-primary'
+              : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary',
             'transition-colors',
           )}
         >

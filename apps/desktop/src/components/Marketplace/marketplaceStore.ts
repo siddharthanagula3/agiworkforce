@@ -150,7 +150,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       const { filters, currentPage, pageSize } = get();
       const workflows = await invoke<PublishedWorkflow[]>('get_published_workflows', {
         category: filters.category === 'all' ? null : filters.category,
-        sort_by: filters.sortBy,
+        sortBy: filters.sortBy,
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
@@ -183,7 +183,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const workflows = await invoke<PublishedWorkflow[]>('get_my_published_workflows', {
-        user_id: userId,
+        userId,
       });
       set({ myPublishedWorkflows: workflows, isLoading: false });
     } catch (error) {
@@ -196,7 +196,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const workflow = await invoke<PublishedWorkflow>('get_workflow_by_id', {
-        workflow_id: workflowId,
+        workflowId,
       });
       set({ selectedWorkflow: workflow, isLoading: false });
     } catch (error) {
@@ -208,7 +208,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchWorkflowReviews: async (workflowId: string) => {
     try {
       const reviews = await invoke<WorkflowReview[]>('get_workflow_reviews', {
-        workflow_id: workflowId,
+        workflowId,
       });
       set({ workflowReviews: reviews });
     } catch (error) {
@@ -219,7 +219,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchWorkflowComments: async (workflowId: string) => {
     try {
       const comments = await invoke<WorkflowComment[]>('get_workflow_comments', {
-        workflow_id: workflowId,
+        workflowId,
       });
       set({ workflowComments: comments });
     } catch (error) {
@@ -230,7 +230,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchWorkflowAnalytics: async (workflowId: string) => {
     try {
       const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', {
-        workflow_id: workflowId,
+        workflowId,
       });
       set({ workflowAnalytics: analytics });
     } catch (error) {
@@ -289,13 +289,13 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       const { filters, currentPage, pageSize } = get();
       const workflows = await invoke<PublishedWorkflow[]>('search_marketplace_workflows', {
-        search_query: filters.searchQuery || null,
+        searchQuery: filters.searchQuery || null,
         category: filters.category === 'all' ? null : filters.category,
-        sort_by: filters.sortBy,
-        min_rating: filters.minRating,
+        sortBy: filters.sortBy,
+        minRating: filters.minRating,
         tags: filters.tags,
-        verified_only: filters.verifiedOnly,
-        featured_only: filters.featuredOnly,
+        verifiedOnly: filters.verifiedOnly,
+        featuredOnly: filters.featuredOnly,
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
@@ -311,10 +311,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       // MKT-007 fix: Use explicit parameter object to avoid type bypass
       const clonedId = await invoke<string>('clone_marketplace_workflow', {
-        workflow_id: request.workflow_id,
-        user_id: request.user_id,
-        user_name: request.user_name,
-        customize_title: request.customize_title,
+        workflowId: request.workflow_id,
+        userId: request.user_id,
+        userName: request.user_name,
+        customizeTitle: request.customize_title,
       });
 
       const { workflows, featuredWorkflows, trendingWorkflows } = get();
