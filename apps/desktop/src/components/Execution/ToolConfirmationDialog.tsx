@@ -139,9 +139,9 @@ export function ToolConfirmationDialog({ className }: ToolConfirmationDialogProp
 
       try {
         await invoke('respond_tool_confirmation', {
-          request_id: pendingConfirmation.request_id,
+          requestId: pendingConfirmation.request_id,
           approved,
-          remember_choice: rememberChoice,
+          rememberChoice,
           reason: reason || null,
         });
       } catch (error) {
@@ -184,7 +184,7 @@ export function ToolConfirmationDialog({ className }: ToolConfirmationDialogProp
 
     try {
       await invoke('cancel_tool_confirmation', {
-        request_id: pendingConfirmation.request_id,
+        requestId: pendingConfirmation.request_id,
       });
     } catch (error) {
       console.error('[ToolConfirmation] Failed to cancel:', error);

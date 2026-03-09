@@ -318,11 +318,14 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
         {!isCollapsed && (
           <div className="border-t border-border bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground">
             <kbd className="rounded bg-background px-1.5 py-0.5">{modKey}+Shift+E</kbd> Toggle •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+T</kbd> Thinking •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+R</kbd> Terminal •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+B</kbd> Browser •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+F</kbd> Files •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+I</kbd> Insights
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+T</kbd>{' '}
+            Thinking •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+R</kbd>{' '}
+            Terminal •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+B</kbd> Browser
+            •<kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+F</kbd> Files
+            •<kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+I</kbd>{' '}
+            Insights
           </div>
         )}
       </motion.div>
