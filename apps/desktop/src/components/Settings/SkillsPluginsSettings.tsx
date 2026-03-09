@@ -513,7 +513,7 @@ export function SkillsPluginsSettings() {
             command,
             cwd: projectRoot,
             shell: null,
-            timeout_ms: 120000,
+            timeoutMs: 120000,
           });
           if ((response.exitCode ?? 1) === 0) {
             successfulCommand = command;

@@ -207,8 +207,8 @@ export function OAuthCredentialsPanel() {
       try {
         await invoke('mcp_oauth_set_credentials', {
           provider: id,
-          client_id: clientId.trim(),
-          client_secret: clientSecret.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
         });
         setState((prev) => ({
           ...prev,

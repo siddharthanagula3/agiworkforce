@@ -192,7 +192,7 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
         description: 'Shell command to execute',
       },
       {
-        key: 'timeout_ms',
+        key: 'timeoutMs',
         label: 'Timeout (ms)',
         type: 'number',
         placeholder: '30000',
@@ -218,7 +218,7 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
         required: true,
       },
       {
-        key: 'timeout_ms',
+        key: 'timeoutMs',
         label: 'Timeout (ms)',
         type: 'number',
         placeholder: '10000',

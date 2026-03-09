@@ -185,14 +185,18 @@ describe('automationStore', () => {
     expect(useAutomationStore.getState().inspector.isActive).toBe(false);
   });
 
-  it('should manage recording state', () => {
-    const { startRecording, stopRecording } = useAutomationStore.getState();
+  it('should manage recording state', async () => {
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === 'automation_record_start') return { recordingId: 'rec-123' };
+      if (cmd === 'automation_record_stop') return { actions: [] };
+      return undefined;
+    });
 
-    startRecording();
+    await useAutomationStore.getState().startRecording();
     expect(useAutomationStore.getState().isRecording).toBe(true);
-    expect(useAutomationStore.getState().currentRecording).toBeNull();
+    expect(useAutomationStore.getState().currentRecording).not.toBeNull();
 
-    stopRecording();
+    await useAutomationStore.getState().stopRecording();
     expect(useAutomationStore.getState().isRecording).toBe(false);
   });
 });

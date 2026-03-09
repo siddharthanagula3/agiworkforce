@@ -189,9 +189,10 @@ export function useSendMessage(config: UseSendMessageConfig) {
           if (slashCommand.commandPath) {
             customSlashMetadata.commandPath = slashCommand.commandPath;
           }
-          // BUG-IX-03 fix: return early after project-command processing is complete.
-          isSlashCommand = true;
-          return;
+          // Project slash commands fall through to the normal send path below.
+          // customSlashInstructions and customSlashMetadata are consumed there
+          // (lines that prepend them into mergedCustomInstructions and attach slashCommand
+          // metadata to the user message).  Do NOT return early here — that was BUG-IX-03.
         } else {
           // BUG-IX-02 fix: declare userMessageId at the top of the enclosing else-block scope
           let userMessageId: string | undefined;

@@ -218,9 +218,10 @@ describe('ToolTimeline', () => {
 
       await user.click(screen.getByRole('button'));
 
-      expect(screen.getByText('(main.rs)')).toBeInTheDocument();
-      expect(screen.getByText('(cargo test)')).toBeInTheDocument();
-      expect(screen.getByText('(lib.rs)')).toBeInTheDocument();
+      // Args are rendered as JSON via argsFromDisplayArgs({ input: displayArgs })
+      expect(screen.getByText(/main\.rs/)).toBeInTheDocument();
+      expect(screen.getByText(/cargo test/)).toBeInTheDocument();
+      expect(screen.getByText(/lib\.rs/)).toBeInTheDocument();
     });
 
     it('renders a single entry correctly when expanded', async () => {
@@ -239,7 +240,7 @@ describe('ToolTimeline', () => {
       await user.click(screen.getByRole('button'));
 
       expect(screen.getByText('WebSearch')).toBeInTheDocument();
-      expect(screen.getByText('(rust docs)')).toBeInTheDocument();
+      expect(screen.getByText(/rust docs/)).toBeInTheDocument();
     });
   });
 
