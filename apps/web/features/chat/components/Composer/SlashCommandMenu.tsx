@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useImperativeHandle, forwardRef, useEffect } from 'react';
+import React, { useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Globe, Brain, Image, FileText, Code } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -41,10 +41,14 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
 
     const [activeIndex, setActiveIndex] = useState(0);
 
-    // Reset active index when filtered list changes
-    useEffect(() => {
-      setActiveIndex(0);
-    }, [query]);
+    // Reset active index when query changes
+    const prevQueryRef = React.useRef(query);
+    React.useEffect(() => {
+      if (prevQueryRef.current !== query) {
+        prevQueryRef.current = query;
+        if (activeIndex !== 0) setActiveIndex(0);
+      }
+    }, [query, activeIndex]);
 
     const handleSelect = useCallback(
       (id: string) => {
@@ -103,7 +107,8 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
                   'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
                   isActive ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
                 )}
-                aria-selected={isActive}
+                data-active={isActive || undefined}
+                aria-current={isActive || undefined}
               >
                 <Icon
                   className={cn(

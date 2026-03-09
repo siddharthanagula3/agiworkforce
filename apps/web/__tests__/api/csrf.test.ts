@@ -56,19 +56,17 @@ const mockSupabaseQuery = {
   eq: vi.fn().mockReturnThis(),
   is: vi.fn().mockReturnThis(),
   update: vi.fn().mockReturnThis(),
-  single: vi
-    .fn()
-    .mockResolvedValue({
-      data: {
-        id: 'mem-1',
-        content: 'test',
-        category: 'note',
-        source: 'user',
-        created_at: '2026-01-01',
-        updated_at: '2026-01-01',
-      },
-      error: null,
-    }),
+  single: vi.fn().mockResolvedValue({
+    data: {
+      id: 'mem-1',
+      content: 'test',
+      category: 'note',
+      source: 'user',
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    error: null,
+  }),
   order: vi.fn().mockResolvedValue({ data: [], error: null }),
 };
 
