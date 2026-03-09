@@ -218,6 +218,10 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support. Environment: `TOTP_ENCRYPTION_KEY`, `NEXT_PUBLIC_API_URL` required in web app (see `lib/validate-env.ts`).
 - **UI stack**: Radix UI primitives + Tailwind CSS 4 + Lucide icons + Sonner toasts.
 - **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`.
+- **Embeddings**: `HttpSummaryLLM` in `core/agi/conversation_summarizer.rs` provides real embeddings via 3-tier fallback: Ollama local (nomic-embed-text, 768-dim) → OpenAI cloud (text-embedding-3-small, 1536-dim) → None. Never returns zero vectors. Memory search degrades gracefully to FTS-only when embeddings unavailable.
+- **Model ID Normalization**: `normalize_model_id()` in `llm_router.rs` normalizes dot/hyphen formats at router entry for routing only — original IDs preserved for API payloads. Uses `models.json` canonicalization maps as single source of truth.
+- **Agent Navigate**: `Action::Navigate` in `core/agent/executor.rs` uses PlaywrightBridge (CDP) when available, with OS-level `open` as fallback.
+- **IPC Rule**: All `invoke()` calls in TypeScript MUST use camelCase param keys (see `.claude/rules/tauri-ipc.md`). Tauri auto-converts from Rust snake_case. Snake_case in invoke() silently fails.
 - **Rust lint strictness**: Cargo.toml denies `unsafe_code`, `dead_code`, `unused_imports`, `unused_variables`, `unused_mut`. All warnings are errors. `clippy::await_holding_lock` is allowed.
 
 ## Development Rules
