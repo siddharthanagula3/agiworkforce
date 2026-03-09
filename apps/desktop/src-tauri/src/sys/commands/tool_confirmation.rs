@@ -23,18 +23,13 @@ use tracing::{debug, info, warn};
 /// - **Safe**: Only read-only, non-destructive tools are allowed.
 /// - **Build**: All tools allowed, but destructive ones require user confirmation.
 /// - **Autopilot**: All tools allowed, auto-approved without prompts.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentMode {
     Safe,
+    #[default]
     Build,
     Autopilot,
-}
-
-impl Default for AgentMode {
-    fn default() -> Self {
-        AgentMode::Build
-    }
 }
 
 /// State for managing pending tool confirmation requests

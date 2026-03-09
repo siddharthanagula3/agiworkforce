@@ -76,8 +76,8 @@ impl ManagedCloudProvider {
         match trimmed.as_str() {
             m if m.starts_with("gpt-5.2-codex-") => "gpt-5.2-codex".to_string(),
             m if m.starts_with("gpt-5.3-codex-") => "gpt-5.3-codex".to_string(),
-            // Keep user-selected model ID when no alias is needed.
-            _ => model.to_string(),
+            // Keep the trimmed/lowercased model ID when no alias is needed.
+            _ => trimmed,
         }
     }
 

@@ -33,6 +33,14 @@ fn validate_app_name(name: &str) -> Result<()> {
         return Err(anyhow!("Application name cannot be empty"));
     }
 
+    // Reject relative path components
+    if name == "." || name == ".." {
+        return Err(anyhow!(
+            "Application name cannot be a relative path component: '{}'",
+            name
+        ));
+    }
+
     // Reject path separators — prevents launching arbitrary binaries by path
     if name.contains('/') || name.contains('\\') {
         return Err(anyhow!(
