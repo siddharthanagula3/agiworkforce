@@ -3,6 +3,7 @@ use crate::core::agent::{
     approval::{ApprovalController, ApprovalResolution},
     AgentConfig, AutonomousAgent, Task,
 };
+use crate::sys::commands::browser::BrowserStateWrapper;
 use crate::sys::commands::llm::LLMState;
 use anyhow::Result;
 use parking_lot::Mutex;
@@ -40,6 +41,7 @@ pub async fn agent_init(
     config: AgentConfig,
     automation: State<'_, Arc<Option<AutomationService>>>,
     llm_state: State<'_, LLMState>,
+    browser_state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
     if automation.is_none() {
         return Err(
@@ -54,8 +56,16 @@ pub async fn agent_init(
             .map_err(|e| format!("Failed to create automation service: {}", e))?,
     );
 
-    let agent = AutonomousAgent::new(config, automation_arc, router_for_agent)
-        .map_err(|e| format!("Failed to create agent: {}", e))?;
+    // Extract the PlaywrightBridge from BrowserStateWrapper if available.
+    // This allows Navigate actions to use CDP instead of OS-level open.
+    let browser_bridge = browser_state
+        .get()
+        .ok()
+        .map(|bs| bs.playwright.clone());
+
+    let agent =
+        AutonomousAgent::with_browser_bridge(config, automation_arc, router_for_agent, browser_bridge)
+            .map_err(|e| format!("Failed to create agent: {}", e))?;
 
     let agent_arc = Arc::new(TokioMutex::new(agent));
 
