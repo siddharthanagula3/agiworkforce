@@ -1,5 +1,6 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
+import { AbortError } from '@agiworkforce/utils';
 import { supabase } from './supabase';
 
 export interface StreamDelta {
@@ -32,7 +33,12 @@ function isNetworkError(err: unknown): boolean {
     // fetch throws TypeError on network failure / stream read failure
     return true;
   }
-  if (err instanceof DOMException && err.name === 'AbortError') {
+  if (
+    err instanceof AbortError ||
+    (typeof DOMException !== 'undefined' &&
+      err instanceof DOMException &&
+      err.name === 'AbortError')
+  ) {
     // AbortError from the user or timeout controller — not a network error
     return false;
   }
@@ -172,13 +178,18 @@ export async function streamChat(
       callbacks.onReconnecting?.(attempt);
 
       await new Promise<void>((resolve, reject) => {
+        // If already aborted, skip the wait entirely
+        if (combinedSignal.aborted) {
+          reject(new AbortError('Aborted during reconnect backoff'));
+          return;
+        }
         const tid = setTimeout(resolve, delay);
         // Cancel the wait if the signal aborts during backoff
         combinedSignal.addEventListener(
           'abort',
           () => {
             clearTimeout(tid);
-            reject(new DOMException('Aborted during reconnect backoff', 'AbortError'));
+            reject(new AbortError('Aborted during reconnect backoff'));
           },
           { once: true },
         );
