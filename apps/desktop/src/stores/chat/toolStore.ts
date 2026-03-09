@@ -609,17 +609,18 @@ export const useToolStore = create<ToolState>()(
                 if (!hash || !signature) {
                   return;
                 }
-                const workflow =
-                  state.trustedWorkflows[hash] ??
-                  ({
+                const existing = state.trustedWorkflows[hash];
+                if (existing) {
+                  if (!existing.actionSignatures.includes(signature)) {
+                    existing.actionSignatures.push(signature);
+                  }
+                } else {
+                  state.trustedWorkflows[hash] = {
                     hash,
                     createdAt: new Date(),
-                    actionSignatures: [],
-                  } as TrustedWorkflow);
-                if (!workflow.actionSignatures.includes(signature)) {
-                  workflow.actionSignatures.push(signature);
+                    actionSignatures: [signature],
+                  };
                 }
-                state.trustedWorkflows[hash] = workflow;
               },
               undefined,
               'tool/recordTrustedAction',

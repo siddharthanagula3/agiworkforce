@@ -1029,11 +1029,20 @@ async function handleRegister(
           return existingSession;
         }
 
-        const { data: dbSession } = await supabase
+        // Wrap DB query with timeout to prevent indefinite hangs if Supabase is slow/unresponsive
+        const DB_QUERY_TIMEOUT_MS = 10_000;
+        const dbQuery = supabase
           .from('signaling_sessions')
           .select('*')
           .eq('code', message.code)
           .single();
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Rehydration DB query timed out')),
+            DB_QUERY_TIMEOUT_MS,
+          ),
+        );
+        const { data: dbSession } = await Promise.race([dbQuery, timeout]);
 
         if (!dbSession) {
           return null;
