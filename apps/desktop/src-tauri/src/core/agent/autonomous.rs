@@ -1,4 +1,5 @@
 use super::*;
+use crate::automation::browser::PlaywrightBridge;
 use crate::automation::AutomationService;
 use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
@@ -8,7 +9,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
-use tokio::sync::{oneshot, Notify, RwLock};
+use tokio::sync::{oneshot, Mutex as TokioMutex, Notify, RwLock};
 use tokio::time::sleep;
 
 use super::background_tasks::{AutonomousTaskCheckpoint, TaskStorage};
@@ -62,6 +63,9 @@ pub struct AutonomousAgent {
     /// When set, the agent saves a checkpoint after each successful step
     /// so tasks can be resumed across app restarts.
     task_storage: Option<Arc<TaskStorage>>,
+    /// Optional CDP browser bridge for in-process navigation.
+    /// Shared with the `TaskExecutor` so Navigate actions target the CDP-controlled browser.
+    browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
 }
 
 impl AutonomousAgent {
@@ -70,8 +74,19 @@ impl AutonomousAgent {
         automation: Arc<AutomationService>,
         router: Arc<RwLock<LLMRouter>>,
     ) -> Result<Self> {
+        Self::with_browser_bridge(config, automation, router, None)
+    }
+
+    /// Creates an `AutonomousAgent` with an optional CDP browser bridge.
+    /// When provided, `Action::Navigate` uses CDP instead of OS-level open.
+    pub fn with_browser_bridge(
+        config: AgentConfig,
+        automation: Arc<AutomationService>,
+        router: Arc<RwLock<LLMRouter>>,
+        browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
+    ) -> Result<Self> {
         let planner = TaskPlanner::new(router.clone())?;
-        let executor = TaskExecutor::new(automation.clone())?;
+        let executor = TaskExecutor::new(automation.clone(), browser_bridge.clone())?;
         let vision = VisionAutomation::new()?;
         let approval = ApprovalManager::new(config.clone());
 
@@ -89,6 +104,7 @@ impl AutonomousAgent {
             task_notify: Arc::new(Notify::new()),
             app_handle: None,
             task_storage: None,
+            browser_bridge,
         })
     }
 
@@ -1176,7 +1192,7 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
             router: self.router.clone(),
             planner: TaskPlanner::new(self.router.clone())
                 .map_err(|e| anyhow!("TaskPlanner creation failed: {}", e))?,
-            executor: TaskExecutor::new(self.automation.clone())
+            executor: TaskExecutor::new(self.automation.clone(), self.browser_bridge.clone())
                 .map_err(|e| anyhow!("TaskExecutor creation failed: {}", e))?,
             vision: VisionAutomation::new()
                 .map_err(|e| anyhow!("VisionAutomation creation failed: {}", e))?,
@@ -1187,6 +1203,7 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
             task_notify: self.task_notify.clone(),
             app_handle: self.app_handle.clone(),
             task_storage: self.task_storage.clone(),
+            browser_bridge: self.browser_bridge.clone(),
         })
     }
 
