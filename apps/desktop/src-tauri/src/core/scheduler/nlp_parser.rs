@@ -246,17 +246,28 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     if let Some(caps) = RE_AT_TIME.captures(input) {
         let time = parse_time_from_captures(&caps)?;
         let now = Local::now();
-        let mut target = now
+        let target = now
             .date_naive()
             .and_time(time)
             .and_local_timezone(Local)
             .single()
             .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?;
 
-        // If the time has passed today, schedule for tomorrow
-        if target <= now {
-            target += Duration::days(1);
-        }
+        // If the time has passed today, schedule for tomorrow.
+        // Use calendar-day arithmetic (succ_opt) instead of Duration::days(1)
+        // to correctly handle DST transitions where a day may not be exactly 24 hours.
+        let target = if target <= now {
+            let tomorrow = now.date_naive().succ_opt().ok_or_else(|| {
+                ParseError::InvalidDate("Cannot compute next day".to_string())
+            })?;
+            tomorrow
+                .and_time(time)
+                .and_local_timezone(Local)
+                .single()
+                .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?
+        } else {
+            target
+        };
 
         return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));
     }
@@ -264,7 +275,9 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     // Pattern: "tomorrow at HH:MM"
     if let Some(caps) = RE_TOMORROW_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
-        let tomorrow = Local::now().date_naive() + Duration::days(1);
+        let tomorrow = Local::now().date_naive().succ_opt().ok_or_else(|| {
+            ParseError::InvalidDate("Cannot compute next day".to_string())
+        })?;
         let target = tomorrow
             .and_time(time)
             .and_local_timezone(Local)
@@ -610,7 +623,7 @@ mod tests {
                 let expected = Utc::now() + Duration::minutes(5);
                 assert!((dt - expected).num_seconds().abs() < 2);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -622,7 +635,7 @@ mod tests {
                 let expected = Utc::now() + Duration::hours(2);
                 assert!((dt - expected).num_seconds().abs() < 2);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -634,7 +647,7 @@ mod tests {
                 let expected = Utc::now() + Duration::days(3);
                 assert!((dt - expected).num_seconds().abs() < 2);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -646,7 +659,7 @@ mod tests {
                 let expected = Utc::now() + Duration::weeks(2);
                 assert!((dt - expected).num_seconds().abs() < 2);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -658,7 +671,7 @@ mod tests {
                 let expected = Utc::now() + Duration::minutes(1);
                 assert!((dt - expected).num_seconds().abs() < 2);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -673,7 +686,7 @@ mod tests {
                 assert_eq!(local.hour(), 15);
                 assert_eq!(local.minute(), 0);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -686,7 +699,7 @@ mod tests {
                 assert_eq!(local.hour(), 9);
                 assert_eq!(local.minute(), 0);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -699,7 +712,7 @@ mod tests {
                 assert_eq!(local.hour(), 15);
                 assert_eq!(local.minute(), 30);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -713,7 +726,7 @@ mod tests {
                 assert_eq!(local.date_naive(), tomorrow);
                 assert_eq!(local.hour(), 9);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -725,7 +738,7 @@ mod tests {
                 let local = dt.with_timezone(&Local);
                 assert_eq!(local.weekday(), Weekday::Mon);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -738,7 +751,7 @@ mod tests {
                 assert_eq!(local.weekday(), Weekday::Fri);
                 assert_eq!(local.hour(), 14);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -751,7 +764,7 @@ mod tests {
                 assert_eq!(local.month(), 1);
                 assert_eq!(local.day(), 15);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -765,7 +778,7 @@ mod tests {
                 assert_eq!(local.day(), 25);
                 assert_eq!(local.hour(), 10);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -778,7 +791,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert!(duration_approx_eq(d, Duration::hours(1)));
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -789,7 +802,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert!(duration_approx_eq(d, Duration::minutes(30)));
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -800,7 +813,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert!(duration_approx_eq(d, Duration::days(1)));
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -813,7 +826,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 8 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -824,7 +837,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 1");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -835,7 +848,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 1");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -846,7 +859,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 5");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -857,7 +870,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 15 * * 5");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -868,7 +881,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -879,7 +892,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 18 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -890,7 +903,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 * * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -901,7 +914,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 1");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -912,7 +925,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 1 * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -925,7 +938,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 8 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -936,7 +949,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 18 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -947,7 +960,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 22 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -958,7 +971,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 14 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -969,7 +982,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 12 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -980,7 +993,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 0 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -991,7 +1004,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 1-5");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1002,7 +1015,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 0,6");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1014,7 +1027,7 @@ mod tests {
         assert!(result.is_err());
         match result {
             Err(ParseError::InvalidExpression(_)) => {}
-            _ => panic!("Expected InvalidExpression error"),
+            other => panic!("Expected InvalidExpression error, got: {:?}", other),
         }
     }
 
@@ -1117,7 +1130,7 @@ mod tests {
                 assert_eq!(local.hour(), 10);
                 assert_eq!(local.minute(), 0);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -1129,7 +1142,7 @@ mod tests {
                 let local = dt.with_timezone(&Local);
                 assert_eq!(local.weekday(), Weekday::Fri);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -1143,7 +1156,7 @@ mod tests {
                 assert_eq!(local.hour(), 17);
                 assert_eq!(local.minute(), 0);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -1158,7 +1171,7 @@ mod tests {
                 assert_eq!(local.hour(), 9);
                 assert_eq!(local.minute(), 30);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
@@ -1174,7 +1187,7 @@ mod tests {
                 ParsedSchedule::Cron(expr) => {
                     assert_eq!(expr, "0 12 * * *");
                 }
-                _ => panic!("Expected Cron schedule"),
+                other => panic!("Expected Cron schedule, got: {:?}", other),
             }
         } else {
             // "noon" is not a recognized time format, use "daily at 12pm" instead
@@ -1183,7 +1196,7 @@ mod tests {
                 ParsedSchedule::Cron(expr) => {
                     assert_eq!(expr, "0 12 * * *");
                 }
-                _ => panic!("Expected Cron schedule"),
+                other => panic!("Expected Cron schedule, got: {:?}", other),
             }
         }
     }
@@ -1195,7 +1208,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 12 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1206,7 +1219,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 0 * * *");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1219,7 +1232,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 17 * * 5");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1230,7 +1243,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 10 * * 0");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1241,7 +1254,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 9 * * 6");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1254,7 +1267,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 3600);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1265,7 +1278,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 1800);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1276,7 +1289,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 900);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1287,7 +1300,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 60);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1298,7 +1311,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 1);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1309,7 +1322,7 @@ mod tests {
             ParsedSchedule::Interval(d) => {
                 assert_eq!(d.num_seconds(), 7 * 24 * 60 * 60);
             }
-            _ => panic!("Expected Interval schedule"),
+            other => panic!("Expected Interval schedule, got: {:?}", other),
         }
     }
 
@@ -1355,7 +1368,7 @@ mod tests {
                 assert!((dt - now).num_seconds().abs() < 2);
             }
             Err(_) => {} // Also acceptable
-            _ => panic!("Unexpected result type"),
+            other => panic!("Unexpected result type, got: {:?}", other),
         }
     }
 
@@ -1380,7 +1393,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 8 * * 1-5");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1391,7 +1404,7 @@ mod tests {
             ParsedSchedule::Cron(expr) => {
                 assert_eq!(expr, "0 8 * * 0,6");
             }
-            _ => panic!("Expected Cron schedule"),
+            other => panic!("Expected Cron schedule, got: {:?}", other),
         }
     }
 
@@ -1406,7 +1419,7 @@ mod tests {
                 let local = dt.with_timezone(&Local);
                 assert_eq!(local.hour(), 0);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
 
         // 12pm should be noon (12:00)
@@ -1416,7 +1429,7 @@ mod tests {
                 let local = dt.with_timezone(&Local);
                 assert_eq!(local.hour(), 12);
             }
-            _ => panic!("Expected Once schedule"),
+            other => panic!("Expected Once schedule, got: {:?}", other),
         }
     }
 
