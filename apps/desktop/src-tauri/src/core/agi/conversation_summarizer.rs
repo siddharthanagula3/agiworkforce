@@ -644,11 +644,19 @@ impl SummaryLLM for HttpSummaryLLM {
 
                     match resp {
                         Ok(r) if r.status().is_success() => {
-                            let body: serde_json::Value = r.json().await.unwrap_or_default();
-                            body["choices"][0]["message"]["content"]
-                                .as_str()
-                                .unwrap_or("")
-                                .to_string()
+                            match r.json::<serde_json::Value>().await {
+                                Ok(body) => body["choices"][0]["message"]["content"]
+                                    .as_str()
+                                    .unwrap_or("")
+                                    .to_string(),
+                                Err(e) => {
+                                    tracing::warn!("Failed to parse OpenAI chat response: {}", e);
+                                    return Ok(ExtractionResult {
+                                        memories: Vec::new(),
+                                        summary: String::new(),
+                                    });
+                                }
+                            }
                         }
                         Ok(r) => {
                             tracing::warn!("OpenAI chat returned status {}", r.status());
