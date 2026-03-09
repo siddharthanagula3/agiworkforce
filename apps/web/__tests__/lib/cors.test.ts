@@ -98,7 +98,7 @@ describe('CORS', () => {
 
       expect(headers['Access-Control-Allow-Methods']).toBe('GET, POST, PUT, DELETE, OPTIONS');
       expect(headers['Access-Control-Allow-Headers']).toBe(
-        'Content-Type, Authorization, X-Request-ID',
+        'Content-Type, Authorization, X-Request-ID, x-csrf-token',
       );
       expect(headers['Access-Control-Max-Age']).toBe('86400');
     });

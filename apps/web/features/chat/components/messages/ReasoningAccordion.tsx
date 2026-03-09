@@ -53,6 +53,7 @@ export function ReasoningAccordion({
   const prevStreamingRef = useRef(isStreaming);
 
   // Auto-expand when streaming starts (unless user manually collapsed)
+
   useEffect(() => {
     if (isStreaming && !prevStreamingRef.current && !hasUserCollapsed) {
       setIsOpen(true);

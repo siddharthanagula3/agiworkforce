@@ -37,8 +37,8 @@ interface SpeechRecognitionInstance extends EventTarget {
 function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance) | null {
   if (typeof window === 'undefined') return null;
 
-  const w = window as any;
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+  const w = window as unknown as Record<string, (new () => SpeechRecognitionInstance) | undefined>;
+  return w['SpeechRecognition'] ?? w['webkitSpeechRecognition'] ?? null;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     };
 
     recognition.onerror = (event) => {
-      const err = (event as any).error as string | undefined;
+      const err = (event as unknown as { error?: string }).error;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         setError('Microphone permission denied. Please allow access in your browser settings.');
       } else if (err === 'no-speech') {
