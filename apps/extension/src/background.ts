@@ -650,8 +650,7 @@ async function handleMessageAsync(
       // The new URL will be picked up automatically on the next handleChatMessage()
       // call because getAgiBridgeBaseUrl() reads from storage at invocation time.
       // Log for debugging and acknowledge.
-      const changedMsg = message as ExtensionMessage & { url?: string };
-      logger.info('Bridge URL updated', { url: changedMsg.url ?? '(default)' });
+      logger.info('Bridge URL updated', { url: message.url ?? '(default)' });
       return { success: true } as ExtensionResponse;
     }
 
@@ -1261,7 +1260,7 @@ async function captureCurrentPage(): Promise<void> {
  * back to all extension views (the side panel listens via chrome.runtime.onMessage).
  */
 /** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
-const DEFAULT_AGI_BRIDGE_URL = 'ws://localhost:8765';
+const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
 
 /**
  * Resolve the configured bridge URL from storage, falling back to the default.
@@ -1272,13 +1271,11 @@ async function getAgiBridgeBaseUrl(): Promise<string> {
     chrome.storage.local.get('agi_bridge_url', (result) => {
       const raw = (result['agi_bridge_url'] as string | undefined)?.trim();
       if (!raw) {
-        resolve('http://localhost:8765');
+        resolve(DEFAULT_AGI_BRIDGE_URL);
         return;
       }
       // Accept ws://, wss://, http://, https:// — normalise to http(s)://
-      const normalized = raw
-        .replace(/^wss:\/\//, 'https://')
-        .replace(/^ws:\/\//, 'http://');
+      const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
       // Strip trailing slash
       resolve(normalized.replace(/\/$/, ''));
     });
@@ -1321,16 +1318,44 @@ async function handleChatMessage(
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
 
   // Resolve the API key: prefer the value forwarded from the side panel,
-  // then fall back to chrome.storage.local so background-initiated requests work too.
+  // then check chrome.storage.session (where side_panel.ts now persists keys),
+  // then fall back to chrome.storage.local for keys saved by older versions.
   const resolvedApiKey: string | null = await new Promise((resolve) => {
     if (apiKey) {
       resolve(apiKey);
       return;
     }
-    chrome.storage.local.get('agi_api_key', (result) => {
-      const stored = (result['agi_api_key'] as string | undefined)?.trim();
-      resolve(stored ?? null);
-    });
+    try {
+      chrome.storage.session.get('agi_api_key', (sessionResult) => {
+        if (chrome.runtime.lastError) {
+          logger.warn('Failed to read API key from session storage', {
+            error: chrome.runtime.lastError.message,
+          });
+          resolve(null);
+          return;
+        }
+        const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
+        if (sessionStored) {
+          resolve(sessionStored);
+          return;
+        }
+        // Fallback: check local storage for a key saved by an older version.
+        try {
+          chrome.storage.local.get('agi_api_key', (localResult) => {
+            if (chrome.runtime.lastError) {
+              resolve(null);
+              return;
+            }
+            const localStored = (localResult['agi_api_key'] as string | undefined)?.trim();
+            resolve(localStored ?? null);
+          });
+        } catch {
+          resolve(null);
+        }
+      });
+    } catch {
+      resolve(null);
+    }
   });
 
   try {
@@ -1356,7 +1381,6 @@ async function handleChatMessage(
         streamed = true;
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
-        let accumulated = '';
 
         while (true) {
           const { value, done } = await reader.read();
@@ -1375,7 +1399,6 @@ async function handleChatMessage(
               };
               const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
               if (delta) {
-                accumulated += delta;
                 broadcastChunk(delta, false);
               }
               if (parsed.done || parsed.choices?.[0]?.finish_reason === 'stop') {
