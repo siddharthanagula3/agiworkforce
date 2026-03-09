@@ -362,9 +362,9 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
         let candidates = router.candidates(&request, &preferences);
         drop(router);
 
-        if !candidates.is_empty() {
+        if let Some(candidate) = candidates.first() {
             let router = self.router.read().await;
-            if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
+            if let Ok(outcome) = router.invoke_candidate(candidate, &request).await {
                 let response = outcome.response.content.trim();
                 if let Some(process_type) = ProcessType::from_str(response) {
                     return Ok(process_type);
