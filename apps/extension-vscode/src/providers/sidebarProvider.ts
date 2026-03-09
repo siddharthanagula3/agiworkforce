@@ -688,6 +688,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         await this._handleWebviewMessage(msg);
       },
     );
+
+    // Clean up resources when the webview view is disposed (sidebar closed)
+    webviewView.onDidDispose(() => {
+      this._messageListener?.dispose();
+      delete this._messageListener;
+      this._currentCancelSource?.cancel();
+      this._currentCancelSource?.dispose();
+      delete this._currentCancelSource;
+      delete this._view;
+    });
   }
 
   private async _handleWebviewMessage(msg: WebviewToExtMessage): Promise<void> {
