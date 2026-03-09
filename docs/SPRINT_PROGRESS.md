@@ -199,8 +199,7 @@ Status: COMPLETE
 
 **Review findings deferred:**
 
-- S2 (HIGH-functional): `HttpSummaryLLM::extract_memories` returns empty — needs full LLM wiring (not a quick fix, deferred to next sprint)
-- S7 (LOW): Embedding dimension mismatch (768 vs 1536) — pre-existing architectural issue, cosine_similarity returns 0.0 for mismatched dims (safe, not corrupting)
+- NONE — S2 and S7 were resolved post-review (see Additional fixes section below)
 
 **Post-review build verification:** cargo check PASS, tsc --noEmit PASS
 
