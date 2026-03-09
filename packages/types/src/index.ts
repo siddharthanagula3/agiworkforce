@@ -26,3 +26,12 @@ export * from './customModel';
 
 // Tool event types for the agentic chat pipeline (matches Rust ToolEvent enum)
 export * from './tool-events';
+
+// Agent session and status tracking types
+export * from './agent-status';
+
+// Authentication types (sessions, tokens, bridge messages)
+export * from './auth';
+
+// Voice types (providers, config, transcription)
+export * from './voice';
