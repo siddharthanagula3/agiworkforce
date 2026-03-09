@@ -148,7 +148,7 @@ export class SecurityManager {
       if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
         window.crypto.getRandomValues(nonce);
       } else if (typeof globalThis !== 'undefined' && 'crypto' in globalThis) {
-        (globalThis as any).crypto.getRandomValues(nonce);
+        (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(nonce);
       } else {
         throw new Error('No cryptographically secure random number generator available');
       }
@@ -545,7 +545,7 @@ export class SecurityManager {
     } else if (typeof globalThis !== 'undefined' && 'crypto' in globalThis) {
       const array = new Uint8Array(length);
 
-      (globalThis as any).crypto.getRandomValues(array);
+      (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(array);
       return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
 

@@ -32,9 +32,14 @@ export function ThinkingBlock({
 
   // Auto-collapse once streaming ends (unless user has manually toggled)
   const userToggledRef = useRef(false);
+  const prevStreamingRef = useRef(isStreaming);
+
   useEffect(() => {
-    if (!isStreaming && !userToggledRef.current) {
-      setExpanded(false);
+    if (prevStreamingRef.current !== isStreaming) {
+      prevStreamingRef.current = isStreaming;
+      if (!isStreaming && !userToggledRef.current) {
+        setExpanded(false);
+      }
     }
   }, [isStreaming]);
 

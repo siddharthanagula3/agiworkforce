@@ -74,6 +74,18 @@ vi.mock('@/lib/error-handler', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock: CreditService — allow by default (sufficient credits)
+// ---------------------------------------------------------------------------
+vi.mock('@/lib/services/credit-service', () => ({
+  CreditService: {
+    checkAvailable: vi.fn().mockResolvedValue(true),
+    getBalance: vi.fn().mockResolvedValue({ credits_remaining_cents: 10000 }),
+    deductCredits: vi.fn().mockResolvedValue({ success: true }),
+    generateIdempotencyKey: vi.fn().mockReturnValue('test-idempotency-key'),
+  },
+}));
+
+// ---------------------------------------------------------------------------
 // Mock: global fetch (used for provider API calls)
 // ---------------------------------------------------------------------------
 const mockFetch = vi.fn();

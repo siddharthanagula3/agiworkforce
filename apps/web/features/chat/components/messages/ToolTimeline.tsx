@@ -109,6 +109,7 @@ function ToolItem({ tool }: { tool: ToolEntry }) {
       )}
 
       {/* Tool icon */}
+      {}
       <Icon
         className={cn(
           'w-3 h-3 shrink-0',

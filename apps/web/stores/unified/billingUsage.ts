@@ -148,9 +148,7 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
 
   dismissAlert: (id: string) => {
     set((state) => ({
-      budgetAlerts: state.budgetAlerts.map((a) =>
-        a.id === id ? { ...a, dismissed: true } : a,
-      ),
+      budgetAlerts: state.budgetAlerts.map((a) => (a.id === id ? { ...a, dismissed: true } : a)),
     }));
   },
 
