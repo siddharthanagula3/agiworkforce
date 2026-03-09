@@ -63,7 +63,7 @@ export const FloatingChat = () => {
             content: trimmed,
             userId,
             attachments: [],
-            conversation_id: activeConversationId ? uuidToDbId(activeConversationId) : null,
+            conversationId: activeConversationId ? uuidToDbId(activeConversationId) : null,
             stream: true,
             enableTools: true,
           },
