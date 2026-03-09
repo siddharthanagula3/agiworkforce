@@ -32,8 +32,10 @@
 //! ```
 
 use chrono::{DateTime, Duration, Utc};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 
 use crate::sys::error::{Error, Result};
@@ -437,6 +439,195 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
         let config = self.config.read().await.clone();
         self.summarize_conversation(conversation_id, project_id, &config)
             .await
+    }
+}
+
+// =============================================================================
+// PRODUCTION HTTP LLM IMPLEMENTATION
+// =============================================================================
+
+/// Ollama embedding API response
+#[derive(Debug, Deserialize)]
+struct OllamaEmbedResponse {
+    embeddings: Vec<Vec<f32>>,
+}
+
+/// OpenAI embedding API response
+#[derive(Debug, Deserialize)]
+struct OpenAIEmbeddingResponse {
+    data: Vec<OpenAIEmbeddingData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIEmbeddingData {
+    embedding: Vec<f32>,
+}
+
+/// Production SummaryLLM implementation that generates real embeddings via HTTP.
+///
+/// Uses a 3-tier fallback strategy:
+/// 1. Ollama local embeddings (nomic-embed-text, no API key needed)
+/// 2. OpenAI embeddings (text-embedding-3-small, requires API key)
+/// 3. Returns None (honest "no embedding available")
+///
+/// NEVER returns zero vectors — that corrupts similarity search.
+pub struct HttpSummaryLLM {
+    http_client: Client,
+    ollama_url: String,
+    openai_api_key: Option<String>,
+}
+
+impl HttpSummaryLLM {
+    /// Create a new HttpSummaryLLM with optional OpenAI API key.
+    pub fn new(openai_api_key: Option<String>) -> Self {
+        let http_client = Client::builder()
+            .timeout(StdDuration::from_secs(10))
+            .build()
+            .unwrap_or_default();
+
+        Self {
+            http_client,
+            ollama_url: "http://localhost:11434".to_string(),
+            openai_api_key,
+        }
+    }
+
+    /// Tier 1: Generate embedding via Ollama (local, no API key needed)
+    async fn generate_ollama_embedding(&self, text: &str) -> std::result::Result<Vec<f32>, String> {
+        let url = format!("{}/api/embed", self.ollama_url);
+
+        let body = serde_json::json!({
+            "model": "nomic-embed-text",
+            "input": text
+        });
+
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&body)
+            .timeout(StdDuration::from_secs(5))
+            .send()
+            .await
+            .map_err(|e| format!("Ollama request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(format!("Ollama error {}: {}", status, body_text));
+        }
+
+        let result: OllamaEmbedResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+
+        result
+            .embeddings
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No embeddings in Ollama response".to_string())
+    }
+
+    /// Tier 2: Generate embedding via OpenAI (requires API key)
+    async fn generate_openai_embedding(&self, text: &str) -> std::result::Result<Vec<f32>, String> {
+        let api_key = self
+            .openai_api_key
+            .as_ref()
+            .ok_or_else(|| "No OpenAI API key available".to_string())?;
+
+        let body = serde_json::json!({
+            "model": "text-embedding-3-small",
+            "input": text
+        });
+
+        let response = self
+            .http_client
+            .post("https://api.openai.com/v1/embeddings")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&body)
+            .timeout(StdDuration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| format!("OpenAI request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(format!("OpenAI error {}: {}", status, body_text));
+        }
+
+        let result: OpenAIEmbeddingResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse OpenAI response: {}", e))?;
+
+        result
+            .data
+            .into_iter()
+            .next()
+            .map(|d| d.embedding)
+            .ok_or_else(|| "No embeddings in OpenAI response".to_string())
+    }
+}
+
+#[async_trait::async_trait]
+impl SummaryLLM for HttpSummaryLLM {
+    async fn extract_memories(
+        &self,
+        _prompt: &str,
+        _conversation_content: &str,
+    ) -> Result<ExtractionResult> {
+        // Memory extraction requires a full LLM call which is handled separately
+        // by the chat pipeline. This implementation focuses on embeddings.
+        Ok(ExtractionResult {
+            memories: Vec::new(),
+            summary: String::new(),
+        })
+    }
+
+    /// Generate embeddings with 3-tier fallback:
+    /// 1. Ollama local (nomic-embed-text, 768-dim)
+    /// 2. OpenAI cloud (text-embedding-3-small, 1536-dim)
+    /// 3. None (no embedding available — honest, no zero vectors)
+    async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
+        if text.trim().is_empty() {
+            tracing::debug!("Skipping embedding generation for empty text");
+            return Ok(None);
+        }
+
+        // Tier 1: Try Ollama local embeddings
+        match self.generate_ollama_embedding(text).await {
+            Ok(embedding) => {
+                tracing::debug!(
+                    "Generated Ollama embedding ({} dimensions)",
+                    embedding.len()
+                );
+                return Ok(Some(embedding));
+            }
+            Err(e) => {
+                tracing::debug!("Ollama embedding unavailable, trying OpenAI: {}", e);
+            }
+        }
+
+        // Tier 2: Try OpenAI embeddings
+        match self.generate_openai_embedding(text).await {
+            Ok(embedding) => {
+                tracing::debug!(
+                    "Generated OpenAI embedding ({} dimensions)",
+                    embedding.len()
+                );
+                return Ok(Some(embedding));
+            }
+            Err(e) => {
+                tracing::debug!("OpenAI embedding unavailable: {}", e);
+            }
+        }
+
+        // Tier 3: No embedding available — return None (NOT zero vectors)
+        tracing::warn!(
+            "No embedding provider available. Memory will use FTS-only search."
+        );
+        Ok(None)
     }
 }
 

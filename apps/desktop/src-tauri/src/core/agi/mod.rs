@@ -45,7 +45,7 @@ pub use checkpoint_store::CheckpointStore;
 pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
 pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
 pub use conversation_summarizer::{
-    ConversationSummarizer, ExtractedMemory, ExtractionResult, SummarizationRun,
+    ConversationSummarizer, ExtractedMemory, ExtractionResult, HttpSummaryLLM, SummarizationRun,
     SummarizationStatus, SummaryLLM, DEFAULT_EXTRACTION_PROMPT,
 };
 pub use core::AGICore;
