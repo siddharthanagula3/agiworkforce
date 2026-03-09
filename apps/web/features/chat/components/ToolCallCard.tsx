@@ -9,7 +9,7 @@
  * No Tauri or framer-motion dependencies — plain Tailwind + React.
  */
 
-import React, { useState, memo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -194,8 +194,8 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   );
   const [copied, setCopied] = useState(false);
 
-  const ToolIcon = getToolIcon(toolCall.name);
-  const statusConfig = getStatusConfig(toolCall.status);
+  const ToolIcon = useMemo(() => getToolIcon(toolCall.name), [toolCall.name]);
+  const statusConfig = useMemo(() => getStatusConfig(toolCall.status), [toolCall.status]);
   const hasParameters = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
   const needsApproval = toolCall.status === 'awaiting_approval';
   const canCancel = toolCall.status === 'running' && onCancel;
@@ -253,6 +253,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
         <span className={statusConfig.colorClass}>{statusConfig.icon}</span>
 
         {/* Tool icon + name */}
+        {}
         <ToolIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

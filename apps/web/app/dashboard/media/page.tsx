@@ -77,7 +77,11 @@ async function pollVideoStatus(taskId: string, maxAttempts = 60): Promise<VideoS
 
     const status = (await res.json()) as VideoStatusResponse;
 
-    if (status.status === 'completed' || status.status === 'failed' || status.status === 'timeout') {
+    if (
+      status.status === 'completed' ||
+      status.status === 'failed' ||
+      status.status === 'timeout'
+    ) {
       return status;
     }
   }
@@ -220,10 +224,7 @@ function ImagePanel({ generating, results, onGenerate }: ImagePanelProps) {
             Images
           </Label>
           <Select value={count} onValueChange={setCount} disabled={generating}>
-            <SelectTrigger
-              id="image-count"
-              className="w-20 bg-zinc-900 border-zinc-700"
-            >
+            <SelectTrigger id="image-count" className="w-20 bg-zinc-900 border-zinc-700">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -265,7 +266,6 @@ function ImagePanel({ generating, results, onGenerate }: ImagePanelProps) {
                   key={idx}
                   className="group relative overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={src}
                     alt={`Generated image ${idx + 1}`}
@@ -389,7 +389,8 @@ function VideoPanel({ generating, videoUrl, videoProgress, onGenerate }: VideoPa
 
       <div className="flex items-center justify-between gap-4">
         <p className="text-xs text-zinc-500">
-          Video generation is async. You will see progress below — it typically takes 30–120 seconds.
+          Video generation is async. You will see progress below — it typically takes 30–120
+          seconds.
         </p>
         <Button
           type="submit"
@@ -434,12 +435,7 @@ function VideoPanel({ generating, videoUrl, videoProgress, onGenerate }: VideoPa
         <div className="mt-6 space-y-3">
           <h3 className="text-sm font-medium text-zinc-300">Result</h3>
           <div className="rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
-            <video
-              src={videoUrl}
-              controls
-              className="w-full"
-              preload="metadata"
-            >
+            <video src={videoUrl} controls className="w-full" preload="metadata">
               Your browser does not support the video tag.
             </video>
             <div className="flex items-center justify-end gap-2 p-3 border-t border-zinc-700">
@@ -479,7 +475,10 @@ export default function MediaPage() {
   // Image generation handler
   // ---------------------------------------------------------------------------
   const handleGenerateImage = useCallback(
-    async (prompt: string, options: { provider: string; size: string; style: string; quality: string; n: number }) => {
+    async (
+      prompt: string,
+      options: { provider: string; size: string; style: string; quality: string; n: number },
+    ) => {
       setImageGenerating(true);
       setImageResults([]);
 
@@ -543,7 +542,10 @@ export default function MediaPage() {
   // Video generation handler
   // ---------------------------------------------------------------------------
   const handleGenerateVideo = useCallback(
-    async (prompt: string, options: { provider: string; duration_secs: number; resolution: string }) => {
+    async (
+      prompt: string,
+      options: { provider: string; duration_secs: number; resolution: string },
+    ) => {
       setVideoGenerating(true);
       setVideoUrl(null);
       setVideoProgress(null);
@@ -599,10 +601,9 @@ export default function MediaPage() {
         } else if (statusResult.status === 'failed') {
           toast.error(statusResult.error ?? 'Video generation failed.', { id: toastId });
         } else if (statusResult.status === 'timeout') {
-          toast.error(
-            statusResult.error ?? 'Video generation timed out. Please try again.',
-            { id: toastId },
-          );
+          toast.error(statusResult.error ?? 'Video generation timed out. Please try again.', {
+            id: toastId,
+          });
         } else {
           toast.error('Unknown video status. Please try again.', { id: toastId });
         }

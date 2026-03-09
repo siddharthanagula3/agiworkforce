@@ -37,7 +37,8 @@ function useCommands(): CommandOption[] {
   const { toggleSimpleMode, simpleMode } = useUIStore();
 
   // Use platform-appropriate modifier key symbol for shortcut labels
-  const mod = typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+';
+  const mod =
+    typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+';
 
   return [
     {
