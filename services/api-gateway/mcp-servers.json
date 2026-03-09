@@ -1,0 +1,40 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem",
+      "description": "Read, write, and search files on the server. Provides directory listing, file reading, file writing, and search capabilities.",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/mcp-workspace"],
+        "env": {}
+      },
+      "enabled": false
+    },
+    {
+      "id": "fetch",
+      "name": "Web Fetch",
+      "description": "Fetch content from URLs on the web. Supports GET requests and returns page content as text.",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-fetch"],
+        "env": {}
+      },
+      "enabled": false
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "description": "Persistent memory using a knowledge graph. Store and retrieve entities, relations, and observations.",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-memory"],
+        "env": {}
+      },
+      "enabled": false
+    }
+  ]
+}
