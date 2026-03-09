@@ -30,7 +30,7 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "devDependencies": {
-    "@types/chrome": "^0.0.261",
+    "@types/chrome": "^0.1.37",
     "jsdom": "^27.4.0",
     "terser": "^5.46.0",
     "typescript": "5.9.3",
