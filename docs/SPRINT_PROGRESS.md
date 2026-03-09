@@ -227,16 +227,18 @@ Status: COMPLETE
 - [x] Chrome extension API key in session storage
 - [x] All panics improved (were test-only, not production)
 
-**P0 issues deferred:**
+**P0 issues deferred:** NONE
 
-- HttpSummaryLLM::extract_memories needs LLM wiring (returns empty)
-- HttpSummaryLLM needs wiring into lib.rs ConversationSummarizer construction
-- Embedding dimension mismatch (768 vs 1536) pre-existing architectural issue
+**Additional fixes (post-review):**
 
-**Build status post-sprint:** ALL GREEN (cargo check, clippy, tsc --noEmit)
+- extract_memories now calls Ollama/OpenAI LLM for real memory extraction
+- normalize_embedding_dim() pads Ollama 768-dim to 1536 DEFAULT_EMBEDDING_DIM
+- Eliminates dimension mismatch that corrupted cosine similarity
+
+**Build status post-sprint:** ALL GREEN (cargo check, clippy -D warnings, tsc --noEmit)
 
 **Recommended next sprint:**
 
-1. Wire HttpSummaryLLM into lib.rs + implement extract_memories with real LLM call
-2. Unify embedding dimensions (pick one model, re-index)
-3. Fix pre-existing web app TS errors in lib/ai-sdk/
+1. Wire ConversationSummarizer<HttpSummaryLLM> into lib.rs managed state
+2. Fix pre-existing web app TS errors in lib/ai-sdk/
+3. Add integration tests for embedding fallback chain
