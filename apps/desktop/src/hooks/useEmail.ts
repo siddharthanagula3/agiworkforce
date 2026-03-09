@@ -7,7 +7,7 @@
  * @module useEmail
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -213,7 +213,7 @@ export function useEmail(): UseEmailReturn {
       try {
         const messageId = await invoke<string>('email_send_message', {
           request: {
-            account_id: request.accountId,
+            accountId: request.accountId,
             to: request.to,
             cc: request.cc ?? [],
             bcc: request.bcc ?? [],

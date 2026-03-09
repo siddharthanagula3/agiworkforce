@@ -545,8 +545,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           try {
             await invoke<PendingUserMessage | null>('chat_pop_pending_message', {
               request: {
-                conversation_id: targetConversationId,
-                pending_message_id: pendingMessage.id,
+                conversationId: targetConversationId,
+                pendingMessageId: pendingMessage.id,
               },
             });
           } catch (backendErr) {
@@ -839,7 +839,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
           // Use the hook's capture function directly
           const result = await invoke<CaptureResult>('capture_screen_full', {
-            conversation_id: conversationDbId,
+            conversationId: conversationDbId,
           });
 
           return await handleScreenCapture(result);
@@ -884,7 +884,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         const pendingMsg = await invoke<PendingUserMessage>('chat_add_pending_message', {
           request: {
             content: messageContent,
-            conversation_id: conversationDbId,
+            conversationId: conversationDbId,
           },
         });
 
