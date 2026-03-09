@@ -397,18 +397,18 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.19.15",
     "@types/vscode": "^1.95.0",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.0.0",
-    "esbuild": "^0.25.0",
-    "eslint": "^9.0.0",
+    "esbuild": "^0.27.3",
+    "eslint": "^9.39.4",
     "rimraf": "^6.0.0",
-    "typescript": "^5.8.0",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
 }
