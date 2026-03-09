@@ -23,16 +23,22 @@ pub struct Checkpoint {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateCheckpointRequest {
+    #[serde(alias = "conversationId")]
     pub conversation_id: i64,
+    #[serde(alias = "checkpointName")]
     pub checkpoint_name: String,
     pub description: Option<String>,
+    #[serde(default, alias = "parentCheckpointId")]
     pub parent_checkpoint_id: Option<String>,
+    #[serde(default, alias = "branchName")]
     pub branch_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RestoreCheckpointRequest {
+    #[serde(alias = "checkpointId")]
     pub checkpoint_id: String,
+    #[serde(alias = "conversationId")]
     pub conversation_id: i64,
 }
 

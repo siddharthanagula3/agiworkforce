@@ -96,11 +96,11 @@ export function CheckpointManager({
     try {
       await invoke('checkpoint_create', {
         request: {
-          conversation_id: conversationId,
-          checkpoint_name: newCheckpointName.trim(),
+          conversationId: conversationId,
+          checkpointName: newCheckpointName.trim(),
           description: newCheckpointDescription.trim() || null,
-          parent_checkpoint_id: null,
-          branch_name: null,
+          parentCheckpointId: null,
+          branchName: null,
         },
       });
 
@@ -134,8 +134,8 @@ export function CheckpointManager({
       try {
         await invoke('checkpoint_restore', {
           request: {
-            checkpoint_id: checkpointId,
-            conversation_id: conversationId,
+            checkpointId: checkpointId,
+            conversationId: conversationId,
           },
         });
 
