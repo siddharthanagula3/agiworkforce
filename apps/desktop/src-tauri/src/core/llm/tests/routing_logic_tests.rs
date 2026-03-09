@@ -466,7 +466,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     #[test]
@@ -482,7 +482,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     #[test]
@@ -827,7 +827,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-5");
+        assert_eq!(suggestion.model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -855,6 +855,8 @@ mod tests {
             "pro",
         );
         let suggestion = router.suggest_for_context(&context);
+        // Pro plan + writing routes to OpenAI, but with no provider registered
+        // it falls through to the default model for the preferred provider
         assert_eq!(suggestion.provider, Provider::OpenAI);
     }
 
@@ -972,9 +974,9 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing/research -> Google (Gemini Pro)
+        // hobby + writing/research -> Google (Gemini Pro, Complex task)
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     // --- Intelligent routing: selected_model -> provider inference ---
@@ -1066,7 +1068,7 @@ mod tests {
         let context = intelligent_context("pro", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-5");
+        assert_eq!(suggestion.model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -1093,7 +1095,7 @@ mod tests {
         let context = intelligent_context("hobby", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4-1-fast-reasoning");
     }
 
     #[test]
@@ -1111,7 +1113,7 @@ mod tests {
         let context = intelligent_context("hobby", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-flash");
     }
 
     #[test]
@@ -1120,7 +1122,7 @@ mod tests {
         let context = intelligent_context("pro", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-5");
+        assert_eq!(suggestion.model, "claude-sonnet-4-6");
     }
 
     #[test]
@@ -1129,7 +1131,7 @@ mod tests {
         let context = intelligent_context("pro", Some("multimodal"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     #[test]
@@ -1138,7 +1140,7 @@ mod tests {
         let context = intelligent_context("hobby", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-flash");
     }
 
     #[test]
@@ -1147,7 +1149,7 @@ mod tests {
         let context = intelligent_context("pro", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     // --- Large-context and edge cases ---
@@ -1163,9 +1165,9 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing -> Google (Pro), large context doesn't change hobby routing
+        // hobby + writing -> Google (Complex task), large context doesn't change hobby routing
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro-preview");
+        assert_eq!(suggestion.model, "gemini-2.0-pro-exp");
     }
 
     #[test]

@@ -108,10 +108,10 @@ fn detect_runner(root: &Path) -> TestRunner {
             }
         }
         // Check if bun is installed and bun.lock exists
-        if root.join("bun.lock").exists() || root.join("bun.lockb").exists() {
-            if which::which("bun").is_ok() {
-                return TestRunner::Bun;
-            }
+        if (root.join("bun.lock").exists() || root.join("bun.lockb").exists())
+            && which::which("bun").is_ok()
+        {
+            return TestRunner::Bun;
         }
     }
     if root.join("pyproject.toml").exists()
@@ -444,8 +444,7 @@ fn parse_pytest_failures(raw: &str) -> Vec<TestFailure> {
     let mut failures = Vec::new();
 
     for line in raw.lines() {
-        if line.starts_with("FAILED ") {
-            let rest = &line["FAILED ".len()..];
+        if let Some(rest) = line.strip_prefix("FAILED ") {
             if let Some((loc, msg)) = rest.split_once(" - ") {
                 let (file, name) = if let Some((f, _name)) = loc.split_once("::") {
                     (Some(f.to_string()), loc.to_string())
