@@ -3,7 +3,9 @@ use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
     McpToolRegistry,
 };
-use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::commands::tool_confirmation::{
+    request_tool_confirmation, request_tool_confirmation_no_mode_gate, ToolConfirmationState,
+};
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 use base64::Engine as _;
 use parking_lot::Mutex;
@@ -710,9 +712,17 @@ pub async fn mcp_connect_server(
         undo_description: Some("Disconnect the MCP server".to_string()),
     };
 
-    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
-        .await
-        .map_err(|e| e.to_string())?;
+    // MCP server connection is a user-initiated Settings action, not an agent
+    // tool call. Skip the agent-mode gate (which blocks non-read-only tools in
+    // Safe mode) and go straight to auto-approve / remembered-choice / dialog.
+    let approved = request_tool_confirmation_no_mode_gate(
+        &app,
+        &confirmation_state,
+        confirmation,
+        120,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     if !approved {
         return Err("MCP server connection cancelled".to_string());

@@ -1,5 +1,4 @@
 // AI Employee Chat Interface
-// Demonstrates AI Employee interaction with inline types
 
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -87,10 +86,34 @@ export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({ employee, userId
     setIsTyping(true);
 
     try {
-      // Simulate AI response (executor integration deferred to runtime wiring)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Build conversation history from existing messages (last 20, excluding the welcome)
+      const conversationHistory = messages
+        .filter((m) => m.sender_type === 'user' || m.sender_type === 'employee')
+        .filter((m) => m.id !== 'welcome-001')
+        .slice(-20)
+        .map((m) => ({
+          role: (m.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: m.message,
+        }));
 
-      const responseMessage = `I understand your request: "${currentInput}". I'm processing this as ${employee.name}. How else can I help you?`;
+      const response = await fetch('/api/agents/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          message: currentInput,
+          conversationHistory,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error((errData as { error?: string }).error || `HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as { response?: string; content?: string };
+      const responseMessage =
+        data.response || data.content || 'I processed your request. How else can I help?';
 
       const employeeMessage: ChatMessageLocal = {
         id: `employee-${Date.now()}`,
@@ -110,7 +133,7 @@ export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({ employee, userId
         session_id: 'session-001',
         sender_type: 'employee',
         sender_id: employee.id,
-        message: `I'm sorry, but I encountered an unexpected error: ${(error as Error).message}. Please try again.`,
+        message: `I'm sorry, but I encountered an error: ${(error as Error).message}. Please try again.`,
         message_type: 'system',
         metadata: { error: true },
         created_at: new Date().toISOString(),
