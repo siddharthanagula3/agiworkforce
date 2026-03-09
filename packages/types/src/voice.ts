@@ -6,9 +6,6 @@
  * - Mobile (expo-av recording + server transcription)
  * - Chrome Extension (Web Speech API)
  *
- * Each platform uses different underlying implementations, but the type
- * contracts are consistent to enable shared logic and UI patterns.
- *
  * @module voice
  * @packageDocumentation
  */
@@ -17,11 +14,20 @@
  * Voice/transcription provider identifier.
  *
  * - `deepgram` — Deepgram Nova API (desktop + mobile direct)
- * - `whisper` — OpenAI Whisper (local or cloud, via Rust backend or API gateway)
- * - `web-speech` — Browser Web Speech API (chrome extension, desktop fallback)
+ * - `whisper` — OpenAI Whisper (cloud, via Rust backend or API gateway)
+ * - `local-whisper` — Local Whisper model (via Rust backend)
+ * - `openai` — OpenAI audio API
+ * - `web-speech` / `browser` — Browser Web Speech API (chrome extension, desktop fallback)
  * - `system` — Platform-native speech recognition (expo-speech on mobile, OS-level on desktop)
  */
-export type VoiceProvider = 'deepgram' | 'whisper' | 'web-speech' | 'system';
+export type VoiceProvider =
+  | 'deepgram'
+  | 'whisper'
+  | 'local-whisper'
+  | 'openai'
+  | 'web-speech'
+  | 'browser'
+  | 'system';
 
 /**
  * Configuration for a voice input session.
@@ -33,6 +39,10 @@ export interface VoiceConfig {
   language?: string;
   /** Provider-specific model identifier (e.g., 'nova-3', 'whisper-1') */
   model?: string;
+  /** Audio sample rate in Hz */
+  sampleRate?: number;
+  /** Number of audio channels */
+  channels?: number;
 }
 
 /**
@@ -46,13 +56,13 @@ export interface TranscriptionResult {
   /** The transcribed text */
   text: string;
   /** Confidence score from 0.0 to 1.0 (not all providers supply this) */
-  confidence: number;
+  confidence?: number;
   /** Detected or configured language code */
   language?: string;
   /** Duration of the audio that was transcribed, in milliseconds */
-  durationMs: number;
+  durationMs?: number;
   /** Which provider performed the transcription */
-  provider: string;
+  provider?: string;
 }
 
 /**
@@ -71,4 +81,11 @@ export interface VoiceState {
   error: string | null;
   /** The most recent transcription result, or null if none yet */
   lastTranscription: TranscriptionResult | null;
+}
+
+/** Voice metering event data */
+export interface VoiceMeteringEvent {
+  metering: number;
+  durationMillis: number;
+  isDoneRecording: boolean;
 }

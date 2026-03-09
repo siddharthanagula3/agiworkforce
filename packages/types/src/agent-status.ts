@@ -27,6 +27,9 @@
  */
 export type AgentSessionStatus = 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
 
+/** Possible states of an agent */
+export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
+
 /**
  * Represents a single agent execution session.
  *
@@ -119,4 +122,29 @@ export interface AgentStatusSummary {
 
   /** Total number of tracked agent sessions. */
   total: number;
+}
+
+// ============================================================================
+// Active Agent & Task Assignment
+// ============================================================================
+
+/** Represents an active agent with its current state */
+export interface ActiveAgent {
+  id: string;
+  name: string;
+  status: AgentStatus;
+  currentTask?: string;
+  progress?: number;
+  lastActivity?: Date;
+}
+
+/** Task assigned to an agent */
+export interface TaskAssignment {
+  taskId: string;
+  agentId: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  createdAt: Date;
+  updatedAt: Date;
 }
