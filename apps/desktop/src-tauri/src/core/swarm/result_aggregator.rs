@@ -70,10 +70,11 @@ impl SubtaskResult {
 }
 
 /// Strategy for aggregating results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AggregationStrategy {
     /// Merge all successful results into one.
+    #[default]
     MergeAll,
     /// Use the first successful result.
     FirstSuccess,
@@ -85,12 +86,6 @@ pub enum AggregationStrategy {
     Majority,
     /// Custom aggregation function.
     Custom,
-}
-
-impl Default for AggregationStrategy {
-    fn default() -> Self {
-        Self::MergeAll
-    }
 }
 
 /// Aggregated result from parallel execution.

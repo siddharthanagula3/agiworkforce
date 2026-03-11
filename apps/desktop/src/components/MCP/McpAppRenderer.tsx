@@ -37,6 +37,18 @@ interface IframeInboundMessage {
   data: unknown;
 }
 
+// ─── URL Safety ──────────────────────────────────────────────────────────────
+
+const safeMcpHref = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    if (!['https:', 'http:'].includes(parsed.protocol)) return '#';
+    return url;
+  } catch {
+    return '#';
+  }
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_HEIGHT = 300;
@@ -191,7 +203,7 @@ const McpAppRendererComponent: React.FC<McpAppRendererProps> = ({ app, className
       {isUrl && isLoaded && !hasError && (
         <div className="absolute bottom-2 right-2">
           <a
-            href={app.content.payload}
+            href={safeMcpHref(app.content.payload)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-2 py-1 text-xs text-white hover:bg-black/90 transition-colors"

@@ -1,0 +1,264 @@
+name: AGI Workforce Bot
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  process:
+    if: |
+      (startsWith(github.event.comment.body, '/agi ') || github.event.comment.body == '/agi') &&
+      (github.event.issue.pull_request != null || github.event.pull_request != null)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse command
+        id: parse
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          COMMAND=$(echo "$COMMENT" | sed 's|^/agi *||' | head -1)
+          if [ -z "$COMMAND" ]; then
+            COMMAND="help"
+          fi
+          echo "command=$COMMAND" >> $GITHUB_OUTPUT
+
+      - name: React to comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes'
+            });
+
+      - name: Handle help command
+        if: steps.parse.outputs.command == 'help'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const helpText = '## AGI Workforce Bot\n\nAvailable commands:\n- `/agi help` - Show this help message\n- `/agi review` - Review the PR for code quality and common issues\n- `/agi explain` - Explain the changes in this PR\n- `/agi check` - Run build checks and report status\n- `/agi stats` - Show PR statistics (files changed, lines, complexity)';
+            const issueNumber = context.issue.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: helpText
+            });
+
+      - name: Handle explain command
+        if: steps.parse.outputs.command == 'explain'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            let summary = '## PR Change Summary\n\n';
+            let totalAdditions = 0;
+            let totalDeletions = 0;
+
+            const byType = {};
+            for (const file of files) {
+              totalAdditions += file.additions;
+              totalDeletions += file.deletions;
+              const ext = file.filename.split('.').pop() || 'other';
+              byType[ext] = (byType[ext] || 0) + 1;
+            }
+
+            summary += `**${files.length}** files changed: **+${totalAdditions}** / **-${totalDeletions}**\n\n`;
+            summary += '### Files by type\n';
+            for (const [ext, count] of Object.entries(byType).sort((a, b) => b[1] - a[1])) {
+              summary += `- .${ext}: ${count} files\n`;
+            }
+
+            summary += '\n### Changed files\n';
+            for (const file of files.slice(0, 30)) {
+              const status = file.status === 'added' ? '(new)' : file.status === 'removed' ? '(removed)' : '(modified)';
+              summary += `- ${status} ${file.filename} (+${file.additions}/-${file.deletions})\n`;
+            }
+            if (files.length > 30) {
+              summary += `\n...and ${files.length - 30} more files\n`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+
+      - name: Handle stats command
+        if: steps.parse.outputs.command == 'stats'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const { data: commits } = await github.rest.pulls.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            let stats = '## PR Statistics\n\n';
+            stats += '| Metric | Value |\n';
+            stats += '|--------|-------|\n';
+            stats += `| Commits | ${commits.length} |\n`;
+            stats += `| Files changed | ${files.length} |\n`;
+            stats += `| Additions | +${pr.additions} |\n`;
+            stats += `| Deletions | -${pr.deletions} |\n`;
+            stats += `| Reviews | ${reviews.length} |\n`;
+            const mergeableIcon = pr.mergeable ? 'OK' : 'CONFLICT';
+            const draftStatus = pr.draft ? 'Yes' : 'No';
+            stats += `| Mergeable | ${mergeableIcon} |\n`;
+            stats += `| Draft | ${draftStatus} |\n`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: stats
+            });
+
+      - name: Handle check command
+        if: steps.parse.outputs.command == 'check'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: checks } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.payload.pull_request?.head.sha || context.sha
+            });
+
+            let report = '## Build Check Status\n\n';
+            if (checks.check_runs.length === 0) {
+              report += 'No check runs found for this commit.\n';
+            } else {
+              report += '| Check | Status | Conclusion |\n';
+              report += '|-------|--------|------------|\n';
+              for (const run of checks.check_runs) {
+                const icon = run.conclusion === 'success' ? 'PASS' :
+                             run.conclusion === 'failure' ? 'FAIL' : 'PENDING';
+                report += `| ${run.name} | ${run.status} | ${icon} |\n`;
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: report
+            });
+
+      - name: Handle review command
+        if: steps.parse.outputs.command == 'review'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            let review = '## Automated PR Review\n\n';
+
+            const issues = [];
+            for (const file of files) {
+              if (file.filename.endsWith('.env') || file.filename.endsWith('.env.local') ||
+                  file.filename.includes('credentials') || file.filename.includes('secrets')) {
+                issues.push(`SECURITY: ${file.filename} may contain secrets`);
+              }
+              if (file.additions > 500) {
+                issues.push(`SIZE: ${file.filename} has ${file.additions}+ additions - consider splitting`);
+              }
+              if (file.filename.includes('node_modules') || file.filename.includes('.git')) {
+                issues.push(`ARTIFACTS: ${file.filename} may be unnecessary`);
+              }
+            }
+
+            if (issues.length > 0) {
+              review += '### Issues Found\n\n';
+              for (const issue of issues) {
+                review += `- ${issue}\n`;
+              }
+            } else {
+              review += 'No obvious issues found.\n';
+            }
+
+            review += '\n### Summary\n';
+            review += `- Files changed: ${files.length}\n`;
+
+            const rustFiles = files.filter(f => f.filename.endsWith('.rs')).length;
+            const tsFiles = files.filter(f => f.filename.endsWith('.ts') || f.filename.endsWith('.tsx')).length;
+            const ymlFiles = files.filter(f => f.filename.endsWith('.yml') || f.filename.endsWith('.yaml')).length;
+
+            if (rustFiles > 0) review += `- Rust files: ${rustFiles}\n`;
+            if (tsFiles > 0) review += `- TypeScript files: ${tsFiles}\n`;
+            if (ymlFiles > 0) review += `- YAML files: ${ymlFiles}\n`;
+
+            review += '\nNote: This is a basic automated review. For deep code analysis, request a human review.';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: review
+            });
+
+      - name: Unknown command handler
+        if: |
+          steps.parse.outputs.command != 'help' &&
+          steps.parse.outputs.command != 'review' &&
+          steps.parse.outputs.command != 'explain' &&
+          steps.parse.outputs.command != 'check' &&
+          steps.parse.outputs.command != 'stats'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const command = '${{ steps.parse.outputs.command }}';
+            const response = `Unknown command: ${command}\n\nType /agi help to see available commands.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: response
+            });

@@ -268,7 +268,11 @@ impl ProjectManager {
         Ok(())
     }
 
-    pub fn add_document(&self, project_id: &str, file_path: &str) -> Result<KnowledgeDocument> {
+    pub async fn add_document(
+        &self,
+        project_id: &str,
+        file_path: &str,
+    ) -> Result<KnowledgeDocument> {
         let path = PathBuf::from(file_path);
         let file_name = path
             .file_name()
@@ -307,7 +311,8 @@ impl ProjectManager {
             let mut chunk_with_embedding = chunk;
             let embedding = self
                 .rag_engine
-                .generate_embedding(&chunk_with_embedding.content)?;
+                .generate_embedding(&chunk_with_embedding.content)
+                .await?;
             chunk_with_embedding.embedding = Some(embedding);
             self.knowledge_base.add_chunk(chunk_with_embedding)?;
         }
@@ -315,13 +320,13 @@ impl ProjectManager {
         Ok(document)
     }
 
-    pub fn search_knowledge(
+    pub async fn search_knowledge(
         &self,
         project_id: &str,
         query: &str,
         top_k: usize,
     ) -> Result<Vec<super::rag::RAGResult>> {
-        let query_embedding = self.rag_engine.generate_embedding(query)?;
+        let query_embedding = self.rag_engine.generate_embedding(query).await?;
 
         let documents = self.knowledge_base.get_project_documents(project_id)?;
         let mut all_chunks = Vec::new();

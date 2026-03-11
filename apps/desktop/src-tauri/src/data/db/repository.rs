@@ -71,10 +71,13 @@ pub fn update_conversation_title(
     user_id: &str,
     title: String,
 ) -> Result<()> {
-    conn.execute(
+    let updated = conn.execute(
         "UPDATE conversations SET title = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND user_id = ?3",
         params![title, id, user_id],
     )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
     Ok(())
 }
 
@@ -191,10 +194,13 @@ pub fn delete_message(conn: &Connection, id: i64) -> Result<()> {
 }
 
 pub fn update_message_content(conn: &Connection, id: i64, content: String) -> Result<Message> {
-    conn.execute(
+    let updated = conn.execute(
         "UPDATE messages SET content = ?1 WHERE id = ?2",
         params![content, id],
     )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
 
     get_message(conn, id)
 }

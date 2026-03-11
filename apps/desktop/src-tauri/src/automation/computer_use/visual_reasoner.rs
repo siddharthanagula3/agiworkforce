@@ -11,13 +11,13 @@ use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::timeout;
 
 use crate::automation::screen::{capture_primary_screen, capture_region, CapturedImage};
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
-    ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider,
+    ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 
 use super::types::{ElementBounds, ScreenAnalysis, ScreenElement};
@@ -81,7 +81,7 @@ pub struct ScreenObservation {
 
 /// The Visual Reasoner analyzes screenshots to understand screen content.
 pub struct VisualReasoner {
-    llm_router: Arc<Mutex<LLMRouter>>,
+    llm_router: Arc<RwLock<LLMRouter>>,
     config: VisualReasonerConfig,
     /// Cached last observation for quick reference.
     last_observation: Mutex<Option<ScreenObservation>>,
@@ -89,7 +89,7 @@ pub struct VisualReasoner {
 
 impl VisualReasoner {
     /// Creates a new visual reasoner with the given LLM router and configuration.
-    pub fn new(llm_router: Arc<Mutex<LLMRouter>>, config: VisualReasonerConfig) -> Self {
+    pub fn new(llm_router: Arc<RwLock<LLMRouter>>, config: VisualReasonerConfig) -> Self {
         Self {
             llm_router,
             config,
@@ -98,7 +98,7 @@ impl VisualReasoner {
     }
 
     /// Creates a visual reasoner with default configuration.
-    pub fn with_defaults(llm_router: Arc<Mutex<LLMRouter>>) -> Self {
+    pub fn with_defaults(llm_router: Arc<RwLock<LLMRouter>>) -> Self {
         Self::new(llm_router, VisualReasonerConfig::default())
     }
 
@@ -419,7 +419,7 @@ If not found:
 
     /// Calls the vision LLM with an image and prompt.
     async fn call_vision_llm(&self, prompt: &str, image_base64: &str) -> Result<String> {
-        let router = self.llm_router.lock().await;
+        let router = self.llm_router.read().await;
 
         let image_bytes = general_purpose::STANDARD
             .decode(image_base64)
@@ -457,8 +457,8 @@ If not found:
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {
-            provider: Some(Provider::Anthropic),
-            model: Some("claude-sonnet-4-5".to_string()),
+            provider: None,
+            model: None,
             strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
             context: Some(crate::core::llm::llm_router::RouterContext {
                 requires_vision: true,
@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn test_percent_to_pixels() {
-        let llm_router = Arc::new(Mutex::new(LLMRouter::new()));
+        let llm_router = Arc::new(RwLock::new(LLMRouter::new()));
         let reasoner = VisualReasoner::with_defaults(llm_router);
 
         let bounds_json = serde_json::json!({
@@ -699,7 +699,7 @@ mod tests {
 
     #[test]
     fn test_extract_json() {
-        let llm_router = Arc::new(Mutex::new(LLMRouter::new()));
+        let llm_router = Arc::new(RwLock::new(LLMRouter::new()));
         let reasoner = VisualReasoner::with_defaults(llm_router);
 
         // Test markdown-wrapped JSON

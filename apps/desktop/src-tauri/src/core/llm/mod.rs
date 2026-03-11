@@ -25,6 +25,9 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
 
+/// Default Ollama base URL used across the codebase.
+pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMRequest {
     pub messages: Vec<ChatMessage>,
@@ -183,9 +186,10 @@ impl AudioFormat {
 }
 
 /// Voice options for text-to-speech audio output
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AudioVoice {
+    #[default]
     Alloy,
     Echo,
     Fable,
@@ -197,12 +201,6 @@ pub enum AudioVoice {
     Coral,
     Sage,
     Verse,
-}
-
-impl Default for AudioVoice {
-    fn default() -> Self {
-        Self::Alloy
-    }
 }
 
 /// Configuration for audio output (text-to-speech)
@@ -578,6 +576,16 @@ pub enum Provider {
     Zhipu,
     Mistral,
     ManagedCloud,
+    Groq,
+    Together,
+    Fireworks,
+    Cerebras,
+    DeepInfra,
+    Cohere,
+    AI21,
+    Sambanova,
+    Azure,
+    Bedrock,
 }
 
 impl Provider {
@@ -596,6 +604,16 @@ impl Provider {
             Provider::Zhipu => "zhipu",
             Provider::Mistral => "mistral",
             Provider::ManagedCloud => "managed_cloud",
+            Provider::Groq => "groq",
+            Provider::Together => "together",
+            Provider::Fireworks => "fireworks",
+            Provider::Cerebras => "cerebras",
+            Provider::DeepInfra => "deepinfra",
+            Provider::Cohere => "cohere",
+            Provider::AI21 => "ai21",
+            Provider::Sambanova => "sambanova",
+            Provider::Azure => "azure",
+            Provider::Bedrock => "bedrock",
         }
     }
 
@@ -614,6 +632,18 @@ impl Provider {
             "zhipu" | "zhipuai" | "bigmodel" | "glm" => Some(Provider::Zhipu),
             "mistral" | "mistral-ai" | "mistral_ai" => Some(Provider::Mistral),
             "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
+            "groq" => Some(Provider::Groq),
+            "together" | "together-ai" | "together_ai" | "togetherai" => Some(Provider::Together),
+            "fireworks" | "fireworks-ai" | "fireworks_ai" | "fireworksai" => {
+                Some(Provider::Fireworks)
+            }
+            "cerebras" => Some(Provider::Cerebras),
+            "deepinfra" | "deep-infra" | "deep_infra" => Some(Provider::DeepInfra),
+            "cohere" => Some(Provider::Cohere),
+            "ai21" | "ai21-labs" | "ai21_labs" => Some(Provider::AI21),
+            "sambanova" | "samba-nova" | "samba_nova" => Some(Provider::Sambanova),
+            "azure" | "azure-openai" | "azure_openai" => Some(Provider::Azure),
+            "bedrock" | "aws-bedrock" | "aws_bedrock" => Some(Provider::Bedrock),
             _ => None,
         }
     }

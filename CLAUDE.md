@@ -56,7 +56,7 @@ services/
 
 ## Prerequisites
 
-- Node >= 22.12.0, pnpm >= 9.15.3
+- Node 22, pnpm >= 9.15.0
 - Rust toolchain (for Tauri desktop app)
 - `libclang` for SQLCipher: `brew install llvm` on macOS
 
@@ -144,7 +144,7 @@ The Rust backend is organized into six top-level modules:
 - **`sys/`** — System services and platform integration
   - `commands/chat/` — Chat command handlers
     - `tool_events.rs` — Structured `ToolEvent` emission to frontend (Started, Progress, Completed); display name mapping for Claude Code-style labels (Read, Write, Bash, WebSearch, etc.)
-  - `commands/` — All `#[tauri::command]` handlers (100+ files), invoked from frontend via `invoke()`
+  - `commands/` — All `#[tauri::command]` handlers (125+ files), invoked from frontend via `invoke()`
   - `security/` — ToolGuard (`tool_guard.rs`, 1778 lines), SecretManager, encryption (Argon2id + AES-GCM), auth, RBAC, rate limiting
   - `billing/`, `diagnostics/`, `logging/`, `telemetry/`, `permissions/`, `account/`
 
@@ -164,10 +164,10 @@ Entry point: `main.rs` calls `lib.rs::run()` which sets up Tauri with all plugin
 
 React 19 SPA with Vite, using react-router-dom for routing:
 
-- **`components/`** — 60+ component directories (Agent, Chat, Settings, Voice, Vision, Terminal, etc.)
+- **`components/`** — 75+ component directories (Agent, Chat, Settings, Voice, Vision, Terminal, etc.)
   - `UnifiedAgenticChat/` — Agentic chat UI: `ToolLabel.tsx` (tool execution status), `ToolTimeline.tsx` (collapsible tool timeline)
 - **`lib/chatToolUtils.ts`** — Pure utility functions for tool name normalization and inline data transformations (extracted from UnifiedAgenticChat)
-- **`stores/`** — 40+ Zustand stores with Immer and Persist middleware. Key stores:
+- **`stores/`** — 55+ Zustand stores with Immer and Persist middleware. Key stores:
   - `settingsStore.ts` — App configuration (persist v10 migration)
   - `unifiedChatStore.ts` — Chat state management
   - `chat/toolStore.ts` — Tool execution tracking; listens on `tool:event` Tauri channel to build timeline of executed tools
@@ -215,7 +215,7 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - **State Management Pattern** (lib.rs): Uses degraded state constructors for optional features — `MemoryState::degraded()`, `MasterPasswordState::degraded()`, etc. Allows graceful fallback if initialization fails.
 - **Security**: ToolGuard validates all tool execution. SecretManager encrypts API keys via Argon2id + AES-GCM, stored in SQLite/keychain. Never plaintext. Deep linking secured via ALLOWED_DEEP_LINK_PARAMS allowlist, scheme validation, and token redaction in `apps/web/hooks/useDeepLink.ts`.
 - **MCP**: Supports stdio, SSE, and streamable HTTP transports. Config in `.mcp.json`.
-- **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support. Environment: `TOTP_ENCRYPTION_KEY`, `NEXT_PUBLIC_API_URL` required in web app (see `lib/validate-env.ts`).
+- **Frontend state**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support. Environment: Critical: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_APP_URL`. Warning-level: `TOTP_ENCRYPTION_KEY`, `NEXT_PUBLIC_API_URL`, `CSRF_SECRET`, `CRON_SECRET`, `UPSTASH_REDIS_*`, `DEVICE_TOKEN_ENCRYPTION_KEY`. Plus 8 `STRIPE_PRICE_*` IDs. See `lib/validate-env.ts` for full list.
 - **UI stack**: Radix UI primitives + Tailwind CSS 4 + Lucide icons + Sonner toasts.
 - **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`.
 - **Embeddings**: `HttpSummaryLLM` in `core/agi/conversation_summarizer.rs` provides real embeddings via 3-tier fallback: Ollama local (nomic-embed-text, 768-dim) → OpenAI cloud (text-embedding-3-small, 1536-dim) → None. Never returns zero vectors. Memory search degrades gracefully to FTS-only when embeddings unavailable.

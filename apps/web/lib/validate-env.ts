@@ -65,6 +65,8 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_PRO_YEARLY',
     'STRIPE_PRICE_MAX_MONTHLY',
     'STRIPE_PRICE_MAX_YEARLY',
+    'STRIPE_PRICE_ENTERPRISE_MONTHLY',
+    'STRIPE_PRICE_ENTERPRISE_YEARLY',
   ];
 
   // Check critical variables

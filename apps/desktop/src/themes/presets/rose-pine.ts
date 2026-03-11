@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const rosePine: ThemeDefinition = {
+  id: 'rose-pine',
+  name: 'Rosé Pine',
+  author: 'Rosé Pine',
+  variant: 'dark',
+  colors: {
+    background: '250 24% 14%',
+    foreground: '247 21% 73%',
+    card: '250 24% 11%',
+    cardForeground: '247 21% 73%',
+    popover: '250 24% 11%',
+    popoverForeground: '247 21% 73%',
+    primary: '2 55% 67%',
+    primaryForeground: '250 24% 14%',
+    secondary: '250 24% 20%',
+    secondaryForeground: '247 21% 73%',
+    muted: '250 24% 20%',
+    mutedForeground: '252 10% 48%',
+    accent: '196 76% 61%',
+    accentForeground: '250 24% 14%',
+    destructive: '2 55% 67%',
+    destructiveForeground: '250 24% 14%',
+    border: '250 24% 25%',
+    input: '250 24% 25%',
+    ring: '2 55% 67%',
+    syntax: {
+      keyword: '#31748f',
+      string: '#f6c177',
+      comment: '#6e6a86',
+      function: '#9ccfd8',
+      number: '#ebbcba',
+      operator: '#31748f',
+    },
+  },
+};

@@ -26,7 +26,11 @@ export const secureStorage: StateStorage = {
   },
   setItem: (name: string, value: string): void => {
     // Fire-and-forget — errors are logged but don't crash the store.
-    SecureStore.setItemAsync(sanitizeKey(name), value).catch((err) => {
+    // WHEN_UNLOCKED_THIS_DEVICE_ONLY: value is never transferred to iCloud
+    // backup and is only accessible while the device is unlocked.
+    SecureStore.setItemAsync(sanitizeKey(name), value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    }).catch((err) => {
       console.error('[secureStorage] Failed to persist to secure store:', err);
     });
   },

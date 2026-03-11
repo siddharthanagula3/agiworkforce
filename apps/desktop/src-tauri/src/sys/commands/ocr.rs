@@ -429,28 +429,39 @@ pub async fn ocr_process_with_boxes(
         image_path.clone()
     };
 
-    let tess = Tesseract::new(None, Some(&lang))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
+    let cleanup = |path: &str, original: &str| {
+        if path != original {
+            let _ = std::fs::remove_file(path);
+        }
+    };
 
-    let mut tess = tess
-        .set_image(&processing_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?;
+    let tess = Tesseract::new(None, Some(&lang)).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to initialize Tesseract: {}", e)
+    })?;
+
+    let mut tess = tess.set_image(&processing_path).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to set image: {}", e)
+    })?;
 
     tess.set_page_seg_mode(PageSegMode::PsmAuto);
 
-    let text = tess
-        .get_text()
-        .map_err(|e| format!("Failed to extract text: {}", e))?;
+    let text = tess.get_text().map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to extract text: {}", e)
+    })?;
 
     let confidence = tess.mean_text_conf() as f32;
 
-    let words = extract_word_data(&mut tess)?;
+    let words = extract_word_data(&mut tess).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        e
+    })?;
 
     let processing_time = start.elapsed().as_millis() as u64;
 
-    if should_preprocess && processing_path != image_path {
-        let _ = std::fs::remove_file(&processing_path);
-    }
+    cleanup(&processing_path, &image_path);
 
     tracing::info!(
         "OCR processing with boxes completed in {}ms with {} words",
@@ -501,33 +512,44 @@ pub async fn ocr_process_multi_language(
         image_path.clone()
     };
 
-    let detected_languages = detect_languages(&processing_path)?;
+    let cleanup = |path: &str, original: &str| {
+        if path != original {
+            let _ = std::fs::remove_file(path);
+        }
+    };
+
+    let detected_languages = detect_languages(&processing_path).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        e
+    })?;
 
     let primary_language = detected_languages
         .first()
         .map(|l| l.language.clone())
         .unwrap_or_else(|| "eng".to_string());
 
-    let tess = Tesseract::new(None, Some(&primary_language))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
+    let tess = Tesseract::new(None, Some(&primary_language)).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to initialize Tesseract: {}", e)
+    })?;
 
-    let mut tess = tess
-        .set_image(&processing_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?;
+    let mut tess = tess.set_image(&processing_path).map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to set image: {}", e)
+    })?;
 
     tess.set_page_seg_mode(PageSegMode::PsmAuto);
 
-    let text = tess
-        .get_text()
-        .map_err(|e| format!("Failed to extract text: {}", e))?;
+    let text = tess.get_text().map_err(|e| {
+        cleanup(&processing_path, &image_path);
+        format!("Failed to extract text: {}", e)
+    })?;
 
     let confidence = tess.mean_text_conf() as f32;
 
     let processing_time = start.elapsed().as_millis() as u64;
 
-    if should_preprocess && processing_path != image_path {
-        let _ = std::fs::remove_file(&processing_path);
-    }
+    cleanup(&processing_path, &image_path);
 
     tracing::info!(
         "Multi-language OCR completed in {}ms, primary language: {}",

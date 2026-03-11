@@ -44,7 +44,7 @@ impl Default for EmbeddingConfig {
     fn default() -> Self {
         Self {
             model: EmbeddingModel::OllamaNomicEmbedText,
-            ollama_url: "http://localhost:3000".to_string(),
+            ollama_url: crate::core::llm::OLLAMA_DEFAULT_BASE_URL.to_string(),
             enable_fallback: true,
             timeout: Duration::from_secs(30),
         }

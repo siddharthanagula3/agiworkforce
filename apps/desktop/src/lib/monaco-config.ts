@@ -44,12 +44,17 @@ export function configureMonacoTypescript(monaco: Monaco): void {
 }
 
 /**
- * Convert app theme to Monaco theme name
+ * Convert app theme (including named themes) to a Monaco theme name.
+ * Named themes use the DOM class to determine dark/light variant.
  */
-export function getMonacoTheme(theme: 'dark' | 'light' | 'system'): string {
+export function getMonacoTheme(theme: string): string {
   if (theme === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     return prefersDark ? 'vs-dark' : 'light';
   }
-  return theme === 'dark' ? 'vs-dark' : 'light';
+  if (theme === 'dark') return 'vs-dark';
+  if (theme === 'light') return 'light';
+  // Named theme: read variant from the class applied to <html>
+  const isDark = document.documentElement.classList.contains('dark');
+  return isDark ? 'vs-dark' : 'light';
 }

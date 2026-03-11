@@ -1318,8 +1318,8 @@ async function handleChatMessage(
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
 
   // Resolve the API key: prefer the value forwarded from the side panel,
-  // then check chrome.storage.session (where side_panel.ts now persists keys),
-  // then fall back to chrome.storage.local for keys saved by older versions.
+  // then check chrome.storage.session (where side_panel.ts persists keys).
+  // CRIT-004: Do NOT read from chrome.storage.local as an ongoing fallback.
   const resolvedApiKey: string | null = await new Promise((resolve) => {
     if (apiKey) {
       resolve(apiKey);
@@ -1331,27 +1331,11 @@ async function handleChatMessage(
           logger.warn('Failed to read API key from session storage', {
             error: chrome.runtime.lastError.message,
           });
-          // Fall through to local storage on session storage error
-        } else {
-          const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
-          if (sessionStored) {
-            resolve(sessionStored);
-            return;
-          }
-        }
-        // Fallback: check local storage for a key saved by an older version.
-        try {
-          chrome.storage.local.get('agi_api_key', (localResult) => {
-            if (chrome.runtime.lastError) {
-              resolve(null);
-              return;
-            }
-            const localStored = (localResult['agi_api_key'] as string | undefined)?.trim();
-            resolve(localStored ?? null);
-          });
-        } catch {
           resolve(null);
+          return;
         }
+        const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
+        resolve(sessionStored ?? null);
       });
     } catch {
       resolve(null);

@@ -107,23 +107,18 @@ pub enum SwarmError {
 pub type SwarmResultType<T> = Result<T, SwarmError>;
 
 /// Priority levels for subtasks in the swarm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SubtaskPriority {
     /// Background tasks that can be delayed.
     Low = 0,
     /// Standard priority for most tasks.
+    #[default]
     Normal = 1,
     /// Higher priority for important tasks.
     High = 2,
     /// Critical path tasks that must complete first.
     Critical = 3,
-}
-
-impl Default for SubtaskPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// Status of a subtask in the swarm.

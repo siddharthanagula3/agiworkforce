@@ -421,15 +421,16 @@ impl ExtensionInstaller {
         tracing::info!("Installing npm dependencies in {}", npm_dir.display());
 
         // Run npm install
+        // --ignore-scripts prevents malicious postinstall scripts from executing arbitrary code
         let output = if cfg!(target_os = "windows") {
             Command::new("cmd")
-                .args(["/C", "npm", "install", "--production"])
+                .args(["/C", "npm", "install", "--production", "--ignore-scripts"])
                 .current_dir(npm_dir)
                 .output()
                 .await
         } else {
             Command::new("npm")
-                .args(["install", "--production"])
+                .args(["install", "--production", "--ignore-scripts"])
                 .current_dir(npm_dir)
                 .output()
                 .await

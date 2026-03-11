@@ -141,13 +141,24 @@ export const useAuthStore = create<AuthState>()(
       },
 
       refreshSession: async () => {
-        const { data, error } = await supabase.auth.refreshSession();
-        if (error || !data.session) {
-          console.warn('[authStore] Refresh failed:', error?.message ?? 'no session');
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Session refresh timeout')), 10000),
+          );
+          const { data, error } = await Promise.race([
+            supabase.auth.refreshSession(),
+            timeoutPromise,
+          ]);
+          if (error || !data.session) {
+            console.warn('[authStore] Refresh failed:', error?.message ?? 'no session');
+            set({ session: null, user: null });
+            return;
+          }
+          set({ session: data.session, user: data.session.user });
+        } catch (err) {
+          console.warn('[authStore] Refresh failed:', err instanceof Error ? err.message : 'unknown error');
           set({ session: null, user: null });
-          return;
         }
-        set({ session: data.session, user: data.session.user });
       },
     }),
     {

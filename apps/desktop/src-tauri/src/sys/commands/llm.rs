@@ -1,5 +1,6 @@
 use crate::core::llm::providers::{
-    managed_cloud_provider::ManagedCloudProvider, ollama::OllamaProvider,
+    direct_api_provider::DirectApiProvider, managed_cloud_provider::ManagedCloudProvider,
+    ollama::OllamaProvider,
 };
 use crate::core::llm::{
     cache_manager::CacheManager,
@@ -7,23 +8,58 @@ use crate::core::llm::{
     ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider,
 };
 use crate::sys::commands::chat::AppDatabase;
+use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::State;
 use tokio::sync::RwLock;
 
+use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
+
 const DEFAULT_MODEL: &str = "gpt-5-nano";
-const OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
+/// Managed state holding rate limiters for LLM and MCP tool execution.
+///
+/// `RateLimiter` uses `parking_lot::Mutex` internally, so it is already
+/// `Send + Sync` and safe to share across async Tauri command handlers
+/// without an additional `Arc<Mutex<>>` wrapper.
+pub struct RateLimitState {
+    /// Rate limiter for LLM message requests (30 requests per 60 seconds).
+    pub llm_limiter: RateLimiter,
+    /// Rate limiter for MCP tool executions (60 requests per 60 seconds).
+    pub mcp_limiter: RateLimiter,
+}
+
+impl Default for RateLimitState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RateLimitState {
+    pub fn new() -> Self {
+        Self {
+            llm_limiter: RateLimiter::new(RateLimitConfig {
+                max_requests: 30,
+                window: Duration::from_secs(60),
+            }),
+            mcp_limiter: RateLimiter::new(RateLimitConfig {
+                max_requests: 60,
+                window: Duration::from_secs(60),
+            }),
+        }
+    }
+}
 
 /// Resolves a provider string to the appropriate Provider enum for routing.
-/// Cloud providers (OpenAI, Anthropic, etc.) are routed through ManagedCloud
-/// since local API keys are not used. Only Ollama remains as a direct provider.
+///
+/// Preserves the actual provider so that BYOK (direct API key) providers
+/// can be matched when registered via `llm_configure_provider`. The router
+/// will fall back to ManagedCloud automatically when the specific provider
+/// is not registered.
 fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
-    Provider::from_string(s).map(|p| match p {
-        Provider::Ollama => Provider::Ollama,
-        _ => Provider::ManagedCloud,
-    })
+    Provider::from_string(s)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +104,17 @@ impl LLMState {
 pub async fn llm_send_message(
     request: LLMSendMessageRequest,
     state: State<'_, LLMState>,
+    rate_limit_state: State<'_, RateLimitState>,
 ) -> Result<LLMResponse, String> {
+    // Rate limit check: 30 requests per minute per user session.
+    // Uses "llm" as the global key since all LLM requests share the same budget.
+    rate_limit_state
+        .llm_limiter
+        .check_rate_limit("llm")
+        .map_err(|_| {
+            "[ERR_RATE_LIMIT] You are sending messages too quickly. Please wait a moment and try again (limit: 30 requests per minute).".to_string()
+        })?;
+
     if request.messages.is_empty() {
         return Err("Messages array cannot be empty".to_string());
     }
@@ -100,14 +146,15 @@ pub async fn llm_send_message(
         }
     }
 
-    // Pre-flight authentication check for cloud credits
-    // If user prefers cloud credits or requests ManagedCloud, verify they're authenticated
+    // Pre-flight authentication check for cloud credits.
+    // Only require auth when user explicitly requests ManagedCloud or prefers cloud credits.
+    // BYOK providers (OpenAI, Anthropic, etc.) with user-supplied API keys do not need auth.
     let is_managed_cloud_request = request
         .provider
         .as_ref()
         .map(|p| {
             Provider::from_string(p)
-                .map(|provider| provider != Provider::Ollama)
+                .map(|provider| provider == Provider::ManagedCloud)
                 .unwrap_or(false)
         })
         .unwrap_or(false);
@@ -317,7 +364,7 @@ pub async fn llm_send_message(
 #[tauri::command]
 pub async fn llm_configure_provider(
     provider: String,
-    _api_key: Option<String>,
+    api_key: Option<String>,
     base_url: Option<String>,
     state: State<'_, LLMState>,
 ) -> Result<(), String> {
@@ -341,10 +388,36 @@ pub async fn llm_configure_provider(
             router.set_managed_cloud(Box::new(managed));
             Ok(())
         }
-        _ => Err(format!(
-            "Provider '{}' must be configured via Vercel environment variables. Local key storage is disabled for security.",
-            provider
-        )),
+        _ => {
+            // BYOK: Create a DirectApiProvider for cloud providers with user-supplied API keys.
+            let provider_enum = Provider::from_string(&provider)
+                .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+
+            // Try the explicitly passed api_key first, then fall back to the
+            // encrypted key stored in the MCP settings database.
+            let resolved_key = api_key
+                .filter(|k| !k.is_empty())
+                .or_else(|| {
+                    crate::sys::commands::mcp_oauth::retrieve_api_key(provider_enum.as_string())
+                        .ok()
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "No API key provided for '{}'. Please add your API key in Settings \u{2192} Models.",
+                        provider
+                    )
+                })?;
+
+            let direct = DirectApiProvider::new(provider_enum, resolved_key, base_url)
+                .map_err(|e| format!("Failed to create {} provider: {}", provider, e))?;
+            router.set_provider(provider_enum, Box::new(direct));
+
+            tracing::info!(
+                "Registered BYOK DirectApiProvider for '{}'",
+                provider_enum.as_string()
+            );
+            Ok(())
+        }
     }
 }
 
@@ -508,7 +581,7 @@ pub async fn llm_check_provider_status(
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
         match client
-            .get(format!("{}/api/tags", OLLAMA_BASE_URL))
+            .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
             .timeout(std::time::Duration::from_secs(2))
             .send()
             .await
@@ -533,7 +606,7 @@ pub async fn llm_check_provider_status(
         available,
         configured,
         error: if !configured && provider != "ollama" {
-            Some("Cloud authentication required. Sign in to use managed models.".to_string())
+            Some("Provider not configured. Add your API key in Settings \u{2192} Models, or sign in to use Managed Cloud.".to_string())
         } else if provider == "ollama" && !ollama_running.unwrap_or(false) {
             Some("Ollama server is not running. Start with 'ollama serve'".to_string())
         } else {
@@ -676,7 +749,7 @@ async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
-        .get(format!("{}/api/tags", OLLAMA_BASE_URL))
+        .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
         .timeout(Duration::from_secs(5))
         .send()
         .await
@@ -752,7 +825,7 @@ pub async fn get_model_capabilities(
     if provider.eq_ignore_ascii_case("ollama") {
         let url = base_url
             .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| OLLAMA_BASE_URL.to_string());
+            .unwrap_or_else(|| OLLAMA_DEFAULT_BASE_URL.to_string());
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
@@ -797,5 +870,19 @@ pub async fn get_model_capabilities(
 #[tauri::command]
 pub async fn clear_model_capability_cache() -> Result<(), String> {
     crate::core::llm::capability_detection::clear_capability_cache().await;
+    Ok(())
+}
+
+/// Reset the session cost accumulator to zero.
+///
+/// The LLM router tracks cumulative cost across all invocations in a session.
+/// Once it hits `SESSION_COST_SAFETY_CAP` it refuses new requests. This command
+/// lets the frontend (or user) reset the counter — e.g. at conversation start or
+/// when the user explicitly acknowledges the spend.
+#[tauri::command]
+pub async fn reset_session_cost(state: State<'_, LLMState>) -> Result<(), String> {
+    let router = state.router.read().await;
+    router.reset_cumulative_cost();
+    tracing::info!("Session cost accumulator reset to zero");
     Ok(())
 }

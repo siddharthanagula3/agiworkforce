@@ -1,0 +1,219 @@
+{
+  "NETWORK_ERROR": {
+    "title": "Problème de connexion",
+    "message": "Impossible de se connecter au serveur. Veuillez vérifier votre connexion Internet.",
+    "suggestions": [
+      "Vérifiez votre connexion WiFi ou Ethernet",
+      "Désactivez le VPN s'il est activé",
+      "Réessayez dans un moment",
+      "Vérifiez si le serveur est hors ligne"
+    ]
+  },
+  "NETWORK_TIMEOUT": {
+    "title": "Délai d'expiration de la requête",
+    "message": "La requête a pris trop de temps.",
+    "suggestions": [
+      "Vérifiez votre vitesse Internet",
+      "Réessayez avec une requête plus petite",
+      "Le serveur est peut-être surchargé"
+    ]
+  },
+  "API_RATE_LIMIT": {
+    "title": "Limite de taux dépassée",
+    "message": "Trop de requêtes. Veuillez patienter avant de réessayer.",
+    "suggestions": [
+      "Attendez quelques minutes avant de réessayer",
+      "Envisagez de mettre à niveau votre plan API",
+      "Réduisez la fréquence des requêtes"
+    ]
+  },
+  "FILE_NOT_FOUND": {
+    "title": "Fichier introuvable",
+    "message": "Le fichier demandé est introuvable.",
+    "suggestions": [
+      "Vérifiez si le chemin du fichier est correct",
+      "Vérifiez si le fichier existe encore",
+      "Vérifiez les permissions du fichier"
+    ]
+  },
+  "PERMISSION_DENIED": {
+    "title": "Permission refusée",
+    "message": "Vous n'avez pas la permission d'accéder à cette ressource.",
+    "suggestions": [
+      "Exécutez l'application en tant qu'administrateur",
+      "Vérifiez les permissions du fichier/dossier",
+      "Contactez votre administrateur système"
+    ]
+  },
+  "DISK_FULL": {
+    "title": "Disque plein",
+    "message": "Espace disque insuffisant pour terminer l'opération.",
+    "suggestions": [
+      "Libérez de l'espace disque en supprimant des fichiers inutiles",
+      "Déplacez des fichiers vers un lecteur externe",
+      "Videz la corbeille"
+    ]
+  },
+  "DATABASE_LOCKED": {
+    "title": "Base de données verrouillée",
+    "message": "La base de données est actuellement verrouillée par un autre processus.",
+    "suggestions": [
+      "Attendez un moment et réessayez",
+      "Fermez les autres instances de l'application",
+      "Redémarrez l'application"
+    ]
+  },
+  "DATABASE_CORRUPTED": {
+    "title": "Base de données corrompue",
+    "message": "Le fichier de base de données semble corrompu.",
+    "suggestions": [
+      "Restaurez depuis une sauvegarde si disponible",
+      "Contactez le support pour obtenir de l'aide",
+      "Vous devrez peut-être réinitialiser l'application"
+    ]
+  },
+  "AUTH_FAILED": {
+    "title": "Échec de l'authentification",
+    "message": "Impossible de s'authentifier avec les informations d'identification fournies.",
+    "suggestions": [
+      "Vérifiez votre nom d'utilisateur et mot de passe",
+      "Vérifiez que votre clé API est correcte",
+      "Vérifiez si votre compte est actif"
+    ]
+  },
+  "TOKEN_EXPIRED": {
+    "title": "Session expirée",
+    "message": "Votre session a expiré. Veuillez vous reconnecter.",
+    "suggestions": ["Cliquez pour vous réauthentifier", "Vérifiez si vos informations d'identification sont encore valides"]
+  },
+  "LLM_API_ERROR": {
+    "title": "Erreur du fournisseur LLM",
+    "message": "Une erreur s'est produite lors de la communication avec le fournisseur LLM.",
+    "suggestions": [
+      "Vérifiez la configuration de votre clé API",
+      "Vérifiez que votre compte dispose de crédits suffisants",
+      "Essayez de passer à un autre fournisseur",
+      "Consultez la page d'état du fournisseur"
+    ]
+  },
+  "LLM_CONTEXT_LENGTH": {
+    "title": "Contexte trop long",
+    "message": "Le contexte de la conversation dépasse la longueur maximale du modèle.",
+    "suggestions": [
+      "Démarrez une nouvelle conversation",
+      "Résumez l'historique de la conversation",
+      "Utilisez un modèle avec une fenêtre de contexte plus grande"
+    ]
+  },
+  "LLM_CONTENT_FILTER": {
+    "title": "Contenu filtré",
+    "message": "La requête a été bloquée par le filtre de contenu.",
+    "suggestions": [
+      "Reformulez votre requête",
+      "Supprimez le contenu potentiellement sensible",
+      "Consultez la politique de contenu"
+    ]
+  },
+  "BROWSER_NOT_FOUND": {
+    "title": "Navigateur introuvable",
+    "message": "Le navigateur requis n'est pas installé ou introuvable.",
+    "suggestions": [
+      "Installez le navigateur requis",
+      "Vérifiez le chemin d'installation du navigateur",
+      "Essayez d'utiliser un navigateur différent"
+    ]
+  },
+  "BROWSER_CRASH": {
+    "title": "Navigateur planté",
+    "message": "La session d'automatisation du navigateur a planté de manière inattendue.",
+    "suggestions": [
+      "Réessayez l'opération",
+      "Mettez à jour votre navigateur vers la dernière version",
+      "Vérifiez les ressources système (mémoire, CPU)"
+    ]
+  },
+  "ELEMENT_NOT_FOUND": {
+    "title": "Élément introuvable",
+    "message": "L'élément d'interface utilisateur spécifié est introuvable sur la page.",
+    "suggestions": [
+      "La page est peut-être encore en chargement",
+      "Le sélecteur d'élément est peut-être incorrect",
+      "La structure de la page a peut-être changé"
+    ]
+  },
+  "AUTOMATION_FAILED": {
+    "title": "Automatisation échouée",
+    "message": "La tâche d'automatisation n'a pas pu être complétée.",
+    "suggestions": [
+      "Vérifiez si l'application est encore en cours d'exécution",
+      "Vérifiez si les étapes d'automatisation sont correctes",
+      "Essayez d'abord d'exécuter l'automatisation manuellement"
+    ]
+  },
+  "UI_ELEMENT_TIMEOUT": {
+    "title": "Délai d'attente de l'élément",
+    "message": "L'attente de l'apparition d'un élément d'interface a été trop longue.",
+    "suggestions": [
+      "L'application répond peut-être lentement",
+      "Augmentez la durée du délai dans les paramètres",
+      "Vérifiez si l'élément existe encore"
+    ]
+  },
+  "OUT_OF_MEMORY": {
+    "title": "Mémoire insuffisante",
+    "message": "L'application a manqué de mémoire disponible.",
+    "suggestions": [
+      "Fermez d'autres applications pour libérer de la mémoire",
+      "Redémarrez l'application",
+      "Traitez de plus petites quantités de données",
+      "Mettez à niveau la RAM système si cela se produit fréquemment"
+    ]
+  },
+  "SYSTEM_ERROR": {
+    "title": "Erreur système",
+    "message": "Une erreur système inattendue s'est produite.",
+    "suggestions": [
+      "Réessayez l'opération",
+      "Redémarrez l'application",
+      "Consultez les journaux système pour plus de détails",
+      "Contactez le support si le problème persiste"
+    ]
+  },
+  "AGI_PLANNING_FAILED": {
+    "title": "Échec de la planification",
+    "message": "Le planificateur AGI n'a pas pu créer un plan pour l'objectif.",
+    "suggestions": [
+      "Essayez de reformuler l'objectif plus précisément",
+      "Décomposez les objectifs complexes en étapes plus petites",
+      "Vérifiez si le fournisseur LLM est disponible"
+    ]
+  },
+  "AGI_EXECUTION_FAILED": {
+    "title": "Échec de l'exécution",
+    "message": "Le système AGI n'a pas réussi à exécuter une étape.",
+    "suggestions": [
+      "Consultez les détails de l'étape dans le journal d'erreurs",
+      "Vérifiez si les outils requis sont disponibles",
+      "Essayez d'exécuter l'étape manuellement"
+    ]
+  },
+  "AGI_TOOL_NOT_FOUND": {
+    "title": "Outil non disponible",
+    "message": "L'outil requis n'est pas disponible ou n'est pas installé.",
+    "suggestions": [
+      "Installez l'outil requis",
+      "Activez l'outil dans les paramètres",
+      "Essayez d'utiliser un outil alternatif"
+    ]
+  },
+  "UNKNOWN_ERROR": {
+    "title": "Erreur inconnue",
+    "message": "Une erreur inattendue s'est produite.",
+    "suggestions": [
+      "Réessayez l'opération",
+      "Redémarrez l'application",
+      "Consultez les journaux d'erreurs pour plus de détails",
+      "Signalez ce problème s'il persiste"
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const nord: ThemeDefinition = {
+  id: 'nord',
+  name: 'Nord',
+  author: 'Arctic Ice Studio',
+  variant: 'dark',
+  colors: {
+    background: '220 16% 22%',
+    foreground: '219 28% 88%',
+    card: '220 16% 18%',
+    cardForeground: '219 28% 88%',
+    popover: '220 16% 18%',
+    popoverForeground: '219 28% 88%',
+    primary: '213 32% 52%',
+    primaryForeground: '220 16% 22%',
+    secondary: '220 16% 28%',
+    secondaryForeground: '219 28% 88%',
+    muted: '220 16% 28%',
+    mutedForeground: '220 16% 56%',
+    accent: '179 25% 65%',
+    accentForeground: '220 16% 22%',
+    destructive: '354 42% 56%',
+    destructiveForeground: '219 28% 88%',
+    border: '220 16% 32%',
+    input: '220 16% 32%',
+    ring: '213 32% 52%',
+    syntax: {
+      keyword: '#81a1c1',
+      string: '#a3be8c',
+      comment: '#4c566a',
+      function: '#88c0d0',
+      number: '#b48ead',
+      operator: '#81a1c1',
+    },
+  },
+};

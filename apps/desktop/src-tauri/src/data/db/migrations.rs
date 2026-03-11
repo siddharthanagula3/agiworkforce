@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 56;
+const CURRENT_VERSION: i32 = 57;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -176,6 +176,13 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "agi_checkpoint_restore_history",
         // Conversation branching
         "conversation_branches",
+        // Projects (added in v44)
+        "projects",
+        "project_settings",
+        // Token usage tracking (added in v43)
+        "token_usage",
+        // First-run marker (added in v29, v37)
+        "sample_data_marker",
     ])
 });
 
@@ -528,6 +535,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 56 {
         run_migration_in_transaction(conn, 56, apply_migration_v56)?;
+    }
+
+    if current_version < 57 {
+        run_migration_in_transaction(conn, 57, apply_migration_v57)?;
     }
 
     Ok(())
@@ -1138,6 +1149,27 @@ fn apply_migration_v2(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // FTS sync triggers for ocr_text_fts (external content table requires manual sync)
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS ocr_text_fts_ai AFTER INSERT ON ocr_results BEGIN
+            INSERT INTO ocr_text_fts(rowid, text) VALUES (new.rowid, new.text);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS ocr_text_fts_ad AFTER DELETE ON ocr_results BEGIN
+            INSERT INTO ocr_text_fts(ocr_text_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS ocr_text_fts_au AFTER UPDATE ON ocr_results BEGIN
+            INSERT INTO ocr_text_fts(ocr_text_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+            INSERT INTO ocr_text_fts(rowid, text) VALUES (new.rowid, new.text);
+        END",
+        [],
+    )?;
+
     Ok(())
 }
 
@@ -1573,6 +1605,27 @@ fn apply_migration_v7(conn: &Connection) -> Result<()> {
             content=emails,
             content_rowid=rowid
         )",
+        [],
+    )?;
+
+    // FTS sync triggers for emails_fts (external content table requires manual sync)
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS emails_fts_ai AFTER INSERT ON emails BEGIN
+            INSERT INTO emails_fts(rowid, subject, body_text, from_email) VALUES (new.rowid, new.subject, new.body_text, new.from_email);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS emails_fts_ad AFTER DELETE ON emails BEGIN
+            INSERT INTO emails_fts(emails_fts, rowid, subject, body_text, from_email) VALUES ('delete', old.rowid, old.subject, old.body_text, old.from_email);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS emails_fts_au AFTER UPDATE ON emails BEGIN
+            INSERT INTO emails_fts(emails_fts, rowid, subject, body_text, from_email) VALUES ('delete', old.rowid, old.subject, old.body_text, old.from_email);
+            INSERT INTO emails_fts(rowid, subject, body_text, from_email) VALUES (new.rowid, new.subject, new.body_text, new.from_email);
+        END",
         [],
     )?;
 
@@ -2668,6 +2721,27 @@ fn apply_migration_v23(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // FTS sync triggers for agent_templates_fts (external content table requires manual sync)
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS agent_templates_fts_ai AFTER INSERT ON agent_templates BEGIN
+            INSERT INTO agent_templates_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS agent_templates_fts_ad AFTER DELETE ON agent_templates BEGIN
+            INSERT INTO agent_templates_fts(agent_templates_fts, rowid, name, description) VALUES ('delete', old.rowid, old.name, old.description);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS agent_templates_fts_au AFTER UPDATE ON agent_templates BEGIN
+            INSERT INTO agent_templates_fts(agent_templates_fts, rowid, name, description) VALUES ('delete', old.rowid, old.name, old.description);
+            INSERT INTO agent_templates_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+        END",
+        [],
+    )?;
+
     Ok(())
 }
 
@@ -3259,6 +3333,27 @@ fn apply_migration_v29(conn: &Connection) -> Result<()> {
             content=tutorial_feedback,
             content_rowid=rowid
         )",
+        [],
+    )?;
+
+    // FTS sync triggers for tutorial_feedback_fts (external content table requires manual sync)
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS tutorial_feedback_fts_ai AFTER INSERT ON tutorial_feedback BEGIN
+            INSERT INTO tutorial_feedback_fts(rowid, feedback_text) VALUES (new.rowid, new.feedback_text);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS tutorial_feedback_fts_ad AFTER DELETE ON tutorial_feedback BEGIN
+            INSERT INTO tutorial_feedback_fts(tutorial_feedback_fts, rowid, feedback_text) VALUES ('delete', old.rowid, old.feedback_text);
+        END",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS tutorial_feedback_fts_au AFTER UPDATE ON tutorial_feedback BEGIN
+            INSERT INTO tutorial_feedback_fts(tutorial_feedback_fts, rowid, feedback_text) VALUES ('delete', old.rowid, old.feedback_text);
+            INSERT INTO tutorial_feedback_fts(rowid, feedback_text) VALUES (new.rowid, new.feedback_text);
+        END",
         [],
     )?;
 
@@ -4079,6 +4174,14 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
         [],
     )?;
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token) WHERE verification_token IS NOT NULL",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token) WHERE reset_token IS NOT NULL",
+        [],
+    )?;
+    conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)",
         [],
     )?;
@@ -4087,11 +4190,19 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
         [],
     )?;
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at)",
+        [],
+    )?;
+    conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_oauth_providers_user_id ON oauth_providers(user_id)",
         [],
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash) WHERE revoked = 0",
         [],
     )?;
     conn.execute(
@@ -4738,16 +4849,20 @@ fn apply_migration_v55(conn: &Connection) -> Result<()> {
 /// - Backfills existing messages with branch_id = 'main'
 /// - Creates an index on messages(conversation_id, branch_id)
 fn apply_migration_v56(conn: &Connection) -> Result<()> {
-    // Add branching columns to messages
-    conn.execute(
-        "ALTER TABLE messages ADD COLUMN parent_message_id INTEGER DEFAULT NULL",
-        [],
-    )?;
+    // Add branching columns to messages (idempotent: guard against duplicate column errors)
+    if !table_has_column(conn, "messages", "parent_message_id")? {
+        conn.execute(
+            "ALTER TABLE messages ADD COLUMN parent_message_id INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
 
-    conn.execute(
-        "ALTER TABLE messages ADD COLUMN branch_id TEXT DEFAULT 'main'",
-        [],
-    )?;
+    if !table_has_column(conn, "messages", "branch_id")? {
+        conn.execute(
+            "ALTER TABLE messages ADD COLUMN branch_id TEXT DEFAULT 'main'",
+            [],
+        )?;
+    }
 
     // Create conversation_branches table
     conn.execute(
@@ -4783,6 +4898,40 @@ fn apply_migration_v56(conn: &Connection) -> Result<()> {
     )?;
 
     tracing::info!("Migration v56: Conversation branching schema applied");
+
+    Ok(())
+}
+
+/// Migration v57: Add HMAC-based lookup columns for auth_sessions tokens.
+/// The existing access_token / refresh_token columns are kept for backward compatibility
+/// during the migration window and will be cleared after re-encryption.
+fn apply_migration_v57(conn: &Connection) -> Result<()> {
+    if !table_has_column(conn, "auth_sessions", "access_token_hash")? {
+        conn.execute(
+            "ALTER TABLE auth_sessions ADD COLUMN access_token_hash TEXT",
+            [],
+        )?;
+    }
+    if !table_has_column(conn, "auth_sessions", "access_token_encrypted")? {
+        conn.execute(
+            "ALTER TABLE auth_sessions ADD COLUMN access_token_encrypted TEXT",
+            [],
+        )?;
+    }
+    if !table_has_column(conn, "auth_sessions", "refresh_token_hash")? {
+        conn.execute(
+            "ALTER TABLE auth_sessions ADD COLUMN refresh_token_hash TEXT",
+            [],
+        )?;
+    }
+    if !table_has_column(conn, "auth_sessions", "refresh_token_encrypted")? {
+        conn.execute(
+            "ALTER TABLE auth_sessions ADD COLUMN refresh_token_encrypted TEXT",
+            [],
+        )?;
+    }
+
+    tracing::info!("Migration v57: Added token hash/encrypted columns to auth_sessions");
 
     Ok(())
 }

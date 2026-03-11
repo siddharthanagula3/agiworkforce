@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Available Perplexity Sonar models (2025)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PerplexityModel {
     /// Standard search model - good balance of speed and quality
+    #[default]
     Sonar,
     /// Pro search model - more thorough search and reasoning
     SonarPro,
@@ -35,12 +36,6 @@ impl PerplexityModel {
             "pplx-70b-online" | "pplx-7b-online" => Some(Self::Sonar),
             _ => None,
         }
-    }
-}
-
-impl Default for PerplexityModel {
-    fn default() -> Self {
-        Self::Sonar
     }
 }
 

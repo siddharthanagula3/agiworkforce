@@ -60,6 +60,7 @@ describe('settingsStore', () => {
         compactMode: true,
         autoApproveTools: false,
         agentMode: 'build',
+        chatStorageMode: 'local',
       },
       allowedDirectories: [],
       loading: false,

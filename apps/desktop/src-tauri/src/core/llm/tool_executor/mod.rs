@@ -1,14 +1,18 @@
 mod api_tools;
 mod browser_tools;
+mod code_tools;
 mod communication_tools;
 mod db_tools;
 mod document_tools;
+mod edit_tools;
 mod file_tools;
 mod git_tools;
+pub(crate) mod interactive_tools;
 mod llm_tools;
 mod mcp_tools;
 mod media_tools;
 mod memory_tools;
+mod planning_tools;
 mod scheduler_tools;
 mod search_tools;
 mod terminal_tools;
@@ -85,7 +89,7 @@ impl ToolTimeoutConfig {
     pub fn get_timeout(&self, tool_id: &str) -> u64 {
         match tool_id {
             // Fast tools (15s)
-            "search_web" | "api_call" | "web_fetch" | "llm_reason" => self.fast,
+            "search_web" | "api_call" | "web_fetch" | "llm_reason" | "code_search" => self.fast,
 
             // Medium tools (60s)
             "file_read"
@@ -101,7 +105,9 @@ impl ToolTimeoutConfig {
             | "db_execute"
             | "db_transaction_begin"
             | "db_transaction_commit"
-            | "db_transaction_rollback" => self.medium,
+            | "db_transaction_rollback"
+            | "multi_edit"
+            | "apply_patch" => self.medium,
 
             // Slow tools (180s)
             "terminal_execute"
@@ -155,6 +161,8 @@ const DANGEROUS_TOOLS: &[&str] = &[
     "db_execute",
     "db_transaction_begin",
     "code_execute",
+    "multi_edit",
+    "apply_patch",
 ];
 
 fn is_dangerous_tool(tool_id: &str) -> bool {
@@ -311,6 +319,12 @@ impl ToolExecutor {
                 "cover_letter_path",
                 &["coverLetterPath", "cover_letter_file_path"],
             );
+        }
+
+        if normalized == "code_search" {
+            Self::promote_alias_arg(args, "query", &["pattern", "symbol", "name", "search"]);
+            Self::promote_alias_arg(args, "type", &["symbol_type", "kind"]);
+            Self::promote_alias_arg(args, "root", &["directory", "path", "cwd"]);
         }
 
         if normalized == "image_generate" || normalized == "media_generate_image" {
@@ -1500,6 +1514,7 @@ impl ToolExecutor {
             "api_call" => self.execute_api_call_tool(&args).await,
             "image_ocr" => self.execute_image_ocr_tool(&args).await,
             "code_analyze" => self.execute_code_analyze_tool(&args).await,
+            "code_search" => self.execute_code_search_tool(&args).await,
             "image_generate" | "media_generate_image" => {
                 self.execute_image_generate_tool(&args).await
             }
@@ -1564,7 +1579,11 @@ impl ToolExecutor {
             "git_init" => self.execute_git_init_tool(&args).await,
             "github_create_repo" => self.execute_github_create_repo_tool(&args).await,
             "physical_scrape" => self.execute_physical_scrape_tool(&args).await,
+            "todo_write" => self.execute_todo_write_tool(&args).await,
+            "question" => self.execute_question_tool(&args).await,
             "test_run" => self.execute_test_run_tool(args, action_id).await,
+            "multi_edit" => self.execute_multi_edit_tool(&args).await,
+            "apply_patch" => self.execute_apply_patch_tool(&args).await,
             id if id.starts_with("browser_") => self.execute_browser_tool(id, args).await,
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }

@@ -24,7 +24,7 @@ use chrono::{DateTime, Utc};
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tauri::{command, State};
+use tauri::State;
 
 use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::sys::error::{Error, Result};
@@ -338,7 +338,7 @@ impl SchedulerState {
                             jobs.values()
                                 .filter(|job| {
                                     job.status == JobStatus::Active
-                                        && job.next_run.map_or(false, |nr| nr <= now)
+                                        && job.next_run.is_some_and(|nr| nr <= now)
                                 })
                                 .map(|job| {
                                     (
@@ -429,7 +429,7 @@ impl Default for SchedulerState {
 ///
 /// # Returns
 /// The unique job ID
-#[command]
+#[tauri::command]
 pub async fn scheduler_add_job(
     name: String,
     schedule: serde_json::Value,
@@ -487,7 +487,7 @@ pub async fn scheduler_add_job(
 ///
 /// # Returns
 /// `true` if the job was found and removed, `false` otherwise
-#[command]
+#[tauri::command]
 pub async fn scheduler_remove_job(
     job_id: Option<String>,
     id: Option<String>,
@@ -503,7 +503,7 @@ pub async fn scheduler_remove_job(
 ///
 /// # Returns
 /// A vector of all scheduled jobs
-#[command]
+#[tauri::command]
 pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec<ScheduledJob>> {
     state.scheduler.list_jobs()
 }
@@ -514,7 +514,7 @@ pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec
 ///
 /// # Returns
 /// `true` if the job was found and paused, `false` if not found or already paused
-#[command]
+#[tauri::command]
 pub async fn scheduler_pause_job(
     job_id: Option<String>,
     id: Option<String>,
@@ -532,7 +532,7 @@ pub async fn scheduler_pause_job(
 ///
 /// # Returns
 /// `true` if the job was found and resumed, `false` if not found or not paused
-#[command]
+#[tauri::command]
 pub async fn scheduler_resume_job(
     job_id: Option<String>,
     id: Option<String>,
@@ -550,7 +550,7 @@ pub async fn scheduler_resume_job(
 ///
 /// # Returns
 /// The job if found, `None` otherwise
-#[command]
+#[tauri::command]
 pub async fn scheduler_get_job(
     job_id: Option<String>,
     id: Option<String>,
@@ -577,7 +577,7 @@ pub struct NextRunEntry {
 ///
 /// # Returns
 /// A vector of (job_id, next_run_timestamp) tuples, sorted by next run time
-#[command]
+#[tauri::command]
 pub async fn scheduler_get_next_runs(
     limit: Option<usize>,
     state: State<'_, SchedulerState>,
@@ -599,7 +599,7 @@ pub async fn scheduler_get_next_runs(
 ///
 /// # Returns
 /// `true` if the job was found and toggled, `false` otherwise
-#[command]
+#[tauri::command]
 pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) -> Result<bool> {
     // Check current status and toggle accordingly
     let current_status = {
@@ -632,7 +632,7 @@ pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) 
 ///
 /// # Returns
 /// `true` if the job was found and executed
-#[command]
+#[tauri::command]
 pub async fn scheduler_run_job_now(
     id: String,
     state: State<'_, SchedulerState>,
@@ -706,6 +706,89 @@ pub async fn scheduler_run_job_now(
     state.scheduler.mark_job_run(&id, success)
 }
 
+/// SECURITY: Validates a shell command/script against dangerous patterns.
+/// Returns Err with a descriptive message if the command is blocked.
+fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
+    let cmd_lower = command.to_lowercase();
+
+    // Dangerous destructive commands
+    let dangerous_patterns: &[(&str, &str)] = &[
+        ("rm -rf /", "recursive deletion of root filesystem"),
+        ("rm -rf /*", "recursive deletion of root filesystem"),
+        ("rm -rf ~", "recursive deletion of home directory"),
+        ("mkfs", "filesystem formatting"),
+        ("dd if=", "raw disk write"),
+        (":(){:|:&};:", "fork bomb"),
+        (">()", "fork bomb variant"),
+        ("chmod -r 777 /", "global permission change on root"),
+        ("chown -r", "recursive ownership change"),
+        ("shutdown", "system shutdown"),
+        ("reboot", "system reboot"),
+        ("halt", "system halt"),
+        ("init 0", "system shutdown via init"),
+        ("init 6", "system reboot via init"),
+        ("poweroff", "system power off"),
+        ("kill -9 -1", "kill all user processes"),
+        ("killall", "mass process termination"),
+        ("pkill -9", "aggressive process termination"),
+        ("curl | sh", "pipe remote script to shell"),
+        ("curl | bash", "pipe remote script to shell"),
+        ("wget | sh", "pipe remote script to shell"),
+        ("wget | bash", "pipe remote script to shell"),
+    ];
+
+    for (pattern, description) in dangerous_patterns {
+        if cmd_lower.contains(pattern) {
+            tracing::warn!(
+                "[SECURITY][Scheduler] Blocked dangerous command pattern '{}': {}",
+                pattern,
+                description
+            );
+            return Err(format!(
+                "Command blocked: contains dangerous pattern '{}' ({}). \
+                 If this is intentional, execute the command manually instead of via scheduler.",
+                pattern, description
+            ));
+        }
+    }
+
+    // Block commands that attempt to modify critical system paths
+    let protected_paths = ["/etc/", "/boot/", "/sys/", "/proc/", "/dev/"];
+    let write_prefixes = ["rm ", "mv ", "cp ", "> ", "tee "];
+    for path in &protected_paths {
+        for write_op in &write_prefixes {
+            // Check for patterns like "rm /etc/..." or "> /etc/..."
+            let pattern = format!("{}{}", write_op, path);
+            if cmd_lower.contains(&pattern) {
+                tracing::warn!(
+                    "[SECURITY][Scheduler] Blocked write to protected path '{}' via '{}'",
+                    path,
+                    write_op.trim()
+                );
+                return Err(format!(
+                    "Command blocked: attempted write to protected system path '{}'. \
+                     Scheduler commands cannot modify critical system directories.",
+                    path
+                ));
+            }
+        }
+    }
+
+    // Block command chaining that could bypass checks via encoded/obfuscated patterns
+    if cmd_lower.contains("\\x") || cmd_lower.contains("$'\\") || cmd_lower.contains("$(printf") {
+        tracing::warn!(
+            "[SECURITY][Scheduler] Blocked command with encoded/obfuscated characters"
+        );
+        return Err(
+            "Command blocked: contains encoded or obfuscated characters. \
+             Use plain text commands only."
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
+
 /// Dispatch the actual job action based on type and data.
 ///
 /// This executes the job's configured action:
@@ -734,7 +817,10 @@ async fn dispatch_job_action(
                 return Err("Shell command is empty".to_string());
             }
 
-            tracing::info!("[Scheduler] Executing shell command: {}", command);
+            // SECURITY: Validate command against dangerous patterns
+            validate_shell_command(command)?;
+
+            tracing::info!("[Scheduler] Executing shell command for job '{}': {}", job_name, command);
 
             let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"
@@ -773,19 +859,72 @@ async fn dispatch_job_action(
 
             tracing::info!("[Scheduler] Dispatching AGI task: {}", prompt);
 
-            // Emit event for the chat/agent system to pick up
-            app_handle
-                .emit(
-                    "scheduler:agi-task",
-                    serde_json::json!({
-                        "prompt": prompt,
-                        "job_name": job_name,
-                        "source": "scheduler"
-                    }),
-                )
-                .map_err(|e| format!("Failed to emit AGI task event: {}", e))?;
+            // Get the orchestrator from the global static
+            let orchestrator_arc = {
+                let guard = crate::sys::commands::agi::ORCHESTRATOR.lock();
+                guard
+                    .as_ref()
+                    .ok_or_else(|| {
+                        "AGI Orchestrator not initialized. Please initialize it first."
+                            .to_string()
+                    })?
+                    .clone()
+            };
 
-            Ok(())
+            let goal = crate::core::agi::Goal {
+                id: format!("scheduled_{}", uuid::Uuid::new_v4()),
+                description: prompt.to_string(),
+                priority: crate::core::agi::Priority::Medium,
+                deadline: None,
+                constraints: vec![],
+                success_criteria: vec![],
+            };
+
+            let orchestrator = orchestrator_arc.lock().await;
+            let agent_id = orchestrator
+                .spawn_agent(goal)
+                .await
+                .map_err(|e| format!("Failed to spawn scheduled agent: {}", e))?;
+
+            tracing::info!(
+                "[Scheduler] Spawned agent {} for job '{}'",
+                agent_id,
+                job_name
+            );
+
+            // Release lock before polling
+            drop(orchestrator);
+
+            // Poll for completion (max 120 seconds at 200ms intervals = 600 iterations)
+            for _ in 0..600 {
+                let orch = orchestrator_arc.lock().await;
+                if let Some(status) = orch.get_agent_status(&agent_id).await {
+                    match status.status {
+                        crate::core::agi::orchestrator::AgentState::Completed => {
+                            tracing::info!(
+                                "[Scheduler] Agent {} completed for job '{}'",
+                                agent_id,
+                                job_name
+                            );
+                            return Ok(());
+                        }
+                        crate::core::agi::orchestrator::AgentState::Failed => {
+                            return Err(format!(
+                                "Scheduled agent {} failed: {:?}",
+                                agent_id, status.error
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+                drop(orch);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+
+            Err(format!(
+                "Scheduled AGI task timed out after 120s (agent: {})",
+                agent_id
+            ))
         }
 
         SchedulerActionType::Workflow => {
@@ -892,7 +1031,10 @@ async fn dispatch_job_action(
                 return Err("Script content is empty".to_string());
             }
 
-            tracing::info!("[Scheduler] Executing script for job: {}", job_name);
+            // SECURITY: Validate script against dangerous patterns
+            validate_shell_command(script)?;
+
+            tracing::info!("[Scheduler] Executing script for job '{}': <{} chars>", job_name, script.len());
 
             let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"
@@ -930,7 +1072,7 @@ async fn dispatch_job_action(
 ///
 /// # Returns
 /// A vector of JobExecutionRecord entries sorted by most recent first
-#[command]
+#[tauri::command]
 pub async fn scheduler_get_history(
     job_id: Option<String>,
     state: State<'_, SchedulerState>,
@@ -978,7 +1120,7 @@ pub struct ScheduledJobUpdate {
 ///
 /// # Returns
 /// `true` if the job was found and updated
-#[command]
+#[tauri::command]
 pub async fn scheduler_update_job(
     id: String,
     updates: ScheduledJobUpdate,

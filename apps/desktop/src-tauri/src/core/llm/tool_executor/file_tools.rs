@@ -309,6 +309,14 @@ impl ToolExecutor {
                     }
                 }
 
+                // Auto-format after write (best-effort, don't fail the write)
+                if let Some(ext) = Path::new(&validated_path_string)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                {
+                    let _ = try_auto_format(&validated_path_string, ext).await;
+                }
+
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "success": true, "path": &validated_path_string }),
@@ -604,4 +612,118 @@ impl ToolExecutor {
             }
         }
     }
+}
+
+/// Best-effort auto-format: run the appropriate formatter for a file extension.
+///
+/// This is intentionally fire-and-forget. If the formatter is not installed or
+/// fails for any reason, we silently skip — the file write has already succeeded.
+/// We delegate to the existing `format_file` Tauri command module which handles
+/// formatter detection, project-local binary resolution, and fallback chains.
+async fn try_auto_format(path: &str, ext: &str) -> Result<()> {
+    use crate::sys::commands::code_search::format_file;
+
+    // Only attempt formatting for known source file extensions to avoid
+    // running formatters on binary, config, or data files unnecessarily.
+    let should_format = matches!(
+        ext,
+        "rs" | "ts"
+            | "tsx"
+            | "js"
+            | "jsx"
+            | "mjs"
+            | "cjs"
+            | "py"
+            | "go"
+            | "rb"
+            | "c"
+            | "cpp"
+            | "cc"
+            | "h"
+            | "hpp"
+            | "java"
+            | "kt"
+            | "kts"
+            | "json"
+            | "jsonc"
+            | "toml"
+            | "md"
+            | "css"
+            | "scss"
+            | "html"
+            | "vue"
+            | "svelte"
+            | "sh"
+            | "bash"
+            | "zig"
+            | "dart"
+            | "ex"
+            | "exs"
+            | "gleam"
+            | "tf"
+    );
+
+    if !should_format {
+        return Ok(());
+    }
+
+    // Detect project root from the file path (walk up to find common project markers)
+    let project_root = detect_project_root(path);
+
+    match format_file(path.to_string(), project_root).await {
+        Ok(result) => {
+            if result.formatted && result.changed {
+                tracing::debug!(
+                    "[auto-format] Formatted {} with {}",
+                    path,
+                    result.formatter
+                );
+            }
+        }
+        Err(e) => {
+            tracing::debug!("[auto-format] Skipped {}: {}", path, e);
+        }
+    }
+
+    Ok(())
+}
+
+/// Walk up from a file path to find a project root directory.
+///
+/// Looks for common project markers: `Cargo.toml`, `package.json`, `.git`, `go.mod`, etc.
+/// Returns `None` if no marker is found within 10 parent levels.
+fn detect_project_root(file_path: &str) -> Option<String> {
+    let markers = [
+        "Cargo.toml",
+        "package.json",
+        ".git",
+        "go.mod",
+        "pyproject.toml",
+        "setup.py",
+        "Gemfile",
+        "pom.xml",
+        "build.gradle",
+        "CMakeLists.txt",
+        "pubspec.yaml",
+        "mix.exs",
+    ];
+
+    let path = std::path::Path::new(file_path);
+    let mut current = path.parent();
+    let mut depth = 0;
+
+    while let Some(dir) = current {
+        if depth > 10 {
+            break;
+        }
+        for marker in &markers {
+            if dir.join(marker).exists() {
+                return Some(dir.to_string_lossy().to_string());
+            }
+        }
+        current = dir.parent();
+        depth += 1;
+    }
+
+    None
 }

@@ -29,12 +29,13 @@
       "qs": ">=6.14.2",
       "minimatch@3": ">=3.1.4",
       "minimatch@9": ">=9.0.7",
-      "tar": ">=7.5.10",
+      "tar": ">=7.5.11",
       "rollup": ">=4.59.0",
       "serialize-javascript": ">=6.0.3",
       "uuid": "^13.0.0",
       "immer": "^11.1.4",
-      "prismjs": ">=1.30.0"
+      "prismjs": ">=1.30.0",
+      "dompurify": ">=3.3.2"
     }
   },
   "scripts": {

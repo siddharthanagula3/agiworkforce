@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { toast } from 'sonner';
 import type { ModelMetadata } from '../constants/llm';
 import {
   getAllModels,
@@ -190,6 +191,13 @@ interface ModelState {
    */
   isManualModelSelection: () => boolean;
 
+  /**
+   * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
+   * E.g. claude-sonnet-4-6 ↔ claude-sonnet-4-6-thinking, gpt-4o ↔ o1, etc.
+   * Shows a toast with the result.
+   */
+  cycleModelVariant: () => void;
+
   reset: () => void;
 }
 
@@ -209,15 +217,41 @@ const defaultUsageStats: UsageStats = {
     perplexity: { tokens: 0, cost: 0, messages: 0 },
     zhipu: { tokens: 0, cost: 0, messages: 0 },
     managed_cloud: { tokens: 0, cost: 0, messages: 0 },
-    'black-forest-labs': { tokens: 0, cost: 0, messages: 0 },
-    suno: { tokens: 0, cost: 0, messages: 0 },
-    udio: { tokens: 0, cost: 0, messages: 0 },
     mistral: { tokens: 0, cost: 0, messages: 0 },
+    groq: { tokens: 0, cost: 0, messages: 0 },
+    together: { tokens: 0, cost: 0, messages: 0 },
+    fireworks: { tokens: 0, cost: 0, messages: 0 },
+    cerebras: { tokens: 0, cost: 0, messages: 0 },
+    deepinfra: { tokens: 0, cost: 0, messages: 0 },
+    cohere: { tokens: 0, cost: 0, messages: 0 },
+    ai21: { tokens: 0, cost: 0, messages: 0 },
+    sambanova: { tokens: 0, cost: 0, messages: 0 },
+    azure: { tokens: 0, cost: 0, messages: 0 },
+    bedrock: { tokens: 0, cost: 0, messages: 0 },
   },
   byModel: {},
 };
 
 // storageFallback is imported from '../lib/storageFallback'
+
+// ---------------------------------------------------------------------------
+// Model variant map — maps a model to its thinking/reasoning counterpart
+// ---------------------------------------------------------------------------
+
+const MODEL_VARIANT_MAP: Record<string, string> = {
+  'claude-sonnet-4-6': 'claude-sonnet-4-6-thinking',
+  'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6',
+  'claude-opus-4-5': 'claude-opus-4-5-thinking',
+  'claude-opus-4-5-thinking': 'claude-opus-4-5',
+  'gpt-4o': 'o1',
+  o1: 'gpt-4o',
+  'gpt-4o-mini': 'o1-mini',
+  'o1-mini': 'gpt-4o-mini',
+  'gemini-2.0-flash': 'gemini-2.0-flash-thinking',
+  'gemini-2.0-flash-thinking': 'gemini-2.0-flash',
+  'deepseek-chat': 'deepseek-reasoner',
+  'deepseek-reasoner': 'deepseek-chat',
+};
 
 // Version for storage migration
 const MODEL_STORE_VERSION = 1;
@@ -242,10 +276,17 @@ export const useModelStore = create<ModelState>()(
           perplexity: null,
           zhipu: null,
           managed_cloud: null,
-          'black-forest-labs': null,
-          suno: null,
-          udio: null,
           mistral: null,
+          groq: null,
+          together: null,
+          fireworks: null,
+          cerebras: null,
+          deepinfra: null,
+          cohere: null,
+          ai21: null,
+          sambanova: null,
+          azure: null,
+          bedrock: null,
         },
         availableModels: [],
         usageStats: null,
@@ -653,6 +694,24 @@ export const useModelStore = create<ModelState>()(
           return isManualSelection(selectedModel);
         },
 
+        cycleModelVariant: () => {
+          const { selectedModel } = get();
+          if (!selectedModel) {
+            toast.info('No model selected');
+            return;
+          }
+          const variantId = MODEL_VARIANT_MAP[selectedModel];
+          if (!variantId) {
+            toast.info('No thinking/reasoning variant available for this model');
+            return;
+          }
+          // Determine provider from the variant model metadata; fall back to current provider
+          const variantMeta = getModelMetadata(variantId);
+          const provider = variantMeta?.provider ?? get().selectedProvider ?? 'anthropic';
+          void get().selectModel(variantId, provider);
+          toast.success(`Switched to ${variantId}`);
+        },
+
         reset: () => {
           set(
             {
@@ -672,10 +731,17 @@ export const useModelStore = create<ModelState>()(
                 perplexity: null,
                 zhipu: null,
                 managed_cloud: null,
-                'black-forest-labs': null,
-                suno: null,
-                udio: null,
                 mistral: null,
+                groq: null,
+                together: null,
+                fireworks: null,
+                cerebras: null,
+                deepinfra: null,
+                cohere: null,
+                ai21: null,
+                sambanova: null,
+                azure: null,
+                bedrock: null,
               },
               availableModels: [],
               usageStats: null,
