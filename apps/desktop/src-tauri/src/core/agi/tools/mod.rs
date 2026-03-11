@@ -1546,6 +1546,49 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "code_search".to_string(),
+            name: "Code Search".to_string(),
+            description: "Search for code symbols (functions, classes, imports, types, variables) using AST-aware patterns. Uses ripgrep with language-specific regex for fast, gitignore-aware search.".to_string(),
+            capabilities: vec![ToolCapability::CodeAnalysis, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "query".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The symbol name or pattern to search for".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "type".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Symbol type filter: 'function', 'class', 'import', 'type', 'variable', or 'any' (default: 'any')".to_string(),
+                    default: Some(serde_json::Value::String("any".to_string())),
+                },
+                ToolParameter {
+                    name: "language".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Language hint for pattern specialization: 'rust', 'typescript', 'javascript', 'python', 'go', etc.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "root".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Root directory to search in. Defaults to project folder or current working directory.".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "llm_reason".to_string(),
             name: "LLM Reasoning".to_string(),
             description: "Use LLM for reasoning and problem solving".to_string(),
@@ -2860,6 +2903,77 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // ── Planning / Todo ───────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "todo_write".to_string(),
+            name: "TodoWrite (Task List)".to_string(),
+            description: "Create or update a structured task list. Use to track multi-step \
+                progress. Each todo item has an optional id, a required title, and a status \
+                (pending, in_progress, or completed). Calling this tool replaces the \
+                entire task list displayed to the user."
+                .to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::TextProcessing],
+            parameters: vec![ToolParameter {
+                name: "todos".to_string(),
+                parameter_type: ParameterType::Array,
+                required: true,
+                description: "Array of todo items. Each item: {id?: string, title: string, \
+                    status?: 'pending' | 'in_progress' | 'completed'}. Defaults: \
+                    id auto-generated, status 'pending'."
+                    .to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 4,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Interactive Question ─────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "question".to_string(),
+            name: "Question (Interactive)".to_string(),
+            description: "Ask the user a question with selectable choices, displayed inline \
+                in the chat. Use this when you need the user to choose between options \
+                before proceeding. The tool blocks until the user answers or a 60-second \
+                timeout expires. For single-select, the answer is a string. For \
+                multi-select, the answer is an array of strings."
+                .to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "question".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The question text to present to the user".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "choices".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of string choices for the user to pick from".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "multi_select".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Whether the user can select multiple choices (default: false)"
+                        .to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 4,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // ── Test Runner ───────────────────────────────────────────────────────
         self.register_tool(Tool {
             id: "test_run".to_string(),
@@ -2904,6 +3018,68 @@ impl ToolRegistry {
             estimated_resources: ResourceUsage {
                 cpu_percent: 50.0,
                 memory_mb: 256,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── MultiEdit ────────────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "multi_edit".to_string(),
+            name: "Multi Edit".to_string(),
+            description: "Atomic batch find-and-replace across one or more files. \
+                Takes an array of edits, each with {path, old_text, new_text}. \
+                All edits are applied atomically: if any edit fails, all changes \
+                are rolled back. Use this instead of multiple file_write calls \
+                when you need to make coordinated changes across files."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
+            parameters: vec![ToolParameter {
+                name: "edits".to_string(),
+                parameter_type: ParameterType::Array,
+                required: true,
+                description:
+                    "Array of edit objects, each with: path (string), old_text (string), new_text (string)"
+                        .to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── ApplyPatch ───────────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "apply_patch".to_string(),
+            name: "Apply Patch".to_string(),
+            description: "Apply a unified diff patch to a file. Accepts standard \
+                unified diff format with @@ hunk headers, context lines (space prefix), \
+                removals (- prefix), and additions (+ prefix). Partial application is \
+                allowed: successfully applied hunks are kept even if some fail."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path to the file to patch".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "patch".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Unified diff patch content".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
                 network_mb: 0.0,
             },
             dependencies: vec![],

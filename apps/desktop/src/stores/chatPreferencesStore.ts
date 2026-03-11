@@ -41,10 +41,14 @@ export interface ChatPreferences {
   autoInjectSkills?: boolean;
   /** Agent execution mode — controls which tools are allowed and whether approval dialogs appear */
   agentMode: AgentMode;
+  /** Automatically speak assistant responses when input was voice */
+  autoTTS: boolean;
 }
 
 interface ChatPreferencesState {
   chatPreferences: ChatPreferences;
+  /** Transient flag: true when the most recent user message was submitted via voice input */
+  lastInputWasVoice: boolean;
 }
 
 interface ChatPreferencesActions {
@@ -54,6 +58,8 @@ interface ChatPreferencesActions {
   setAutoInjectSkills: (enabled: boolean) => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAgentMode: (mode: AgentMode) => Promise<void>;
+  setAutoTTS: (enabled: boolean) => void;
+  setLastInputWasVoice: (wasVoice: boolean) => void;
 }
 
 export type ChatPreferencesStore = ChatPreferencesState & ChatPreferencesActions;
@@ -69,6 +75,7 @@ export const defaultChatPreferences: ChatPreferences = {
   autoApproveTools: false,
   autoInjectSkills: true,
   agentMode: 'build' as AgentMode,
+  autoTTS: true,
 };
 
 // ============================================================================
@@ -80,6 +87,7 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
     persist(
       subscribeWithSelector((set) => ({
         chatPreferences: { ...defaultChatPreferences },
+        lastInputWasVoice: false,
 
         setPromptCompletionEnabled: (enabled: boolean) => {
           set(
@@ -151,13 +159,38 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
             console.error('Failed to sync agent mode to backend:', error);
           }
         },
+
+        setAutoTTS: (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, autoTTS: enabled },
+            }),
+            undefined,
+            'chatPreferences/setAutoTTS',
+          );
+        },
+
+        setLastInputWasVoice: (wasVoice: boolean) => {
+          set({ lastInputWasVoice: wasVoice }, undefined, 'chatPreferences/setLastInputWasVoice');
+        },
       })),
       {
         name: 'agiworkforce-chat-preferences',
-        version: 1,
+        version: 2,
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        migrate: (persistedState: unknown, version: number) => {
+          const state = persistedState as ChatPreferencesStore;
+          if (version < 2) {
+            state.chatPreferences = {
+              ...defaultChatPreferences,
+              ...state.chatPreferences,
+              autoTTS: true,
+            };
+          }
+          return state;
+        },
         partialize: (state) => ({
           chatPreferences: state.chatPreferences,
         }),

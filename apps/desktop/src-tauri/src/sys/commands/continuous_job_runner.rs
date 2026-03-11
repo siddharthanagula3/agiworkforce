@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{command, AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout, Duration};
@@ -2861,7 +2861,7 @@ async fn run_continuous_loop(
     handle.take();
 }
 
-#[command]
+#[tauri::command]
 pub async fn continuous_job_runner_start(
     app_handle: AppHandle,
     mut request: ContinuousJobRunnerRequest,
@@ -2983,7 +2983,7 @@ pub async fn continuous_job_runner_start(
     Ok(read_status().await)
 }
 
-#[command]
+#[tauri::command]
 pub async fn continuous_job_runner_stop(
     reason: Option<String>,
 ) -> Result<ContinuousJobRunnerStatus, String> {
@@ -3007,7 +3007,7 @@ pub async fn continuous_job_runner_stop(
     Ok(read_status().await)
 }
 
-#[command]
+#[tauri::command]
 pub async fn continuous_job_runner_status() -> Result<ContinuousJobRunnerStatus, String> {
     Ok(read_status().await)
 }

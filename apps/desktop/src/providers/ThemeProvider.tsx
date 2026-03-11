@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'dark' | 'light' | 'system';
+import { applyTheme, clearAppliedTheme, getThemeById } from '../themes';
+
+/** Base modes. Any other string is interpreted as a named theme ID. */
+type BaseTheme = 'dark' | 'light' | 'system';
+type Theme = BaseTheme | string;
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -26,32 +30,43 @@ export function ThemeProvider({
   storageKey = 'ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
+  const [theme, setThemeState] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme,
   );
 
   useEffect(() => {
     const root = window.document.documentElement;
 
+    // Named theme: delegate to the theme registry
+    if (theme !== 'dark' && theme !== 'light' && theme !== 'system') {
+      const themeDefinition = getThemeById(theme);
+      if (themeDefinition) {
+        applyTheme(themeDefinition);
+        return;
+      }
+      // Unknown ID — fall through to default dark
+    }
+
+    // Base mode: clear any previously applied inline theme properties
+    clearAppliedTheme();
     root.classList.remove('light', 'dark');
 
     if (theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
-
       root.classList.add(systemTheme);
       return;
     }
 
-    root.classList.add(theme);
+    root.classList.add(theme as BaseTheme);
   }, [theme]);
 
-  const value = {
+  const value: ThemeProviderState = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+    setTheme: (newTheme: Theme) => {
+      localStorage.setItem(storageKey, newTheme);
+      setThemeState(newTheme);
     },
   };
 

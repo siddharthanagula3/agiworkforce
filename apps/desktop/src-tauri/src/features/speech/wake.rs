@@ -496,8 +496,8 @@ impl VoiceWake {
         for (i, row) in matrix.iter_mut().enumerate().take(m + 1) {
             row[0] = i;
         }
-        for j in 0..=n {
-            matrix[0][j] = j;
+        for (j, val) in matrix[0].iter_mut().enumerate().take(n + 1) {
+            *val = j;
         }
 
         for i in 1..=m {

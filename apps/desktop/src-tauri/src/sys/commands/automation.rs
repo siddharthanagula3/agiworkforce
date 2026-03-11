@@ -904,7 +904,7 @@ fn default_left_button() -> String {
 
 fn emit_overlay(app: &AppHandle, animation: &OverlayAnimation) {
     let _ = app.emit(animation.event_name(), animation);
-    let _ = app.emit("overlay:animation", animation);
+    let _ = app.emit("overlay:animate", animation);
 }
 
 fn animation_from_event(event: OverlayEvent) -> Option<OverlayAnimation> {

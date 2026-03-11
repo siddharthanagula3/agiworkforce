@@ -28,6 +28,16 @@ pub struct Database {
 impl Database {
     pub fn new(path: &str) -> Result<Self> {
         let conn = Connection::open(path)?;
+        conn.execute_batch(
+            "
+            PRAGMA journal_mode = WAL;
+            PRAGMA busy_timeout = 5000;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA foreign_keys = ON;
+            PRAGMA cache_size = -64000;
+            PRAGMA temp_store = MEMORY;
+        ",
+        )?;
         migrations::run_migrations(&conn)?;
 
         Ok(Self {

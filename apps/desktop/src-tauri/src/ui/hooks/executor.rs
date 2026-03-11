@@ -1,3 +1,24 @@
+//! Hook executor for the UI hooks system.
+//!
+//! # Trust Model (Security)
+//!
+//! Hooks in this system are **user-authored only**, following the same trust model
+//! as Claude Code hooks. Hook commands come exclusively from:
+//!
+//! 1. A YAML config file at `~/.agiworkforce/hooks.yaml` on the user's own machine
+//! 2. The `hooks_add` / `hooks_update` Tauri commands (user action via frontend UI)
+//! 3. The `hooks_import` Tauri command (user manually imports YAML)
+//!
+//! There is **no** path from marketplace downloads, plugins, or any untrusted source
+//! to the hook system. The workflow marketplace deals exclusively with workflow
+//! definitions and has zero hook integration.
+//!
+//! Despite the user-authored trust model, we apply a defensive blocklist against
+//! clearly destructive commands (rm -rf /, fork bombs, etc.) to protect against
+//! accidental paste errors or importing malicious YAML from untrusted sources.
+//! Hook commands are passed to `sh -c` (or `cmd /C` on Windows), so the user
+//! has the same power as running commands in their own terminal.
+
 use super::types::{Hook, HookEvent, HookExecutionResult};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -7,6 +28,84 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
+
+/// Dangerous command patterns that are blocked even in user-authored hooks.
+///
+/// These represent clearly destructive operations that a user would almost never
+/// intend to run as a hook. This is a defense-in-depth measure to catch accidental
+/// paste errors or malicious YAML imports from untrusted sources.
+const BLOCKED_HOOK_PATTERNS: &[&str] = &[
+    // Destructive file system operations
+    "rm -rf /",
+    "rm -rf /*",
+    "rm -rf ~",
+    "sudo rm -rf",
+    // Disk destruction
+    "dd if=/dev/zero of=/dev/",
+    "dd if=/dev/random of=/dev/",
+    "mkfs.",
+    // Fork bomb patterns
+    ":(){ :|:& };:",
+    ":(){:|:&};:",
+    "bomb(){ bomb|bomb& };bomb",
+    ".() { .|.& };.",
+    // Remote code execution via pipe
+    "curl | bash",
+    "wget | bash",
+    "curl|bash",
+    "wget|bash",
+    "curl | sh",
+    "wget | sh",
+    "curl|sh",
+    "wget|sh",
+    // System control commands
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "init 0",
+    "init 6",
+    // Destructive redirects to system files/devices
+    "> /dev/sda",
+    "> /dev/hda",
+    ">/dev/sda",
+    ">/dev/hda",
+    "> /etc/passwd",
+    "> /etc/shadow",
+    ">/etc/passwd",
+    ">/etc/shadow",
+    // Dangerous permission changes
+    "chmod 777 /",
+    "chmod -R 777 /",
+    // Overwrite MBR
+    "dd of=/dev/sda",
+    "dd of=/dev/hda",
+    "dd of=/dev/nvme",
+];
+
+/// Validate that a hook command does not contain clearly destructive patterns.
+///
+/// Returns `Ok(())` if the command passes validation, or an error describing
+/// the blocked pattern.
+fn validate_hook_command(command: &str) -> Result<()> {
+    let cmd_lower = command.to_lowercase();
+    let cmd_normalized = cmd_lower.replace(['\t', '\n', '\r'], " ");
+
+    for pattern in BLOCKED_HOOK_PATTERNS {
+        if cmd_normalized.contains(&pattern.to_lowercase()) {
+            error!(
+                "[HookExecutor] SECURITY: Blocked dangerous hook command pattern '{}' in: {}",
+                pattern, command
+            );
+            return Err(anyhow::anyhow!(
+                "Hook command blocked: contains dangerous pattern '{}'",
+                pattern
+            ));
+        }
+    }
+
+    Ok(())
+}
 
 pub struct HookExecutor {
     hooks: tokio::sync::RwLock<Vec<Hook>>,
@@ -32,12 +131,31 @@ impl HookExecutor {
 
     pub async fn load_hooks(&self, hooks: Vec<Hook>) {
         let mut hook_list = self.hooks.write().await;
-        *hook_list = hooks;
+
+        // SECURITY: Filter out hooks with dangerous command patterns at load time.
+        // Log warnings but don't fail the entire load for one bad hook.
+        let mut safe_hooks = Vec::with_capacity(hooks.len());
+        for hook in hooks {
+            match validate_hook_command(&hook.command) {
+                Ok(()) => safe_hooks.push(hook),
+                Err(e) => {
+                    warn!(
+                        "Hook '{}' rejected during load: {}",
+                        hook.name, e
+                    );
+                }
+            }
+        }
+
+        *hook_list = safe_hooks;
         self.sort_hooks_by_priority(&mut hook_list);
         info!("Loaded {} hooks", hook_list.len());
     }
 
     pub async fn add_hook(&self, hook: Hook) -> Result<()> {
+        // SECURITY: Validate command before registering the hook
+        validate_hook_command(&hook.command)?;
+
         let mut hook_list = self.hooks.write().await;
 
         if hook_list.iter().any(|h| h.name == hook.name) {
@@ -149,6 +267,11 @@ impl HookExecutor {
         event: &HookEvent,
     ) -> Result<HookExecutionResult> {
         let start_time = Instant::now();
+
+        // SECURITY: Validate hook command against destructive pattern blocklist.
+        // Hooks are user-authored (same trust model as Claude Code hooks), but
+        // we still block clearly destructive patterns as defense-in-depth.
+        validate_hook_command(&hook.command)?;
 
         let event_json = event.to_json().context("Failed to serialize event")?;
 

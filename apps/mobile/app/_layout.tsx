@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
-import { storage } from '@/lib/mmkv';
+import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import {
   registerForPushNotifications,
   setupNotificationListeners,
@@ -23,9 +23,19 @@ export default function RootLayout() {
   const url = useURL();
   const backPressCount = useRef(0);
 
+  // Initialise MMKV encryption before any store access.
+  // This must run before initialize() so that the Zustand persist middleware
+  // can access the encrypted MMKV instance when rehydrating.
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    initMmkvEncryption()
+      .then(() => initialize())
+      .catch((err) => {
+        console.error('[layout] Failed to initialise MMKV encryption:', err);
+        // Fall through to initialize anyway so auth guard still runs
+        initialize();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Push notifications — register + listeners
   useEffect(() => {

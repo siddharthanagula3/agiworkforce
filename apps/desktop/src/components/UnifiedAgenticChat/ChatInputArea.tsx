@@ -58,6 +58,7 @@ import { FileMentionPicker, MentionFile } from './FileMentionPicker';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceRecordingStatus } from './VoiceRecordingStatus';
+import { PromptStash } from './PromptStash';
 
 import { classifyIntentLocally } from '../../lib/intentClassifier';
 import { open as openFolderDialog } from '@tauri-apps/plugin-dialog';
@@ -1510,6 +1511,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 containerRef={modelSelectorRef}
                 capabilities={capabilities}
                 isToolFallback={isToolFallback}
+              />
+              <PromptStash
+                currentText={content}
+                onLoad={(text) => {
+                  setContent(text);
+                  setDraftContent(text);
+                }}
+                disabled={disabled}
               />
               <VoiceInputButton
                 disabled={disabled}

@@ -39,6 +39,7 @@ pub struct McpToolExecutor {
     execution_history: Arc<RwLock<VecDeque<ToolExecutionResult>>>,
     tool_stats: Arc<RwLock<HashMap<String, ToolStats>>>,
     max_history_size: usize,
+    default_timeout: Duration,
 }
 
 impl McpToolExecutor {
@@ -90,10 +91,28 @@ impl McpToolExecutor {
             execution_history: Arc::new(RwLock::new(VecDeque::with_capacity(1000))),
             tool_stats: Arc::new(RwLock::new(HashMap::new())),
             max_history_size: 1000,
+            default_timeout: Duration::from_secs(60),
         }
     }
 
+    /// Set the default timeout for tool executions that don't specify one.
+    pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
+        self.default_timeout = timeout;
+        self
+    }
+
+    /// Execute a tool with the default timeout safety cap.
     pub async fn execute_tool(
+        &self,
+        tool_id: &str,
+        arguments: HashMap<String, Value>,
+    ) -> McpResult<ToolExecutionResult> {
+        self.execute_tool_with_timeout(tool_id, arguments, self.default_timeout)
+            .await
+    }
+
+    /// Inner implementation that performs the actual tool execution without any timeout.
+    async fn execute_tool_inner(
         &self,
         tool_id: &str,
         arguments: HashMap<String, Value>,
@@ -164,13 +183,14 @@ impl McpToolExecutor {
         }
     }
 
+    /// Execute a tool with a specific timeout.
     pub async fn execute_tool_with_timeout(
         &self,
         tool_id: &str,
         arguments: HashMap<String, Value>,
         timeout: Duration,
     ) -> McpResult<ToolExecutionResult> {
-        match tokio::time::timeout(timeout, self.execute_tool(tool_id, arguments)).await {
+        match tokio::time::timeout(timeout, self.execute_tool_inner(tool_id, arguments)).await {
             Ok(result) => result,
             Err(_) => Err(McpError::ToolExecutionTimeout(format!(
                 "Tool '{}' execution timed out after {:?}",

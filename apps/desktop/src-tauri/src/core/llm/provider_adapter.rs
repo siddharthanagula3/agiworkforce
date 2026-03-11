@@ -255,6 +255,17 @@ impl ProviderAdapterFactory {
             Provider::Zhipu => Box::new(ZhipuAdapter),
             Provider::Mistral => Box::new(OpenAIAdapter), // Mistral uses OpenAI-compatible format
             Provider::ManagedCloud => Box::new(OpenAIAdapter), // ManagedCloud proxies OpenAI format
+            // New OpenAI-compatible providers
+            Provider::Groq => Box::new(OpenAIAdapter),
+            Provider::Together => Box::new(OpenAIAdapter),
+            Provider::Fireworks => Box::new(OpenAIAdapter),
+            Provider::Cerebras => Box::new(OpenAIAdapter),
+            Provider::DeepInfra => Box::new(OpenAIAdapter),
+            Provider::Cohere => Box::new(OpenAIAdapter),  // Cohere v2 uses OpenAI-compatible format
+            Provider::AI21 => Box::new(OpenAIAdapter),
+            Provider::Sambanova => Box::new(OpenAIAdapter),
+            Provider::Azure => Box::new(OpenAIAdapter),   // Azure OpenAI uses OpenAI format
+            Provider::Bedrock => Box::new(OpenAIAdapter),  // Bedrock stub — will need custom adapter later
         }
     }
 }

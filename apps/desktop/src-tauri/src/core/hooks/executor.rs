@@ -2,6 +2,16 @@
 //!
 //! Executes hook commands in response to lifecycle events. Commands are run
 //! via the system shell with hook context provided as environment variables.
+//!
+//! # Trust Model (Security)
+//!
+//! Hooks are **user-authored only**, following the same trust model as Claude Code
+//! hooks. Commands come from the user's own configuration (settings JSON or YAML).
+//! There is no path from marketplace, plugins, or untrusted sources to this executor.
+//!
+//! Despite the user-authored trust model, we apply a defensive blocklist against
+//! clearly destructive commands (rm -rf /, fork bombs, etc.) to protect against
+//! accidental paste errors or importing configs from untrusted sources.
 
 use super::config::{HookDefinition, HooksConfig};
 use super::error::{HookError, HookResult};
@@ -22,6 +32,76 @@ const MAX_CONCURRENT_HOOKS: usize = 10;
 
 /// Maximum output size to capture from hook commands (64KB).
 const MAX_OUTPUT_SIZE: usize = 65536;
+
+/// Dangerous command patterns that are blocked even in user-authored hooks.
+///
+/// Defense-in-depth measure to catch accidental paste errors or malicious
+/// config imports from untrusted sources.
+const BLOCKED_HOOK_PATTERNS: &[&str] = &[
+    "rm -rf /",
+    "rm -rf /*",
+    "rm -rf ~",
+    "sudo rm -rf",
+    "dd if=/dev/zero of=/dev/",
+    "dd if=/dev/random of=/dev/",
+    "mkfs.",
+    ":(){ :|:& };:",
+    ":(){:|:&};:",
+    "bomb(){ bomb|bomb& };bomb",
+    ".() { .|.& };.",
+    "curl | bash",
+    "wget | bash",
+    "curl|bash",
+    "wget|bash",
+    "curl | sh",
+    "wget | sh",
+    "curl|sh",
+    "wget|sh",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "init 0",
+    "init 6",
+    "> /dev/sda",
+    "> /dev/hda",
+    ">/dev/sda",
+    ">/dev/hda",
+    "> /etc/passwd",
+    "> /etc/shadow",
+    ">/etc/passwd",
+    ">/etc/shadow",
+    "chmod 777 /",
+    "chmod -R 777 /",
+    "dd of=/dev/sda",
+    "dd of=/dev/hda",
+    "dd of=/dev/nvme",
+];
+
+/// Validate that a hook command does not contain clearly destructive patterns.
+fn validate_hook_command(command: &str) -> HookResult<()> {
+    let cmd_lower = command.to_lowercase();
+    let cmd_normalized = cmd_lower.replace(['\t', '\n', '\r'], " ");
+
+    for pattern in BLOCKED_HOOK_PATTERNS {
+        if cmd_normalized.contains(&pattern.to_lowercase()) {
+            tracing::error!(
+                "[HookExecutor] SECURITY: Blocked dangerous hook command pattern '{}' in: {}",
+                pattern,
+                command
+            );
+            return Err(HookError::ExecutionFailed {
+                event: "command_validation".to_string(),
+                reason: format!(
+                    "Hook command blocked: contains dangerous pattern '{}'",
+                    pattern
+                ),
+            });
+        }
+    }
+
+    Ok(())
+}
 
 /// Environment variable prefix for hook context.
 const ENV_PREFIX: &str = "AGI_HOOK_";
@@ -350,6 +430,9 @@ impl HookExecutor {
         env_vars: &HashMap<String, String>,
         working_dir: Option<&PathBuf>,
     ) -> HookResult<HookExecutionResult> {
+        // SECURITY: Validate hook command against destructive pattern blocklist.
+        validate_hook_command(&hook.command)?;
+
         // Acquire semaphore permit to limit concurrency
         let _permit = self
             .semaphore

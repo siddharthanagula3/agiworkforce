@@ -1,0 +1,219 @@
+{
+  "NETWORK_ERROR": {
+    "title": "Problema di Connessione",
+    "message": "Impossibile connettersi al server. Verifica la tua connessione Internet.",
+    "suggestions": [
+      "Controlla la connessione WiFi o Ethernet",
+      "Disabilita la VPN se attiva",
+      "Riprova tra un momento",
+      "Verifica se il server è offline"
+    ]
+  },
+  "NETWORK_TIMEOUT": {
+    "title": "Timeout della Richiesta",
+    "message": "La richiesta ha impiegato troppo tempo.",
+    "suggestions": [
+      "Controlla la velocità di Internet",
+      "Riprova con una richiesta più piccola",
+      "Il server potrebbe essere sovraccarico"
+    ]
+  },
+  "API_RATE_LIMIT": {
+    "title": "Limite di Velocità Superato",
+    "message": "Troppe richieste. Attendi prima di riprovare.",
+    "suggestions": [
+      "Attendi qualche minuto prima di riprovare",
+      "Considera di aggiornare il tuo piano API",
+      "Riduci la frequenza delle richieste"
+    ]
+  },
+  "FILE_NOT_FOUND": {
+    "title": "File Non Trovato",
+    "message": "Il file richiesto non è stato trovato.",
+    "suggestions": [
+      "Verifica che il percorso del file sia corretto",
+      "Controlla che il file esista ancora",
+      "Controlla i permessi del file"
+    ]
+  },
+  "PERMISSION_DENIED": {
+    "title": "Permesso Negato",
+    "message": "Non hai il permesso di accedere a questa risorsa.",
+    "suggestions": [
+      "Esegui l'applicazione come amministratore",
+      "Controlla i permessi di file/cartella",
+      "Contatta il tuo amministratore di sistema"
+    ]
+  },
+  "DISK_FULL": {
+    "title": "Disco Pieno",
+    "message": "Spazio su disco insufficiente per completare l'operazione.",
+    "suggestions": [
+      "Libera spazio su disco eliminando file non necessari",
+      "Sposta i file su un'unità esterna",
+      "Svuota il cestino"
+    ]
+  },
+  "DATABASE_LOCKED": {
+    "title": "Database Bloccato",
+    "message": "Il database è attualmente bloccato da un altro processo.",
+    "suggestions": [
+      "Aspetta un momento e riprova",
+      "Chiudi altre istanze dell'applicazione",
+      "Riavvia l'applicazione"
+    ]
+  },
+  "DATABASE_CORRUPTED": {
+    "title": "Database Corrotto",
+    "message": "Il file del database sembra essere corrotto.",
+    "suggestions": [
+      "Ripristina da un backup se disponibile",
+      "Contatta il supporto per assistenza",
+      "Potrebbe essere necessario reimpostare l'applicazione"
+    ]
+  },
+  "AUTH_FAILED": {
+    "title": "Autenticazione Fallita",
+    "message": "Impossibile autenticarsi con le credenziali fornite.",
+    "suggestions": [
+      "Controlla nome utente e password",
+      "Verifica che la tua chiave API sia corretta",
+      "Controlla se il tuo account è attivo"
+    ]
+  },
+  "TOKEN_EXPIRED": {
+    "title": "Sessione Scaduta",
+    "message": "La tua sessione è scaduta. Accedi di nuovo.",
+    "suggestions": ["Clicca per ri-autenticarti", "Verifica se le tue credenziali sono ancora valide"]
+  },
+  "LLM_API_ERROR": {
+    "title": "Errore del Provider LLM",
+    "message": "Si è verificato un errore durante la comunicazione con il provider LLM.",
+    "suggestions": [
+      "Controlla la configurazione della tua chiave API",
+      "Verifica che il tuo account abbia crediti sufficienti",
+      "Prova a passare a un provider diverso",
+      "Controlla la pagina di stato del provider"
+    ]
+  },
+  "LLM_CONTEXT_LENGTH": {
+    "title": "Contesto Troppo Lungo",
+    "message": "Il contesto della conversazione supera la lunghezza massima del modello.",
+    "suggestions": [
+      "Inizia una nuova conversazione",
+      "Riassumi la cronologia della conversazione",
+      "Usa un modello con una finestra di contesto più grande"
+    ]
+  },
+  "LLM_CONTENT_FILTER": {
+    "title": "Contenuto Filtrato",
+    "message": "La richiesta è stata bloccata dal filtro dei contenuti.",
+    "suggestions": [
+      "Riformula la tua richiesta",
+      "Rimuovi contenuti potenzialmente sensibili",
+      "Rivedi la politica sui contenuti"
+    ]
+  },
+  "BROWSER_NOT_FOUND": {
+    "title": "Browser Non Trovato",
+    "message": "Il browser richiesto non è installato o non può essere trovato.",
+    "suggestions": [
+      "Installa il browser richiesto",
+      "Controlla il percorso di installazione del browser",
+      "Prova a usare un browser diverso"
+    ]
+  },
+  "BROWSER_CRASH": {
+    "title": "Browser Crashato",
+    "message": "La sessione di automazione del browser è crashata inaspettatamente.",
+    "suggestions": [
+      "Riprova l'operazione",
+      "Aggiorna il browser all'ultima versione",
+      "Controlla le risorse di sistema (memoria, CPU)"
+    ]
+  },
+  "ELEMENT_NOT_FOUND": {
+    "title": "Elemento Non Trovato",
+    "message": "L'elemento UI specificato non è stato trovato sulla pagina.",
+    "suggestions": [
+      "La pagina potrebbe essere ancora in caricamento",
+      "Il selettore dell'elemento potrebbe essere errato",
+      "La struttura della pagina potrebbe essere cambiata"
+    ]
+  },
+  "AUTOMATION_FAILED": {
+    "title": "Automazione Fallita",
+    "message": "L'attività di automazione non ha potuto essere completata.",
+    "suggestions": [
+      "Controlla se l'applicazione è ancora in esecuzione",
+      "Verifica che i passaggi di automazione siano corretti",
+      "Prova prima a eseguire l'automazione manualmente"
+    ]
+  },
+  "UI_ELEMENT_TIMEOUT": {
+    "title": "Timeout Elemento",
+    "message": "Attesa troppo lunga per la comparsa di un elemento UI.",
+    "suggestions": [
+      "L'applicazione potrebbe rispondere lentamente",
+      "Aumenta la durata del timeout nelle impostazioni",
+      "Controlla se l'elemento esiste ancora"
+    ]
+  },
+  "OUT_OF_MEMORY": {
+    "title": "Memoria Esaurita",
+    "message": "L'applicazione ha esaurito la memoria disponibile.",
+    "suggestions": [
+      "Chiudi altre applicazioni per liberare memoria",
+      "Riavvia l'applicazione",
+      "Elabora quantità minori di dati",
+      "Aggiorna la RAM di sistema se questo accade frequentemente"
+    ]
+  },
+  "SYSTEM_ERROR": {
+    "title": "Errore di Sistema",
+    "message": "Si è verificato un errore di sistema imprevisto.",
+    "suggestions": [
+      "Riprova l'operazione",
+      "Riavvia l'applicazione",
+      "Controlla i log di sistema per i dettagli",
+      "Contatta il supporto se il problema persiste"
+    ]
+  },
+  "AGI_PLANNING_FAILED": {
+    "title": "Pianificazione Fallita",
+    "message": "Il pianificatore AGI non è riuscito a creare un piano per l'obiettivo.",
+    "suggestions": [
+      "Prova a riformulare l'obiettivo in modo più specifico",
+      "Suddividi gli obiettivi complessi in passaggi più piccoli",
+      "Verifica se il provider LLM è disponibile"
+    ]
+  },
+  "AGI_EXECUTION_FAILED": {
+    "title": "Esecuzione Fallita",
+    "message": "Il sistema AGI non è riuscito a eseguire un passaggio.",
+    "suggestions": [
+      "Esamina i dettagli del passaggio nel log degli errori",
+      "Verifica se gli strumenti necessari sono disponibili",
+      "Prova a eseguire il passaggio manualmente"
+    ]
+  },
+  "AGI_TOOL_NOT_FOUND": {
+    "title": "Strumento Non Disponibile",
+    "message": "Lo strumento richiesto non è disponibile o non è installato.",
+    "suggestions": [
+      "Installa lo strumento richiesto",
+      "Abilita lo strumento nelle impostazioni",
+      "Prova a usare uno strumento alternativo"
+    ]
+  },
+  "UNKNOWN_ERROR": {
+    "title": "Errore Sconosciuto",
+    "message": "Si è verificato un errore imprevisto.",
+    "suggestions": [
+      "Riprova l'operazione",
+      "Riavvia l'applicazione",
+      "Controlla i log degli errori per i dettagli",
+      "Segnala questo problema se persiste"
+    ]
+  }
+}

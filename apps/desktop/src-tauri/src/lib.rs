@@ -974,8 +974,8 @@ pub fn run() {
             crate::sys::commands::chat_send_message,
             crate::sys::commands::chat_stop_generation,
             crate::sys::commands::cancel_tool_execution,
-            crate::sys::commands::chat_add_pending_message,
-            crate::sys::commands::chat_pop_pending_message,
+            crate::sys::commands::chat::pending::chat_add_pending_message,
+            crate::sys::commands::chat::pending::chat_pop_pending_message,
             crate::sys::commands::chat_get_conversation_stats,
             crate::sys::commands::chat_get_cost_overview,
             crate::sys::commands::chat_get_cost_analytics,
@@ -1246,6 +1246,22 @@ pub fn run() {
             // Custom Instructions
             crate::sys::commands::save_custom_instructions,
             crate::sys::commands::load_custom_instructions,
+
+            // Custom Agents CRUD
+            crate::sys::commands::list_custom_agents,
+            crate::sys::commands::save_custom_agent,
+            crate::sys::commands::delete_custom_agent,
+
+            // Config Hierarchy
+            crate::sys::commands::get_resolved_config,
+            crate::sys::commands::save_project_config,
+            crate::sys::commands::save_global_config,
+
+            // Interactive Tools
+            crate::sys::commands::interactive::question_answer,
+
+            // Session Sharing
+            crate::sys::commands::chat::share::conversation_share,
 
             crate::sys::account::device_link_initiate,
             crate::sys::account::device_link_poll,

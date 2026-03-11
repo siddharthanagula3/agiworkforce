@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const kanagawa: ThemeDefinition = {
+  id: 'kanagawa',
+  name: 'Kanagawa',
+  author: 'rebelot',
+  variant: 'dark',
+  colors: {
+    background: '225 25% 12%',
+    foreground: '220 14% 80%',
+    card: '225 25% 10%',
+    cardForeground: '220 14% 80%',
+    popover: '225 25% 10%',
+    popoverForeground: '220 14% 80%',
+    primary: '198 74% 69%',
+    primaryForeground: '225 25% 12%',
+    secondary: '225 25% 18%',
+    secondaryForeground: '220 14% 80%',
+    muted: '225 25% 18%',
+    mutedForeground: '220 10% 50%',
+    accent: '302 21% 70%',
+    accentForeground: '225 25% 12%',
+    destructive: '6 74% 61%',
+    destructiveForeground: '220 14% 80%',
+    border: '225 25% 24%',
+    input: '225 25% 24%',
+    ring: '198 74% 69%',
+    syntax: {
+      keyword: '#957fb8',
+      string: '#98bb6c',
+      comment: '#727169',
+      function: '#7e9cd8',
+      number: '#d27e99',
+      operator: '#7fb4ca',
+    },
+  },
+};

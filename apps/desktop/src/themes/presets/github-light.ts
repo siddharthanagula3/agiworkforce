@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const githubLight: ThemeDefinition = {
+  id: 'github-light',
+  name: 'GitHub Light',
+  author: 'GitHub',
+  variant: 'light',
+  colors: {
+    background: '0 0% 100%',
+    foreground: '215 28% 17%',
+    card: '0 0% 98%',
+    cardForeground: '215 28% 17%',
+    popover: '0 0% 98%',
+    popoverForeground: '215 28% 17%',
+    primary: '212 92% 43%',
+    primaryForeground: '0 0% 100%',
+    secondary: '210 38% 95%',
+    secondaryForeground: '215 28% 17%',
+    muted: '210 38% 95%',
+    mutedForeground: '215 25% 40%',
+    accent: '271 91% 65%',
+    accentForeground: '0 0% 100%',
+    destructive: '5 74% 42%',
+    destructiveForeground: '0 0% 100%',
+    border: '210 31% 80%',
+    input: '210 31% 80%',
+    ring: '212 92% 43%',
+    syntax: {
+      keyword: '#cf222e',
+      string: '#0a3069',
+      comment: '#6e7781',
+      function: '#8250df',
+      number: '#0550ae',
+      operator: '#cf222e',
+    },
+  },
+};

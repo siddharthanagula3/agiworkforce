@@ -30,13 +30,55 @@ export class SecurityManager {
 
   /**
    * Get the key source for encryption key derivation.
-   * Uses a combination of factors to create a deterministic key source.
+   * Requires ENCRYPTION_KEY environment variable in production (server-only).
+   * Falls back to a per-origin key ONLY in development.
+   *
+   * NOTE: ENCRYPTION_KEY is intentionally NOT prefixed with NEXT_PUBLIC_ to
+   * prevent it from being bundled into client-side JavaScript. This class
+   * should only be used server-side for encryption operations. Client-side
+   * code that imports SecurityManager will use the development fallback
+   * (in dev) or throw in production — which is the correct behavior since
+   * encryption should happen server-side.
    */
   private getKeySource(): string {
-    // In a browser environment, we use a combination of factors
-    // For production, consider using a server-provided secret
+    // Check for server-only encryption key (not exposed to client bundle)
+    const envKey =
+      typeof process !== 'undefined' && process.env ? process.env['ENCRYPTION_KEY'] : undefined;
+
+    if (envKey && envKey.length >= 32) {
+      return envKey;
+    }
+
+    // In production, refuse to use a deterministic fallback
+    const isProduction =
+      (typeof process !== 'undefined' && process.env && process.env['NODE_ENV'] === 'production') ||
+      (typeof window !== 'undefined' &&
+        window.location?.hostname !== 'localhost' &&
+        !window.location?.hostname?.startsWith('127.') &&
+        !window.location?.hostname?.endsWith('.local'));
+
+    if (isProduction) {
+      throw new Error(
+        'ENCRYPTION_KEY environment variable is required in production ' +
+          '(minimum 32 characters). SecurityManager cannot use a deterministic fallback key.',
+      );
+    }
+
+    // Client-side usage warning
+    if (typeof window !== 'undefined') {
+      console.warn(
+        '[SecurityManager] No ENCRYPTION_KEY available client-side. ' +
+          'Using development fallback. Encryption should be done server-side in production.',
+      );
+    }
+
+    // Development-only fallback — still include origin for per-environment isolation
+    console.warn(
+      '[SecurityManager] Using development fallback encryption key. ' +
+        'Set ENCRYPTION_KEY (>=32 chars) for production.',
+    );
     const factors = [
-      'agi-agent-encryption-key',
+      'agi-agent-dev-encryption-key',
       typeof window !== 'undefined' ? window.location.origin : 'server',
       'v1',
     ];
@@ -433,9 +475,9 @@ export class SecurityManager {
   static unescapeHtml(html: string): string {
     if (!html) return '';
 
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.textContent || div.innerText || '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = html;
+    return textarea.value;
   }
 
   // Validate and sanitize JSON input
@@ -693,6 +735,7 @@ export class CSPManager {
   private static policies: Record<string, string[]> = {
     'default-src': ["'self'"],
     'script-src': ["'self'"],
+    // SECURITY: unsafe-inline required for Tailwind CSS 4 + Radix UI runtime styles
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'https:'],
     'font-src': ["'self'", 'https:'],

@@ -8,6 +8,8 @@
 import React, { useCallback } from 'react';
 import { Check, Download, Loader2, Server } from 'lucide-react';
 import { invoke } from '@/lib/tauri-mock';
+import { toast } from 'sonner';
+import { validateUrl } from '@/utils/security';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
@@ -32,6 +34,15 @@ const BYOK_PROVIDERS = [
   { id: 'mistral', name: 'Mistral', placeholder: 'API key...' },
   { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...' },
   { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...' },
+  { id: 'groq', name: 'Groq', placeholder: 'gsk_...' },
+  { id: 'azure', name: 'Azure OpenAI', placeholder: 'API key...' },
+  { id: 'together', name: 'Together AI', placeholder: 'API key...' },
+  { id: 'fireworks', name: 'Fireworks AI', placeholder: 'fw_...' },
+  { id: 'cohere', name: 'Cohere', placeholder: 'API key...' },
+  { id: 'cerebras', name: 'Cerebras', placeholder: 'API key...' },
+  { id: 'deepinfra', name: 'DeepInfra', placeholder: 'API key...' },
+  { id: 'ai21', name: 'AI21', placeholder: 'API key...' },
+  { id: 'sambanova', name: 'Sambanova', placeholder: 'API key...' },
 ] as const;
 
 function BYOKApiKeysSection() {
@@ -125,6 +136,8 @@ interface ApiKeysSettingsProps {
     | null
     | undefined;
   effortLevel: EffortLevel;
+  providerMode: 'auto' | 'local' | 'cloud';
+  ollamaUrl: string;
   onOllamaEnabledChange: (enabled: boolean) => void;
   onOllamaModelChange: (model: string) => void;
   onAgentModeChange: (value: boolean) => void;
@@ -132,6 +145,8 @@ interface ApiKeysSettingsProps {
   onCompactModeChange: (value: boolean) => void;
   onPromptCompletionChange: (value: boolean) => void;
   onEffortLevelChange: (level: EffortLevel) => void;
+  onProviderModeChange: (mode: 'auto' | 'local' | 'cloud') => void;
+  onOllamaUrlChange: (url: string) => void;
 }
 
 export function ApiKeysSettings({
@@ -142,6 +157,8 @@ export function ApiKeysSettings({
   selectedOllamaModel,
   chatPreferences,
   effortLevel,
+  providerMode,
+  ollamaUrl,
   onOllamaEnabledChange,
   onOllamaModelChange,
   onAgentModeChange,
@@ -149,6 +166,8 @@ export function ApiKeysSettings({
   onCompactModeChange,
   onPromptCompletionChange,
   onEffortLevelChange,
+  onProviderModeChange,
+  onOllamaUrlChange,
 }: ApiKeysSettingsProps) {
   return (
     <>
@@ -157,6 +176,69 @@ export function ApiKeysSettings({
       <div className="pt-6 border-t border-border">
         <h3 className="text-lg font-semibold mb-4">Local Models</h3>
         <div className="space-y-6">
+          {/* Provider Mode */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Provider Mode</label>
+            <div className="flex gap-2">
+              {(['auto', 'local', 'cloud'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onProviderModeChange(mode)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
+                    providerMode === mode
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background border-border hover:bg-accent'
+                  }`}
+                >
+                  {mode === 'auto' ? '⚡ Auto' : mode === 'local' ? '🖥️ Local' : '☁️ Cloud'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {providerMode === 'local'
+                ? 'Always use local Ollama. No data leaves your machine.'
+                : providerMode === 'cloud'
+                  ? 'Always use cloud providers (OpenAI, Anthropic, etc.).'
+                  : 'Automatically route to the best provider for each task.'}
+            </p>
+          </div>
+
+          {/* Ollama URL */}
+          {providerMode !== 'cloud' && (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Ollama URL</label>
+              <input
+                type="url"
+                value={ollamaUrl}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (!raw.trim()) {
+                    onOllamaUrlChange(raw);
+                    return;
+                  }
+                  try {
+                    new URL(raw);
+                    const result = validateUrl(raw, { allowLocalhost: true });
+                    if (!result.valid) {
+                      toast.error(result.error ?? 'Invalid Ollama URL');
+                      return;
+                    }
+                    onOllamaUrlChange(result.sanitized ?? raw);
+                  } catch {
+                    // Still typing a partial URL — allow it through
+                    onOllamaUrlChange(raw);
+                  }
+                }}
+                placeholder="http://localhost:11434"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                URL for the local Ollama server. Default: http://localhost:11434
+              </p>
+            </div>
+          )}
+
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
@@ -353,7 +435,7 @@ export function ApiKeysSettings({
       </div>
 
       <div className="pt-4 text-xs text-muted-foreground">
-        <h4 className="font-medium mb-2">Supported Providers</h4>
+        <h4 className="font-medium mb-2">Supported Providers (22+)</h4>
         <ul className="list-disc list-inside space-y-1">
           <li>OpenAI (GPT-4o, GPT-4.5, o1, o3-mini)</li>
           <li>Anthropic (Claude 4, Sonnet, Haiku)</li>
@@ -361,6 +443,15 @@ export function ApiKeysSettings({
           <li>xAI (Grok-3, Grok-3 Mini)</li>
           <li>DeepSeek (R1, V3)</li>
           <li>Mistral (Large, Codestral)</li>
+          <li>Groq (Llama 3.3, Mixtral)</li>
+          <li>Together AI (Llama, Mixtral, others)</li>
+          <li>Fireworks AI (Llama, Mixtral, others)</li>
+          <li>Cerebras (Llama 3.3)</li>
+          <li>DeepInfra (Llama, Mixtral, others)</li>
+          <li>Cohere (Command R+)</li>
+          <li>AI21 (Jamba 1.5)</li>
+          <li>Sambanova (Llama 3.3)</li>
+          <li>Azure OpenAI (GPT-4o, GPT-4)</li>
           <li>Meta Llama (via Ollama)</li>
           <li>Perplexity (Sonar Pro, Sonar)</li>
           <li>OpenRouter (any model)</li>

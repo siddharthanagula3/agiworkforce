@@ -315,6 +315,40 @@ fn resolve_command_path(command: &str) -> String {
     command.to_string()
 }
 
+/// Allowlist of permitted MCP server executors.
+/// Only these binary names (not full paths) are allowed as MCP server commands.
+const ALLOWED_MCP_EXECUTORS: &[&str] = &[
+    "node", "node.exe",
+    "python", "python3", "python3.exe",
+    "npx", "npx.cmd",
+    "uvx",
+    "deno", "deno.exe",
+    "bun", "bun.exe",
+];
+
+fn validate_mcp_command(command: &str) -> McpResult<()> {
+    // Extract basename (handle both Unix and Windows paths)
+    let basename = std::path::Path::new(command)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(command);
+
+    // Reject shell metacharacters in any argument
+    if command.chars().any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r')) {
+        return Err(McpError::InvalidConfig(format!(
+            "MCP command contains forbidden characters: {command}"
+        )));
+    }
+
+    if !ALLOWED_MCP_EXECUTORS.contains(&basename) {
+        return Err(McpError::InvalidConfig(format!(
+            "MCP server command '{basename}' is not in the allowed executor list. \
+             Permitted executors: {ALLOWED_MCP_EXECUTORS:?}"
+        )));
+    }
+    Ok(())
+}
+
 impl StdioTransport {
     pub async fn new(
         server_name: String,
@@ -322,6 +356,18 @@ impl StdioTransport {
         args: &[String],
         env: &HashMap<String, String>,
     ) -> McpResult<Self> {
+        // Validate the command against the allowlist before spawning
+        validate_mcp_command(command)?;
+
+        // Validate each arg for shell metacharacters
+        for arg in args {
+            if arg.chars().any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r')) {
+                return Err(McpError::InvalidConfig(format!(
+                    "MCP arg contains forbidden characters: {arg}"
+                )));
+            }
+        }
+
         let resolved = resolve_command_path(command);
         tracing::info!(
             "[MCP Transport] Starting server '{}': {} {:?}",

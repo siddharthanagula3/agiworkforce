@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const tokyoNight: ThemeDefinition = {
+  id: 'tokyo-night',
+  name: 'Tokyo Night',
+  author: 'Enkia',
+  variant: 'dark',
+  colors: {
+    background: '225 27% 12%',
+    foreground: '219 14% 71%',
+    card: '225 27% 10%',
+    cardForeground: '219 14% 71%',
+    popover: '225 27% 10%',
+    popoverForeground: '219 14% 71%',
+    primary: '217 92% 76%',
+    primaryForeground: '225 27% 12%',
+    secondary: '225 27% 18%',
+    secondaryForeground: '219 14% 71%',
+    muted: '225 27% 18%',
+    mutedForeground: '220 14% 50%',
+    accent: '267 84% 81%',
+    accentForeground: '225 27% 12%',
+    destructive: '0 63% 69%',
+    destructiveForeground: '225 27% 12%',
+    border: '225 27% 22%',
+    input: '225 27% 22%',
+    ring: '217 92% 76%',
+    syntax: {
+      keyword: '#bb9af7',
+      string: '#9ece6a',
+      comment: '#565f89',
+      function: '#7aa2f7',
+      number: '#ff9e64',
+      operator: '#89ddff',
+    },
+  },
+};

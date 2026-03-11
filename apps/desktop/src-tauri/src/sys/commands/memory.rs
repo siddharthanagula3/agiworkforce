@@ -6,7 +6,7 @@
 use chrono::Utc;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::{command, State};
+use tauri::State;
 
 use crate::core::agi::memory_manager::{
     CompactionCandidate, CompactionConfig, DailyLogEntry, DecayCandidate, DecayConfig, DecayResult,
@@ -111,7 +111,7 @@ impl ConversationSummarizerState {
 /// Store or update a memory
 ///
 /// If a memory with the same category+topic already exists, it will be updated.
-#[command]
+#[tauri::command]
 pub async fn memory_remember(
     category: String,
     topic: String,
@@ -127,7 +127,7 @@ pub async fn memory_remember(
 }
 
 /// Recall a specific memory by category and topic
-#[command]
+#[tauri::command]
 pub async fn memory_recall(
     category: String,
     topic: String,
@@ -138,7 +138,7 @@ pub async fn memory_recall(
 }
 
 /// Search memories by query text
-#[command]
+#[tauri::command]
 pub async fn memory_search(
     query: String,
     limit: Option<usize>,
@@ -149,7 +149,7 @@ pub async fn memory_search(
 }
 
 /// Get all memories in a category
-#[command]
+#[tauri::command]
 pub async fn memory_get_by_category(
     category: String,
     limit: Option<usize>,
@@ -160,7 +160,7 @@ pub async fn memory_get_by_category(
 }
 
 /// Get high-importance memories (for session initialization)
-#[command]
+#[tauri::command]
 pub async fn memory_get_important(
     min_importance: Option<i32>,
     state: State<'_, MemoryState>,
@@ -170,13 +170,13 @@ pub async fn memory_get_important(
 }
 
 /// Delete a memory by ID
-#[command]
+#[tauri::command]
 pub async fn memory_forget(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
     state.manager.forget(memory_id)
 }
 
 /// Delete a memory by category and topic
-#[command]
+#[tauri::command]
 pub async fn memory_forget_topic(
     category: String,
     topic: String,
@@ -187,7 +187,7 @@ pub async fn memory_forget_topic(
 }
 
 /// Log an entry to today's daily log
-#[command]
+#[tauri::command]
 pub async fn memory_log_context(
     content: String,
     entry_type: Option<String>,
@@ -206,7 +206,7 @@ pub async fn memory_log_context(
 }
 
 /// Get daily logs for a specific date (YYYY-MM-DD format)
-#[command]
+#[tauri::command]
 pub async fn memory_get_daily_logs(
     date: String,
     state: State<'_, MemoryState>,
@@ -215,13 +215,13 @@ pub async fn memory_get_daily_logs(
 }
 
 /// Get session context (recent logs + important memories) for AGI initialization
-#[command]
+#[tauri::command]
 pub async fn memory_get_session_context(state: State<'_, MemoryState>) -> Result<String> {
     state.manager.get_session_context()
 }
 
 /// List all memory categories
-#[command]
+#[tauri::command]
 pub async fn memory_list_categories() -> Result<Vec<String>> {
     // Return the standard memory categories
     Ok(vec![
@@ -233,19 +233,19 @@ pub async fn memory_list_categories() -> Result<Vec<String>> {
 }
 
 /// Export all memories for backup
-#[command]
+#[tauri::command]
 pub async fn memory_export_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
     state.manager.export_all()
 }
 
 /// List all memories (alias for memory_export_all for frontend compatibility)
-#[command]
+#[tauri::command]
 pub async fn memory_list_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
     state.manager.export_all()
 }
 
 /// Store or update a memory (alias for memory_remember for frontend compatibility)
-#[command]
+#[tauri::command]
 pub async fn memory_store(
     category: String,
     topic: String,
@@ -261,13 +261,13 @@ pub async fn memory_store(
 }
 
 /// Delete a memory by ID (alias for memory_forget for frontend compatibility)
-#[command]
+#[tauri::command]
 pub async fn memory_delete(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
     state.manager.forget(memory_id)
 }
 
 /// Cleanup old daily logs (keep last N days)
-#[command]
+#[tauri::command]
 pub async fn memory_cleanup_logs(
     keep_days: Option<i32>,
     state: State<'_, MemoryState>,
@@ -281,19 +281,19 @@ pub async fn memory_cleanup_logs(
 // =============================================================================
 
 /// Run memory importance decay
-#[command]
+#[tauri::command]
 pub async fn memory_run_decay(state: State<'_, MemoryState>) -> Result<DecayResult> {
     state.manager.decay_memories()
 }
 
 /// Get the current decay configuration
-#[command]
+#[tauri::command]
 pub async fn memory_get_decay_config(state: State<'_, MemoryState>) -> Result<DecayConfig> {
     state.manager.get_decay_config()
 }
 
 /// Set the decay configuration
-#[command]
+#[tauri::command]
 pub async fn memory_set_decay_config(
     enabled: bool,
     decay_rate: f32,
@@ -313,7 +313,7 @@ pub async fn memory_set_decay_config(
 }
 
 /// Get memories that are candidates for decay
-#[command]
+#[tauri::command]
 pub async fn memory_get_decay_candidates(
     state: State<'_, MemoryState>,
 ) -> Result<Vec<DecayCandidate>> {
@@ -321,13 +321,13 @@ pub async fn memory_get_decay_candidates(
 }
 
 /// Boost the importance of a memory by ID
-#[command]
+#[tauri::command]
 pub async fn memory_boost_on_access(memory_id: i64, state: State<'_, MemoryState>) -> Result<i32> {
     state.manager.boost_on_access(memory_id)
 }
 
 /// Recall a memory with importance boost
-#[command]
+#[tauri::command]
 pub async fn memory_recall_with_boost(
     category: String,
     topic: String,
@@ -338,7 +338,7 @@ pub async fn memory_recall_with_boost(
 }
 
 /// Manually decay a specific memory by a given amount
-#[command]
+#[tauri::command]
 pub async fn memory_decay_single(
     memory_id: i64,
     decay_amount: i32,
@@ -348,7 +348,7 @@ pub async fn memory_decay_single(
 }
 
 /// Get statistics about memory importance distribution
-#[command]
+#[tauri::command]
 pub async fn memory_get_stats(state: State<'_, MemoryState>) -> Result<MemoryStats> {
     state.manager.get_memory_stats()
 }
@@ -358,7 +358,7 @@ pub async fn memory_get_stats(state: State<'_, MemoryState>) -> Result<MemorySta
 // =============================================================================
 
 /// Get daily logs that are candidates for compaction
-#[command]
+#[tauri::command]
 pub async fn memory_get_compaction_candidates(
     config: Option<CompactionConfig>,
     state: State<'_, MemoryState>,
@@ -368,7 +368,7 @@ pub async fn memory_get_compaction_candidates(
 }
 
 /// Get logs in a date range for compaction preview
-#[command]
+#[tauri::command]
 pub async fn memory_get_logs_in_range(
     start_date: Option<String>,
     end_date: Option<String>,
@@ -380,7 +380,7 @@ pub async fn memory_get_logs_in_range(
 }
 
 /// Compact old daily logs into long-term memories
-#[command]
+#[tauri::command]
 pub async fn memory_compact_old_logs(
     start_date: Option<String>,
     end_date: Option<String>,
@@ -407,7 +407,7 @@ pub async fn memory_compact_old_logs(
 }
 
 /// Promote extracted memories to long-term storage
-#[command]
+#[tauri::command]
 pub async fn memory_promote_extracted(
     memories: Vec<ExtractedMemory>,
     state: State<'_, MemoryState>,
@@ -416,7 +416,7 @@ pub async fn memory_promote_extracted(
 }
 
 /// Archive compacted daily logs
-#[command]
+#[tauri::command]
 pub async fn memory_archive_compacted_logs(
     dates: Vec<String>,
     delete_compacted: bool,
@@ -428,7 +428,7 @@ pub async fn memory_archive_compacted_logs(
 }
 
 /// Get the extraction prompt for a date range
-#[command]
+#[tauri::command]
 pub async fn memory_get_extraction_prompt(
     start_date: Option<String>,
     end_date: Option<String>,
@@ -448,7 +448,7 @@ pub async fn memory_get_extraction_prompt(
 }
 
 /// Get compaction statistics
-#[command]
+#[tauri::command]
 pub async fn memory_get_compaction_stats(
     state: State<'_, MemoryState>,
 ) -> Result<serde_json::Value> {
@@ -463,7 +463,7 @@ pub async fn memory_get_compaction_stats(
 ///
 /// If a path is provided, exports to that file and returns metadata about the export.
 /// If no path is provided, returns the full JSON export data.
-#[command]
+#[tauri::command]
 pub async fn memory_export_json(
     state: State<'_, MemoryState>,
     path: Option<String>,
@@ -498,7 +498,7 @@ pub async fn memory_export_json(
 ///
 /// If a path is provided, exports to that file and returns metadata about the export as JSON.
 /// If no path is provided, returns the Markdown string directly.
-#[command]
+#[tauri::command]
 pub async fn memory_export_markdown(
     state: State<'_, MemoryState>,
     path: Option<String>,
@@ -536,7 +536,7 @@ pub async fn memory_export_markdown(
 /// - "skip" (default): Keep existing memories, skip duplicates
 /// - "replace": Replace existing memories with imported data
 /// - "merge": Only update if imported data is newer
-#[command]
+#[tauri::command]
 pub async fn memory_import_json(
     state: State<'_, MemoryState>,
     path: String,
@@ -562,7 +562,7 @@ pub async fn memory_import_json(
 ///
 /// Imports memories and daily logs from a JSON string (useful for programmatic imports).
 /// The strategy parameter controls how to handle conflicts with existing memories.
-#[command]
+#[tauri::command]
 pub async fn memory_import_json_string(
     state: State<'_, MemoryState>,
     json: String,
@@ -587,7 +587,7 @@ pub async fn memory_import_json_string(
 // =============================================================================
 
 /// Get memory dashboard statistics
-#[command]
+#[tauri::command]
 pub async fn memory_get_dashboard_stats(
     state: State<'_, MemoryState>,
 ) -> Result<serde_json::Value> {
@@ -601,7 +601,7 @@ pub async fn memory_get_dashboard_stats(
 }
 
 /// Get project-specific memories for injection into LLM context
-#[command]
+#[tauri::command]
 pub async fn memory_get_project_memories(
     project_name: Option<String>,
     limit: Option<usize>,
@@ -619,7 +619,7 @@ pub async fn memory_get_project_memories(
 }
 
 /// Get memory usage trends (placeholder for future analytics)
-#[command]
+#[tauri::command]
 pub async fn memory_get_usage_trends(state: State<'_, MemoryState>) -> Result<serde_json::Value> {
     let stats = state.manager.get_memory_stats()?;
 
@@ -634,7 +634,7 @@ pub async fn memory_get_usage_trends(state: State<'_, MemoryState>) -> Result<se
 }
 
 /// Suggest important memories for user review
-#[command]
+#[tauri::command]
 pub async fn memory_suggest_important(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
     // Get critical memories (importance >= 9)
     state.manager.get_important_memories(9)

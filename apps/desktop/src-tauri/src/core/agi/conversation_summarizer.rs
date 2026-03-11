@@ -388,6 +388,12 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                 .ok()
                 .flatten();
 
+            // SECURITY: Filter zero vectors — cosine similarity is undefined for zero magnitude.
+            let embedding = embedding.filter(|v| {
+                !v.is_empty()
+                    && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
+            });
+
             let memory = PersistentMemory::new(extracted.content, category, extracted.topic)
                 .with_importance(extracted.importance)
                 .with_source(conversation_id.to_string());
@@ -417,6 +423,12 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                 .await
                 .ok()
                 .flatten();
+
+            // SECURITY: Filter zero vectors for summary embedding.
+            let summary_embedding = summary_embedding.filter(|v| {
+                !v.is_empty()
+                    && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
+            });
 
             self.store.store_conversation_summary(
                 conversation_id,
@@ -498,7 +510,7 @@ impl HttpSummaryLLM {
 
         Self {
             http_client,
-            ollama_url: "http://localhost:11434".to_string(),
+            ollama_url: crate::core::llm::OLLAMA_DEFAULT_BASE_URL.to_string(),
             openai_api_key,
         }
     }

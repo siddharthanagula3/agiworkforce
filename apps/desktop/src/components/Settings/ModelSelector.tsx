@@ -97,10 +97,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       perplexity: [],
       zhipu: [],
       managed_cloud: [],
-      'black-forest-labs': [],
-      suno: [],
-      udio: [],
       mistral: [],
+      groq: [],
+      together: [],
+      fireworks: [],
+      cerebras: [],
+      deepinfra: [],
+      cohere: [],
+      ai21: [],
+      sambanova: [],
+      azure: [],
+      bedrock: [],
     };
 
     filteredModels.forEach((model) => {

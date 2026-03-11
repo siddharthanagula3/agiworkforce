@@ -62,6 +62,16 @@ mod r1_phantom_models {
             Provider::Zhipu,
             Provider::ManagedCloud,
             Provider::Mistral,
+            Provider::Groq,
+            Provider::Together,
+            Provider::Fireworks,
+            Provider::Cerebras,
+            Provider::DeepInfra,
+            Provider::Cohere,
+            Provider::AI21,
+            Provider::Sambanova,
+            Provider::Azure,
+            Provider::Bedrock,
         ];
         let tasks = [
             TaskType::FastCompletion,
