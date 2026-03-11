@@ -89,13 +89,13 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
                 </h4>
               )}
               <a
-                href={citation.url}
+                href={/^https?:\/\//i.test(citation.url || '') ? citation.url : '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-teal hover:text-teal/80 flex items-center gap-1 break-all"
                 onClick={(e) => e.stopPropagation()}
               >
-                {new URL(citation.url).hostname}
+                {(() => { try { return new URL(citation.url).hostname; } catch { return citation.url; } })()}
                 <ExternalLink className="w-3 h-3 shrink-0" />
               </a>
             </div>

@@ -71,7 +71,7 @@ impl OllamaProvider {
             .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
         Ok(Self {
             client,
-            base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
+            base_url: base_url.unwrap_or_else(|| super::super::OLLAMA_DEFAULT_BASE_URL.to_string()),
         })
     }
 

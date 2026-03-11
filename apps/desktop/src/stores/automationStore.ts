@@ -375,7 +375,7 @@ export const useAutomationStore = create<AutomationState>()(
         saveRecordingAsScript: async (recording, name, description, tags) => {
           try {
             const script = await invoke<AutomationScript>('save_recording_as_script', {
-              recording_id: recording.id,
+              recordingId: recording.id,
               name,
               description,
               tags,
@@ -491,7 +491,7 @@ export const useAutomationStore = create<AutomationState>()(
           );
           try {
             const result = await invoke<ExecutionResult>('execute_automation_script', {
-              script_id: script.id,
+              scriptId: script.id,
               script,
             });
             const historyEntry: ExecutionHistory = {

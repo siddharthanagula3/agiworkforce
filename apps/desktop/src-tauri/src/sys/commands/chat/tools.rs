@@ -71,7 +71,8 @@ pub fn build_chat_tools(
 
 /// Create a ToolRegistry specifically for schema generation.
 /// This ensures the tool definitions sent to the LLM match what's executed at runtime.
-fn create_tool_registry_for_schema() -> Result<Arc<ToolRegistry>> {
+/// `pub(crate)` so callers (e.g. `mod.rs`) can pre-build the registry and reuse it.
+pub(crate) fn create_tool_registry_for_schema() -> Result<Arc<ToolRegistry>> {
     let registry = Arc::new(ToolRegistry::new()?);
     registry.register_all_tools()?;
     Ok(registry)
@@ -1223,7 +1224,11 @@ impl ChatToolResult {
 }
 
 /// Execute a chat tool by name.
-/// This function dispatches tool calls to the appropriate executor.
+///
+/// `prebuilt_registry` is an optional `Arc<ToolRegistry>` from `build_tool_definitions`.
+/// When provided it is reused directly, avoiding the cost of constructing and registering
+/// all tools again for every tool call within a loop (Fix 4 — registry caching per request).
+/// When absent (e.g. called outside the main chat flow) a fresh registry is created.
 pub async fn execute_chat_tool(
     tool_name: &str,
     arguments_json: &str,
@@ -1231,11 +1236,10 @@ pub async fn execute_chat_tool(
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
+    prebuilt_registry: Option<Arc<ToolRegistry>>,
 ) -> Result<String> {
-    use crate::core::agi::tools::ToolRegistry;
     use crate::core::llm::tool_executor::ToolExecutor;
     use crate::core::llm::ToolCall;
-    use std::sync::Arc;
 
     let handle =
         app_handle.ok_or_else(|| anyhow::anyhow!("Tool execution requires desktop app context"))?;
@@ -1246,8 +1250,15 @@ pub async fn execute_chat_tool(
         _ => tool_name,
     };
 
-    let registry = Arc::new(ToolRegistry::new()?);
-    registry.register_all_tools()?;
+    // Reuse the pre-built registry when available; otherwise build one now.
+    let registry = match prebuilt_registry {
+        Some(r) => r,
+        None => {
+            let r = Arc::new(ToolRegistry::new()?);
+            r.register_all_tools()?;
+            r
+        }
+    };
 
     let mut executor = ToolExecutor::with_app_handle(registry, handle.clone());
     executor.set_project_folder(project_folder);

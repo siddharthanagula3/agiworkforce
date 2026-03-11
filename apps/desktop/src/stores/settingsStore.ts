@@ -27,17 +27,24 @@ import type { Provider } from '../types/provider';
 import type { CustomModelConfig } from '../types/customModel';
 import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
-export type Theme = 'light' | 'dark' | 'system';
-export type Language = 'en' | 'es';
-/**
- * Agent operating modes:
- * - 'safe'     — minimal tool use, always confirms before acting
- * - 'plan'     — READ-ONLY: reads files, searches, analyses, but NEVER writes/edits/executes.
- *                Shows a plan before asking user to switch to 'build' to apply it.
- * - 'build'    — full tool access, can write/edit files and run shell commands (default)
- * - 'autopilot'— full tool access, skips all confirmation dialogs
- */
-export type AgentMode = 'safe' | 'plan' | 'build' | 'autopilot';
+import type { AgentMode } from './chatPreferencesStore';
+export type { AgentMode };
+
+/** Base theme modes. Any other string value is treated as a named theme ID from the theme registry. */
+export type Theme = 'light' | 'dark' | 'system' | string;
+export type Language =
+  | 'en'
+  | 'es'
+  | 'zh'
+  | 'ja'
+  | 'ko'
+  | 'fr'
+  | 'de'
+  | 'pt'
+  | 'it'
+  | 'ru'
+  | 'ar'
+  | 'hi';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
 
@@ -61,6 +68,8 @@ interface LLMConfig {
   };
   taskRouting: TaskRouting;
   favoriteModels: string[];
+  providerMode: 'auto' | 'local' | 'cloud';
+  ollamaUrl: string;
 }
 
 interface WindowPreferences {
@@ -68,6 +77,8 @@ interface WindowPreferences {
   language: Language;
   startupPosition: 'center' | 'remember';
   dockOnStartup: 'left' | 'right' | null;
+  /** Named theme ID from the theme registry. When set, overrides `theme` for color values. */
+  selectedTheme?: string;
 }
 
 export interface ChatPreferences {
@@ -86,6 +97,12 @@ export interface ChatPreferences {
   autoInjectSkills?: boolean;
   /** Agent execution mode — controls which tools are allowed and whether approval dialogs appear */
   agentMode: AgentMode;
+  /**
+   * Where chat history is persisted.
+   * 'local'  — SQLite only, never synced to cloud (default & recommended for privacy).
+   * 'cloud'  — SQLite + best-effort Supabase sync after every message save.
+   */
+  chatStorageMode: 'local' | 'cloud';
 }
 
 export interface ExecutionPreferences {
@@ -136,6 +153,12 @@ interface SettingsState {
   globalHotkeyPreferences: GlobalHotkeyPreferences;
   allowedDirectories: string[];
   customModels: CustomModelConfig[];
+  /**
+   * User-customized keybindings.
+   * Key = shortcut ID (from DEFAULT_SHORTCUTS), value = serialized combo ("meta+shift+m").
+   * Only overrides are stored — missing IDs fall back to DEFAULT_SHORTCUTS.
+   */
+  customKeybindings: Record<string, string>;
   loading: boolean;
   error: string | null;
 
@@ -151,8 +174,11 @@ interface SettingsState {
   setFavoriteModels: (models: string[]) => void;
   addFavoriteModel: (model: string) => void;
   removeFavoriteModel: (model: string) => void;
+  setProviderMode: (mode: 'auto' | 'local' | 'cloud') => void;
+  setOllamaUrl: (url: string) => void;
 
   setTheme: (theme: Theme) => void;
+  setSelectedTheme: (themeId: string | undefined) => void;
   setLanguage: (language: Language) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
@@ -163,6 +189,7 @@ interface SettingsState {
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
   setAgentMode: (mode: AgentMode) => Promise<void>;
+  setChatStorageMode: (mode: 'local' | 'cloud') => void;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;
@@ -172,6 +199,10 @@ interface SettingsState {
 
   setGlobalHotkeyEnabled: (enabled: boolean) => void;
   setGlobalHotkeyCombo: (combo: string) => void;
+
+  setCustomKeybinding: (id: string, combo: string) => void;
+  resetCustomKeybinding: (id: string) => void;
+  resetAllCustomKeybindings: () => void;
 
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
@@ -198,6 +229,7 @@ const defaultSettings: Pick<
   | 'globalHotkeyPreferences'
   | 'allowedDirectories'
   | 'customModels'
+  | 'customKeybindings'
   | 'features'
 > = {
   llmConfig: {
@@ -209,6 +241,8 @@ const defaultSettings: Pick<
       managed_cloud: 'auto',
     },
     favoriteModels: [],
+    providerMode: 'auto' as const,
+    ollamaUrl: 'http://localhost:11434',
     taskRouting: {
       search: { provider: 'managed_cloud', model: 'auto' },
       code: { provider: 'managed_cloud', model: 'auto' },
@@ -232,6 +266,7 @@ const defaultSettings: Pick<
     autoApproveTools: false, // Off by default - show confirmation dialogs
     autoInjectSkills: true, // Auto-inject relevant skills based on message intent
     agentMode: 'build' as AgentMode, // Default to Build mode
+    chatStorageMode: 'local' as const, // Local-only by default (privacy-preserving)
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
@@ -246,6 +281,7 @@ const defaultSettings: Pick<
   },
   allowedDirectories: [],
   customModels: [],
+  customKeybindings: {},
   features: {},
 };
 
@@ -275,7 +311,11 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v11: Added features for capability toggles
 // v12: Added autoInjectSkills to chatPreferences
 // v13: Added agentMode to chatPreferences
-const SETTINGS_STORE_VERSION = 13;
+// v14: Added providerMode and ollamaUrl to llmConfig
+// v15: Added chatStorageMode to chatPreferences (local | cloud)
+// v16: Added customKeybindings for user-defined keyboard shortcuts
+// v17: Added selectedTheme to windowPreferences (named theme registry ID)
+const SETTINGS_STORE_VERSION = 17;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -425,6 +465,31 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
+        setCustomKeybinding: (id: string, combo: string) => {
+          set(
+            (state) => ({
+              customKeybindings: { ...state.customKeybindings, [id]: combo },
+            }),
+            undefined,
+            'settings/setCustomKeybinding',
+          );
+        },
+
+        resetCustomKeybinding: (id: string) => {
+          set(
+            (state) => {
+              const { [id]: _removed, ...rest } = state.customKeybindings;
+              return { customKeybindings: rest };
+            },
+            undefined,
+            'settings/resetCustomKeybinding',
+          );
+        },
+
+        resetAllCustomKeybindings: () => {
+          set({ customKeybindings: {} }, undefined, 'settings/resetAllCustomKeybindings');
+        },
+
         setDefaultProvider: async (provider: Provider) => {
           try {
             await invoke('llm_set_default_provider', { provider });
@@ -534,6 +599,28 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
+        setProviderMode: (mode: 'auto' | 'local' | 'cloud') => {
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, providerMode: mode },
+            }),
+            undefined,
+            'settings/setProviderMode',
+          );
+          void get().saveSettings();
+        },
+
+        setOllamaUrl: (url: string) => {
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, ollamaUrl: url },
+            }),
+            undefined,
+            'settings/setOllamaUrl',
+          );
+          void get().saveSettings();
+        },
+
         setTheme: (theme: Theme) => {
           set(
             (state) => ({
@@ -553,6 +640,16 @@ export const useSettingsStore = create<SettingsState>()(
               document.documentElement.classList.remove('dark');
             }
           }
+        },
+
+        setSelectedTheme: (themeId: string | undefined) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, selectedTheme: themeId },
+            }),
+            undefined,
+            'settings/setSelectedTheme',
+          );
         },
 
         setLanguage: (language: Language) => {
@@ -658,6 +755,17 @@ export const useSettingsStore = create<SettingsState>()(
           }
         },
 
+        setChatStorageMode: (mode: 'local' | 'cloud') => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, chatStorageMode: mode },
+            }),
+            undefined,
+            'settings/setChatStorageMode',
+          );
+          void get().saveSettings();
+        },
+
         addAllowedDirectory: (path: string) => {
           set(
             (state) => {
@@ -761,6 +869,9 @@ export const useSettingsStore = create<SettingsState>()(
               favoriteModels: Array.isArray(settings.llmConfig?.favoriteModels)
                 ? settings.llmConfig.favoriteModels
                 : [],
+              providerMode:
+                settings.llmConfig?.providerMode ?? defaultSettings.llmConfig.providerMode,
+              ollamaUrl: settings.llmConfig?.ollamaUrl ?? defaultSettings.llmConfig.ollamaUrl,
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -790,7 +901,7 @@ export const useSettingsStore = create<SettingsState>()(
               await invoke('llm_configure_provider', {
                 provider: 'ollama',
                 apiKey: null,
-                baseUrl: 'http://localhost:11434',
+                baseUrl: mergedLLMConfig.ollamaUrl || 'http://localhost:11434',
               });
             } catch (error) {
               console.error('Failed to configure Ollama provider:', error);
@@ -967,12 +1078,14 @@ export const useSettingsStore = create<SettingsState>()(
             language: state.windowPreferences.language,
             startupPosition: state.windowPreferences.startupPosition,
             dockOnStartup: state.windowPreferences.dockOnStartup,
+            selectedTheme: state.windowPreferences.selectedTheme,
           },
           chatPreferences: state.chatPreferences,
           executionPreferences: state.executionPreferences,
           globalHotkeyPreferences: state.globalHotkeyPreferences,
           allowedDirectories: state.allowedDirectories,
           customModels: state.customModels,
+          customKeybindings: state.customKeybindings,
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SettingsState> | undefined;
@@ -1000,6 +1113,8 @@ export const useSettingsStore = create<SettingsState>()(
             favoriteModels: Array.isArray(persisted?.llmConfig?.favoriteModels)
               ? persisted.llmConfig.favoriteModels
               : currentState.llmConfig.favoriteModels,
+            providerMode: persisted?.llmConfig?.providerMode ?? currentState.llmConfig.providerMode,
+            ollamaUrl: persisted?.llmConfig?.ollamaUrl ?? currentState.llmConfig.ollamaUrl,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -1036,6 +1151,10 @@ export const useSettingsStore = create<SettingsState>()(
             customModels: Array.isArray(persisted?.customModels)
               ? persisted.customModels
               : currentState.customModels,
+            customKeybindings:
+              persisted?.customKeybindings && typeof persisted.customKeybindings === 'object'
+                ? persisted.customKeybindings
+                : currentState.customKeybindings,
           };
         },
         migrate: (persistedState: unknown, version: number) => {
@@ -1078,6 +1197,7 @@ export const useSettingsStore = create<SettingsState>()(
                 compactMode: true,
                 autoApproveTools: false,
                 agentMode: 'build',
+                chatStorageMode: 'local',
               };
             } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
               state.chatPreferences.alwaysUseAgentMode = false;
@@ -1172,6 +1292,54 @@ export const useSettingsStore = create<SettingsState>()(
               state.chatPreferences.agentMode = state.chatPreferences.autoApproveTools
                 ? 'autopilot'
                 : 'build';
+            }
+          }
+
+          // Migration from v13 to v14: Add providerMode and ollamaUrl to llmConfig
+          if (version < 14) {
+            if (state.llmConfig) {
+              const llmConfig = state.llmConfig as Partial<LLMConfig>;
+              if (llmConfig.providerMode === undefined) {
+                llmConfig.providerMode = 'auto';
+              }
+              if (llmConfig.ollamaUrl === undefined) {
+                llmConfig.ollamaUrl = 'http://localhost:11434';
+              }
+            }
+          }
+
+          // Migration from v14 to v15: Add chatStorageMode to chatPreferences
+          if (version < 15) {
+            if (state.chatPreferences) {
+              const cp = state.chatPreferences as Partial<ChatPreferences>;
+              if (cp.chatStorageMode === undefined) {
+                cp.chatStorageMode = 'local';
+              }
+            }
+          }
+
+          // Migration from v15 to v16: Add customKeybindings map
+          if (version < 16) {
+            const stateWithKeys = state as Partial<SettingsState>;
+            if (
+              !stateWithKeys.customKeybindings ||
+              typeof stateWithKeys.customKeybindings !== 'object'
+            ) {
+              stateWithKeys.customKeybindings = {};
+            }
+          }
+
+          // Migration from v16 to v17: Add selectedTheme to windowPreferences
+          if (version < 17) {
+            const stateWithTheme = state as Partial<SettingsState>;
+            if (stateWithTheme.windowPreferences) {
+              // selectedTheme is undefined by default (no named theme selected)
+              if (stateWithTheme.windowPreferences.selectedTheme === undefined) {
+                stateWithTheme.windowPreferences = {
+                  ...stateWithTheme.windowPreferences,
+                  selectedTheme: undefined,
+                };
+              }
             }
           }
 

@@ -73,6 +73,16 @@ mod tests {
             (Provider::Zhipu, "zhipu"),
             (Provider::ManagedCloud, "managed_cloud"),
             (Provider::Mistral, "mistral"),
+            (Provider::Groq, "groq"),
+            (Provider::Together, "together"),
+            (Provider::Fireworks, "fireworks"),
+            (Provider::Cerebras, "cerebras"),
+            (Provider::DeepInfra, "deepinfra"),
+            (Provider::Cohere, "cohere"),
+            (Provider::AI21, "ai21"),
+            (Provider::Sambanova, "sambanova"),
+            (Provider::Azure, "azure"),
+            (Provider::Bedrock, "bedrock"),
         ];
         for &(provider, name) in all_providers {
             router.set_provider(

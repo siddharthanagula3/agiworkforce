@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const solarizedLight: ThemeDefinition = {
+  id: 'solarized-light',
+  name: 'Solarized Light',
+  author: 'Ethan Schoonover',
+  variant: 'light',
+  colors: {
+    background: '44 87% 94%',
+    foreground: '194 14% 40%',
+    card: '44 87% 97%',
+    cardForeground: '194 14% 40%',
+    popover: '44 87% 97%',
+    popoverForeground: '194 14% 40%',
+    primary: '205 69% 49%',
+    primaryForeground: '44 87% 94%',
+    secondary: '44 87% 88%',
+    secondaryForeground: '194 14% 40%',
+    muted: '44 87% 88%',
+    mutedForeground: '186 13% 59%',
+    accent: '68 100% 30%',
+    accentForeground: '44 87% 94%',
+    destructive: '1 71% 52%',
+    destructiveForeground: '44 87% 94%',
+    border: '44 87% 82%',
+    input: '44 87% 82%',
+    ring: '205 69% 49%',
+    syntax: {
+      keyword: '#859900',
+      string: '#2aa198',
+      comment: '#93a1a1',
+      function: '#268bd2',
+      number: '#d33682',
+      operator: '#2aa198',
+    },
+  },
+};

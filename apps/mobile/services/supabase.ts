@@ -25,9 +25,12 @@ async function secureGet(key: string): Promise<string | null> {
       chunks.push(chunk);
     }
     return chunks.join('');
-  } catch {
-    // SecureStore unavailable (e.g., simulator without keychain) — fall back to MMKV.
-    return storage.getString(key) ?? null;
+  } catch (err) {
+    // CRIT-005: Do NOT fall back to unencrypted MMKV storage for auth tokens.
+    // On devices where SecureStore is unavailable, return null and let the
+    // caller handle re-authentication rather than storing tokens in plaintext.
+    console.error('[Supabase] SecureStore unavailable for auth token read:', err);
+    return null;
   }
 }
 
@@ -52,9 +55,12 @@ async function secureSet(key: string, value: string): Promise<void> {
       // Remove any direct-key value that may have existed previously.
       await SecureStore.deleteItemAsync(key).catch(() => {});
     }
-  } catch {
-    // Fall back to MMKV if SecureStore is unavailable.
-    storage.set(key, value);
+  } catch (err) {
+    // CRIT-005: Do NOT fall back to unencrypted MMKV storage for auth tokens.
+    // Don't throw — the Supabase auth client may not handle storage errors
+    // gracefully, which can crash the app. Log and continue; the session will
+    // simply not persist and the user may need to re-authenticate on restart.
+    console.error('[Supabase] SecureStore write failed:', err);
   }
 }
 
@@ -72,8 +78,10 @@ async function secureRemove(key: string): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(key);
     await secureRemoveChunks(key);
-  } catch {
-    storage.delete(key);
+  } catch (err) {
+    // CRIT-005: If SecureStore fails on delete, log and continue.
+    // The token may not exist in SecureStore if it was never written there.
+    console.error('[Supabase] SecureStore unavailable for auth token delete:', err);
   }
 }
 
@@ -82,8 +90,9 @@ async function secureRemove(key: string): Promise<void> {
  * Auth tokens (JWTs) are stored in the iOS/Android Keychain via expo-secure-store
  * rather than plain MMKV, providing encryption at rest.
  * Large session values are automatically chunked to respect SecureStore's 2 KB limit.
- * Falls back to MMKV if SecureStore is unavailable (e.g., some simulators).
- * MMKV is retained for non-sensitive UI state (preferences, chat history, etc.).
+ * If SecureStore is unavailable, auth operations return null or throw to
+ * trigger re-authentication rather than storing tokens in plaintext.
+ * MMKV is used only for non-sensitive UI state (preferences, chat history, etc.).
  */
 const supabaseStorage = {
   getItem: (key: string): Promise<string | null> => secureGet(key),

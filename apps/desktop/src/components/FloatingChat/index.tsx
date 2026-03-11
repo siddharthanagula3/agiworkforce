@@ -53,11 +53,20 @@ export const FloatingChat = () => {
           content: trimmed,
         });
 
+        // Create assistant placeholder with a known ID for stream event coordination
+        const assistantMessageId = crypto.randomUUID();
+        addMessage({
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          metadata: { streaming: true },
+        });
+
         if (!userId) {
           throw new Error('No authenticated user is available for floating chat');
         }
 
-        // Send to backend
+        // Send to backend with frontendMessageId for stream event matching
         await invoke('chat_send_message', {
           request: {
             content: trimmed,
@@ -66,6 +75,7 @@ export const FloatingChat = () => {
             conversationId: activeConversationId ? uuidToDbId(activeConversationId) : null,
             stream: true,
             enableTools: true,
+            frontendMessageId: assistantMessageId,
           },
         });
       } catch (error) {

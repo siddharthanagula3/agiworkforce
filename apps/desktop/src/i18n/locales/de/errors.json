@@ -1,0 +1,219 @@
+{
+  "NETWORK_ERROR": {
+    "title": "Verbindungsproblem",
+    "message": "Verbindung zum Server nicht möglich. Bitte prüfen Sie Ihre Internetverbindung.",
+    "suggestions": [
+      "Überprüfen Sie Ihre WLAN- oder Ethernet-Verbindung",
+      "Deaktivieren Sie das VPN, falls aktiviert",
+      "Versuchen Sie es in einem Moment erneut",
+      "Prüfen Sie, ob der Server ausgefallen ist"
+    ]
+  },
+  "NETWORK_TIMEOUT": {
+    "title": "Anfrage-Timeout",
+    "message": "Die Anfrage hat zu lange gedauert.",
+    "suggestions": [
+      "Überprüfen Sie Ihre Internetgeschwindigkeit",
+      "Versuchen Sie es mit einer kleineren Anfrage",
+      "Der Server könnte überlastet sein"
+    ]
+  },
+  "API_RATE_LIMIT": {
+    "title": "Ratenlimit überschritten",
+    "message": "Zu viele Anfragen. Bitte warten Sie vor dem erneuten Versuch.",
+    "suggestions": [
+      "Warten Sie einige Minuten vor dem erneuten Versuch",
+      "Erwägen Sie ein Upgrade Ihres API-Plans",
+      "Reduzieren Sie die Häufigkeit der Anfragen"
+    ]
+  },
+  "FILE_NOT_FOUND": {
+    "title": "Datei nicht gefunden",
+    "message": "Die angeforderte Datei konnte nicht gefunden werden.",
+    "suggestions": [
+      "Prüfen Sie, ob der Dateipfad korrekt ist",
+      "Überprüfen Sie, ob die Datei noch vorhanden ist",
+      "Prüfen Sie die Dateiberechtigungen"
+    ]
+  },
+  "PERMISSION_DENIED": {
+    "title": "Zugriff verweigert",
+    "message": "Sie haben keine Berechtigung, auf diese Ressource zuzugreifen.",
+    "suggestions": [
+      "Führen Sie die Anwendung als Administrator aus",
+      "Prüfen Sie die Datei-/Ordnerberechtigungen",
+      "Wenden Sie sich an Ihren Systemadministrator"
+    ]
+  },
+  "DISK_FULL": {
+    "title": "Laufwerk voll",
+    "message": "Nicht genügend Speicherplatz, um den Vorgang abzuschließen.",
+    "suggestions": [
+      "Geben Sie Speicherplatz frei, indem Sie unnötige Dateien löschen",
+      "Verschieben Sie Dateien auf ein externes Laufwerk",
+      "Leeren Sie den Papierkorb"
+    ]
+  },
+  "DATABASE_LOCKED": {
+    "title": "Datenbank gesperrt",
+    "message": "Die Datenbank ist derzeit durch einen anderen Prozess gesperrt.",
+    "suggestions": [
+      "Warten Sie einen Moment und versuchen Sie es erneut",
+      "Schließen Sie andere Instanzen der Anwendung",
+      "Starten Sie die Anwendung neu"
+    ]
+  },
+  "DATABASE_CORRUPTED": {
+    "title": "Datenbank beschädigt",
+    "message": "Die Datenbankdatei scheint beschädigt zu sein.",
+    "suggestions": [
+      "Stellen Sie aus einer Sicherungskopie wieder her, falls vorhanden",
+      "Wenden Sie sich an den Support",
+      "Möglicherweise müssen Sie die Anwendung zurücksetzen"
+    ]
+  },
+  "AUTH_FAILED": {
+    "title": "Authentifizierung fehlgeschlagen",
+    "message": "Authentifizierung mit den angegebenen Anmeldedaten nicht möglich.",
+    "suggestions": [
+      "Prüfen Sie Benutzername und Passwort",
+      "Stellen Sie sicher, dass Ihr API-Schlüssel korrekt ist",
+      "Prüfen Sie, ob Ihr Konto aktiv ist"
+    ]
+  },
+  "TOKEN_EXPIRED": {
+    "title": "Sitzung abgelaufen",
+    "message": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+    "suggestions": ["Klicken Sie, um sich erneut zu authentifizieren", "Prüfen Sie, ob Ihre Anmeldedaten noch gültig sind"]
+  },
+  "LLM_API_ERROR": {
+    "title": "LLM-Anbieter-Fehler",
+    "message": "Bei der Kommunikation mit dem LLM-Anbieter ist ein Fehler aufgetreten.",
+    "suggestions": [
+      "Prüfen Sie Ihre API-Schlüssel-Konfiguration",
+      "Stellen Sie sicher, dass Ihr Konto ausreichend Guthaben hat",
+      "Versuchen Sie, zu einem anderen Anbieter zu wechseln",
+      "Prüfen Sie die Statusseite des Anbieters"
+    ]
+  },
+  "LLM_CONTEXT_LENGTH": {
+    "title": "Kontext zu lang",
+    "message": "Der Gesprächskontext überschreitet die maximale Länge des Modells.",
+    "suggestions": [
+      "Starten Sie ein neues Gespräch",
+      "Fassen Sie den Gesprächsverlauf zusammen",
+      "Verwenden Sie ein Modell mit größerem Kontextfenster"
+    ]
+  },
+  "LLM_CONTENT_FILTER": {
+    "title": "Inhalt gefiltert",
+    "message": "Die Anfrage wurde durch Inhaltsfilterung blockiert.",
+    "suggestions": [
+      "Formulieren Sie Ihre Anfrage um",
+      "Entfernen Sie potenziell sensible Inhalte",
+      "Prüfen Sie die Inhaltsrichtlinie"
+    ]
+  },
+  "BROWSER_NOT_FOUND": {
+    "title": "Browser nicht gefunden",
+    "message": "Der erforderliche Browser ist nicht installiert oder kann nicht gefunden werden.",
+    "suggestions": [
+      "Installieren Sie den erforderlichen Browser",
+      "Prüfen Sie den Browser-Installationspfad",
+      "Versuchen Sie, einen anderen Browser zu verwenden"
+    ]
+  },
+  "BROWSER_CRASH": {
+    "title": "Browser abgestürzt",
+    "message": "Die Browser-Automatisierungssitzung ist unerwartet abgestürzt.",
+    "suggestions": [
+      "Versuchen Sie den Vorgang erneut",
+      "Aktualisieren Sie Ihren Browser auf die neueste Version",
+      "Prüfen Sie Systemressourcen (Arbeitsspeicher, CPU)"
+    ]
+  },
+  "ELEMENT_NOT_FOUND": {
+    "title": "Element nicht gefunden",
+    "message": "Das angegebene UI-Element konnte auf der Seite nicht gefunden werden.",
+    "suggestions": [
+      "Die Seite wird möglicherweise noch geladen",
+      "Der Elementselektor könnte falsch sein",
+      "Die Seitenstruktur könnte sich geändert haben"
+    ]
+  },
+  "AUTOMATION_FAILED": {
+    "title": "Automatisierung fehlgeschlagen",
+    "message": "Die Automatisierungsaufgabe konnte nicht abgeschlossen werden.",
+    "suggestions": [
+      "Prüfen Sie, ob die Anwendung noch läuft",
+      "Überprüfen Sie, ob die Automatisierungsschritte korrekt sind",
+      "Versuchen Sie, die Automatisierung zuerst manuell auszuführen"
+    ]
+  },
+  "UI_ELEMENT_TIMEOUT": {
+    "title": "Element-Timeout",
+    "message": "Zu lange auf das Erscheinen eines UI-Elements gewartet.",
+    "suggestions": [
+      "Die Anwendung reagiert möglicherweise langsam",
+      "Erhöhen Sie die Timeout-Dauer in den Einstellungen",
+      "Prüfen Sie, ob das Element noch vorhanden ist"
+    ]
+  },
+  "OUT_OF_MEMORY": {
+    "title": "Nicht genug Arbeitsspeicher",
+    "message": "Der Anwendung ist der verfügbare Arbeitsspeicher ausgegangen.",
+    "suggestions": [
+      "Schließen Sie andere Anwendungen, um Arbeitsspeicher freizugeben",
+      "Starten Sie die Anwendung neu",
+      "Verarbeiten Sie kleinere Datenmengen",
+      "Erwägen Sie ein RAM-Upgrade, wenn dies häufig auftritt"
+    ]
+  },
+  "SYSTEM_ERROR": {
+    "title": "Systemfehler",
+    "message": "Ein unerwarteter Systemfehler ist aufgetreten.",
+    "suggestions": [
+      "Versuchen Sie den Vorgang erneut",
+      "Starten Sie die Anwendung neu",
+      "Prüfen Sie die Systemprotokolle für Details",
+      "Wenden Sie sich an den Support, wenn das Problem anhält"
+    ]
+  },
+  "AGI_PLANNING_FAILED": {
+    "title": "Planung fehlgeschlagen",
+    "message": "Der AGI-Planer konnte keinen Plan für das Ziel erstellen.",
+    "suggestions": [
+      "Versuchen Sie, das Ziel spezifischer zu formulieren",
+      "Teilen Sie komplexe Ziele in kleinere Schritte auf",
+      "Prüfen Sie, ob der LLM-Anbieter verfügbar ist"
+    ]
+  },
+  "AGI_EXECUTION_FAILED": {
+    "title": "Ausführung fehlgeschlagen",
+    "message": "Das AGI-System konnte einen Schritt nicht ausführen.",
+    "suggestions": [
+      "Überprüfen Sie die Schrittdetails im Fehlerprotokoll",
+      "Prüfen Sie, ob die erforderlichen Werkzeuge verfügbar sind",
+      "Versuchen Sie, den Schritt manuell auszuführen"
+    ]
+  },
+  "AGI_TOOL_NOT_FOUND": {
+    "title": "Werkzeug nicht verfügbar",
+    "message": "Das erforderliche Werkzeug ist nicht verfügbar oder nicht installiert.",
+    "suggestions": [
+      "Installieren Sie das erforderliche Werkzeug",
+      "Aktivieren Sie das Werkzeug in den Einstellungen",
+      "Versuchen Sie, ein alternatives Werkzeug zu verwenden"
+    ]
+  },
+  "UNKNOWN_ERROR": {
+    "title": "Unbekannter Fehler",
+    "message": "Ein unerwarteter Fehler ist aufgetreten.",
+    "suggestions": [
+      "Versuchen Sie den Vorgang erneut",
+      "Starten Sie die Anwendung neu",
+      "Prüfen Sie die Fehlerprotokolle für Details",
+      "Melden Sie dieses Problem, wenn es anhält"
+    ]
+  }
+}

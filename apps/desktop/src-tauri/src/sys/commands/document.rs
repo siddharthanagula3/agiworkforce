@@ -1,6 +1,6 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use tauri::{command, State};
+use tauri::State;
 
 use crate::features::document::{
     DocumentContent, DocumentManager, DocumentMetadata, ExcelDocumentConfig, ExcelDocumentCreator,
@@ -27,7 +27,7 @@ impl DocumentState {
     }
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_read(
     file_path: String,
     state: State<'_, DocumentState>,
@@ -35,7 +35,7 @@ pub async fn document_read(
     state.manager.read_document(&file_path).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_extract_text(
     file_path: String,
     state: State<'_, DocumentState>,
@@ -43,7 +43,7 @@ pub async fn document_extract_text(
     state.manager.extract_text(&file_path).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_get_metadata(
     file_path: String,
     state: State<'_, DocumentState>,
@@ -51,7 +51,7 @@ pub async fn document_get_metadata(
     state.manager.get_metadata(&file_path).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_search(
     file_path: String,
     query: String,
@@ -60,13 +60,13 @@ pub async fn document_search(
     state.manager.search(&file_path, &query).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_detect_type(file_path: String) -> Result<String> {
     let doc_type = DocumentManager::detect_type(&file_path)?;
     Ok(format!("{:?}", doc_type))
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_word(
     output_path: String,
     config: WordDocumentConfig,
@@ -78,7 +78,7 @@ pub async fn document_create_word(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_word_simple(
     output_path: String,
     title: Option<String>,
@@ -91,7 +91,7 @@ pub async fn document_create_word_simple(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_excel(
     output_path: String,
     config: ExcelDocumentConfig,
@@ -103,7 +103,7 @@ pub async fn document_create_excel(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_excel_simple(
     output_path: String,
     sheet_name: String,
@@ -116,7 +116,7 @@ pub async fn document_create_excel_simple(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_excel_numbers(
     output_path: String,
     sheet_name: String,
@@ -129,7 +129,7 @@ pub async fn document_create_excel_numbers(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_pdf(
     output_path: String,
     config: PdfDocumentConfig,
@@ -141,7 +141,7 @@ pub async fn document_create_pdf(
     Ok(resolved_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn document_create_pdf_simple(
     output_path: String,
     title: Option<String>,

@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const githubDark: ThemeDefinition = {
+  id: 'github-dark',
+  name: 'GitHub Dark',
+  author: 'GitHub',
+  variant: 'dark',
+  colors: {
+    background: '215 28% 9%',
+    foreground: '213 31% 91%',
+    card: '215 28% 7%',
+    cardForeground: '213 31% 91%',
+    popover: '215 28% 7%',
+    popoverForeground: '213 31% 91%',
+    primary: '212 92% 45%',
+    primaryForeground: '213 31% 91%',
+    secondary: '215 28% 15%',
+    secondaryForeground: '213 31% 91%',
+    muted: '215 28% 15%',
+    mutedForeground: '215 20% 55%',
+    accent: '284 70% 73%',
+    accentForeground: '215 28% 9%',
+    destructive: '5 86% 68%',
+    destructiveForeground: '215 28% 9%',
+    border: '215 28% 20%',
+    input: '215 28% 20%',
+    ring: '212 92% 45%',
+    syntax: {
+      keyword: '#ff7b72',
+      string: '#a5d6ff',
+      comment: '#8b949e',
+      function: '#d2a8ff',
+      number: '#79c0ff',
+      operator: '#ff7b72',
+    },
+  },
+};

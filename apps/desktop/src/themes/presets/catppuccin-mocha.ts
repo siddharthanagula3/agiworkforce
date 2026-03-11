@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const catppuccinMocha: ThemeDefinition = {
+  id: 'catppuccin-mocha',
+  name: 'Catppuccin Mocha',
+  author: 'Catppuccin',
+  variant: 'dark',
+  colors: {
+    background: '240 21% 15%',
+    foreground: '226 64% 88%',
+    card: '240 21% 12%',
+    cardForeground: '226 64% 88%',
+    popover: '240 21% 12%',
+    popoverForeground: '226 64% 88%',
+    primary: '267 84% 81%',
+    primaryForeground: '240 21% 15%',
+    secondary: '240 21% 20%',
+    secondaryForeground: '226 64% 88%',
+    muted: '240 21% 20%',
+    mutedForeground: '228 24% 72%',
+    accent: '316 72% 86%',
+    accentForeground: '240 21% 15%',
+    destructive: '343 81% 75%',
+    destructiveForeground: '240 21% 15%',
+    border: '240 21% 25%',
+    input: '240 21% 25%',
+    ring: '267 84% 81%',
+    syntax: {
+      keyword: '#cba6f7',
+      string: '#a6e3a1',
+      comment: '#6c7086',
+      function: '#89b4fa',
+      number: '#fab387',
+      operator: '#89dceb',
+    },
+  },
+};

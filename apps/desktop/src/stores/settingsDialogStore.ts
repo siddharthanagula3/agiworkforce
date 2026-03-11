@@ -12,7 +12,9 @@ export type SettingsTab =
   | 'extensions'
   | 'notifications'
   | 'tools'
-  | 'research';
+  | 'research'
+  | 'keybindings'
+  | 'themes';
 
 interface SettingsDialogState {
   settingsOpen: boolean;

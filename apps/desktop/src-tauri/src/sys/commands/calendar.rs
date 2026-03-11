@@ -9,7 +9,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use tauri::{command, AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 use crate::sys::api::oauth::TokenResponse;
@@ -63,7 +63,7 @@ pub struct AccountIdResponse {
     pub account_id: String,
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_connect(
     config: CalendarOAuthConfig,
     state: State<'_, CalendarState>,
@@ -90,7 +90,7 @@ pub async fn calendar_connect(
     })
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_complete_oauth(
     request: CompleteOAuthRequest,
     state: State<'_, CalendarState>,
@@ -132,7 +132,7 @@ pub async fn calendar_complete_oauth(
     Ok(AccountIdResponse { account_id })
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_disconnect(
     account_id: String,
     state: State<'_, CalendarState>,
@@ -150,7 +150,7 @@ pub async fn calendar_disconnect(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_list_calendars(
     account_id: String,
     state: State<'_, CalendarState>,
@@ -169,7 +169,7 @@ pub async fn calendar_list_calendars(
     Ok(calendars)
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_list_events(
     account_id: String,
     request: ListEventsRequest,
@@ -189,7 +189,7 @@ pub async fn calendar_list_events(
     Ok(response)
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_create_event(
     account_id: String,
     request: CreateEventRequest,
@@ -218,7 +218,7 @@ pub async fn calendar_create_event(
     Ok(event)
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_update_event(
     account_id: String,
     calendar_id: String,
@@ -248,7 +248,7 @@ pub async fn calendar_update_event(
     Ok(event)
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_delete_event(
     account_id: String,
     calendar_id: String,
@@ -293,7 +293,7 @@ pub async fn calendar_delete_event(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_list_accounts(
     state: State<'_, CalendarState>,
     app: AppHandle,
@@ -324,7 +324,7 @@ pub async fn calendar_list_accounts(
     Ok(accounts)
 }
 
-#[command]
+#[tauri::command]
 pub async fn calendar_get_system_timezone() -> Result<String> {
     use crate::features::calendar::timezone::get_system_timezone;
 
@@ -516,13 +516,37 @@ fn list_calendar_accounts(
                         Box::new(e),
                     )
                 })?;
-            let token: TokenResponse = serde_json::from_str(&token_json).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    4,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+            let token: TokenResponse =
+                match serde_json::from_str::<EncryptedSecret>(&token_json) {
+                    Ok(encrypted_secret) => {
+                        let key = machine_key::derive_key(KeyPurpose::CalendarCredentials);
+                        let decrypted_json =
+                            decrypt_secret(&key, &encrypted_secret).map_err(|e| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    4,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(Error::Generic(e)),
+                                )
+                            })?;
+                        serde_json::from_str(&decrypted_json).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                4,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })?
+                    }
+                    Err(_) => {
+                        // Plaintext fallback for rows written before encryption was added
+                        serde_json::from_str(&token_json).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                4,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })?
+                    }
+                };
             let created_at: i64 = row.get(6)?;
             let connected_at = Utc
                 .timestamp_opt(created_at, 0)
@@ -584,7 +608,7 @@ fn provider_to_string(provider: CalendarProvider) -> &'static str {
 }
 
 // AUDIT-CALENDAR-078 fix: Add missing calendar_get_event command
-#[command]
+#[tauri::command]
 pub async fn calendar_get_event(
     account_id: String,
     calendar_id: String,
@@ -625,7 +649,7 @@ pub async fn calendar_get_event(
 }
 
 // AUDIT-CALENDAR-078 fix: Add missing calendar_sync command
-#[command]
+#[tauri::command]
 pub async fn calendar_sync(
     account_id: String,
     state: State<'_, CalendarState>,

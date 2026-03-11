@@ -336,6 +336,9 @@ pub struct BackgroundAgentManager {
     /// Handles for controlling running agents.
     handles: Arc<Mutex<HashMap<String, AgentHandle>>>,
     /// Database connection for persistence.
+    // std::sync::Mutex wraps a rusqlite Connection (not Send-safe with tokio::sync::Mutex).
+    // DB reads in load_persisted_agents use spawn_blocking. Short writes (persist_agent,
+    // delete_agent_from_db) are sync to allow calling under async RwLock guards.
     db_conn: Arc<std::sync::Mutex<Connection>>,
     /// Tauri app handle for notifications and events.
     app_handle: Option<AppHandle>,
@@ -829,38 +832,42 @@ impl BackgroundAgentManager {
     /// Load persisted agents from the database.
     async fn load_persisted_agents(&self) -> anyhow::Result<()> {
         let agents_data = {
-            let conn = self
-                .db_conn
-                .lock()
-                .map_err(|e| anyhow::anyhow!("Failed to acquire database lock: {}", e))?;
+            let db_conn = self.db_conn.clone();
+            tokio::task::spawn_blocking(move || {
+                let conn = db_conn
+                    .lock()
+                    .map_err(|e| anyhow::anyhow!("Failed to acquire database lock: {}", e))?;
 
-            let mut stmt = conn.prepare(
-                "SELECT id, conversation_id, goal, status, progress_json, summary_json,
-                        error, created_at, started_at, completed_at, context_json, priority, timeout_secs
-                 FROM background_agents
-                 WHERE status NOT IN ('completed', 'failed', 'cancelled', 'taken_over')
-                    OR completed_at > datetime('now', '-24 hours')",
-            )?;
+                let mut stmt = conn.prepare(
+                    "SELECT id, conversation_id, goal, status, progress_json, summary_json,
+                            error, created_at, started_at, completed_at, context_json, priority, timeout_secs
+                     FROM background_agents
+                     WHERE status NOT IN ('completed', 'failed', 'cancelled', 'taken_over')
+                        OR completed_at > datetime('now', '-24 hours')",
+                )?;
 
-            let rows = stmt.query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, String>(7)?,
-                    row.get::<_, Option<String>>(8)?,
-                    row.get::<_, Option<String>>(9)?,
-                    row.get::<_, String>(10)?,
-                    row.get::<_, u8>(11)?,
-                    row.get::<_, u64>(12)?,
-                ))
-            })?;
+                let rows = stmt.query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, String>(7)?,
+                        row.get::<_, Option<String>>(8)?,
+                        row.get::<_, Option<String>>(9)?,
+                        row.get::<_, String>(10)?,
+                        row.get::<_, u8>(11)?,
+                        row.get::<_, u64>(12)?,
+                    ))
+                })?;
 
-            rows.collect::<Result<Vec<_>, _>>()?
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| anyhow::anyhow!("Failed to load agents: {}", e))
+            })
+            .await??
         };
 
         // Collect IDs that need to be queued while populating the agents map.
@@ -970,6 +977,10 @@ impl BackgroundAgentManager {
     }
 
     /// Persist an agent to the database.
+    ///
+    /// Uses `spawn_blocking` to move the `std::sync::Mutex` lock off the async
+    /// executor thread. The `std::sync::Mutex` is required because `rusqlite::Connection`
+    /// is `!Send` and cannot be held across `.await` points.
     fn persist_agent(&self, agent: &BackgroundAgent) -> anyhow::Result<()> {
         let conn = self
             .db_conn
@@ -1010,6 +1021,9 @@ impl BackgroundAgentManager {
     }
 
     /// Delete an agent from the database.
+    ///
+    /// Uses `std::sync::Mutex` because `rusqlite::Connection` is `!Send`.
+    /// Lock is held briefly for a single DELETE statement.
     fn delete_agent_from_db(&self, agent_id: &str) -> anyhow::Result<()> {
         let conn = self
             .db_conn

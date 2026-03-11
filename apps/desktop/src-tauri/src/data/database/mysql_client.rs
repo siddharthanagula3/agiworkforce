@@ -12,6 +12,76 @@ pub struct MySqlClient {
 }
 
 impl MySqlClient {
+    /// Validates that a SQL identifier (table name, procedure name) contains only
+    /// alphanumeric characters and underscores, preventing SQL injection.
+    fn validate_sql_identifier(name: &str, kind: &str) -> Result<(), Error> {
+        if name.is_empty() {
+            return Err(Error::Other(format!("{} name cannot be empty", kind)));
+        }
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(Error::Other(format!(
+                "Invalid {} name '{}': only alphanumeric characters and underscores are allowed",
+                kind, name
+            )));
+        }
+        Ok(())
+    }
+
+    /// SECURITY: Validates a SQL statement for safety in query mode.
+    /// Blocks DDL/DML operations, stacked queries, and comment injection.
+    /// Only SELECT, SHOW, DESCRIBE, and EXPLAIN statements are allowed.
+    fn validate_query_sql(sql: &str) -> Result<(), Error> {
+        let sql_upper = sql.trim().to_uppercase();
+
+        // Block empty queries
+        if sql_upper.is_empty() {
+            return Err(Error::Other("SQL query cannot be empty".to_string()));
+        }
+
+        // Block stacked queries (multiple statements via semicolons)
+        if sql.contains(';') {
+            return Err(Error::Other(
+                "Multiple SQL statements (semicolons) are not allowed in query mode".to_string(),
+            ));
+        }
+
+        // Block SQL comment injection
+        if sql.contains("--") || sql.contains("/*") {
+            return Err(Error::Other(
+                "SQL comments are not allowed in query mode".to_string(),
+            ));
+        }
+
+        // Only allow read-only statements
+        let allowed_prefixes = ["SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH"];
+        let is_allowed = allowed_prefixes
+            .iter()
+            .any(|prefix| sql_upper.starts_with(prefix));
+
+        if !is_allowed {
+            return Err(Error::Other(format!(
+                "Only SELECT, SHOW, DESCRIBE, and EXPLAIN statements are allowed in query mode. Got: {}",
+                sql_upper.chars().take(30).collect::<String>()
+            )));
+        }
+
+        // Block dangerous keywords even within allowed statements (e.g., subqueries with mutations)
+        let blocked_keywords = [
+            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE",
+            "GRANT", "REVOKE", "LOAD_FILE", "INTO OUTFILE", "INTO DUMPFILE",
+        ];
+        for keyword in &blocked_keywords {
+            if sql_upper.contains(keyword) {
+                return Err(Error::Other(format!(
+                    "SQL operation '{}' is not allowed in query mode",
+                    keyword
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn new() -> Self {
         Self {
             pools: Arc::new(RwLock::new(HashMap::new())),
@@ -66,7 +136,10 @@ impl MySqlClient {
     pub async fn execute_query(&self, connection_id: &str, sql: &str) -> Result<QueryResult> {
         let start = std::time::Instant::now();
 
-        tracing::debug!("MySQL query: {}", sql);
+        // SECURITY: Validate SQL statement before execution
+        Self::validate_query_sql(sql)?;
+
+        tracing::info!("[SECURITY][MySQL] Executing query on '{}': {}", connection_id, sql);
 
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
@@ -130,6 +203,15 @@ impl MySqlClient {
         queries: &[String],
     ) -> Result<Vec<QueryResult>> {
         tracing::info!("Executing batch of {} queries", queries.len());
+
+        // SECURITY: Validate each query in the batch
+        for (i, query) in queries.iter().enumerate() {
+            Self::validate_query_sql(query).map_err(|e| {
+                Error::Other(format!("Batch query {} validation failed: {}", i + 1, e))
+            })?;
+        }
+
+        tracing::info!("[SECURITY][MySQL] Executing validated batch of {} queries on '{}'", queries.len(), connection_id);
 
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
@@ -231,7 +313,8 @@ impl MySqlClient {
             .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
-        let query = format!("DESCRIBE `{}`", table_name.replace('`', "``"));
+        Self::validate_sql_identifier(table_name, "table")?;
+        let query = format!("DESCRIBE `{}`", table_name);
         let rows: Vec<Row> = conn
             .query(&query)
             .await
@@ -303,7 +386,8 @@ impl MySqlClient {
             .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
-        let query = format!("SHOW INDEX FROM `{}`", table_name.replace('`', "``"));
+        Self::validate_sql_identifier(table_name, "table")?;
+        let query = format!("SHOW INDEX FROM `{}`", table_name);
         let rows: Vec<Row> = conn
             .query(&query)
             .await
@@ -325,6 +409,7 @@ impl MySqlClient {
             .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
+        Self::validate_sql_identifier(procedure_name, "procedure")?;
         let mysql_params = Self::json_params_to_mysql(params)?;
 
         let placeholders: Vec<&str> = params.iter().map(|_| "?").collect();
@@ -352,6 +437,14 @@ impl MySqlClient {
             return Ok(0);
         }
 
+        // Validate table name
+        Self::validate_sql_identifier(table_name, "table")?;
+
+        // Validate all column names to prevent SQL injection via column identifiers
+        for column in columns {
+            Self::validate_sql_identifier(column, "column")?;
+        }
+
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
@@ -369,7 +462,7 @@ impl MySqlClient {
 
         let sql = format!(
             "INSERT INTO `{}` (`{}`) VALUES {}",
-            table_name.replace('`', "``"),
+            table_name,
             column_list,
             placeholders.join(", ")
         );
@@ -395,6 +488,11 @@ impl MySqlClient {
         sql: &str,
         batch_size: usize,
     ) -> Result<Vec<QueryResult>> {
+        // SECURITY: Validate SQL statement before execution
+        Self::validate_query_sql(sql)?;
+
+        tracing::info!("[SECURITY][MySQL] Executing stream query on '{}': {}", connection_id, sql);
+
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()

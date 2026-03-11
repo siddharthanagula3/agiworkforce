@@ -5,8 +5,9 @@
  * Extracted from the main useEffect in UnifiedAgenticChat.
  */
 import { useEffect } from 'react';
-import { listen, isTauri } from '../../lib/tauri-mock';
+import { listen, isTauri, invoke as tauriInvoke } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
+import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useBillingStore } from '../../stores/auth';
@@ -203,7 +204,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
             (artifact) =>
               !targetMessage.artifacts?.some(
-                (existing) => existing.id === artifact.id || existing.content === artifact.content,
+                (existing) => existing.id === artifact.id,
               ),
           ) as Artifact[]),
         ] as Artifact[];
@@ -217,12 +218,12 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           patch['content'] || (existing as Record<string, unknown> | null)?.['content'] || '',
         );
         const nextArtifact = {
+          ...(existing ? { ...existing } : {}),
+          ...patch,
           id: toolCallId,
           type: toolNameToArtifactType(patchToolName),
           title: toolNameToTitle(patchToolName),
           content: patchContent,
-          ...existing,
-          ...patch,
         };
 
         const nextArtifacts =
@@ -252,7 +253,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
             (artifact) =>
               !targetMessage.artifacts?.some(
-                (existing) => existing.id === artifact.id || existing.content === artifact.content,
+                (existing) => existing.id === artifact.id,
               ),
           ) as Artifact[]),
         ] as Artifact[];
@@ -675,6 +676,31 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
           if (shouldClearGlobalState) {
             finalizeStream(payload.conversation_id, finalizedMessageId, 'completed');
+          }
+
+          // Auto-TTS: speak the assistant response when the user's last input was voice
+          const chatPrefs = useChatPreferencesStore.getState();
+          if (chatPrefs.lastInputWasVoice && chatPrefs.chatPreferences.autoTTS && finalizedMessageId) {
+            chatPrefs.setLastInputWasVoice(false);
+            const assistantMsg = findMessageById(finalizedMessageId);
+            if (assistantMsg?.content && assistantMsg.role === 'assistant') {
+              const clean = assistantMsg.content
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/`[^`]+`/g, '')
+                .replace(/^#{1,6}\s+/gm, '')
+                .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, '$1')
+                .trim();
+              if (clean) {
+                tauriInvoke('voice_tts_speak', { text: clean }).catch(() => {
+                  // Fallback to browser SpeechSynthesis when native TTS is unavailable
+                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(clean);
+                    utterance.rate = 1.05;
+                    window.speechSynthesis.speak(utterance);
+                  }
+                });
+              }
+            }
           }
         }),
       );

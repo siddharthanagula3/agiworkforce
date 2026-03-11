@@ -223,6 +223,121 @@ impl TextToSpeech for ElevenLabsTts {
     }
 }
 
+/// OpenAI TTS implementation
+pub struct OpenAiTts {
+    config: TtsConfig,
+    client: reqwest::Client,
+}
+
+impl OpenAiTts {
+    pub fn new(config: TtsConfig) -> Self {
+        Self {
+            config,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    fn api_key(&self) -> Result<&str> {
+        self.config
+            .api_key
+            .as_deref()
+            .ok_or_else(|| Error::Config("OpenAI API key required".into()))
+    }
+
+    fn voice(&self) -> &str {
+        self.config.voice_id.as_deref().unwrap_or("alloy")
+    }
+
+    fn model(&self) -> &str {
+        self.config.model_id.as_deref().unwrap_or("tts-1")
+    }
+}
+
+#[async_trait]
+impl TextToSpeech for OpenAiTts {
+    async fn synthesize(&self, text: &str) -> Result<AudioOutput> {
+        let api_key = self.api_key()?;
+
+        let payload = serde_json::json!({
+            "model": self.model(),
+            "input": text,
+            "voice": self.voice(),
+            "response_format": "mp3"
+        });
+
+        let response = self
+            .client
+            .post("https://api.openai.com/v1/audio/speech")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| Error::Generic(format!("OpenAI TTS API error: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(Error::Generic(format!("OpenAI TTS error: {}", error_text)));
+        }
+
+        let data = response
+            .bytes()
+            .await
+            .map_err(|e| Error::Generic(format!("Failed to read audio: {}", e)))?;
+
+        Ok(AudioOutput {
+            data: data.to_vec(),
+            format: AudioFormat::Mp3,
+            sample_rate: 24000,
+        })
+    }
+
+    async fn list_voices(&self) -> Result<Vec<Voice>> {
+        Ok(vec![
+            Voice {
+                id: "alloy".to_string(),
+                name: "Alloy".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+            Voice {
+                id: "echo".to_string(),
+                name: "Echo".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+            Voice {
+                id: "fable".to_string(),
+                name: "Fable".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+            Voice {
+                id: "onyx".to_string(),
+                name: "Onyx".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+            Voice {
+                id: "nova".to_string(),
+                name: "Nova".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+            Voice {
+                id: "shimmer".to_string(),
+                name: "Shimmer".to_string(),
+                preview_url: None,
+                category: Some("openai".to_string()),
+            },
+        ])
+    }
+
+    fn provider_name(&self) -> &'static str {
+        "openai"
+    }
+}
+
 /// System TTS (uses OS native TTS) with playback control
 pub struct SystemTts {
     /// Flag indicating if playback is in progress
@@ -376,7 +491,7 @@ impl Default for SystemTts {
 pub fn create_tts_provider(config: TtsConfig) -> Box<dyn TextToSpeech> {
     match config.provider {
         TtsProvider::ElevenLabs => Box::new(ElevenLabsTts::new(config)),
-        TtsProvider::OpenAi => Box::new(ElevenLabsTts::new(config)), // Fallback for now
+        TtsProvider::OpenAi => Box::new(OpenAiTts::new(config)),
         TtsProvider::System => Box::new(SystemTts::new()),
     }
 }

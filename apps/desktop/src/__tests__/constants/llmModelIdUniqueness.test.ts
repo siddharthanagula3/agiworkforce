@@ -63,9 +63,6 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
       'moonshot',
       'perplexity',
       'zhipu',
-      'black-forest-labs',
-      'suno',
-      'udio',
       'mistral',
     ];
 

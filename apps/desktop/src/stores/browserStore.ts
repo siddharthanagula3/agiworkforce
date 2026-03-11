@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface BrowserTab {
   id: string;
@@ -182,62 +182,9 @@ export const useBrowserStore = create<BrowserState>()(
 
             await invoke('browser_init');
             set({ initialized: true }, undefined, 'browser/initialize');
-
-            const unlisten1 = await listen<BrowserAction>('browser:action', (event) => {
-              try {
-                const action = event?.payload;
-                if (action) {
-                  get().addAction(action);
-                }
-              } catch (error) {
-                console.error('[browserStore] Error handling browser:action event:', error);
-              }
-            });
-            unlistenFunctions.push(unlisten1);
-
-            const unlisten2 = await listen<ConsoleLog>('browser:console', (event) => {
-              try {
-                const log = event?.payload;
-                if (log) {
-                  set(
-                    (state) => {
-                      state.consoleLogs.push(log);
-                      // STR-003 fix: Cap consoleLogs at 5000 entries (matching terminalLogs pattern)
-                      if (state.consoleLogs.length > 5000) {
-                        state.consoleLogs = state.consoleLogs.slice(-5000);
-                      }
-                    },
-                    undefined,
-                    'browser/consoleLog',
-                  );
-                }
-              } catch (error) {
-                console.error('[browserStore] Error handling browser:console event:', error);
-              }
-            });
-            unlistenFunctions.push(unlisten2);
-
-            const unlisten3 = await listen<NetworkRequest>('browser:network', (event) => {
-              try {
-                const request = event?.payload;
-                if (request) {
-                  set(
-                    (state) => {
-                      state.networkRequests.push(request);
-                      // STR-003 fix: Cap networkRequests at 5000 entries
-                      if (state.networkRequests.length > 5000) {
-                        state.networkRequests = state.networkRequests.slice(-5000);
-                      }
-                    },
-                    undefined,
-                    'browser/networkRequest',
-                  );
-                }
-              } catch (error) {
-                console.error('[browserStore] Error handling browser:network event:', error);
-              }
-            });
-            unlistenFunctions.push(unlisten3);
+            // NOTE: browser:action, browser:console, and browser:network Tauri events are
+            // never emitted by Rust. Console/network data is fetched via polling
+            // (getConsoleLogs / getNetworkActivity). Dead listeners removed.
           } catch (error) {
             console.error('Failed to initialize browser:', error);
             set({ initialized: false }, undefined, 'browser/initialize/error');
@@ -279,7 +226,7 @@ export const useBrowserStore = create<BrowserState>()(
         closeBrowser: async (sessionId: string) => {
           // BUG-001 fix: invoke backend to terminate the browser process before removing from state
           try {
-            await invoke('browser_close', { browserId: sessionId });
+            await invoke('browser_close_tab', { tabId: sessionId });
           } catch (error) {
             console.error('[browserStore] Failed to close browser process on backend:', error);
             // Continue so UI state is still cleaned up even if backend call fails

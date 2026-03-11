@@ -460,7 +460,7 @@ impl Default for McpOAuthState {
             let http_client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .expect("Failed to create fallback HTTP client with timeout");
+                .unwrap_or_else(|_| reqwest::Client::new());
             Self {
                 pending_flows: Arc::new(RwLock::new(HashMap::new())),
                 http_client,
@@ -1700,9 +1700,13 @@ pub async fn mcp_connect_connector(
     Ok(())
 }
 
-/// Save an API key for a provider (encrypted)
+/// Save an API key for a provider (encrypted) and activate it in the LLM router
 #[tauri::command]
-pub async fn save_api_key(provider: String, key: String) -> Result<(), String> {
+pub async fn save_api_key(
+    provider: String,
+    key: String,
+    llm_state: tauri::State<'_, crate::sys::commands::llm::LLMState>,
+) -> Result<(), String> {
     let conn = open_mcp_settings_db()?;
 
     // Encrypt the API key before storing
@@ -1713,6 +1717,37 @@ pub async fn save_api_key(provider: String, key: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to store API key: {}", e))?;
 
     tracing::info!("API key stored for provider: {}", provider);
+
+    // Activate the key in the LLM router so the user doesn't need to restart
+    if let Some(provider_enum) = crate::core::llm::Provider::from_string(&provider) {
+        match provider_enum {
+            crate::core::llm::Provider::Ollama => {
+                // Ollama doesn't use API keys — skip activation
+            }
+            crate::core::llm::Provider::ManagedCloud => {
+                // ManagedCloud uses access tokens, not API keys — skip activation
+            }
+            _ => {
+                // BYOK: Create a DirectApiProvider for the provider
+                let direct =
+                    crate::core::llm::providers::direct_api_provider::DirectApiProvider::new(
+                        provider_enum,
+                        key,
+                        None,
+                    )
+                    .map_err(|e| {
+                        format!("Key stored but failed to activate {} provider: {}", provider, e)
+                    })?;
+                let mut router = llm_state.router.write().await;
+                router.set_provider(provider_enum, Box::new(direct));
+                tracing::info!(
+                    "Activated BYOK DirectApiProvider for '{}'",
+                    provider_enum.as_string()
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1748,8 +1783,11 @@ fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, Stri
     }
 }
 
-/// Retrieve an API key for a connector from the database
-fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
+/// Retrieve an API key for a connector from the database.
+///
+/// Exposed as `pub(crate)` so that `llm.rs` can use it as a fallback when
+/// the caller does not pass an explicit API key to `llm_configure_provider`.
+pub(crate) fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
     let conn = open_mcp_settings_db()?;
 
     let setting_key = format!("api_key_{}", connector_id);

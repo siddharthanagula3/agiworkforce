@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-use tauri::command;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FeedbackPayload {
@@ -23,7 +22,7 @@ pub struct FeedbackMetadata {
 /// Reads the application log files and returns only WARN/ERROR lines,
 /// with sensitive data stripped. Used by the feedback dialog to attach
 /// filtered diagnostic logs.
-#[command]
+#[tauri::command]
 pub async fn get_filtered_logs(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     use tauri::Manager;
 
@@ -141,7 +140,7 @@ pub async fn get_filtered_logs(app: tauri::AppHandle) -> Result<Vec<String>, Str
     Ok(filtered_lines)
 }
 
-#[command]
+#[tauri::command]
 pub async fn submit_feedback(
     subject: String,
     message: String,
