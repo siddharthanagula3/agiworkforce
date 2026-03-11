@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@features/chat/stores/chat-store';
@@ -235,8 +236,10 @@ function ChatPageInner() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="flex h-full items-center justify-center" />}>
-      <ChatPageInner />
-    </Suspense>
+    <ErrorBoundary componentName="ChatPage" compact>
+      <Suspense fallback={<div className="flex h-full items-center justify-center" />}>
+        <ChatPageInner />
+      </Suspense>
+    </ErrorBoundary>
   );
 }

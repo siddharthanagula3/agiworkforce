@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const oneDark: ThemeDefinition = {
+  id: 'one-dark',
+  name: 'One Dark',
+  author: 'Atom',
+  variant: 'dark',
+  colors: {
+    background: '220 13% 18%',
+    foreground: '220 14% 71%',
+    card: '220 13% 15%',
+    cardForeground: '220 14% 71%',
+    popover: '220 13% 15%',
+    popoverForeground: '220 14% 71%',
+    primary: '207 82% 66%',
+    primaryForeground: '220 13% 18%',
+    secondary: '220 13% 24%',
+    secondaryForeground: '220 14% 71%',
+    muted: '220 13% 24%',
+    mutedForeground: '220 9% 46%',
+    accent: '286 60% 67%',
+    accentForeground: '220 13% 18%',
+    destructive: '5 48% 51%',
+    destructiveForeground: '220 14% 71%',
+    border: '220 13% 28%',
+    input: '220 13% 28%',
+    ring: '207 82% 66%',
+    syntax: {
+      keyword: '#c678dd',
+      string: '#98c379',
+      comment: '#5c6370',
+      function: '#61afef',
+      number: '#d19a66',
+      operator: '#56b6c2',
+    },
+  },
+};

@@ -64,11 +64,34 @@ impl ExecutionContext {
 
 pub struct WorkflowExecutor {
     engine: Arc<WorkflowEngine>,
+    mcp_tool_executor: Option<Arc<crate::core::mcp::tool_executor::McpToolExecutor>>,
+    default_agent_timeout_secs: u64,
 }
 
 impl WorkflowExecutor {
     pub fn new(engine: Arc<WorkflowEngine>) -> Self {
-        Self { engine }
+        Self {
+            engine,
+            mcp_tool_executor: None,
+            default_agent_timeout_secs: 300,
+        }
+    }
+
+    pub fn with_tool_executor(
+        engine: Arc<WorkflowEngine>,
+        executor: Arc<crate::core::mcp::tool_executor::McpToolExecutor>,
+    ) -> Self {
+        Self {
+            engine,
+            mcp_tool_executor: Some(executor),
+            default_agent_timeout_secs: 300,
+        }
+    }
+
+    /// Set the default timeout (in seconds) for agent nodes that don't specify one.
+    pub fn with_default_timeout(mut self, timeout_secs: u64) -> Self {
+        self.default_agent_timeout_secs = timeout_secs;
+        self
     }
 
     pub async fn execute_workflow(
@@ -83,8 +106,14 @@ impl WorkflowExecutor {
         let context = ExecutionContext::new(execution_id.clone(), workflow_id.clone(), inputs);
 
         let engine = Arc::clone(&self.engine);
+        let tool_executor = self.mcp_tool_executor.clone();
+        let default_timeout = self.default_agent_timeout_secs;
         tokio::spawn(async move {
-            let executor = WorkflowExecutor::new(engine);
+            let executor = WorkflowExecutor {
+                engine,
+                mcp_tool_executor: tool_executor,
+                default_agent_timeout_secs: default_timeout,
+            };
             if let Err(e) = executor.run_workflow(workflow, context).await {
                 tracing::error!("Workflow execution failed: {}", e);
             }
@@ -439,7 +468,11 @@ impl WorkflowExecutor {
 
         // Each branch gets its own cloned context so they can run concurrently.
         // After all branches complete, we merge their variables back into the parent context.
-        let timeout_secs = data.timeout_seconds.unwrap_or(300) as u64;
+        let timeout_secs = data
+            .timeout_seconds
+            .filter(|&t| t > 0)
+            .map(|t| t as u64)
+            .unwrap_or(self.default_agent_timeout_secs);
 
         let mut handles: Vec<
             tokio::task::JoinHandle<Result<(String, HashMap<String, Value>), String>>,
@@ -450,10 +483,16 @@ impl WorkflowExecutor {
             let branch_workflow = workflow.clone();
             let branch_node = branch_node.clone();
             let branch_engine = Arc::clone(&self.engine);
+            let branch_tool_executor = self.mcp_tool_executor.clone();
             let branch_timeout = timeout_secs;
+            let branch_default_timeout = self.default_agent_timeout_secs;
 
             handles.push(tokio::spawn(async move {
-                let executor = WorkflowExecutor::new(branch_engine);
+                let executor = WorkflowExecutor {
+                    engine: branch_engine,
+                    mcp_tool_executor: branch_tool_executor,
+                    default_agent_timeout_secs: branch_default_timeout,
+                };
                 let branch_id = branch_node.id().to_string();
 
                 let result = timeout(
@@ -619,12 +658,143 @@ impl WorkflowExecutor {
         Ok(())
     }
 
+    /// Validate script code for dangerous patterns before execution.
+    /// Returns an error string if the script contains blocked operations.
+    fn validate_script_safety(code: &str, language: &ScriptLanguage) -> Result<(), String> {
+        // Patterns that indicate dangerous filesystem / system operations
+        // across all languages
+        let universal_blocked = [
+            // Recursive deletion patterns
+            ("rm -rf /", "recursive root deletion"),
+            ("rm -rf ~", "recursive home deletion"),
+            ("rmdir /s /q", "recursive Windows root deletion"),
+            ("format c:", "disk format"),
+            // Credential / key theft
+            ("/.ssh/", "SSH key access"),
+            ("/etc/shadow", "password file access"),
+            ("/etc/passwd", "user account file access"),
+            // Crypto-mining indicators
+            ("stratum+tcp://", "crypto mining pool connection"),
+            ("xmrig", "crypto miner binary"),
+            // Reverse shells
+            ("/dev/tcp/", "reverse shell via /dev/tcp"),
+            ("mkfifo", "named pipe (potential reverse shell)"),
+        ];
+
+        let code_lower = code.to_lowercase();
+        for (pattern, description) in &universal_blocked {
+            if code_lower.contains(&pattern.to_lowercase()) {
+                return Err(format!(
+                    "Script blocked: contains dangerous pattern '{}' ({})",
+                    pattern, description
+                ));
+            }
+        }
+
+        // Language-specific checks
+        match language {
+            ScriptLanguage::Bash => {
+                let bash_blocked = [
+                    (":(){ :|:& };:", "fork bomb"),
+                    ("dd if=/dev/", "raw disk I/O"),
+                    ("> /dev/sd", "raw disk write"),
+                    ("chmod -R 777 /", "recursive permission change on root"),
+                    ("chown -R", "recursive ownership change"),
+                    ("curl | sh", "pipe-to-shell remote code execution"),
+                    ("wget | sh", "pipe-to-shell remote code execution"),
+                    ("curl | bash", "pipe-to-shell remote code execution"),
+                    ("wget | bash", "pipe-to-shell remote code execution"),
+                ];
+                for (pattern, description) in &bash_blocked {
+                    if code_lower.contains(&pattern.to_lowercase()) {
+                        return Err(format!(
+                            "Bash script blocked: contains dangerous pattern '{}' ({})",
+                            pattern, description
+                        ));
+                    }
+                }
+            }
+            ScriptLanguage::Python => {
+                let python_blocked = [
+                    ("subprocess.call", "subprocess execution"),
+                    ("subprocess.popen", "subprocess execution"),
+                    ("subprocess.run", "subprocess execution"),
+                    ("os.system(", "shell command execution"),
+                    ("os.popen(", "shell command execution"),
+                    ("os.exec", "process replacement"),
+                    ("shutil.rmtree('/'", "recursive root deletion"),
+                    ("__import__('os')", "dynamic OS module import"),
+                    ("__import__('subprocess')", "dynamic subprocess import"),
+                ];
+                for (pattern, description) in &python_blocked {
+                    if code_lower.contains(&pattern.to_lowercase()) {
+                        return Err(format!(
+                            "Python script blocked: contains dangerous pattern '{}' ({})",
+                            pattern, description
+                        ));
+                    }
+                }
+            }
+            ScriptLanguage::JavaScript => {
+                let js_blocked = [
+                    ("child_process", "child process execution"),
+                    ("require('fs').rmdir", "recursive directory deletion"),
+                    ("require('fs').unlink", "file deletion"),
+                    ("execsync(", "synchronous command execution"),
+                    ("execfilesync(", "synchronous file execution"),
+                    ("spawnsync(", "synchronous process spawn"),
+                ];
+                for (pattern, description) in &js_blocked {
+                    if code_lower.contains(&pattern.to_lowercase()) {
+                        return Err(format!(
+                            "JavaScript script blocked: contains dangerous pattern '{}' ({})",
+                            pattern, description
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn execute_script_node(
         &self,
         data: &ScriptNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
         tracing::info!("Executing script node: {}", data.label);
+
+        // --- Security validation ---
+        // 1. Validate script content against blocked patterns
+        Self::validate_script_safety(&data.code, &data.language)?;
+
+        // 2. Log script execution for audit trail
+        tracing::warn!(
+            "SCRIPT_EXECUTION: workflow={} execution={} language={:?} label='{}' code_length={} code_hash={:x}",
+            context.workflow_id,
+            context.execution_id,
+            data.language,
+            data.label,
+            data.code.len(),
+            {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                data.code.hash(&mut hasher);
+                hasher.finish()
+            }
+        );
+
+        // 3. Enforce maximum script code size (64 KB) to prevent abuse
+        const MAX_SCRIPT_SIZE: usize = 64 * 1024;
+        if data.code.len() > MAX_SCRIPT_SIZE {
+            return Err(format!(
+                "Script code exceeds maximum allowed size ({} bytes > {} bytes)",
+                data.code.len(),
+                MAX_SCRIPT_SIZE
+            ));
+        }
 
         /// Maximum output size in bytes to prevent memory exhaustion (1 MB).
         const MAX_OUTPUT_BYTES: usize = 1_024 * 1_024;
@@ -634,9 +804,12 @@ impl WorkflowExecutor {
             .map(|t| if t > 0 { t as u64 } else { 30 })
             .unwrap_or(30);
 
+        // Cap maximum timeout to 5 minutes to prevent indefinite execution
+        let timeout_secs = timeout_secs.min(300);
+
         let (program, args, code) = match data.language {
             ScriptLanguage::JavaScript => {
-                // Prefer deno, fall back to node
+                // Prefer deno (sandboxed by default), fall back to node
                 let runtime = if which_exists("deno") {
                     "deno"
                 } else if which_exists("node") {
@@ -647,9 +820,18 @@ impl WorkflowExecutor {
                     );
                 };
                 if runtime == "deno" {
+                    // Deno sandbox: only allow env reads (for WF_ vars), deny net/fs/run
                     (
                         "deno".to_string(),
-                        vec!["run".to_string(), "--allow-env".to_string(), "-".to_string()],
+                        vec![
+                            "run".to_string(),
+                            "--allow-env".to_string(),
+                            "--deny-net".to_string(),
+                            "--deny-read".to_string(),
+                            "--deny-write".to_string(),
+                            "--deny-run".to_string(),
+                            "-".to_string(),
+                        ],
                         data.code.clone(),
                     )
                 } else {
@@ -672,11 +854,10 @@ impl WorkflowExecutor {
                 } else {
                     "bash"
                 };
-                let flag = if cfg!(target_os = "windows") {
-                    "/C"
-                } else {
-                    "-c"
-                };
+                // Use restricted bash mode (-r) when available; disables some dangerous
+                // operations like changing directories via cd, setting/unsetting PATH,
+                // and redirecting output to files.
+                let flag = if cfg!(target_os = "windows") { "/C" } else { "-rc" };
                 (shell.to_string(), vec![flag.to_string(), data.code.clone()], String::new())
             }
         };
@@ -685,13 +866,30 @@ impl WorkflowExecutor {
         let mut cmd = tokio::process::Command::new(&program);
         cmd.args(&args);
 
+        // Clear inherited environment to prevent leaking secrets (API keys, tokens, etc.)
+        // Only pass through safe system variables needed for runtime execution.
+        cmd.env_clear();
+        let safe_inherited_vars = ["PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "TMPDIR", "TMP", "TEMP"];
+        for var in &safe_inherited_vars {
+            if let Ok(val) = std::env::var(var) {
+                cmd.env(var, val);
+            }
+        }
+
         // Pass workflow variables as environment variables (WF_ prefix)
         for (key, value) in &context.variables {
+            // Sanitize key: only allow alphanumeric + underscore
+            let sanitized_key: String = key.chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if sanitized_key.is_empty() {
+                continue;
+            }
             let env_val = match value {
                 Value::String(s) => s.clone(),
                 other => other.to_string(),
             };
-            cmd.env(format!("WF_{}", key.to_uppercase()), env_val);
+            cmd.env(format!("WF_{}", sanitized_key.to_uppercase()), env_val);
         }
 
         // For deno reading from stdin, pipe the code
@@ -779,12 +977,39 @@ impl WorkflowExecutor {
     ) -> Result<(), String> {
         tracing::info!("Executing tool node: {}", data.label);
 
-        sleep(Duration::from_millis(100)).await;
+        let executor = self
+            .mcp_tool_executor
+            .as_ref()
+            .ok_or_else(|| {
+                format!(
+                    "MCP tool executor not available — cannot execute tool '{}'",
+                    data.tool_name
+                )
+            })?;
 
-        context.set_variable(
-            format!("{}_output", data.tool_name),
-            Value::String(format!("Tool {} executed", data.tool_name)),
-        );
+        let timeout_secs = data
+            .timeout_seconds
+            .map(|t| if t > 0 { t as u64 } else { 60 })
+            .unwrap_or(60);
+        let timeout_dur = Duration::from_secs(timeout_secs);
+
+        let result = executor
+            .execute_tool_with_timeout(&data.tool_name, data.tool_input.clone(), timeout_dur)
+            .await
+            .map_err(|e| format!("Tool '{}' failed: {}", data.tool_name, e))?;
+
+        // Build a Value from ToolExecutionResult fields (it does not implement Serialize)
+        let result_value = serde_json::json!({
+            "tool_id": result.tool_id,
+            "server_name": result.server_name,
+            "result": result.result,
+            "duration_ms": result.duration_ms,
+            "timestamp": result.timestamp,
+            "success": result.success,
+            "error": result.error,
+        });
+
+        context.set_variable(format!("{}_output", data.tool_name), result_value);
 
         Ok(())
     }
@@ -866,9 +1091,15 @@ impl WorkflowExecutor {
             if let Some(node) = workflow.nodes.iter().find(|n| n.id() == node_id) {
                 let node = node.clone();
                 let engine = Arc::clone(&self.engine);
+                let tool_executor = self.mcp_tool_executor.clone();
+                let default_timeout = self.default_agent_timeout_secs;
                 let execution_id = execution_id.to_string();
                 tokio::spawn(async move {
-                    let executor = WorkflowExecutor::new(engine);
+                    let executor = WorkflowExecutor {
+                        engine,
+                        mcp_tool_executor: tool_executor,
+                        default_agent_timeout_secs: default_timeout,
+                    };
                     // Update status to Running when actually resuming execution
                     let _ = executor.engine.update_execution_status(
                         &execution_id,
@@ -890,9 +1121,15 @@ impl WorkflowExecutor {
         } else {
             // No current node, start fresh from beginning
             let engine = Arc::clone(&self.engine);
+            let tool_executor = self.mcp_tool_executor.clone();
+            let default_timeout = self.default_agent_timeout_secs;
             let execution_id = execution_id.to_string();
             tokio::spawn(async move {
-                let executor = WorkflowExecutor::new(engine);
+                let executor = WorkflowExecutor {
+                    engine,
+                    mcp_tool_executor: tool_executor,
+                    default_agent_timeout_secs: default_timeout,
+                };
                 if let Err(e) = executor.run_workflow(workflow, context).await {
                     tracing::error!("Failed to resume workflow: {}", e);
                     let _ = executor.engine.update_execution_status(
@@ -1001,10 +1238,16 @@ impl WorkflowExecutor {
         let context = ExecutionContext::new(execution_id.clone(), workflow_id.clone(), inputs);
 
         let engine = Arc::clone(&self.engine);
+        let tool_executor = self.mcp_tool_executor.clone();
+        let default_timeout = self.default_agent_timeout_secs;
         let execution_id_clone = execution_id.clone();
 
         tokio::spawn(async move {
-            let executor = WorkflowExecutor::new(engine);
+            let executor = WorkflowExecutor {
+                engine,
+                mcp_tool_executor: tool_executor,
+                default_agent_timeout_secs: default_timeout,
+            };
 
             let timeout_duration = Duration::from_secs(timeout_seconds);
             let result = timeout(timeout_duration, executor.run_workflow(workflow, context)).await;

@@ -1,5 +1,5 @@
 use std::sync::RwLock;
-use tauri::{command, State};
+use tauri::State;
 
 /// Managed state for session tokens — avoids process-global statics.
 /// Wrapped in an RwLock so multiple readers can coexist with exclusive writers.
@@ -174,7 +174,7 @@ pub fn get_session_user_id(state: &SessionState) -> Result<String, String> {
     }
 }
 
-#[command]
+#[tauri::command]
 pub async fn auth_store_session(
     session: String,
     state: State<'_, SessionState>,
@@ -185,13 +185,13 @@ pub async fn auth_store_session(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn auth_retrieve_session(state: State<'_, SessionState>) -> Result<String, String> {
     let store = state.0.read().map_err(|e| e.to_string())?;
     store.clone().ok_or_else(|| "No session stored".to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn auth_remove_session(state: State<'_, SessionState>) -> Result<(), String> {
     let mut store = state.0.write().map_err(|e| e.to_string())?;
     *store = None;

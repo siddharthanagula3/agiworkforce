@@ -1,0 +1,78 @@
+# AGI Workforce — Codex CLI Configuration
+#
+# Project-level config for OpenAI Codex CLI.
+# Docs: https://github.com/openai/codex
+#
+# Monorepo: Tauri v2 desktop (Rust + React/TS), Next.js web, React Native mobile,
+# Chrome extension, VS Code extension, Express API gateway.
+
+# Model selection
+model = "o4-mini"
+model_provider = "openai"
+
+# Permissions
+[permissions]
+# "untrusted" = no writes, "on-request" = ask per action, "never" = full auto
+approval_policy = "on-request"
+# "off", "workspace-read", "workspace-write", "danger-full-access"
+sandbox_mode = "workspace-write"
+
+# Notifications (macOS)
+[notify]
+command = "terminal-notifier -title 'Codex AGI' -message 'Task completed!' -sound default"
+on_complete = true
+
+# History - persistent instructions applied to every session
+[history]
+persistent_instructions = """
+Follow AGI Workforce project rules:
+
+1. Architecture: Tauri v2 desktop app — Rust backend (src-tauri/) + React 19 / TypeScript frontend (src/). Next.js 16 web app. React Native + Expo mobile app.
+2. Security-First: All secrets through SecretManager (Argon2id + AES-GCM). Never hardcode API keys. Use ToolGuard for tool execution. Validate all inputs. No eval() or dynamic code execution from user input.
+3. Conventional commits enforced: type(scope): lowercase subject (max 100 chars). Types: feat|fix|chore|docs|refactor|test|perf|ci|build|style. Subject MUST be lowercase.
+4. Rust: Follow Tauri v2 patterns. #[tauri::command] for invoke handlers. snake_case. deny(unsafe_code, dead_code, unused_imports, unused_variables, unused_mut). All warnings are errors.
+5. TypeScript: strict mode, named exports, absolute imports from src/. React: functional components only. Tailwind CSS 4 for styling. Zustand v5 + Immer for state.
+6. IPC Rule: All invoke() calls in TypeScript MUST use camelCase param keys. Tauri auto-converts from Rust snake_case. Snake_case in invoke() silently fails.
+7. Model catalogs (desktop src/constants/llm.ts, web constants/models.json, Rust provider_adapter.rs) must stay in sync.
+8. Build commands: pnpm install, cd apps/desktop && pnpm dev, cd apps/web && pnpm dev, cargo check, cargo clippy, pnpm typecheck, pnpm lint.
+9. Do NOT run tests unless explicitly asked. Do NOT create documentation files unless explicitly asked.
+10. Error handling: handle at every level, never swallow errors. Rust: use anyhow/thiserror. TypeScript: proper try/catch with user-facing error messages.
+"""
+
+# MCP Servers
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+
+[mcp_servers.memory]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-memory"]
+
+[mcp_servers.sequential-thinking]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+
+[mcp_servers.supabase]
+command = "npx"
+args = ["-y", "supabase-mcp-server@latest", "--read-only"]
+
+[mcp_servers.vercel]
+command = "npx"
+args = ["-y", "vercel-mcp-server@latest"]
+
+# Features
+[features]
+web_search_request = true
+
+# Profiles — switch with CODEX_PROFILE=<name>
+[profiles.strict]
+approval_policy = "on-request"
+sandbox_mode = "workspace-read"
+
+[profiles.yolo]
+approval_policy = "never"
+sandbox_mode = "workspace-write"

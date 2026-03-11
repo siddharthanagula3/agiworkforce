@@ -12,10 +12,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 /// Status of an installed extension
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ExtensionStatus {
     /// Extension is installed but not enabled
+    #[default]
     Disabled,
 
     /// Extension is enabled and ready to use
@@ -32,12 +33,6 @@ pub enum ExtensionStatus {
 
     /// Extension is pending removal
     PendingRemoval,
-}
-
-impl Default for ExtensionStatus {
-    fn default() -> Self {
-        Self::Disabled
-    }
 }
 
 impl std::fmt::Display for ExtensionStatus {

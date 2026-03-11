@@ -445,8 +445,6 @@ const INTENT_KEYWORDS: Record<IntentType, { high: string[]; medium: string[] }> 
       'compose music',
       'make a beat',
       'create soundtrack',
-      'suno',
-      'udio',
       'generate melody',
     ],
     medium: ['music', 'song', 'melody', 'instrumental', 'audio track'],

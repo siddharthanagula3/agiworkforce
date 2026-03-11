@@ -1,4 +1,5 @@
 use crate::core::mcp::config::{open_mcp_settings_db, upsert_settings_v2_value};
+use crate::sys::commands::auth::{get_session_user_id, SessionState};
 use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
     McpToolRegistry,
@@ -35,10 +36,11 @@ pub struct McpConfigLocation {
     pub exists: bool,
 }
 
-fn build_runtime_config(raw_config: &McpServersConfig) -> Result<McpServersConfig, String> {
+async fn build_runtime_config(raw_config: &McpServersConfig) -> Result<McpServersConfig, String> {
     let mut runtime_config = raw_config.clone();
     runtime_config
         .inject_credentials()
+        .await
         .map_err(|e| format!("Failed to inject credentials: {}", e))?;
     Ok(runtime_config)
 }
@@ -138,7 +140,7 @@ impl McpState {
             seed_config
         };
 
-        let runtime_config = build_runtime_config(&raw_config)?;
+        let runtime_config = build_runtime_config(&raw_config).await?;
         *self.config.lock() = raw_config;
 
         let mut warnings: Vec<String> = Vec::new();
@@ -728,7 +730,7 @@ pub async fn mcp_connect_server(
         return Err("MCP server connection cancelled".to_string());
     }
 
-    let runtime_config = build_runtime_config(&raw_config)?;
+    let runtime_config = build_runtime_config(&raw_config).await?;
     let server_config = runtime_config
         .mcp_servers
         .get(&name)
@@ -882,10 +884,20 @@ pub async fn mcp_search_tools(
 pub async fn mcp_call_tool(
     state: State<'_, McpState>,
     confirmation_state: State<'_, ToolConfirmationState>,
+    rate_limit_state: State<'_, crate::sys::commands::llm::RateLimitState>,
     app: tauri::AppHandle,
     tool_id: String,
     arguments: HashMap<String, Value>,
 ) -> Result<Value, String> {
+    // Rate limit check: 60 tool executions per minute.
+    // Uses "mcp" as the global key since all MCP tool calls share the same budget.
+    rate_limit_state
+        .mcp_limiter
+        .check_rate_limit("mcp")
+        .map_err(|_| {
+            "Rate limit exceeded for MCP tool execution. Please wait a moment and try again (limit: 60 tool calls per minute).".to_string()
+        })?;
+
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
@@ -1075,7 +1087,7 @@ pub async fn mcp_update_config(
         serde_json::from_value(new_config).map_err(|e| format!("Invalid config: {}", e))?;
     let existing_config = state.config.lock().clone();
     restore_redacted_env_values(&mut parsed_config, &existing_config, "<redacted>");
-    let runtime_config = build_runtime_config(&parsed_config)?;
+    let runtime_config = build_runtime_config(&parsed_config).await?;
 
     state.persist_config_snapshot(&parsed_config).await?;
 
@@ -1232,7 +1244,7 @@ async fn set_server_enabled(
             return Ok(format!("Server '{}' enabled", trimmed));
         }
 
-        let runtime_config = build_runtime_config(&snapshot)?;
+        let runtime_config = build_runtime_config(&snapshot).await?;
         let server_config = runtime_config
             .mcp_servers
             .get(trimmed)
@@ -1354,11 +1366,16 @@ pub async fn mcp_get_server_logs(
 /// Store a credential in encrypted database storage
 #[tauri::command]
 pub async fn mcp_store_credential(
+    session: State<'_, SessionState>,
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
-    mcp_set_credential(server_name, key, value).await
+    let user_id = get_session_user_id(&session)?;
+    if user_id == "default" {
+        return Err("Authentication required to modify MCP credentials".to_string());
+    }
+    mcp_set_credential(session, server_name, key, value).await
 }
 
 #[tauri::command]
@@ -1385,10 +1402,16 @@ pub async fn mcp_check_server_health(
 /// Set a credential for an MCP server (stores in encrypted database)
 #[tauri::command]
 pub async fn mcp_set_credential(
+    session: State<'_, SessionState>,
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
+    if user_id == "default" {
+        return Err("Authentication required to modify MCP credentials".to_string());
+    }
+
     use crate::core::mcp::config::encrypt_mcp_credential;
 
     // Encrypt the credential
@@ -1410,7 +1433,16 @@ pub async fn mcp_set_credential(
 
 /// Delete a credential for an MCP server from encrypted database
 #[tauri::command]
-pub async fn mcp_delete_credential(server_name: String, key: String) -> Result<String, String> {
+pub async fn mcp_delete_credential(
+    session: State<'_, SessionState>,
+    server_name: String,
+    key: String,
+) -> Result<String, String> {
+    let user_id = get_session_user_id(&session)?;
+    if user_id == "default" {
+        return Err("Authentication required to modify MCP credentials".to_string());
+    }
+
     let conn = open_mcp_settings_db()?;
 
     let cred_key = format!("mcp_credential_{}_{}", server_name, key);

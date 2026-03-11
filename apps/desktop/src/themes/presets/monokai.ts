@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const monokai: ThemeDefinition = {
+  id: 'monokai',
+  name: 'Monokai',
+  author: 'Wimer Hazenberg',
+  variant: 'dark',
+  colors: {
+    background: '70 8% 15%',
+    foreground: '60 30% 96%',
+    card: '70 8% 12%',
+    cardForeground: '60 30% 96%',
+    popover: '70 8% 12%',
+    popoverForeground: '60 30% 96%',
+    primary: '80 76% 53%',
+    primaryForeground: '70 8% 15%',
+    secondary: '70 8% 22%',
+    secondaryForeground: '60 30% 96%',
+    muted: '70 8% 22%',
+    mutedForeground: '70 4% 55%',
+    accent: '329 100% 59%',
+    accentForeground: '70 8% 15%',
+    destructive: '0 100% 67%',
+    destructiveForeground: '70 8% 15%',
+    border: '70 8% 28%',
+    input: '70 8% 28%',
+    ring: '80 76% 53%',
+    syntax: {
+      keyword: '#f92672',
+      string: '#e6db74',
+      comment: '#75715e',
+      function: '#a6e22e',
+      number: '#ae81ff',
+      operator: '#f92672',
+    },
+  },
+};

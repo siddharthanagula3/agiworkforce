@@ -6,15 +6,18 @@ use crate::data::db::repository;
 use base64::Engine;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
 use tracing::{debug, error, info, warn};
 
 pub mod branching;
+pub mod share;
+pub mod conversation;
 pub mod memory_handler;
+pub mod pending;
+pub mod state;
 pub mod tool_events;
 pub mod tools;
 pub mod types;
@@ -22,65 +25,30 @@ pub use branching::*;
 pub use types::*;
 
 use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
-use once_cell::sync::Lazy;
-
-// === Named constants for previously-hardcoded values ===
-/// Default temperature for LLM requests
-const DEFAULT_TEMPERATURE: f32 = 0.7;
-/// Default max tokens for LLM responses
-const DEFAULT_MAX_TOKENS: u32 = 4096;
-/// Maximum characters to extract from text/PDF file attachments (~100 KB)
-const MAX_FILE_EXTRACT_CHARS: usize = 100_000;
-/// Default limit when listing conversations
-const DEFAULT_CONVERSATION_LIST_LIMIT: i64 = 1000;
-/// Maximum length for pending user messages
-const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
-/// Max idle wait for next streaming chunk before failing the stream.
-/// 300s (5 minutes) to accommodate:
-///   - Image/video generation tools (30-120s)
-///   - Extended thinking / reasoning models (60-180s before first token)
-///   - High-latency networks and provider cold-starts
-///   - Provider keepalive gaps during heavy load
-///     The SSE parser emits keepalive chunks for provider heartbeats (`: keep-alive`,
-///     `event: ping`), so this timeout only fires if truly NO bytes are received.
-const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 300;
-/// Max wait per follow-up model invocation in tool loop (e.g. after image generation).
-/// 120s to accommodate reasoning/thinking models that can take 30-90s before first token.
-const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 120;
-/// Extended followup timeout for image/video generation tools.
-/// These tools produce large outputs that take 30-120s, and the followup
-/// model invocation needs additional time to process the result.
-const MEDIA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 300;
-/// Max total wait across all candidate retries for a single follow-up call.
-const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 180;
-/// Fast metadata follow-ups should still allow for MCP startup and remote latency.
-const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 15;
-/// Fast metadata follow-ups should have a bounded but realistic retry budget.
-const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 45;
-/// Hard upper bound for a streaming tool loop.
-/// 600s (10 minutes) to accommodate multi-step agentic workflows with
-/// image/video generation and reasoning model follow-ups.
-const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 600;
-/// Fast metadata loops should remain bounded while tolerating transient slowness.
-const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 120;
-/// Default streaming tool-loop iteration limit.
-const STREAMING_TOOL_LOOP_MAX_ITERATIONS: usize = 25;
-/// Fast metadata loops should terminate quickly while still allowing recovery retries.
-const FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS: usize = 8;
-/// Long-running operations that can legitimately take minutes.
-const LONG_RUNNING_TOOL_TIMEOUT_SECS: u64 = 300;
-/// Default timeout for most tools.
-const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 120;
-/// Fast metadata tools should fail fast enough for UX but not before realistic completion windows.
-const FAST_TOOL_TIMEOUT_SECS: u64 = 45;
-/// Maximum age (in milliseconds) for browser page context before it is considered stale.
-const PAGE_CONTEXT_MAX_AGE_MS: u64 = 300_000; // 5 minutes
-/// Maximum length for sanitized URLs injected into prompts.
-const PAGE_CONTEXT_URL_MAX_LEN: usize = 2048;
-/// Maximum length for sanitized page titles injected into prompts.
-const PAGE_CONTEXT_TITLE_MAX_LEN: usize = 200;
-/// Maximum length for sanitized selected text injected into prompts.
-const PAGE_CONTEXT_SELECTED_TEXT_MAX_LEN: usize = 4096;
+// All named constants live in state.rs as pub(crate) — import them here so
+// mod.rs code can reference them without duplication.
+use crate::sys::commands::chat::state::{
+    DEFAULT_CONVERSATION_LIST_LIMIT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE,
+    DEFAULT_TOOL_TIMEOUT_SECS, FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS,
+    FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS, FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS,
+    FAST_METADATA_TOOL_LOOP_MAX_SECS, FAST_TOOL_TIMEOUT_SECS, FOLLOWUP_INVOKE_TIMEOUT_SECS,
+    FOLLOWUP_TOTAL_TIMEOUT_SECS, LONG_RUNNING_TOOL_TIMEOUT_SECS, MAX_FILE_EXTRACT_CHARS,
+    MEDIA_FOLLOWUP_INVOKE_TIMEOUT_SECS, PAGE_CONTEXT_MAX_AGE_MS,
+    PAGE_CONTEXT_SELECTED_TEXT_MAX_LEN, PAGE_CONTEXT_TITLE_MAX_LEN, PAGE_CONTEXT_URL_MAX_LEN,
+    STREAM_CHUNK_IDLE_TIMEOUT_SECS, STREAMING_TOOL_LOOP_MAX_ITERATIONS,
+    STREAMING_TOOL_LOOP_MAX_SECS,
+    // Statics and helpers (canonical source — removes inline duplicates)
+    ACTIVE_STOP_CONVERSATION, PENDING_MESSAGES, STOP_GENERATION,
+    is_tool_cancelled, mark_tool_cancelled, take_tool_cancelled,
+};
+pub use crate::sys::commands::chat::pending::{
+    AddPendingMessageRequest, PendingUserMessage, PopPendingMessageRequest,
+    chat_add_pending_message, chat_clear_pending_messages, chat_get_pending_messages,
+    chat_pop_pending_message,
+    has_pending_messages, has_pending_messages_for_conversation, peek_pending_messages,
+    peek_pending_messages_for_conversation, pending_messages_count,
+    pop_pending_message_for_conversation,
+};
 
 /// Strip control characters and truncate to a maximum length for safe prompt injection.
 ///
@@ -483,7 +451,9 @@ fn process_document_attachments(
 
 /// Build tool definitions for chat, including MCP tools and optional web search injection.
 ///
-/// Returns `(Option<Vec<ToolDefinition>>, Option<ToolChoice>)`.
+/// Returns `(Option<Vec<ToolDefinition>>, Option<ToolChoice>, Option<Arc<ToolRegistry>>)`.
+/// The `Arc<ToolRegistry>` is returned so callers can reuse it for tool execution without
+/// reconstructing it on every tool call (Fix 4 — registry caching per request).
 fn build_tool_definitions(
     enable_tools: Option<bool>,
     mcp_state: &crate::sys::commands::mcp::McpState,
@@ -493,15 +463,27 @@ fn build_tool_definitions(
 ) -> (
     Option<Vec<crate::core::llm::ToolDefinition>>,
     Option<ToolChoice>,
+    Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) {
     if !enable_tools.unwrap_or(true) {
         debug!("[Chat] Tools explicitly disabled by request");
-        return (None, None);
+        return (None, None, None);
     }
+
+    // Build a single registry up-front so it can be reused for tool execution.
+    // Fall back to None if registry construction fails; build_chat_tools will
+    // create its own internal fallback in that case.
+    let registry = match tools::create_tool_registry_for_schema() {
+        Ok(r) => Some(r),
+        Err(e) => {
+            warn!("[Chat] Failed to pre-build ToolRegistry for schema: {}", e);
+            None
+        }
+    };
 
     // Default to enabling tools for Claude Desktop-like experience
     // Include MCP tools if available
-    let mut tool_defs = tools::build_chat_tools(None, Some(mcp_state));
+    let mut tool_defs = tools::build_chat_tools(registry.as_ref(), Some(mcp_state));
 
     // Filter tools based on model capabilities if provided by frontend
     if let Some(caps) = model_capabilities {
@@ -546,10 +528,10 @@ fn build_tool_definitions(
             "[Chat] Enabling {} tools for chat (Claude Desktop-like mode, includes MCP tools)",
             tool_defs.len()
         );
-        (Some(tool_defs), Some(ToolChoice::Auto))
+        (Some(tool_defs), Some(ToolChoice::Auto), registry)
     } else {
         debug!("[Chat] No tools available, proceeding without tool support");
-        (None, None)
+        (None, None, None)
     }
 }
 
@@ -978,6 +960,7 @@ async fn execute_tool_calls_batch(
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     iteration: usize,
+    registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> (Vec<tools::ChatToolResult>, Vec<String>) {
     let mut tool_results = Vec::new();
     let mut tool_failure_summaries = Vec::new();
@@ -1057,6 +1040,7 @@ async fn execute_tool_calls_batch(
             project_folder.clone(),
             conversation_mode.clone(),
             Some(tc.id.as_str()),
+            registry.clone(),
         )
         .await;
 
@@ -1277,39 +1261,7 @@ fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
-// AUDIT-STREAM-038 fix: Track active conversation for scoped stop
-static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> = Lazy::new(|| Mutex::new(None));
-
-// Pending messages queue for mid-task user input
-static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
-    Lazy::new(|| Mutex::new(Vec::new()));
-// Tracks tool_call IDs explicitly cancelled by the user so long-running handlers can stop early.
-static CANCELLED_TOOL_CALLS: Lazy<Mutex<HashSet<String>>> =
-    Lazy::new(|| Mutex::new(HashSet::new()));
-
-fn mark_tool_cancelled(tool_call_id: &str) {
-    if let Ok(mut cancelled) = CANCELLED_TOOL_CALLS.lock() {
-        cancelled.insert(tool_call_id.to_string());
-    }
-}
-
-fn take_tool_cancelled(tool_call_id: &str) -> bool {
-    if let Ok(mut cancelled) = CANCELLED_TOOL_CALLS.lock() {
-        return cancelled.remove(tool_call_id);
-    }
-    false
-}
-
-/// Check if a tool has been cancelled without removing it from the set.
-/// This allows the cancellation check to be non-destructive so it can be polled frequently.
-/// AUDIT-CANCEL-060 fix: Added non-consuming check for immediate cancellation detection.
-fn is_tool_cancelled(tool_call_id: &str) -> bool {
-    if let Ok(cancelled) = CANCELLED_TOOL_CALLS.lock() {
-        return cancelled.contains(tool_call_id);
-    }
-    false
-}
+// Statics and helpers are imported from state:: and pending:: above.
 
 fn emit_stream_failure(
     app_handle: &tauri::AppHandle,
@@ -1448,6 +1400,7 @@ async fn execute_chat_tool_with_timeout(
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
+    registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> Result<String, String> {
     let timeout_secs = resolve_tool_execution_timeout_secs(tool_name);
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
@@ -1493,6 +1446,7 @@ async fn execute_chat_tool_with_timeout(
             project_folder_owned,
             conversation_mode_owned,
             tool_call_id_owned.as_deref(),
+            registry,
         )
         .await
     });
@@ -1661,13 +1615,7 @@ async fn execute_chat_tool_with_timeout(
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PendingUserMessage {
-    pub id: String,
-    pub content: String,
-    pub timestamp: chrono::DateTime<Utc>,
-    pub conversation_id: Option<i64>,
-}
+// PendingUserMessage is re-exported from pending:: above.
 
 // === Smart Intent Detection System ===
 // Automatically determines user intent without explicit commands
@@ -3496,8 +3444,10 @@ pub async fn chat_send_message(
         );
     }
 
-    // Build tool definitions if tools are enabled
-    let (chat_tools, tool_choice) = build_tool_definitions(
+    // Build tool definitions if tools are enabled.
+    // The registry is returned so it can be reused for tool execution without
+    // reconstructing it on every tool call within the loop.
+    let (chat_tools, tool_choice, tool_registry) = build_tool_definitions(
         request.enable_tools,
         &mcp_state,
         request.model_capabilities.as_ref(),
@@ -4191,6 +4141,7 @@ pub async fn chat_send_message(
         let project_folder_clone = request.project_folder.clone();
         let conversation_mode_clone = request.conversation_mode.clone();
         let correlation_id_clone = correlation_id.clone();
+        let tool_registry_clone = tool_registry.clone();
 
         // Spawn streaming task to avoid blocking the command response
         // Return immediately - events will handle the streaming updates
@@ -4279,6 +4230,7 @@ pub async fn chat_send_message(
                             project_folder_clone.clone(),
                             conversation_mode_clone.clone(),
                             0,
+                            tool_registry_clone.clone(),
                         )
                         .await;
                         tool_failure_summaries.extend(batch_failures);
@@ -4667,6 +4619,7 @@ pub async fn chat_send_message(
                                                             project_folder_clone.clone(),
                                                             conversation_mode_clone.clone(),
                                                             streaming_tool_iteration,
+                                                            tool_registry_clone.clone(),
                                                         )
                                                         .await;
                                                     tool_failure_summaries.extend(batch_failures);
@@ -5402,6 +5355,7 @@ Please confirm the tool permissions or try a different approach.",
                         request.project_folder.clone(),
                         request.conversation_mode.clone(),
                         0,
+                        tool_registry.clone(),
                     )
                     .await;
 
@@ -5756,207 +5710,7 @@ pub fn reset_stop_flag() {
     }
 }
 
-// ============================================================================
-// Pending Messages API - Allows users to queue messages while AI is processing
-// ============================================================================
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AddPendingMessageRequest {
-    pub content: String,
-    pub conversation_id: Option<i64>,
-}
-
-#[tauri::command]
-pub async fn chat_add_pending_message(
-    app_handle: tauri::AppHandle,
-    request: AddPendingMessageRequest,
-) -> Result<PendingUserMessage, String> {
-    let trimmed_content = request.content.trim();
-    if trimmed_content.is_empty() {
-        return Err("Pending message content cannot be empty".to_string());
-    }
-    if trimmed_content.len() > MAX_PENDING_MESSAGE_CHARS {
-        return Err(format!(
-            "Pending message content cannot exceed {} characters",
-            MAX_PENDING_MESSAGE_CHARS
-        ));
-    }
-
-    let pending_msg = PendingUserMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        content: trimmed_content.to_string(),
-        timestamp: Utc::now(),
-        conversation_id: request.conversation_id,
-    };
-
-    {
-        const MAX_PENDING_QUEUE_SIZE: usize = 20;
-        let mut queue = PENDING_MESSAGES
-            .lock()
-            .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
-        if queue.len() >= MAX_PENDING_QUEUE_SIZE {
-            return Err(format!(
-                "Pending message queue is full (max {MAX_PENDING_QUEUE_SIZE} messages). Please wait for the agent to process current messages."
-            ));
-        }
-        queue.push(pending_msg.clone());
-        info!(
-            "[Chat] Added pending message (queue size: {}): {}...",
-            queue.len(),
-            &trimmed_content.chars().take(50).collect::<String>()
-        );
-    }
-
-    // Emit event to notify frontend
-    let _ = app_handle.emit("chat:pending-message-added", &pending_msg);
-
-    Ok(pending_msg)
-}
-
-#[tauri::command]
-pub async fn chat_get_pending_messages() -> Result<Vec<PendingUserMessage>, String> {
-    let queue = PENDING_MESSAGES
-        .lock()
-        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
-    Ok(queue.clone())
-}
-
-#[tauri::command]
-pub async fn chat_clear_pending_messages(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let mut queue = PENDING_MESSAGES
-        .lock()
-        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
-    let count = queue.len();
-    queue.clear();
-    info!("[Chat] Cleared {} pending messages", count);
-
-    // Emit event to notify frontend
-    let _ = app_handle.emit(
-        "chat:pending-messages-cleared",
-        serde_json::json!({ "count": count }),
-    );
-
-    Ok(())
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PopPendingMessageRequest {
-    pub conversation_id: Option<i64>,
-    #[serde(default)]
-    pub pending_message_id: Option<String>,
-}
-
-#[tauri::command]
-pub async fn chat_pop_pending_message(
-    app_handle: tauri::AppHandle,
-    request: PopPendingMessageRequest,
-) -> Result<Option<PendingUserMessage>, String> {
-    let mut queue = PENDING_MESSAGES
-        .lock()
-        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
-
-    if queue.is_empty() {
-        return Ok(None);
-    }
-
-    // Pop by explicit pending message ID when available to avoid FIFO mismatches.
-    let msg = if let Some(pending_message_id) = request.pending_message_id.as_deref() {
-        let idx = queue.iter().position(|m| {
-            m.id == pending_message_id
-                && request
-                    .conversation_id
-                    .map(|cid| m.conversation_id == Some(cid))
-                    .unwrap_or(true)
-        });
-        if let Some(idx) = idx {
-            queue.remove(idx)
-        } else {
-            return Ok(None);
-        }
-    } else if let Some(conversation_id) = request.conversation_id {
-        // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided.
-        let idx = queue
-            .iter()
-            .position(|m| m.conversation_id == Some(conversation_id));
-        if let Some(idx) = idx {
-            queue.remove(idx)
-        } else {
-            return Ok(None);
-        }
-    } else {
-        // Fallback to global queue behavior for backward compatibility
-        queue.remove(0)
-    };
-
-    info!(
-        "[Chat] Popped pending message (remaining: {}): {}...",
-        queue.len(),
-        &msg.content.chars().take(50).collect::<String>()
-    );
-
-    // Emit event to notify frontend
-    let _ = app_handle.emit(
-        "chat:pending-message-consumed",
-        serde_json::json!({
-            "message": msg,
-            "remaining": queue.len()
-        }),
-    );
-
-    Ok(Some(msg))
-}
-
-/// Check if there are pending messages (used by tool executor)
-pub fn has_pending_messages() -> bool {
-    PENDING_MESSAGES
-        .lock()
-        .map(|q| !q.is_empty())
-        .unwrap_or(false)
-}
-
-// AUDIT-STREAM-062 fix: Check pending messages for a specific conversation
-pub fn has_pending_messages_for_conversation(conversation_id: i64) -> bool {
-    PENDING_MESSAGES
-        .lock()
-        .map(|q| q.iter().any(|m| m.conversation_id == Some(conversation_id)))
-        .unwrap_or(false)
-}
-
-/// Get pending messages count
-pub fn pending_messages_count() -> usize {
-    PENDING_MESSAGES.lock().map(|q| q.len()).unwrap_or(0)
-}
-
-/// Peek at pending messages without removing them
-pub fn peek_pending_messages() -> Vec<PendingUserMessage> {
-    PENDING_MESSAGES
-        .lock()
-        .map(|q| q.clone())
-        .unwrap_or_default()
-}
-
-// AUDIT-STREAM-062 fix: Peek at pending messages for a specific conversation
-pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<PendingUserMessage> {
-    PENDING_MESSAGES
-        .lock()
-        .map(|q| {
-            q.iter()
-                .filter(|m| m.conversation_id == Some(conversation_id))
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// Pop the first pending message for a specific conversation (used by agentic loop).
-pub fn pop_pending_message_for_conversation(conversation_id: i64) -> Option<PendingUserMessage> {
-    PENDING_MESSAGES.lock().ok().and_then(|mut q| {
-        let idx = q
-            .iter()
-            .position(|m| m.conversation_id == Some(conversation_id))?;
-        Some(q.remove(idx))
-    })
-}
+// Pending Messages API commands and helpers live in pending.rs (imported above).
 
 // ============================================================================
 // Smart Intent Detection API

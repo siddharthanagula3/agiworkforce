@@ -306,6 +306,27 @@ impl TaskManager {
         self.executor.shutdown().await;
     }
 
+    /// Extend the per-task deadline override by `additional_secs`.
+    ///
+    /// If the task has no existing override, the global `max_duration_secs` baseline
+    /// is used as the starting point before adding the extension.
+    pub async fn extend_deadline(
+        &self,
+        task_id: &str,
+        additional_secs: i64,
+        global_max_secs: i64,
+    ) -> anyhow::Result<i64> {
+        let mut tasks = self.tasks.write().await;
+        let task = tasks
+            .get_mut(task_id)
+            .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", task_id))?;
+
+        let current_max = task.deadline_override_secs.unwrap_or(global_max_secs);
+        let new_max = current_max + additional_secs;
+        task.deadline_override_secs = Some(new_max);
+        Ok(new_max)
+    }
+
     // AUDIT-004-012: Cleanup old completed/failed/cancelled tasks
     /// Remove tasks that have been in a terminal state for longer than the max age
     pub async fn cleanup_old_tasks(&self) -> anyhow::Result<usize> {

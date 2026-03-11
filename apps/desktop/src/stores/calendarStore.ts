@@ -238,7 +238,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
     try {
       const calendars = await invoke<CalendarSummary[]>('calendar_list_calendars', {
-        account_id: accountId,
+        accountId,
       });
       const firstCalendar = calendars[0];
       set({
@@ -286,13 +286,13 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       const response = await invoke<{ events: CalendarEvent[] }>('calendar_list_events', {
-        account_id: selectedAccountId,
+        accountId: selectedAccountId,
         request: {
-          calendar_id: targetCalendarId,
-          start_time: now.toISOString(),
-          end_time: options?.end_time ?? end.toISOString(),
-          max_results: options?.max_results ?? 50,
-          show_deleted: options?.show_deleted ?? false,
+          calendarId: targetCalendarId,
+          startTime: now.toISOString(),
+          endTime: options?.end_time ?? end.toISOString(),
+          maxResults: options?.max_results ?? 50,
+          showDeleted: options?.show_deleted ?? false,
         },
       });
 
@@ -322,7 +322,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       const created = await invoke<CalendarEvent>('calendar_create_event', {
-        account_id: selectedAccountId,
+        accountId: selectedAccountId,
         request,
       });
 
@@ -348,9 +348,9 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       const updated = await invoke<CalendarEvent>('calendar_update_event', {
-        account_id: selectedAccountId,
-        calendar_id: calendarId,
-        event_id: eventId,
+        accountId: selectedAccountId,
+        calendarId,
+        eventId,
         request,
       });
 
@@ -378,9 +378,9 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       await invoke('calendar_delete_event', {
-        account_id: selectedAccountId,
-        calendar_id: calendarId,
-        event_id: eventId,
+        accountId: selectedAccountId,
+        calendarId,
+        eventId,
       });
 
       set((state) => ({

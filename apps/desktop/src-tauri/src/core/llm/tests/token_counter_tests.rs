@@ -375,6 +375,16 @@ mod tests {
             Provider::Zhipu,
             Provider::ManagedCloud,
             Provider::Mistral,
+            Provider::Groq,
+            Provider::Together,
+            Provider::Fireworks,
+            Provider::Cerebras,
+            Provider::DeepInfra,
+            Provider::Cohere,
+            Provider::AI21,
+            Provider::Sambanova,
+            Provider::Azure,
+            Provider::Bedrock,
         ];
 
         for provider in providers {

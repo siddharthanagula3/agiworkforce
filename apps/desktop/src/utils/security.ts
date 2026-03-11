@@ -326,29 +326,41 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => map[char] || char);
 }
 
-export function validateUrl(url: string): { valid: boolean; sanitized?: string; error?: string } {
+export function validateUrl(
+  url: string,
+  options?: { allowLocalhost?: boolean },
+): { valid: boolean; sanitized?: string; error?: string } {
   try {
     const parsed = new URL(url);
 
-    if (parsed.protocol !== 'http://' && parsed.protocol !== 'https://') {
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
     }
 
     const hostname = parsed.hostname.toLowerCase();
+
+    // Always block cloud metadata endpoint (SSRF vector)
+    if (/^169\.254\./.test(hostname)) {
+      return { valid: false, error: 'Access to link-local addresses is not allowed' };
+    }
+
     const privatePatterns = [
       /^localhost$/,
       /^127\./,
       /^10\./,
       /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
       /^192\.168\./,
-      /^169\.254\./,
       /^::1$/,
       /^fc00:/,
       /^fe80:/,
     ];
 
-    if (import.meta.env.PROD && privatePatterns.some((pattern) => pattern.test(hostname))) {
-      return { valid: false, error: 'Access to private networks is not allowed' };
+    const isPrivate = privatePatterns.some((pattern) => pattern.test(hostname));
+
+    if (isPrivate && !options?.allowLocalhost) {
+      if (import.meta.env.PROD) {
+        return { valid: false, error: 'Access to private networks is not allowed' };
+      }
     }
 
     return { valid: true, sanitized: parsed.toString() };

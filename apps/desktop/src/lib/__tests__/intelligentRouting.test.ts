@@ -143,14 +143,14 @@ describe('MultiModalRouter', () => {
   describe('selectModalityModel', () => {
     it('should select an image model for hobby tier image generation', () => {
       const result = selectModalityModel('image', 'hobby');
-      // Hobby tier gets access to economy image models (flux-schnell is cost-effective)
-      expect(['flux-schnell', 'dall-e-3', 'flux-1.1-pro']).toContain(result.selectedModel);
+      // Hobby tier gets access to economy image models
+      expect(result.selectedModel).toBe('dall-e-3');
       expect(result.modality).toBe('image');
     });
 
     it('should prefer quality when specified', () => {
       const result = selectModalityModel('image', 'max', { preferQuality: true });
-      expect(['gpt-image-1.5', 'imagen-4-ultra', 'flux-2-pro']).toContain(result.selectedModel);
+      expect(['gpt-image-1.5', 'imagen-4-ultra']).toContain(result.selectedModel);
     });
 
     it('should select sonar for hobby search', () => {
@@ -262,8 +262,8 @@ describe('Intelligent Routing Integration', () => {
     it('should route image generation to image model', () => {
       const result = routeIntelligentlySync('Generate an image of a mountain', 'auto-economy');
       expect(result.modelCategory).toBe('image');
-      // Economy mode routes to flux-schnell (cheaper), balanced/quality would use dall-e-3
-      expect(result.selectedModel).toBe('flux-schnell');
+      // Economy mode routes to dall-e-3 (the hobby-tier image model)
+      expect(result.selectedModel).toBe('dall-e-3');
       expect(result.intent.primary).toBe('image-gen');
     });
 

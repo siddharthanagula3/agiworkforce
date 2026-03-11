@@ -31,6 +31,47 @@ import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 // Event payload types
 // =============================================================================
 
+// agent:timeline discriminated union
+export type TimelineEventType =
+  | { type: 'task_queued'; task_id: string; description: string; priority: 'low' | 'normal' | 'high' | 'critical' }
+  | { type: 'task_started'; task_id: string; description: string }
+  | { type: 'step_started'; task_id: string; step_index: number; step_description: string }
+  | { type: 'step_completed'; task_id: string; step_index: number; result: unknown }
+  | { type: 'step_failed'; task_id: string; step_index: number; error: string }
+  | { type: 'tool_called'; task_id: string; tool_name: string; arguments: Record<string, unknown> }
+  | { type: 'tool_result'; task_id: string; tool_name: string; success: boolean; result: unknown; error: string | null }
+  | { type: 'task_completed'; task_id: string; result: unknown }
+  | { type: 'task_failed'; task_id: string; error: string }
+  | { type: 'task_cancelled'; task_id: string; reason: string }
+  | { type: 'reasoning'; task_id: string; thought: string; duration_ms: number | null }
+  | { type: 'todo_updated'; task_id: string; todos: unknown[] }
+  | { type: 'file_modified'; task_id: string; file_path: string; operation: string }
+  | { type: 'terminal_spawned'; task_id: string; session_id: string; command: string | null }
+  | { type: 'auto_approval_triggered'; task_id: string; action: string; safe: boolean };
+
+// diagnostics:progress payload
+export interface DiagnosticsProgressEvent {
+  currentCheck: string;
+  currentIndex: number;
+  totalChecks: number;
+  completedResults: Array<{
+    name: string;
+    status: 'pass' | 'fail' | 'warn' | 'skip';
+    message: string;
+    duration_ms?: number;
+  }>;
+}
+
+// diagnostics:complete payload
+export interface DiagnosticsCompleteEvent {
+  report: {
+    overall_status: 'pass' | 'fail' | 'warn';
+    checks: DiagnosticsProgressEvent['completedResults'];
+    elapsed_ms: number;
+    timestamp: string;
+  };
+}
+
 export interface AgentPlanUpdateEvent {
   plan: {
     id: string;
@@ -652,6 +693,79 @@ export function useAgentLoopEvents(deps: AgentLoopEventDeps): void {
         },
       );
       push(unlistenGoalCompleted);
+
+      // agent:timeline
+      const unlistenTimeline = await listen<TimelineEventType>('agent:timeline', (event) => {
+        if (!isMountedRef.current) return;
+        const payload = event.payload;
+        console.debug('[agent:timeline]', payload.type, payload);
+
+        if (payload.type === 'reasoning') {
+          console.debug('[agent:timeline] reasoning', payload.thought, payload.duration_ms);
+        } else if (payload.type === 'task_completed') {
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: 'completed',
+            message: 'Task completed',
+            progress: 100,
+            fadeAfter: 10000,
+          });
+          upsertActionLogEntry({
+            id: `timeline-${payload.task_id}-completed`,
+            type: 'plan',
+            title: 'Task completed',
+            description: String(payload.result ?? ''),
+            status: 'success',
+          });
+        } else if (payload.type === 'task_failed') {
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: 'error',
+            message: `Task failed: ${payload.error}`,
+            progress: 0,
+          });
+          upsertActionLogEntry({
+            id: `timeline-${payload.task_id}-failed`,
+            type: 'plan',
+            title: 'Task failed',
+            description: payload.error,
+            status: 'failed',
+            error: payload.error,
+          });
+        }
+      }).catch((error) => {
+        console.error('[useAgentLoopEvents] Failed to setup agent:timeline listener', error);
+        return () => {};
+      });
+      push(unlistenTimeline);
+
+      // diagnostics:progress
+      const unlistenDiagnosticsProgress = await listen<DiagnosticsProgressEvent>(
+        'diagnostics:progress',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const payload = event.payload;
+          console.debug('[diagnostics:progress]', payload.currentCheck, payload.currentIndex, '/', payload.totalChecks);
+        },
+      ).catch((error) => {
+        console.error('[useAgentLoopEvents] Failed to setup diagnostics:progress listener', error);
+        return () => {};
+      });
+      push(unlistenDiagnosticsProgress);
+
+      // diagnostics:complete
+      const unlistenDiagnosticsComplete = await listen<DiagnosticsCompleteEvent>(
+        'diagnostics:complete',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { report } = event.payload;
+          console.debug('[diagnostics:complete]', report.overall_status, report.elapsed_ms, 'ms');
+        },
+      ).catch((error) => {
+        console.error('[useAgentLoopEvents] Failed to setup diagnostics:complete listener', error);
+        return () => {};
+      });
+      push(unlistenDiagnosticsComplete);
     };
 
     setup().catch((error) => {

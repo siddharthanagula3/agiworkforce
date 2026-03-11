@@ -17,23 +17,18 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 /// Notification priority levels.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum NotificationPriority {
     Low,
+    #[default]
     Normal,
     High,
     Urgent,
 }
 
-impl Default for NotificationPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
-
 /// Notification types for categorization.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationType {
     /// System notifications (updates, errors, etc.)
@@ -53,17 +48,12 @@ pub enum NotificationType {
     /// Team-related notifications
     Team,
     /// General info notifications
+    #[default]
     Info,
     /// Warning notifications
     Warning,
     /// Error notifications
     Error,
-}
-
-impl Default for NotificationType {
-    fn default() -> Self {
-        Self::Info
-    }
 }
 
 /// An in-app notification.

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 
 use crate::automation::input::{
@@ -21,7 +21,7 @@ use crate::automation::input::{
 use crate::automation::screen::capture_primary_screen;
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
-    ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider,
+    ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 
 use super::safety::{ComputerUseSafetyLayer, SafetyConfig};
@@ -145,7 +145,7 @@ pub enum CompletionReason {
 
 /// The Computer Use Agent that drives autonomous task execution.
 pub struct ComputerUseAgent {
-    llm_router: Arc<Mutex<LLMRouter>>,
+    llm_router: Arc<RwLock<LLMRouter>>,
     config: ComputerUseConfig,
     visual_reasoner: VisualReasoner,
     safety_layer: ComputerUseSafetyLayer,
@@ -155,7 +155,7 @@ pub struct ComputerUseAgent {
 
 impl ComputerUseAgent {
     /// Creates a new Computer Use agent.
-    pub fn new(llm_router: Arc<Mutex<LLMRouter>>, config: ComputerUseConfig) -> Result<Self> {
+    pub fn new(llm_router: Arc<RwLock<LLMRouter>>, config: ComputerUseConfig) -> Result<Self> {
         let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), config.visual.clone());
         let safety_layer = ComputerUseSafetyLayer::new(config.safety.clone());
         let window_coordinator = WindowCoordinator::new(config.window.clone());
@@ -171,7 +171,7 @@ impl ComputerUseAgent {
     }
 
     /// Creates an agent with default configuration.
-    pub fn with_defaults(llm_router: Arc<Mutex<LLMRouter>>) -> Result<Self> {
+    pub fn with_defaults(llm_router: Arc<RwLock<LLMRouter>>) -> Result<Self> {
         Self::new(llm_router, ComputerUseConfig::default())
     }
 
@@ -501,7 +501,7 @@ Only include actions you're confident will make progress."#,
 
     /// Calls the vision LLM with planning prompt.
     async fn call_vision_llm(&self, prompt: &str, image_base64: &str) -> Result<String> {
-        let router = self.llm_router.lock().await;
+        let router = self.llm_router.read().await;
 
         let image_bytes = general_purpose::STANDARD
             .decode(image_base64)
@@ -539,8 +539,8 @@ Only include actions you're confident will make progress."#,
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {
-            provider: Some(Provider::Anthropic),
-            model: Some("claude-sonnet-4-5".to_string()),
+            provider: None,
+            model: None,
             strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
             context: Some(crate::core::llm::llm_router::RouterContext {
                 requires_vision: true,

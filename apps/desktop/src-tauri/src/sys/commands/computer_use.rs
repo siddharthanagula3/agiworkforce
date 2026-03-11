@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -7,8 +8,10 @@ use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
 use xcap::Monitor;
 
 use crate::automation::computer_use::{
-    zoom_region, InterpolationMethod, Region, ZoomAction, ZoomLevel,
+    zoom_region, ComputerUseAgent, ComputerUseConfig, ComputerUseTask, InterpolationMethod, Region,
+    ZoomAction, ZoomLevel,
 };
+use crate::sys::commands::llm::LLMState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenCapture {
@@ -539,4 +542,54 @@ pub async fn computer_use_zoom_at_point(
 #[tauri::command]
 pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
     crate::automation::computer_use::suggest_zoom_level(width, height).scale_factor()
+}
+
+#[tauri::command]
+pub async fn computer_use_execute_opa_task(
+    description: String,
+    timeout_ms: Option<u64>,
+    max_actions: Option<u32>,
+    target_application: Option<String>,
+    success_indicators: Option<Vec<String>>,
+    app: tauri::AppHandle,
+    _state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    llm_state: State<'_, LLMState>,
+) -> Result<serde_json::Value, String> {
+    let router = llm_state.router.clone();
+
+    let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(300_000));
+    let iterations = max_actions.unwrap_or(100);
+
+    let config = ComputerUseConfig {
+        max_iterations: iterations,
+        max_duration: timeout_duration,
+        ..ComputerUseConfig::default()
+    };
+
+    let agent = ComputerUseAgent::new(router, config)
+        .map_err(|e| format!("Failed to create ComputerUseAgent: {}", e))?
+        .with_app_handle(app);
+
+    let task = ComputerUseTask {
+        description,
+        timeout_ms: timeout_ms.unwrap_or(300_000),
+        max_actions: max_actions.unwrap_or(100),
+        target_application,
+        success_indicators: success_indicators.unwrap_or_default(),
+        ..ComputerUseTask::default()
+    };
+
+    let result = agent
+        .execute_task(task)
+        .await
+        .map_err(|e| format!("OPA task execution failed: {}", e))?;
+
+    let value = serde_json::json!({
+        "success": result.success,
+        "reason": result.reason,
+        "state": result.state,
+        "outcome": result.outcome,
+    });
+
+    Ok(value)
 }

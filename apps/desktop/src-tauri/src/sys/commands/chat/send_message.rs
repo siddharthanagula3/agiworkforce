@@ -118,7 +118,7 @@ fn detect_agent_mode(
 pub async fn chat_send_message(
     _db: State<'_, AppDatabase>,
     _llm_state: State<'_, LLMState>,
-    _settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
     #[cfg_attr(not(feature = "billing"), allow(unused_variables))] _billing_state: State<
         '_,
         crate::sys::billing::BillingStateWrapper,
@@ -132,6 +132,16 @@ pub async fn chat_send_message(
 ) -> Result<ChatSendMessageResponse, String> {
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
+
+    // Read chat storage mode once — guard all Supabase sync calls below.
+    // "cloud" → dual-write to Supabase; anything else ("local" / missing) → local-only.
+    let cloud_sync_enabled = {
+        let s = settings_state.settings.lock().await;
+        s.chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
 
     // Clear any stale stop flag from previous conversations/runs.
     // Without this, one stopped run can leak into future chats.
@@ -291,8 +301,10 @@ pub async fn chat_send_message(
                 .map_err(|e| format!("Failed to create conversation: {e}"))?;
             let new_conv = repository::get_conversation(&conn, id, &request.user_id)
                 .map_err(|e| format!("Failed to get new conversation: {e}"))?;
-            // Best-effort dual-write new conversation to Supabase
-            crate::data::supabase_sync::spawn_sync_conversation(new_conv.clone());
+            // Best-effort dual-write new conversation to Supabase (only in cloud storage mode)
+            if cloud_sync_enabled {
+                crate::data::supabase_sync::spawn_sync_conversation(new_conv.clone());
+            }
             new_conv
         }
     };
@@ -347,8 +359,10 @@ pub async fn chat_send_message(
             .map_err(|e| format!("Failed to save user message: {e}"))?;
         let saved_msg = repository::get_message(&conn, id)
             .map_err(|e| format!("Failed to retrieve user message: {e}"))?;
-        // Best-effort dual-write user message to Supabase
-        crate::data::supabase_sync::spawn_sync_message(saved_msg.clone());
+        // Best-effort dual-write user message to Supabase (only in cloud storage mode)
+        if cloud_sync_enabled {
+            crate::data::supabase_sync::spawn_sync_message(saved_msg.clone());
+        }
         saved_msg
     };
 
@@ -1385,6 +1399,7 @@ pub async fn chat_send_message(
                             project_folder_clone.clone(),
                             conversation_mode_clone.clone(),
                             0,
+                            None,
                         )
                         .await;
                         tool_failure_summaries.extend(batch_failures);
@@ -1773,6 +1788,7 @@ pub async fn chat_send_message(
                                                             project_folder_clone.clone(),
                                                             conversation_mode_clone.clone(),
                                                             streaming_tool_iteration,
+                                                            None,
                                                         )
                                                         .await;
                                                     tool_failure_summaries.extend(batch_failures);
@@ -2209,6 +2225,7 @@ Please confirm the tool permissions or try a different approach.",
             provider_enum.map(|p| p.as_string()),
             &model,
             incognito,
+            cloud_sync_enabled,
         )?;
 
         let stats = compute_or_skip_stats(&_db, conversation.id, incognito)?;
@@ -2321,6 +2338,7 @@ Please confirm the tool permissions or try a different approach.",
             provider_enum.map(|p| p.as_string()),
             &model,
             incognito,
+            cloud_sync_enabled,
         )?;
 
         let stats = compute_or_skip_stats(&_db, conversation.id, incognito)?;
@@ -2380,6 +2398,7 @@ Please confirm the tool permissions or try a different approach.",
                             Some(outcome.provider.as_string()),
                             &outcome.model,
                             incognito,
+                            cloud_sync_enabled,
                         )?;
 
                         let stats = compute_or_skip_stats(&_db, conversation.id, incognito)?;
@@ -2508,6 +2527,7 @@ Please confirm the tool permissions or try a different approach.",
                         request.project_folder.clone(),
                         request.conversation_mode.clone(),
                         0,
+                        None,
                     )
                     .await;
 
@@ -2621,6 +2641,7 @@ Please confirm the tool permissions or try a different approach.",
                     Some(outcome.provider.as_string()),
                     &outcome.model,
                     incognito,
+                    cloud_sync_enabled,
                 )?;
 
                 let stats = compute_or_skip_stats(&_db, conversation.id, incognito)?;

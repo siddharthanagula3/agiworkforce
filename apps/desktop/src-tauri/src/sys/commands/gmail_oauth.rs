@@ -15,7 +15,7 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use tauri::{command, AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 use crate::features::communications::gmail_oauth::{
@@ -116,7 +116,7 @@ fn store_gmail_tokens(conn: &Connection, account_id: &str, token: &TokenResponse
 ///
 /// Returns an authorization URL that the user should be redirected to.
 /// The state parameter should be saved and verified when completing the OAuth flow.
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_start(
     config: GmailOAuthConfig,
     state: State<'_, GmailOAuthState>,
@@ -142,7 +142,7 @@ pub async fn gmail_oauth_start(
 ///
 /// Called after the user has authorized the application and been redirected back.
 /// Returns the account ID of the newly connected account.
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_complete(
     request: GmailOAuthCompleteRequest,
     state: State<'_, GmailOAuthState>,
@@ -186,7 +186,7 @@ pub async fn gmail_oauth_complete(
 /// Refresh Gmail OAuth token for an account
 ///
 /// Returns true if refresh was successful, false otherwise.
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_refresh(
     account_id: String,
     state: State<'_, GmailOAuthState>,
@@ -218,7 +218,7 @@ pub async fn gmail_oauth_refresh(
 }
 
 /// List all connected Gmail accounts
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_list_accounts(
     state: State<'_, GmailOAuthState>,
     app: AppHandle,
@@ -253,7 +253,7 @@ pub async fn gmail_oauth_list_accounts(
 }
 
 /// Disconnect a Gmail account
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_disconnect(
     account_id: String,
     state: State<'_, GmailOAuthState>,
@@ -272,7 +272,7 @@ pub async fn gmail_oauth_disconnect(
 }
 
 /// Get account info for a specific Gmail account
-#[command]
+#[tauri::command]
 pub async fn gmail_oauth_get_account(
     account_id: String,
     state: State<'_, GmailOAuthState>,

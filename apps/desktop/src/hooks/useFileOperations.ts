@@ -7,8 +7,7 @@
  * @module useFileOperations
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -153,7 +152,7 @@ export function useFileOperations(options?: {
   useEffect(() => {
     if (onFileChangeRef.current) {
       const setupListener = async () => {
-        unlistenRef.current = await listen<FileChangeEvent>('file:change', (event) => {
+        unlistenRef.current = await listen<FileChangeEvent>('file-event', (event) => {
           onFileChangeRef.current?.(event.payload);
         });
       };

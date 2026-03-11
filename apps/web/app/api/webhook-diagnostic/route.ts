@@ -22,7 +22,7 @@ function verifyDiagnosticSecret(request: NextRequest): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'default');
+  const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse;
 
   if (!verifyDiagnosticSecret(request)) {

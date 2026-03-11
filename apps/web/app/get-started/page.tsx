@@ -38,13 +38,17 @@ function getDownloadUrl() {
 }
 
 export default function GetStartedPage() {
-  const [downloadInfo] = useState<{
+  const [downloadInfo, setDownloadInfo] = useState<{
     url: string;
     platform: string;
     filename: string;
-  } | null>(() => getDownloadUrl());
+  } | null>(null);
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [autoDownloadAttempted, setAutoDownloadAttempted] = useState(false);
+
+  useEffect(() => {
+    setDownloadInfo(getDownloadUrl());
+  }, []);
 
   const triggerDownload = (url: string) => {
     setDownloadStarted(true);

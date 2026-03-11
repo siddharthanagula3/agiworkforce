@@ -3,15 +3,16 @@
  *
  * Configuration for agent behavior: default model, parallelism,
  * approval mode, sub-agents, execution preferences.
+ * Also provides a UI for creating, editing, and deleting custom agent files.
  */
 
-import { Bot } from 'lucide-react';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Label } from '../ui/Label';
 import { Switch } from '../ui/Switch';
 import { Slider } from '../ui/Slider';
+import { CustomAgentsList } from './CustomAgentsList';
 
 export function AgentsSettings() {
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
@@ -321,30 +322,8 @@ export function AgentsSettings() {
         </div>
       </div>
 
-      {/* Custom Agents Info */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Custom Agents</h3>
-        <div className="rounded-lg border border-border bg-card p-6 flex items-start gap-4">
-          <div className="rounded-md bg-muted p-3 shrink-0">
-            <Bot className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Configure via .claude/agents/</h4>
-            <p className="text-sm text-muted-foreground">
-              Custom named agents are configured by placing YAML or Markdown agent definition files
-              in the <code className="rounded bg-muted px-1 py-0.5 text-xs">.claude/agents/</code>{' '}
-              directory of your project. Each file defines an agent with a name, model, system
-              prompt, and capabilities.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Example:{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                .claude/agents/frontend-engineer.md
-              </code>
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Custom Agents — live CRUD UI */}
+      <CustomAgentsList />
 
       {/* Auto-approve standalone toggle (mirrors llm-config tab) */}
       <div>

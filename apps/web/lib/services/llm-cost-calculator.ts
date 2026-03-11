@@ -174,15 +174,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // ---------------------------------------------------------------------------
   // Third-party Image Generation (Updated 2026-01-28)
   // ---------------------------------------------------------------------------
-  'flux-1.1-pro': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
-  'flux-2-pro': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 60.0 },
   'ideogram-2': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 20.0 },
-
-  // ---------------------------------------------------------------------------
-  // Music Generation (Credit-based, use 0 for now)
-  // ---------------------------------------------------------------------------
-  'suno-v4': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 },
-  udio: { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 },
 };
 
 // =============================================================================

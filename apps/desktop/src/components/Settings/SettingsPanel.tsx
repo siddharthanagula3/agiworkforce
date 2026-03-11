@@ -1,5 +1,7 @@
 import { invoke } from '@/lib/tauri-mock';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
+import { toast } from 'sonner';
+import { validateUrl } from '@/utils/security';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
@@ -9,7 +11,9 @@ import {
   Database,
   Download,
   FlaskConical,
+  Keyboard,
   Loader2,
+  Palette,
   Plug,
   Puzzle,
   Share2,
@@ -63,6 +67,8 @@ import { VoiceSettings } from './VoiceSettings';
 import { MemoryPanel } from '../Memory/MemoryPanel';
 import { ResearchSettings } from './ResearchSettings';
 import { ToolsPanel } from '../Tools/ToolsPanel';
+import { KeybindingsSettings } from './KeybindingsSettings';
+import { ThemeSettings } from './ThemeSettings';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -83,6 +89,8 @@ const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'tools', label: 'Tools', icon: TerminalSquare },
   { key: 'research', label: 'Research', icon: FlaskConical },
+  { key: 'keybindings', label: 'Keybindings', icon: Keyboard },
+  { key: 'themes', label: 'Themes', icon: Palette },
 ];
 
 const BYOK_PROVIDERS = [
@@ -207,6 +215,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const setGlobalHotkeyEnabled = useSettingsStore((state) => state.setGlobalHotkeyEnabled);
   const setGlobalHotkeyCombo = useSettingsStore((state) => state.setGlobalHotkeyCombo);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
+  const setProviderMode = useSettingsStore((state) => state.setProviderMode);
+  const setOllamaUrl = useSettingsStore((state) => state.setOllamaUrl);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
   const loading = useSettingsStore((state) => state.loading);
@@ -849,6 +859,80 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       <div className="pt-6 border-t border-border">
                         <h3 className="text-lg font-semibold mb-4">Local Models</h3>
                         <div className="space-y-6">
+                          {/* Provider Mode */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Provider Mode</label>
+                            <div className="flex gap-2">
+                              {(['auto', 'local', 'cloud'] as const).map((mode) => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => {
+                                    setProviderMode(mode);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
+                                    (resolvedLLMConfig.providerMode ?? 'auto') === mode
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'bg-background border-border hover:bg-accent'
+                                  }`}
+                                >
+                                  {mode === 'auto'
+                                    ? '⚡ Auto'
+                                    : mode === 'local'
+                                      ? '🖥️ Local'
+                                      : '☁️ Cloud'}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
+                                ? 'Always use local Ollama. No data leaves your machine.'
+                                : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
+                                  ? 'Always use cloud providers (OpenAI, Anthropic, etc.).'
+                                  : 'Automatically route to the best provider for each task.'}
+                            </p>
+                          </div>
+
+                          {/* Ollama URL */}
+                          {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-medium">Ollama URL</label>
+                              <input
+                                type="url"
+                                value={resolvedLLMConfig.ollamaUrl ?? 'http://localhost:11434'}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  // Allow empty / partial typing without blocking input
+                                  if (!raw.trim()) {
+                                    setOllamaUrl(raw);
+                                    setHasUnsavedChanges(true);
+                                    return;
+                                  }
+                                  // Validate on blur-like basis: if it looks like a full URL, validate
+                                  try {
+                                    new URL(raw);
+                                    const result = validateUrl(raw, { allowLocalhost: true });
+                                    if (!result.valid) {
+                                      toast.error(result.error ?? 'Invalid Ollama URL');
+                                      return;
+                                    }
+                                    setOllamaUrl(result.sanitized ?? raw);
+                                  } catch {
+                                    // Still typing a partial URL — allow it through
+                                    setOllamaUrl(raw);
+                                  }
+                                  setHasUnsavedChanges(true);
+                                }}
+                                placeholder="http://localhost:11434"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                URL for the local Ollama server. Default: http://localhost:11434
+                              </p>
+                            </div>
+                          )}
+
                           <div className="rounded-lg border border-border bg-card p-6">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex items-start gap-4">
@@ -1115,6 +1199,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
                   {/* Research Tab */}
                   {activeTab === 'research' && <ResearchSettings />}
+
+                  {/* Keybindings Tab */}
+                  {activeTab === 'keybindings' && <KeybindingsSettings />}
+
+                  {/* Themes Tab */}
+                  {activeTab === 'themes' && <ThemeSettings />}
                 </div>
               )}
             </div>
@@ -1157,6 +1247,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 }
 
 function DataPrivacyTab() {
+  const chatStorageMode = useSettingsStore((state) => state.chatPreferences.chatStorageMode);
+  const setChatStorageMode = useSettingsStore((state) => state.setChatStorageMode);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -1365,6 +1457,33 @@ function DataPrivacyTab() {
             Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely in an
             encrypted local database.
           </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+          <div>
+            <h4 className="font-semibold mb-1">Chat History Storage</h4>
+            <p className="text-sm text-muted-foreground">
+              Choose where your chat history is kept. Local storage never leaves your device. Cloud
+              sync backs up your conversations to your account.
+            </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <label htmlFor="chatStorageMode" className="text-sm font-medium">
+                Sync chat history to cloud
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {chatStorageMode === 'cloud'
+                  ? 'Conversations are synced to your account after each message.'
+                  : 'Conversations stay on this device only (default).'}
+              </p>
+            </div>
+            <Switch
+              id="chatStorageMode"
+              checked={chatStorageMode === 'cloud'}
+              onCheckedChange={(checked) => setChatStorageMode(checked ? 'cloud' : 'local')}
+            />
+          </div>
         </div>
 
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">

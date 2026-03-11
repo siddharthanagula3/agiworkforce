@@ -21,12 +21,16 @@ use tracing::{debug, info, warn};
 /// Agent execution mode controlling which tools are permitted.
 ///
 /// - **Safe**: Only read-only, non-destructive tools are allowed.
+/// - **Plan**: Read-only tools allowed (same allowlist as Safe). The agent
+///   produces a plan but cannot execute write operations. The user must
+///   switch to Build or Autopilot to apply the plan.
 /// - **Build**: All tools allowed, but destructive ones require user confirmation.
 /// - **Autopilot**: All tools allowed, auto-approved without prompts.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentMode {
     Safe,
+    Plan,
     #[default]
     Build,
     Autopilot,
@@ -87,30 +91,69 @@ impl ToolConfirmationState {
         *self.agent_mode.lock()
     }
 
+    /// Read-only tool allowlist shared by Safe and Plan modes.
+    const READ_ONLY_TOOLS: &'static [&'static str] = &[
+        "file_read",
+        "file_list",
+        "search_web",
+        "browser_get_text",
+        "browser_get_url",
+        "browser_get_title",
+        "ui_screenshot",
+        "image_analyze",
+        "image_ocr",
+        "email_fetch",
+        "calendar_list_events",
+        "db_query",
+        "document_read",
+        "document_search",
+        "code_analyze",
+        "git_status",
+        "llm_reason",
+        "list_scheduled_tasks",
+        "memory_search",
+    ];
+
     /// Check whether a tool is permitted under the given agent mode.
     ///
-    /// In **Safe** mode only read-only / non-destructive tools are allowed.
+    /// In **Safe** and **Plan** modes only read-only / non-destructive tools
+    /// are allowed. Plan mode additionally permits MCP read-only tools
+    /// (prefixed with `mcp__`) that match common read patterns.
+    ///
     /// **Build** and **Autopilot** modes permit all tools (confirmation gating
     /// is handled separately by the auto-approve flag and dialog system).
     pub fn is_tool_permitted_for_mode(tool_name: &str, mode: AgentMode) -> bool {
         match mode {
-            AgentMode::Safe => {
-                matches!(
-                    tool_name,
-                    "file_read"
-                        | "file_list"
-                        | "search_web"
-                        | "browser_get_text"
-                        | "browser_get_url"
-                        | "browser_get_title"
-                        | "ui_screenshot"
-                        | "image_analyze"
-                        | "email_fetch"
-                        | "calendar_list_events"
-                        | "db_query"
-                        | "document_read"
-                        | "code_analyze"
-                )
+            AgentMode::Safe | AgentMode::Plan => {
+                // Direct allowlist match
+                if Self::READ_ONLY_TOOLS.contains(&tool_name) {
+                    return true;
+                }
+                // MCP tools: allow known read-only patterns in Plan/Safe mode
+                if tool_name.starts_with("mcp__") {
+                    let read_mcp_patterns = [
+                        "read_file",
+                        "read_text_file",
+                        "read_media_file",
+                        "read_multiple_files",
+                        "list_directory",
+                        "list_directory_with_sizes",
+                        "list_allowed_directories",
+                        "directory_tree",
+                        "get_file_info",
+                        "search_files",
+                        "git_status",
+                        "git_log",
+                        "git_show",
+                        "git_diff",
+                        "git_diff_staged",
+                        "git_diff_unstaged",
+                    ];
+                    return read_mcp_patterns
+                        .iter()
+                        .any(|pattern| tool_name.ends_with(pattern));
+                }
+                false
             }
             AgentMode::Build | AgentMode::Autopilot => true,
         }
@@ -569,20 +612,27 @@ pub async fn request_tool_confirmation(
     // Agent mode gate — block tools not permitted in the current mode
     let current_mode = state.get_agent_mode();
     if !ToolConfirmationState::is_tool_permitted_for_mode(&tool_name, current_mode) {
+        let mode_label = format!("{:?}", current_mode).to_lowercase();
         warn!(
-            "[ToolConfirmation] Tool '{}' blocked by agent mode {:?}",
-            tool_name, current_mode
+            "[ToolConfirmation] Tool '{}' blocked by agent mode {}",
+            tool_name, mode_label
         );
+        let hint = if current_mode == AgentMode::Plan {
+            "Switch to build mode to execute write operations."
+        } else {
+            "Change agent mode to allow this tool."
+        };
         let _ = app_handle.emit(
             "tool:blocked_by_mode",
             serde_json::json!({
                 "tool_name": tool_name,
-                "mode": format!("{:?}", current_mode).to_lowercase(),
+                "mode": mode_label,
+                "hint": hint,
             }),
         );
         return Err(format!(
-            "Tool '{}' is not permitted in {:?} mode",
-            tool_name, current_mode
+            "Tool '{}' is not permitted in {} mode. {}",
+            tool_name, mode_label, hint
         ));
     }
 
@@ -886,11 +936,92 @@ mod tests {
     }
 
     #[test]
+    fn test_tool_permitted_plan_mode() {
+        // Plan mode allows the same read-only tools as Safe mode
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_read", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("search_web", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_read", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("git_status", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("llm_reason", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_analyze", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_search", AgentMode::Plan));
+
+        // Plan mode blocks write/destructive tools
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_delete", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("terminal_execute", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("git_push", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("git_commit", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("browser_navigate", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("email_send", AgentMode::Plan));
+    }
+
+    #[test]
+    fn test_tool_permitted_plan_mode_mcp_read_tools() {
+        // Plan mode allows MCP read-only tools
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__read_file",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__list_directory",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__directory_tree",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__git__git_status",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__git__git_log",
+            AgentMode::Plan
+        ));
+
+        // Plan mode blocks MCP write tools
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__write_file",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__edit_file",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__git__git_commit",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__move_file",
+            AgentMode::Plan
+        ));
+    }
+
+    #[test]
     fn test_tool_permitted_build_autopilot() {
         // Build and Autopilot modes allow everything
         assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Build));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Build));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Autopilot));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Autopilot));
+    }
+
+    #[test]
+    fn test_agent_mode_plan_set_get() {
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(AgentMode::Plan);
+        assert_eq!(state.get_agent_mode(), AgentMode::Plan);
+    }
+
+    #[test]
+    fn test_agent_mode_plan_serde_roundtrip() {
+        let json_str = r#""plan""#;
+        let mode: AgentMode = serde_json::from_str(json_str).expect("deserialize plan");
+        assert_eq!(mode, AgentMode::Plan);
+        let serialized = serde_json::to_string(&mode).expect("serialize plan");
+        assert_eq!(serialized, r#""plan""#);
     }
 }

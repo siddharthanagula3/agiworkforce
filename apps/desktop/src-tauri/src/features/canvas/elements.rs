@@ -147,20 +147,15 @@ pub struct ButtonConfig {
 }
 
 /// Button variants
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ButtonVariant {
+    #[default]
     Primary,
     Secondary,
     Outline,
     Ghost,
     Destructive,
-}
-
-impl Default for ButtonVariant {
-    fn default() -> Self {
-        Self::Primary
-    }
 }
 
 /// Canvas element types
@@ -255,33 +250,23 @@ pub enum CanvasElement {
 }
 
 /// Container layout options
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ContainerLayout {
+    #[default]
     Vertical,
     Horizontal,
     Grid,
     Flex,
 }
 
-impl Default for ContainerLayout {
-    fn default() -> Self {
-        Self::Vertical
-    }
-}
-
 /// Orientation for dividers and other elements
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Orientation {
+    #[default]
     Horizontal,
     Vertical,
-}
-
-impl Default for Orientation {
-    fn default() -> Self {
-        Self::Horizontal
-    }
 }
 
 impl CanvasElement {

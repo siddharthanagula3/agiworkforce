@@ -11,10 +11,8 @@ export function useDeepLink() {
 
     const setupListener = async () => {
       try {
-        console.debug('[DeepLink] Setting up listener...');
         const unlisten = await onOpenUrl((urls) => {
           if (!isMounted) return; // Guard against unmounted callbacks
-          console.debug('[DeepLink] Received URLs:', urls);
           for (const url of urls) {
             handleDeepLink(url);
           }
@@ -23,7 +21,6 @@ export function useDeepLink() {
         // Only store unlisten if we're still mounted
         if (isMounted) {
           unlistenFn = unlisten;
-          console.debug('[DeepLink] Listener setup success');
         } else {
           // Component unmounted while setting up - cleanup immediately
           unlisten();
@@ -38,7 +35,6 @@ export function useDeepLink() {
     return () => {
       isMounted = false;
       if (unlistenFn) {
-        console.debug('[DeepLink] Cleaning up listener');
         unlistenFn();
         unlistenFn = null;
       }
@@ -49,7 +45,6 @@ export function useDeepLink() {
 function handleDeepLink(url: string) {
   try {
     const parsed = new URL(url);
-    console.debug('[DeepLink] Parsing URL:', parsed.href);
 
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
@@ -78,7 +73,6 @@ function handleDeepLink(url: string) {
 
       if (error) {
         // Handle OAuth error callback
-        console.debug('[DeepLink] MCP OAuth error for provider:', provider, 'error:', error);
         window.dispatchEvent(
           new CustomEvent('mcp-oauth-error', {
             detail: {
@@ -90,7 +84,6 @@ function handleDeepLink(url: string) {
         );
       } else if (code && state) {
         // Handle successful OAuth callback
-        console.debug('[DeepLink] MCP OAuth callback for provider:', provider);
         window.dispatchEvent(
           new CustomEvent('mcp-oauth-callback', {
             detail: {
@@ -113,7 +106,6 @@ function handleDeepLink(url: string) {
     const code = allParams['code'];
 
     if (access_token || code || type || refresh_token) {
-      console.debug('[DeepLink] Dispatched agi-deep-link event');
       window.dispatchEvent(
         new CustomEvent('agi-deep-link', {
           detail: {

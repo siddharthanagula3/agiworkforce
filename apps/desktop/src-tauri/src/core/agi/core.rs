@@ -91,6 +91,9 @@ pub struct AGICore {
     learning: Arc<LearningSystem>,
     router: Arc<RwLock<LLMRouter>>,
     automation: Arc<AutomationService>,
+    // HIGH-007: std::sync::Mutex used here because AGICore is constructed outside async context.
+    // TODO: Migrate to tokio::sync::Mutex to eliminate blocking-in-async risk when the AGI
+    //       execution loop is fully async-native (requires async-aware callers throughout).
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
     stop_signal: Arc<AtomicBool>,

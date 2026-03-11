@@ -14,8 +14,18 @@
  */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { invoke } from '../lib/tauri-mock';
-import type { McpBundle, McpBundleCategory, BundleInstallProgress } from '../types/mcp';
+import { invoke, listen } from '../lib/tauri-mock';
+import type { McpBundle, McpBundleCategory, BundleInstallProgress, BundleInstallStatus } from '../types/mcp';
+
+// ---------------------------------------------------------------------------
+// mcpb:install_progress — Rust-emitted event payload
+// ---------------------------------------------------------------------------
+interface McpbInstallProgressEvent {
+  bundleId: string;
+  phase: string; // 'downloading' | 'installing' | 'configuring' | etc.
+  progress: number; // 0–100
+  message: string;
+}
 
 // API layer for Tauri commands
 const mcpbApi = {
@@ -267,3 +277,59 @@ export const selectBundleById = (bundleId: string) => (state: McpbState) =>
 
 export const selectBundlesWithUpdates = (state: McpbState) =>
   state.installedBundles.filter((bundle) => bundle.updateAvailable);
+
+// ---------------------------------------------------------------------------
+// mcpb:install_progress listener
+// Initialised once at the module level (mirrors initializeAgentStatusListener).
+// Maps the Rust phase string to BundleInstallStatus and forwards the update
+// to setInstallProgress so existing UI subscribers react automatically.
+// ---------------------------------------------------------------------------
+
+/** Known phase strings emitted by the Rust mcpb backend. */
+const KNOWN_PHASES = new Set<BundleInstallStatus>([
+  'pending',
+  'downloading',
+  'installing',
+  'configuring',
+  'completed',
+  'failed',
+]);
+
+function toInstallStatus(phase: string): BundleInstallStatus {
+  if (KNOWN_PHASES.has(phase as BundleInstallStatus)) {
+    return phase as BundleInstallStatus;
+  }
+  return 'installing'; // safe default for unknown phases
+}
+
+let mcpbInstallListenerInitialized = false;
+
+/**
+ * Call once during app bootstrap to wire up the `mcpb:install_progress`
+ * Tauri event into the MCPB store.
+ */
+export async function initializeMcpbInstallListener(): Promise<void> {
+  if (mcpbInstallListenerInitialized) {
+    return;
+  }
+  mcpbInstallListenerInitialized = true;
+
+  try {
+    await listen<McpbInstallProgressEvent>('mcpb:install_progress', (event) => {
+      const { bundleId, phase, progress, message } = event.payload;
+      console.debug('[mcpb:install_progress]', bundleId, phase, progress);
+
+      const installProgress: BundleInstallProgress = {
+        bundleId,
+        status: toInstallStatus(phase),
+        progress,
+        message,
+      };
+
+      useMcpbStore.getState().setInstallProgress(installProgress);
+    });
+  } catch (error) {
+    mcpbInstallListenerInitialized = false;
+    console.error('[McpbStore] Failed to initialize mcpb:install_progress listener:', error);
+  }
+}

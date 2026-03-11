@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const gruvboxDark: ThemeDefinition = {
+  id: 'gruvbox-dark',
+  name: 'Gruvbox Dark',
+  author: 'morhetz',
+  variant: 'dark',
+  colors: {
+    background: '35 23% 14%',
+    foreground: '43 59% 81%',
+    card: '35 23% 11%',
+    cardForeground: '43 59% 81%',
+    popover: '35 23% 11%',
+    popoverForeground: '43 59% 81%',
+    primary: '40 77% 66%',
+    primaryForeground: '35 23% 14%',
+    secondary: '35 23% 20%',
+    secondaryForeground: '43 59% 81%',
+    muted: '35 23% 20%',
+    mutedForeground: '43 30% 55%',
+    accent: '104 35% 55%',
+    accentForeground: '35 23% 14%',
+    destructive: '5 74% 59%',
+    destructiveForeground: '43 59% 81%',
+    border: '35 23% 26%',
+    input: '35 23% 26%',
+    ring: '40 77% 66%',
+    syntax: {
+      keyword: '#fb4934',
+      string: '#b8bb26',
+      comment: '#928374',
+      function: '#fabd2f',
+      number: '#d3869b',
+      operator: '#8ec07c',
+    },
+  },
+};

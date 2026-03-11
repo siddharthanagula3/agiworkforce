@@ -28,6 +28,31 @@ impl WorkflowEngineState {
             scheduler,
         }
     }
+
+    pub fn new_with_tools(
+        db_path: String,
+        tool_executor: Option<Arc<crate::core::mcp::tool_executor::McpToolExecutor>>,
+    ) -> Self {
+        let engine = Arc::new(WorkflowEngine::new(db_path));
+        let executor = if let Some(tex) = tool_executor {
+            Arc::new(WorkflowExecutor::with_tool_executor(
+                Arc::clone(&engine),
+                tex,
+            ))
+        } else {
+            Arc::new(WorkflowExecutor::new(Arc::clone(&engine)))
+        };
+        let scheduler = Arc::new(WorkflowScheduler::new(
+            Arc::clone(&engine),
+            Arc::clone(&executor),
+        ));
+
+        Self {
+            engine,
+            executor,
+            scheduler,
+        }
+    }
 }
 
 #[tauri::command]
