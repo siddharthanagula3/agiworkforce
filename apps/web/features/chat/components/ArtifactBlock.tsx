@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { cn } from '@shared/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -240,8 +241,7 @@ function JsonBlock({ code }: { code: string }) {
       <pre className="overflow-x-auto bg-zinc-950 p-4 max-h-[400px]">
         <code
           className="text-sm leading-relaxed"
-          // Safe: we only inject known colour spans; no user-controlled HTML
-          dangerouslySetInnerHTML={{ __html: highlighted }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }) }}
         />
       </pre>
     </div>

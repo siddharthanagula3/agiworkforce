@@ -11,7 +11,6 @@ export type ImageProviderId =
   | 'replicate'
   | 'fal'
   | 'ideogram'
-  | 'black-forest-labs'
   | 'google_imagen'
   | 'google_imagen_lite'
   | 'dalle'

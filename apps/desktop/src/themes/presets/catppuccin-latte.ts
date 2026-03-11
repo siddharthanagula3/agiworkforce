@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const catppuccinLatte: ThemeDefinition = {
+  id: 'catppuccin-latte',
+  name: 'Catppuccin Latte',
+  author: 'Catppuccin',
+  variant: 'light',
+  colors: {
+    background: '220 23% 95%',
+    foreground: '234 16% 35%',
+    card: '220 23% 97%',
+    cardForeground: '234 16% 35%',
+    popover: '220 23% 97%',
+    popoverForeground: '234 16% 35%',
+    primary: '266 85% 58%',
+    primaryForeground: '220 23% 95%',
+    secondary: '220 23% 90%',
+    secondaryForeground: '234 16% 35%',
+    muted: '220 23% 90%',
+    mutedForeground: '233 13% 47%',
+    accent: '316 73% 69%',
+    accentForeground: '220 23% 95%',
+    destructive: '347 87% 44%',
+    destructiveForeground: '220 23% 95%',
+    border: '220 23% 84%',
+    input: '220 23% 84%',
+    ring: '266 85% 58%',
+    syntax: {
+      keyword: '#8839ef',
+      string: '#40a02b',
+      comment: '#9ca0b0',
+      function: '#1e66f5',
+      number: '#fe640b',
+      operator: '#04a5e5',
+    },
+  },
+};

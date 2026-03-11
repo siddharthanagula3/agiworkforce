@@ -167,7 +167,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ result }) => {
 
   return (
     <a
-      href={result.url}
+      href={/^https?:\/\//i.test(result.url || '') ? result.url : '#'}
       target="_blank"
       rel="noopener noreferrer"
       className="group flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/30 hover:border-blue-500/30 transition-all duration-200"

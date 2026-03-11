@@ -15,6 +15,7 @@ import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
+import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 
 // ─── Connector Data ────────────────────────────────────────────────────────────
 
@@ -725,6 +726,7 @@ export function ConnectorsPage() {
   }, []);
 
   return (
+    <ErrorBoundary componentName="ConnectorsPage" compact>
     <div className="min-h-full bg-background">
       {/* Page Header */}
       <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
@@ -900,5 +902,6 @@ export function ConnectorsPage() {
         )}
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

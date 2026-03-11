@@ -12,6 +12,7 @@
  */
 
 import { invoke } from '../lib/tauri-mock';
+import { toast } from 'sonner';
 import type { Message } from '../types/chat';
 
 /**
@@ -78,7 +79,10 @@ export async function detectIntent(content: string): Promise<IntentResult> {
  * ```
  */
 export async function isStopCommand(content: string): Promise<boolean> {
-  return invoke<boolean>('chat_is_stop_command', { content });
+  return invoke<boolean>('chat_is_stop_command', { content }).catch((e) => {
+    console.error('[chat] chat_is_stop_command failed:', e);
+    return false;
+  });
 }
 
 /**
@@ -96,7 +100,11 @@ export async function isStopCommand(content: string): Promise<boolean> {
  * ```
  */
 export async function handleStop(): Promise<boolean> {
-  return invoke<boolean>('chat_handle_stop');
+  return invoke<boolean>('chat_handle_stop').catch((e) => {
+    console.error('[chat] chat_handle_stop failed:', e);
+    toast.error('Failed to stop generation');
+    return false;
+  });
 }
 
 /**
@@ -106,7 +114,9 @@ export async function handleStop(): Promise<boolean> {
  * @deprecated Use handleStop() instead which also handles AGI operations
  */
 export async function stopGeneration(conversationId?: number): Promise<void> {
-  return invoke<void>('chat_stop_generation', { conversationId });
+  return invoke<void>('chat_stop_generation', { conversationId }).catch((e) => {
+    console.error('[chat] chat_stop_generation failed:', e);
+  });
 }
 
 /**
@@ -131,7 +141,10 @@ export async function loadConversationMessages(
   conversationId: number,
   userId: string,
 ): Promise<Message[]> {
-  return invoke<Message[]>('chat_get_messages', { conversationId, userId });
+  return invoke<Message[]>('chat_get_messages', { conversationId, userId }).catch((e) => {
+    console.error('[chat] chat_get_messages failed:', e);
+    throw new Error(`Failed to load messages: ${e}`);
+  });
 }
 
 /**

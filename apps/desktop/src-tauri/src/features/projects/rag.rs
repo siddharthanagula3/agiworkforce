@@ -1,6 +1,7 @@
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 static HTML_TAG_RE: Lazy<regex::Regex> =
     Lazy::new(|| regex::Regex::new(r"<[^>]*>").expect("valid regex: HTML tag pattern"));
@@ -37,11 +38,25 @@ pub struct RAGResult {
 
 pub struct RAGEngine {
     chunking_config: ChunkingConfig,
+    embedding_generator: Option<Arc<crate::core::embeddings::EmbeddingGenerator>>,
 }
 
 impl RAGEngine {
     pub fn new(chunking_config: ChunkingConfig) -> Self {
-        Self { chunking_config }
+        Self {
+            chunking_config,
+            embedding_generator: None,
+        }
+    }
+
+    pub fn with_embeddings(
+        chunking_config: ChunkingConfig,
+        generator: Arc<crate::core::embeddings::EmbeddingGenerator>,
+    ) -> Self {
+        Self {
+            chunking_config,
+            embedding_generator: Some(generator),
+        }
     }
 
     pub fn chunk_document(&self, document: &KnowledgeDocument) -> Result<Vec<KnowledgeChunk>> {
@@ -155,7 +170,32 @@ impl RAGEngine {
         })
     }
 
-    pub fn generate_embedding(&self, text: &str) -> Result<Vec<f32>> {
+    /// Generate a semantic embedding for the given text.
+    ///
+    /// When an `EmbeddingGenerator` is available (via `with_embeddings`), this
+    /// produces real semantic embeddings (Ollama nomic-embed-text or similar).
+    /// Falls back to a hash-based bag-of-words vector when no generator is
+    /// configured or when the generator fails.
+    pub async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>> {
+        if let Some(gen) = &self.embedding_generator {
+            match gen.generate(text).await {
+                Ok(vector) => return Ok(vector),
+                Err(e) => {
+                    tracing::warn!(
+                        "Real embedding generation failed, using hash fallback: {}",
+                        e
+                    );
+                }
+            }
+        }
+
+        tracing::warn!("RAG using hash-based embeddings — semantic quality degraded");
+        self.generate_hash_embedding(text)
+    }
+
+    /// Hash-based bag-of-words embedding (384-dim). NOT semantic — used only as
+    /// a degraded fallback when no real embedding provider is available.
+    fn generate_hash_embedding(&self, text: &str) -> Result<Vec<f32>> {
         let words: Vec<&str> = text.split_whitespace().collect();
         let mut embedding = vec![0.0f32; 384];
 

@@ -19,15 +19,84 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // import this module, preventing any LLM streaming from ever starting.
 }
 
-// Simple localStorage-based storage adapter for Supabase auth
-// Using localStorage instead of system keyring to avoid OS permission prompts
-// This is secure enough for Tauri apps since localStorage is sandboxed to the app
+// Derive a symmetric key from a stable per-device secret.
+// We use a combination of the app's origin + a fixed salt.
+// NOTE: This is not perfect (anyone with source can reproduce the derivation),
+// but it protects against static file exfiltration and naive localStorage dumps.
+let cachedKey: CryptoKey | null = null;
+
+async function deriveStorageKey(): Promise<CryptoKey> {
+  if (cachedKey) return cachedKey;
+
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode('agiworkforce-storage-v1-' + window.location.hostname),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey'],
+  );
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: new TextEncoder().encode('agi-supabase-storage-salt-2026'),
+      iterations: 100_000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+
+  cachedKey = key;
+  return key;
+}
+
+async function encryptValue(value: string): Promise<string> {
+  const key = await deriveStorageKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(value);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  // Pack iv + ciphertext as base64
+  const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ciphertext), iv.byteLength);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptValue(stored: string): Promise<string> {
+  // If it looks like plaintext JSON (Supabase session data), return as-is (migration path)
+  if (stored.startsWith('{') || stored.startsWith('"') || stored.startsWith('[')) {
+    return stored;
+  }
+
+  try {
+    const key = await deriveStorageKey();
+    const combined = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new TextDecoder().decode(decrypted);
+  } catch {
+    // Not plaintext and decryption failed — corrupted ciphertext
+    console.warn('[supabase] Removing corrupted encrypted value from localStorage');
+    return ''; // Supabase will treat empty as no session and trigger re-auth
+  }
+}
+
+// localStorage-based storage adapter for Supabase auth with AES-GCM encryption.
+// Using localStorage instead of system keyring to avoid OS permission prompts.
+// Values are encrypted before write and decrypted on read to protect against
+// static file exfiltration and naive localStorage dumps.
 const secureStorage = {
   getItem: async (key: string): Promise<string | null> => {
-    return localStorage.getItem(key);
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    return decryptValue(stored);
   },
   setItem: async (key: string, value: string): Promise<void> => {
-    localStorage.setItem(key, value);
+    const encrypted = await encryptValue(value);
+    localStorage.setItem(key, encrypted);
   },
   removeItem: async (key: string): Promise<void> => {
     localStorage.removeItem(key);

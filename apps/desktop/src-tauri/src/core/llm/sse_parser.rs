@@ -272,6 +272,17 @@ pub(crate) fn parse_sse_event(
         crate::core::llm::Provider::Zhipu => parse_openai_sse(event), // ZhipuAI uses OpenAI-compatible format
         crate::core::llm::Provider::Mistral => parse_openai_sse(event), // Mistral uses OpenAI-compatible format
         crate::core::llm::Provider::ManagedCloud => parse_openai_sse(event), // ManagedCloud uses OpenAI-compatible format
+        // New OpenAI-compatible providers
+        crate::core::llm::Provider::Groq => parse_openai_sse(event),
+        crate::core::llm::Provider::Together => parse_openai_sse(event),
+        crate::core::llm::Provider::Fireworks => parse_openai_sse(event),
+        crate::core::llm::Provider::Cerebras => parse_openai_sse(event),
+        crate::core::llm::Provider::DeepInfra => parse_openai_sse(event),
+        crate::core::llm::Provider::Cohere => parse_openai_sse(event),
+        crate::core::llm::Provider::AI21 => parse_openai_sse(event),
+        crate::core::llm::Provider::Sambanova => parse_openai_sse(event),
+        crate::core::llm::Provider::Azure => parse_openai_sse(event), // Azure OpenAI uses OpenAI-compatible format
+        crate::core::llm::Provider::Bedrock => parse_openai_sse(event), // Bedrock stub — will need custom parser later
     }
 }
 
@@ -382,6 +393,55 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                 }
             }
 
+            // ── OpenAI Responses API fallback ───────────────────────────
+            // The Responses API (used by o3, o4-mini, gpt-4.1) emits different
+            // event types than Chat Completions.  Only activate when the Chat
+            // Completions `choices` block above did not produce content.
+            if content.is_empty() {
+                // Handle output_text_delta: { "type": "output_text_delta", "delta": "text" }
+                if json.get("type").and_then(|t| t.as_str()) == Some("output_text_delta") {
+                    if let Some(delta_text) = json.get("delta").and_then(|d| d.as_str()) {
+                        content.push_str(delta_text);
+                    }
+                }
+
+                // Handle response.output_item.done with full content
+                if let Some(item) = json.get("item") {
+                    if let Some(content_parts) = item.get("content").and_then(|c| c.as_array()) {
+                        for part in content_parts {
+                            if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                content.push_str(text);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle Responses API "response.completed" event with usage
+            if let Some(response) = json.get("response") {
+                if let Some(u) = response.get("usage") {
+                    usage = Some(TokenUsage {
+                        prompt_tokens: u
+                            .get("input_tokens")
+                            .or(u.get("prompt_tokens"))
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        completion_tokens: u
+                            .get("output_tokens")
+                            .or(u.get("completion_tokens"))
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        total_tokens: u
+                            .get("total_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                    });
+                }
+                if response.get("status").and_then(|s| s.as_str()) == Some("completed") {
+                    done = true;
+                }
+            }
+
             if let Some(m) = json.get("model").and_then(|m| m.as_str()) {
                 model = Some(m.to_string());
             }
@@ -390,10 +450,12 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                 usage = Some(TokenUsage {
                     prompt_tokens: u
                         .get("prompt_tokens")
+                        .or(u.get("input_tokens"))
                         .and_then(|t| t.as_u64())
                         .map(|t| t as u32),
                     completion_tokens: u
                         .get("completion_tokens")
+                        .or(u.get("output_tokens"))
                         .and_then(|t| t.as_u64())
                         .map(|t| t as u32),
                     total_tokens: u

@@ -13,6 +13,7 @@ import { AlertTriangle, Terminal, WrenchIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../lib/utils';
 import type { CanvasArtifact } from '../../stores/canvasStore';
+import { sanitizeMarkdownHtml } from '../../utils/security';
 
 // ---------------------------------------------------------------------------
 // Simple markdown → HTML renderer (no external deps)
@@ -141,9 +142,8 @@ ${content}
           <div className="h-full overflow-y-auto p-6 bg-gray-950">
             <div
               className="prose prose-sm prose-invert max-w-none"
-              // Safe: markdownHtml is produced by our own renderer from user content
-              // that never executes JS (no script tags, sanitized HTML entities first)
-              dangerouslySetInnerHTML={{ __html: markdownHtml }}
+              // CRIT-009: sanitizeMarkdownHtml strips any unsafe tags/attributes via DOMPurify
+              dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
             />
           </div>
         )}

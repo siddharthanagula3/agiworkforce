@@ -13,6 +13,10 @@ const MAX_MESSAGE_SIZE = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
 // Authentication timeout - close connection if not authenticated within this time
 const AUTH_TIMEOUT_MS = Number(process.env['WS_AUTH_TIMEOUT_MS'] ?? 30000); // 30 seconds default
 
+// Rate limiting: max messages per connection within a sliding window
+const RATE_LIMIT_MAX_MESSAGES = Number(process.env['WS_RATE_LIMIT_MAX_MESSAGES'] ?? 100);
+const RATE_LIMIT_WINDOW_MS = Number(process.env['WS_RATE_LIMIT_WINDOW_MS'] ?? 60000); // 60 seconds default
+
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   deviceId?: string;
@@ -21,6 +25,9 @@ interface AuthenticatedWebSocket extends WebSocket {
 }
 
 const clients = new Map<string, Set<AuthenticatedWebSocket>>();
+
+// Per-connection rate limiting tracker
+const rateLimitTracker = new Map<AuthenticatedWebSocket, { count: number; resetAt: number }>();
 
 // Pending commands queue for offline desktops (in-memory, limited to 100 per user/device)
 const pendingCommands = new Map<
@@ -220,6 +227,20 @@ export function setupWebSocket(wss: WebSocketServer) {
           return;
         }
 
+        // Per-connection rate limiting (sliding window)
+        const now = Date.now();
+        let rateLimit = rateLimitTracker.get(ws);
+        if (!rateLimit || now >= rateLimit.resetAt) {
+          rateLimit = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+          rateLimitTracker.set(ws, rateLimit);
+        }
+        rateLimit.count++;
+        if (rateLimit.count > RATE_LIMIT_MAX_MESSAGES) {
+          logger.warn({ userId: ws.userId }, 'WebSocket rate limit exceeded, closing connection');
+          ws.close(1008, 'Rate limit exceeded');
+          return;
+        }
+
         const parsed = parseMessage(message);
         if (!parsed) {
           ws.send(
@@ -257,6 +278,9 @@ export function setupWebSocket(wss: WebSocketServer) {
       if (ws.authTimeout) {
         clearTimeout(ws.authTimeout);
       }
+
+      // Clean up rate limit tracking to prevent memory leaks
+      rateLimitTracker.delete(ws);
 
       if (ws.userId) {
         const userClients = clients.get(ws.userId);

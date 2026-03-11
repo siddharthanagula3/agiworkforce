@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{command, State};
+use tauri::State;
 
 static BROWSER_ALREADY_TILED: AtomicBool = AtomicBool::new(false);
 
@@ -214,7 +214,7 @@ impl BrowserStateWrapper {
 
 // Browser Automation Commands
 
-#[command]
+#[tauri::command]
 pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
     if state.is_available() {
         Ok(())
@@ -223,7 +223,7 @@ pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<(), S
     }
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_check_status(state: State<'_, BrowserStateWrapper>) -> Result<Value, String> {
     Ok(serde_json::json!({
         "available": state.is_available(),
@@ -231,7 +231,7 @@ pub async fn browser_check_status(state: State<'_, BrowserStateWrapper>) -> Resu
     }))
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_launch(
     state: State<'_, BrowserStateWrapper>,
     options: Option<Value>,
@@ -257,7 +257,7 @@ pub async fn browser_launch(
     Ok(handle.id)
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_open_tab(
     state: State<'_, BrowserStateWrapper>,
     url: Option<String>,
@@ -315,7 +315,7 @@ pub async fn browser_open_tab(
     Ok(tab_id)
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_close_tab(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -351,7 +351,7 @@ pub async fn browser_close_tab(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_switch_tab(
     state: State<'_, BrowserStateWrapper>,
     tab_id: String,
@@ -367,7 +367,7 @@ pub async fn browser_switch_tab(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_list_tabs(
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<String>, String> {
@@ -381,7 +381,7 @@ pub async fn browser_list_tabs(
     Ok(tabs.into_iter().map(|t| t.id).collect())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_navigate(
     app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
@@ -429,7 +429,7 @@ pub async fn browser_navigate(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_go_back(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -442,7 +442,7 @@ pub async fn browser_go_back(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_go_forward(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -455,7 +455,7 @@ pub async fn browser_go_forward(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_reload(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -468,7 +468,7 @@ pub async fn browser_reload(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_url(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -477,7 +477,7 @@ pub async fn browser_get_url(
     client.get_url().await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_title(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -486,7 +486,7 @@ pub async fn browser_get_title(
     client.get_title().await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_click(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -502,7 +502,7 @@ pub async fn browser_click(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_type(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -518,7 +518,7 @@ pub async fn browser_type(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_text(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -533,7 +533,7 @@ pub async fn browser_get_text(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_attribute(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -549,7 +549,7 @@ pub async fn browser_get_attribute(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_wait_for_selector(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -565,7 +565,7 @@ pub async fn browser_wait_for_selector(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_select_option(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -581,7 +581,7 @@ pub async fn browser_select_option(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_check(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -593,7 +593,7 @@ pub async fn browser_check(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_uncheck(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -605,7 +605,7 @@ pub async fn browser_uncheck(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_screenshot(
     state: State<'_, BrowserStateWrapper>,
     selector: Option<String>,
@@ -630,7 +630,7 @@ pub async fn browser_screenshot(
     Ok(STANDARD.encode(bytes))
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_evaluate(
     app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
@@ -673,7 +673,7 @@ pub async fn browser_evaluate(
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_hover(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -685,7 +685,7 @@ pub async fn browser_hover(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_focus(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -697,7 +697,7 @@ pub async fn browser_focus(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_query_all(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -710,7 +710,7 @@ pub async fn browser_query_all(
     Ok(elements.iter().map(|e| e.text.clone()).collect())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_scroll_into_view(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -726,7 +726,7 @@ pub async fn browser_scroll_into_view(
 // IMPLEMENTED COMMANDS
 // =============================================================================
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_content(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -735,7 +735,7 @@ pub async fn browser_get_content(
     client.get_content().await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_dom_snapshot(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -744,7 +744,7 @@ pub async fn browser_get_dom_snapshot(
     client.get_content().await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_execute_async_js(
     app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
@@ -793,7 +793,7 @@ pub async fn browser_execute_async_js(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_element_state(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -824,7 +824,7 @@ pub async fn browser_get_element_state(
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_wait_for_interactive(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -880,7 +880,7 @@ pub async fn browser_wait_for_interactive(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_fill_form(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -939,7 +939,7 @@ pub async fn browser_fill_form(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_drag_and_drop(
     state: State<'_, BrowserStateWrapper>,
     source: String,
@@ -993,7 +993,7 @@ pub async fn browser_drag_and_drop(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_upload_file(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -1075,7 +1075,7 @@ pub async fn browser_upload_file(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_cookies(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -1101,7 +1101,7 @@ pub async fn browser_get_cookies(
     Ok(result)
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_set_cookie(
     state: State<'_, BrowserStateWrapper>,
     cookie: Value,
@@ -1147,7 +1147,7 @@ pub async fn browser_set_cookie(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_clear_cookies(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -1158,7 +1158,7 @@ pub async fn browser_clear_cookies(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_performance_metrics(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -1177,7 +1177,7 @@ pub async fn browser_get_performance_metrics(
     }))
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_wait_for_navigation(
     state: State<'_, BrowserStateWrapper>,
     timeout_ms: Option<u64>,
@@ -1230,14 +1230,14 @@ pub async fn browser_wait_for_navigation(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_frames(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<String>, String> {
     Ok(vec![])
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_execute_in_frame(
     _state: State<'_, BrowserStateWrapper>,
     _frame_id: String,
@@ -1246,7 +1246,7 @@ pub async fn browser_execute_in_frame(
     Ok(Value::Null)
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_call_function(
     _state: State<'_, BrowserStateWrapper>,
     _function: String,
@@ -1255,7 +1255,7 @@ pub async fn browser_call_function(
     Ok(Value::Null)
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_enable_request_interception(
     _state: State<'_, BrowserStateWrapper>,
     _enabled: bool,
@@ -1263,7 +1263,7 @@ pub async fn browser_enable_request_interception(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_screenshot_stream(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
@@ -1277,7 +1277,7 @@ pub async fn browser_get_screenshot_stream(
     Ok(STANDARD.encode(bytes))
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_highlight_element(
     state: State<'_, BrowserStateWrapper>,
     selector: String,
@@ -1307,14 +1307,14 @@ pub async fn browser_highlight_element(
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_console_logs(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<String>, String> {
     Ok(vec![])
 }
 
-#[command]
+#[tauri::command]
 pub async fn browser_get_network_activity(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<Value>, String> {
@@ -1323,7 +1323,7 @@ pub async fn browser_get_network_activity(
 
 // Semantic Commands
 
-#[command]
+#[tauri::command]
 pub async fn find_element_semantic(
     _state: State<'_, BrowserStateWrapper>,
     _query: String,
@@ -1331,7 +1331,7 @@ pub async fn find_element_semantic(
     Ok("#semantic-element".to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn find_all_elements_semantic(
     _state: State<'_, BrowserStateWrapper>,
     _query: String,
@@ -1339,7 +1339,7 @@ pub async fn find_all_elements_semantic(
     Ok(vec![])
 }
 
-#[command]
+#[tauri::command]
 pub async fn click_semantic(
     _state: State<'_, BrowserStateWrapper>,
     _query: String,
@@ -1347,7 +1347,7 @@ pub async fn click_semantic(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn type_semantic(
     _state: State<'_, BrowserStateWrapper>,
     _query: String,
@@ -1356,35 +1356,35 @@ pub async fn type_semantic(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn get_accessibility_tree(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-#[command]
+#[tauri::command]
 pub async fn test_selector_strategies(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-#[command]
+#[tauri::command]
 pub async fn get_dom_semantic_graph(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-#[command]
+#[tauri::command]
 pub async fn get_interactive_elements(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<String>, String> {
     Ok(vec![])
 }
 
-#[command]
+#[tauri::command]
 pub async fn find_by_role(
     _state: State<'_, BrowserStateWrapper>,
     _role: String,

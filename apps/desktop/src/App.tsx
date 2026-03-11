@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
@@ -224,6 +225,12 @@ const DesktopShell = () => {
 
     void initializeAgentStatusListener();
     void initializeToolEventListener();
+
+    // Wire up mcpb:install_progress Tauri event into the MCPB store
+    void (async () => {
+      const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
+      void initializeMcpbInstallListener();
+    })();
 
     void (async () => {
       // Wait for settings store hydration from localStorage before loading from backend
@@ -723,6 +730,14 @@ const DesktopShell = () => {
 };
 
 const App = () => {
+  const { i18n } = useTranslation();
+
+  // Set document direction for RTL language support (Arabic)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
+  }, [i18n.language]);
+
   useEffect(() => {
     // Single consolidated auth orchestrator - replaces individual store initializers
     // This prevents race conditions from multiple auth listeners firing simultaneously

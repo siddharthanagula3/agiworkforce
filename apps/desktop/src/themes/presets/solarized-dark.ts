@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const solarizedDark: ThemeDefinition = {
+  id: 'solarized-dark',
+  name: 'Solarized Dark',
+  author: 'Ethan Schoonover',
+  variant: 'dark',
+  colors: {
+    background: '193 100% 8%',
+    foreground: '186 13% 59%',
+    card: '193 100% 6%',
+    cardForeground: '186 13% 59%',
+    popover: '193 100% 6%',
+    popoverForeground: '186 13% 59%',
+    primary: '205 69% 49%',
+    primaryForeground: '193 100% 8%',
+    secondary: '193 100% 12%',
+    secondaryForeground: '186 13% 59%',
+    muted: '193 100% 12%',
+    mutedForeground: '194 14% 40%',
+    accent: '68 100% 30%',
+    accentForeground: '193 100% 8%',
+    destructive: '1 71% 52%',
+    destructiveForeground: '186 13% 59%',
+    border: '193 100% 15%',
+    input: '193 100% 15%',
+    ring: '205 69% 49%',
+    syntax: {
+      keyword: '#859900',
+      string: '#2aa198',
+      comment: '#586e75',
+      function: '#268bd2',
+      number: '#d33682',
+      operator: '#2aa198',
+    },
+  },
+};

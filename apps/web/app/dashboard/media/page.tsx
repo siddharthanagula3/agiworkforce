@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Film, ImageIcon, Loader2, Download } from 'lucide-react';
+import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { toast } from 'sonner';
 import { Button } from '@shared/ui/button';
 import { Textarea } from '@shared/ui/textarea';
@@ -619,6 +620,7 @@ export default function MediaPage() {
   );
 
   return (
+    <ErrorBoundary componentName="MediaPage" compact>
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
       {/* Header */}
       <div className="space-y-1">
@@ -711,5 +713,6 @@ export default function MediaPage() {
         </Card>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

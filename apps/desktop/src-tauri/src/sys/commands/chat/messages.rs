@@ -32,6 +32,7 @@ pub(crate) fn compute_conversation_stats(
 }
 
 /// Save an assistant message to the database and return the saved Message.
+/// Pass `cloud_sync = true` only when the user's chat_storage_mode is "cloud".
 pub(crate) fn save_assistant_message(
     db: &AppDatabase,
     conversation_id: i64,
@@ -41,6 +42,7 @@ pub(crate) fn save_assistant_message(
     cost: Option<f64>,
     provider: Option<&str>,
     model: &str,
+    cloud_sync: bool,
 ) -> Result<Message, String> {
     let conn = db.connection()?;
     let msg = Message {
@@ -62,14 +64,17 @@ pub(crate) fn save_assistant_message(
     let saved = repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?;
 
-    // Best-effort dual-write to Supabase (fire-and-forget)
-    supabase_sync::spawn_sync_message(saved.clone());
+    // Best-effort dual-write to Supabase (only in cloud storage mode)
+    if cloud_sync {
+        supabase_sync::spawn_sync_message(saved.clone());
+    }
 
     Ok(saved)
 }
 
 /// In incognito mode, create an in-memory Message without persisting to SQLite.
 /// Otherwise, delegate to `save_assistant_message`.
+/// `cloud_sync` is passed through from the caller (read from settings at request start).
 pub(crate) fn save_or_skip_assistant_message(
     db: &AppDatabase,
     conversation_id: i64,
@@ -80,6 +85,7 @@ pub(crate) fn save_or_skip_assistant_message(
     provider: Option<&str>,
     model: &str,
     incognito: bool,
+    cloud_sync: bool,
 ) -> Result<Message, String> {
     if incognito {
         Ok(Message {
@@ -106,6 +112,7 @@ pub(crate) fn save_or_skip_assistant_message(
             cost,
             provider,
             model,
+            cloud_sync,
         )
     }
 }
@@ -137,6 +144,7 @@ pub(crate) fn compute_or_skip_stats(
 #[tauri::command]
 pub fn chat_create_message(
     db: State<'_, AppDatabase>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
     request: CreateMessageRequest,
 ) -> Result<Message, String> {
     if request.conversation_id <= 0 {
@@ -198,8 +206,17 @@ pub fn chat_create_message(
     let created = repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve message {}: {e}", id))?;
 
-    // Best-effort dual-write to Supabase (fire-and-forget)
-    supabase_sync::spawn_sync_message(created.clone());
+    // Best-effort dual-write to Supabase (only in cloud storage mode)
+    let cloud_sync = {
+        let s = settings_state.settings.blocking_lock();
+        s.chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+    if cloud_sync {
+        supabase_sync::spawn_sync_message(created.clone());
+    }
 
     Ok(created)
 }

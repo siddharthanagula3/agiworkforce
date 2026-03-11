@@ -58,7 +58,6 @@ export interface MultiModalRoutingResult {
  * Image Generation Models (January 2026)
  *
  * Based on public opinion research:
- * - Flux: Best for photorealism (Flux 2 leads photorealistic benchmarks)
  * - Midjourney v7: Best for artistic/creative (most artistic versatility)
  * - Ideogram 3: Best for text rendering (logos, typography)
  * - DALL-E 3: Good all-rounder, best OpenAI integration
@@ -79,33 +78,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
       styles: ['natural', 'vivid'],
     },
   },
-  {
-    id: 'flux-schnell',
-    name: 'Flux Schnell',
-    provider: 'blackforest',
-    tier: 'hobby',
-    costPerUnit: 0.003, // Very cheap, fast generation
-    quality: 'standard',
-    speed: 'fast',
-    capabilities: {
-      maxResolution: '1024x1024',
-      styles: ['natural', 'artistic'],
-    },
-  },
   // === PRO TIER ===
-  {
-    id: 'flux-2-pro',
-    name: 'Flux 2 Pro',
-    provider: 'blackforest',
-    tier: 'pro',
-    costPerUnit: 0.055,
-    quality: 'ultra',
-    speed: 'normal',
-    capabilities: {
-      maxResolution: '2048x2048',
-      styles: ['natural', 'artistic', 'anime', 'photorealistic'],
-    },
-  },
   {
     id: 'ideogram-3',
     name: 'Ideogram 3',
@@ -340,34 +313,7 @@ export const STT_MODELS: ModalityModel[] = [
 /**
  * Music Generation Models (January 2026)
  */
-export const MUSIC_MODELS: ModalityModel[] = [
-  {
-    id: 'suno-v4',
-    name: 'Suno v4',
-    provider: 'suno',
-    tier: 'pro',
-    costPerUnit: 0.05, // Per generation
-    quality: 'hd',
-    speed: 'normal',
-    capabilities: {
-      maxDuration: 240, // 4 minutes
-      styles: ['pop', 'rock', 'electronic', 'classical', 'jazz', 'hip-hop', 'ambient'],
-    },
-  },
-  {
-    id: 'udio',
-    name: 'Udio',
-    provider: 'udio',
-    tier: 'pro',
-    costPerUnit: 0.05,
-    quality: 'hd',
-    speed: 'normal',
-    capabilities: {
-      maxDuration: 180,
-      styles: ['pop', 'rock', 'electronic', 'folk', 'r&b', 'country'],
-    },
-  },
-];
+export const MUSIC_MODELS: ModalityModel[] = [];
 
 /**
  * Search/Research Models (January 2026)

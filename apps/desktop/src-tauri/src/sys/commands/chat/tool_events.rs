@@ -3,9 +3,9 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::Instant;
 use tauri::Emitter;
+use std::sync::Mutex;
 
 /// Global rate-limit map: tracks the last emission timestamp per tool execution ID.
 static PROGRESS_LAST_EMIT: std::sync::LazyLock<Mutex<HashMap<String, Instant>>> =
@@ -14,6 +14,10 @@ static PROGRESS_LAST_EMIT: std::sync::LazyLock<Mutex<HashMap<String, Instant>>> 
 /// Returns true if enough time (100ms) has passed since the last Progress emission
 /// for the given `tool_id`. This prevents flooding the frontend with high-frequency
 /// progress events that can degrade UI performance.
+///
+/// Uses `std::sync::Mutex` intentionally: the lock is held for sub-microsecond
+/// HashMap operations with no `.await` points, so a sync mutex avoids the overhead
+/// of tokio's async Mutex.
 pub fn should_emit_progress(tool_id: &str) -> bool {
     let mut map = PROGRESS_LAST_EMIT.lock().unwrap_or_else(|e| e.into_inner());
     let now = Instant::now();
@@ -103,7 +107,16 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         .and_then(|v| v.as_str())
         .map(|s| truncate(s, 60));
 
-    let (name, arg_display) = if contains_any(&lower, &["read_file", "read_text", "read_media"]) {
+    let edits_count = args
+        .get("edits")
+        .and_then(|v| v.as_array())
+        .map(|arr| format!("{} edits", arr.len()));
+
+    let (name, arg_display) = if contains_any(&lower, &["multi_edit"]) {
+        ("MultiEdit", edits_count.unwrap_or_default())
+    } else if contains_any(&lower, &["apply_patch"]) {
+        ("ApplyPatch", path.clone().unwrap_or_default())
+    } else if contains_any(&lower, &["read_file", "read_text", "read_media"]) {
         ("Read", path.unwrap_or_default())
     } else if contains_any(&lower, &["write_file", "write_text"]) {
         ("Write", path.unwrap_or_default())
@@ -111,6 +124,17 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         ("Edit", path.unwrap_or_default())
     } else if contains_any(&lower, &["list_directory", "directory_tree", "list_dir"]) {
         ("LS", path.unwrap_or_else(|| ".".to_string()))
+    } else if contains_any(&lower, &["code_search"]) {
+        let symbol_type = args
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("any");
+        let display = if symbol_type != "any" {
+            format!("{} {}", symbol_type, query.unwrap_or_default())
+        } else {
+            query.unwrap_or_default()
+        };
+        ("CodeSearch", display)
     } else if contains_any(&lower, &["search_files", "grep", "find_files", "glob"]) {
         ("Search", query.unwrap_or_default())
     } else if contains_any(
@@ -144,6 +168,19 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
             .and_then(|v| v.as_str())
             .map(|s| truncate(s, 40));
         ("ImageGen", prompt.unwrap_or_default())
+    } else if contains_any(&lower, &["todo_write"]) {
+        let count = args
+            .get("todos")
+            .and_then(|v| v.as_array())
+            .map(|arr| format!("{} items", arr.len()))
+            .unwrap_or_default();
+        ("TodoWrite", count)
+    } else if lower == "question" || contains_any(&lower, &["question_ask"]) {
+        let q = args
+            .get("question")
+            .and_then(|v| v.as_str())
+            .map(|s| truncate(s, 50));
+        ("Question", q.unwrap_or_default())
     } else {
         // Fallback: extract the last segment of the MCP tool name
         let short_name = tool_name.rsplit("__").next().unwrap_or(tool_name);

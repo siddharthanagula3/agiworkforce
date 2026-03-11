@@ -527,6 +527,26 @@ function getWebviewContent(
       return html;
     }
 
+    // ── HTML sanitizer (defense-in-depth for innerHTML) ──────────────────
+    function sanitizeHtml(html) {
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      // Remove dangerous elements
+      var dangerous = div.querySelectorAll('script,style,iframe,object,embed,form,link,meta,base');
+      for (var i = 0; i < dangerous.length; i++) { dangerous[i].remove(); }
+      // Remove event handler attributes from all elements
+      var all = div.querySelectorAll('*');
+      for (var j = 0; j < all.length; j++) {
+        var attrs = Array.from(all[j].attributes);
+        for (var k = 0; k < attrs.length; k++) {
+          if (/^on/i.test(attrs[k].name)) {
+            all[j].removeAttribute(attrs[k].name);
+          }
+        }
+      }
+      return div.innerHTML;
+    }
+
     // ── Send ──────────────────────────────────────────────────────────────────
     function sendMessage() {
       if (streaming) {
@@ -606,7 +626,7 @@ function getWebviewContent(
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
-          currentAssistantEl.innerHTML = renderMarkdown(accumulatedContent);
+          currentAssistantEl.innerHTML = sanitizeHtml(renderMarkdown(accumulatedContent));
         }
         setStreaming(false);
         currentAssistantEl = null;

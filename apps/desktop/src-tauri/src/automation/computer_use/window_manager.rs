@@ -15,26 +15,28 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 /// Sanitizes a string for safe interpolation into AppleScript string literals.
-/// Removes double quotes, backslashes, and single quotes that could break out of
-/// AppleScript string literals or trigger code injection. Trims to max 200 chars.
+/// Removes double quotes, backslashes, single quotes, null bytes, and newlines
+/// (`\n`, `\r`) that could break out of AppleScript string literals or inject
+/// arbitrary commands. Trims to max 200 chars.
 fn sanitize_applescript_string(input: &str) -> String {
     input
         .chars()
-        .filter(|c| *c != '"' && *c != '\\' && *c != '\'' && *c != '\0')
+        .filter(|c| *c != '"' && *c != '\\' && *c != '\'' && *c != '\0' && *c != '\n' && *c != '\r')
         .take(200)
         .collect()
 }
 
 /// Sanitizes a window title for use as a direct argument to external commands
 /// (e.g. wmctrl) where the value is passed as a separate argv element rather than
-/// through a shell. Strips null bytes (which would truncate argv) and enforces a
-/// length limit to prevent excessively long arguments.
+/// through a shell. Strips null bytes (which would truncate argv), newlines
+/// (`\n`, `\r`) which could be interpreted by some tools, and enforces a length
+/// limit to prevent excessively long arguments.
 // Only used on non-Windows/non-macOS (Linux) — suppress dead_code on other platforms.
 #[cfg_attr(any(target_os = "windows", target_os = "macos"), allow(dead_code))]
 fn sanitize_window_title_arg(input: &str) -> String {
     input
         .chars()
-        .filter(|c| *c != '\0')
+        .filter(|c| *c != '\0' && *c != '\n' && *c != '\r')
         .take(200)
         .collect()
 }
@@ -832,6 +834,49 @@ mod tests {
     fn test_sanitize_applescript_string_truncates_long_input() {
         let long_input = "a".repeat(300);
         assert_eq!(sanitize_applescript_string(&long_input).len(), 200);
+    }
+
+    #[test]
+    fn test_sanitize_applescript_string_strips_newlines() {
+        // Newline injection: attacker crafts a window title containing \n to inject AppleScript
+        assert_eq!(
+            sanitize_applescript_string("title\ndo shell script \"evil\""),
+            "titledo shell script evil"
+        );
+        assert_eq!(
+            sanitize_applescript_string("title\r\ndo shell script \"evil\""),
+            "titledo shell script evil"
+        );
+        assert_eq!(
+            sanitize_applescript_string("clean title"),
+            "clean title"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_window_title_arg_strips_null_and_newlines() {
+        assert_eq!(
+            sanitize_window_title_arg("title\0rest"),
+            "titlerest"
+        );
+        assert_eq!(
+            sanitize_window_title_arg("title\ninjected"),
+            "titleinjected"
+        );
+        assert_eq!(
+            sanitize_window_title_arg("title\r\ninjected"),
+            "titleinjected"
+        );
+        assert_eq!(
+            sanitize_window_title_arg("normal title"),
+            "normal title"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_window_title_arg_truncates_long_input() {
+        let long_input = "b".repeat(300);
+        assert_eq!(sanitize_window_title_arg(&long_input).len(), 200);
     }
 
     #[test]

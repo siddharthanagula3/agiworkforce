@@ -338,6 +338,7 @@ pub(crate) async fn execute_tool_calls_batch(
             project_folder.clone(),
             conversation_mode.clone(),
             Some(tc.id.as_str()),
+            None, // registry threaded from send_message.rs in a follow-up refactor
         )
         .await;
 
@@ -596,6 +597,7 @@ pub(crate) async fn execute_chat_tool_with_timeout(
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
+    registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> Result<String, String> {
     let timeout_secs = resolve_tool_execution_timeout_secs(tool_name);
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
@@ -641,6 +643,7 @@ pub(crate) async fn execute_chat_tool_with_timeout(
             project_folder_owned,
             conversation_mode_owned,
             tool_call_id_owned.as_deref(),
+            registry,
         )
         .await
     });

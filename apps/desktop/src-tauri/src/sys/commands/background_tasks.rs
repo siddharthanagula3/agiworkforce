@@ -3,9 +3,10 @@ use crate::features::tasks::TaskManager;
 use chrono::Utc;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
 
 pub struct TaskManagerState(pub Arc<TaskManager>);
 
@@ -194,12 +195,31 @@ pub async fn agi_get_timeout_status(
 #[tauri::command]
 pub async fn agi_extend_timeout(
     task_id: String,
-    _additional_minutes: i32,
+    additional_minutes: i32,
     state: State<'_, TaskManagerState>,
 ) -> Result<(), String> {
-    // Timeout extension would need actual implementation
-    // For now, just verify the task exists
-    bg_get_task_status(task_id, state).await?;
+    if additional_minutes <= 0 {
+        return Err("additional_minutes must be positive".to_string());
+    }
+    let additional_secs = additional_minutes as i64 * 60;
+
+    // Read the global baseline before acquiring the task write-lock.
+    let global_max = TIMEOUT_CONFIG
+        .lock()
+        .map_err(|e| format!("Failed to lock timeout config: {e}"))?
+        .max_duration_secs;
+
+    let new_max = state
+        .0
+        .extend_deadline(&task_id, additional_secs, global_max)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!(
+        "[TaskManager] Extended timeout for task '{}' by {} minutes (new deadline: {}s from start)",
+        task_id, additional_minutes, new_max
+    );
+
     Ok(())
 }
 
@@ -278,4 +298,82 @@ pub async fn timeout_get_recommended(task_type: String) -> Result<i64, String> {
         _ => 600,                  // Default 10 minutes
     };
     Ok(timeout)
+}
+
+/// Spawn an async loop that emits `agi:timeout_warning` when a running task is
+/// within 60 seconds of its configured deadline.
+///
+/// Call this once during app setup, passing a clone of the TaskManager Arc and
+/// a clone of the AppHandle.
+pub fn start_timeout_warning_loop(
+    manager: Arc<TaskManager>,
+    app_handle: tauri::AppHandle,
+) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
+        // Track which task IDs have already received a warning this session.
+        let mut warned: HashSet<String> = HashSet::new();
+
+        loop {
+            interval.tick().await;
+
+            let (max_duration_secs, enable_warnings) = {
+                match TIMEOUT_CONFIG.lock() {
+                    Ok(cfg) => (cfg.max_duration_secs, cfg.enable_warnings),
+                    Err(_) => continue,
+                }
+            };
+
+            if !enable_warnings {
+                continue;
+            }
+
+            // Collect all currently running tasks.
+            let filter = crate::features::tasks::types::TaskFilter {
+                status: Some(TaskStatus::Running),
+                priority: None,
+                limit: None,
+            };
+
+            let tasks = match manager.list(filter).await {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+
+            for task in tasks {
+                if warned.contains(&task.id) {
+                    continue;
+                }
+
+                let elapsed_secs = task
+                    .started_at
+                    .map(|started| (Utc::now() - started).num_seconds().max(0))
+                    .unwrap_or(0);
+
+                let max_secs = task.deadline_override_secs.unwrap_or(max_duration_secs);
+                let remaining = max_secs - elapsed_secs;
+
+                // Emit warning when within the last 60 seconds of the deadline.
+                if (0..=60).contains(&remaining) {
+                    let _ = app_handle.emit(
+                        "agi:timeout_warning",
+                        serde_json::json!({
+                            "taskId": task.id,
+                            "taskName": task.name,
+                            "remainingSeconds": remaining,
+                            "maxTimeoutMinutes": max_duration_secs / 60,
+                            "executedSteps": 0,
+                            "totalEstimatedSteps": null,
+                        }),
+                    );
+                    warned.insert(task.id.clone());
+                    tracing::warn!(
+                        task_id = %task.id,
+                        remaining_seconds = remaining,
+                        "Emitted agi:timeout_warning for task approaching deadline"
+                    );
+                }
+            }
+        }
+    });
 }
