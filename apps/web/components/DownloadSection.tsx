@@ -1,7 +1,7 @@
 'use client';
 
 import { Apple, Laptop, Terminal } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { triggerDownload } from '../services/download';
 import { cn } from '../utils/cn';
 
@@ -11,20 +11,23 @@ interface DownloadUrls {
   linux?: string;
 }
 
+function detectOS(): 'mac' | 'windows' | 'linux' | 'unknown' {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  // Order matters: 'mac' must be checked before 'win' — macOS user agents never contain 'win',
+  // and Windows user agents never contain 'mac', so this ordering is unambiguous and correct.
+  if (userAgent.indexOf('mac') !== -1) return 'mac';
+  if (userAgent.indexOf('linux') !== -1) return 'linux';
+  // 'win' matches 'windows', 'win32', 'win64', 'wince' — covers all Windows versions
+  if (userAgent.indexOf('win') !== -1) return 'windows';
+  return 'unknown';
+}
+
 export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
-  const [detectedOS] = useState<'mac' | 'windows' | 'linux' | 'unknown'>(() => {
-    // SSR fallback: default to 'windows' so server-rendered HTML pre-highlights the Windows card,
-    // which is the most common desktop OS. Client hydration corrects this immediately.
-    if (typeof window === 'undefined') return 'windows';
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    // Order matters: 'mac' must be checked before 'win' — macOS user agents never contain 'win',
-    // and Windows user agents never contain 'mac', so this ordering is unambiguous and correct.
-    if (userAgent.indexOf('mac') !== -1) return 'mac';
-    if (userAgent.indexOf('linux') !== -1) return 'linux';
-    // 'win' matches 'windows', 'win32', 'win64', 'wince' — covers all Windows versions
-    if (userAgent.indexOf('win') !== -1) return 'windows';
-    return 'unknown';
-  });
+  const [detectedOS, setDetectedOS] = useState<'mac' | 'windows' | 'linux' | 'unknown'>('windows');
+
+  useEffect(() => {
+    setDetectedOS(detectOS());
+  }, []);
 
   const platforms = [
     {

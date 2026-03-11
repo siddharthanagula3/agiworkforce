@@ -88,6 +88,7 @@ impl TaskPersistence {
                         .and_then(|t| DateTime::from_timestamp(t, 0)),
                     result,
                     payload: row.get(10)?,
+                    deadline_override_secs: None,
                 })
             })
             .optional()
@@ -155,6 +156,7 @@ impl TaskPersistence {
                         .and_then(|t| DateTime::from_timestamp(t, 0)),
                     result,
                     payload: row.get(10)?,
+                    deadline_override_secs: None,
                 })
             })
             .context("Failed to query tasks")?

@@ -641,7 +641,7 @@ test.describe('Windows: Terminal Component', () => {
       ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
-        const session = await tauri.invoke('create_terminal_session', {
+        const session = await tauri.invoke('terminal_create_session', {
           shell: 'powershell',
         });
         return { success: true, session };
@@ -722,7 +722,7 @@ test.describe('Windows: Toast Notifications', () => {
       ).__TAURI__;
       if (!tauri) return { skipped: true };
       try {
-        await tauri.invoke('send_notification', {
+        await tauri.invoke('notification_show', {
           title: 'E2E Test',
           body: 'Windows E2E notification test',
         });

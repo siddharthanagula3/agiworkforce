@@ -99,18 +99,13 @@ impl ElementBounds {
 }
 
 /// Mouse button for click actions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MouseButton {
+    #[default]
     Left,
     Right,
     Middle,
-}
-
-impl Default for MouseButton {
-    fn default() -> Self {
-        Self::Left
-    }
 }
 
 /// Scroll direction for scroll actions.

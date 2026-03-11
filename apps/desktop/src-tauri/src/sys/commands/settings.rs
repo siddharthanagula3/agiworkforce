@@ -14,6 +14,18 @@ pub struct LLMConfig {
     pub favorite_models: Vec<String>,
     #[serde(default)]
     pub task_routing: Option<serde_json::Value>,
+    #[serde(default = "default_provider_mode")]
+    pub provider_mode: String,
+    #[serde(default = "default_ollama_url")]
+    pub ollama_url: String,
+}
+
+fn default_provider_mode() -> String {
+    "auto".to_string()
+}
+
+fn default_ollama_url() -> String {
+    "http://localhost:11434".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +61,11 @@ pub struct ChatPreferences {
     pub auto_approve_tools: bool,
     #[serde(default = "default_auto_inject_skills")]
     pub auto_inject_skills: bool,
+    /// Where chat history is persisted.
+    /// `"local"` — SQLite only, never synced to cloud (default).
+    /// `"cloud"` — SQLite + best-effort Supabase sync on every save.
+    #[serde(default = "default_chat_storage_mode")]
+    pub chat_storage_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -73,6 +90,10 @@ pub struct GlobalHotkeyPreferences {
     pub enabled: bool,
     #[serde(default = "default_global_hotkey_combo")]
     pub combo: String,
+}
+
+fn default_chat_storage_mode() -> String {
+    "local".to_string()
 }
 
 fn default_prompt_completion_enabled() -> bool {
@@ -195,6 +216,8 @@ impl SettingsState {
                     },
                     favorite_models: Vec::new(),
                     task_routing: None,
+                    provider_mode: default_provider_mode(),
+                    ollama_url: default_ollama_url(),
                 },
                 window_preferences: WindowPreferences {
                     theme: "system".to_string(),
@@ -209,6 +232,7 @@ impl SettingsState {
                     compact_mode: true,
                     auto_approve_tools: false,
                     auto_inject_skills: true,
+                    chat_storage_mode: default_chat_storage_mode(),
                 }),
                 execution_preferences: Some(ExecutionPreferences {
                     max_timeout_minutes: default_max_timeout_minutes(),

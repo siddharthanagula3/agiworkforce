@@ -498,8 +498,21 @@ impl MemoryManager {
         }
     }
 
-    /// Search memories by query (searches topic and content)
+    /// Search memories by query — uses semantic search when available, LIKE fallback
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>> {
+        // Try semantic search first (TF-IDF ranked results)
+        match self.semantic_search(query, limit) {
+            Ok(results) if !results.is_empty() => {
+                return Ok(results.into_iter().map(|r| r.memory).collect());
+            }
+            _ => {}
+        }
+        // Fall back to raw keyword search
+        self.search_keyword(query, limit)
+    }
+
+    /// Raw keyword search using LIKE (O(n) scan, no ranking)
+    fn search_keyword(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>> {
         let conn = self
             .conn
             .lock()
@@ -1452,7 +1465,7 @@ Format your response as JSON with this structure:
 
         // If semantic search is disabled, fall back to keyword search only
         if !config.enabled {
-            let keyword_results = self.search(query, limit)?;
+            let keyword_results = self.search_keyword(query, limit)?;
             return Ok(keyword_results
                 .into_iter()
                 .map(|memory| SemanticSearchResult {
@@ -1465,7 +1478,7 @@ Format your response as JSON with this structure:
         }
 
         // Get keyword search results
-        let keyword_results = self.search(query, limit * 2)?;
+        let keyword_results = self.search_keyword(query, limit * 2)?;
 
         // Get semantic search results
         let semantic_results = self.semantic_search(query, limit * 2)?;

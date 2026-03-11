@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke as tauriInvoke } from '../lib/tauri-mock';
 
 function stripMarkdown(text: string): string {
   return (
@@ -39,6 +40,7 @@ export interface UseTTSReturn {
   isSpeaking: boolean;
   isSupported: boolean;
   speak: (text: string) => void;
+  speakNative: (text: string) => Promise<void>;
   stop: () => void;
 }
 
@@ -92,6 +94,20 @@ export function useTTS(): UseTTSReturn {
     [isSupported, isSpeaking, stop],
   );
 
+  const speakNative = useCallback(
+    async (text: string) => {
+      const clean = stripMarkdown(text);
+      if (!clean) return;
+      try {
+        await tauriInvoke('voice_tts_speak', { text: clean });
+      } catch {
+        // Fallback to browser TTS when native is unavailable
+        speak(clean);
+      }
+    },
+    [speak],
+  );
+
   // Cancel on unmount
   useEffect(() => {
     return () => {
@@ -99,5 +115,5 @@ export function useTTS(): UseTTSReturn {
     };
   }, [isSupported]);
 
-  return { isSpeaking, isSupported, speak, stop };
+  return { isSpeaking, isSupported, speak, speakNative, stop };
 }

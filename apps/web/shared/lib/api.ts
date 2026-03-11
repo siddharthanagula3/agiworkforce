@@ -4,6 +4,8 @@
  */
 
 import { APIResponse, APIException } from '@shared/stores/query-client';
+import { securityManager } from './security';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 // ========================================
 // API Configuration
@@ -36,36 +38,139 @@ export class APIClient {
   private config: APIConfig;
   private tokenKey = 'auth_token';
   private refreshTokenKey = 'refresh_token';
+  // In-memory cache of decrypted tokens for synchronous header reads.
+  // Populated on setToken/setRefreshToken and on loadTokenFromStorage().
+  private cachedToken: string | null = null;
+  private cachedRefreshToken: string | null = null;
+  private readyPromise: Promise<void>;
 
   constructor(config: Partial<APIConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Load and decrypt any tokens persisted from a previous session.
+    this.readyPromise = this.loadTokenFromStorage();
+  }
+
+  /** Wait for initial token loading to complete. */
+  async ready(): Promise<void> {
+    await this.readyPromise;
   }
 
   // Token management
+
+  /**
+   * Async initialization: decrypt stored tokens into the in-memory cache.
+   * Distinguishes between plaintext JSON (migration path) and corrupted ciphertext.
+   */
+  async loadTokenFromStorage(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    this.cachedToken = await this.decryptOrClearStored(this.tokenKey);
+    this.cachedRefreshToken = await this.decryptOrClearStored(this.refreshTokenKey);
+  }
+
+  /**
+   * Attempt to decrypt a stored value. If it looks like plaintext JSON
+   * (migration from pre-encryption storage), return it as-is. If decryption
+   * fails and the value is not plaintext JSON, clear the corrupted entry.
+   */
+  private async decryptOrClearStored(key: string): Promise<string | null> {
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+
+    try {
+      return await securityManager.decryptAsync(stored);
+    } catch {
+      // Check if the stored value looks like plaintext (migration path).
+      // JWT tokens start with "ey" (base64-encoded JSON header).
+      // Supabase session data starts with '{' or '"'.
+      const firstChar = stored.charAt(0);
+      if (firstChar === '{' || firstChar === '"' || stored.startsWith('ey')) {
+        console.warn(`[APIClient] Plaintext token found in ${key}; using as-is (migration path)`);
+        return stored;
+      }
+
+      // Corrupted ciphertext — clear it
+      console.warn(`[APIClient] Removing corrupted value from ${key}`);
+      localStorage.removeItem(key);
+      return null;
+    }
+  }
+
+  /** Synchronous read for the auth token (uses in-memory cache). */
   private getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(this.tokenKey);
+    return this.cachedToken;
   }
 
-  private setToken(token: string): void {
+  /** Encrypt and persist the auth token; update in-memory cache. */
+  private async setToken(token: string): Promise<void> {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(this.tokenKey, token);
+    this.cachedToken = token; // cache plaintext for synchronous header reads
+    try {
+      const encrypted = await securityManager.encryptAsync(token);
+      localStorage.setItem(this.tokenKey, encrypted);
+    } catch {
+      // Do NOT store plaintext — log warning and skip localStorage persistence
+      console.warn('[APIClient] Encryption unavailable; token stored in memory only');
+    }
+    // Also set as HttpOnly cookie for stronger security
+    getCsrfToken()
+      .then((csrfToken) =>
+        fetch('/api/auth/set-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ token }),
+        }),
+      )
+      .catch(() => {
+        /* non-critical */
+      });
   }
 
+  /** Synchronous read for the refresh token (uses in-memory cache). */
   private getRefreshToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(this.refreshTokenKey);
+    return this.cachedRefreshToken;
   }
 
-  private setRefreshToken(token: string): void {
+  /** Encrypt and persist the refresh token; update in-memory cache. */
+  private async setRefreshToken(token: string): Promise<void> {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(this.refreshTokenKey, token);
+    this.cachedRefreshToken = token;
+    try {
+      const encrypted = await securityManager.encryptAsync(token);
+      localStorage.setItem(this.refreshTokenKey, encrypted);
+    } catch {
+      // Do NOT store plaintext — log warning and skip localStorage persistence
+      console.warn('[APIClient] Encryption unavailable; refresh token stored in memory only');
+    }
+    // Also set as HttpOnly cookie for stronger security
+    getCsrfToken()
+      .then((csrfToken) =>
+        fetch('/api/auth/set-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ refreshToken: token }),
+        }),
+      )
+      .catch(() => {
+        /* non-critical */
+      });
   }
 
   private clearTokens(): void {
     if (typeof window === 'undefined') return;
+    this.cachedToken = null;
+    this.cachedRefreshToken = null;
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.refreshTokenKey);
+    getCsrfToken()
+      .then((csrfToken) =>
+        fetch('/api/auth/clear-token', {
+          method: 'POST',
+          headers: { 'x-csrf-token': csrfToken },
+        }),
+      )
+      .catch(() => {
+        /* non-critical */
+      });
   }
 
   // Build request headers
@@ -140,7 +245,7 @@ export class APIClient {
       });
     }
 
-    this.setToken(newToken);
+    await this.setToken(newToken);
     return newToken;
   }
 
@@ -446,10 +551,10 @@ export class APIClient {
     }>('/auth/login', credentials);
 
     if (response.data?.token) {
-      this.setToken(response.data.token);
+      await this.setToken(response.data.token);
     }
     if (response.data?.refreshToken) {
-      this.setRefreshToken(response.data.refreshToken);
+      await this.setRefreshToken(response.data.refreshToken);
     }
 
     return response;

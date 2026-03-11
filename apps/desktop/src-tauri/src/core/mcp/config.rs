@@ -319,67 +319,46 @@ impl McpServersConfig {
     ///
     /// OAuth tokens are checked first, with automatic fallback to legacy credentials
     /// if OAuth is not configured. Expired OAuth tokens are auto-refreshed.
-    pub fn inject_credentials(&mut self) -> crate::core::mcp::McpResult<()> {
+    pub async fn inject_credentials(&mut self) -> crate::core::mcp::McpResult<()> {
         let db_path = crate::sys::utils::database_path()
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
-        // Try to open database if it exists
-        if db_path.exists() {
-            let conn = open_mcp_settings_db()
-                .map_err(std::io::Error::other)?;
-            for (server_name, config) in &mut self.mcp_servers {
-                for (key, value) in &mut config.env {
-                    // Check for OAuth placeholder first (e.g., "<from_oauth:github>")
-                    if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with(">") {
-                        // Extract provider name before mutating value
+        if !db_path.exists() {
+            return Ok(());
+        }
+
+        // ── Sync phase ─────────────────────────────────────────────────────────
+        // Collect which servers/keys need OAuth refresh vs. can be resolved now.
+        // The DB connection is opened, queried, and dropped before any .await.
+        //
+        // HIGH-008: rusqlite::Connection is !Send — it must NOT be held across an
+        // await point. All synchronous DB access happens here; OAuth HTTP refresh
+        // (async) is performed below after the connection is gone.
+
+        enum Resolved {
+            /// Value was resolved synchronously from DB.
+            Done(String),
+            /// OAuth provider token — needs async HTTP refresh check.
+            NeedsOAuth(String),
+        }
+
+        // Collect (server_name, env_key, resolution) triples
+        let mut plan: Vec<(String, String, Resolved)> = Vec::new();
+
+        {
+            // Scope: conn is dropped at the end of this block
+            let conn = open_mcp_settings_db().map_err(std::io::Error::other)?;
+
+            for (server_name, config) in &self.mcp_servers {
+                for (key, value) in &config.env {
+                    if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with('>') {
                         let provider =
                             value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
-
-                        // Try to get OAuth token
-                        match get_oauth_token(&conn, &provider) {
-                            Ok(token) => {
-                                if key == "OPENAPI_MCP_HEADERS" && provider == "notion" {
-                                    *value = format!(
-                                        r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
-                                        token
-                                    );
-                                } else {
-                                    *value = token;
-                                }
-                                tracing::debug!("Injected OAuth token for provider: {}", provider);
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "OAuth token not available for {} ({}), trying legacy credential",
-                                    provider,
-                                    e
-                                );
-                                // Fall back to legacy credential manager
-                                let cred_key = format!("mcp_credential_{}_{}", server_name, key);
-                                if let Ok(stored_value) = conn.query_row(
-                                    "SELECT value FROM settings_v2 WHERE key = ?1",
-                                    rusqlite::params![cred_key],
-                                    |row| row.get::<_, String>(0),
-                                ) {
-                                    if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                        *value = decrypted;
-                                        tracing::debug!(
-                                            "Injected legacy credential for {} / {}",
-                                            server_name,
-                                            key
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Check for API key placeholders (e.g., "<from_api_key:vercel>")
-                    else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with(">")
-                    {
+                        plan.push((server_name.clone(), key.clone(), Resolved::NeedsOAuth(provider)));
+                    } else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with('>') {
                         let provider =
                             value[API_KEY_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
                         let api_key_storage_key = format!("api_key_{}", provider);
-
                         match conn.query_row(
                             "SELECT value FROM settings_v2 WHERE key = ?1",
                             rusqlite::params![api_key_storage_key],
@@ -387,56 +366,104 @@ impl McpServersConfig {
                         ) {
                             Ok(stored_value) => {
                                 if let Some(decrypted) = decrypt_oauth_token(&stored_value) {
-                                    *value = decrypted;
-                                    tracing::debug!(
-                                        "Injected API key placeholder value for provider: {}",
-                                        provider
-                                    );
+                                    plan.push((server_name.clone(), key.clone(), Resolved::Done(decrypted)));
                                 } else {
-                                    tracing::warn!(
-                                        "Failed to decrypt API key for provider: {}",
-                                        provider
-                                    );
+                                    tracing::warn!("Failed to decrypt API key for provider: {}", provider);
                                 }
                             }
                             Err(_) => {
                                 tracing::warn!("API key not found for provider: {}", provider);
                             }
                         }
-                    }
-                    // Check for legacy credential manager placeholder
-                    else if value == CREDENTIAL_PLACEHOLDER {
+                    } else if value == CREDENTIAL_PLACEHOLDER {
                         let cred_key = format!("mcp_credential_{}_{}", server_name, key);
-                        // Try to get credential from database
                         match conn.query_row(
                             "SELECT value FROM settings_v2 WHERE key = ?1",
                             rusqlite::params![cred_key],
                             |row| row.get::<_, String>(0),
                         ) {
                             Ok(stored_value) => {
-                                // Value is stored encrypted - decrypt using machine key
                                 if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                    *value = decrypted;
+                                    plan.push((server_name.clone(), key.clone(), Resolved::Done(decrypted)));
                                 } else {
                                     tracing::warn!(
                                         "Failed to decrypt credential for {} / {}",
-                                        server_name,
-                                        key
+                                        server_name, key
                                     );
                                 }
                             }
                             Err(_) => {
-                                tracing::warn!(
-                                    "Credential not found for {} / {}",
-                                    server_name,
-                                    key
-                                );
+                                tracing::warn!("Credential not found for {} / {}", server_name, key);
                             }
                         }
                     }
                 }
             }
+        } // conn dropped here — no !Send value crosses the await below
+
+        // ── Async phase ────────────────────────────────────────────────────────
+        // For each NeedsOAuth entry, call the async get_oauth_token (which may
+        // make an HTTP request). All DB connections within get_oauth_token are
+        // also opened and dropped before their own await points.
+        for (server_name, key, resolution) in plan {
+            match resolution {
+                Resolved::Done(val) => {
+                    if let Some(config) = self.mcp_servers.get_mut(&server_name) {
+                        if let Some(entry) = config.env.get_mut(&key) {
+                            *entry = val;
+                        }
+                    }
+                }
+                Resolved::NeedsOAuth(provider) => {
+                    match get_oauth_token(&provider).await {
+                        Ok(token) => {
+                            if let Some(config) = self.mcp_servers.get_mut(&server_name) {
+                                if let Some(entry) = config.env.get_mut(&key) {
+                                    *entry = if key == "OPENAPI_MCP_HEADERS" && provider == "notion" {
+                                        format!(
+                                            r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
+                                            token
+                                        )
+                                    } else {
+                                        token
+                                    };
+                                    tracing::debug!("Injected OAuth token for provider: {}", provider);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "OAuth token not available for {} ({}), trying legacy credential",
+                                provider, e
+                            );
+                            // Fall back to legacy credential synchronously
+                            let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+                            if let Ok(conn) = open_mcp_settings_db() {
+                                if let Ok(stored_value) = conn.query_row(
+                                    "SELECT value FROM settings_v2 WHERE key = ?1",
+                                    rusqlite::params![cred_key],
+                                    |row| row.get::<_, String>(0),
+                                ) {
+                                    if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
+                                        if let Some(config) = self.mcp_servers.get_mut(&server_name) {
+                                            if let Some(entry) = config.env.get_mut(&key) {
+                                                *entry = decrypted;
+                                                tracing::debug!(
+                                                    "Injected legacy credential for {} / {}",
+                                                    server_name, key
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
         }
+
         Ok(())
     }
 }
@@ -471,19 +498,23 @@ pub fn upsert_settings_v2_value(
     Ok(())
 }
 
-/// Get an OAuth token for a provider, auto-refreshing if expired
-///
-/// OAuth tokens are stored with keys:
-/// - `mcp_oauth_{provider}_access_token` - The encrypted access token
-/// - `mcp_oauth_{provider}_refresh_token` - The encrypted refresh token
-/// - `mcp_oauth_{provider}_expires_at` - Token expiry timestamp (Unix seconds)
-fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String, String> {
+/// Synchronous helper: read all OAuth token fields from the DB and return owned values.
+/// The connection is opened and closed within this fn — no `conn` is held across await points.
+struct OAuthTokenData {
+    encrypted_access: String,
+    expires_at: Option<i64>,
+    refresh_token: Option<String>, // already decrypted
+    access_token_key: String,
+    expires_at_key: String,
+}
+
+fn read_oauth_token_data(provider: &str) -> Result<OAuthTokenData, String> {
+    let conn = open_mcp_settings_db()?;
     let access_token_key = format!("mcp_oauth_{}_access_token", provider);
     let expires_at_key = format!("mcp_oauth_{}_expires_at", provider);
     let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
 
-    // Get encrypted access token
-    let encrypted_token: String = conn
+    let encrypted_access: String = conn
         .query_row(
             "SELECT value FROM settings_v2 WHERE key = ?1",
             rusqlite::params![access_token_key],
@@ -491,7 +522,6 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
         )
         .map_err(|_| format!("OAuth access token not found for provider: {}", provider))?;
 
-    // Check expiry
     let expires_at: Option<i64> = conn
         .query_row(
             "SELECT value FROM settings_v2 WHERE key = ?1",
@@ -504,56 +534,88 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
         .ok()
         .flatten();
 
+    let refresh_token: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![refresh_token_key],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|enc| decrypt_oauth_token(&enc));
+
+    // conn is dropped here — no !Send value crosses an await point
+    Ok(OAuthTokenData {
+        encrypted_access,
+        expires_at,
+        refresh_token,
+        access_token_key,
+        expires_at_key,
+    })
+}
+
+/// Write refreshed OAuth token data back to the DB (sync, no async).
+fn store_refreshed_oauth_token(
+    access_token_key: &str,
+    expires_at_key: &str,
+    new_access: &str,
+    new_expires: i64,
+) {
+    let conn = match open_mcp_settings_db() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to open MCP settings DB for storing refreshed OAuth token: {}", e);
+            return;
+        }
+    };
+    let encrypted_new = match encrypt_oauth_token(new_access) {
+        Some(enc) => enc,
+        None => {
+            tracing::error!("Failed to encrypt refreshed OAuth access token for key '{}'", access_token_key);
+            return;
+        }
+    };
+    if let Err(e) = upsert_settings_v2_value(&conn, access_token_key, &encrypted_new, "security", true) {
+        tracing::error!("Failed to persist refreshed OAuth access token for key '{}': {}", access_token_key, e);
+    }
+    if let Err(e) = upsert_settings_v2_value(&conn, expires_at_key, &new_expires.to_string(), "security", false) {
+        tracing::error!("Failed to persist refreshed OAuth expiry for key '{}': {}", expires_at_key, e);
+    }
+}
+
+/// Get an OAuth token for a provider, auto-refreshing if expired.
+///
+/// All DB access is completed synchronously before any `.await`, ensuring
+/// `rusqlite::Connection` (which is `!Send`) never crosses an await point.
+async fn get_oauth_token(provider: &str) -> Result<String, String> {
+    // Sync phase: read all DB data — no !Send values held past this point
+    let data = read_oauth_token_data(provider)?;
+
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
     // Check if token is expired (with 60 second buffer)
-    if let Some(exp) = expires_at {
+    if let Some(exp) = data.expires_at {
         if current_time >= exp - 60 {
-            tracing::info!(
-                "OAuth token for {} is expired, attempting refresh",
-                provider
-            );
+            tracing::info!("OAuth token for {} is expired, attempting refresh", provider);
 
-            // Get refresh token
-            if let Ok(encrypted_refresh) = conn.query_row(
-                "SELECT value FROM settings_v2 WHERE key = ?1",
-                rusqlite::params![refresh_token_key],
-                |row| row.get::<_, String>(0),
-            ) {
-                if let Some(refresh_token) = decrypt_oauth_token(&encrypted_refresh) {
-                    // Attempt to refresh the token
-                    match refresh_oauth_token(provider, &refresh_token) {
-                        Ok((new_access, new_expires)) => {
-                            // Store the new token
-                            if let Some(encrypted_new) = encrypt_oauth_token(&new_access) {
-                                let _ = upsert_settings_v2_value(
-                                    conn,
-                                    &access_token_key,
-                                    &encrypted_new,
-                                    "security",
-                                    true,
-                                );
-                                let _ = upsert_settings_v2_value(
-                                    conn,
-                                    &expires_at_key,
-                                    &new_expires.to_string(),
-                                    "security",
-                                    false,
-                                );
-                                tracing::info!(
-                                    "Successfully refreshed OAuth token for {}",
-                                    provider
-                                );
-                                return Ok(new_access);
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to refresh OAuth token for {}: {}", provider, e);
-                            // Fall through to use possibly stale token
-                        }
+            if let Some(refresh_token) = data.refresh_token {
+                // Async phase: HTTP token refresh — no DB connection in scope here
+                match refresh_oauth_token(provider, &refresh_token).await {
+                    Ok((new_access, new_expires)) => {
+                        store_refreshed_oauth_token(
+                            &data.access_token_key,
+                            &data.expires_at_key,
+                            &new_access,
+                            new_expires,
+                        );
+                        tracing::info!("Successfully refreshed OAuth token for {}", provider);
+                        return Ok(new_access);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to refresh OAuth token for {}: {}", provider, e);
+                        // Fall through to use possibly stale token
                     }
                 }
             }
@@ -561,7 +623,7 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
     }
 
     // Decrypt and return the access token
-    decrypt_oauth_token(&encrypted_token)
+    decrypt_oauth_token(&data.encrypted_access)
         .ok_or_else(|| format!("Failed to decrypt OAuth token for provider: {}", provider))
 }
 
@@ -634,16 +696,13 @@ fn get_oauth_provider_config(provider: &str) -> Option<OAuthProviderConfig> {
     }
 }
 
-/// Refresh an OAuth token using the refresh token
-///
-/// Makes HTTP requests to the provider's token endpoint to exchange
-/// the refresh token for a new access token.
-fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i64), String> {
-    // Get provider configuration
-    let provider_config = get_oauth_provider_config(provider)
-        .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
-
-    // Get client credentials from database
+/// Synchronous helper: read OAuth client credentials from DB for a provider.
+/// Returns (client_id, client_secret). Connection is opened and dropped here.
+fn read_oauth_client_credentials(
+    provider: &str,
+    client_id_keys: &[&str],
+    client_secret_keys: &[&str],
+) -> Result<(String, String), String> {
     let conn = open_mcp_settings_db()?;
 
     let load_credential = |keys: &[&str], label: &str| -> Result<String, String> {
@@ -653,24 +712,60 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
                 rusqlite::params![key],
                 |row| row.get(0),
             );
-
             if let Ok(stored_value) = result {
-                // Newer credentials are encrypted; legacy values may be plaintext.
                 return Ok(decrypt_oauth_token(&stored_value).unwrap_or(stored_value));
             }
         }
-
-        Err(format!(
-            "OAuth {} not found for provider: {}",
-            label, provider
-        ))
+        Err(format!("OAuth {} not found for provider: {}", label, provider))
     };
 
-    let client_id = load_credential(provider_config.client_id_keys, "client_id")?;
-    let client_secret = load_credential(provider_config.client_secret_keys, "client_secret")?;
+    let client_id = load_credential(client_id_keys, "client_id")?;
+    let client_secret = load_credential(client_secret_keys, "client_secret")?;
+    // conn dropped here
+    Ok((client_id, client_secret))
+}
 
-    // Use blocking HTTP client since we're in a sync context
-    let client = reqwest::blocking::Client::new();
+/// Store a newly-issued refresh token back to the DB (sync).
+fn store_new_refresh_token(provider: &str, new_refresh_token: &str) {
+    let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
+    let encrypted_refresh = match encrypt_oauth_token(new_refresh_token) {
+        Some(enc) => enc,
+        None => {
+            tracing::error!("Failed to encrypt new refresh token for provider: {}", provider);
+            return;
+        }
+    };
+    let conn = match open_mcp_settings_db() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to open MCP settings DB for storing refresh token for provider '{}': {}", provider, e);
+            return;
+        }
+    };
+    if let Err(e) = upsert_settings_v2_value(&conn, &refresh_token_key, &encrypted_refresh, "security", true) {
+        tracing::error!("Failed to persist refresh token for provider '{}': {}", provider, e);
+    } else {
+        tracing::debug!("Stored new refresh token for provider: {}", provider);
+    }
+}
+
+/// Refresh an OAuth token using the refresh token.
+///
+/// All DB access is completed before any `.await` to ensure `rusqlite::Connection`
+/// (which is `!Send`) never crosses an await point.
+async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i64), String> {
+    // Sync phase: resolve provider config and read DB credentials — no !Send across await
+    let provider_config = get_oauth_provider_config(provider)
+        .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
+
+    let (client_id, client_secret) = read_oauth_client_credentials(
+        provider,
+        provider_config.client_id_keys,
+        provider_config.client_secret_keys,
+    )?;
+
+    // Async phase: HTTP request — no DB connection in scope
+    let client = reqwest::Client::new();
 
     let response = client
         .post(provider_config.token_url)
@@ -682,11 +777,12 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
             ("client_secret", &client_secret),
         ])
         .send()
+        .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().unwrap_or_default();
+        let body = response.text().await.unwrap_or_default();
         return Err(format!(
             "Token refresh failed with status {}: {}",
             status, body
@@ -695,6 +791,7 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
 
     let token_response: serde_json::Value = response
         .json()
+        .await
         .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
     // Extract access token
@@ -717,19 +814,9 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
 
     let expires_at = current_time + expires_in;
 
-    // If a new refresh token is provided, store it
+    // If a new refresh token is provided, store it (sync DB write, no conn held across await)
     if let Some(new_refresh_token) = token_response.get("refresh_token").and_then(|v| v.as_str()) {
-        let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
-        if let Some(encrypted_refresh) = encrypt_oauth_token(new_refresh_token) {
-            let _ = upsert_settings_v2_value(
-                &conn,
-                &refresh_token_key,
-                &encrypted_refresh,
-                "security",
-                true,
-            );
-            tracing::debug!("Stored new refresh token for provider: {}", provider);
-        }
+        store_new_refresh_token(provider, new_refresh_token);
     }
 
     tracing::info!(

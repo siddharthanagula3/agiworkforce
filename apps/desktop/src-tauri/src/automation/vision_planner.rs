@@ -155,10 +155,13 @@ impl ActionPlanner {
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {
-            provider: Some(crate::core::llm::Provider::Anthropic),
+            provider: None,
             model: None,
             strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
-            context: None,
+            context: Some(crate::core::llm::llm_router::RouterContext {
+                requires_vision: true,
+                ..Default::default()
+            }),
             prefer_cloud_credits: false,
         };
 

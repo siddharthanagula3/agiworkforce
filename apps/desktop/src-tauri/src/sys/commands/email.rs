@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
-use tauri::{command, AppHandle, Manager};
+use tauri::{AppHandle, Manager};
 use tracing::{debug, error, info, warn};
 
 use crate::features::communications::{
@@ -414,7 +414,7 @@ pub struct SendEmailRequest {
     pub attachments: Vec<String>,
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_connect(
     app_handle: AppHandle,
     provider: String,
@@ -467,7 +467,7 @@ pub async fn email_connect(
     Ok(record.into_account())
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_list_accounts(app_handle: AppHandle) -> Result<Vec<EmailAccount>> {
     let conn = open_connection(&app_handle)?;
     let mut stmt = conn
@@ -491,7 +491,7 @@ pub async fn email_list_accounts(app_handle: AppHandle) -> Result<Vec<EmailAccou
     Ok(accounts)
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_remove_account(app_handle: AppHandle, account_id: i64) -> Result<()> {
     info!("Removing email account {}", account_id);
     let conn = open_connection(&app_handle)?;
@@ -510,7 +510,7 @@ pub async fn email_remove_account(app_handle: AppHandle, account_id: i64) -> Res
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_list_folders(app_handle: AppHandle, account_id: i64) -> Result<Vec<String>> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
@@ -531,7 +531,7 @@ pub async fn email_list_folders(app_handle: AppHandle, account_id: i64) -> Resul
     Ok(folders)
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_fetch_inbox(
     app_handle: AppHandle,
     account_id: i64,
@@ -570,7 +570,7 @@ pub async fn email_fetch_inbox(
     Ok(emails)
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_mark_read(
     app_handle: AppHandle,
     account_id: i64,
@@ -596,7 +596,7 @@ pub async fn email_mark_read(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_delete(app_handle: AppHandle, account_id: i64, uid: u32) -> Result<()> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
@@ -617,7 +617,7 @@ pub async fn email_delete(app_handle: AppHandle, account_id: i64, uid: u32) -> R
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_move_message(
     app_handle: AppHandle,
     account_id: i64,
@@ -654,7 +654,7 @@ pub async fn email_move_message(
     Ok(())
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_download_attachment(
     app_handle: AppHandle,
     account_id: i64,
@@ -686,7 +686,7 @@ pub async fn email_download_attachment(
     Ok(file_path)
 }
 
-#[command]
+#[tauri::command]
 pub async fn email_send(app_handle: AppHandle, request: SendEmailRequest) -> Result<String> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, request.account_id)?;
@@ -717,7 +717,7 @@ pub async fn email_send(app_handle: AppHandle, request: SendEmailRequest) -> Res
 }
 
 // AUDIT-EMAIL-077 fix: Alias for email_fetch_inbox for frontend compatibility
-#[command]
+#[tauri::command]
 pub async fn email_list_messages(
     app_handle: AppHandle,
     account_id: i64,
@@ -729,7 +729,7 @@ pub async fn email_list_messages(
 }
 
 // AUDIT-EMAIL-077 fix: Alias for email_send for frontend compatibility
-#[command]
+#[tauri::command]
 pub async fn email_send_message(
     app_handle: AppHandle,
     request: SendEmailRequest,
@@ -738,7 +738,7 @@ pub async fn email_send_message(
 }
 
 // AUDIT-EMAIL-077 fix: New command to get a single message
-#[command]
+#[tauri::command]
 pub async fn email_get_message(
     app_handle: AppHandle,
     account_id: i64,
@@ -769,7 +769,7 @@ pub async fn email_get_message(
 }
 
 // AUDIT-EMAIL-077 fix: New command to search emails
-#[command]
+#[tauri::command]
 pub async fn email_search(
     app_handle: AppHandle,
     account_id: i64,
@@ -829,19 +829,19 @@ async fn contact_manager(app_handle: &AppHandle) -> Result<ContactManager> {
     ContactManager::new(db_path.to_string_lossy().as_ref()).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_create(app_handle: AppHandle, contact: Contact) -> Result<i64> {
     let manager = contact_manager(&app_handle).await?;
     manager.create_contact(&contact).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_get(app_handle: AppHandle, id: i64) -> Result<Option<Contact>> {
     let manager = contact_manager(&app_handle).await?;
     manager.get_contact(id).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_list(
     app_handle: AppHandle,
     limit: Option<usize>,
@@ -851,7 +851,7 @@ pub async fn contact_list(
     manager.list_contacts(limit, offset).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_search(
     app_handle: AppHandle,
     query: String,
@@ -861,28 +861,28 @@ pub async fn contact_search(
     manager.search_contacts(&query, limit).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_update(app_handle: AppHandle, contact: Contact) -> Result<()> {
     info!("Updating contact {}", contact.id);
     let manager = contact_manager(&app_handle).await?;
     manager.update_contact(&contact).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_delete(app_handle: AppHandle, id: i64) -> Result<()> {
     info!("Deleting contact {}", id);
     let manager = contact_manager(&app_handle).await?;
     manager.delete_contact(id).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_import_vcard(app_handle: AppHandle, file_path: String) -> Result<usize> {
     info!("Importing contacts from {}", file_path);
     let manager = contact_manager(&app_handle).await?;
     manager.import_vcard(&file_path).await
 }
 
-#[command]
+#[tauri::command]
 pub async fn contact_export_vcard(app_handle: AppHandle, file_path: String) -> Result<usize> {
     info!("Exporting contacts to {}", file_path);
     let manager = contact_manager(&app_handle).await?;
@@ -1039,7 +1039,7 @@ pub struct MigrationResult {
 /// - How many accounts have credentials in keyring
 /// - How many accounts have credentials in SQLite (encrypted)
 /// - How many accounts have legacy Base64 storage
-#[command]
+#[tauri::command]
 pub async fn email_check_keyring_status(app_handle: AppHandle) -> Result<KeyringStatus> {
     let conn = open_connection(&app_handle)?;
 
@@ -1111,7 +1111,7 @@ pub async fn email_check_keyring_status(app_handle: AppHandle) -> Result<Keyring
 ///    - Update the database marker
 ///
 /// Returns a list of migration results for each account.
-#[command]
+#[tauri::command]
 pub async fn email_migrate_credentials(app_handle: AppHandle) -> Result<Vec<MigrationResult>> {
     info!("Starting email credential migration to OS keyring");
 

@@ -635,6 +635,16 @@ impl LLMRouter {
             Provider::OpenAI,
             Provider::Google,
             Provider::DeepSeek,
+            Provider::Groq,
+            Provider::Together,
+            Provider::Fireworks,
+            Provider::Cerebras,
+            Provider::DeepInfra,
+            Provider::Cohere,
+            Provider::AI21,
+            Provider::Sambanova,
+            Provider::Azure,
+            Provider::Bedrock,
             Provider::Qwen,
             Provider::Moonshot,
             Provider::Zhipu,
@@ -747,6 +757,46 @@ impl LLMRouter {
         self.set_provider(Provider::ManagedCloud, provider);
     }
 
+    pub fn set_groq(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Groq, provider);
+    }
+
+    pub fn set_together(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Together, provider);
+    }
+
+    pub fn set_fireworks(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Fireworks, provider);
+    }
+
+    pub fn set_cerebras(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Cerebras, provider);
+    }
+
+    pub fn set_deepinfra(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::DeepInfra, provider);
+    }
+
+    pub fn set_cohere(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Cohere, provider);
+    }
+
+    pub fn set_ai21(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::AI21, provider);
+    }
+
+    pub fn set_sambanova(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Sambanova, provider);
+    }
+
+    pub fn set_azure(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Azure, provider);
+    }
+
+    pub fn set_bedrock(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Bedrock, provider);
+    }
+
     /// Get the cumulative cost (USD) across all LLM invocations in this session.
     pub fn get_cumulative_cost(&self) -> f64 {
         *self.cumulative_cost.lock()
@@ -840,6 +890,7 @@ impl LLMRouter {
             if !order
                 .iter()
                 .any(|existing| existing.provider == suggestion.provider)
+                && self.has_provider(suggestion.provider)
             {
                 order.push(RouteCandidate {
                     strategy: None,
@@ -884,6 +935,16 @@ impl LLMRouter {
             Provider::Google,
             Provider::XAI,
             Provider::DeepSeek,
+            Provider::Groq,
+            Provider::Together,
+            Provider::Fireworks,
+            Provider::Cerebras,
+            Provider::DeepInfra,
+            Provider::Cohere,
+            Provider::AI21,
+            Provider::Sambanova,
+            Provider::Azure,
+            Provider::Bedrock,
             Provider::Qwen,
             Provider::Moonshot,
             Provider::Perplexity,
@@ -995,6 +1056,20 @@ impl LLMRouter {
 
         // Enforce output protocol to prevent XML/tool-tag leakage
         crate::core::llm::prompt_policy::apply_no_xml_rule(&mut routed_request);
+
+        // Strip tools for providers that don't support function calling (e.g. Perplexity).
+        // The per-provider adapter also strips them at serialization time, but doing it here
+        // makes the intent explicit and avoids building/serializing a tool list unnecessarily.
+        if !provider.supports_function_calling() {
+            if routed_request.tools.is_some() {
+                tracing::debug!(
+                    provider = %candidate.provider.as_string(),
+                    "Provider does not support function calling — stripping tools from request"
+                );
+            }
+            routed_request.tools = None;
+            routed_request.tool_choice = None;
+        }
 
         let mut response = provider
             .send_message(&routed_request)
@@ -1948,6 +2023,58 @@ impl LLMRouter {
                 TaskCategory::Complex => "gpt-5".to_string(),
                 TaskCategory::Creative => "gpt-5".to_string(),
             },
+            // New providers — use their best available models
+            Provider::Groq => match task {
+                TaskCategory::Simple => "llama-3.3-70b-versatile".to_string(),
+                TaskCategory::Complex => "llama-3.3-70b-versatile".to_string(),
+                TaskCategory::Creative => "llama-3.3-70b-versatile".to_string(),
+            },
+            Provider::Together => match task {
+                TaskCategory::Simple => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
+                TaskCategory::Complex => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
+                TaskCategory::Creative => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
+            },
+            Provider::Fireworks => match task {
+                TaskCategory::Simple => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
+                TaskCategory::Complex => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
+                TaskCategory::Creative => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
+            },
+            Provider::Cerebras => match task {
+                TaskCategory::Simple => "llama-3.3-70b".to_string(),
+                TaskCategory::Complex => "llama-3.3-70b".to_string(),
+                TaskCategory::Creative => "llama-3.3-70b".to_string(),
+            },
+            Provider::DeepInfra => match task {
+                TaskCategory::Simple => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
+                TaskCategory::Complex => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
+                TaskCategory::Creative => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
+            },
+            Provider::Cohere => match task {
+                TaskCategory::Simple => "command-r-plus".to_string(),
+                TaskCategory::Complex => "command-r-plus".to_string(),
+                TaskCategory::Creative => "command-r-plus".to_string(),
+            },
+            Provider::AI21 => match task {
+                TaskCategory::Simple => "jamba-1.5-mini".to_string(),
+                TaskCategory::Complex => "jamba-1.5-large".to_string(),
+                TaskCategory::Creative => "jamba-1.5-large".to_string(),
+            },
+            Provider::Sambanova => match task {
+                TaskCategory::Simple => "Meta-Llama-3.3-70B-Instruct".to_string(),
+                TaskCategory::Complex => "Meta-Llama-3.3-70B-Instruct".to_string(),
+                TaskCategory::Creative => "Meta-Llama-3.3-70B-Instruct".to_string(),
+            },
+            Provider::Azure => match task {
+                // Azure uses deployment names — these are typical defaults
+                TaskCategory::Simple => "gpt-4o-mini".to_string(),
+                TaskCategory::Complex => "gpt-4o".to_string(),
+                TaskCategory::Creative => "gpt-4o".to_string(),
+            },
+            Provider::Bedrock => match task {
+                TaskCategory::Simple => "anthropic.claude-3-haiku-20240307-v1:0".to_string(),
+                TaskCategory::Complex => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+                TaskCategory::Creative => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+            },
         }
     }
 
@@ -2286,6 +2413,20 @@ impl LLMRouter {
         }
 
         routed_request.stream = true;
+
+        // Strip tools for providers that don't support function calling (e.g. Perplexity).
+        // Mirrors the guard in invoke_candidate; keeps both paths consistent and avoids
+        // sending tool definitions that will just be stripped by the adapter anyway.
+        if !provider.supports_function_calling() {
+            if routed_request.tools.is_some() {
+                tracing::debug!(
+                    provider = %candidate.provider.as_string(),
+                    "Provider does not support function calling — stripping tools from streaming request"
+                );
+            }
+            routed_request.tools = None;
+            routed_request.tool_choice = None;
+        }
 
         // C1 fix: pre-flight session cost cap check for the streaming path.
         //

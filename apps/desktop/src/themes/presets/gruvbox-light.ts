@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const gruvboxLight: ThemeDefinition = {
+  id: 'gruvbox-light',
+  name: 'Gruvbox Light',
+  author: 'morhetz',
+  variant: 'light',
+  colors: {
+    background: '48 87% 92%',
+    foreground: '24 10% 22%',
+    card: '48 87% 95%',
+    cardForeground: '24 10% 22%',
+    popover: '48 87% 95%',
+    popoverForeground: '24 10% 22%',
+    primary: '33 100% 34%',
+    primaryForeground: '48 87% 92%',
+    secondary: '48 87% 85%',
+    secondaryForeground: '24 10% 22%',
+    muted: '48 87% 85%',
+    mutedForeground: '24 10% 45%',
+    accent: '100 27% 38%',
+    accentForeground: '48 87% 92%',
+    destructive: '5 74% 45%',
+    destructiveForeground: '48 87% 92%',
+    border: '48 87% 78%',
+    input: '48 87% 78%',
+    ring: '33 100% 34%',
+    syntax: {
+      keyword: '#9d0006',
+      string: '#79740e',
+      comment: '#928374',
+      function: '#b57614',
+      number: '#8f3f71',
+      operator: '#427b58',
+    },
+  },
+};

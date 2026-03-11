@@ -13,6 +13,62 @@ pub struct PostgresClient {
 }
 
 impl PostgresClient {
+    /// SECURITY: Validates a SQL statement for safety in query mode.
+    /// Blocks DDL/DML operations, stacked queries, and comment injection.
+    /// Only SELECT, SHOW, and EXPLAIN statements are allowed.
+    fn validate_query_sql(sql: &str) -> Result<(), Error> {
+        let sql_upper = sql.trim().to_uppercase();
+
+        // Block empty queries
+        if sql_upper.is_empty() {
+            return Err(Error::Other("SQL query cannot be empty".to_string()));
+        }
+
+        // Block stacked queries (multiple statements via semicolons)
+        if sql.contains(';') {
+            return Err(Error::Other(
+                "Multiple SQL statements (semicolons) are not allowed in query mode".to_string(),
+            ));
+        }
+
+        // Block SQL comment injection
+        if sql.contains("--") || sql.contains("/*") {
+            return Err(Error::Other(
+                "SQL comments are not allowed in query mode".to_string(),
+            ));
+        }
+
+        // Only allow read-only statements
+        let allowed_prefixes = ["SELECT", "SHOW", "EXPLAIN", "WITH"];
+        let is_allowed = allowed_prefixes
+            .iter()
+            .any(|prefix| sql_upper.starts_with(prefix));
+
+        if !is_allowed {
+            return Err(Error::Other(format!(
+                "Only SELECT, SHOW, and EXPLAIN statements are allowed in query mode. Got: {}",
+                sql_upper.chars().take(30).collect::<String>()
+            )));
+        }
+
+        // Block dangerous keywords even within allowed statements (e.g., subqueries with mutations)
+        let blocked_keywords = [
+            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE",
+            "GRANT", "REVOKE", "COPY", "PG_READ_FILE", "PG_WRITE_FILE",
+            "LO_IMPORT", "LO_EXPORT",
+        ];
+        for keyword in &blocked_keywords {
+            if sql_upper.contains(keyword) {
+                return Err(Error::Other(format!(
+                    "SQL operation '{}' is not allowed in query mode",
+                    keyword
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn new() -> Self {
         Self {
             pools: Arc::new(RwLock::new(HashMap::new())),
@@ -79,7 +135,10 @@ impl PostgresClient {
     pub async fn execute_query(&self, connection_id: &str, sql: &str) -> Result<QueryResult> {
         let start = std::time::Instant::now();
 
-        tracing::debug!("PostgreSQL query: {}", sql);
+        // SECURITY: Validate SQL statement before execution
+        Self::validate_query_sql(sql)?;
+
+        tracing::info!("[SECURITY][PostgreSQL] Executing query on '{}': {}", connection_id, sql);
 
         let pool = self.get_pool(connection_id).await?;
         let client = pool
@@ -147,6 +206,15 @@ impl PostgresClient {
         queries: &[String],
     ) -> Result<Vec<QueryResult>> {
         tracing::info!("Executing batch of {} queries", queries.len());
+
+        // SECURITY: Validate each query in the batch
+        for (i, query) in queries.iter().enumerate() {
+            Self::validate_query_sql(query).map_err(|e| {
+                Error::Other(format!("Batch query {} validation failed: {}", i + 1, e))
+            })?;
+        }
+
+        tracing::info!("[SECURITY][PostgreSQL] Executing validated batch of {} queries on '{}'", queries.len(), connection_id);
 
         let pool = self.get_pool(connection_id).await?;
         let mut client = pool

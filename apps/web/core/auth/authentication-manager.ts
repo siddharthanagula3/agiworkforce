@@ -103,7 +103,7 @@ class AuthService {
       // SECURITY: Check if account is locked before attempting login
       const lockoutCheck = await accountLockoutService.checkLockout(loginData.email);
       if (lockoutCheck.isLocked) {
-        logger.auth(`Login blocked - account locked: ${loginData.email}`);
+        logger.auth(`Login blocked - account locked: ${loginData.email.slice(0, 3)}***`);
         return {
           user: null,
           error: lockoutCheck.message,
@@ -123,12 +123,12 @@ class AuthService {
           userAgent: loginData.userAgent,
         });
 
-        logger.auth(`Login failed for ${loginData.email}: ${error.message}`);
+        logger.auth(`Login failed for ${loginData.email.slice(0, 3)}***`);
 
         // Return enhanced error with lockout info
         return {
           user: null,
-          error: failedResult.isLocked ? failedResult.message : error.message,
+          error: failedResult.isLocked ? failedResult.message : 'Invalid email or password',
           attemptsRemaining: failedResult.attemptsRemaining,
           lockout: failedResult.isLocked
             ? {
@@ -172,7 +172,7 @@ class AuthService {
         user_metadata: data.user.user_metadata,
       };
 
-      logger.auth(`Login successful: ${loginData.email}`);
+      logger.auth(`Login successful: ${loginData.email.slice(0, 3)}***`);
       return { user: authUser, error: null };
     } catch (error) {
       // Updated: Jan 15th 2026 - Fixed missing error type check

@@ -56,8 +56,10 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
 
-      - name: Dependency audit (JS)
-        # Non-blocking: upstream advisories should not block CI for our code changes
+      - name: Dependency audit (JS) — critical (blocking)
+        run: pnpm audit --audit-level=critical
+
+      - name: Dependency audit (JS) — high (advisory)
         continue-on-error: true
         run: pnpm audit --audit-level=high
 
@@ -83,7 +85,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: '1.90.0'
+          toolchain: '1.94.0'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
@@ -94,16 +96,20 @@ jobs:
           cache-directories: ~/.cargo/bin
 
       - name: Ensure clippy is available
-        run: rustup component add clippy --toolchain 1.90.0
+        run: rustup component add clippy --toolchain 1.94.0
 
       # H41: Verify exact Rust toolchain version before running clippy/tests
       - name: Verify Rust toolchain
         run: rustup show active-toolchain && rustc --version && cargo --version
 
-      - name: Dependency audit (Rust)
-        # Non-blocking: upstream advisories should not block CI for our code changes
+      - name: Dependency audit (Rust) — critical (blocking)
+        run: cargo install cargo-audit --version 0.22.1 --locked --quiet && cargo audit --deny warnings
+        env:
+          CARGO_HOME: ~/.cargo
+
+      - name: Dependency audit (Rust) — high (advisory)
         continue-on-error: true
-        run: cargo install cargo-audit --version 0.22.1 --locked --quiet && cargo audit
+        run: cargo audit
         env:
           CARGO_HOME: ~/.cargo
 
@@ -220,7 +226,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: '1.90.0'
+          toolchain: '1.94.0'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
@@ -232,8 +238,38 @@ jobs:
           key: all-features
 
       - name: Ensure clippy is available
-        run: rustup component add clippy --toolchain 1.90.0
+        run: rustup component add clippy --toolchain 1.94.0
 
       - name: Clippy (all features, includes optional OCR/vision)
         # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # macOS smoke check: compile + clippy on the primary target platform.
+  # Runs after the main check job passes to avoid wasting macOS runner minutes on bad code.
+  macos-smoke:
+    name: macOS Rust smoke (cargo check + clippy)
+    runs-on: macos-latest
+    needs: check
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.94.0'
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'apps/desktop/src-tauri -> target'
+          cache-on-failure: true
+          key: macos-smoke
+
+      - name: cargo check (default features, macOS)
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --workspace
+
+      - name: Clippy (default features, macOS)
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code

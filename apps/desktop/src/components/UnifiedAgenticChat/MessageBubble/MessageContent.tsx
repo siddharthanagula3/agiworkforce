@@ -253,9 +253,11 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               );
             },
             a({ href, children }) {
+              // Block javascript:, data:, and other dangerous schemes
+              const safeHref = href && /^https?:\/\//i.test(href) ? href : '#';
               return (
                 <a
-                  href={href}
+                  href={safeHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"

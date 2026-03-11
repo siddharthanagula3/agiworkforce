@@ -233,14 +233,9 @@ export const useAuthCoreStore = create<AuthCoreStore>()(
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
-          user: state.user
-            ? {
-                id: state.user.id,
-                email: state.user.email,
-                name: state.user.name,
-                avatar: state.user.avatar,
-              }
-            : null,
+          // User PII is intentionally excluded from persisted storage (CRIT-003).
+          // isAuthenticated is persisted only to avoid a flash of unauthenticated UI on startup.
+          // Full user details are re-hydrated from the live Supabase session on app load.
           isAuthenticated: state.isAuthenticated,
         }),
         onRehydrateStorage: () => (state) => {

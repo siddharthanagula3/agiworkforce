@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::{command, State};
+use tauri::State;
 use uuid::Uuid;
 
 /// Knowledge entry stored in the knowledge base
@@ -53,7 +53,7 @@ impl KnowledgeState {
 /// This is a simple implementation that stores the content without embeddings.
 /// In a production system, this would generate embeddings and store them
 /// in a vector database for semantic search.
-#[command]
+#[tauri::command]
 pub async fn knowledge_add(
     content: String,
     source: String,
@@ -83,7 +83,7 @@ pub async fn knowledge_add(
 ///
 /// This is a simple implementation that does keyword matching.
 /// In a production system, this would use vector similarity search.
-#[command]
+#[tauri::command]
 pub async fn knowledge_query(
     query: String,
     limit: usize,

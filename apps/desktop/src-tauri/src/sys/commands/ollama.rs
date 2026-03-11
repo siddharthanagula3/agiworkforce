@@ -84,8 +84,7 @@ struct OllamaApiModelDetails {
     format: Option<String>,
 }
 
-/// Default Ollama API endpoint
-const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
+use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
 /// Check if Ollama server is running and accessible
 ///

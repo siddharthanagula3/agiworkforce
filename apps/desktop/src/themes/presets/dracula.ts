@@ -1,0 +1,37 @@
+import type { ThemeDefinition } from '../types';
+
+export const dracula: ThemeDefinition = {
+  id: 'dracula',
+  name: 'Dracula',
+  author: 'Zeno Rocha',
+  variant: 'dark',
+  colors: {
+    background: '231 15% 18%',
+    foreground: '60 30% 96%',
+    card: '232 14% 15%',
+    cardForeground: '60 30% 96%',
+    popover: '232 14% 15%',
+    popoverForeground: '60 30% 96%',
+    primary: '265 89% 78%',
+    primaryForeground: '231 15% 18%',
+    secondary: '232 14% 22%',
+    secondaryForeground: '60 30% 96%',
+    muted: '232 14% 22%',
+    mutedForeground: '233 14% 55%',
+    accent: '135 94% 65%',
+    accentForeground: '231 15% 18%',
+    destructive: '0 100% 67%',
+    destructiveForeground: '231 15% 18%',
+    border: '232 14% 28%',
+    input: '232 14% 28%',
+    ring: '265 89% 78%',
+    syntax: {
+      keyword: '#ff79c6',
+      string: '#f1fa8c',
+      comment: '#6272a4',
+      function: '#50fa7b',
+      number: '#bd93f9',
+      operator: '#ff79c6',
+    },
+  },
+};

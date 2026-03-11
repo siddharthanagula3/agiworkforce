@@ -72,7 +72,7 @@ pub(crate) static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> =
     Lazy::new(|| Mutex::new(None));
 
 // Pending messages queue for mid-task user input
-pub(crate) static PENDING_MESSAGES: Lazy<Mutex<Vec<super::pending::PendingUserMessage>>> =
+pub(crate) static PENDING_MESSAGES: Lazy<Mutex<Vec<super::PendingUserMessage>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
 // Tracks tool_call IDs explicitly cancelled by the user so long-running handlers can stop early.
 pub(crate) static CANCELLED_TOOL_CALLS: Lazy<Mutex<HashSet<String>>> =

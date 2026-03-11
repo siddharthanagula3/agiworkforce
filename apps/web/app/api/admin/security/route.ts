@@ -6,6 +6,15 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
+import { createError, type AppError } from '@/lib/errors';
+
+/** Convert an AppError to a NextResponse with structured error body. */
+function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
+  return NextResponse.json(
+    { error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) } },
+    { status: err.statusCode, ...(headers ? { headers } : {}) },
+  );
+}
 
 const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
 const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
@@ -81,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security dashboard access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse(createError.unauthorized());
     }
 
     const { searchParams } = new URL(request.url);
@@ -110,9 +119,8 @@ export async function GET(request: NextRequest) {
           ? (rawSeverity as 'low' | 'medium' | 'high' | 'critical')
           : null;
         if (rawSeverity && !severity) {
-          return NextResponse.json(
-            { error: `Invalid severity. Must be one of: ${validSeverities.join(', ')}` },
-            { status: 400 },
+          return errorResponse(
+            createError.badRequest(`Invalid severity. Must be one of: ${validSeverities.join(', ')}`),
           );
         }
         const eventType = searchParams.get('eventType') as string | null;
@@ -129,7 +137,7 @@ export async function GET(request: NextRequest) {
       case 'user': {
         const userId = searchParams.get('userId');
         if (!userId) {
-          return NextResponse.json({ error: 'userId parameter required' }, { status: 400 });
+          return errorResponse(createError.badRequest('userId parameter required'));
         }
         const events = await SecurityMonitoringService.getEventsByUser(userId);
         return NextResponse.json({ events, count: events.length });
@@ -146,20 +154,16 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json(
-          { error: 'Unknown action. Supported: dashboard, metrics, alerts, events, user, ips' },
-          { status: 400 },
+        return errorResponse(
+          createError.badRequest('Unknown action. Supported: dashboard, metrics, alerts, events, user, ips'),
         );
     }
   } catch (error) {
     logger.error({ error }, 'Error in security monitoring API');
     if (isDbUnavailableError(error)) {
-      return NextResponse.json(
-        { error: 'Database temporarily unavailable' },
-        { status: 503, headers: { 'Retry-After': '30' } },
-      );
+      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), { 'Retry-After': '30' });
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return errorResponse(createError.internal());
   }
 }
 
@@ -178,13 +182,13 @@ export async function POST(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse(createError.unauthorized());
     }
 
     // Body size guard: cap admin payloads to prevent memory exhaustion from oversized JSON
     const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
     if (contentLength > 8192) {
-      return NextResponse.json({ error: { code: 'PAYLOAD_TOO_LARGE' } }, { status: 413 });
+      return errorResponse(createError.payloadTooLarge());
     }
 
     const { searchParams } = new URL(request.url);
@@ -208,15 +212,15 @@ export async function POST(request: NextRequest) {
         };
 
         if (!targetUserId || !reason) {
-          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+          return errorResponse(createError.badRequest('userId and reason are required'));
         }
 
         if (targetUserId === adminUserId) {
-          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+          return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
         if (!supabaseAdmin) {
-          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+          return errorResponse(createError.internal('Server configuration error'));
         }
 
         const { error: updateError } = await supabaseAdmin
@@ -226,7 +230,7 @@ export async function POST(request: NextRequest) {
 
         if (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
-          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+          return errorResponse(createError.internal('Failed to update account status'));
         }
 
         // Session invalidation is handled at the middleware level:
@@ -258,15 +262,15 @@ export async function POST(request: NextRequest) {
         };
 
         if (!targetUserId || !reason) {
-          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+          return errorResponse(createError.badRequest('userId and reason are required'));
         }
 
         if (targetUserId === adminUserId) {
-          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+          return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
         if (!supabaseAdmin) {
-          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+          return errorResponse(createError.internal('Server configuration error'));
         }
 
         const { error: updateError } = await supabaseAdmin
@@ -276,7 +280,7 @@ export async function POST(request: NextRequest) {
 
         if (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
-          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+          return errorResponse(createError.internal('Failed to update account status'));
         }
 
         // Belt-and-suspenders: also set Supabase-level ban in addition to middleware check
@@ -317,15 +321,15 @@ export async function POST(request: NextRequest) {
         };
 
         if (!targetUserId || !reason) {
-          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+          return errorResponse(createError.badRequest('userId and reason are required'));
         }
 
         if (targetUserId === adminUserId) {
-          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+          return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
         if (!supabaseAdmin) {
-          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+          return errorResponse(createError.internal('Server configuration error'));
         }
 
         const { error: updateError } = await supabaseAdmin
@@ -335,7 +339,7 @@ export async function POST(request: NextRequest) {
 
         if (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
-          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+          return errorResponse(createError.internal('Failed to update account status'));
         }
 
         // Remove any Supabase-level ban
@@ -366,21 +370,15 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json(
-          {
-            error: 'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user',
-          },
-          { status: 400 },
+        return errorResponse(
+          createError.badRequest('Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user'),
         );
     }
   } catch (error) {
     logger.error({ error }, 'Error in security admin action');
     if (isDbUnavailableError(error)) {
-      return NextResponse.json(
-        { error: 'Database temporarily unavailable' },
-        { status: 503, headers: { 'Retry-After': '30' } },
-      );
+      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), { 'Retry-After': '30' });
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return errorResponse(createError.internal());
   }
 }

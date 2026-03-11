@@ -120,6 +120,14 @@ const InlineMarketplaceCard = React.lazy(() =>
   import('./InlineMarketplaceCard').then((m) => ({ default: m.InlineMarketplaceCard })),
 );
 
+const InlineTodoList = React.lazy(() =>
+  import('./TodoList').then((m) => ({ default: m.TodoList })),
+);
+
+const InlineQuestionPrompt = React.lazy(() =>
+  import('./QuestionPrompt').then((m) => ({ default: m.QuestionPrompt })),
+);
+
 // Reuse existing components for multiple tool types
 const InlineBrowserAutomation = InlineTerminalOutput; // Browser ops usually return structured/text output
 const InlineEmailOperation = InlineTerminalOutput; // Reuse terminal style for email
@@ -434,6 +442,16 @@ export const TOOL_RENDERERS: Record<
   marketplace_search: InlineMarketplaceCard,
   marketplace_install: InlineMarketplaceCard,
   template_fetch: InlineMarketplaceCard,
+
+  // ============================================
+  // PLANNING / TODO
+  // ============================================
+  todo_write: InlineTodoList,
+
+  // ============================================
+  // INTERACTIVE (Question Prompts)
+  // ============================================
+  question: InlineQuestionPrompt,
 };
 
 /**

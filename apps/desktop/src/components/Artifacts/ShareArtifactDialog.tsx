@@ -59,8 +59,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
     };
 
     void generate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, expiryMode]);
+  }, [isOpen, expiryMode, artifact.id, artifact.title, artifact.artifact_type, artifact.content, artifact.metadata]);
 
   const handleCopy = useCallback(async () => {
     if (!shareResult?.url) return;

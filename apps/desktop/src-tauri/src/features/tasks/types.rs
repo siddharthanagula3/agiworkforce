@@ -112,6 +112,10 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
     pub result: Option<TaskResult>,
     pub payload: Option<String>,
+    /// Per-task deadline override in seconds from `started_at`.
+    /// When `Some`, this overrides the global `TIMEOUT_CONFIG.max_duration_secs`.
+    /// Extended by `agi_extend_timeout`.
+    pub deadline_override_secs: Option<i64>,
 }
 
 impl Task {
@@ -128,6 +132,7 @@ impl Task {
             completed_at: None,
             result: None,
             payload: None,
+            deadline_override_secs: None,
         }
     }
 

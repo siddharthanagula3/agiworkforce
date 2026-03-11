@@ -47,22 +47,43 @@ let credits401Cache: {
 } | null = null;
 
 // Subscription cache for resilience
-const SUBSCRIPTION_CACHE_KEY = 'agiworkforce_subscription_cache';
+const SUBSCRIPTION_CACHE_KEY_BASE = 'agiworkforce_subscription_cache';
 const SUBSCRIPTION_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// User-scoped cache key: hash of userId is appended so switching accounts
+// never reads another user's cached subscription tier.
+let cachedUserHash: string | null = null;
+
+async function hashUserId(userId: string): Promise<string> {
+  const encoded = new TextEncoder().encode(userId);
+  const hash = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hash))
+    .slice(0, 8)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function getSubscriptionCacheKey(): string {
+  return cachedUserHash
+    ? `${SUBSCRIPTION_CACHE_KEY_BASE}_${cachedUserHash}`
+    : SUBSCRIPTION_CACHE_KEY_BASE;
+}
 
 interface SubscriptionCache {
   planTier: PlanTier;
   subscriptionStatus: SubscriptionStatus;
   fetchedAt: number;
-  userId: string;
+  // MED-010: userId intentionally excluded from localStorage cache to avoid PII leakage.
+  // Cache freshness is validated by fetchedAt timestamp alone. User scoping uses a hash.
 }
 
-function getCachedSubscription(userId: string): SubscriptionCache | null {
+function getCachedSubscription(_userId: string): SubscriptionCache | null {
   try {
-    const cached = localStorage.getItem(SUBSCRIPTION_CACHE_KEY);
+    const cached = localStorage.getItem(getSubscriptionCacheKey());
     if (!cached) return null;
     const data = JSON.parse(cached) as SubscriptionCache;
-    if (data.userId === userId && Date.now() - data.fetchedAt < SUBSCRIPTION_CACHE_MAX_AGE_MS) {
+    // MED-010: validate freshness by timestamp only — no userId stored in cache
+    if (Date.now() - data.fetchedAt < SUBSCRIPTION_CACHE_MAX_AGE_MS) {
       return data;
     }
     return null;
@@ -72,18 +93,18 @@ function getCachedSubscription(userId: string): SubscriptionCache | null {
 }
 
 function setCachedSubscription(
-  userId: string,
+  _userId: string,
   planTier: PlanTier,
   subscriptionStatus: SubscriptionStatus,
 ): void {
   try {
+    // MED-010: userId intentionally omitted from serialized cache to prevent PII in localStorage
     const cache: SubscriptionCache = {
       planTier,
       subscriptionStatus,
       fetchedAt: Date.now(),
-      userId,
     };
-    localStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cache));
+    localStorage.setItem(getSubscriptionCacheKey(), JSON.stringify(cache));
   } catch {
     // Ignore localStorage errors
   }
@@ -91,7 +112,7 @@ function setCachedSubscription(
 
 function clearCachedSubscription(): void {
   try {
-    localStorage.removeItem(SUBSCRIPTION_CACHE_KEY);
+    localStorage.removeItem(getSubscriptionCacheKey());
   } catch {
     // Ignore localStorage errors
   }
@@ -188,6 +209,10 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     // STEP 1: Update user info in unified store
     // ═══════════════════════════════════════════════════════════════
     if (authState.user) {
+      // Scope the subscription cache to this user so account switches
+      // never read another user's cached tier.
+      cachedUserHash = await hashUserId(authState.user.id);
+
       unifiedAuthStore.setUser({
         id: authState.user.id,
         email: authState.user.email || '',
@@ -206,6 +231,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       console.debug('[AuthOrchestrator] No user, clearing unified auth store');
       unifiedAuthStore.reset();
       clearCachedSubscription();
+      cachedUserHash = null;
       return;
     }
 
@@ -440,6 +466,7 @@ export function initializeAuthOrchestrator(): () => void {
     credits401Cache = null;
     isProcessingAuthChange = false;
     pendingAuthState = null;
+    cachedUserHash = null;
   };
 }
 
@@ -457,4 +484,5 @@ export function resetAuthOrchestrator(): void {
   isProcessingAuthChange = false;
   pendingAuthState = null;
   clearCachedSubscription();
+  cachedUserHash = null;
 }
