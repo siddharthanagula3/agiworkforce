@@ -271,14 +271,12 @@ pub fn derive_key_with_password_base64(password_key: &[u8], purpose: KeyPurpose)
 
 /// Check if machine-only keys are in use (for migration detection)
 ///
-/// Returns true if there are encrypted secrets that were encrypted
-/// without a master password. These should be migrated to password-based
-/// encryption when the user sets up a master password.
+/// Returns `false` as the safe default. The `MasterPasswordManager` handles
+/// the actual migration tracking via its own database flag
+/// (`master_password_set`). Returning `true` unconditionally (the previous
+/// stub) caused spurious migration prompts and unnecessary work (Bug #69 fix).
 pub fn has_machine_only_secrets() -> bool {
-    // This is a placeholder - the actual implementation would check
-    // the database for secrets encrypted with machine-only keys
-    // The MasterPasswordManager handles the actual migration tracking
-    true
+    false
 }
 
 #[cfg(test)]

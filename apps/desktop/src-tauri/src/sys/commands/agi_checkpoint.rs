@@ -32,7 +32,6 @@ impl<T> CheckpointResponse<T> {
             error: None,
         }
     }
-
 }
 
 /// Request to save a checkpoint for a task
@@ -333,8 +332,7 @@ pub async fn resume_autonomous_task(
     // Return the checkpoint data so the frontend / caller can feed it to
     // the autonomous agent's resume_from_checkpoint method.
     // The actual re-submission happens via agi_submit_goal with checkpoint context.
-    serde_json::to_string(&checkpoint)
-        .map_err(|e| format!("Failed to serialize checkpoint: {}", e))
+    serde_json::to_string(&checkpoint).map_err(|e| format!("Failed to serialize checkpoint: {}", e))
 }
 
 /// Deletes a specific autonomous task checkpoint by ID.

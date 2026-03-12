@@ -15,13 +15,36 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { toast } from '../../hooks/useToast';
 import { toast as sonnerToast } from 'sonner';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
-import type { Artifact } from '../../types/chat';
 import {
   normalizeToolNameForUi,
   toolNameToArtifactType,
   toolNameToTitle,
-  normalizeInlineToolData,
 } from '../../lib/chatToolUtils';
+import {
+  buildMessageArtifactUpdate,
+  finalizeRunningMessageArtifacts,
+  getMergedMessageArtifacts,
+  upsertMessageArtifact,
+} from '../../lib/messageArtifacts';
+import { findMessageById } from '../../lib/messageLookup';
+import {
+  resolveActiveStreamMessageId,
+  buildCompletedStreamMessageUpdate,
+  buildFailedStreamMessageUpdate,
+  buildStreamingStateMessageUpdate,
+  buildToolCallMessageUpdate,
+  buildToolResultStateMessageUpdate,
+  resolveTerminalStreamTarget,
+} from '../../lib/streamLifecycle';
+import {
+  clearRunningToolTrailEntries,
+  reconcileToolArtifactTerminalState,
+} from '../../lib/toolStreamRuntime';
+import {
+  buildRunningToolArtifactPatch,
+  buildTerminalToolArtifactPatch,
+  buildThinkingContentPlan,
+} from '../../lib/streamContentRuntime';
 import { resolveToolHardTimeoutMs, shouldAbortGenerationOnToolTimeout } from './toolTimeoutPolicy';
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
@@ -112,18 +135,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         return [];
       };
 
-      const findMessageById = (messageId: string) => {
-        const state = useUnifiedChatStore.getState();
-        const direct = state.messages.find((msg) => msg.id === messageId);
-        if (direct) return direct;
-
-        for (const messages of Object.values(state.messagesByConversation)) {
-          const found = messages.find((msg) => msg.id === messageId);
-          if (found) return found;
-        }
-        return null;
-      };
-
       const resolveStreamTargetMessageId = (
         conversationId: number,
         payloadMessageId?: string | number,
@@ -131,53 +142,12 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         const state = useUnifiedChatStore.getState();
         const conversationMessages = getConversationMessagesForStream(conversationId);
         const sessionMessageId = activeStreamSessionsRef.current.get(conversationId);
-        const normalizedPayloadId =
-          payloadMessageId === undefined || payloadMessageId === null
-            ? null
-            : String(payloadMessageId);
-
-        // Priority 1: Session-tracked message for this conversation
-        if (sessionMessageId && conversationMessages.some((m) => m.id === sessionMessageId)) {
-          return sessionMessageId;
-        }
-        // Priority 2: Explicit message ID from payload
-        if (
-          normalizedPayloadId &&
-          conversationMessages.some((m) => String(m.id) === normalizedPayloadId)
-        ) {
-          return normalizedPayloadId;
-        }
-        // Priority 3: Current streaming message (only if it belongs to this conversation)
-        if (
-          state.currentStreamingMessageId &&
-          conversationMessages.some((m) => String(m.id) === String(state.currentStreamingMessageId))
-        ) {
-          return state.currentStreamingMessageId;
-        }
-
-        // Priority 4: find an assistant message still marked streaming in this conversation.
-        if (conversationMessages.length > 0) {
-          const streamingAssistant = conversationMessages.find(
-            (m) => m.role === 'assistant' && m.metadata?.streaming,
-          );
-          if (streamingAssistant) {
-            return streamingAssistant.id;
-          }
-        }
-
-        // Priority 5 (global fallback): conversation ID mapping may not exist yet (race
-        // between stream events and the linkConversationId call that follows ipcInvoke).
-        // The Rust backend always uses the frontend-assigned UUID as message_id, so a
-        // global store search by that ID is always safe and never causes cross-conversation
-        // confusion (UUIDs are unique).
-        if (sessionMessageId && findMessageById(sessionMessageId)) {
-          return sessionMessageId;
-        }
-        if (normalizedPayloadId && findMessageById(normalizedPayloadId)) {
-          return normalizedPayloadId;
-        }
-
-        return null;
+        return resolveActiveStreamMessageId(state, {
+          conversationMessages,
+          sessionMessageId,
+          payloadMessageId,
+          currentStreamingMessageId: state.currentStreamingMessageId,
+        });
       };
 
       const upsertToolArtifact = (
@@ -193,24 +163,14 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           return;
         }
 
-        const targetMessage = findMessageById(targetMessageId);
+        const targetMessage = findMessageById(useUnifiedChatStore.getState(), targetMessageId);
         if (!targetMessage) {
           console.warn('[upsertToolArtifact] Message not found for id:', targetMessageId);
           return;
         }
 
-        const baseArtifacts = [
-          ...(targetMessage.artifacts || []),
-          ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
-            (artifact) =>
-              !targetMessage.artifacts?.some(
-                (existing) => existing.id === artifact.id,
-              ),
-          ) as Artifact[]),
-        ] as Artifact[];
-
-        const index = baseArtifacts.findIndex((artifact) => artifact.id === toolCallId);
-        const existing = index >= 0 ? baseArtifacts[index] : null;
+        const baseArtifacts = getMergedMessageArtifacts(targetMessage);
+        const existing = baseArtifacts.find((artifact) => artifact.id === toolCallId) ?? null;
         const patchToolName = String(
           patch['toolName'] || (existing as Record<string, unknown> | null)?.['toolName'] || 'code',
         );
@@ -226,17 +186,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           content: patchContent,
         };
 
-        const nextArtifacts =
-          index >= 0
-            ? baseArtifacts.map((artifact, i) => (i === index ? nextArtifact : artifact))
-            : [...baseArtifacts, nextArtifact];
-
-        state.updateMessage(targetMessageId, {
-          artifacts: nextArtifacts as Artifact[],
-          metadata: {
-            artifacts: nextArtifacts as Artifact[],
-          },
-        });
+        state.updateMessage(
+          targetMessageId,
+          buildMessageArtifactUpdate(targetMessage, upsertMessageArtifact(targetMessage, nextArtifact)),
+        );
       };
 
       const finalizeRunningArtifactsForMessage = (
@@ -245,66 +198,12 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         reason: string,
       ) => {
         const state = useUnifiedChatStore.getState();
-        const targetMessage = findMessageById(messageId);
+        const targetMessage = findMessageById(state, messageId);
         if (!targetMessage) return;
 
-        const baseArtifacts = [
-          ...(targetMessage.artifacts || []),
-          ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
-            (artifact) =>
-              !targetMessage.artifacts?.some(
-                (existing) => existing.id === artifact.id,
-              ),
-          ) as Artifact[]),
-        ] as Artifact[];
-        if (baseArtifacts.length === 0) return;
-
-        let changed = false;
-        const nextArtifacts = baseArtifacts.map((artifact) => {
-          const withRuntimeFields = artifact as Artifact & {
-            status?: string;
-            success?: boolean;
-            error?: string;
-            content?: string;
-          };
-          if (withRuntimeFields.status !== 'running') {
-            return artifact;
-          }
-          changed = true;
-          const currentContent = (withRuntimeFields.content || '').trim();
-          if (status === 'completed') {
-            return {
-              ...withRuntimeFields,
-              status: 'completed',
-              success: true,
-              content: currentContent || 'Tool completed. Output included in assistant response.',
-            } as Artifact;
-          }
-          if (status === 'cancelled') {
-            return {
-              ...withRuntimeFields,
-              status: 'cancelled',
-              success: false,
-              error: reason,
-              content: currentContent || reason,
-            } as Artifact;
-          }
-          return {
-            ...withRuntimeFields,
-            status: 'failed',
-            success: false,
-            error: reason,
-            content: currentContent || reason,
-          } as Artifact;
-        });
-
-        if (!changed) return;
-        state.updateMessage(messageId, {
-          artifacts: nextArtifacts as Artifact[],
-          metadata: {
-            artifacts: nextArtifacts as Artifact[],
-          },
-        });
+        const nextArtifacts = finalizeRunningMessageArtifacts(targetMessage, { status, reason });
+        if (!nextArtifacts) return;
+        state.updateMessage(messageId, buildMessageArtifactUpdate(targetMessage, nextArtifacts));
       };
 
       const clearAgentIterationEntries = () => {
@@ -432,9 +331,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               activeStreamSessionsRef.current.get(conversationId) ?? null;
             if (conversationStreamMessageId) {
               clearQueuedStreamUpdates(conversationStreamMessageId);
-              state.updateMessage(conversationStreamMessageId, {
-                metadata: { streaming: false },
-              });
+              state.updateMessage(
+                conversationStreamMessageId,
+                buildStreamingStateMessageUpdate({ streaming: false }),
+              );
             }
             activeStreamSessionsRef.current.delete(conversationId);
             clearToolExecutionTimeoutsForConversation(conversationId);
@@ -538,6 +438,38 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         ),
       );
 
+      // Live status updates: "Connecting...", "Writing response...", "Calling Read(file)..."
+      registerListener(
+        listen<{
+          conversation_id: number;
+          message_id: string | number;
+          phase: string;
+          message: string;
+        }>('chat:stream-status', ({ payload }) => {
+          if (!isMountedRef.current) return;
+          markStreamActivity();
+
+          const chatState = useUnifiedChatStore.getState();
+          const trailType =
+            payload.phase === 'connecting'
+              ? 'searching'
+              : payload.phase === 'tool_executing' || payload.phase === 'tool_call'
+                ? 'running'
+                : 'thinking';
+
+          chatState.addActionTrailEntry({
+            type: trailType as 'thinking' | 'searching' | 'running',
+            message: payload.message,
+            fadeAfter: 30000,
+            metadata: {
+              source: 'chat:stream-status',
+              phase: payload.phase,
+              messageId: String(payload.message_id),
+            },
+          });
+        }),
+      );
+
       registerListener(
         listen<{
           conversation_id: number;
@@ -586,62 +518,31 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const currentMatchesSession =
             !!currentStreamingId &&
             (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
-          let finalizedMessageId: string | null = null;
-          let hasValidTarget = targetId !== null || currentMatchesSession;
+          const resolution = resolveTerminalStreamTarget({
+            resolvedTargetId: targetId,
+            currentStreamingMessageId: currentStreamingId,
+            currentMatchesSession,
+            conversationMessages: getConversationMessagesForStream(payload.conversation_id),
+          });
+          const { finalizedMessageId } = resolution;
+          let { hasValidTarget } = resolution;
 
           // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
           // This prevents stale stream-end events from one conversation clearing
           // active loading state for a different in-flight chat
-          if (targetId) {
-            finalizedMessageId = targetId;
-            state.updateMessage(targetId, {
-              metadata: {
-                streaming: false,
-                tokenCount: payload.usage?.total_tokens,
-                cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
-              },
-            });
+          if (finalizedMessageId) {
+            state.updateMessage(
+              finalizedMessageId,
+              buildCompletedStreamMessageUpdate({
+                totalTokens: payload.usage?.total_tokens,
+                costCents: payload.credits?.cost_cents,
+              }),
+            );
             finalizeRunningArtifactsForMessage(
-              targetId,
+              finalizedMessageId,
               'completed',
               'Tool completed without explicit terminal event.',
             );
-          } else if (currentStreamingId && currentMatchesSession) {
-            finalizedMessageId = currentStreamingId;
-            state.updateMessage(currentStreamingId, {
-              metadata: {
-                streaming: false,
-                tokenCount: payload.usage?.total_tokens,
-                cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
-              },
-            });
-            finalizeRunningArtifactsForMessage(
-              currentStreamingId,
-              'completed',
-              'Tool completed without explicit terminal event.',
-            );
-          } else {
-            // Fallback: clear any assistant message still marked as streaming to
-            // avoid stale "Generating" UI when stream-end IDs don't resolve cleanly.
-            const fallbackStreaming = [...getConversationMessagesForStream(payload.conversation_id)]
-              .reverse()
-              .find((m) => m.role === 'assistant' && m.metadata?.streaming);
-            if (fallbackStreaming) {
-              finalizedMessageId = fallbackStreaming.id;
-              hasValidTarget = true;
-              state.updateMessage(fallbackStreaming.id, {
-                metadata: {
-                  streaming: false,
-                  tokenCount: payload.usage?.total_tokens,
-                  cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
-                },
-              });
-              finalizeRunningArtifactsForMessage(
-                fallbackStreaming.id,
-                'completed',
-                'Tool completed without explicit terminal event.',
-              );
-            }
           }
 
           // CHT-005 fix: Clean up stream session tracking
@@ -680,9 +581,13 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
           // Auto-TTS: speak the assistant response when the user's last input was voice
           const chatPrefs = useChatPreferencesStore.getState();
-          if (chatPrefs.lastInputWasVoice && chatPrefs.chatPreferences.autoTTS && finalizedMessageId) {
+          if (
+            chatPrefs.lastInputWasVoice &&
+            chatPrefs.chatPreferences.autoTTS &&
+            finalizedMessageId
+          ) {
             chatPrefs.setLastInputWasVoice(false);
-            const assistantMsg = findMessageById(finalizedMessageId);
+            const assistantMsg = findMessageById(useUnifiedChatStore.getState(), finalizedMessageId);
             if (assistantMsg?.content && assistantMsg.role === 'assistant') {
               const clean = assistantMsg.content
                 .replace(/```[\s\S]*?```/g, '')
@@ -726,61 +631,29 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
 
             // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
-            let hasValidTarget = targetId !== null || currentMatchesSession;
-            let finalizedMessageId: string | null = null;
+            const resolution = resolveTerminalStreamTarget({
+              resolvedTargetId: targetId,
+              currentStreamingMessageId: currentStreamingId,
+              currentMatchesSession,
+              conversationMessages: getConversationMessagesForStream(payload.conversation_id),
+            });
+            const { finalizedMessageId } = resolution;
+            let { hasValidTarget } = resolution;
 
-            if (targetId) {
-              finalizedMessageId = targetId;
-              // Always use friendly error messages — no raw error strings in the UI
+            if (finalizedMessageId) {
               const displayError = formatErrorForChat(payload.error, true);
-
-              state.updateMessage(targetId, {
-                content: displayError,
-                metadata: { streaming: false },
-                error: payload.error,
-              });
+              state.updateMessage(
+                finalizedMessageId,
+                buildFailedStreamMessageUpdate({
+                  displayError,
+                  rawError: payload.error,
+                }),
+              );
               finalizeRunningArtifactsForMessage(
-                targetId,
+                finalizedMessageId,
                 'failed',
                 payload.error || 'Tool failed while generating the response.',
               );
-            } else if (currentStreamingId && currentMatchesSession) {
-              finalizedMessageId = currentStreamingId;
-              const displayError = formatErrorForChat(payload.error, true);
-
-              state.updateMessage(currentStreamingId, {
-                content: displayError,
-                metadata: { streaming: false },
-                error: payload.error,
-              });
-              finalizeRunningArtifactsForMessage(
-                currentStreamingId,
-                'failed',
-                payload.error || 'Tool failed while generating the response.',
-              );
-            } else {
-              // Fallback: clear any assistant message still marked as streaming to
-              // avoid stale "Generating" UI when stream-error IDs don't resolve cleanly.
-              const fallbackStreaming = [
-                ...getConversationMessagesForStream(payload.conversation_id),
-              ]
-                .reverse()
-                .find((m) => m.role === 'assistant' && m.metadata?.streaming);
-              if (fallbackStreaming) {
-                finalizedMessageId = fallbackStreaming.id;
-                hasValidTarget = true;
-                const displayError = formatErrorForChat(payload.error, true);
-                state.updateMessage(fallbackStreaming.id, {
-                  content: displayError,
-                  metadata: { streaming: false },
-                  error: payload.error,
-                });
-                finalizeRunningArtifactsForMessage(
-                  fallbackStreaming.id,
-                  'failed',
-                  payload.error || 'Tool failed while generating the response.',
-                );
-              }
             }
 
             // CHT-005 fix: Clean up stream session tracking on error
@@ -1007,25 +880,20 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (!targetMessageId) return;
 
           const chatState = useChatStore.getState();
+          const plan = buildThinkingContentPlan(payload.event_type, payload.content);
 
-          if (payload.event_type === 'start') {
+          if (plan.clear) {
             chatState.clearThinkingContent(targetMessageId);
-          } else if (payload.event_type === 'delta' && payload.content) {
-            chatState.appendThinkingContent(targetMessageId, payload.content);
-          } else if (payload.event_type === 'complete') {
-            // On complete, always clear first, then append the final authoritative string
-            // (even if payload.content is empty, the clear ensures no stale content remains)
-            chatState.clearThinkingContent(targetMessageId);
-            if (payload.content) {
-              chatState.appendThinkingContent(targetMessageId, payload.content);
-            }
+          }
+          if (plan.append) {
+            chatState.appendThinkingContent(targetMessageId, plan.append);
           }
         }),
       );
 
       // AUDIT-APPROVAL-047 fix: Removed duplicate tool:confirmation_required handler.
       // The tool confirmation flow is now handled exclusively by useAgenticEvents which
-      // adds approvals to pendingApprovals store. The ApprovalModal then handles
+      // adds approvals to pendingApprovals store. Inline approval components then handle
       // user responses via useApprovalActions, which correctly routes to either
       // respond_tool_confirmation (for MCP/tool confirmations) or agent_resolve_approval
       // (for agent-level approvals).
@@ -1060,48 +928,24 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             const firstTool = payload.tool_calls[0];
             if (firstTool) {
               const normalizedFirstToolName = normalizeToolNameForUi(firstTool.name);
-              state.updateMessage(targetMessageId, {
-                metadata: {
-                  // key fields for MessageBubble to detect tool call
-                  tool: normalizedFirstToolName,
-                  tool_call: firstTool.id,
-                  actionId: firstTool.id, // AUDIT-UI-035: Add actionId for MessageBubble store linkage
-                  name: normalizedFirstToolName,
-                  status: 'running',
-                  // also keep streaming true so it shows as active
-                  streaming: true,
-                },
-              });
+              state.updateMessage(
+                targetMessageId,
+                buildToolCallMessageUpdate({
+                  toolName: normalizedFirstToolName,
+                  toolCallId: firstTool.id,
+                }),
+              );
             }
           }
 
           // Add to action trail to show which tools are being called
           for (const tc of payload.tool_calls) {
             const normalizedToolName = normalizeToolNameForUi(tc.name);
-            let parsedArguments: Record<string, unknown> = {};
-            try {
-              parsedArguments = tc.arguments
-                ? (JSON.parse(tc.arguments) as Record<string, unknown>)
-                : {};
-            } catch {
-              // Keep fallback empty object if arguments are partial/non-JSON.
-            }
 
             upsertToolArtifact(
               payload.conversation_id,
               tc.id,
-              {
-                toolName: normalizedToolName, // Use normalized tool names for renderer lookups
-                type: toolNameToArtifactType(normalizedToolName),
-                title: toolNameToTitle(normalizedToolName),
-                status: 'running',
-                content: '',
-                ...(parsedArguments['prompt'] ? { prompt: parsedArguments['prompt'] } : {}),
-                ...(parsedArguments['output_path']
-                  ? { filePath: parsedArguments['output_path'] }
-                  : {}),
-                ...(parsedArguments['file_path'] ? { filePath: parsedArguments['file_path'] } : {}),
-              },
+              buildRunningToolArtifactPatch(tc.name, tc.arguments),
               payload.message_id,
             );
 
@@ -1192,34 +1036,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
           clearToolExecutionTimeout(payload.tool_call_id);
 
-          let parsedData: Record<string, unknown> = payload.result_data || {};
-          if (!payload.result_data && payload.result) {
-            try {
-              const parsed = JSON.parse(payload.result);
-              if (parsed && typeof parsed === 'object') {
-                parsedData = parsed as Record<string, unknown>;
-              }
-            } catch {
-              // Keep raw string available so inline renderers can still display content.
-              parsedData = { raw_result: payload.result };
-            }
-          }
-
-          const normalizedData = normalizeInlineToolData(normalizedToolName, parsedData);
-
           upsertToolArtifact(
             payload.conversation_id,
             payload.tool_call_id,
-            {
-              toolName: normalizedToolName,
-              type: toolNameToArtifactType(normalizedToolName),
-              title: toolNameToTitle(normalizedToolName),
-              status: payload.success ? 'completed' : 'failed',
+            buildTerminalToolArtifactPatch({
+              toolName: payload.tool_name,
               success: payload.success,
-              error: payload.success ? undefined : payload.result,
-              content: payload.result || '',
-              ...normalizedData,
-            },
+              result: payload.result,
+              resultData: payload.result_data,
+            }),
             payload.message_id,
           );
 
@@ -1230,12 +1055,9 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             payload.message_id,
           );
           if (targetMessageId) {
-            useUnifiedChatStore.getState().updateMessage(targetMessageId, {
-              metadata: {
-                status: payload.success ? 'completed' : 'failed',
-                streaming: false, // Stop streaming indicator
-              },
-            });
+            useUnifiedChatStore
+              .getState()
+              .updateMessage(targetMessageId, buildToolResultStateMessageUpdate({ success: payload.success }));
           }
 
           // Update action trail with result
@@ -1249,23 +1071,11 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           });
 
           // Remove the old "running" entry for this tool_call_id to prevent "Running..." from staying
-          const state = useUnifiedChatStore.getState();
-          const actionTrail = state.actionTrail;
-          const runningEntries = actionTrail.filter((entry) => {
-            if (entry.type !== 'running') return false;
-            const metadataToolCallId = (entry.metadata as Record<string, unknown> | undefined)?.[
-              'tool_call_id'
-            ];
-            if (metadataToolCallId === payload.tool_call_id) return true;
-            // Backward compatibility: clear legacy running entries that were added without metadata.
-            return (
-              entry.message === `Executing ${normalizedToolName}...` ||
-              entry.message === `Calling ${normalizedToolName}...`
-            );
-          });
-          for (const runningEntry of runningEntries) {
-            state.removeActionTrailEntry(runningEntry.id);
-          }
+          clearRunningToolTrailEntries(
+            useUnifiedChatStore.getState(),
+            payload.tool_call_id,
+            normalizedToolName,
+          );
 
           // Keep agent status coherent during multi-step runs:
           // a single tool result should update step text, not mark the whole run complete.
@@ -1315,49 +1125,27 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           // Clear any tool execution timeout that might be pending
           clearToolExecutionTimeout(cancelledEvent.tool_id);
 
+          const state = useUnifiedChatStore.getState();
+          clearRunningToolTrailEntries(state, cancelledEvent.tool_id);
+
           // Update action trail to reflect cancellation
-          useUnifiedChatStore.getState().addActionTrailEntry({
+          state.addActionTrailEntry({
             type: 'error',
             message: `Tool cancelled: ${cancelledEvent.reason || 'Cancelled by user'}`,
             metadata: { tool_call_id: cancelledEvent.tool_id },
             fadeAfter: 3000,
           });
 
-          // Update message metadata to reflect cancelled status
-          // We need to find the message that contains this tool's artifact
-          const state = useUnifiedChatStore.getState();
-          for (const message of state.messages) {
-            const artifacts = message.artifacts || [];
-            const artifactIndex = artifacts.findIndex((a) => a.id === cancelledEvent.tool_id);
-            if (artifactIndex >= 0) {
-              const existingArtifact = artifacts[artifactIndex];
-              if (existingArtifact) {
-                const updatedArtifact = {
-                  ...existingArtifact,
-                  metadata: {
-                    ...existingArtifact.metadata,
-                    status: 'cancelled',
-                    error: cancelledEvent.reason,
-                    completedAt: new Date(timestamp).toISOString(),
-                    duration_ms: cancelledEvent.duration_ms,
-                  },
-                };
-                const updatedArtifacts = [...artifacts];
-                updatedArtifacts[artifactIndex] = updatedArtifact;
-
-                state.updateMessage(message.id, {
-                  artifacts: updatedArtifacts,
-                  metadata: {
-                    ...message.metadata,
-                    artifacts: updatedArtifacts,
-                    status: 'cancelled',
-                    streaming: false,
-                  },
-                });
-              }
-              break;
-            }
-          }
+          reconcileToolArtifactTerminalState(state, cancelledEvent.tool_id, {
+            status: 'cancelled',
+            reason: cancelledEvent.reason,
+            completedAt: new Date(timestamp).toISOString(),
+            durationMs: cancelledEvent.duration_ms,
+            messageState: {
+              status: 'cancelled',
+              streaming: false,
+            },
+          });
         }),
       );
 
@@ -1501,14 +1289,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (!currentId) return;
 
           const progressText =
-            payload.message ?? `Processing ${payload.tool_name.replace(/_/g, ' ')}...`;
+            payload.message ??
+            `Processing ${normalizeToolNameForUi(payload.tool_name).replace(/_/g, ' ')}...`;
 
           state.updateMessage(currentId, {
-            metadata: {
+            ...buildStreamingStateMessageUpdate({
+              streaming: true,
               status: 'tool_progress',
               label: progressText,
-              streaming: true,
-            },
+            }),
           });
         }),
       );
@@ -1548,14 +1337,14 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       // Clear stale stream session tracking
       activeStreamSessions.clear();
-      // Copy ref value to variable for cleanup to avoid stale closure issues
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      const timeouts = new Map(toolExecutionTimeoutsRef.current);
-      timeouts.forEach((timeoutEntry) => {
+      // Bug #305 fix: Clear the live ref directly instead of a snapshot copy.
+      // A snapshot copy clears its own Map but leaves the ref's Map untouched,
+      // causing stale timeouts to persist if the hook re-mounts.
+      toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
         clearTimeout(timeoutEntry.softTimeoutId);
         clearTimeout(timeoutEntry.hardTimeoutId);
       });
-      timeouts.clear();
+      toolExecutionTimeoutsRef.current.clear();
 
       // Clean up all registered listeners - handle both sync and async unlisten functions
       // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections

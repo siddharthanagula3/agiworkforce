@@ -262,7 +262,7 @@ pub async fn cache_get_analytics(db: State<'_, AppDatabase>) -> Result<CacheAnal
     let mut stmt = conn
         .prepare(
             "SELECT prompt_hash, provider, model, hit_count,
-                    cost_saved, last_used_a
+                    cost_saved, last_used_at
              FROM cache_entries
              WHERE hit_count > 0
              ORDER BY hit_count DESC
@@ -607,16 +607,24 @@ pub async fn codebase_cache_calculate_hash(content: Vec<u8>) -> Result<String, S
     Ok(CodebaseCache::calculate_file_hash(&content))
 }
 
+/// Bug #80 fix: `hit_rate` and `miss_rate` are f64 percentages (0..100).
+/// Casting them directly to u64 with `as u64` truncates anything < 1.0 to 0.
+/// Use `.round() as u64` to get meaningful integer counts, and derive
+/// actual hit/miss counts from the rate * total_entries.
 fn get_codebase_cache_stats(cache: &State<CodebaseCacheState>) -> Result<CacheTypeStats, String> {
     let stats = cache
         .0
         .get_stats()
         .map_err(|e| format!("Failed to get codebase cache stats: {}", e))?;
 
+    let total = stats.total_entries as f64;
+    let hits_count = ((stats.hit_rate / 100.0) * total).round() as u64;
+    let misses_count = ((stats.miss_rate / 100.0) * total).round() as u64;
+
     Ok(CacheTypeStats {
-        hits: stats.hit_rate as u64,
-        misses: stats.miss_rate as u64,
-        hit_rate: stats.hit_rate,
+        hits: hits_count,
+        misses: misses_count,
+        hit_rate: stats.hit_rate / 100.0, // normalize to 0..1 to match llm_cache convention
         size_mb: stats.total_size_bytes as f64 / (1024.0 * 1024.0),
         entries: stats.total_entries,
         savings_usd: None,

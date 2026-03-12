@@ -495,8 +495,9 @@ struct ChannelsListResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsMessage {
     pub id: String,
+    /// Graph API returns an RFC3339/ISO8601 datetime string (e.g. "2025-01-15T10:30:00Z")
     #[serde(rename = "createdDateTime")]
-    pub created_at: i64,
+    pub created_at: String,
     pub from_user_id: String,
     pub from_user_name: Option<String>,
     pub body: String,

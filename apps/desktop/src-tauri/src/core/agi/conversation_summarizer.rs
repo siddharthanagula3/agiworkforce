@@ -390,8 +390,7 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
 
             // SECURITY: Filter zero vectors — cosine similarity is undefined for zero magnitude.
             let embedding = embedding.filter(|v| {
-                !v.is_empty()
-                    && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
+                !v.is_empty() && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
             });
 
             let memory = PersistentMemory::new(extracted.content, category, extracted.topic)
@@ -426,8 +425,7 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
 
             // SECURITY: Filter zero vectors for summary embedding.
             let summary_embedding = summary_embedding.filter(|v| {
-                !v.is_empty()
-                    && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
+                !v.is_empty() && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
             });
 
             self.store.store_conversation_summary(
@@ -757,9 +755,7 @@ impl SummaryLLM for HttpSummaryLLM {
         }
 
         // Tier 3: No embedding available — return None (NOT zero vectors)
-        tracing::warn!(
-            "No embedding provider available. Memory will use FTS-only search."
-        );
+        tracing::warn!("No embedding provider available. Memory will use FTS-only search.");
         Ok(None)
     }
 }
@@ -963,11 +959,22 @@ mod tests {
         let llm = Arc::new(MockOllamaSucceeds);
         let summarizer = ConversationSummarizer::new(store, llm);
 
-        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+        let embedding = summarizer
+            .llm
+            .generate_embedding("hello world")
+            .await
+            .unwrap();
 
-        assert!(embedding.is_some(), "Tier 1: Ollama should return an embedding");
+        assert!(
+            embedding.is_some(),
+            "Tier 1: Ollama should return an embedding"
+        );
         let vec = embedding.unwrap();
-        assert_eq!(vec.len(), 768, "Ollama nomic-embed-text produces 768-dim vectors");
+        assert_eq!(
+            vec.len(),
+            768,
+            "Ollama nomic-embed-text produces 768-dim vectors"
+        );
         assert!(
             vec.iter().any(|&v| v != 0.0),
             "Embedding must not be all zeros"
@@ -980,7 +987,11 @@ mod tests {
         let llm = Arc::new(MockOllamaFailsOpenAISucceeds);
         let summarizer = ConversationSummarizer::new(store, llm);
 
-        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+        let embedding = summarizer
+            .llm
+            .generate_embedding("hello world")
+            .await
+            .unwrap();
 
         assert!(
             embedding.is_some(),
@@ -1004,7 +1015,11 @@ mod tests {
         let llm = Arc::new(MockBothFail);
         let summarizer = ConversationSummarizer::new(store, llm);
 
-        let embedding = summarizer.llm.generate_embedding("hello world").await.unwrap();
+        let embedding = summarizer
+            .llm
+            .generate_embedding("hello world")
+            .await
+            .unwrap();
 
         assert!(
             embedding.is_none(),

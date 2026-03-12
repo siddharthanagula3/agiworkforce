@@ -44,8 +44,9 @@ impl ConfigHierarchy {
             .map(|h| h.join(".agiworkforce").join("config.json"))
             .and_then(|p| Self::load_config_file(&p));
 
-        let project_config = project_root
-            .and_then(|root| Self::load_config_file(&root.join(".agiworkforce").join("config.json")));
+        let project_config = project_root.and_then(|root| {
+            Self::load_config_file(&root.join(".agiworkforce").join("config.json"))
+        });
 
         Self {
             project_config,
@@ -70,7 +71,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.default_model.as_deref())
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.default_model.as_deref()))
             .or(self.defaults.default_model.as_deref())
@@ -81,9 +83,7 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.theme.as_deref())
-            .or(self.global_config
-                .as_ref()
-                .and_then(|c| c.theme.as_deref()))
+            .or(self.global_config.as_ref().and_then(|c| c.theme.as_deref()))
             .or(self.defaults.theme.as_deref())
     }
 
@@ -92,7 +92,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.auto_approve_tools)
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.auto_approve_tools))
             .or(self.defaults.auto_approve_tools)
@@ -104,7 +105,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.custom_instructions.as_deref())
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.custom_instructions.as_deref()))
             .or(self.defaults.custom_instructions.as_deref())
@@ -115,7 +117,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.auto_format_on_save)
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.auto_format_on_save))
             .or(self.defaults.auto_format_on_save)
@@ -127,7 +130,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.agent_mode.as_deref())
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.agent_mode.as_deref()))
             .or(self.defaults.agent_mode.as_deref())
@@ -138,7 +142,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.language.as_deref())
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.language.as_deref()))
             .or(self.defaults.language.as_deref())
@@ -149,7 +154,8 @@ impl ConfigHierarchy {
         self.project_config
             .as_ref()
             .and_then(|c| c.allowed_directories.as_deref())
-            .or(self.global_config
+            .or(self
+                .global_config
                 .as_ref()
                 .and_then(|c| c.allowed_directories.as_deref()))
             .or(self.defaults.allowed_directories.as_deref())
@@ -161,9 +167,7 @@ impl ConfigHierarchy {
             default_model: self.default_model().map(|s| s.to_string()),
             theme: self.theme().map(|s| s.to_string()),
             auto_approve_tools: Some(self.auto_approve_tools()),
-            allowed_directories: self
-                .allowed_directories()
-                .map(|dirs| dirs.to_vec()),
+            allowed_directories: self.allowed_directories().map(|dirs| dirs.to_vec()),
             custom_instructions: self.custom_instructions().map(|s| s.to_string()),
             auto_format_on_save: Some(self.auto_format_on_save()),
             agent_mode: self.agent_mode().map(|s| s.to_string()),
@@ -246,9 +250,7 @@ mod tests {
         // Build hierarchy with an explicit global path by using the struct directly
         let hierarchy = ConfigHierarchy {
             project_config: None,
-            global_config: ConfigHierarchy::load_config_file(
-                &global_dir.join("config.json"),
-            ),
+            global_config: ConfigHierarchy::load_config_file(&global_dir.join("config.json")),
             defaults: ProjectConfig::default(),
         };
 
@@ -286,9 +288,7 @@ mod tests {
         std::fs::write(project_dir.join("config.json"), project_json).expect("write");
 
         let hierarchy = ConfigHierarchy {
-            project_config: ConfigHierarchy::load_config_file(
-                &project_dir.join("config.json"),
-            ),
+            project_config: ConfigHierarchy::load_config_file(&project_dir.join("config.json")),
             global_config: Some(global_config),
             defaults: ProjectConfig::default(),
         };
@@ -387,8 +387,8 @@ mod tests {
         let expected_path = ConfigHierarchy::project_config_path(&project_root);
         assert!(expected_path.exists());
 
-        let loaded = ConfigHierarchy::load_config_file(&expected_path)
-            .expect("load should succeed");
+        let loaded =
+            ConfigHierarchy::load_config_file(&expected_path).expect("load should succeed");
         assert_eq!(loaded.default_model.as_deref(), Some("gpt-4o"));
         assert_eq!(loaded.theme.as_deref(), Some("monokai"));
         assert_eq!(loaded.auto_approve_tools, Some(true));

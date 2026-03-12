@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 import type {
   CalendarAccount,
@@ -62,7 +62,7 @@ export function useCalendar() {
     setError(null);
     try {
       const calendars = await invoke<CalendarSummary[]>('calendar_list_calendars', {
-        account_id: accountId,
+        accountId,
       });
       return calendars;
     } catch (err) {
@@ -83,13 +83,13 @@ export function useCalendar() {
       setError(null);
       try {
         const response = await invoke<EventListResponse>('calendar_list_events', {
-          account_id: accountId,
+          accountId,
           request: {
-            calendar_id: options.calendar_id,
-            start_time: options.start_time,
-            end_time: options.end_time,
-            max_results: options.max_results ?? 100,
-            show_deleted: options.show_deleted ?? false,
+            calendarId: options.calendar_id,
+            startTime: options.start_time,
+            endTime: options.end_time,
+            maxResults: options.max_results ?? 100,
+            showDeleted: options.show_deleted ?? false,
           },
         });
         return response.events;
@@ -113,9 +113,9 @@ export function useCalendar() {
       setError(null);
       try {
         const event = await invoke<CalendarEvent>('calendar_get_event', {
-          account_id: accountId,
-          calendar_id: calendarId,
-          event_id: eventId,
+          accountId,
+          calendarId,
+          eventId,
         });
         return event;
       } catch (err) {
@@ -138,7 +138,7 @@ export function useCalendar() {
       setError(null);
       try {
         const event = await invoke<CalendarEvent>('calendar_create_event', {
-          account_id: accountId,
+          accountId,
           request,
         });
         return event;
@@ -167,9 +167,9 @@ export function useCalendar() {
       setError(null);
       try {
         const event = await invoke<CalendarEvent>('calendar_update_event', {
-          account_id: accountId,
-          calendar_id: calendarId,
-          event_id: eventId,
+          accountId,
+          calendarId,
+          eventId,
           request,
         });
         return event;
@@ -193,9 +193,9 @@ export function useCalendar() {
       setError(null);
       try {
         await invoke('calendar_delete_event', {
-          account_id: accountId,
-          calendar_id: calendarId,
-          event_id: eventId,
+          accountId,
+          calendarId,
+          eventId,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -217,7 +217,7 @@ export function useCalendar() {
     setError(null);
     try {
       const response = await invoke<SyncResponse>('calendar_sync', {
-        account_id: accountId,
+        accountId,
       });
       return response;
     } catch (err) {

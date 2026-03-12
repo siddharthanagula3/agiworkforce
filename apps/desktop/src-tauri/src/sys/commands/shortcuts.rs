@@ -713,7 +713,10 @@ mod tests {
     #[test]
     fn normalizes_common_aliases() {
         let combo = normalize_accelerator_for_platform("cmd + shift + space");
-        assert_eq!(combo, format!("{}+Shift+Space", expected_primary_modifier()));
+        assert_eq!(
+            combo,
+            format!("{}+Shift+Space", expected_primary_modifier())
+        );
     }
 
     #[test]

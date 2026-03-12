@@ -510,6 +510,16 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
+            "physical_scrape".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["url".to_string(), "selector".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
             "terminal_execute".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 5,
@@ -1047,7 +1057,10 @@ impl ToolExecutionGuard {
     /// Validate security-sensitive parameters on MCP tool calls.
     /// Inspects all parameter values for paths, URLs, and command strings
     /// regardless of the specific MCP tool, since MCP tools are dynamic.
-    fn validate_mcp_tool_params(&self, parameters: &Value) -> std::result::Result<(), SecurityError> {
+    fn validate_mcp_tool_params(
+        &self,
+        parameters: &Value,
+    ) -> std::result::Result<(), SecurityError> {
         let obj = match parameters.as_object() {
             Some(o) => o,
             None => return Ok(()),
@@ -1080,8 +1093,13 @@ impl ToolExecutionGuard {
             if key_lower == "command" || key_lower == "cmd" {
                 // Basic command injection checks (same patterns as validate_code)
                 let dangerous = [
-                    "rm -rf /", "mkfs", "dd if=", ":(){:|:&};:",
-                    "chmod -R 777 /", "curl | sh", "wget | sh",
+                    "rm -rf /",
+                    "mkfs",
+                    "dd if=",
+                    ":(){:|:&};:",
+                    "chmod -R 777 /",
+                    "curl | sh",
+                    "wget | sh",
                 ];
                 let val_lower = val_str.to_lowercase();
                 for pattern in &dangerous {
@@ -1143,8 +1161,9 @@ impl ToolExecutionGuard {
         );
 
         let policy = {
-            let guard = self.allowed_tools.read()
-                .map_err(|_| SecurityError::UnauthorizedTool("ToolGuard lock poisoned".to_string()))?;
+            let guard = self.allowed_tools.read().map_err(|_| {
+                SecurityError::UnauthorizedTool("ToolGuard lock poisoned".to_string())
+            })?;
             guard
                 .get(tool_name)
                 .cloned()

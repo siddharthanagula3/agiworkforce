@@ -50,9 +50,21 @@ pub struct VideoGenerationResponse {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum VideoStatus {
+    /// Google API: STATE_UNSPECIFIED or initial queue state
+    #[serde(alias = "Queued", alias = "STATE_UNSPECIFIED")]
     Queued,
+    /// Google API: STATE_PENDING_PROCESSING / STATE_ACTIVE
+    #[serde(
+        alias = "Processing",
+        alias = "STATE_PENDING_PROCESSING",
+        alias = "STATE_ACTIVE"
+    )]
     Processing,
+    /// Google API: STATE_SUCCEEDED
+    #[serde(alias = "Completed", alias = "STATE_SUCCEEDED")]
     Completed,
+    /// Google API: STATE_FAILED / STATE_CANCELLED
+    #[serde(alias = "Failed", alias = "STATE_FAILED", alias = "STATE_CANCELLED")]
     Failed,
 }
 

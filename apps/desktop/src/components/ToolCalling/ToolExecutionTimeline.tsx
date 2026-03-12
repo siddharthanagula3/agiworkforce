@@ -160,7 +160,7 @@ export function ToolExecutionTimeline({
   const progress = useMemo(() => {
     const totalSteps = workflow.total_steps || workflow.steps.length;
     const completedSteps = workflow.current_step || 0;
-    return (completedSteps / totalSteps) * 100;
+    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
   }, [workflow]);
 
   // Get status icon and color

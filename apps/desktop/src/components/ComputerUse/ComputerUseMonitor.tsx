@@ -48,7 +48,7 @@ export function ComputerUseMonitor() {
         </div>
 
         {isActive ? (
-          <button
+          <button type="button"
             onClick={stopSession}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
@@ -59,7 +59,7 @@ export function ComputerUseMonitor() {
             Stop
           </button>
         ) : (
-          <button
+          <button type="button"
             onClick={startSession}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
@@ -97,7 +97,7 @@ export function ComputerUseMonitor() {
       {/* Action Log header */}
       <div className="px-4 py-2 flex items-center justify-between border-b border-zinc-800">
         <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Action Log</h3>
-        <button
+        <button type="button"
           onClick={() => useComputerUseStore.getState().clearLog()}
           className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
         >

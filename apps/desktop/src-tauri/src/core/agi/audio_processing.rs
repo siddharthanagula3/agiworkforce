@@ -25,13 +25,11 @@ impl AudioProcessor {
             .unwrap_or("");
 
         match extension.to_lowercase().as_str() {
-            "mp3" | "wav" | "m4a" | "ogg" | "flac" | "aac" => {
-                Err(anyhow::anyhow!(
-                    "Audio transcription requires a cloud speech-to-text API (e.g. Whisper API) \
+            "mp3" | "wav" | "m4a" | "ogg" | "flac" | "aac" => Err(anyhow::anyhow!(
+                "Audio transcription requires a cloud speech-to-text API (e.g. Whisper API) \
                      or the local-whisper feature to be enabled. File: {}",
-                    audio_path.display()
-                ))
-            }
+                audio_path.display()
+            )),
             _ => Err(anyhow::anyhow!("Unsupported audio format: {}", extension)),
         }
     }

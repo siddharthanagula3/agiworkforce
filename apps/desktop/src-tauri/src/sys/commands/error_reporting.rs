@@ -44,18 +44,50 @@ pub async fn error_report(error_data: ErrorReport) -> Result<(), String> {
                 "extra": error_data.context
             });
 
-            let sentry_url = format!("{}/api/store/", sentry_dsn.trim_end_matches('/'));
+            // Bug #81 fix: Sentry DSN is a full URL like
+            // `https://<key>@<host>/<project_id>`. The store endpoint must
+            // be constructed as `https://<host>/api/<project_id>/store/`
+            // with the auth key passed via the `X-Sentry-Auth` header,
+            // NOT by naively appending `/api/store/` to the DSN (which
+            // strips the key embedded in the userinfo portion of the URL).
+            let sentry_url = match url::Url::parse(&sentry_dsn) {
+                Ok(parsed) => {
+                    let sentry_key = parsed.username().to_string();
+                    let host = parsed.host_str().unwrap_or("sentry.io").to_string();
+                    let scheme = parsed.scheme().to_string();
+                    let port_str = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
+                    let project_id = parsed
+                        .path_segments()
+                        .and_then(|mut s| s.next())
+                        .unwrap_or("0")
+                        .to_string();
+                    let store_url = format!(
+                        "{}://{}{}/api/{}/store/",
+                        scheme, host, port_str, project_id
+                    );
+                    // Attach auth header to the payload
+                    let auth_header = format!("Sentry sentry_version=7, sentry_key={}", sentry_key);
+                    (store_url, auth_header)
+                }
+                Err(_) => {
+                    // Fallback: treat DSN as-is (backwards compat)
+                    let url = format!("{}/api/store/", sentry_dsn.trim_end_matches('/'));
+                    (url, String::new())
+                }
+            };
+            let (sentry_store_url, sentry_auth_header) = sentry_url;
             tokio::spawn(async move {
                 if let Ok(client) = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(5))
                     .build()
                 {
-                    let _ = client
-                        .post(&sentry_url)
-                        .header("Content-Type", "application/json")
-                        .json(&payload)
-                        .send()
-                        .await;
+                    let mut req = client
+                        .post(&sentry_store_url)
+                        .header("Content-Type", "application/json");
+                    if !sentry_auth_header.is_empty() {
+                        req = req.header("X-Sentry-Auth", &sentry_auth_header);
+                    }
+                    let _ = req.json(&payload).send().await;
                 }
             });
         }

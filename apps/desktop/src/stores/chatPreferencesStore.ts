@@ -137,6 +137,11 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
             undefined,
             'chatPreferences/setAutoApproveTools',
           );
+          try {
+            await invoke('set_auto_approve_all', { enabled });
+          } catch (error) {
+            console.error('Failed to sync auto-approve-all to backend:', error);
+          }
         },
 
         setAgentMode: async (mode: AgentMode) => {
@@ -155,6 +160,7 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
           );
           try {
             await invoke('set_agent_mode', { mode });
+            await invoke('set_auto_approve_all', { enabled: mode === 'autopilot' });
           } catch (error) {
             console.error('Failed to sync agent mode to backend:', error);
           }

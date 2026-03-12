@@ -25,10 +25,7 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing 'query' parameter"))?;
 
-        let symbol_type = args
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("any");
+        let symbol_type = args.get("type").and_then(|v| v.as_str()).unwrap_or("any");
 
         let language = args.get("language").and_then(|v| v.as_str());
 

@@ -25,7 +25,11 @@ pub(crate) const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
 ///   - Provider keepalive gaps during heavy load
 ///     The SSE parser emits keepalive chunks for provider heartbeats (`: keep-alive`,
 ///     `event: ping`), so this timeout only fires if truly NO bytes are received.
-pub(crate) const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 300;
+///
+/// Bug #34 fix: Reduced from 300s to 90s. Since SSE keepalives reset the timer,
+/// 90s of total silence means the connection is dead. This prevents frozen UI
+/// while still accommodating reasoning models (60-90s before first token).
+pub(crate) const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 90;
 /// Max wait per follow-up model invocation in tool loop (e.g. after image generation).
 /// 120s to accommodate reasoning/thinking models that can take 30-90s before first token.
 pub(crate) const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 120;

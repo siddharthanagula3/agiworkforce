@@ -172,7 +172,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               </div>
 
               {}
-              <button
+              <button type="button"
                 onClick={() => removeImage(image.id)}
                 className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
               >
@@ -192,7 +192,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="flex gap-1">
                   {(['low', 'high', 'auto'] as const).map((level) => (
-                    <button
+                    <button type="button"
                       key={level}
                       onClick={() => updateImageDetail(image.id, level)}
                       className={`flex-1 px-2 py-1 text-xs rounded ${

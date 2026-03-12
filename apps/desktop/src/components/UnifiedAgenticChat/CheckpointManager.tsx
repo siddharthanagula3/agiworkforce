@@ -95,13 +95,11 @@ export function CheckpointManager({
     setCreating(true);
     try {
       await invoke('checkpoint_create', {
-        request: {
-          conversationId: conversationId,
-          checkpointName: newCheckpointName.trim(),
-          description: newCheckpointDescription.trim() || null,
-          parentCheckpointId: null,
-          branchName: null,
-        },
+        conversationId: conversationId,
+        checkpointName: newCheckpointName.trim(),
+        description: newCheckpointDescription.trim() || null,
+        parentCheckpointId: null,
+        branchName: null,
       });
 
       toast.success('Checkpoint created successfully');
@@ -133,10 +131,8 @@ export function CheckpointManager({
       setRestoring(true);
       try {
         await invoke('checkpoint_restore', {
-          request: {
-            checkpointId: checkpointId,
-            conversationId: conversationId,
-          },
+          checkpointId: checkpointId,
+          conversationId: conversationId,
         });
 
         toast.success(`Restored to checkpoint: ${checkpointName}`);

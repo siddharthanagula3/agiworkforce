@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FeedbackPayload {
     pub subject: String,

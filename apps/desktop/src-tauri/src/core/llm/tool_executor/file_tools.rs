@@ -11,7 +11,10 @@ pub(super) const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
 
 impl ToolExecutor {
-    pub(super) fn parse_string_array_param(args: &HashMap<String, Value>, key: &str) -> Option<Vec<String>> {
+    pub(super) fn parse_string_array_param(
+        args: &HashMap<String, Value>,
+        key: &str,
+    ) -> Option<Vec<String>> {
         args.get(key).and_then(|v| {
             v.as_array().map(|arr| {
                 arr.iter()
@@ -25,7 +28,10 @@ impl ToolExecutor {
         excludes.iter().any(|pat| entry_name == pat)
     }
 
-    pub(crate) async fn execute_file_read_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_file_read_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -223,7 +229,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_file_write_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_file_write_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -336,7 +345,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_file_delete_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_file_delete_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let raw_path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -419,7 +431,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_file_list_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_file_list_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let requested_path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -673,11 +688,7 @@ async fn try_auto_format(path: &str, ext: &str) -> Result<()> {
     match format_file(path.to_string(), project_root).await {
         Ok(result) => {
             if result.formatted && result.changed {
-                tracing::debug!(
-                    "[auto-format] Formatted {} with {}",
-                    path,
-                    result.formatter
-                );
+                tracing::debug!("[auto-format] Formatted {} with {}", path, result.formatter);
             }
         }
         Err(e) => {

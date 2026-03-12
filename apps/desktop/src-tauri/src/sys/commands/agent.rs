@@ -58,14 +58,15 @@ pub async fn agent_init(
 
     // Extract the PlaywrightBridge from BrowserStateWrapper if available.
     // This allows Navigate actions to use CDP instead of OS-level open.
-    let browser_bridge = browser_state
-        .get()
-        .ok()
-        .map(|bs| bs.playwright.clone());
+    let browser_bridge = browser_state.get().ok().map(|bs| bs.playwright.clone());
 
-    let agent =
-        AutonomousAgent::with_browser_bridge(config, automation_arc, router_for_agent, browser_bridge)
-            .map_err(|e| format!("Failed to create agent: {}", e))?;
+    let agent = AutonomousAgent::with_browser_bridge(
+        config,
+        automation_arc,
+        router_for_agent,
+        browser_bridge,
+    )
+    .map_err(|e| format!("Failed to create agent: {}", e))?;
 
     let agent_arc = Arc::new(TokioMutex::new(agent));
 

@@ -122,7 +122,7 @@ export const UsageDashboard: React.FC = () => {
         {}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics Dashboard</h1>
-          <button
+          <button type="button"
             onClick={refreshAllMetrics}
             disabled={isLoadingMetrics}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"

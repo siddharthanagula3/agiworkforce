@@ -462,19 +462,12 @@ impl UnifiedTaskProvider for AsanaClient {
     }
 
     async fn create_task(&self, task: Task) -> Result<String> {
-        let workspace_id = if task.project_id.is_none() {
-            let workspaces = self.list_workspaces().await?;
-            workspaces
-                .first()
-                .map(|w| w.gid.clone())
-                .ok_or_else(|| Error::Provider("No workspaces found".to_string()))?
-        } else {
-            let workspaces = self.list_workspaces().await?;
-            workspaces
-                .first()
-                .map(|w| w.gid.clone())
-                .ok_or_else(|| Error::Provider("No workspaces found".to_string()))?
-        };
+        // Bug #224 fix: Remove duplicate branch — workspace is always needed as fallback
+        let workspaces = self.list_workspaces().await?;
+        let workspace_id = workspaces
+            .first()
+            .map(|w| w.gid.clone())
+            .ok_or_else(|| Error::Provider("No workspaces found".to_string()))?;
 
         let due_on = task.due_date.map(|d| d.format("%Y-%m-%d").to_string());
 

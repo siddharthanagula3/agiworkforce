@@ -850,7 +850,9 @@ impl ToolExecutor {
         Ok(profile)
     }
 
-    pub(super) fn build_job_autofill_options(args: &HashMap<String, Value>) -> serde_json::Map<String, Value> {
+    pub(super) fn build_job_autofill_options(
+        args: &HashMap<String, Value>,
+    ) -> serde_json::Map<String, Value> {
         let mut options = Self::parse_object_argument(args, "options").unwrap_or_default();
 
         let canonical_fields = [

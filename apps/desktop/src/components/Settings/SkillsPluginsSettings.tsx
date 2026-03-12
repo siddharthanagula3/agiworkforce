@@ -150,7 +150,7 @@ function SectionHeader({
   onToggle: () => void;
 }) {
   return (
-    <button
+    <button type="button"
       className="flex items-center justify-between w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors"
       onClick={onToggle}
     >
@@ -197,7 +197,7 @@ function PluginRow({
 
   return (
     <div className="border-b border-border last:border-0">
-      <button
+      <button type="button"
         className="flex items-start gap-3 w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >

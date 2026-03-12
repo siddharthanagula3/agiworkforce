@@ -118,217 +118,218 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
   const fileCount = fileChanges.length;
   const pendingFileCount = pendingFileChanges.length;
 
-  if (!panelVisible) {
-    return null;
-  }
-
+  // BUG-387: Render AnimatePresence unconditionally, move visibility check inside
+  // so Framer Motion can run exit animations when panelVisible transitions to false.
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.2 }}
-        className={cn(
-          'fixed inset-x-0 bottom-0 z-50 flex flex-col border-t border-border bg-background shadow-2xl',
-          isMaximized ? 'top-0' : isCollapsed ? 'h-12' : 'h-[500px]',
-          className,
-        )}
-      >
-        {}
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Execution Dashboard</h2>
-            {activeGoal && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>•</span>
-                <span>
-                  {activeGoal.completedSteps}/{activeGoal.totalSteps} steps
-                </span>
-                <span>•</span>
-                <span>{activeGoal.progressPercent}%</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1">
-            {}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              title={isCollapsed ? 'Expand' : 'Collapse'}
-            >
-              {isCollapsed ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
+      {panelVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.2 }}
+          className={cn(
+            'fixed inset-x-0 bottom-0 z-50 flex flex-col border-t border-border bg-background shadow-2xl',
+            isMaximized ? 'top-0' : isCollapsed ? 'h-12' : 'h-[500px]',
+            className,
+          )}
+        >
+          {}
+          <div className="flex items-center justify-between border-b border-border px-4 py-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-foreground">Execution Dashboard</h2>
+              {activeGoal && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>•</span>
+                  <span>
+                    {activeGoal.completedSteps}/{activeGoal.totalSteps} steps
+                  </span>
+                  <span>•</span>
+                  <span>{activeGoal.progressPercent}%</span>
+                </div>
               )}
-            </Button>
+            </div>
 
-            {}
-            {!isCollapsed && (
+            <div className="flex items-center gap-1">
+              {}
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setIsMaximized(!isMaximized)}
-                title={isMaximized ? 'Restore' : 'Maximize'}
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                title={isCollapsed ? 'Expand' : 'Collapse'}
               >
-                {isMaximized ? (
-                  <Minimize2 className="h-4 w-4" />
+                {isCollapsed ? (
+                  <ChevronUp className="h-4 w-4" />
                 ) : (
-                  <Maximize2 className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" />
                 )}
               </Button>
-            )}
 
-            {}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setPanelVisible(false)}
-              title={`Close (${modKey}+Shift+E)`}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+              {}
+              {!isCollapsed && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsMaximized(!isMaximized)}
+                  title={isMaximized ? 'Restore' : 'Maximize'}
+                >
+                  {isMaximized ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
 
-        {}
-        {!isCollapsed && (
-          <Tabs.Root
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as typeof activeTab)}
-            className="flex flex-1 flex-col overflow-hidden"
-          >
-            {}
-            <Tabs.List className="flex border-b border-border bg-muted/30 px-4">
-              <Tabs.Trigger
-                value="thinking"
-                className={cn(
-                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-                  activeTab === 'thinking' && 'border-primary text-foreground',
-                )}
+              {}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setPanelVisible(false)}
+                title={`Close (${modKey}+Shift+E)`}
               >
-                <Brain className="h-4 w-4" />
-                Thinking
-                {activeStepCount > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                    {activeStepCount}
-                  </span>
-                )}
-              </Tabs.Trigger>
-
-              <Tabs.Trigger
-                value="terminal"
-                className={cn(
-                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-                  activeTab === 'terminal' && 'border-primary text-foreground',
-                )}
-              >
-                <TerminalIcon className="h-4 w-4" />
-                Terminal
-                {terminalCount > 0 && (
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {terminalCount}
-                  </span>
-                )}
-              </Tabs.Trigger>
-
-              <Tabs.Trigger
-                value="browser"
-                className={cn(
-                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-                  activeTab === 'browser' && 'border-primary text-foreground',
-                )}
-              >
-                <Globe className="h-4 w-4" />
-                Browser
-                {browserCount > 0 && (
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {browserCount}
-                  </span>
-                )}
-              </Tabs.Trigger>
-
-              <Tabs.Trigger
-                value="files"
-                className={cn(
-                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-                  activeTab === 'files' && 'border-primary text-foreground',
-                )}
-              >
-                <Files className="h-4 w-4" />
-                Files
-                {pendingFileCount > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                    {pendingFileCount}
-                  </span>
-                )}
-                {fileCount > 0 && pendingFileCount === 0 && (
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {fileCount}
-                  </span>
-                )}
-              </Tabs.Trigger>
-
-              <Tabs.Trigger
-                value="reflection"
-                className={cn(
-                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-                  activeTab === 'reflection' && 'border-primary text-foreground',
-                )}
-              >
-                <Lightbulb className="h-4 w-4" />
-                Insights
-                {hasReflectionIssues && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-xs text-white">
-                    {reflectionIssueCount}
-                  </span>
-                )}
-              </Tabs.Trigger>
-            </Tabs.List>
-
-            {}
-            <div className="flex-1 overflow-hidden">
-              <Tabs.Content value="thinking" className="h-full">
-                <ThinkingPanel />
-              </Tabs.Content>
-
-              <Tabs.Content value="terminal" className="h-full">
-                <TerminalPanel />
-              </Tabs.Content>
-
-              <Tabs.Content value="browser" className="h-full">
-                <BrowserPanel />
-              </Tabs.Content>
-
-              <Tabs.Content value="files" className="h-full">
-                <FilesPanel />
-              </Tabs.Content>
-
-              <Tabs.Content value="reflection" className="h-full">
-                <ReflectionPanel />
-              </Tabs.Content>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-          </Tabs.Root>
-        )}
-
-        {}
-        {!isCollapsed && (
-          <div className="border-t border-border bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground">
-            <kbd className="rounded bg-background px-1.5 py-0.5">{modKey}+Shift+E</kbd> Toggle •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+T</kbd>{' '}
-            Thinking •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+R</kbd>{' '}
-            Terminal •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+B</kbd> Browser
-            •<kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+F</kbd> Files
-            •<kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+I</kbd>{' '}
-            Insights
           </div>
-        )}
-      </motion.div>
+
+          {}
+          {!isCollapsed && (
+            <Tabs.Root
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
+              {}
+              <Tabs.List className="flex border-b border-border bg-muted/30 px-4">
+                <Tabs.Trigger
+                  value="thinking"
+                  className={cn(
+                    'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    activeTab === 'thinking' && 'border-primary text-foreground',
+                  )}
+                >
+                  <Brain className="h-4 w-4" />
+                  Thinking
+                  {activeStepCount > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+                      {activeStepCount}
+                    </span>
+                  )}
+                </Tabs.Trigger>
+
+                <Tabs.Trigger
+                  value="terminal"
+                  className={cn(
+                    'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    activeTab === 'terminal' && 'border-primary text-foreground',
+                  )}
+                >
+                  <TerminalIcon className="h-4 w-4" />
+                  Terminal
+                  {terminalCount > 0 && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {terminalCount}
+                    </span>
+                  )}
+                </Tabs.Trigger>
+
+                <Tabs.Trigger
+                  value="browser"
+                  className={cn(
+                    'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    activeTab === 'browser' && 'border-primary text-foreground',
+                  )}
+                >
+                  <Globe className="h-4 w-4" />
+                  Browser
+                  {browserCount > 0 && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {browserCount}
+                    </span>
+                  )}
+                </Tabs.Trigger>
+
+                <Tabs.Trigger
+                  value="files"
+                  className={cn(
+                    'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    activeTab === 'files' && 'border-primary text-foreground',
+                  )}
+                >
+                  <Files className="h-4 w-4" />
+                  Files
+                  {pendingFileCount > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+                      {pendingFileCount}
+                    </span>
+                  )}
+                  {fileCount > 0 && pendingFileCount === 0 && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {fileCount}
+                    </span>
+                  )}
+                </Tabs.Trigger>
+
+                <Tabs.Trigger
+                  value="reflection"
+                  className={cn(
+                    'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    activeTab === 'reflection' && 'border-primary text-foreground',
+                  )}
+                >
+                  <Lightbulb className="h-4 w-4" />
+                  Insights
+                  {hasReflectionIssues && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-xs text-white">
+                      {reflectionIssueCount}
+                    </span>
+                  )}
+                </Tabs.Trigger>
+              </Tabs.List>
+
+              {}
+              <div className="flex-1 overflow-hidden">
+                <Tabs.Content value="thinking" className="h-full">
+                  <ThinkingPanel />
+                </Tabs.Content>
+
+                <Tabs.Content value="terminal" className="h-full">
+                  <TerminalPanel />
+                </Tabs.Content>
+
+                <Tabs.Content value="browser" className="h-full">
+                  <BrowserPanel />
+                </Tabs.Content>
+
+                <Tabs.Content value="files" className="h-full">
+                  <FilesPanel />
+                </Tabs.Content>
+
+                <Tabs.Content value="reflection" className="h-full">
+                  <ReflectionPanel />
+                </Tabs.Content>
+              </div>
+            </Tabs.Root>
+          )}
+
+          {}
+          {!isCollapsed && (
+            <div className="border-t border-border bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground">
+              <kbd className="rounded bg-background px-1.5 py-0.5">{modKey}+Shift+E</kbd> Toggle •
+              <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+T</kbd>{' '}
+              Thinking •
+              <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+R</kbd>{' '}
+              Terminal •
+              <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+B</kbd>{' '}
+              Browser •
+              <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+F</kbd> Files
+              •<kbd className="ml-2 rounded bg-background px-1.5 py-0.5">{modKey}+Shift+I</kbd>{' '}
+              Insights
+            </div>
+          )}
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

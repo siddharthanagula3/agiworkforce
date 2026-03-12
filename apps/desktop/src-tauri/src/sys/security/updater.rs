@@ -3,6 +3,21 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
 
+/// Lightweight semver tuple for comparison without pulling in a crate.
+/// Parses `major.minor.patch` (optional `-pre` suffix is ignored for ordering).
+fn parse_semver(s: &str) -> Option<(u64, u64, u64)> {
+    // Strip optional pre-release / build metadata for the numeric comparison
+    let numeric_part = s.split('-').next().unwrap_or(s);
+    let parts: Vec<&str> = numeric_part.split('.').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let major = parts[0].parse::<u64>().ok()?;
+    let minor = parts[1].parse::<u64>().ok()?;
+    let patch = parts[2].parse::<u64>().ok()?;
+    Some((major, minor, patch))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateMetadata {
     pub version: String,
@@ -177,8 +192,27 @@ impl UpdateSecurityManager {
         }
     }
 
+    /// Compare versions using semantic versioning rules (Bug #70 fix).
+    ///
+    /// Returns `true` when `new_version` is strictly greater than
+    /// `current_version`. Falls back to string inequality if either
+    /// version string cannot be parsed as semver.
     pub fn should_update(&self, current_version: &str, new_version: &str) -> bool {
-        current_version != new_version
+        // Parse both versions, stripping an optional leading 'v'
+        let cur = current_version.strip_prefix('v').unwrap_or(current_version);
+        let new = new_version.strip_prefix('v').unwrap_or(new_version);
+
+        match (parse_semver(cur), parse_semver(new)) {
+            (Some(c), Some(n)) => n > c,
+            _ => {
+                tracing::warn!(
+                    "Could not parse semver for version comparison: '{}' vs '{}', falling back to string compare",
+                    current_version,
+                    new_version
+                );
+                current_version != new_version
+            }
+        }
     }
 
     pub fn validate_download_url(&self, url: &str) -> Result<(), String> {
@@ -349,8 +383,24 @@ mod tests {
     fn test_version_comparison() {
         let manager = UpdateSecurityManager::new(None);
 
+        // Newer version should trigger update
         assert!(manager.should_update("1.0.0", "1.1.0"));
+        assert!(manager.should_update("1.0.0", "2.0.0"));
+        assert!(manager.should_update("1.0.0", "1.0.1"));
+
+        // Same version should NOT trigger update
         assert!(!manager.should_update("1.0.0", "1.0.0"));
+
+        // Older version should NOT trigger update (Bug #70 — was broken with string compare)
+        assert!(!manager.should_update("1.1.0", "1.0.0"));
+        assert!(!manager.should_update("2.0.0", "1.9.9"));
+
+        // Handles 'v' prefix
+        assert!(manager.should_update("v1.0.0", "v1.0.1"));
+        assert!(!manager.should_update("v1.0.1", "v1.0.0"));
+
+        // Pre-release suffix (numeric part wins)
+        assert!(manager.should_update("1.0.0-beta", "1.0.1-rc"));
     }
 
     #[test]

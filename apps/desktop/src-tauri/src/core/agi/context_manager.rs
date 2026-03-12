@@ -175,12 +175,14 @@ impl ContextManager {
         );
 
         let router_guard = router.lock().await;
+        // Use router default (Auto strategy) instead of hardcoding a specific model.
+        // The router will pick the best available cheap/fast model.
         let summary_response = router_guard
             .send_message(
                 &summarization_prompt,
                 Some(RouterPreferences {
                     provider: None,
-                    model: Some("gpt-4o-mini".to_string()),
+                    model: None,
                     strategy: crate::core::llm::RoutingStrategy::Auto,
                     context: None,
                     prefer_cloud_credits: false,

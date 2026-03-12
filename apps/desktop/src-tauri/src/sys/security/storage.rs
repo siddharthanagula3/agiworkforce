@@ -109,11 +109,22 @@ impl SecureStorage {
     }
 
     /// Lock storage (clear master key from memory)
+    ///
+    /// Uses volatile writes to prevent the compiler from optimizing away the
+    /// zeroization (Bug #65 fix — matches master_password.rs pattern).
     pub fn lock(&self) {
         if let Ok(mut master) = self.master_key.safe_write() {
             if let Some(ref mut key) = *master {
-                // Zero out the key before dropping
-                key.iter_mut().for_each(|b| *b = 0);
+                // Secure zeroization via volatile writes + compiler fence
+                for byte in key.iter_mut() {
+                    // SAFETY: volatile_write ensures the write is not optimized away
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        std::ptr::write_volatile(byte, 0);
+                    }
+                }
+                // Memory barrier to ensure all writes complete
+                std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
             }
             *master = None;
         }

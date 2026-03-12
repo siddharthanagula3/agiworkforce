@@ -9,6 +9,16 @@ use url::Url;
 
 use crate::sys::error::{Error, Result};
 
+/// Escape special characters in a string intended for insertion into a
+/// JavaScript single-quoted string literal.
+fn escape_js_string_cdp(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('`', "\\`")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
 pub struct CdpClient {
     ws_url: String,
     message_id: Arc<AtomicU64>,
@@ -215,6 +225,7 @@ impl CdpClient {
     }
 
     pub async fn click_element(&self, selector: &str) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -224,7 +235,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector, selector
+            safe, safe
         );
 
         self.evaluate(&script).await?;
@@ -238,6 +249,8 @@ impl CdpClient {
         clear_first: bool,
     ) -> Result<()> {
         let clear_script = if clear_first { "el.value = '';" } else { "" };
+        let safe_selector = escape_js_string_cdp(selector);
+        let safe_text = escape_js_string_cdp(text);
 
         let script = format!(
             r#"
@@ -252,10 +265,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector,
-            selector,
-            clear_script,
-            text.replace('\\', "\\\\").replace('\'', "\\'")
+            safe_selector, safe_selector, clear_script, safe_text
         );
 
         self.evaluate(&script).await?;
@@ -263,6 +273,7 @@ impl CdpClient {
     }
 
     pub async fn get_text(&self, selector: &str) -> Result<String> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -271,7 +282,7 @@ impl CdpClient {
                 return el.textContent || el.innerText || '';
             }})()
             "#,
-            selector, selector
+            safe, safe
         );
 
         let result = self.evaluate(&script).await?;
@@ -283,6 +294,8 @@ impl CdpClient {
     }
 
     pub async fn get_attribute(&self, selector: &str, attribute: &str) -> Result<Option<String>> {
+        let safe_sel = escape_js_string_cdp(selector);
+        let safe_attr = escape_js_string_cdp(attribute);
         let script = format!(
             r#"
             (function() {{
@@ -291,7 +304,7 @@ impl CdpClient {
                 return el.getAttribute('{}');
             }})()
             "#,
-            selector, selector, attribute
+            safe_sel, safe_sel, safe_attr
         );
 
         let result = self.evaluate(&script).await?;
@@ -300,6 +313,7 @@ impl CdpClient {
     }
 
     pub async fn wait_for_selector(&self, selector: &str, timeout_ms: u64) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             new Promise((resolve, reject) => {{
@@ -326,7 +340,7 @@ impl CdpClient {
                 check();
             }})
             "#,
-            timeout_ms, selector, selector
+            timeout_ms, safe, safe
         );
 
         self.evaluate(&script).await?;
@@ -334,13 +348,14 @@ impl CdpClient {
     }
 
     pub async fn element_exists(&self, selector: &str) -> Result<bool> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
                 return !!document.querySelector('{}');
             }})()
             "#,
-            selector
+            safe
         );
 
         let result = self.evaluate(&script).await?;
@@ -349,6 +364,8 @@ impl CdpClient {
     }
 
     pub async fn select_option(&self, selector: &str, value: &str) -> Result<()> {
+        let safe_sel = escape_js_string_cdp(selector);
+        let safe_val = escape_js_string_cdp(value);
         let script = format!(
             r#"
             (function() {{
@@ -359,9 +376,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector,
-            selector,
-            value.replace('\\', "\\\\").replace('\'', "\\'")
+            safe_sel, safe_sel, safe_val
         );
 
         self.evaluate(&script).await?;
@@ -369,6 +384,7 @@ impl CdpClient {
     }
 
     pub async fn set_checked(&self, selector: &str, checked: bool) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -379,7 +395,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector, selector, checked
+            safe, safe, checked
         );
 
         self.evaluate(&script).await?;
@@ -387,6 +403,7 @@ impl CdpClient {
     }
 
     pub async fn focus_element(&self, selector: &str) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -396,7 +413,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector, selector
+            safe, safe
         );
 
         self.evaluate(&script).await?;
@@ -404,6 +421,7 @@ impl CdpClient {
     }
 
     pub async fn hover_element(&self, selector: &str) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -414,7 +432,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector, selector
+            safe, safe
         );
 
         self.evaluate(&script).await?;
@@ -422,6 +440,7 @@ impl CdpClient {
     }
 
     pub async fn scroll_into_view(&self, selector: &str) -> Result<()> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -431,7 +450,7 @@ impl CdpClient {
                 return true;
             }})()
             "#,
-            selector, selector
+            safe, safe
         );
 
         self.evaluate(&script).await?;
@@ -439,6 +458,7 @@ impl CdpClient {
     }
 
     pub async fn query_all(&self, selector: &str) -> Result<Vec<Value>> {
+        let safe = escape_js_string_cdp(selector);
         let script = format!(
             r#"
             (function() {{
@@ -451,7 +471,7 @@ impl CdpClient {
                 }}));
             }})()
             "#,
-            selector
+            safe
         );
 
         let result = self.evaluate(&script).await?;

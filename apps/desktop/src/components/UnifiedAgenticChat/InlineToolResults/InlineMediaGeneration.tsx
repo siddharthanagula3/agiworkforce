@@ -241,7 +241,13 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
 
       {/* Video Player */}
       <div className="relative bg-black/40 aspect-video">
-        <video src={resolvedVideoUrl} controls className="w-full h-full" />
+        {/^(https?:|data:|blob:)/i.test(resolvedVideoUrl) ? (
+          <video src={resolvedVideoUrl} controls className="w-full h-full" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+            Invalid video source
+          </div>
+        )}
       </div>
 
       {/* Info Footer */}

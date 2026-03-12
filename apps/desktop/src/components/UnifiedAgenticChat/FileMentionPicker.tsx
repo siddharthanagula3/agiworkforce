@@ -338,7 +338,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         </div>
       ) : (
         displayEntries.map((entry, i) => (
-          <button
+          <button type="button"
             key={entry.path}
             data-mention-item
             role="option"

@@ -358,11 +358,7 @@ impl SchedulerState {
                 };
 
                 for (job_id, action_type, action_data, job_name) in due_jobs {
-                    tracing::info!(
-                        "[Scheduler] Firing due job '{}' (id={})",
-                        job_name,
-                        job_id
-                    );
+                    tracing::info!("[Scheduler] Firing due job '{}' (id={})", job_name, job_id);
 
                     let started_at = chrono::Utc::now();
                     let result =
@@ -650,13 +646,8 @@ pub async fn scheduler_run_job_now(
     // Record the start time before dispatching so history timestamps are accurate
     let started_at = chrono::Utc::now();
 
-    let execution_result = dispatch_job_action(
-        &job.action_type,
-        &job.action_data,
-        &job.name,
-        &app_handle,
-    )
-    .await;
+    let execution_result =
+        dispatch_job_action(&job.action_type, &job.action_data, &job.name, &app_handle).await;
 
     let completed_at = chrono::Utc::now();
     let duration_ms = (completed_at - started_at).num_milliseconds();
@@ -681,9 +672,10 @@ pub async fn scheduler_run_job_now(
 
     // Record execution history with accurate timestamps and duration
     {
-        let mut history = state.execution_history.write().map_err(|e| {
-            Error::Generic(format!("Failed to acquire history write lock: {}", e))
-        })?;
+        let mut history = state
+            .execution_history
+            .write()
+            .map_err(|e| Error::Generic(format!("Failed to acquire history write lock: {}", e)))?;
 
         let record = JobExecutionRecord {
             id: history.len() as i64 + 1,
@@ -776,9 +768,7 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
 
     // Block command chaining that could bypass checks via encoded/obfuscated patterns
     if cmd_lower.contains("\\x") || cmd_lower.contains("$'\\") || cmd_lower.contains("$(printf") {
-        tracing::warn!(
-            "[SECURITY][Scheduler] Blocked command with encoded/obfuscated characters"
-        );
+        tracing::warn!("[SECURITY][Scheduler] Blocked command with encoded/obfuscated characters");
         return Err(
             "Command blocked: contains encoded or obfuscated characters. \
              Use plain text commands only."
@@ -820,7 +810,11 @@ async fn dispatch_job_action(
             // SECURITY: Validate command against dangerous patterns
             validate_shell_command(command)?;
 
-            tracing::info!("[Scheduler] Executing shell command for job '{}': {}", job_name, command);
+            tracing::info!(
+                "[Scheduler] Executing shell command for job '{}': {}",
+                job_name,
+                command
+            );
 
             let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"
@@ -865,8 +859,7 @@ async fn dispatch_job_action(
                 guard
                     .as_ref()
                     .ok_or_else(|| {
-                        "AGI Orchestrator not initialized. Please initialize it first."
-                            .to_string()
+                        "AGI Orchestrator not initialized. Please initialize it first.".to_string()
                     })?
                     .clone()
             };
@@ -1034,7 +1027,11 @@ async fn dispatch_job_action(
             // SECURITY: Validate script against dangerous patterns
             validate_shell_command(script)?;
 
-            tracing::info!("[Scheduler] Executing script for job '{}': <{} chars>", job_name, script.len());
+            tracing::info!(
+                "[Scheduler] Executing script for job '{}': <{} chars>",
+                job_name,
+                script.len()
+            );
 
             let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"

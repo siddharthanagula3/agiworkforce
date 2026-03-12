@@ -12,8 +12,8 @@
 #[cfg(test)]
 mod security_tests {
     use crate::sys::security::command_validator::{
-        requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
-        ValidationConfig,
+        requires_confirmation, validate_command, validate_interactive_input,
+        CommandValidationError, ValidationConfig,
     };
     use crate::sys::security::tool_guard::{RiskLevel, ToolSafetyTier};
 
@@ -891,8 +891,7 @@ mod security_tests {
     #[test]
     fn test_error_is_std_error() {
         // CommandValidationError implements std::error::Error
-        let err: Box<dyn std::error::Error> =
-            Box::new(CommandValidationError::EmptyCommand);
+        let err: Box<dyn std::error::Error> = Box::new(CommandValidationError::EmptyCommand);
         assert!(!err.to_string().is_empty());
     }
 
@@ -1032,6 +1031,10 @@ mod security_tests {
         // wget, curl, etc. are suspicious but not blocked on their own
         let cfg = ValidationConfig::interactive();
         assert!(validate_command("wget https://example.com/file.tar.gz", &cfg).is_ok());
-        assert!(validate_command("curl -o /tmp/file.txt https://api.github.com/users/octocat", &cfg).is_ok());
+        assert!(validate_command(
+            "curl -o /tmp/file.txt https://api.github.com/users/octocat",
+            &cfg
+        )
+        .is_ok());
     }
 }

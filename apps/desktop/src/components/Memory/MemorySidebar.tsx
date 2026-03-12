@@ -122,7 +122,7 @@ export const MemorySidebar = memo(function MemorySidebar({
             <ScrollArea className="flex-1 p-2">
               <div className="space-y-2">
                 {importantMemories.map((memory) => (
-                  <button
+                  <button type="button"
                     key={memory.id}
                     onClick={() => handleMemoryClick(memory)}
                     className="w-full flex flex-col gap-2 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-left group"

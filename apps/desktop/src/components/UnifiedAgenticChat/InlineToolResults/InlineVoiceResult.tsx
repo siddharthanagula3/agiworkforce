@@ -64,7 +64,7 @@ export function InlineVoiceResult({ result, status }: ToolResultProps) {
       </div>
 
       <div className="p-3 space-y-3">
-        {audioUrl && (
+        {audioUrl && /^(https?:|data:|blob:)/i.test(audioUrl) && (
           <audio src={audioUrl} controls className="w-full h-8" style={{ colorScheme: 'dark' }} />
         )}
 

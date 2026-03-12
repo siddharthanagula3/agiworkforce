@@ -110,7 +110,7 @@ function exportThemeToFile(theme: ThemeDefinition): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast.success(`Exported "${theme.name}"`);
 }
 

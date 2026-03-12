@@ -223,6 +223,7 @@ impl AuthDatabaseManager {
         let refresh_token_encrypted = encrypt_token(&session.refresh_token)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
+        // SECURITY: Do NOT store plaintext tokens — only store hashes (for lookup) and encrypted forms (for retrieval)
         db.execute(
             "INSERT INTO auth_sessions (session_id, user_id, access_token, refresh_token,
              access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
@@ -231,8 +232,8 @@ impl AuthDatabaseManager {
             params![
                 &session.session_id,
                 &session.user_id,
-                &session.access_token,
-                &session.refresh_token,
+                "[redacted]",
+                "[redacted]",
                 &access_token_hash,
                 &access_token_encrypted,
                 &refresh_token_hash,
@@ -380,6 +381,7 @@ impl AuthDatabaseManager {
         let access_token_encrypted = encrypt_token(new_access_token)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
+        // SECURITY: Do NOT store plaintext token — only store hash (for lookup) and encrypted form (for retrieval)
         db.execute(
             "UPDATE auth_sessions SET
              access_token = ?1,
@@ -389,7 +391,7 @@ impl AuthDatabaseManager {
              last_activity_at = ?5
              WHERE session_id = ?6",
             params![
-                new_access_token,
+                "[redacted]",
                 &access_token_hash,
                 &access_token_encrypted,
                 new_expires_at.to_rfc3339(),

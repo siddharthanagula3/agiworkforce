@@ -1,10 +1,10 @@
-//! Context compaction API (CTX-004).
-
 use tauri::State;
 use tracing::info;
 
-use super::state::AppDatabase;
+use crate::core::agent::context_compactor::{CompactionConfig, ContextCompactor};
 use crate::data::db::repository;
+
+use super::AppDatabase;
 
 /// Response from context compaction
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -41,8 +41,6 @@ pub async fn chat_compact_context(
     focus: Option<String>,
     user_id: String,
 ) -> Result<ContextCompactionResponse, String> {
-    use crate::core::agent::context_compactor::{CompactionConfig, ContextCompactor};
-
     if conversation_id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
@@ -53,15 +51,12 @@ pub async fn chat_compact_context(
         return Err("User ID cannot be empty".to_string());
     }
 
-    // Load messages in a block to release the connection before async operations
     let messages = {
         let conn = db.connection()?;
 
-        // Verify conversation ownership
         repository::get_conversation(&conn, conversation_id, &user_id)
             .map_err(|e| format!("Access denied or conversation not found: {e}"))?;
 
-        // Load messages for the conversation
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to load messages: {e}"))?
     };
@@ -78,13 +73,11 @@ pub async fn chat_compact_context(
         });
     }
 
-    // Calculate current token count
     let tokens_before: usize = messages
         .iter()
-        .map(|m| m.tokens.unwrap_or(0) as usize)
+        .map(|message| message.tokens.unwrap_or(0) as usize)
         .sum();
 
-    // Check if compaction is needed
     if messages.len() < 10 {
         return Ok(ContextCompactionResponse {
             messages_compacted: 0,
@@ -100,21 +93,19 @@ pub async fn chat_compact_context(
         });
     }
 
-    // Create compactor with custom config based on focus
     let config = CompactionConfig {
         max_tokens: 100_000,
         target_tokens: 50_000,
         keep_recent: match focus.as_deref() {
-            Some("errors") | Some("debug") => 15, // Keep more recent for debugging
-            Some("decisions") | Some("todo") => 5, // Keep fewer, focus on decisions
-            _ => 10,                              // Default
+            Some("errors") | Some("debug") => 15,
+            Some("decisions") | Some("todo") => 5,
+            _ => 10,
         },
         min_messages: 10,
     };
 
     let compactor = ContextCompactor::new(config);
 
-    // Check if compaction would be beneficial
     if !compactor.should_compact(&messages) {
         return Ok(ContextCompactionResponse {
             messages_compacted: 0,
@@ -130,17 +121,15 @@ pub async fn chat_compact_context(
         });
     }
 
-    // Generate summary using heuristic method (LLM integration would require async setup)
     let summary = compactor
         .generate_summary(&messages)
         .await
         .map_err(|e| format!("Failed to generate summary: {e}"))?;
 
-    // Get compacted messages
     let compacted = compactor.get_compacted_messages(&messages, &summary);
     let tokens_after: usize = compacted
         .iter()
-        .map(|m| m.tokens.unwrap_or(0) as usize)
+        .map(|message| message.tokens.unwrap_or(0) as usize)
         .sum();
 
     let messages_compacted = messages.len() - compacted.len();
@@ -158,9 +147,6 @@ pub async fn chat_compact_context(
         tokens_after,
         savings_percent
     );
-
-    // Note: We don't actually delete messages from DB - the compaction is for the LLM context
-    // The summary could be stored as a system message if needed
 
     Ok(ContextCompactionResponse {
         messages_compacted,

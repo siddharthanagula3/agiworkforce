@@ -263,12 +263,20 @@ impl AgentOrchestrator {
         Ok(agent_id)
     }
 
+    /// Bug #53 fix: Actually spawn agents in parallel using `join_all` instead
+    /// of sequentially awaiting each one in a loop.
     pub async fn spawn_parallel(&self, goals: Vec<Goal>) -> Result<Vec<String>> {
-        let mut agent_ids = Vec::new();
+        use futures_util::future::join_all;
 
-        for goal in goals {
-            let agent_id = self.spawn_agent(goal).await?;
-            agent_ids.push(agent_id);
+        let futures: Vec<_> = goals
+            .into_iter()
+            .map(|goal| self.spawn_agent(goal))
+            .collect();
+        let results = join_all(futures).await;
+
+        let mut agent_ids = Vec::with_capacity(results.len());
+        for result in results {
+            agent_ids.push(result?);
         }
 
         Ok(agent_ids)

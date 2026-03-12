@@ -55,7 +55,9 @@ impl WorkflowScheduler {
 
         tracing::info!(
             "Scheduled workflow {} with cron: {} (timezone: {:?})",
-            workflow_id, cron_expr, timezone
+            workflow_id,
+            cron_expr,
+            timezone
         );
 
         Ok(())
@@ -69,7 +71,8 @@ impl WorkflowScheduler {
     ) -> Result<String, String> {
         tracing::info!(
             "Triggering workflow {} on event: {}",
-            workflow_id, event_type
+            workflow_id,
+            event_type
         );
 
         self.executor
@@ -100,7 +103,8 @@ impl WorkflowScheduler {
     ) -> Result<(), String> {
         tracing::info!(
             "Registered file watcher for workflow {} at path: {}",
-            workflow_id, path
+            workflow_id,
+            path
         );
 
         Ok(())
@@ -114,7 +118,8 @@ impl WorkflowScheduler {
     ) -> Result<(), String> {
         tracing::info!(
             "Registered email trigger for workflow {} on account: {}",
-            workflow_id, account_id
+            workflow_id,
+            account_id
         );
 
         Ok(())
@@ -129,7 +134,10 @@ impl WorkflowScheduler {
     ) -> Result<(), String> {
         tracing::info!(
             "Registered database trigger for workflow {} on {}.{} ({})",
-            workflow_id, database_id, table, operation
+            workflow_id,
+            database_id,
+            table,
+            operation
         );
 
         Ok(())
@@ -143,7 +151,9 @@ impl WorkflowScheduler {
     ) -> Result<(), String> {
         tracing::info!(
             "Registered API trigger for workflow {} at {} {}",
-            workflow_id, method, endpoint
+            workflow_id,
+            method,
+            endpoint
         );
 
         Ok(())

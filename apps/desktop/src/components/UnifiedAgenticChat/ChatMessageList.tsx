@@ -78,8 +78,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       const a = document.createElement('a');
       a.href = url;
       a.download = `conversation-${new Date().toISOString()}.json`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Failed to export conversation:', err);
     }
@@ -165,7 +167,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         <p className="text-gray-600 dark:text-gray-400">
           No messages found matching "{searchQuery}"
         </p>
-        <button
+        <button type="button"
           onClick={() => setSearchQuery('')}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
@@ -179,21 +181,21 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     <div className={`flex flex-col h-full ${className}`}>
       {}
       <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900 backdrop-blur-xs">
-        <button
+        <button type="button"
           onClick={() => setShowSearch(!showSearch)}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
           title="Search messages"
         >
           <Search size={16} className="text-gray-600 dark:text-gray-400" />
         </button>
-        <button
+        <button type="button"
           onClick={handleExport}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
           title="Export conversation"
         >
           <Download size={16} className="text-gray-600 dark:text-gray-400" />
         </button>
-        <button
+        <button type="button"
           onClick={handleClearHistory}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
           title="Clear history"

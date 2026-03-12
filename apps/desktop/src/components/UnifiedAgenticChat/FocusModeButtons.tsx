@@ -55,7 +55,7 @@ export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
       className="mb-3 flex items-center justify-center gap-2 flex-wrap"
     >
       {FOCUS_MODES.map((mode) => (
-        <button
+        <button type="button"
           key={mode.value || 'all'}
           onClick={() => onFocusModeChange(mode.value)}
           className={cn(

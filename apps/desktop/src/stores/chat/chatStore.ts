@@ -566,8 +566,8 @@ export const useChatStore = create<ChatState>()(
 
             try {
               const backendMessages = await invoke<BackendMessage[]>('chat_get_messages', {
-                conversation_id: dbId,
-                user_id: userId,
+                conversationId: dbId,
+                userId: userId,
               });
 
               const enhancedMessages = backendMessages.map(convertBackendMessage);
@@ -1550,6 +1550,8 @@ export const useChatStore = create<ChatState>()(
                   state.toolTimelineByMessage[messageId] = [];
                 }
                 const entries = state.toolTimelineByMessage[messageId]!;
+                // Deduplicate: skip if an entry with the same id already exists
+                if (entries.some((e) => e.id === entry.id)) return;
                 // Cap per-message timeline at 200 entries to prevent unbounded growth
                 if (entries.length < 200) {
                   entries.push(entry);
@@ -1863,17 +1865,92 @@ export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimel
 export const selectThinkingByMessage = (state: ChatState) => state.thinkingByMessage;
 export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;
 
-// Cross-store subscription: update tokenUsage.max when the selected model changes
+// Cross-store subscription: update tokenUsage.max when the selected model changes.
+// Use a global singleton so module re-evaluation does not create duplicate subscriptions.
+type ChatStoreModelSubscriptionState = {
+  initialized: boolean;
+  pending: Promise<void> | null;
+  unsubscribe: (() => void) | null;
+};
+
+const CHAT_STORE_MODEL_SUBSCRIPTION_STATE = Symbol.for(
+  'agiworkforce.chatStore.modelStoreSubscriptionState',
+);
+
+function getChatStoreModelSubscriptionState(): ChatStoreModelSubscriptionState {
+  const globalScope = globalThis as typeof globalThis & {
+    [CHAT_STORE_MODEL_SUBSCRIPTION_STATE]?: ChatStoreModelSubscriptionState;
+  };
+
+  if (!globalScope[CHAT_STORE_MODEL_SUBSCRIPTION_STATE]) {
+    globalScope[CHAT_STORE_MODEL_SUBSCRIPTION_STATE] = {
+      initialized: false,
+      pending: null,
+      unsubscribe: null,
+    };
+  }
+
+  return globalScope[CHAT_STORE_MODEL_SUBSCRIPTION_STATE];
+}
+
+export async function initializeChatStoreModelStoreSubscription(): Promise<void> {
+  const subscriptionState = getChatStoreModelSubscriptionState();
+
+  if (subscriptionState.initialized) {
+    return;
+  }
+
+  if (subscriptionState.pending) {
+    return subscriptionState.pending;
+  }
+
+  subscriptionState.pending = (async () => {
+    try {
+      const modelStoreModule = await import('../modelStore');
+      const modelStore = modelStoreModule?.useModelStore as
+        | {
+            getState?: () => { selectedModel: string | null };
+            subscribe?: (
+              selector: (state: { selectedModel: string | null }) => string | null,
+              listener: (selectedModel: string | null) => void,
+            ) => () => void;
+          }
+        | undefined;
+
+      if (!modelStore || typeof modelStore.getState !== 'function') {
+        return;
+      }
+
+      const selectedModel = modelStore.getState().selectedModel;
+      if (selectedModel) {
+        useChatStore.getState().updateTokenUsage({ max: getModelContextWindow(selectedModel) });
+      }
+
+      if (typeof modelStore.subscribe === 'function') {
+        subscriptionState.unsubscribe?.();
+        subscriptionState.unsubscribe = modelStore.subscribe(
+          (state) => state.selectedModel,
+          (nextSelectedModel) => {
+            if (nextSelectedModel) {
+              useChatStore
+                .getState()
+                .updateTokenUsage({ max: getModelContextWindow(nextSelectedModel) });
+            }
+          },
+        );
+      }
+
+      subscriptionState.initialized = true;
+    } catch (err) {
+      console.warn('[chatStore] Failed to load modelStore for cross-store subscription:', err);
+    } finally {
+      subscriptionState.pending = null;
+    }
+  })();
+
+  return subscriptionState.pending;
+}
+
 if (typeof window !== 'undefined') {
-  import('../modelStore').then(({ useModelStore }) => {
-    useModelStore.subscribe(
-      (state) => state.selectedModel,
-      (selectedModel) => {
-        if (selectedModel) {
-          const contextWindow = getModelContextWindow(selectedModel);
-          useChatStore.getState().updateTokenUsage({ max: contextWindow });
-        }
-      },
-    );
-  });
+  void initializeChatStoreModelStoreSubscription();
 }

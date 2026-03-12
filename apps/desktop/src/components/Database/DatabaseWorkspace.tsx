@@ -392,7 +392,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                 <span className={cn('text-sm', isActive && 'font-medium')}>{conn.name}</span>
                 <span className="text-xs text-muted-foreground">({conn.type})</span>
 
-                <button
+                <button type="button"
                   onClick={(e) => handleCloseConnection(conn.id, e)}
                   className={cn(
                     'text-muted-foreground hover:text-destructive',
@@ -761,7 +761,7 @@ function SchemaExplorer({
           ) : (
             <div className="space-y-1 p-2">
               {tables.map((table) => (
-                <button
+                <button type="button"
                   key={table}
                   onClick={() => handleTableClick(table)}
                   className={cn(

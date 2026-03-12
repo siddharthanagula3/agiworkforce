@@ -442,7 +442,10 @@ impl ToolExecutor {
         })
     }
 
-    pub(crate) async fn execute_code_execute_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_code_execute_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let language = args
             .get("language")
             .and_then(|v| v.as_str())
@@ -568,9 +571,7 @@ impl ToolExecutor {
             || root.join("jest.config.cjs").exists()
         {
             "jest".to_string()
-        } else if root.join("vitest.config.ts").exists()
-            || root.join("vitest.config.js").exists()
-        {
+        } else if root.join("vitest.config.ts").exists() || root.join("vitest.config.js").exists() {
             "vitest".to_string()
         } else if root.join("go.mod").exists() {
             "go".to_string()
@@ -638,7 +639,10 @@ impl ToolExecutor {
         self.execute_terminal_tool(terminal_args, action_id).await
     }
 
-    pub(crate) async fn execute_code_analyze_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_code_analyze_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let code = args
             .get("code")
             .and_then(|v| v.as_str())

@@ -34,8 +34,7 @@ use tauri::Emitter;
 /// Set to `true` while the global PTT listener thread is running.
 /// `voice_stop_global_ptt` flips it to `false` which causes the listener
 /// thread to exit at its next iteration.
-static PTT_RUNNING: Lazy<Arc<AtomicBool>> =
-    Lazy::new(|| Arc::new(AtomicBool::new(false)));
+static PTT_RUNNING: Lazy<Arc<AtomicBool>> = Lazy::new(|| Arc::new(AtomicBool::new(false)));
 
 /// Join handle of the OS listener thread (if started).
 /// We keep it so we can detect double-starts cleanly.

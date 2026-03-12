@@ -1048,8 +1048,7 @@ impl LLMRouter {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
             routed_request.model =
-                crate::core::llm::models_config::get_default_model(&candidate.provider)
-                    .to_string();
+                crate::core::llm::models_config::get_default_model(&candidate.provider).to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }
@@ -1210,10 +1209,8 @@ impl LLMRouter {
                     // 403/401 auth error: rewrite to user-friendly message and
                     // break immediately — retrying won't help with a bad API key.
                     if is_auth_error(&error_str) {
-                        let friendly = rewrite_auth_error(
-                            &error_str,
-                            candidate.provider.as_string(),
-                        );
+                        let friendly =
+                            rewrite_auth_error(&error_str, candidate.provider.as_string());
                         tracing::warn!(
                             provider = %candidate.provider.as_string(),
                             "Auth error detected, not retrying"
@@ -2035,9 +2032,15 @@ impl LLMRouter {
                 TaskCategory::Creative => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
             },
             Provider::Fireworks => match task {
-                TaskCategory::Simple => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
-                TaskCategory::Complex => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
-                TaskCategory::Creative => "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string(),
+                TaskCategory::Simple => {
+                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
+                }
+                TaskCategory::Complex => {
+                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
+                }
+                TaskCategory::Creative => {
+                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
+                }
             },
             Provider::Cerebras => match task {
                 TaskCategory::Simple => "llama-3.3-70b".to_string(),
@@ -2406,8 +2409,7 @@ impl LLMRouter {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
             routed_request.model =
-                crate::core::llm::models_config::get_default_model(&candidate.provider)
-                    .to_string();
+                crate::core::llm::models_config::get_default_model(&candidate.provider).to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }
@@ -2516,10 +2518,8 @@ impl LLMRouter {
                     // 403/401 auth error: rewrite to user-friendly message and
                     // break immediately — retrying won't help with a bad API key.
                     if is_auth_error(&error_str) {
-                        let friendly = rewrite_auth_error(
-                            &error_str,
-                            candidate.provider.as_string(),
-                        );
+                        let friendly =
+                            rewrite_auth_error(&error_str, candidate.provider.as_string());
                         tracing::warn!(
                             provider = %candidate.provider.as_string(),
                             "Auth error detected in streaming path, not retrying"

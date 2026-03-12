@@ -241,7 +241,9 @@ impl ToolExecutor {
         }))
     }
 
-    pub(super) fn normalize_mcp_filesystem_list_allowed_directories(result_value: &Value) -> Option<Value> {
+    pub(super) fn normalize_mcp_filesystem_list_allowed_directories(
+        result_value: &Value,
+    ) -> Option<Value> {
         let text_blocks = Self::extract_mcp_text_blocks(result_value);
         if text_blocks.is_empty() {
             return None;

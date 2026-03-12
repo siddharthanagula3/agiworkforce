@@ -1,6 +1,7 @@
 import { Code2, Loader2, AlertCircle, MapPin, AlertTriangle, Info } from 'lucide-react';
 import type { ToolResultProps } from './index';
 import { cn } from '@/lib/utils';
+import { invoke } from '@/lib/tauri-mock';
 
 interface LSPLocation {
   file?: string;
@@ -96,7 +97,11 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
         {type === 'definition' && location && (
           <div
             className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
-            onClick={() => {}}
+            onClick={() => {
+              if (location.file) {
+                void invoke('file_open_with_default_app', { path: location.file });
+              }
+            }}
           >
             <MapPin className="h-3 w-3" />
             <span className="font-mono truncate">{location.file}</span>

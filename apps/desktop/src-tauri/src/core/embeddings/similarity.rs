@@ -117,11 +117,7 @@ impl SimilaritySearch {
     /// compared.  Different embedding models produce incompatible vector spaces,
     /// so cross-model comparison is meaningless.  When `model_id` is `None`
     /// (e.g. for legacy data), all embeddings are searched.
-    pub fn search(
-        &self,
-        query_embedding: Vector,
-        limit: usize,
-    ) -> Result<Vec<SearchResult>> {
+    pub fn search(&self, query_embedding: Vector, limit: usize) -> Result<Vec<SearchResult>> {
         self.search_with_model(query_embedding, limit, None)
     }
 
@@ -182,8 +178,7 @@ impl SimilaritySearch {
         };
 
         let rows: Vec<_> = if has_param {
-            stmt.query_map(params![model_id], row_mapper)?
-                .collect()
+            stmt.query_map(params![model_id], row_mapper)?.collect()
         } else {
             stmt.query_map([], row_mapper)?.collect()
         };

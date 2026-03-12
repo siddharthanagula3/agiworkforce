@@ -91,7 +91,7 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
                     />
                     {/* Hover action bar */}
                     <div className="absolute bottom-0 left-0 right-0 flex items-center justify-end gap-1 p-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
+                      <button type="button"
                         onClick={() => handleCopyUrl(url, i)}
                         className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
                         title="Copy image URL"
@@ -99,7 +99,7 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
                         {copiedIndex === i ? <Check size={12} /> : <Copy size={12} />}
                         <span>{copiedIndex === i ? 'Copied' : 'Copy URL'}</span>
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => handleDownload(url, i)}
                         className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
                         title="Download image"

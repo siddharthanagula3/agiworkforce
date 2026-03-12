@@ -84,6 +84,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [pendingDecision, setPendingDecision] = useState<'approve' | 'reject' | null>(null);
   const { resolveApproval } = useApprovalActions();
+  const timeoutHandledRef = useRef(false);
 
   // AUDIT-005-005 fix: Store interval ID in ref for proper cleanup
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -92,6 +93,10 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const riskConfig = RISK_LEVEL_CONFIG[approval.riskLevel];
   const RiskIcon = riskConfig.icon;
   const statusConfig = STATUS_CONFIG[approval.status];
+
+  useEffect(() => {
+    timeoutHandledRef.current = false;
+  }, [approval.id]);
 
   // AUDIT-005-005 fix: Ensure interval is cleared when status changes and on unmount
   useEffect(() => {
@@ -130,6 +135,36 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     };
   }, [approval.createdAt, approval.timeoutSeconds, approval.status]);
 
+  useEffect(() => {
+    if (approval.status !== 'pending' || timeRemaining === null || timeRemaining > 0) {
+      return;
+    }
+
+    if (timeoutHandledRef.current) {
+      return;
+    }
+
+    timeoutHandledRef.current = true;
+
+    void (async () => {
+      if (onReject) {
+        onReject('Approval request timed out');
+        return;
+      }
+
+      setPendingDecision('reject');
+      try {
+        await resolveApproval(approval, 'reject', {
+          reason: 'Approval request timed out',
+        });
+      } catch (error) {
+        console.error('Failed to auto-reject timed out approval:', error);
+      } finally {
+        setPendingDecision(null);
+      }
+    })();
+  }, [approval, onReject, resolveApproval, timeRemaining]);
+
   const formattedTime = new Date(approval.createdAt).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -137,12 +172,18 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   });
 
   const handleApprove = async () => {
+    if (pendingDecision) return;
+    setPendingDecision('approve');
+
     if (onApprove) {
-      onApprove();
+      try {
+        onApprove();
+      } finally {
+        setPendingDecision(null);
+      }
       return;
     }
 
-    setPendingDecision('approve');
     try {
       await resolveApproval(approval, 'approve');
     } catch (error) {
@@ -186,7 +227,13 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     }
   };
 
-  const detailsJson = approval.details ? formatJson(approval.details) : '';
+  const sanitizedDetails = approval.details
+    ? Object.fromEntries(
+        Object.entries(approval.details).filter(([key]) => key !== 'messageId'),
+      )
+    : null;
+  const detailsJson =
+    sanitizedDetails && Object.keys(sanitizedDetails).length > 0 ? formatJson(sanitizedDetails) : '';
 
   return (
     <div
@@ -269,9 +316,9 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
       </div>
 
       {}
-      {approval.details && (
+      {detailsJson && (
         <div className="px-4 pb-2 border-t border-yellow-200 dark:border-yellow-800">
-          <button
+          <button type="button"
             onClick={() => setShowDetails(!showDetails)}
             className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 py-2 hover:text-gray-900 dark:hover:text-gray-100"
           >
@@ -304,14 +351,14 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
               />
               <div className="flex gap-2">
-                <button
+                <button type="button"
                   onClick={handleReject}
                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-60"
                   disabled={pendingDecision === 'reject'}
                 >
                   Confirm Rejection
                 </button>
-                <button
+                <button type="button"
                   onClick={() => {
                     setShowRejectReason(false);
                     setRejectReason('');
@@ -324,7 +371,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={handleApprove}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
                 disabled={pendingDecision !== null}
@@ -332,7 +379,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
                 <Check size={16} />
                 Approve
               </button>
-              <button
+              <button type="button"
                 onClick={handleReject}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
                 disabled={pendingDecision !== null}

@@ -193,7 +193,7 @@ export const AnalyticsSettings = () => {
                 Download all analytics data we've collected about you
               </p>
             </div>
-            <button
+            <button type="button"
               onClick={handleExportData}
               disabled={isExporting}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -210,7 +210,7 @@ export const AnalyticsSettings = () => {
                 Permanently delete all analytics data associated with this device
               </p>
             </div>
-            <button
+            <button type="button"
               onClick={() => setShowDeleteConfirm(true)}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
@@ -254,14 +254,14 @@ export const AnalyticsSettings = () => {
               undone.
             </p>
             <div className="flex gap-3">
-              <button
+              <button type="button"
                 onClick={handleDeleteAllData}
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete All Data'}
               </button>
-              <button
+              <button type="button"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -290,7 +290,7 @@ const SettingToggle: React.FC<SettingToggleProps> = ({ title, description, enabl
         <h4 className="font-medium text-gray-900 dark:text-white mb-1">{title}</h4>
         <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
       </div>
-      <button
+      <button type="button"
         onClick={onToggle}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
           enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'

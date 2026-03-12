@@ -95,7 +95,17 @@ pub enum CanvasEvent {
     CanvasCleared { canvas_id: String },
     /// Active canvas changed
     ActiveCanvasChanged { canvas_id: Option<String> },
+    /// A notification was triggered
+    Notification {
+        canvas_id: Option<String>,
+        message: String,
+        notification_type: String,
+        duration_ms: Option<u32>,
+    },
 }
+
+/// Maximum number of elements allowed per canvas to prevent memory exhaustion
+const MAX_ELEMENTS_PER_CANVAS: usize = 500;
 
 /// Manages multiple canvases and their state
 pub struct CanvasManager {
@@ -222,6 +232,12 @@ impl CanvasManager {
             let canvas = canvases
                 .get_mut(canvas_id)
                 .ok_or_else(|| Error::Generic(format!("Canvas not found: {}", canvas_id)))?;
+            if canvas.elements.len() >= MAX_ELEMENTS_PER_CANVAS {
+                return Err(Error::Generic(format!(
+                    "Canvas '{}' has reached the maximum element limit ({})",
+                    canvas_id, MAX_ELEMENTS_PER_CANVAS
+                )));
+            }
             canvas.add_element(element.clone());
         }
 
@@ -274,16 +290,9 @@ impl CanvasManager {
 
         self.emit_event(CanvasEvent::ElementUpdated {
             canvas_id: canvas_id.to_string(),
-            element,
+            element: element.clone(),
         });
-        Ok({
-            let canvases = self.canvases.read();
-            canvases
-                .get(canvas_id)
-                .and_then(|c| c.get_element(element_id))
-                .cloned()
-                .ok_or_else(|| Error::Generic("Element not found after update".to_string()))?
-        })
+        Ok(element)
     }
 
     /// Clear all elements from a canvas
@@ -300,6 +309,31 @@ impl CanvasManager {
             canvas_id: canvas_id.to_string(),
         });
         Ok(())
+    }
+
+    /// Emit a notification event to the frontend
+    pub fn emit_notification(
+        &self,
+        canvas_id: Option<String>,
+        message: String,
+        notification_type: String,
+        duration_ms: Option<u32>,
+    ) {
+        self.emit_event(CanvasEvent::Notification {
+            canvas_id,
+            message,
+            notification_type,
+            duration_ms,
+        });
+    }
+
+    /// Get the element count for a canvas
+    pub fn element_count(&self, canvas_id: &str) -> Result<usize> {
+        let canvases = self.canvases.read();
+        let canvas = canvases
+            .get(canvas_id)
+            .ok_or_else(|| Error::Generic(format!("Canvas not found: {}", canvas_id)))?;
+        Ok(canvas.elements.len())
     }
 }
 

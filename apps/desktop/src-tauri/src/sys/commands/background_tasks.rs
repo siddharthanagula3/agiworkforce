@@ -217,7 +217,9 @@ pub async fn agi_extend_timeout(
 
     tracing::info!(
         "[TaskManager] Extended timeout for task '{}' by {} minutes (new deadline: {}s from start)",
-        task_id, additional_minutes, new_max
+        task_id,
+        additional_minutes,
+        new_max
     );
 
     Ok(())
@@ -305,10 +307,7 @@ pub async fn timeout_get_recommended(task_type: String) -> Result<i64, String> {
 ///
 /// Call this once during app setup, passing a clone of the TaskManager Arc and
 /// a clone of the AppHandle.
-pub fn start_timeout_warning_loop(
-    manager: Arc<TaskManager>,
-    app_handle: tauri::AppHandle,
-) {
+pub fn start_timeout_warning_loop(manager: Arc<TaskManager>, app_handle: tauri::AppHandle) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
         // Track which task IDs have already received a warning this session.

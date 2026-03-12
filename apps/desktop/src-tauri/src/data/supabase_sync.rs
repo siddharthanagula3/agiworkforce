@@ -14,8 +14,7 @@ use super::db::models::{Conversation, Message};
 
 /// Namespace UUID for deterministic cloud ID generation (uuid v5).
 const SYNC_NAMESPACE: Uuid = Uuid::from_bytes([
-    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
-    0xc8,
+    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
 ]);
 
 /// Best-effort Supabase sync client.
@@ -65,12 +64,17 @@ pub struct BulkSyncResult {
 
 impl SupabaseSyncClient {
     /// Create a new sync client. Returns `None` if Supabase is not configured.
+    ///
+    /// Checks `SUPABASE_URL` / `SUPABASE_ANON_KEY` first (correct for the Rust
+    /// backend), then falls back to the Vite-prefixed variants for dev parity.
     pub fn new() -> Option<Self> {
-        let supabase_url = std::env::var("VITE_SUPABASE_URL")
-            .or_else(|_| std::env::var("SUPABASE_URL"))
+        let supabase_url = std::env::var("SUPABASE_URL")
+            .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_URL"))
+            .or_else(|_| std::env::var("VITE_SUPABASE_URL"))
             .unwrap_or_default();
-        let supabase_anon_key = std::env::var("VITE_SUPABASE_ANON_KEY")
-            .or_else(|_| std::env::var("SUPABASE_ANON_KEY"))
+        let supabase_anon_key = std::env::var("SUPABASE_ANON_KEY")
+            .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
+            .or_else(|_| std::env::var("VITE_SUPABASE_ANON_KEY"))
             .unwrap_or_default();
 
         if supabase_url.is_empty() || supabase_anon_key.is_empty() {
@@ -148,9 +152,7 @@ impl SupabaseSyncClient {
         if !res.status().is_success() {
             let status = res.status();
             let text = res.text().await.unwrap_or_default();
-            return Err(format!(
-                "Supabase conversation sync error {status}: {text}"
-            ));
+            return Err(format!("Supabase conversation sync error {status}: {text}"));
         }
 
         debug!(
@@ -165,8 +167,7 @@ impl SupabaseSyncClient {
         let (jwt, user_uuid) =
             Self::get_auth().ok_or_else(|| "Not authenticated — skipping sync".to_string())?;
 
-        let cloud_conv_id =
-            Self::conversation_cloud_id(&user_uuid, message.conversation_id);
+        let cloud_conv_id = Self::conversation_cloud_id(&user_uuid, message.conversation_id);
         let cloud_msg_id = Self::message_cloud_id(&user_uuid, message.id);
 
         let payload = SupabaseMessage {

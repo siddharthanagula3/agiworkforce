@@ -212,7 +212,7 @@ export const SourceCard = memo(function SourceCard({
 
             {/* Open source button */}
             {source.url && (
-              <button
+              <button type="button"
                 onClick={handleOpenSource}
                 className="flex items-center gap-1.5 text-xs text-primary hover:underline"
               >

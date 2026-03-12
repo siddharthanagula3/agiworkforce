@@ -126,7 +126,7 @@ impl KeyboardSimulator {
             "shift" => Some(Key::Shift),
             "alt" | "option" | "opt" => Some(Key::Alt),
 
-            "cmd" | "command" | "meta" | "super" | "windows" => Some(Key::Control),
+            "cmd" | "command" | "meta" | "super" | "windows" => Some(Key::Meta),
             _ => None,
         }
     }

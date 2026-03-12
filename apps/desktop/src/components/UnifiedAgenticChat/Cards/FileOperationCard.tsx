@@ -133,7 +133,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
         {}
         <div className="flex items-center gap-1 shrink-0 ml-2">
           {onViewFile && (
-            <button
+            <button type="button"
               onClick={onViewFile}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               title="View file"
@@ -153,7 +153,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
                 Content modified ({operation.oldContent?.split('\n').length || 0} →{' '}
                 {operation.newContent?.split('\n').length || 0} lines)
               </div>
-              <button
+              <button type="button"
                 onClick={() => setShowFullDiff(true)}
                 className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
@@ -169,7 +169,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
                 viewMode="split"
                 showLineNumbers={true}
               />
-              <button
+              <button type="button"
                 onClick={() => setShowFullDiff(false)}
                 className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
               >
@@ -183,13 +183,13 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
       {}
       {enableApproval && (
         <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-          <button
+          <button type="button"
             onClick={onApprove}
             className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
           >
             Approve
           </button>
-          <button
+          <button type="button"
             onClick={onReject}
             className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
           >
