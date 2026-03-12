@@ -210,7 +210,9 @@ impl SessionManager {
 
         // Use the appropriate command to list all environment variables per shell
         let env_cmd = match session.shell_type {
-            ShellType::PowerShell => "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }",
+            ShellType::PowerShell => {
+                "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }"
+            }
             ShellType::Cmd => "set",
             _ => "env",
         };
@@ -361,6 +363,37 @@ impl SessionManager {
     }
 }
 
+/// Bug #191 fix: Scrub potential secrets from a command string before storing in DB.
+/// Masks values matching common secret patterns (PASSWORD=xxx, --password xxx,
+/// export SECRET=xxx, API_KEY=xxx, TOKEN=xxx, etc.).
+fn scrub_secrets(command: &str) -> String {
+    use once_cell::sync::Lazy;
+    use regex::Regex;
+
+    // Pattern: KEY=VALUE where KEY looks like a secret name
+    // Matches: PASSWORD=abc, API_KEY="abc", export SECRET_TOKEN='abc'
+    // Note: Rust regex doesn't support backreferences, so we match quoted
+    // and unquoted values without requiring matching quote pairs.
+    static SECRET_ASSIGN: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r#"(?i)((?:export\s+)?(?:\w*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_?KEY|CREDENTIALS?|AUTH)\w*))\s*=\s*['"]?([^\s'"]+)['"]?"#,
+        )
+        .expect("invalid regex")
+    });
+
+    // Pattern: --password VALUE or --token VALUE (common CLI flags)
+    static FLAG_SECRET: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r#"(?i)(--?(?:password|passwd|token|secret|api[_-]?key|auth))\s+['"]?([^\s'"]+)['"]?"#,
+        )
+        .expect("invalid regex")
+    });
+
+    let scrubbed = SECRET_ASSIGN.replace_all(command, "$1=****");
+    let scrubbed = FLAG_SECRET.replace_all(&scrubbed, "$1 ****");
+    scrubbed.into_owned()
+}
+
 async fn log_command_to_db(
     app_handle: &tauri::AppHandle,
     session_id: &str,
@@ -368,6 +401,9 @@ async fn log_command_to_db(
 ) -> Result<()> {
     use crate::sys::commands::AppDatabase;
     use rusqlite::params;
+
+    // Bug #191 fix: Scrub potential secrets before persisting to DB
+    let sanitized_command = scrub_secrets(command);
 
     let db_state = app_handle.state::<AppDatabase>();
     let conn = db_state
@@ -385,14 +421,14 @@ async fn log_command_to_db(
     // AUDIT-TERMINAL-029 fix: Include session_id to make history session-scoped
     conn.execute(
         "INSERT INTO command_history (command, working_dir, created_at, session_id) VALUES (?1, ?2, ?3, ?4)",
-        params![command, working_dir, timestamp, session_id],
+        params![sanitized_command, working_dir, timestamp, session_id],
     )
     .map_err(|e| Error::Database(e.to_string()))?;
 
     tracing::debug!(
         "Logged command to database for session {}: {}",
         session_id,
-        command
+        sanitized_command
     );
 
     Ok(())
@@ -467,6 +503,49 @@ mod tests {
         let debug_str = format!("{:?}", context);
         assert!(debug_str.contains("SessionContext"));
         assert!(debug_str.contains("/test"));
+    }
+
+    #[test]
+    fn test_scrub_secrets_password_assignment() {
+        assert_eq!(
+            scrub_secrets("export PASSWORD=mysecret123"),
+            "export PASSWORD=****"
+        );
+        assert_eq!(
+            scrub_secrets("DB_PASSWORD=hunter2 other_arg"),
+            "DB_PASSWORD=**** other_arg"
+        );
+    }
+
+    #[test]
+    fn test_scrub_secrets_api_key() {
+        assert_eq!(
+            scrub_secrets("API_KEY=sk-abc123 --verbose"),
+            "API_KEY=**** --verbose"
+        );
+        assert_eq!(scrub_secrets("MY_AUTH_TOKEN=tok_xyz"), "MY_AUTH_TOKEN=****");
+    }
+
+    #[test]
+    fn test_scrub_secrets_flag_style() {
+        assert_eq!(
+            scrub_secrets("mysql --password supersecret -h localhost"),
+            "mysql --password **** -h localhost"
+        );
+        assert_eq!(
+            scrub_secrets("curl -H --token bearer_abc123"),
+            "curl -H --token ****"
+        );
+    }
+
+    #[test]
+    fn test_scrub_secrets_no_false_positives() {
+        // Normal commands should not be scrubbed
+        let normal = "ls -la /home/user";
+        assert_eq!(scrub_secrets(normal), normal);
+
+        let git = "git commit -m 'fix auth flow'";
+        assert_eq!(scrub_secrets(git), git);
     }
 
     // Note: Full SessionManager tests require a Tauri AppHandle which

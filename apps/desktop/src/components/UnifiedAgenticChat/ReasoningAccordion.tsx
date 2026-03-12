@@ -146,7 +146,7 @@ export function ReasoningAccordion({
       {/* Inject scrollbar styles */}
       <style dangerouslySetInnerHTML={{ __html: reasoningScrollbarStyles }} />
       {/* Header */}
-      <button
+      <button type="button"
         onClick={handleToggle}
         className={cn(
           'w-full flex items-center justify-between gap-3',
@@ -209,7 +209,6 @@ export function ReasoningAccordion({
             {streamingPreview && !isOpen && !isSimpleMode && (
               <div className="mt-1.5 text-xs text-zinc-500 font-mono truncate max-w-md opacity-70">
                 {streamingPreview}
-                <span className="inline-block w-1.5 h-3 bg-agent-thinking/70 ml-0.5 animate-pulse" />
               </div>
             )}
           </div>
@@ -260,10 +259,6 @@ export function ReasoningAccordion({
                   >
                     {content}
                   </SyntaxHighlighter>
-                  {/* Blinking cursor at end of streaming content */}
-                  {isStreaming && (
-                    <span className="inline-block w-1.5 h-3.5 bg-agent-thinking ml-1 animate-pulse align-middle" />
-                  )}
                 </div>
               </div>
             </div>

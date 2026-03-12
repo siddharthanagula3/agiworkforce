@@ -88,8 +88,8 @@ pub async fn conversation_share(
         return Err("Cannot share an empty conversation".to_string());
     }
 
-    let messages_json =
-        serde_json::to_string(&messages).map_err(|e| format!("Failed to serialise messages: {e}"))?;
+    let messages_json = serde_json::to_string(&messages)
+        .map_err(|e| format!("Failed to serialise messages: {e}"))?;
 
     let token = Uuid::new_v4().to_string();
 

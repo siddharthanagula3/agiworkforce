@@ -134,6 +134,16 @@ impl MetricsAggregator {
     }
 
     pub async fn aggregate_by_user(&self, start: i64, end: i64) -> Result<Vec<UserMetrics>> {
+        self.aggregate_by_user_id("local_user", start, end).await
+    }
+
+    /// Aggregate metrics for a specific user ID.
+    pub async fn aggregate_by_user_id(
+        &self,
+        user_id: &str,
+        start: i64,
+        end: i64,
+    ) -> Result<Vec<UserMetrics>> {
         let conn = self.db.lock().await;
 
         let automation_count: i64 = conn
@@ -207,7 +217,7 @@ impl MetricsAggregator {
         };
 
         Ok(vec![UserMetrics {
-            user_id: "default_user".to_string(),
+            user_id: user_id.to_string(),
             automation_count: automation_count as usize,
             goal_count: goal_count as usize,
             time_saved_hours,

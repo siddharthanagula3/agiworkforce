@@ -88,7 +88,12 @@ impl TaskManager {
 
                 let executors = self.executors.read().await;
 
-                let executor_fn = executors.values().next().cloned();
+                // Bug #229 fix: Match executor by task name instead of always using the first one.
+                // Fall back to first executor if no exact match found.
+                let executor_fn = executors
+                    .get(&task.name)
+                    .cloned()
+                    .or_else(|| executors.values().next().cloned());
 
                 if let Some(executor_fn) = executor_fn {
                     task.start();

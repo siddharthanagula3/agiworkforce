@@ -4,6 +4,7 @@
  * Translates technical tool names to user-friendly descriptions
  * for non-technical users in simple mode.
  */
+import { decodeBase64ToolSegment, decodeCompositeToolName } from './toolNameEncoding';
 
 export interface ToolDisplayInfo {
   /** User-friendly name */
@@ -361,8 +362,14 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     };
   }
 
+  const decodedTechnicalName = decodeCompositeToolName(technicalName);
+  const prefersDecodedFallback =
+    technicalName.includes('b64_') &&
+    !decodedTechnicalName.startsWith('mcp__') &&
+    !decodedTechnicalName.startsWith('mcp_');
+
   // Normalize the name (lowercase, trim)
-  const normalized = technicalName.toLowerCase().trim();
+  const normalized = decodedTechnicalName.toLowerCase().trim();
 
   // Direct match
   if (TOOL_DISPLAY_MAP[normalized]) {
@@ -377,135 +384,153 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     }
   }
 
-  // Try partial matches for common patterns
-  if (normalized.includes('search') || normalized.includes('find')) {
-    return {
-      displayName: 'Searching',
-      activeForm: 'Searching...',
-      completedForm: 'Search complete',
-      description: 'Looking for information',
-      category: 'search',
-    };
-  }
+  if (!prefersDecodedFallback) {
+    // Try partial matches for common patterns
+    if (normalized.includes('search') || normalized.includes('find')) {
+      return {
+        displayName: 'Searching',
+        activeForm: 'Searching...',
+        completedForm: 'Search complete',
+        description: 'Looking for information',
+        category: 'search',
+      };
+    }
 
-  if (
-    normalized.includes('browser') ||
-    normalized.includes('web') ||
-    normalized.includes('navigate')
-  ) {
-    return {
-      displayName: 'Browsing',
-      activeForm: 'Loading page...',
-      completedForm: 'Page loaded',
-      description: 'Working in browser',
-      category: 'browser',
-    };
-  }
+    if (
+      normalized.includes('browser') ||
+      normalized.includes('web') ||
+      normalized.includes('navigate')
+    ) {
+      return {
+        displayName: 'Browsing',
+        activeForm: 'Loading page...',
+        completedForm: 'Page loaded',
+        description: 'Working in browser',
+        category: 'browser',
+      };
+    }
 
-  if (normalized.includes('click') || normalized.includes('press')) {
-    return {
-      displayName: 'Clicking',
-      activeForm: 'Clicking...',
-      completedForm: 'Clicked',
-      description: 'Clicking on element',
-      category: 'browser',
-    };
-  }
+    if (normalized.includes('click') || normalized.includes('press')) {
+      return {
+        displayName: 'Clicking',
+        activeForm: 'Clicking...',
+        completedForm: 'Clicked',
+        description: 'Clicking on element',
+        category: 'browser',
+      };
+    }
 
-  if (normalized.includes('type') || normalized.includes('input') || normalized.includes('fill')) {
-    return {
-      displayName: 'Typing',
-      activeForm: 'Typing...',
-      completedForm: 'Text entered',
-      description: 'Entering text',
-      category: 'browser',
-    };
-  }
+    if (
+      normalized.includes('type') ||
+      normalized.includes('input') ||
+      normalized.includes('fill')
+    ) {
+      return {
+        displayName: 'Typing',
+        activeForm: 'Typing...',
+        completedForm: 'Text entered',
+        description: 'Entering text',
+        category: 'browser',
+      };
+    }
 
-  if (normalized.includes('file') || normalized.includes('read') || normalized.includes('write')) {
-    return {
-      displayName: 'Working with files',
-      activeForm: 'Working with file...',
-      completedForm: 'File processed',
-      description: 'File operation',
-      category: 'file',
-    };
-  }
+    if (
+      normalized.includes('file') ||
+      normalized.includes('read') ||
+      normalized.includes('write')
+    ) {
+      return {
+        displayName: 'Working with files',
+        activeForm: 'Working with file...',
+        completedForm: 'File processed',
+        description: 'File operation',
+        category: 'file',
+      };
+    }
 
-  if (normalized.includes('code') || normalized.includes('execute') || normalized.includes('run')) {
-    return {
-      displayName: 'Running',
-      activeForm: 'Running...',
-      completedForm: 'Completed',
-      description: 'Running code',
-      category: 'code',
-    };
-  }
+    if (
+      normalized.includes('code') ||
+      normalized.includes('execute') ||
+      normalized.includes('run')
+    ) {
+      return {
+        displayName: 'Running',
+        activeForm: 'Running...',
+        completedForm: 'Completed',
+        description: 'Running code',
+        category: 'code',
+      };
+    }
 
-  if (
-    normalized.includes('image') ||
-    normalized.includes('video') ||
-    normalized.includes('media')
-  ) {
-    return {
-      displayName: 'Processing media',
-      activeForm: 'Processing...',
-      completedForm: 'Media ready',
-      description: 'Working with media',
-      category: 'media',
-    };
-  }
+    if (
+      normalized.includes('image') ||
+      normalized.includes('video') ||
+      normalized.includes('media')
+    ) {
+      return {
+        displayName: 'Processing media',
+        activeForm: 'Processing...',
+        completedForm: 'Media ready',
+        description: 'Working with media',
+        category: 'media',
+      };
+    }
 
-  if (
-    normalized.includes('database') ||
-    normalized.includes('query') ||
-    normalized.includes('sql')
-  ) {
-    return {
-      displayName: 'Database operation',
-      activeForm: 'Querying...',
-      completedForm: 'Query complete',
-      description: 'Database operation',
-      category: 'data',
-    };
-  }
+    if (
+      normalized.includes('database') ||
+      normalized.includes('query') ||
+      normalized.includes('sql')
+    ) {
+      return {
+        displayName: 'Database operation',
+        activeForm: 'Querying...',
+        completedForm: 'Query complete',
+        description: 'Database operation',
+        category: 'data',
+      };
+    }
 
-  if (
-    normalized.includes('terminal') ||
-    normalized.includes('shell') ||
-    normalized.includes('bash') ||
-    normalized.includes('cmd')
-  ) {
-    return {
-      displayName: 'Running command',
-      activeForm: 'Running command...',
-      completedForm: 'Command complete',
-      description: 'Terminal operation',
-      category: 'terminal',
-    };
-  }
+    if (
+      normalized.includes('terminal') ||
+      normalized.includes('shell') ||
+      normalized.includes('bash') ||
+      normalized.includes('cmd')
+    ) {
+      return {
+        displayName: 'Running command',
+        activeForm: 'Running command...',
+        completedForm: 'Command complete',
+        description: 'Terminal operation',
+        category: 'terminal',
+      };
+    }
 
-  if (
-    normalized.includes('email') ||
-    normalized.includes('message') ||
-    normalized.includes('send')
-  ) {
-    return {
-      displayName: 'Sending',
-      activeForm: 'Sending...',
-      completedForm: 'Sent',
-      description: 'Sending message',
-      category: 'communication',
-    };
+    if (
+      normalized.includes('email') ||
+      normalized.includes('message') ||
+      normalized.includes('send')
+    ) {
+      return {
+        displayName: 'Sending',
+        activeForm: 'Sending...',
+        completedForm: 'Sent',
+        description: 'Sending message',
+        category: 'communication',
+      };
+    }
   }
 
   // MCP tools - extract the action from mcp__{server}__{action} format
   if (normalized.startsWith('mcp__') || normalized.startsWith('mcp_')) {
-    const parts = normalized.split('__').filter(Boolean);
+    const parts = decodedTechnicalName.split('__').filter(Boolean);
     if (parts.length >= 2) {
-      const action = parts[parts.length - 1] || 'working';
-      // Convert snake_case to readable form
-      const readable = action.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+      let action = parts[parts.length - 1] || 'working';
+      action = decodeBase64ToolSegment(action);
+      // Convert snake_case/hyphen-case to readable form
+      const readable = action
+        .toLowerCase()
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, (l) => l.toUpperCase());
       return {
         displayName: readable,
         activeForm: `${readable}...`,
@@ -517,9 +542,9 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
   }
 
   // Default fallback - clean up the technical name
-  const cleanedName = technicalName
+  const cleanedName = decodedTechnicalName
     .replace(/^(mcp__|tool_|action_)/i, '')
-    .replace(/_/g, ' ')
+    .replace(/[_-]/g, ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase())
     .trim();
 

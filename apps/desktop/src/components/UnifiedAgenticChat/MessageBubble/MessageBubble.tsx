@@ -19,7 +19,7 @@ import { getToolDisplayInfo } from '../../../lib/toolDisplayNames';
 import { EditableMessage } from '../EditableMessage';
 import { DeepResearchPanel } from '../DeepResearchPanel';
 import { ImageLightbox } from '../ImageLightbox';
-import { StatusTrail } from '../StatusTrail';
+import { MessageRuntimeInlineActivity } from '../MessageRuntimeActivity';
 
 // Sub-components
 import { MessageHeader } from './MessageHeader';
@@ -38,6 +38,7 @@ import { hasInlineRenderer } from '../InlineToolResults';
 import { ThinkingMessageBlock } from './ThinkingMessageBlock';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
+import { getMessageWidgets } from './messageRuntime';
 
 // Hooks
 import { useMessageActions } from './useMessageActions';
@@ -413,6 +414,49 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
   }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
+  // Register MCP app in a useEffect instead of during render to avoid infinite loop risk
+  useEffect(() => {
+    if (!toolState) return;
+    const isCompleted =
+      ('status' in toolState && toolState.status === 'completed') ||
+      ('success' in toolState && (toolState as { success?: boolean }).success);
+    if (!isCompleted) return;
+
+    let resultData: unknown;
+    if ('result' in toolState) {
+      resultData = toolState.result || toolState.outputBuffer;
+    } else if ('output' in toolState) {
+      resultData = toolState.output;
+    }
+    if (!resultData) return;
+
+    let mcpAppPayload: McpAppContent | null = null;
+    try {
+      const parsed: unknown =
+        typeof resultData === 'string' ? JSON.parse(resultData as string) : resultData;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        '__mcp_app' in (parsed as Record<string, unknown>)
+      ) {
+        mcpAppPayload = (parsed as Record<string, unknown>)['__mcp_app'] as McpAppContent;
+      }
+    } catch {
+      // Not JSON
+    }
+    if (!mcpAppPayload) return;
+
+    const metaRecord = (message.metadata ?? {}) as Record<string, unknown>;
+    const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
+    const existingEntry = Object.values(mcpApps).find(
+      (a) => a.toolName === String(toolName || '') && a.mcpServer === mcpServerName,
+    );
+    if (!existingEntry) {
+      registerMcpApp(String(toolName || 'mcp_tool'), mcpServerName, mcpAppPayload);
+    }
+  }, [toolState, toolName, message.metadata, mcpApps, registerMcpApp]);
+
   // Event handlers
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -699,24 +743,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               })();
 
               if (mcpAppPayload && success) {
-                // Register the app in the store (idempotent via actionId key check)
-                // Uses reactive mcpApps / registerMcpApp hoisted at component scope
-                // Access mcpServer via unknown cast since it's not in the typed interface
+                // MCP app registration is handled in a useEffect above to avoid
+                // calling store mutations during render (infinite loop risk).
+                // Here we only look up the already-registered entry.
                 const metaRecord = (message.metadata ?? {}) as Record<string, unknown>;
                 const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
-                // Avoid duplicate registrations for the same tool call
                 const existingEntry = Object.values(mcpApps).find(
                   (a) => a.toolName === String(toolName || '') && a.mcpServer === mcpServerName,
                 );
-                const appId = existingEntry
-                  ? existingEntry.id
-                  : registerMcpApp(String(toolName || 'mcp_tool'), mcpServerName, mcpAppPayload);
 
-                const app = mcpApps[appId];
-                if (app) {
+                if (existingEntry) {
                   return (
                     <div className="mt-3">
-                      <McpAppCard app={app} />
+                      <McpAppCard app={existingEntry} />
                     </div>
                   );
                 }
@@ -832,8 +871,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             formattedTime={formattedTime}
           />
 
-          {/* Status Trail for streaming */}
-          {message.metadata?.streaming && <StatusTrail messageId={message.id} />}
+          {/* Inline status trail for any assistant/system message activity */}
+          {!isUser && <MessageRuntimeInlineActivity messageId={message.id} className="mb-3" />}
 
           {/* Edit mode for user messages */}
           {isUser && isEditing ? (
@@ -862,24 +901,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Embedded Widgets (INT-001) */}
-          {(() => {
-            const metadata = message.metadata as Record<string, unknown> | undefined;
-            const widgets = Array.isArray(metadata?.['widgets'])
-              ? (metadata?.['widgets'] as WidgetData[])
-              : Array.isArray(metadata?.['toolWidgets'])
-                ? (metadata?.['toolWidgets'] as WidgetData[])
-                : [];
-
-            return widgets.length > 0;
-          })() && (
+          {getMessageWidgets(message).length > 0 && (
             <WidgetList
               messageId={message.id}
-              widgets={
-                ((message.metadata as Record<string, unknown> | undefined)?.['widgets'] ||
-                  (message.metadata as Record<string, unknown> | undefined)?.[
-                    'toolWidgets'
-                  ]) as WidgetData[]
-              }
+              widgets={getMessageWidgets(message) as WidgetData[]}
               isAssistant={isAssistant}
               isStreaming={Boolean(message.metadata?.streaming)}
             />

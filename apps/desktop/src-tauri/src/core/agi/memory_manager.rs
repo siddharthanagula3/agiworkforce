@@ -471,6 +471,13 @@ impl MemoryManager {
             )
             .map_err(|e| Error::Database(format!("Failed to get memory id: {}", e)))?;
 
+        // Update the TF-IDF search index so the new memory is discoverable
+        // via semantic_search(). Previously this was never called, leaving the
+        // index stale after every remember() call.
+        if let Err(e) = self.update_index(id, content, topic, category_str) {
+            tracing::warn!("Failed to update search index for memory {}: {}", id, e);
+        }
+
         Ok(id)
     }
 

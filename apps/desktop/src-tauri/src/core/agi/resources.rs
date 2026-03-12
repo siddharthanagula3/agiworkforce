@@ -54,11 +54,16 @@ impl ResourceManager {
             && usage.storage_usage_mb < self.limits.storage_mb)
     }
 
+    /// Reserve resources if sufficient capacity exists.
+    ///
+    /// Lock ordering: current_usage (#1) -> reservations (#2) (via update_usage_internal).
     pub async fn reserve_resources(&self, resources: &ResourceUsage) -> Result<bool> {
         let mut usage = self
             .current_usage
             .lock()
             .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
+        // update_usage_internal acquires reservations (#2) then system (#3) internally,
+        // which is consistent with the documented ordering.
         self.update_usage_internal(&mut usage)?;
 
         let can_reserve = (usage.cpu_usage_percent + resources.cpu_percent)
@@ -67,12 +72,13 @@ impl ResourceManager {
             && (usage.network_usage_mbps + resources.network_mb) <= self.limits.network_mbps;
 
         if can_reserve {
+            // Reservations lock is no longer held (update_usage_internal dropped it),
+            // so re-acquire it here while current_usage is still held.
             let mut reservations = self
                 .reservations
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Resource reservations lock poisoned: {}", e))?;
 
-            // Create a unique ID for this reservation
             let reservation_id = uuid::Uuid::new_v4().to_string();
             reservations.insert(reservation_id, resources.clone());
 
@@ -107,7 +113,19 @@ impl ResourceManager {
         self.update_usage_internal(&mut usage)
     }
 
+    /// Update usage state from system metrics + reservations.
+    ///
+    /// Lock ordering (must be consistent across all methods to avoid deadlocks):
+    ///   1. current_usage  (already held by caller as `usage`)
+    ///   2. reservations
+    ///   3. system
     fn update_usage_internal(&self, usage: &mut ResourceState) -> Result<()> {
+        // Acquire reservations first (lock #2), then system (lock #3).
+        let reservations = self
+            .reservations
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource reservations lock poisoned: {}", e))?;
+
         let mut system = self
             .system
             .lock()
@@ -116,10 +134,6 @@ impl ResourceManager {
         system.refresh_memory();
 
         let cpu_usage = system.global_cpu_info().cpu_usage() as f64;
-        let reservations = self
-            .reservations
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Resource reservations lock poisoned: {}", e))?;
         let reserved_cpu: f64 = reservations.values().map(|r| r.cpu_percent).sum();
         usage.cpu_usage_percent = cpu_usage + reserved_cpu;
 

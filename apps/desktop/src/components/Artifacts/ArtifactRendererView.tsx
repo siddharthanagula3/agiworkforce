@@ -459,14 +459,14 @@ function PresentationRenderer({ data }: { data: PresentationRenderData }) {
           Slide {currentSlide + 1} of {data.slide_count}
         </span>
         <div className="flex items-center gap-2">
-          <button
+          <button type="button"
             onClick={() => setCurrentSlide((p) => Math.max(0, p - 1))}
             disabled={currentSlide === 0}
             className="px-2 py-1 text-xs rounded bg-zinc-200 dark:bg-zinc-700 disabled:opacity-50"
           >
             Prev
           </button>
-          <button
+          <button type="button"
             onClick={() => setCurrentSlide((p) => Math.min(data.slide_count - 1, p + 1))}
             disabled={currentSlide === data.slide_count - 1}
             className="px-2 py-1 text-xs rounded bg-zinc-200 dark:bg-zinc-700 disabled:opacity-50"

@@ -139,10 +139,7 @@ impl HookExecutor {
             match validate_hook_command(&hook.command) {
                 Ok(()) => safe_hooks.push(hook),
                 Err(e) => {
-                    warn!(
-                        "Hook '{}' rejected during load: {}",
-                        hook.name, e
-                    );
+                    warn!("Hook '{}' rejected during load: {}", hook.name, e);
                 }
             }
         }

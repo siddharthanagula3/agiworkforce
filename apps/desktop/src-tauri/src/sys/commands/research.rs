@@ -6,7 +6,7 @@
 //! ## Events Emitted
 //!
 //! - `research:progress` - Progress updates during research
-//! - `research:complete` - Research completed successfully
+//! - `research:completed` - Research completed successfully
 //! - `research:error` - Research failed with error
 
 use crate::core::research::{

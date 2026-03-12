@@ -1,8 +1,8 @@
-use anyhow::Result;
 use docx_rs::*;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Read;
+
+use crate::sys::error::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WordEdit {
@@ -55,9 +55,22 @@ impl WordEditor {
         edits: Vec<WordEdit>,
         output_path: &str,
     ) -> Result<()> {
-        let mut file = File::open(file_path)?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
+        // Note: docx_rs can only create new documents, not parse existing ones.
+        // In-place editing of Word documents (reading + modifying) is not yet supported.
+        // The source file is acknowledged but content is not preserved.
+        tracing::warn!(
+            "Word document editing creates a new document from edits only. \
+             Source file '{}' content is not preserved — in-place editing not yet supported by docx_rs.",
+            file_path
+        );
+
+        // Verify source file exists (validates user input)
+        if !std::path::Path::new(file_path).exists() {
+            return Err(Error::Generic(format!(
+                "Source file not found: {}",
+                file_path
+            )));
+        }
 
         let mut docx = Docx::new();
 
@@ -66,8 +79,11 @@ impl WordEditor {
         }
 
         docx.build()
-            .pack(File::create(output_path)?)
-            .map_err(|e| anyhow::anyhow!("Failed to save document: {}", e))?;
+            .pack(
+                File::create(output_path)
+                    .map_err(|e| Error::Generic(format!("Failed to create output file: {}", e)))?,
+            )
+            .map_err(|e| Error::Generic(format!("Failed to save document: {}", e)))?;
 
         Ok(())
     }
@@ -93,7 +109,45 @@ impl WordEditor {
                 };
                 docx = docx.add_paragraph(heading);
             }
-            _ => {}
+            WordEdit::ReplaceText { old_text, new_text } => {
+                tracing::warn!(
+                    "WordEdit::ReplaceText not yet implemented (old='{}', new='{}'). \
+                     docx_rs does not support reading/modifying existing document content.",
+                    old_text,
+                    new_text
+                );
+            }
+            WordEdit::DeleteParagraph { index } => {
+                tracing::warn!(
+                    "WordEdit::DeleteParagraph not yet implemented (index={}). \
+                     docx_rs does not support reading/modifying existing document structure.",
+                    index
+                );
+            }
+            WordEdit::InsertTableRow {
+                table_index,
+                row_index,
+                cells,
+            } => {
+                tracing::warn!(
+                    "WordEdit::InsertTableRow not yet implemented (table={}, row={}, {} cells). \
+                     docx_rs does not support modifying existing tables.",
+                    table_index,
+                    row_index,
+                    cells.len()
+                );
+            }
+            WordEdit::DeleteTableRow {
+                table_index,
+                row_index,
+            } => {
+                tracing::warn!(
+                    "WordEdit::DeleteTableRow not yet implemented (table={}, row={}). \
+                     docx_rs does not support modifying existing tables.",
+                    table_index,
+                    row_index
+                );
+            }
         }
 
         Ok(docx)

@@ -71,7 +71,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows
              WHERE is_featured = 1 OR (avg_rating >= 4.5 AND rating_count >= 10)
              ORDER BY is_featured DESC, avg_rating DESC, clone_count DESC
@@ -140,7 +140,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE 1=1",
         );
 
@@ -210,7 +210,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE share_url = ?1",
                 rusqlite::params![share_url],
                 Self::row_to_published_workflow,
@@ -232,7 +232,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE id = ?1",
                 rusqlite::params![workflow_id],
                 Self::row_to_published_workflow,
@@ -257,7 +257,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows
              WHERE creator_id = ?1
              ORDER BY created_at DESC",
@@ -292,7 +292,7 @@ impl WorkflowMarketplace {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows
              WHERE category = ?1
              ORDER BY clone_count DESC, avg_rating DESC

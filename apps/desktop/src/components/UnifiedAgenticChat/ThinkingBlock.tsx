@@ -1,5 +1,5 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ThinkingBlock.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -18,9 +18,16 @@ export function ThinkingBlock({
   const [expanded, setExpanded] = useState(defaultExpanded);
   // BUG-TB-001: Track whether the user manually expanded so auto-collapse is skipped
   const [userExpanded, setUserExpanded] = useState(false);
+  // BUG-331: Guard so auto-collapse only fires after streaming transitions from true→false,
+  // not on initial mount when isStreaming is already false (e.g. historical messages)
+  const isMountedRef = useRef(false);
 
   // Auto-collapse when streaming finishes, unless user manually expanded
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     if (!isStreaming && !userExpanded) {
       setExpanded(false);
     }
@@ -112,10 +119,6 @@ export function ThinkingBlock({
                 )}
               >
                 {content}
-                {/* Blinking cursor at end while streaming */}
-                {isStreaming && (
-                  <span className="inline-block w-1.5 h-3 bg-slate-400/50 ml-0.5 animate-pulse align-middle" />
-                )}
               </p>
             </div>
           </motion.div>

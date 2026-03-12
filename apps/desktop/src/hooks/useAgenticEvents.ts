@@ -34,7 +34,31 @@ import type {
   ToolStreamCancelledEvent,
 } from '../types/toolCalling';
 import type { Artifact } from '../types/chat';
-import type { EnhancedMessage } from '../stores/chat/types';
+import { normalizeToolNameForUi } from '../lib/chatToolUtils';
+import {
+  getActiveConversationMessages,
+  resolveActiveConversationMessageId,
+} from '../lib/runtimeMessageOwnership';
+import {
+  buildMessageArtifactUpdate,
+  getMergedMessageArtifacts,
+  upsertMessageArtifact,
+} from '../lib/messageArtifacts';
+import {
+  buildRuntimeActivityEmission,
+  buildToolStreamCancelledActivity,
+  buildToolStreamStartedActivity,
+  buildToolStreamTerminalActivity,
+} from '../lib/runtimeActivity';
+import {
+  buildOutputChunkToolStreamUpdate,
+  buildProgressToolStreamUpdate,
+  buildStartedToolStreamUpdate,
+  buildTerminalToolStreamUpdate,
+  clearRunningToolTrailEntries,
+  normalizeToolTerminalArtifactStatus,
+  reconcileToolArtifactTerminalState,
+} from '../lib/toolStreamRuntime';
 
 export interface FileOperationEvent {
   operation: FileOperation;
@@ -407,6 +431,18 @@ export function useAgenticEvents() {
     handlersRef.current.setSidecarSectionFromEvent(eventType);
   };
 
+  const emitRuntimeActivity = (
+    activity: ReturnType<typeof buildRuntimeActivityEmission>,
+  ) => {
+    upsertActionLogEntry(activity.log);
+    if (activity.trail) {
+      useUnifiedChatStore.getState().addActionTrailEntry(activity.trail);
+    }
+    if (activity.sidecarEventType) {
+      focusSidecar(activity.sidecarEventType);
+    }
+  };
+
   const runExtensionPreflightCheck = () => {
     if (extensionPreflightCheckedRef.current || !isTauri) {
       return;
@@ -498,59 +534,12 @@ export function useAgenticEvents() {
     }
   };
 
-  const getMergedMessageArtifacts = (message: EnhancedMessage): Artifact[] => {
-    const artifacts = message.artifacts ?? [];
-    const metadataArtifacts = Array.isArray(message.metadata?.artifacts)
-      ? message.metadata.artifacts
-      : [];
-    if (metadataArtifacts.length === 0) {
-      return [...artifacts];
-    }
-
-    const merged: Artifact[] = [...artifacts];
-    const existingIds = new Set(artifacts.map((artifact) => artifact.id));
-    for (const artifact of metadataArtifacts) {
-      if (!existingIds.has(artifact.id)) {
-        merged.push(artifact);
-      }
-    }
-    return merged;
-  };
-
   const resolveActiveConversationMessages = () => {
-    const state = useUnifiedChatStore.getState();
-    const activeConversationId = state.activeConversationId;
-    if (activeConversationId && state.messagesByConversation[activeConversationId]) {
-      return state.messagesByConversation[activeConversationId] ?? [];
-    }
-    return state.messages;
+    return getActiveConversationMessages(useUnifiedChatStore.getState());
   };
 
   const resolveInlineExtensionTargetMessageId = (): string | null => {
-    const state = useUnifiedChatStore.getState();
-    const conversationMessages = resolveActiveConversationMessages();
-    if (conversationMessages.length === 0) {
-      return null;
-    }
-
-    const streamingMessageId = state.currentStreamingMessageId;
-    if (streamingMessageId && conversationMessages.some((msg) => msg.id === streamingMessageId)) {
-      return streamingMessageId;
-    }
-
-    const latestAssistant = [...conversationMessages]
-      .reverse()
-      .find((msg) => msg.role === 'assistant');
-    if (latestAssistant) {
-      return latestAssistant.id;
-    }
-
-    const latestSystem = [...conversationMessages].reverse().find((msg) => msg.role === 'system');
-    if (latestSystem) {
-      return latestSystem.id;
-    }
-
-    return null;
+    return resolveActiveConversationMessageId(useUnifiedChatStore.getState());
   };
 
   const ensureExtensionMessageTarget = (
@@ -605,9 +594,10 @@ export function useAgenticEvents() {
 
     const artifactId = `extension-${taskId}`;
     const artifacts = getMergedMessageArtifacts(targetMessage);
-    const index = artifacts.findIndex((artifact) => artifact.id === artifactId);
     const existingArtifact =
-      index >= 0 ? (artifacts[index] as Artifact & Record<string, unknown>) : null;
+      artifacts.find((artifact) => artifact.id === artifactId) as
+        | (Artifact & Record<string, unknown>)
+        | undefined;
     const patchMetadata = patch['metadata'];
     const mergedMetadata = {
       ...((existingArtifact?.metadata as Record<string, unknown> | undefined) ?? {}),
@@ -626,25 +616,17 @@ export function useAgenticEvents() {
       metadata: mergedMetadata,
     } as Artifact;
 
-    const nextArtifacts =
-      index >= 0
-        ? artifacts.map((artifact, artifactIndex) =>
-            artifactIndex === index ? nextArtifact : artifact,
-          )
-        : [...artifacts, nextArtifact];
+    const nextArtifacts = upsertMessageArtifact(targetMessage, nextArtifact);
 
     const metadataStatus = (nextArtifact as unknown as Record<string, unknown>)['status'];
-    const currentMetadata = targetMessage.metadata ?? {};
-    state.updateMessage(targetMessageId, {
-      artifacts: nextArtifacts,
-      metadata: {
-        ...currentMetadata,
-        artifacts: nextArtifacts,
+    state.updateMessage(
+      targetMessageId,
+      buildMessageArtifactUpdate(targetMessage, nextArtifacts, {
         event: 'extension',
         sidecarType: 'browser',
         ...(typeof metadataStatus === 'string' ? { status: metadataStatus } : {}),
-      },
-    });
+      }),
+    );
   };
 
   /**
@@ -1170,7 +1152,7 @@ export function useAgenticEvents() {
         addActionTrailEntry?.({
           type: 'running',
           message: `Step ${stepIndex + 1}/${totalSteps}: ${step}`,
-          progress: (stepIndex / totalSteps) * 100,
+          progress: totalSteps > 0 ? (stepIndex / totalSteps) * 100 : 0,
         });
         upsertActionLogEntry({
           id: `${taskId}-step-${stepIndex}`,
@@ -1644,20 +1626,21 @@ export function useAgenticEvents() {
         'calendar:auth_started',
         safeHandler('calendar:auth_started', (provider) => {
           const providerLabel = String(provider || 'calendar').trim() || 'calendar';
-          upsertActionLogEntry({
-            id: `calendar-auth-${Date.now()}`,
-            type: 'terminal',
-            title: 'Calendar authorization started',
-            description: `Opening ${providerLabel} authorization flow`,
-            status: 'running',
-            metadata: { provider: providerLabel },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: `Connecting ${providerLabel} calendar...`,
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-auth-${Date.now()}`,
+              type: 'terminal',
+              title: 'Calendar authorization started',
+              description: `Opening ${providerLabel} authorization flow`,
+              status: 'running',
+              metadata: { provider: providerLabel },
+              trail: {
+                type: 'running',
+                message: `Connecting ${providerLabel} calendar...`,
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarAuthStarted);
@@ -1666,20 +1649,21 @@ export function useAgenticEvents() {
         'calendar:connected',
         safeHandler('calendar:connected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `calendar-connected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Calendar connected',
-            description: `Connected calendar account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Calendar connected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-connected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Calendar connected',
+              description: `Connected calendar account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Calendar connected',
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarConnected);
@@ -1688,20 +1672,21 @@ export function useAgenticEvents() {
         'calendar:disconnected',
         safeHandler('calendar:disconnected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `calendar-disconnected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Calendar disconnected',
-            description: `Disconnected calendar account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Calendar disconnected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-disconnected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Calendar disconnected',
+              description: `Disconnected calendar account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Calendar disconnected',
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarDisconnected);
@@ -1711,20 +1696,21 @@ export function useAgenticEvents() {
         safeHandler('calendar:event_created', (payload) => {
           const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
           const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
-          upsertActionLogEntry({
-            id: `calendar-event-created-${eventId || Date.now().toString()}`,
-            type: 'terminal',
-            title: 'Calendar event created',
-            description: title,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Created event: ${title}`,
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-event-created-${eventId || Date.now().toString()}`,
+              type: 'terminal',
+              title: 'Calendar event created',
+              description: title,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Created event: ${title}`,
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarEventCreated);
@@ -1734,20 +1720,21 @@ export function useAgenticEvents() {
         safeHandler('calendar:event_updated', (payload) => {
           const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
           const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
-          upsertActionLogEntry({
-            id: `calendar-event-updated-${eventId || Date.now().toString()}`,
-            type: 'terminal',
-            title: 'Calendar event updated',
-            description: title,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Updated event: ${title}`,
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-event-updated-${eventId || Date.now().toString()}`,
+              type: 'terminal',
+              title: 'Calendar event updated',
+              description: title,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Updated event: ${title}`,
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarEventUpdated);
@@ -1756,20 +1743,21 @@ export function useAgenticEvents() {
         'calendar:event_deleted',
         safeHandler('calendar:event_deleted', (payload) => {
           const eventId = String(payload['event_id'] ?? payload['id'] ?? 'unknown');
-          upsertActionLogEntry({
-            id: `calendar-event-deleted-${eventId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Calendar event deleted',
-            description: `Deleted calendar event ${eventId}`,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Deleted event ${eventId}`,
-            fadeAfter: 3500,
-          });
-          focusSidecar('calendar');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `calendar-event-deleted-${eventId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Calendar event deleted',
+              description: `Deleted calendar event ${eventId}`,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Deleted event ${eventId}`,
+              },
+              sidecarEventType: 'calendar',
+            }),
+          );
         }),
       );
       push(unlistenCalendarEventDeleted);
@@ -1779,21 +1767,22 @@ export function useAgenticEvents() {
         'automation:recording_started',
         safeHandler('automation:recording_started', (payload) => {
           const sessionId = String(payload['session_id'] ?? payload['sessionId'] ?? 'unknown');
-          upsertActionLogEntry({
-            id: `automation-recording-started-${sessionId}`,
-            actionId: sessionId,
-            type: 'ui',
-            title: 'Automation recording started',
-            description: `Session ${sessionId}`,
-            status: 'running',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: 'Automation recording started',
-            fadeAfter: 3500,
-          });
-          focusSidecar('automation');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `automation-recording-started-${sessionId}`,
+              actionId: sessionId,
+              type: 'ui',
+              title: 'Automation recording started',
+              description: `Session ${sessionId}`,
+              status: 'running',
+              metadata: payload,
+              trail: {
+                type: 'running',
+                message: 'Automation recording started',
+              },
+              sidecarEventType: 'automation',
+            }),
+          );
         }),
       );
       push(unlistenAutomationRecordingStarted);
@@ -1803,21 +1792,23 @@ export function useAgenticEvents() {
         safeHandler('automation:action_recorded', (payload) => {
           const actionType = String(payload['action_type'] ?? payload['actionType'] ?? 'action');
           const actionId = String(payload['id'] ?? crypto.randomUUID());
-          upsertActionLogEntry({
-            id: `automation-action-${actionId}`,
-            actionId,
-            type: 'ui',
-            title: 'Automation action recorded',
-            description: actionType.replace(/_/g, ' '),
-            status: 'running',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: `Recorded action: ${actionType.replace(/_/g, ' ')}`,
-            fadeAfter: 2500,
-          });
-          focusSidecar('automation');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `automation-action-${actionId}`,
+              actionId,
+              type: 'ui',
+              title: 'Automation action recorded',
+              description: actionType.replace(/_/g, ' '),
+              status: 'running',
+              metadata: payload,
+              trail: {
+                type: 'running',
+                message: `Recorded action: ${actionType.replace(/_/g, ' ')}`,
+                fadeAfter: 2500,
+              },
+              sidecarEventType: 'automation',
+            }),
+          );
         }),
       );
       push(unlistenAutomationActionRecorded);
@@ -1827,27 +1818,28 @@ export function useAgenticEvents() {
         safeHandler('automation:recording_stopped', (payload) => {
           const recordingId = String(payload['id'] ?? payload['recording_id'] ?? 'unknown');
           const actionCount = Number(payload['actions_count'] ?? payload['action_count'] ?? 0);
-          upsertActionLogEntry({
-            id: `automation-recording-stopped-${recordingId}`,
-            actionId: recordingId,
-            type: 'ui',
-            title: 'Automation recording stopped',
-            description:
-              actionCount > 0
-                ? `Captured ${actionCount} action${actionCount === 1 ? '' : 's'}`
-                : `Recording ${recordingId} completed`,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message:
-              actionCount > 0
-                ? `Recording complete: ${actionCount} action${actionCount === 1 ? '' : 's'}`
-                : 'Automation recording completed',
-            fadeAfter: 3500,
-          });
-          focusSidecar('automation');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `automation-recording-stopped-${recordingId}`,
+              actionId: recordingId,
+              type: 'ui',
+              title: 'Automation recording stopped',
+              description:
+                actionCount > 0
+                  ? `Captured ${actionCount} action${actionCount === 1 ? '' : 's'}`
+                  : `Recording ${recordingId} completed`,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message:
+                  actionCount > 0
+                    ? `Recording complete: ${actionCount} action${actionCount === 1 ? '' : 's'}`
+                    : 'Automation recording completed',
+              },
+              sidecarEventType: 'automation',
+            }),
+          );
         }),
       );
       push(unlistenAutomationRecordingStopped);
@@ -1856,21 +1848,23 @@ export function useAgenticEvents() {
         'automation:request_screenshot',
         safeHandler('automation:request_screenshot', (payload) => {
           const actionId = String(payload['action_id'] ?? payload['actionId'] ?? 'unknown');
-          upsertActionLogEntry({
-            id: `automation-screenshot-${actionId}-${Date.now()}`,
-            actionId,
-            type: 'ui',
-            title: 'Automation screenshot requested',
-            description: 'Capturing UI state for automation step',
-            status: 'running',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: 'Capturing automation screenshot...',
-            fadeAfter: 3000,
-          });
-          focusSidecar('automation');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `automation-screenshot-${actionId}-${Date.now()}`,
+              actionId,
+              type: 'ui',
+              title: 'Automation screenshot requested',
+              description: 'Capturing UI state for automation step',
+              status: 'running',
+              metadata: payload,
+              trail: {
+                type: 'running',
+                message: 'Capturing automation screenshot...',
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'automation',
+            }),
+          );
         }),
       );
       push(unlistenAutomationScreenshotRequested);
@@ -1880,20 +1874,21 @@ export function useAgenticEvents() {
         'cloud:auth_started',
         safeHandler('cloud:auth_started', (provider) => {
           const providerLabel = String(provider || 'cloud').trim() || 'cloud';
-          upsertActionLogEntry({
-            id: `cloud-auth-${Date.now()}`,
-            type: 'terminal',
-            title: 'Cloud authorization started',
-            description: `Opening ${providerLabel} authorization flow`,
-            status: 'running',
-            metadata: { provider: providerLabel },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: `Connecting ${providerLabel} cloud account...`,
-            fadeAfter: 3500,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-auth-${Date.now()}`,
+              type: 'terminal',
+              title: 'Cloud authorization started',
+              description: `Opening ${providerLabel} authorization flow`,
+              status: 'running',
+              metadata: { provider: providerLabel },
+              trail: {
+                type: 'running',
+                message: `Connecting ${providerLabel} cloud account...`,
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudAuthStarted);
@@ -1902,20 +1897,21 @@ export function useAgenticEvents() {
         'cloud:connected',
         safeHandler('cloud:connected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `cloud-connected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Cloud account connected',
-            description: `Connected account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Cloud account connected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-connected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Cloud account connected',
+              description: `Connected account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Cloud account connected',
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudConnected);
@@ -1924,20 +1920,21 @@ export function useAgenticEvents() {
         'cloud:disconnected',
         safeHandler('cloud:disconnected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `cloud-disconnected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Cloud account disconnected',
-            description: `Disconnected account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Cloud account disconnected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-disconnected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Cloud account disconnected',
+              description: `Disconnected account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Cloud account disconnected',
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudDisconnected);
@@ -1946,20 +1943,22 @@ export function useAgenticEvents() {
         'cloud:file_uploaded',
         safeHandler('cloud:file_uploaded', (payload) => {
           const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
-          upsertActionLogEntry({
-            id: `cloud-file-uploaded-${Date.now()}`,
-            type: 'filesystem',
-            title: 'Cloud file uploaded',
-            description: remotePath,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Uploaded ${remotePath}`,
-            fadeAfter: 3000,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-file-uploaded-${Date.now()}`,
+              type: 'filesystem',
+              title: 'Cloud file uploaded',
+              description: remotePath,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Uploaded ${remotePath}`,
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudFileUploaded);
@@ -1968,20 +1967,22 @@ export function useAgenticEvents() {
         'cloud:file_downloaded',
         safeHandler('cloud:file_downloaded', (payload) => {
           const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
-          upsertActionLogEntry({
-            id: `cloud-file-downloaded-${Date.now()}`,
-            type: 'filesystem',
-            title: 'Cloud file downloaded',
-            description: remotePath,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Downloaded ${remotePath}`,
-            fadeAfter: 3000,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-file-downloaded-${Date.now()}`,
+              type: 'filesystem',
+              title: 'Cloud file downloaded',
+              description: remotePath,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Downloaded ${remotePath}`,
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudFileDownloaded);
@@ -1990,20 +1991,22 @@ export function useAgenticEvents() {
         'cloud:file_deleted',
         safeHandler('cloud:file_deleted', (payload) => {
           const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
-          upsertActionLogEntry({
-            id: `cloud-file-deleted-${Date.now()}`,
-            type: 'filesystem',
-            title: 'Cloud file deleted',
-            description: remotePath,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Deleted ${remotePath}`,
-            fadeAfter: 3000,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-file-deleted-${Date.now()}`,
+              type: 'filesystem',
+              title: 'Cloud file deleted',
+              description: remotePath,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Deleted ${remotePath}`,
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudFileDeleted);
@@ -2012,20 +2015,22 @@ export function useAgenticEvents() {
         'cloud:folder_created',
         safeHandler('cloud:folder_created', (payload) => {
           const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'folder');
-          upsertActionLogEntry({
-            id: `cloud-folder-created-${Date.now()}`,
-            type: 'filesystem',
-            title: 'Cloud folder created',
-            description: remotePath,
-            status: 'success',
-            metadata: payload,
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: `Created folder ${remotePath}`,
-            fadeAfter: 3000,
-          });
-          focusSidecar('cloud');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `cloud-folder-created-${Date.now()}`,
+              type: 'filesystem',
+              title: 'Cloud folder created',
+              description: remotePath,
+              status: 'success',
+              metadata: payload,
+              trail: {
+                type: 'completed',
+                message: `Created folder ${remotePath}`,
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'cloud',
+            }),
+          );
         }),
       );
       push(unlistenCloudFolderCreated);
@@ -2034,20 +2039,21 @@ export function useAgenticEvents() {
       const unlistenGmailAuthStarted = await listen<string>(
         'gmail:auth_started',
         safeHandler('gmail:auth_started', (oauthState) => {
-          upsertActionLogEntry({
-            id: `gmail-auth-${Date.now()}`,
-            type: 'terminal',
-            title: 'Gmail authorization started',
-            description: 'Opening Gmail OAuth flow',
-            status: 'running',
-            metadata: { oauth_state: oauthState },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: 'Connecting Gmail account...',
-            fadeAfter: 3500,
-          });
-          focusSidecar('gmail');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `gmail-auth-${Date.now()}`,
+              type: 'terminal',
+              title: 'Gmail authorization started',
+              description: 'Opening Gmail OAuth flow',
+              status: 'running',
+              metadata: { oauth_state: oauthState },
+              trail: {
+                type: 'running',
+                message: 'Connecting Gmail account...',
+              },
+              sidecarEventType: 'gmail',
+            }),
+          );
         }),
       );
       push(unlistenGmailAuthStarted);
@@ -2056,20 +2062,21 @@ export function useAgenticEvents() {
         'gmail:connected',
         safeHandler('gmail:connected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `gmail-connected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Gmail connected',
-            description: `Connected account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Gmail connected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('gmail');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `gmail-connected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Gmail connected',
+              description: `Connected account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Gmail connected',
+              },
+              sidecarEventType: 'gmail',
+            }),
+          );
         }),
       );
       push(unlistenGmailConnected);
@@ -2078,20 +2085,22 @@ export function useAgenticEvents() {
         'gmail:token_refreshed',
         safeHandler('gmail:token_refreshed', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `gmail-token-refreshed-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Gmail token refreshed',
-            description: `Refreshed credentials for ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Gmail token refreshed',
-            fadeAfter: 3000,
-          });
-          focusSidecar('gmail');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `gmail-token-refreshed-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Gmail token refreshed',
+              description: `Refreshed credentials for ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Gmail token refreshed',
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'gmail',
+            }),
+          );
         }),
       );
       push(unlistenGmailTokenRefreshed);
@@ -2100,20 +2109,21 @@ export function useAgenticEvents() {
         'gmail:disconnected',
         safeHandler('gmail:disconnected', (accountId) => {
           const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-          upsertActionLogEntry({
-            id: `gmail-disconnected-${normalizedAccountId}-${Date.now()}`,
-            type: 'terminal',
-            title: 'Gmail disconnected',
-            description: `Disconnected account ${normalizedAccountId}`,
-            status: 'success',
-            metadata: { account_id: normalizedAccountId },
-          });
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'completed',
-            message: 'Gmail disconnected',
-            fadeAfter: 3500,
-          });
-          focusSidecar('gmail');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `gmail-disconnected-${normalizedAccountId}-${Date.now()}`,
+              type: 'terminal',
+              title: 'Gmail disconnected',
+              description: `Disconnected account ${normalizedAccountId}`,
+              status: 'success',
+              metadata: { account_id: normalizedAccountId },
+              trail: {
+                type: 'completed',
+                message: 'Gmail disconnected',
+              },
+              sidecarEventType: 'gmail',
+            }),
+          );
         }),
       );
       push(unlistenGmailDisconnected);
@@ -2125,25 +2135,22 @@ export function useAgenticEvents() {
           if (!isMountedRef.current) return;
           const { tool_id, server_name } = event.payload;
           const toolName = getMcpToolDisplayName(tool_id);
-
-          upsertActionLogEntry({
-            id: `mcp-${tool_id}-${Date.now()}`,
-            actionId: tool_id,
-            type: 'mcp',
-            title: `Using ${toolName}`,
-            description: `Executing MCP tool from ${server_name}`,
-            status: 'running',
-            metadata: { tool_id, server_name },
-          });
-
-          // Also add to action trail for real-time visibility
-          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
-          addActionTrailEntry?.({
-            type: 'running',
-            message: `Using ${toolName}...`,
-          });
-
-          focusSidecar('mcp');
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `mcp-${tool_id}-${Date.now()}`,
+              actionId: tool_id,
+              type: 'mcp',
+              title: `Using ${toolName}`,
+              description: `Executing MCP tool from ${server_name}`,
+              status: 'running',
+              metadata: { tool_id, server_name },
+              trail: {
+                type: 'running',
+                message: `Using ${toolName}...`,
+              },
+              sidecarEventType: 'mcp',
+            }),
+          );
         },
       );
       push(unlistenMcpToolStarted);
@@ -2162,21 +2169,42 @@ export function useAgenticEvents() {
           );
 
           if (existingEntry) {
-            handlersRef.current.updateActionLogEntry(existingEntry.id, {
-              status: success ? 'success' : 'failed',
+            emitRuntimeActivity(
+              buildRuntimeActivityEmission({
+                id: existingEntry.id,
+                actionId: tool_id,
+                type: existingEntry.type,
+                title: existingEntry.title,
+                description: success
+                  ? `Completed in ${duration_ms}ms`
+                  : `Failed after ${duration_ms}ms`,
+                status: success ? 'success' : 'failed',
+                metadata: { ...existingEntry.metadata, duration_ms, success },
+                trail: {
+                  type: success ? 'completed' : 'error',
+                  message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
+                },
+              }),
+            );
+            return;
+          }
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `mcp-${tool_id}-completed-${Date.now()}`,
+              actionId: tool_id,
+              type: 'mcp',
+              title: `Using ${toolName}`,
               description: success
                 ? `Completed in ${duration_ms}ms`
                 : `Failed after ${duration_ms}ms`,
-              metadata: { ...existingEntry.metadata, duration_ms, success },
-            });
-          }
-
-          // Update action trail
-          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
-          addActionTrailEntry?.({
-            type: success ? 'completed' : 'error',
-            message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
-          });
+              status: success ? 'success' : 'failed',
+              metadata: { tool_id, duration_ms, success },
+              trail: {
+                type: success ? 'completed' : 'error',
+                message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
+              },
+            }),
+          );
         },
       );
       push(unlistenMcpToolCompleted);
@@ -2186,15 +2214,26 @@ export function useAgenticEvents() {
         (event) => {
           if (!isMountedRef.current) return;
           const { server_name, connected, error } = event.payload;
-
-          upsertActionLogEntry({
-            id: `mcp-conn-${server_name}-${Date.now()}`,
-            type: 'mcp',
-            title: connected ? `Connected to ${server_name}` : `Disconnected from ${server_name}`,
-            description: error ?? (connected ? 'MCP server connected' : 'MCP server disconnected'),
-            status: connected ? 'success' : error ? 'failed' : 'success',
-            metadata: { server_name, connected, error },
-          });
+          emitRuntimeActivity(
+            buildRuntimeActivityEmission({
+              id: `mcp-conn-${server_name}-${Date.now()}`,
+              type: 'mcp',
+              title: connected ? `Connected to ${server_name}` : `Disconnected from ${server_name}`,
+              description: error ?? (connected ? 'MCP server connected' : 'MCP server disconnected'),
+              status: connected ? 'success' : error ? 'failed' : 'success',
+              metadata: { server_name, connected, error },
+              trail: {
+                type: connected ? 'completed' : error ? 'error' : 'completed',
+                message: connected
+                  ? `${server_name} connected`
+                  : error
+                    ? `${server_name} connection failed`
+                    : `${server_name} disconnected`,
+                fadeAfter: 3000,
+              },
+              sidecarEventType: 'mcp',
+            }),
+          );
         },
       );
       push(unlistenMcpConnection);
@@ -2222,52 +2261,18 @@ export function useAgenticEvents() {
                 // and update it to reflect final status before removing the stream
                 if (stream) {
                   // Determine the final status - default to completed if still running
-                  const finalStatus = stream.status === 'running' ? 'completed' : stream.status;
+                  const finalStatus = normalizeToolTerminalArtifactStatus(stream.status);
 
-                  // Find message that has an artifact with this tool ID
-                  const candidateMessages = (() => {
-                    const activeMessages = resolveActiveConversationMessages();
-                    return activeMessages.length > 0 ? activeMessages : state.messages;
-                  })();
-                  for (const message of candidateMessages) {
-                    const artifacts = message.artifacts || [];
-                    const artifactIndex = artifacts.findIndex((a) => a.id === toolId);
-                    if (artifactIndex >= 0) {
-                      const existingArtifact = artifacts[artifactIndex];
-                      if (existingArtifact) {
-                        const updatedArtifact = {
-                          ...existingArtifact,
-                          status: finalStatus,
-                          success: finalStatus === 'completed',
-                          error: stream.error,
-                          metadata: {
-                            ...existingArtifact.metadata,
-                            completedAt: stream.completedAt?.toISOString(),
-                            duration_ms: stream.duration_ms,
-                            error: stream.error,
-                            // Ensure status is not stuck in running
-                            status: finalStatus,
-                          },
-                        };
-                        const updatedArtifacts = [...artifacts];
-                        updatedArtifacts[artifactIndex] = updatedArtifact;
-
-                        // AUDIT-UI-053: Also update top-level message metadata status
-                        // so the fallback in MessageBubble.tsx (line 249) works correctly
-                        const currentMetadata = message.metadata || {};
-                        state.updateMessage(message.id, {
-                          artifacts: updatedArtifacts,
-                          metadata: {
-                            ...currentMetadata,
-                            artifacts: updatedArtifacts,
-                            status: finalStatus, // Update top-level status for fallback
-                            state: finalStatus, // Also update state for other fallbacks
-                          },
-                        });
-                      }
-                      break; // Found and updated the message, no need to continue
-                    }
-                  }
+                  reconcileToolArtifactTerminalState(state, toolId, {
+                    status: finalStatus,
+                    reason: stream.error,
+                    completedAt: stream.completedAt?.toISOString(),
+                    durationMs: stream.duration_ms,
+                    messageState: {
+                      status: finalStatus,
+                      state: finalStatus,
+                    },
+                  });
                 }
 
                 handlersRef.current.removeToolStream(toolId);
@@ -2277,75 +2282,50 @@ export function useAgenticEvents() {
             toolStreamCleanupTimeoutsRef.current.set(toolId, timeoutId);
           };
 
-          const clearRunningActionTrailEntries = (toolId: string, toolName?: string) => {
-            const state = useUnifiedChatStore.getState();
-            const matches = state.actionTrail.filter((entry) => {
-              if (entry.type !== 'running') return false;
-              const metadataToolCallId = (entry.metadata as Record<string, unknown> | undefined)?.[
-                'tool_call_id'
-              ];
-              if (metadataToolCallId === toolId) return true;
-              if (!toolName) return false;
-              return (
-                entry.message === `Executing ${toolName}...` ||
-                entry.message === `Calling ${toolName}...`
-              );
-            });
-
-            for (const entry of matches) {
-              state.removeActionTrailEntry(entry.id);
-            }
-          };
-
           switch (streamEvent.type) {
             case 'started': {
               const startedEvent = streamEvent as ToolStreamStartedEvent;
-              handlersRef.current.updateToolStream(startedEvent.tool_id, {
-                tool_id: startedEvent.tool_id,
-                tool_name: startedEvent.tool_name,
-                status: 'running',
-                progress: 0,
-                startedAt: new Date(timestamp),
-                parameters: startedEvent.parameters as Record<string, unknown>,
-              });
-
-              upsertActionLogEntry({
-                id: `toolstream-${startedEvent.tool_id}`,
-                actionId: startedEvent.tool_id,
-                type: mapToolNameToActionType(startedEvent.tool_name),
-                title: `Execute ${startedEvent.tool_name}`,
-                description: `Running ${startedEvent.tool_name}`,
-                status: 'running',
-                metadata: {
-                  tool_name: startedEvent.tool_name,
-                  parameters: startedEvent.parameters ?? null,
-                  stream_started_at: timestamp,
-                },
-              });
-
-              // Also update action trail for visibility
-              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
-              addActionTrailEntry?.({
-                type: 'running',
-                message: `Executing ${startedEvent.tool_name}...`,
-                metadata: { tool_call_id: startedEvent.tool_id },
-              });
+              const decodedToolName = normalizeToolNameForUi(startedEvent.tool_name);
+              handlersRef.current.updateToolStream(
+                startedEvent.tool_id,
+                buildStartedToolStreamUpdate({
+                  toolId: startedEvent.tool_id,
+                  toolName: decodedToolName,
+                  timestamp,
+                  parameters: startedEvent.parameters as Record<string, unknown> | undefined,
+                }),
+              );
+              emitRuntimeActivity(
+                buildToolStreamStartedActivity({
+                  id: `toolstream-${startedEvent.tool_id}`,
+                  actionId: startedEvent.tool_id,
+                  type: mapToolNameToActionType(decodedToolName),
+                  toolName: decodedToolName,
+                  timestamp,
+                  parameters: (startedEvent.parameters as Record<string, unknown>) ?? null,
+                  sidecarEventType: startedEvent.tool_name.startsWith('extension_native_')
+                    ? 'browser'
+                    : undefined,
+                }),
+              );
 
               if (startedEvent.tool_name.startsWith('extension_native_')) {
                 runExtensionPreflightCheck();
-                focusSidecar('browser');
               }
               break;
             }
 
             case 'progress': {
               const progressEvent = streamEvent as ToolStreamProgressEvent;
-              handlersRef.current.updateToolStream(progressEvent.tool_id, {
-                progress: progressEvent.progress,
-                progressMessage: progressEvent.message,
-                bytesProcessed: progressEvent.bytes_processed,
-                bytesTotal: progressEvent.bytes_total,
-              });
+              handlersRef.current.updateToolStream(
+                progressEvent.tool_id,
+                buildProgressToolStreamUpdate({
+                  progress: progressEvent.progress,
+                  message: progressEvent.message,
+                  bytesProcessed: progressEvent.bytes_processed,
+                  bytesTotal: progressEvent.bytes_total,
+                }),
+              );
 
               // Also update action trail with progress message for real-time status
               if (progressEvent.message) {
@@ -2362,123 +2342,110 @@ export function useAgenticEvents() {
 
             case 'output_chunk': {
               const chunkEvent = streamEvent as ToolStreamOutputChunkEvent;
-              handlersRef.current.updateToolStream(chunkEvent.tool_id, {
-                outputBuffer: chunkEvent.chunk,
-                outputChunks: [chunkEvent.chunk],
-              });
+              handlersRef.current.updateToolStream(
+                chunkEvent.tool_id,
+                buildOutputChunkToolStreamUpdate(chunkEvent.chunk),
+              );
               break;
             }
 
             case 'completed': {
               const completedEvent = streamEvent as ToolStreamCompletedEvent;
-              handlersRef.current.updateToolStream(completedEvent.tool_id, {
-                status: 'completed',
-                progress: 1.0,
-                result: completedEvent.result,
-                completedAt: new Date(timestamp),
-                duration_ms: completedEvent.duration_ms,
-              });
+              handlersRef.current.updateToolStream(
+                completedEvent.tool_id,
+                buildTerminalToolStreamUpdate({
+                  status: 'completed',
+                  timestamp,
+                  durationMs: completedEvent.duration_ms,
+                  result: completedEvent.result,
+                }),
+              );
 
               const toolName =
                 useUnifiedChatStore.getState().activeToolStreams.get(completedEvent.tool_id)
                   ?.tool_name ?? 'tool';
-              upsertActionLogEntry({
-                id: `toolstream-${completedEvent.tool_id}`,
-                actionId: completedEvent.tool_id,
-                type: mapToolNameToActionType(toolName),
-                title: `Execute ${toolName}`,
-                description: `Completed in ${completedEvent.duration_ms}ms`,
-                status: 'success',
-                result: safeJsonStringify(completedEvent.result),
-                metadata: {
-                  tool_name: toolName,
-                  duration_ms: completedEvent.duration_ms,
-                  stream_completed_at: timestamp,
-                },
-              });
-
-              // Update action trail
-              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
               const state = useUnifiedChatStore.getState();
               const stream = state.activeToolStreams.get(completedEvent.tool_id);
-              clearRunningActionTrailEntries(completedEvent.tool_id, stream?.tool_name);
-              addActionTrailEntry?.({
-                type: 'completed',
-                message: `${stream?.tool_name || 'Tool'} completed (${completedEvent.duration_ms}ms)`,
-              });
+              clearRunningToolTrailEntries(state, completedEvent.tool_id, stream?.tool_name);
+              emitRuntimeActivity(
+                buildToolStreamTerminalActivity({
+                  id: `toolstream-${completedEvent.tool_id}`,
+                  actionId: completedEvent.tool_id,
+                  type: mapToolNameToActionType(toolName),
+                  toolName: stream?.tool_name || 'Tool',
+                  status: 'success',
+                  timestamp,
+                  durationMs: completedEvent.duration_ms,
+                  result: safeJsonStringify(completedEvent.result),
+                }),
+              );
               scheduleToolStreamCleanup(completedEvent.tool_id);
               break;
             }
 
             case 'error': {
               const errorEvent = streamEvent as ToolStreamErrorEvent;
-              handlersRef.current.updateToolStream(errorEvent.tool_id, {
-                status: 'error',
-                error: errorEvent.error,
-                completedAt: new Date(timestamp),
-                duration_ms: errorEvent.duration_ms,
-                retryable: errorEvent.retryable,
-              });
+              handlersRef.current.updateToolStream(
+                errorEvent.tool_id,
+                buildTerminalToolStreamUpdate({
+                  status: 'error',
+                  timestamp,
+                  durationMs: errorEvent.duration_ms,
+                  error: errorEvent.error,
+                  retryable: errorEvent.retryable,
+                }),
+              );
 
               const toolName =
                 useUnifiedChatStore.getState().activeToolStreams.get(errorEvent.tool_id)
                   ?.tool_name ?? 'tool';
-              upsertActionLogEntry({
-                id: `toolstream-${errorEvent.tool_id}`,
-                actionId: errorEvent.tool_id,
-                type: mapToolNameToActionType(toolName),
-                title: `Execute ${toolName}`,
-                description: errorEvent.error,
-                status: 'failed',
-                error: errorEvent.error,
-                metadata: {
-                  tool_name: toolName,
-                  duration_ms: errorEvent.duration_ms,
-                  retryable: errorEvent.retryable,
-                  stream_error_at: timestamp,
-                },
-              });
-
-              // Update action trail
-              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
               const state = useUnifiedChatStore.getState();
               const stream = state.activeToolStreams.get(errorEvent.tool_id);
-              clearRunningActionTrailEntries(errorEvent.tool_id, stream?.tool_name);
-              addActionTrailEntry?.({
-                type: 'error',
-                message: `${stream?.tool_name || 'Tool'} failed: ${errorEvent.error}`,
-              });
+              clearRunningToolTrailEntries(state, errorEvent.tool_id, stream?.tool_name);
+              emitRuntimeActivity(
+                buildToolStreamTerminalActivity({
+                  id: `toolstream-${errorEvent.tool_id}`,
+                  actionId: errorEvent.tool_id,
+                  type: mapToolNameToActionType(toolName),
+                  toolName: stream?.tool_name || 'Tool',
+                  status: 'failed',
+                  timestamp,
+                  durationMs: errorEvent.duration_ms,
+                  error: errorEvent.error,
+                  retryable: errorEvent.retryable,
+                }),
+              );
               scheduleToolStreamCleanup(errorEvent.tool_id);
               break;
             }
 
             case 'cancelled': {
               const cancelledEvent = streamEvent as ToolStreamCancelledEvent;
-              handlersRef.current.updateToolStream(cancelledEvent.tool_id, {
-                status: 'cancelled',
-                error: cancelledEvent.reason,
-                completedAt: new Date(timestamp),
-                duration_ms: cancelledEvent.duration_ms,
-              });
+              handlersRef.current.updateToolStream(
+                cancelledEvent.tool_id,
+                buildTerminalToolStreamUpdate({
+                  status: 'cancelled',
+                  timestamp,
+                  durationMs: cancelledEvent.duration_ms,
+                  error: cancelledEvent.reason,
+                }),
+              );
 
               const toolName =
                 useUnifiedChatStore.getState().activeToolStreams.get(cancelledEvent.tool_id)
                   ?.tool_name ?? 'tool';
-              upsertActionLogEntry({
-                id: `toolstream-${cancelledEvent.tool_id}`,
-                actionId: cancelledEvent.tool_id,
-                type: mapToolNameToActionType(toolName),
-                title: `Execute ${toolName}`,
-                description: cancelledEvent.reason ?? 'Tool execution cancelled',
-                status: 'failed',
-                error: cancelledEvent.reason ?? 'Tool execution cancelled',
-                metadata: {
-                  tool_name: toolName,
-                  duration_ms: cancelledEvent.duration_ms,
-                  stream_cancelled_at: timestamp,
-                },
-              });
-              clearRunningActionTrailEntries(cancelledEvent.tool_id, toolName);
+              clearRunningToolTrailEntries(useUnifiedChatStore.getState(), cancelledEvent.tool_id, toolName);
+              emitRuntimeActivity(
+                buildToolStreamCancelledActivity({
+                  id: `toolstream-${cancelledEvent.tool_id}`,
+                  actionId: cancelledEvent.tool_id,
+                  type: mapToolNameToActionType(toolName),
+                  toolName,
+                  timestamp,
+                  durationMs: cancelledEvent.duration_ms,
+                  reason: cancelledEvent.reason,
+                }),
+              );
               scheduleToolStreamCleanup(cancelledEvent.tool_id);
               break;
             }

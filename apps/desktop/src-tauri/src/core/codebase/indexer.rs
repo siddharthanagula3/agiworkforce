@@ -454,11 +454,36 @@ fn extract_go_symbols(file_path: &str, content: &str) -> Vec<Symbol> {
     symbols
 }
 
+/// Pre-compiled regex cache to avoid calling Regex::new() on every line.
+/// Each pattern is compiled once and reused for all subsequent calls.
 fn extract_pattern(line: &str, pattern: &str) -> Option<String> {
+    use std::sync::Mutex;
+
+    static REGEX_CACHE: once_cell::sync::Lazy<
+        Mutex<std::collections::HashMap<String, regex::Regex>>,
+    > = once_cell::sync::Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
+
+    let cache = REGEX_CACHE.lock().ok()?;
+    if let Some(re) = cache.get(pattern) {
+        return re
+            .captures(line)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string());
+    }
+    drop(cache);
+
+    // Compile and cache the regex
     let re = regex::Regex::new(pattern).ok()?;
-    re.captures(line)
+    let result = re
+        .captures(line)
         .and_then(|cap| cap.get(1))
-        .map(|m| m.as_str().to_string())
+        .map(|m| m.as_str().to_string());
+
+    if let Ok(mut cache) = REGEX_CACHE.lock() {
+        cache.insert(pattern.to_string(), re);
+    }
+
+    result
 }
 
 fn parse_symbol_kind(kind_str: &str) -> SymbolKind {

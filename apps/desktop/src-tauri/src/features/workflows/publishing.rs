@@ -126,7 +126,7 @@ impl WorkflowPublisher {
                 workflow_definition, thumbnail_url, share_url, clone_count,
                 view_count, favorite_count, avg_rating, rating_count,
                 tags, estimated_time_saved, estimated_cost_saved,
-                is_verified, is_featured, created_at, updated_a
+                is_verified, is_featured, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
             rusqlite::params![
                 &published_id,
@@ -308,7 +308,7 @@ impl WorkflowPublisher {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE id = ?1",
                 rusqlite::params![workflow_id],
                 Self::row_to_published_workflow,
@@ -333,7 +333,7 @@ impl WorkflowPublisher {
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
-                    is_verified, is_featured, created_at, updated_a
+                    is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE creator_id = ?1 ORDER BY created_at DESC",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;

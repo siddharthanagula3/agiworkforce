@@ -95,7 +95,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ template, isInstalle
           </span>
           <span title="Install count">📥 {template.install_count}</span>
         </div>
-        <button
+        <button type="button"
           onClick={handleInstall}
           disabled={installing || isLoading}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${

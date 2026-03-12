@@ -188,8 +188,8 @@ impl McpServersConfig {
             return Ok(Self::project_config_path(&project_root));
         }
 
-        let app_data = crate::sys::utils::app_data_dir()
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let app_data =
+            crate::sys::utils::app_data_dir().map_err(|e| std::io::Error::other(e.to_string()))?;
         Ok(app_data.join(GLOBAL_MCP_CONFIG_FILENAME))
     }
 
@@ -320,8 +320,8 @@ impl McpServersConfig {
     /// OAuth tokens are checked first, with automatic fallback to legacy credentials
     /// if OAuth is not configured. Expired OAuth tokens are auto-refreshed.
     pub async fn inject_credentials(&mut self) -> crate::core::mcp::McpResult<()> {
-        let db_path = crate::sys::utils::database_path()
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let db_path =
+            crate::sys::utils::database_path().map_err(|e| std::io::Error::other(e.to_string()))?;
 
         if !db_path.exists() {
             return Ok(());
@@ -354,8 +354,13 @@ impl McpServersConfig {
                     if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with('>') {
                         let provider =
                             value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
-                        plan.push((server_name.clone(), key.clone(), Resolved::NeedsOAuth(provider)));
-                    } else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with('>') {
+                        plan.push((
+                            server_name.clone(),
+                            key.clone(),
+                            Resolved::NeedsOAuth(provider),
+                        ));
+                    } else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with('>')
+                    {
                         let provider =
                             value[API_KEY_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
                         let api_key_storage_key = format!("api_key_{}", provider);
@@ -366,9 +371,16 @@ impl McpServersConfig {
                         ) {
                             Ok(stored_value) => {
                                 if let Some(decrypted) = decrypt_oauth_token(&stored_value) {
-                                    plan.push((server_name.clone(), key.clone(), Resolved::Done(decrypted)));
+                                    plan.push((
+                                        server_name.clone(),
+                                        key.clone(),
+                                        Resolved::Done(decrypted),
+                                    ));
                                 } else {
-                                    tracing::warn!("Failed to decrypt API key for provider: {}", provider);
+                                    tracing::warn!(
+                                        "Failed to decrypt API key for provider: {}",
+                                        provider
+                                    );
                                 }
                             }
                             Err(_) => {
@@ -384,16 +396,25 @@ impl McpServersConfig {
                         ) {
                             Ok(stored_value) => {
                                 if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                    plan.push((server_name.clone(), key.clone(), Resolved::Done(decrypted)));
+                                    plan.push((
+                                        server_name.clone(),
+                                        key.clone(),
+                                        Resolved::Done(decrypted),
+                                    ));
                                 } else {
                                     tracing::warn!(
                                         "Failed to decrypt credential for {} / {}",
-                                        server_name, key
+                                        server_name,
+                                        key
                                     );
                                 }
                             }
                             Err(_) => {
-                                tracing::warn!("Credential not found for {} / {}", server_name, key);
+                                tracing::warn!(
+                                    "Credential not found for {} / {}",
+                                    server_name,
+                                    key
+                                );
                             }
                         }
                     }
@@ -419,7 +440,8 @@ impl McpServersConfig {
                         Ok(token) => {
                             if let Some(config) = self.mcp_servers.get_mut(&server_name) {
                                 if let Some(entry) = config.env.get_mut(&key) {
-                                    *entry = if key == "OPENAPI_MCP_HEADERS" && provider == "notion" {
+                                    *entry = if key == "OPENAPI_MCP_HEADERS" && provider == "notion"
+                                    {
                                         format!(
                                             r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
                                             token
@@ -427,14 +449,18 @@ impl McpServersConfig {
                                     } else {
                                         token
                                     };
-                                    tracing::debug!("Injected OAuth token for provider: {}", provider);
+                                    tracing::debug!(
+                                        "Injected OAuth token for provider: {}",
+                                        provider
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "OAuth token not available for {} ({}), trying legacy credential",
-                                provider, e
+                                provider,
+                                e
                             );
                             // Fall back to legacy credential synchronously
                             let cred_key = format!("mcp_credential_{}_{}", server_name, key);
@@ -445,12 +471,14 @@ impl McpServersConfig {
                                     |row| row.get::<_, String>(0),
                                 ) {
                                     if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                        if let Some(config) = self.mcp_servers.get_mut(&server_name) {
+                                        if let Some(config) = self.mcp_servers.get_mut(&server_name)
+                                        {
                                             if let Some(entry) = config.env.get_mut(&key) {
                                                 *entry = decrypted;
                                                 tracing::debug!(
                                                     "Injected legacy credential for {} / {}",
-                                                    server_name, key
+                                                    server_name,
+                                                    key
                                                 );
                                             }
                                         }
@@ -460,7 +488,6 @@ impl McpServersConfig {
                         }
                     }
                 }
-
             }
         }
 
@@ -563,22 +590,44 @@ fn store_refreshed_oauth_token(
     let conn = match open_mcp_settings_db() {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!("Failed to open MCP settings DB for storing refreshed OAuth token: {}", e);
+            tracing::error!(
+                "Failed to open MCP settings DB for storing refreshed OAuth token: {}",
+                e
+            );
             return;
         }
     };
     let encrypted_new = match encrypt_oauth_token(new_access) {
         Some(enc) => enc,
         None => {
-            tracing::error!("Failed to encrypt refreshed OAuth access token for key '{}'", access_token_key);
+            tracing::error!(
+                "Failed to encrypt refreshed OAuth access token for key '{}'",
+                access_token_key
+            );
             return;
         }
     };
-    if let Err(e) = upsert_settings_v2_value(&conn, access_token_key, &encrypted_new, "security", true) {
-        tracing::error!("Failed to persist refreshed OAuth access token for key '{}': {}", access_token_key, e);
+    if let Err(e) =
+        upsert_settings_v2_value(&conn, access_token_key, &encrypted_new, "security", true)
+    {
+        tracing::error!(
+            "Failed to persist refreshed OAuth access token for key '{}': {}",
+            access_token_key,
+            e
+        );
     }
-    if let Err(e) = upsert_settings_v2_value(&conn, expires_at_key, &new_expires.to_string(), "security", false) {
-        tracing::error!("Failed to persist refreshed OAuth expiry for key '{}': {}", expires_at_key, e);
+    if let Err(e) = upsert_settings_v2_value(
+        &conn,
+        expires_at_key,
+        &new_expires.to_string(),
+        "security",
+        false,
+    ) {
+        tracing::error!(
+            "Failed to persist refreshed OAuth expiry for key '{}': {}",
+            expires_at_key,
+            e
+        );
     }
 }
 
@@ -598,7 +647,10 @@ async fn get_oauth_token(provider: &str) -> Result<String, String> {
     // Check if token is expired (with 60 second buffer)
     if let Some(exp) = data.expires_at {
         if current_time >= exp - 60 {
-            tracing::info!("OAuth token for {} is expired, attempting refresh", provider);
+            tracing::info!(
+                "OAuth token for {} is expired, attempting refresh",
+                provider
+            );
 
             if let Some(refresh_token) = data.refresh_token {
                 // Async phase: HTTP token refresh — no DB connection in scope here
@@ -716,7 +768,10 @@ fn read_oauth_client_credentials(
                 return Ok(decrypt_oauth_token(&stored_value).unwrap_or(stored_value));
             }
         }
-        Err(format!("OAuth {} not found for provider: {}", label, provider))
+        Err(format!(
+            "OAuth {} not found for provider: {}",
+            label, provider
+        ))
     };
 
     let client_id = load_credential(client_id_keys, "client_id")?;
@@ -731,19 +786,36 @@ fn store_new_refresh_token(provider: &str, new_refresh_token: &str) {
     let encrypted_refresh = match encrypt_oauth_token(new_refresh_token) {
         Some(enc) => enc,
         None => {
-            tracing::error!("Failed to encrypt new refresh token for provider: {}", provider);
+            tracing::error!(
+                "Failed to encrypt new refresh token for provider: {}",
+                provider
+            );
             return;
         }
     };
     let conn = match open_mcp_settings_db() {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!("Failed to open MCP settings DB for storing refresh token for provider '{}': {}", provider, e);
+            tracing::error!(
+                "Failed to open MCP settings DB for storing refresh token for provider '{}': {}",
+                provider,
+                e
+            );
             return;
         }
     };
-    if let Err(e) = upsert_settings_v2_value(&conn, &refresh_token_key, &encrypted_refresh, "security", true) {
-        tracing::error!("Failed to persist refresh token for provider '{}': {}", provider, e);
+    if let Err(e) = upsert_settings_v2_value(
+        &conn,
+        &refresh_token_key,
+        &encrypted_refresh,
+        "security",
+        true,
+    ) {
+        tracing::error!(
+            "Failed to persist refresh token for provider '{}': {}",
+            provider,
+            e
+        );
     } else {
         tracing::debug!("Stored new refresh token for provider: {}", provider);
     }

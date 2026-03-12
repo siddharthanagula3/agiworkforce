@@ -19,6 +19,35 @@ pub struct GeneratedCode {
     pub dependencies: Vec<String>,
 }
 
+/// Escape a string for safe insertion into a Python double-quoted string literal.
+fn escape_python_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('{', "{{")
+        .replace('}', "}}")
+}
+
+/// Escape a string for safe insertion into a JavaScript single-quoted string literal.
+fn escape_js_codegen_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('`', "\\`")
+}
+
+/// Escape a string for safe insertion into a Rust double-quoted string literal.
+fn escape_rust_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('{', "{{")
+        .replace('}', "}}")
+}
+
 pub struct CodeGenerator;
 
 impl CodeGenerator {
@@ -79,7 +108,7 @@ impl CodeGenerator {
                     if let Some(ref text) = action.value {
                         code.push_str(&format!(
                             "        pyautogui.write(\"{}\")\n",
-                            text.replace("\"", "\\\"")
+                            escape_python_string(text)
                         ));
                         code.push_str("        print(\"Typed text\")\n");
                     }
@@ -204,15 +233,10 @@ impl CodeGenerator {
                 }
                 "type" => {
                     if let Some(ref text) = action.value {
-                        code.push_str(&format!(
-                            "    let text = \"{}\";\n",
-                            text.replace("\"", "\\\"")
-                        ));
+                        let safe = escape_rust_string(text);
+                        code.push_str(&format!("    let text = \"{}\";\n", safe));
                         code.push_str("    println!(\"Typing: {}\", text);\n");
-                        code.push_str(&format!(
-                            "    println!(\"Typed: {}\");\n\n",
-                            text.replace("\"", "\\\"")
-                        ));
+                        code.push_str(&format!("    println!(\"Typed: {}\");\n\n", safe));
                     }
                 }
                 "wait" => {
@@ -290,7 +314,7 @@ impl CodeGenerator {
                     if let Some(ref text) = action.value {
                         code.push_str(&format!(
                             "  robot.typeString('{}');\n",
-                            text.replace("'", "\\'")
+                            escape_js_codegen_string(text)
                         ));
                         code.push_str("  console.log('Typed text');\n\n");
                     }

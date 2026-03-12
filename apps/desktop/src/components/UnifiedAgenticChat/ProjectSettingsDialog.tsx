@@ -318,7 +318,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 </Label>
                 <div className="flex gap-2 flex-wrap">
                   {PROJECT_COLORS.map((c) => (
-                    <button
+                    <button type="button"
                       key={c.value}
                       onClick={() => setColor(c.value)}
                       className={cn(
@@ -339,7 +339,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     // BUG-PS-05: render actual Lucide icon; fall back to first letter if not in map
                     const IconComponent = ICON_COMPONENT_MAP[i.value];
                     return (
-                      <button
+                      <button type="button"
                         key={i.value}
                         onClick={() => setIcon(i.value)}
                         className={cn(
@@ -448,7 +448,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       </p>
                     </div>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => setAutoSaveMemories(!autoSaveMemories)}
                     className={cn(
                       'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
@@ -505,7 +505,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     {conversations.map((conv: ConversationSummary) => {
                       const isLinked = conversationIds.includes(conv.id);
                       return (
-                        <button
+                        <button type="button"
                           key={conv.id}
                           onClick={() => handleToggleConversation(conv.id)}
                           className={cn(

@@ -105,6 +105,11 @@ impl PermissionManager {
             map.insert(tool_id, policy_obj);
         }
 
+        // Write loaded policies to self.policies so they are actually usable
+        // Use try_write to avoid blocking — this is called during init, not async context
+        let mut policies_lock = self.policies.blocking_write();
+        *policies_lock = map;
+
         Ok(())
     }
 

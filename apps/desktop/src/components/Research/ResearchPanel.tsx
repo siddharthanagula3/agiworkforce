@@ -198,34 +198,67 @@ export const ResearchPanel = memo(function ResearchPanel({
   const [activeTab, setActiveTab] = useState<'progress' | 'report'>('progress');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Listen for research progress events
+  // Bug #401 fix: Store unlisten promises and clean up properly on unmount
+  // to prevent memory leaks from unresolved listener promises.
   useEffect(() => {
     if (!isTauri) return;
 
-    const unlistenProgress = listen<ResearchProgress>('research:progress', (event) => {
-      setState((prev) => ({
-        ...prev,
-        progress: event.payload,
-        status: 'researching',
-      }));
+    let isMounted = true;
+    const unlistenFns: Array<() => void> = [];
 
-      // Auto-scroll during progress
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const setupListeners = async () => {
+      try {
+        const unlistenProgress = await listen<ResearchProgress>('research:progress', (event) => {
+          if (!isMounted) return;
+          setState((prev) => ({
+            ...prev,
+            progress: event.payload,
+            status: 'researching',
+          }));
+
+          // Auto-scroll during progress
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        });
+        if (isMounted) {
+          unlistenFns.push(unlistenProgress);
+        } else {
+          unlistenProgress();
+        }
+
+        const unlistenError = await listen<{ query: string; error: string }>(
+          'research:error',
+          (event) => {
+            if (!isMounted) return;
+            setState((prev) => ({
+              ...prev,
+              status: 'error',
+              error: event.payload.error,
+            }));
+          },
+        );
+        if (isMounted) {
+          unlistenFns.push(unlistenError);
+        } else {
+          unlistenError();
+        }
+      } catch (err) {
+        console.error('[ResearchPanel] Failed to setup event listeners:', err);
       }
-    });
+    };
 
-    const unlistenError = listen<{ query: string; error: string }>('research:error', (event) => {
-      setState((prev) => ({
-        ...prev,
-        status: 'error',
-        error: event.payload.error,
-      }));
-    });
+    setupListeners();
 
     return () => {
-      unlistenProgress.then((unlisten) => unlisten());
-      unlistenError.then((unlisten) => unlisten());
+      isMounted = false;
+      unlistenFns.forEach((unlisten) => {
+        try {
+          unlisten();
+        } catch (err) {
+          console.warn('[ResearchPanel] Error during listener cleanup:', err);
+        }
+      });
     };
   }, []);
 
@@ -296,7 +329,7 @@ ${state.result.report}
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [state.result]);
 
   const handleReset = useCallback(() => {

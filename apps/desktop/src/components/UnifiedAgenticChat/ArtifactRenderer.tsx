@@ -170,7 +170,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleExportPdf = async () => {
@@ -188,7 +188,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         .filter((p) => p.length > 0);
 
       await invoke('document_create_pdf_simple', {
-        output_path: savePath,
+        outputPath: savePath,
         title: artifact.title || 'Document',
         author: null,
         paragraphs,
@@ -215,7 +215,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         .filter((p) => p.length > 0);
 
       await invoke('document_create_word_simple', {
-        output_path: savePath,
+        outputPath: savePath,
         title: artifact.title || 'Document',
         author: null,
         paragraphs,
@@ -262,8 +262,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       const rows = data.map((row) => headers.map((h) => String(row[h] ?? '')));
 
       await invoke('document_create_excel_simple', {
-        output_path: savePath,
-        sheet_name: artifact.title || 'Sheet1',
+        outputPath: savePath,
+        sheetName: artifact.title || 'Sheet1',
         headers,
         rows,
       });
@@ -352,7 +352,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
           toast.success('Exported as SVG');
         }
       } catch {
@@ -417,7 +417,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
-              URL.revokeObjectURL(pngUrl);
+              setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
               toast.success('Exported as PNG');
             }
           }, 'image/png');
@@ -1353,7 +1353,7 @@ ${content}
 
         <div className="flex-1" />
 
-        <button
+        <button type="button"
           onClick={() => setShowCode((prev) => !prev)}
           className={cn(
             'px-2 py-1 text-xs rounded transition-colors',
@@ -1450,7 +1450,7 @@ ${content}
                   <div className="text-center">
                     <Square className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
                     <p className="text-sm text-zinc-400">Execution stopped</p>
-                    <button
+                    <button type="button"
                       onClick={handleRun}
                       className="mt-2 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 transition-colors"
                     >
@@ -1466,7 +1466,7 @@ ${content}
               <div className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50 border-b border-zinc-700/50 flex items-center justify-between">
                 <span>Console</span>
                 {consoleOutput.length > 0 && (
-                  <button
+                  <button type="button"
                     onClick={() => setConsoleOutput([])}
                     className="text-zinc-500 hover:text-zinc-300 transition-colors"
                   >

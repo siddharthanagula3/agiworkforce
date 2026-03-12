@@ -204,7 +204,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('Downloaded artifact');
   }, [renderedArtifact, getArtifact]);
 

@@ -135,14 +135,38 @@ impl SemanticSelector {
 
         if let Some(elem_type) = element_type {
             for keyword in &keywords {
-                let css = match elem_type.as_str() {
-                    "button" => format!("button:contains('{}')", keyword),
-                    "link" => format!("a:contains('{}')", keyword),
-                    "input" => format!("input[name*='{}']", keyword.replace(' ', "")),
-                    "textbox" => "input[type='text']".to_string(),
-                    _ => format!("{}:contains('{}')", elem_type, keyword),
+                match elem_type.as_str() {
+                    "button" => {
+                        // :contains() is not valid CSS in modern browsers; use XPath instead
+                        let xpath = format!(
+                            "//button[contains(text(),'{}')]",
+                            keyword.replace('\'', "\\'")
+                        );
+                        self.strategies.push(SelectorStrategy::XPath(xpath));
+                    }
+                    "link" => {
+                        let xpath =
+                            format!("//a[contains(text(),'{}')]", keyword.replace('\'', "\\'"));
+                        self.strategies.push(SelectorStrategy::XPath(xpath));
+                    }
+                    "input" => {
+                        let css = format!("input[name*='{}']", keyword.replace(' ', ""));
+                        self.strategies.push(SelectorStrategy::Css(css));
+                    }
+                    "textbox" => {
+                        self.strategies
+                            .push(SelectorStrategy::Css("input[type='text']".to_string()));
+                    }
+                    _ => {
+                        // Use XPath for text-based matching instead of invalid :contains()
+                        let xpath = format!(
+                            "//{}[contains(text(),'{}')]",
+                            elem_type,
+                            keyword.replace('\'', "\\'")
+                        );
+                        self.strategies.push(SelectorStrategy::XPath(xpath));
+                    }
                 };
-                self.strategies.push(SelectorStrategy::Css(css));
             }
         }
 

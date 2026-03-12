@@ -616,8 +616,7 @@ async fn test_browser_tool_is_routed_not_unknown() {
         name: "browser_get_url".to_string(),
         arguments: serde_json::json!({}).to_string(),
     };
-    let executor =
-        ToolExecutor::new(create_registry_with_browser_tool("browser_get_url", vec![]));
+    let executor = ToolExecutor::new(create_registry_with_browser_tool("browser_get_url", vec![]));
     let err = executor
         .execute_tool_call(&tool_call)
         .await

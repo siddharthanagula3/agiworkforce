@@ -585,11 +585,7 @@ impl AutonomousAgent {
                 match step_result {
                     Ok(result) if result.success => {
                         let result_text = result.result.as_deref().unwrap_or("OK").to_string();
-                        tracing::info!(
-                            "[Agent] Step {} completed: {}",
-                            step.id,
-                            result_text
-                        );
+                        tracing::info!("[Agent] Step {} completed: {}", step.id, result_text);
                         // BUG-02 fix: emit step-completed event to frontend
                         if let Some(ref handle) = self.app_handle {
                             if let Err(e) = handle.emit(
@@ -1066,7 +1062,12 @@ Be concise."#,
             .saturating_sub(MAX_FEEDBACK_HISTORY);
         let history_lines: Vec<String> = completed_outcomes[history_start..]
             .iter()
-            .map(|o| format!("- [{}] {}\n  Result: {}", o.step_id, o.description, o.result))
+            .map(|o| {
+                format!(
+                    "- [{}] {}\n  Result: {}",
+                    o.step_id, o.description, o.result
+                )
+            })
             .collect();
 
         let remaining_lines: Vec<String> = remaining_steps

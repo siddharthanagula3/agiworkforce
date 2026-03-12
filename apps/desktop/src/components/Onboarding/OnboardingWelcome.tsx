@@ -180,7 +180,7 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onComplete
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
                   {STEPS.map((_, index) => (
-                    <button
+                    <button type="button"
                       key={index}
                       onClick={() => setCurrentStep(index)}
                       className={cn(
@@ -193,7 +193,7 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onComplete
                   ))}
                 </div>
 
-                <button
+                <button type="button"
                   onClick={handleNext}
                   className={cn(
                     'flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all',
@@ -216,7 +216,7 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onComplete
               </div>
 
               {/* Skip button */}
-              <button
+              <button type="button"
                 onClick={handleComplete}
                 className="w-full mt-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               >

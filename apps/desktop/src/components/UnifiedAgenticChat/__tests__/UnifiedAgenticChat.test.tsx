@@ -108,10 +108,6 @@ vi.mock('../ProjectsView', () => ({
   ProjectsView: () => <div data-testid="projects-view" />,
 }));
 
-vi.mock('../ApprovalModal', () => ({
-  ApprovalModal: () => null,
-}));
-
 // Mock supabaseAuth
 vi.mock('../../../services/supabaseAuth', () => ({
   supabaseAuth: {
@@ -363,6 +359,8 @@ vi.mock('../../../stores/modelStore', () => {
   });
 
   (useModelStore as unknown as { getState: () => typeof state }).getState = () => state;
+  (useModelStore as unknown as { subscribe: (...args: unknown[]) => () => void }).subscribe =
+    vi.fn(() => vi.fn());
 
   return {
     useModelStore,
@@ -533,6 +531,7 @@ vi.mock('../../../stores/chatStore', () => ({
 
 // Import after all mocks are set up
 import { UnifiedAgenticChat } from '../index';
+import { useSlashCommands } from '../../../hooks/useSlashCommands';
 
 // Setup matchMedia mock for responsive tests
 Object.defineProperty(window, 'matchMedia', {
@@ -563,6 +562,12 @@ describe('UnifiedAgenticChat', () => {
     vi.clearAllMocks();
     testHarness.mockIpcInvoke.mockResolvedValue({});
     testHarness.chatInputOnSend = undefined;
+    vi.mocked(useSlashCommands).mockReturnValue({
+      parseSlashCommand: vi.fn(() => null),
+      isSlashCommandInput: vi.fn(() => false),
+      validCommands: [],
+      projectCommands: {},
+    });
   });
 
   afterEach(() => {
@@ -730,6 +735,54 @@ describe('UnifiedAgenticChat', () => {
       expect.objectContaining({
         request: expect.objectContaining({
           enableAgentMode: true,
+        }),
+      }),
+    );
+  });
+
+  it('routes project slash commands through chat_send_message with injected instructions', async () => {
+    vi.mocked(useSlashCommands).mockReturnValue({
+      parseSlashCommand: () => ({
+        command: 'review',
+        args: 'src',
+        rawInput: '/review src',
+        source: 'project-command' as const,
+        commandPath: '/tmp/.claude/commands/review.md',
+        commandContent: 'Inspect the requested code carefully.',
+      }),
+      isSlashCommandInput: vi.fn(() => true),
+      validCommands: ['review'],
+      projectCommands: {
+        review: {
+          path: '/tmp/.claude/commands/review.md',
+          content: 'Inspect the requested code carefully.',
+        },
+      },
+    });
+
+    await renderChat();
+
+    expect(testHarness.chatInputOnSend).toBeTypeOf('function');
+
+    await act(async () => {
+      await testHarness.chatInputOnSend?.('/review src');
+    });
+
+    expect(testHarness.mockIpcInvoke).toHaveBeenCalledWith(
+      'chat_send_message',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          content: '/review src',
+          customInstructions: expect.stringContaining('## Project Slash Command'),
+        }),
+      }),
+    );
+
+    expect(testHarness.mockIpcInvoke).toHaveBeenCalledWith(
+      'chat_send_message',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          customInstructions: expect.stringContaining('Command: /review'),
         }),
       }),
     );

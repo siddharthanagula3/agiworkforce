@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Button } from '../ui/Button';
 import { Alert, AlertDescription } from '../ui/Alert';
@@ -50,10 +51,15 @@ export default function MCPConfigEditor() {
   const handleSave = async () => {
     if (!localConfig) return;
 
-    await updateConfig(localConfig);
-    setHasChanges(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    try {
+      await updateConfig(localConfig);
+      setHasChanges(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to save MCP config:', err);
+      toast.error(`Failed to save config: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   const handleReset = () => {

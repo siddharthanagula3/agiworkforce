@@ -991,16 +991,18 @@ Only include actions you're confident will make progress."#,
                     super::zoom::Region::from_element_bounds(region),
                     super::zoom::ZoomLevel::from_factor(*zoom_level),
                 );
-                let _result = super::zoom::zoom_region(&zoom_action)?;
-                // The zoomed image can be used for detailed analysis
-                // In the OPA loop, this would feed back into the observation
+                let zoom_result = super::zoom::zoom_region(&zoom_action)?;
+                // Feed zoomed image back into observation context for detailed analysis
                 tracing::info!(
-                    "Zoomed region at ({}, {}) {}x{} with {}x magnification",
+                    "Zoomed region at ({}, {}) {}x{} with {}x magnification — zoomed image {}x{} ({} bytes base64)",
                     region.left,
                     region.top,
                     region.width,
                     region.height,
-                    zoom_level
+                    zoom_level,
+                    zoom_result.width,
+                    zoom_result.height,
+                    zoom_result.image_base64.len(),
                 );
             }
         }

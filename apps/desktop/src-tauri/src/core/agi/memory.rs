@@ -1,7 +1,20 @@
+//! Deprecated in-memory working memory.
+//!
+//! This module provides a simple VecDeque-backed working memory that was the
+//! original AGI memory implementation. It has been superseded by `MemoryManager`
+//! and `MemoryStore` (backed by SQLite + vector embeddings) but is still
+//! referenced by `AGICore` for lightweight in-process caching during a single
+//! session. New code should use `memory_manager` or `memory_persistence` instead.
+
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+#[deprecated(
+    since = "0.1.0",
+    note = "Use MemoryManager or MemoryStore for persistent, searchable memory. \
+            AGIMemory is retained only for lightweight in-session caching."
+)]
 pub struct AGIMemory {
     working_memory: Mutex<VecDeque<MemoryEntry>>,
     max_entries: usize,
@@ -15,6 +28,7 @@ pub struct MemoryEntry {
     pub importance: f64,
 }
 
+#[allow(deprecated)]
 impl AGIMemory {
     pub fn new() -> Result<Self> {
         Ok(Self {

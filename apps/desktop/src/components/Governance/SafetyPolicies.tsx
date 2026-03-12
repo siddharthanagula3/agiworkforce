@@ -244,7 +244,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
               const config = AGENT_MODE_CONFIG[mode];
               const isActive = agentMode === mode;
               return (
-                <button
+                <button type="button"
                   key={mode}
                   onClick={() => void handleAgentModeChange(mode)}
                   disabled={isUpdatingAgentMode}

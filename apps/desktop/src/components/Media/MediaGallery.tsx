@@ -104,7 +104,7 @@ export const MediaGallery: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {items.map((item) => (
-                <button
+                <button type="button"
                   key={item.id}
                   onClick={() => setSelected(item)}
                   className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-3 text-left shadow-lg shadow-black/30 transition hover:-translate-y-1 hover:border-white/30"
@@ -140,7 +140,7 @@ export const MediaGallery: React.FC = () => {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur">
           <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c14] shadow-2xl">
-            <button
+            <button type="button"
               className="absolute right-3 top-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-200 hover:border-white/30"
               onClick={() => setSelected(null)}
             >

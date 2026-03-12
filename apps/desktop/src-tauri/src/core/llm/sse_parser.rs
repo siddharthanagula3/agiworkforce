@@ -32,6 +32,11 @@ pub struct StreamChunk {
     /// `None` when the model is producing plain-text output with no tool calls.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<StreamingToolCall>>,
+    /// Streaming reasoning/thinking text for providers that expose it separately
+    /// from normal output text (for example Anthropic extended thinking or
+    /// OpenAI reasoning summaries in the Responses API).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
     /// When `true`, this chunk is a keepalive/heartbeat signal from the provider
     /// (e.g. SSE comment lines like `: keep-alive`, Anthropic `ping` events).
     /// The chunk carries no content but keeps the stream alive so idle-timeout
@@ -131,6 +136,7 @@ impl SseStreamParser {
                     usage: None,
                     credits: None,
                     tool_calls: None,
+                    reasoning: None,
                     keepalive: true,
                 }));
                 continue;
@@ -173,6 +179,7 @@ impl SseStreamParser {
                             usage: None,
                             credits: None,
                             tool_calls: None,
+                            reasoning: None,
                             keepalive: true,
                         }));
                     } else {
@@ -293,6 +300,7 @@ fn extract_data_payload(line: &str) -> Option<&str> {
 
 fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
     let mut content = String::new();
+    let mut reasoning = String::new();
     let mut done = false;
     let mut finish_reason = None;
     let mut model = None;
@@ -308,6 +316,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
             }
 
             let json: Value = serde_json::from_str(data)?;
+            let event_type = json.get("type").and_then(|t| t.as_str());
 
             // Check for API error responses in streaming format
             if let Some(error) = json.get("error") {
@@ -354,11 +363,24 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             delta.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             for (position, tool_call) in delta_tool_calls.iter().enumerate() {
-                                let index = tool_call
+                                // Bug #27 fix: Prefer the explicit "index" field from the
+                                // provider. Falling back to array position is dangerous
+                                // because a single-element array with index=1 would be
+                                // misassigned to 0. Log a warning when falling back so
+                                // we can detect providers that omit the index.
+                                let explicit_index = tool_call
                                     .get("index")
                                     .and_then(|i| i.as_u64())
-                                    .map(|idx| idx as usize)
-                                    .unwrap_or(position);
+                                    .map(|idx| idx as usize);
+                                if explicit_index.is_none() && delta_tool_calls.len() > 1 {
+                                    tracing::warn!(
+                                        "[SSE] Tool call delta at position {} missing 'index' field \
+                                        in multi-tool chunk — falling back to array position. \
+                                        This may corrupt tool call accumulation.",
+                                        position
+                                    );
+                                }
+                                let index = explicit_index.unwrap_or(position);
                                 let id = tool_call
                                     .get("id")
                                     .and_then(|i| i.as_str())
@@ -398,8 +420,12 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
             // event types than Chat Completions.  Only activate when the Chat
             // Completions `choices` block above did not produce content.
             if content.is_empty() {
-                // Handle output_text_delta: { "type": "output_text_delta", "delta": "text" }
-                if json.get("type").and_then(|t| t.as_str()) == Some("output_text_delta") {
+                // Handle Responses API text deltas. Support both the older underscore
+                // event alias and the current dotted event name.
+                if matches!(
+                    event_type,
+                    Some("output_text_delta") | Some("response.output_text.delta")
+                ) {
                     if let Some(delta_text) = json.get("delta").and_then(|d| d.as_str()) {
                         content.push_str(delta_text);
                     }
@@ -414,6 +440,23 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             }
                         }
                     }
+                }
+            }
+
+            if matches!(
+                event_type,
+                Some("response.reasoning_summary_text.delta")
+                    | Some("reasoning_summary_text_delta")
+                    | Some("response.reasoning_text.delta")
+                    | Some("reasoning_text_delta")
+            ) {
+                if let Some(delta_text) = json
+                    .get("delta")
+                    .and_then(|d| d.as_str())
+                    .or_else(|| json.get("text").and_then(|t| t.as_str()))
+                    .or_else(|| json.get("summary_text").and_then(|t| t.as_str()))
+                {
+                    reasoning.push_str(delta_text);
                 }
             }
 
@@ -496,12 +539,18 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        reasoning: if reasoning.is_empty() {
+            None
+        } else {
+            Some(reasoning)
+        },
         keepalive: false,
     })
 }
 
 fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
     let mut content = String::new();
+    let mut reasoning = String::new();
     let mut done = false;
     let mut finish_reason = None;
     let mut model = None;
@@ -602,7 +651,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
             // ── content_block_delta ──────────────────────────────────────
             // Anthropic streams content incrementally via delta types:
             //   - text_delta        → regular text content
-            //   - thinking_delta    → extended thinking content (ignored here)
+            //   - thinking_delta    → extended thinking content
             //   - input_json_delta  → partial JSON for tool_use arguments
             Some("content_block_delta") => {
                 let index = json.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
@@ -632,9 +681,17 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                                 arguments: partial_json.to_string(),
                             });
                         }
-                        "thinking_delta" | "signature_delta" => {
-                            // Extended thinking content – not surfaced to
-                            // the streaming output (thinking is internal).
+                        "thinking_delta" => {
+                            if let Some(thinking_text) = delta
+                                .get("thinking")
+                                .and_then(|t| t.as_str())
+                                .or_else(|| delta.get("text").and_then(|t| t.as_str()))
+                            {
+                                reasoning.push_str(thinking_text);
+                            }
+                        }
+                        "signature_delta" => {
+                            // Signature-only blocks carry no user-visible content.
                         }
                         _ => {}
                     }
@@ -737,6 +794,11 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
             None
         } else {
             Some(tool_calls)
+        },
+        reasoning: if reasoning.is_empty() {
+            None
+        } else {
+            Some(reasoning)
         },
         keepalive: false,
     })
@@ -861,6 +923,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        reasoning: None,
         keepalive: false,
     })
 }
@@ -976,6 +1039,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        reasoning: None,
         keepalive: false,
     })
 }
@@ -1081,6 +1145,16 @@ mod stream_tests {
         assert_eq!(tool_calls[1].id, "call_b");
     }
 
+    #[test]
+    fn test_parse_openai_sse_extracts_reasoning_summary_delta() {
+        let event = r#"data: {"type":"response.reasoning_summary_text.delta","delta":"First evaluate options."}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk.reasoning.as_deref(), Some("First evaluate options."));
+        assert!(chunk.content.is_empty());
+    }
+
     // ── Anthropic SSE tool call tests ────────────────────────────────
 
     #[test]
@@ -1112,6 +1186,19 @@ mod stream_tests {
         // id and name are empty for delta chunks (sent in content_block_start)
         assert_eq!(tool_calls[0].id, "");
         assert_eq!(tool_calls[0].name, "");
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_extracts_thinking_delta() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Consider the simplest path first.\"}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert_eq!(
+            chunk.reasoning.as_deref(),
+            Some("Consider the simplest path first.")
+        );
+        assert!(chunk.content.is_empty());
     }
 
     #[test]

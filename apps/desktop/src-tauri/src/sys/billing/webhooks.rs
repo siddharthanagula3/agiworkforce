@@ -249,7 +249,7 @@ impl WebhookHandler {
                         id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
                         status, current_period_start, current_period_end, cancel_at_period_end,
                         cancel_at, canceled_at, trial_start, trial_end, amount, currency,
-                        created_at, updated_a
+                        created_at, updated_at
                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                     rusqlite::params![
                         subscription_id,
@@ -436,14 +436,14 @@ impl WebhookHandler {
 
                 let grace_period_end = now + (7 * 24 * 60 * 60);
 
+                // Note: grace_period_end is tracked in logs only — the column does not
+                // exist in the billing_subscriptions schema.  Only update status + updated_at.
                 db.execute(
                     "UPDATE billing_subscriptions SET
                         status = 'past_due',
-                        grace_period_end = ?1,
-                        updated_at = ?2
-                     WHERE stripe_subscription_id = ?3",
+                        updated_at = ?1
+                     WHERE stripe_subscription_id = ?2",
                     rusqlite::params![
-                        grace_period_end,
                         now,
                         match subscription_id {
                             stripe::Expandable::Id(id) => id.to_string(),
@@ -594,7 +594,49 @@ impl WebhookHandler {
         drop(db);
 
         for (event_id, payload) in events {
-            match self.process_event(&payload, "").await {
+            // Retry by directly parsing and processing the stored event payload,
+            // bypassing signature verification (already verified on first receipt).
+            let retry_result: Result<()> = async {
+                let event: Event = serde_json::from_str(&payload)?;
+
+                if self.is_event_processed(event.id.as_ref())? {
+                    return Ok(());
+                }
+
+                match event.type_ {
+                    EventType::CustomerSubscriptionCreated => {
+                        self.handle_subscription_created(&event).await?;
+                    }
+                    EventType::CustomerSubscriptionUpdated => {
+                        self.handle_subscription_updated(&event).await?;
+                    }
+                    EventType::CustomerSubscriptionDeleted => {
+                        self.handle_subscription_deleted(&event).await?;
+                    }
+                    EventType::InvoicePaymentSucceeded => {
+                        self.handle_invoice_payment_succeeded(&event).await?;
+                    }
+                    EventType::InvoicePaymentFailed => {
+                        self.handle_invoice_payment_failed(&event).await?;
+                    }
+                    EventType::CustomerCreated => {
+                        self.handle_customer_created(&event).await?;
+                    }
+                    EventType::CustomerUpdated => {
+                        self.handle_customer_updated(&event).await?;
+                    }
+                    EventType::CustomerDeleted => {
+                        self.handle_customer_deleted(&event).await?;
+                    }
+                    _ => {}
+                }
+
+                self.mark_event_processed(event.id.as_ref())?;
+                Ok(())
+            }
+            .await;
+
+            match retry_result {
                 Ok(_) => {
                     tracing::info!("Successfully retried event: {}", event_id);
                 }

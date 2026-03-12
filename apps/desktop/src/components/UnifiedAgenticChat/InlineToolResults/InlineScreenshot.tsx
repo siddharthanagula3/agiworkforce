@@ -114,7 +114,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status }) 
 
   const handleCopyOcr = () => {
     if (ocrText) {
-      navigator.clipboard.writeText(ocrText);
+      void navigator.clipboard.writeText(ocrText).catch(() => {});
       toast.success('OCR text copied to clipboard', {
         icon: <Check className="h-4 w-4" />,
         duration: 2000,

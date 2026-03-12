@@ -26,6 +26,8 @@ pub struct WebSocketClient {
     pub id: String,
     pub user_id: Option<String>,
     pub team_id: Option<String>,
+    /// The resource this client is currently interacting with (e.g. typing in)
+    pub current_resource: Option<String>,
 }
 
 pub struct RealtimeServer {
@@ -193,6 +195,7 @@ impl RealtimeServer {
                     id: client_id.clone(),
                     user_id: user_id_from_auth,
                     team_id: team_id_from_auth,
+                    current_resource: None,
                 },
             );
         }
@@ -302,7 +305,16 @@ impl RealtimeServer {
                 }
             }
 
-            RealtimeEvent::UserTyping { resource_id, .. } => {
+            RealtimeEvent::UserTyping {
+                ref resource_id, ..
+            } => {
+                // Track the resource this client is interacting with
+                {
+                    let mut clients_lock = clients.lock().await;
+                    if let Some(client_entry) = clients_lock.get_mut(client_id) {
+                        client_entry.current_resource = Some(resource_id.clone());
+                    }
+                }
                 Self::broadcast_to_resource(resource_id, event.clone(), clients, senders).await;
             }
 
@@ -453,7 +465,7 @@ impl RealtimeServer {
     }
 
     async fn broadcast_to_resource(
-        _resource_id: &str,
+        resource_id: &str,
         event: RealtimeEvent,
         clients: &Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
         senders: &Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
@@ -463,7 +475,12 @@ impl RealtimeServer {
         let mut senders_lock = senders.lock().await;
 
         for (client_id, client) in clients_lock.iter() {
-            if client.user_id.is_some() {
+            // Only send to clients that are actively interacting with this resource
+            let is_on_resource = client
+                .current_resource
+                .as_deref()
+                .is_some_and(|r| r == resource_id);
+            if client.user_id.is_some() && is_on_resource {
                 if let Some(sender) = senders_lock.get_mut(client_id) {
                     let _ = sender.send(message.clone()).await;
                 }
@@ -833,16 +850,25 @@ impl RealtimeServer {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
+
+                // Escape values for safe interpolation into JS string literals.
+                // JSON-encoding produces a quoted string with all special chars
+                // properly escaped (backslash, quotes, newlines, etc.).
+                let safe_selector = serde_json::to_string(&selector)
+                    .map_err(|e| format!("Failed to encode selector: {}", e))?;
+                let safe_attribute = serde_json::to_string(&attribute)
+                    .map_err(|e| format!("Failed to encode attribute: {}", e))?;
+                let safe_value = serde_json::to_string(&value)
+                    .map_err(|e| format!("Failed to encode value: {}", e))?;
+
                 let script = format!(
                     r#"(function() {{
-                        const el = document.querySelector('{}');
+                        const el = document.querySelector({});
                         if (!el) throw new Error('Element not found');
-                        el.setAttribute('{}', '{}');
+                        el.setAttribute({}, {});
                         return true;
                     }})()"#,
-                    selector.replace('\'', "\\'"),
-                    attribute.replace('\'', "\\'"),
-                    value.replace('\'', "\\'")
+                    safe_selector, safe_attribute, safe_value
                 );
                 client.evaluate(&script).await.map_err(|e| e.to_string())?;
 

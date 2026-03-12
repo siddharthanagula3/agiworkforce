@@ -147,7 +147,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
         </span>
       </div>
       {filtered.map((skill, i) => (
-        <button
+        <button type="button"
           key={skill.id}
           role="option"
           aria-selected={i === selectedIndex}

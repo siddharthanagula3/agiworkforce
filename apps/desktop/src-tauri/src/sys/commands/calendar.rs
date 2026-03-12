@@ -516,37 +516,35 @@ fn list_calendar_accounts(
                         Box::new(e),
                     )
                 })?;
-            let token: TokenResponse =
-                match serde_json::from_str::<EncryptedSecret>(&token_json) {
-                    Ok(encrypted_secret) => {
-                        let key = machine_key::derive_key(KeyPurpose::CalendarCredentials);
-                        let decrypted_json =
-                            decrypt_secret(&key, &encrypted_secret).map_err(|e| {
-                                rusqlite::Error::FromSqlConversionFailure(
-                                    4,
-                                    rusqlite::types::Type::Text,
-                                    Box::new(Error::Generic(e)),
-                                )
-                            })?;
-                        serde_json::from_str(&decrypted_json).map_err(|e| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                4,
-                                rusqlite::types::Type::Text,
-                                Box::new(e),
-                            )
-                        })?
-                    }
-                    Err(_) => {
-                        // Plaintext fallback for rows written before encryption was added
-                        serde_json::from_str(&token_json).map_err(|e| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                4,
-                                rusqlite::types::Type::Text,
-                                Box::new(e),
-                            )
-                        })?
-                    }
-                };
+            let token: TokenResponse = match serde_json::from_str::<EncryptedSecret>(&token_json) {
+                Ok(encrypted_secret) => {
+                    let key = machine_key::derive_key(KeyPurpose::CalendarCredentials);
+                    let decrypted_json = decrypt_secret(&key, &encrypted_secret).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(Error::Generic(e)),
+                        )
+                    })?;
+                    serde_json::from_str(&decrypted_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?
+                }
+                Err(_) => {
+                    // Plaintext fallback for rows written before encryption was added
+                    serde_json::from_str(&token_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?
+                }
+            };
             let created_at: i64 = row.get(6)?;
             let connected_at = Utc
                 .timestamp_opt(created_at, 0)

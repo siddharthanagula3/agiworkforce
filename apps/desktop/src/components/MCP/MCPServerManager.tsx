@@ -75,8 +75,14 @@ function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialo
 
   const handleSave = async () => {
     if (server && apiKey) {
-      await storeCredential(server.name, 'API_KEY', apiKey);
-      onSave(server.name, { endpoint });
+      try {
+        await storeCredential(server.name, 'API_KEY', apiKey);
+        onSave(server.name, { endpoint });
+      } catch (err) {
+        console.error('Failed to save server config:', err);
+        toast.error(`Failed to save config: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
     }
     onClose();
   };
@@ -292,6 +298,7 @@ export function MCPServerManager() {
       await refreshServers();
     } catch (err) {
       console.error('Failed to start server:', err);
+      toast.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
     }
     setActionLoading(null);
   };
@@ -303,6 +310,7 @@ export function MCPServerManager() {
       await refreshServers();
     } catch (err) {
       console.error('Failed to stop server:', err);
+      toast.error(`Failed to stop server: ${err instanceof Error ? err.message : String(err)}`);
     }
     setActionLoading(null);
   };
@@ -318,6 +326,7 @@ export function MCPServerManager() {
       await refreshServers();
     } catch (err) {
       console.error('Failed to update server toggle:', err);
+      toast.error(`Failed to toggle server: ${err instanceof Error ? err.message : String(err)}`);
     }
     setActionLoading(null);
   };
@@ -411,7 +420,7 @@ export function MCPServerManager() {
           <div className="flex items-center gap-2 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700">
             <AlertCircle className="w-4 h-4" />
             <span className="flex-1">{error}</span>
-            <button onClick={clearError} className="text-red-700 hover:text-red-900">
+            <button type="button" onClick={clearError} className="text-red-700 hover:text-red-900">
               ✕
             </button>
           </div>

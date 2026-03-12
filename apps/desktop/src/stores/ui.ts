@@ -324,7 +324,7 @@ export const useUIStore = create<UIState>()(
             isOpen: false,
             activeMode: 'code',
             contextId: null,
-            autoTrigger: true,
+            autoTrigger: false,
           },
 
           // --- Simple Mode State (Initial) ---
@@ -492,9 +492,9 @@ export const useUIStore = create<UIState>()(
             try {
               await invoke('error_report', {
                 errorData: {
-                  error_type: error.type,
+                  errorType: error.type,
                   message: error.message,
-                  stack_trace: error.stack,
+                  stackTrace: error.stack,
                   context: error.context || {},
                   timestamp: error.timestamp,
                 },
@@ -715,6 +715,7 @@ export const useUIStore = create<UIState>()(
             set(
               (state) => {
                 if (state.sidecarUserSelected) return;
+                if (!state.sidecarOpen && !state.sidecar.isOpen) return;
                 const lowered = eventType.toLowerCase();
                 let target: SidecarSection | null = null;
                 if (lowered.includes('terminal') || lowered.includes('execute')) {
@@ -749,9 +750,6 @@ export const useUIStore = create<UIState>()(
                   target = 'tools';
                 }
                 if (!target) return;
-                if (!state.sidecarOpen) {
-                  state.sidecarOpen = true;
-                }
                 state.sidecarSection = target;
               },
               undefined,
@@ -980,7 +978,7 @@ export const useUIStore = create<UIState>()(
                   isOpen: false,
                   activeMode: 'code',
                   contextId: null,
-                  autoTrigger: true,
+                  autoTrigger: false,
                 };
 
                 // Note: mode, onboardingCompleted, showModeSwitcherHint are kept
@@ -1048,7 +1046,13 @@ export const useUIStore = create<UIState>()(
             sidecarWidth: persisted?.sidecarWidth ?? currentState.sidecarWidth,
             sidebarWidth: persisted?.sidebarWidth ?? currentState.sidebarWidth,
             sidebarCollapsed: persisted?.sidebarCollapsed ?? currentState.sidebarCollapsed,
-            sidecar: persisted?.sidecar ?? currentState.sidecar,
+            sidecar: persisted?.sidecar
+              ? {
+                  ...currentState.sidecar,
+                  ...persisted.sidecar,
+                  autoTrigger: false,
+                }
+              : currentState.sidecar,
             // Simple mode state
             mode: persisted?.mode ?? currentState.mode,
             onboardingCompleted: persisted?.onboardingCompleted ?? currentState.onboardingCompleted,

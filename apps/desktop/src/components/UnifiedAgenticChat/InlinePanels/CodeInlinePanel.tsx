@@ -59,7 +59,7 @@ const CodeInlinePanelComponent: React.FC<CodeInlinePanelProps> = memo(
                   </div>
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={handleCopyCode}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400 shrink-0 ml-2"
                 title="Copy code"

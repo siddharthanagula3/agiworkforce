@@ -60,12 +60,26 @@ impl ComputerUseSafety {
             return false;
         }
 
-        if y <= 15 && x >= 1800 {
+        // Get actual screen dimensions; fall back to conservative 1920x1080 if unavailable
+        let (screen_w, screen_h) = crate::automation::screen::list_displays()
+            .ok()
+            .and_then(|displays| {
+                displays
+                    .iter()
+                    .find(|d| d.is_primary)
+                    .or(displays.first())
+                    .map(|d| (d.width as i32, d.height as i32))
+            })
+            .unwrap_or((1920, 1080));
+
+        // Block clicks near window control buttons (top-right corner area)
+        if y <= 15 && x >= screen_w - 120 {
             tracing::warn!("Click near window controls blocked: ({}, {})", x, y);
             return false;
         }
 
-        if y >= 1040 && (x <= 120 || x >= 1800) {
+        // Block clicks near system taskbar (bottom edge corners)
+        if y >= screen_h - 40 && (x <= 120 || x >= screen_w - 120) {
             tracing::warn!("Click near system taskbar blocked: ({}, {})", x, y);
             return false;
         }
@@ -136,7 +150,8 @@ pub fn sanitize_tool_output(output: &str) -> String {
             Regex::new(r"sk-[A-Za-z0-9_-]{32,}").expect("valid regex: sk- API key pattern"),
             Regex::new(r"sk_live_[A-Za-z0-9]{24,}").expect("valid regex: sk_live_ key pattern"),
             Regex::new(r"sk_test_[A-Za-z0-9]{24,}").expect("valid regex: sk_test_ key pattern"),
-            Regex::new(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}").expect("valid regex: JWT pattern"),
+            Regex::new(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}")
+                .expect("valid regex: JWT pattern"),
             Regex::new(r"Bearer\s+[A-Za-z0-9_-]{20,}").expect("valid regex: bearer token pattern"),
         ]
     });

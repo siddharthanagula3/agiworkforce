@@ -476,9 +476,7 @@ impl McpExecutor {
         // Validate arguments against the tool's JSON schema before sending.
         // This catches missing required fields and wrong types before the round-trip
         // to the MCP server, producing a clearer error message for the LLM.
-        if let Err(validation_err) =
-            self.validate_tool_args(&server_name, &tool_name, parameters)
-        {
+        if let Err(validation_err) = self.validate_tool_args(&server_name, &tool_name, parameters) {
             tracing::warn!(
                 "[McpExecutor] Argument validation failed for tool '{}' on '{}': {}",
                 tool_name,
@@ -713,18 +711,16 @@ impl McpExecutor {
         // Retrieve the cached tool schema.  If the tool is not found (e.g. the
         // server has disconnected), skip validation rather than blocking the call.
         let schema = match self.client.list_server_tools(server_name) {
-            Ok(tools) => {
-                match tools.into_iter().find(|t| t.name == tool_name) {
-                    Some(tool) => tool.input_schema,
-                    None => {
-                        tracing::debug!(
+            Ok(tools) => match tools.into_iter().find(|t| t.name == tool_name) {
+                Some(tool) => tool.input_schema,
+                None => {
+                    tracing::debug!(
                             "[McpExecutor] Tool '{}' not found in server '{}' cache — skipping schema validation",
                             tool_name, server_name
                         );
-                        return Ok(());
-                    }
+                    return Ok(());
                 }
-            }
+            },
             Err(_) => return Ok(()), // server not connected — skip
         };
 
@@ -746,11 +742,7 @@ impl McpExecutor {
         }
 
         // Check additionalProperties: false constraint.
-        if schema
-            .get("additionalProperties")
-            .and_then(|v| v.as_bool())
-            == Some(false)
-        {
+        if schema.get("additionalProperties").and_then(|v| v.as_bool()) == Some(false) {
             if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
                 let extra: Vec<&str> = parameters
                     .keys()

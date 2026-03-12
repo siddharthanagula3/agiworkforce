@@ -252,7 +252,10 @@ pub async fn example_monitoring(orchestrator: &AgentOrchestrator) -> anyhow::Res
         for status in &statuses {
             tracing::debug!(
                 "  {} [{}]: {}% - {:?}",
-                status.name, status.id, status.progress, status.status
+                status.name,
+                status.id,
+                status.progress,
+                status.status
             );
             if let Some(ref step) = status.current_step {
                 tracing::debug!("    Current: {}", step);

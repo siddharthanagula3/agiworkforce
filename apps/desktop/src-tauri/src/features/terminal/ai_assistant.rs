@@ -32,7 +32,7 @@ impl TerminalAI {
 
 Intent: {}
 Shell: {}
-OS: Windows{}
+OS: {}{}
 
 Requirements:
 - Return ONLY the command, no explanations
@@ -42,7 +42,11 @@ Requirements:
 - Use modern best practices
 
 Command:"#,
-            intent, shell_type, cwd_context, shell_type
+            intent,
+            shell_type,
+            std::env::consts::OS,
+            cwd_context,
+            shell_type
         );
 
         let response = self
@@ -82,7 +86,7 @@ Error Output:
 {}
 {}
 Shell: {}
-OS: Windows
+OS: {}
 
 Provide:
 1. Brief explanation of what went wrong (2-3 sentences)
@@ -91,7 +95,10 @@ Provide:
 4. Alternative approaches if applicable
 
 Keep explanation concise and actionable."#,
-            error_output, command_context, shell_type
+            error_output,
+            command_context,
+            shell_type,
+            std::env::consts::OS
         );
 
         let response = self
@@ -197,7 +204,7 @@ Generate the commit message:"#,
 
 Command: {}
 Shell: {}
-OS: Windows
+OS: {}
 
 Check for:
 - Security issues (destructive operations, unsafe patterns)
@@ -213,7 +220,9 @@ If issues found, provide:
 3. Improved command (if applicable)
 
 Response:"#,
-            command, shell_type
+            command,
+            shell_type,
+            std::env::consts::OS
         );
 
         let response = self

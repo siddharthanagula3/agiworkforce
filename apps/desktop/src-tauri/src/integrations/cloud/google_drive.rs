@@ -252,8 +252,8 @@ impl GoogleDriveClient {
                 .await
                 .map_err(|e| Error::Other(format!("Google Drive chunk upload failed: {}", e)))?;
 
-            if !(response.status().is_success() || response.status() == 308) {
-                let status = response.status();
+            let status = response.status();
+            if !(status.is_success() || status == 308) {
                 let body = response
                     .text()
                     .await
@@ -265,14 +265,20 @@ impl GoogleDriveClient {
             }
 
             offset += read as u64;
+
+            // Bug #228 fix: Extract file ID from the final 200/201 response body
+            // instead of searching by name (which fails on duplicate names)
+            if status.is_success() && offset >= total_size {
+                let uploaded: DriveFileItem = response.json().await.map_err(|e| {
+                    Error::Other(format!("Failed to parse upload completion response: {}", e))
+                })?;
+                return Ok(uploaded.id);
+            }
         }
 
-        let uploaded = self
-            .find_in_parent(&token, &parent_id, &file_name)
-            .await?
-            .ok_or_else(|| Error::Other("Uploaded file not located via Drive API".to_string()))?;
-
-        Ok(uploaded.id)
+        Err(Error::Other(
+            "Google Drive upload did not return a completion response".to_string(),
+        ))
     }
 
     pub async fn download(&mut self, remote_path: &str, local_path: &str) -> Result<()> {

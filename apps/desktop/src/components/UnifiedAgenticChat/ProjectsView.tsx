@@ -212,7 +212,7 @@ export function ProjectsView() {
           {/* Filter tabs */}
           <div className="flex gap-1 mt-3">
             {(['active', 'archived', 'all'] as FilterMode[]).map((mode) => (
-              <button
+              <button type="button"
                 key={mode}
                 onClick={() => setFilterMode(mode)}
                 className={cn(

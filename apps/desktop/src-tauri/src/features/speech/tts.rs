@@ -371,17 +371,14 @@ impl SystemTts {
 
         #[cfg(target_os = "macos")]
         {
-            // Kill the say process
+            // Kill only our tracked say process, not system-wide
             if let Ok(mut guard) = self.current_process.lock() {
                 if let Some(ref mut child) = *guard {
                     let _ = child.kill();
-                    *guard = None;
+                    let _ = child.wait(); // Reap zombie process
                 }
+                *guard = None;
             }
-            // Also kill any lingering say processes
-            let _ = std::process::Command::new("pkill")
-                .args(["-9", "say"])
-                .spawn();
         }
 
         self.is_playing.store(false, Ordering::SeqCst);

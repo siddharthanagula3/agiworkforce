@@ -127,7 +127,10 @@ export function InteractiveTerminal({
 
       onCommandExecuted?.(command, result.stdout || result.stderr, result.exitCode ?? -1);
     } catch (error) {
-      terminal.writeln(`\x1b[31mError: ${error}\x1b[0m`);
+      // Strip ANSI escape sequences from untrusted error content before writing to xterm
+      // eslint-disable-next-line no-control-regex
+      const sanitized = String(error).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+      terminal.writeln(`\x1b[31mError: ${sanitized}\x1b[0m`);
     } finally {
       setIsExecuting(false);
       terminal.writeln('');
@@ -425,7 +428,7 @@ export function InteractiveTerminal({
           <span className="text-xs text-emerald-300">
             AI suggestion applied. Press Enter to execute.
           </span>
-          <button
+          <button type="button"
             onClick={() => setAiSuggestion(null)}
             className="ml-auto text-xs text-gray-500 hover:text-gray-300"
           >

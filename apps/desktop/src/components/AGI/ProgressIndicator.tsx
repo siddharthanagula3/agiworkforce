@@ -99,15 +99,17 @@ export function ProgressIndicator({
           const newMap = new Map(prev);
           const goal = newMap.get(payload.goal_id);
           if (goal) {
-            goal.totalSteps = payload.total_steps;
-            goal.status = 'executing';
-
-            goal.steps = Array.from({ length: payload.total_steps }, (_, i) => ({
-              id: `step_${i}`,
-              index: i,
-              description: 'Loading...',
-              status: 'pending',
-            }));
+            newMap.set(payload.goal_id, {
+              ...goal,
+              totalSteps: payload.total_steps,
+              status: 'executing',
+              steps: Array.from({ length: payload.total_steps }, (_, i) => ({
+                id: `step_${i}`,
+                index: i,
+                description: 'Loading...',
+                status: 'pending',
+              })),
+            });
           }
           return newMap;
         });
@@ -125,13 +127,15 @@ export function ProgressIndicator({
         const newMap = new Map(prev);
         const goal = newMap.get(payload.goal_id);
         if (goal && goal.steps[payload.step_index]) {
-          goal.steps[payload.step_index] = {
+          const newSteps = [...goal.steps];
+          newSteps[payload.step_index] = {
             id: payload.step_id,
             index: payload.step_index,
             description: payload.description,
             status: 'in-progress',
             startTime: Date.now(),
           };
+          newMap.set(payload.goal_id, { ...goal, steps: newSteps });
         }
         return newMap;
       });
@@ -152,7 +156,8 @@ export function ProgressIndicator({
         if (goal && goal.steps[payload.step_index]) {
           const existingStep = goal.steps[payload.step_index];
           if (existingStep) {
-            goal.steps[payload.step_index] = {
+            const newSteps = [...goal.steps];
+            newSteps[payload.step_index] = {
               id: existingStep.id,
               index: existingStep.index,
               description: existingStep.description,
@@ -162,6 +167,7 @@ export function ProgressIndicator({
               executionTimeMs: payload.execution_time_ms,
               error: payload.error,
             };
+            newMap.set(payload.goal_id, { ...goal, steps: newSteps });
           }
         }
         return newMap;
@@ -178,8 +184,11 @@ export function ProgressIndicator({
         const newMap = new Map(prev);
         const goal = newMap.get(payload.goal_id);
         if (goal) {
-          goal.completedSteps = payload.completed_steps;
-          goal.progressPercent = payload.progress_percent;
+          newMap.set(payload.goal_id, {
+            ...goal,
+            completedSteps: payload.completed_steps,
+            progressPercent: payload.progress_percent,
+          });
         }
         return newMap;
       });
@@ -192,9 +201,12 @@ export function ProgressIndicator({
           const newMap = new Map(prev);
           const goal = newMap.get(payload.goal_id);
           if (goal) {
-            goal.status = 'completed';
-            goal.completedSteps = payload.completed_steps;
-            goal.progressPercent = 100;
+            newMap.set(payload.goal_id, {
+              ...goal,
+              status: 'completed',
+              completedSteps: payload.completed_steps,
+              progressPercent: 100,
+            });
           }
           return newMap;
         });

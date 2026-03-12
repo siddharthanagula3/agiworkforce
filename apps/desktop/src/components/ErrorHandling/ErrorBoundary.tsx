@@ -202,7 +202,7 @@ class ErrorBoundary extends Component<Props, State> {
             )}
 
             <div className="flex flex-wrap gap-3" role="group" aria-label="Error recovery actions">
-              <button
+              <button type="button"
                 onClick={this.handleReset}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 aria-label="Reset the current view to recover from the error"
@@ -210,7 +210,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <Home className="h-4 w-4" aria-hidden="true" />
                 Reset View
               </button>
-              <button
+              <button type="button"
                 onClick={this.handleReload}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                 aria-label="Reload the entire page"
@@ -218,7 +218,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 Reload Page
               </button>
-              <button
+              <button type="button"
                 onClick={this.handleCopyError}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                 aria-label={
@@ -231,7 +231,7 @@ class ErrorBoundary extends Component<Props, State> {
                 {this.state.copySuccess ? 'Copied!' : 'Copy Error'}
               </button>
               {!this.state.errorReported && (
-                <button
+                <button type="button"
                   onClick={this.handleReportError}
                   className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                   aria-label="Send an error report to help improve the application"

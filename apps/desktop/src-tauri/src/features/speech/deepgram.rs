@@ -383,6 +383,7 @@ impl DeepgramClient {
                         &state,
                         &is_streaming,
                         config.sample_rate,
+                        config.channels,
                     )
                     .await;
 
@@ -491,6 +492,7 @@ impl DeepgramClient {
         state: &Arc<RwLock<StreamState>>,
         is_streaming: &Arc<AtomicBool>,
         sample_rate: u32,
+        channels: u16,
     ) -> String {
         let (mut write, mut read) = ws_stream.split();
 
@@ -548,7 +550,7 @@ impl DeepgramClient {
                         state_guard.stats.bytes_sent += bytes_len as u64;
                         // Calculate duration: bytes / (sample_rate * 2 bytes per sample * channels)
                         state_guard.stats.duration_sent +=
-                            bytes_len as f64 / (sample_rate as f64 * 2.0);
+                            bytes_len as f64 / (sample_rate as f64 * 2.0 * channels as f64);
                     }
                 }
 

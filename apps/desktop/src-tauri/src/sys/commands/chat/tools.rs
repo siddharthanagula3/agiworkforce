@@ -5,6 +5,7 @@
 
 use crate::core::agi::tools::{ParameterType, Tool, ToolRegistry};
 use crate::core::llm::ToolDefinition;
+use crate::sys::commands::chat::prompt_context::escape_xml;
 use crate::sys::commands::mcp::McpState;
 use anyhow::{anyhow, Result};
 use serde_json::json;
@@ -1213,11 +1214,11 @@ impl ChatToolResult {
     /// structured prompt that wraps tool results.
     pub fn to_message_content(&self) -> String {
         if self.success {
-            super::escape_xml(&self.content)
+            escape_xml(&self.content)
         } else {
             format!(
                 "Error: {}",
-                super::escape_xml(self.error.as_deref().unwrap_or("Unknown error"))
+                escape_xml(self.error.as_deref().unwrap_or("Unknown error"))
             )
         }
     }

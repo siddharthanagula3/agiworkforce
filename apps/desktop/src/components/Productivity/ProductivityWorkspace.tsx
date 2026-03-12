@@ -408,7 +408,7 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
               const isSelected = selectedProvider === provider.value;
 
               return (
-                <button
+                <button type="button"
                   key={provider.value}
                   onClick={() => isConnected && selectProvider(provider.value)}
                   disabled={!isConnected}

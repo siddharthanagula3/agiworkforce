@@ -29,16 +29,15 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '../ui/Button';
 import { MessageBubble } from './MessageBubble';
-import { CurrentActionBadge } from './CurrentActionBadge';
 import { ActiveToolStreams } from './Cards/ActiveToolStreams';
 import { IterationProgressPanel } from '../AGI';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
 import { ToolRationaleDisplay } from './ToolRationaleDisplay';
-import { ToolTimeline } from './ToolTimeline';
-import { ThinkingBlock } from './ThinkingBlock';
-import { useChatStore } from '../../stores/chat/chatStore';
+import { ApprovalRequestCard } from './Cards/ApprovalRequestCard';
+import { MessageRuntimeDecorators } from './MessageRuntimeActivity';
+import { useUnassignedApprovals } from './useMessageRuntimeActivity';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -225,14 +224,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
   const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
+  const pendingApprovals = useUnassignedApprovals();
   const startEditingMessage = useUnifiedChatStore((state) => state.startEditingMessage);
   const showMessageTimestamps = useUnifiedChatStore((state) => state.showMessageTimestamps);
   const editAndRegenerateFromMessage = useUnifiedChatStore(
     (state) => state.editAndRegenerateFromMessage,
   );
-
-  const toolTimelineByMessage = useChatStore((state) => state.toolTimelineByMessage);
-  const thinkingByMessage = useChatStore((state) => state.thinkingByMessage);
 
   const items = useMemo(() => messages ?? [], [messages]);
 
@@ -529,7 +526,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 </span>
               )}
               <div className="flex items-center gap-1" role="group" aria-label="Search navigation">
-                <button
+                <button type="button"
                   onClick={() => navigateSearch('prev')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -538,7 +535,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 >
                   <ChevronUp className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                 </button>
-                <button
+                <button type="button"
                   onClick={() => navigateSearch('next')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -548,7 +545,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   <ChevronDown className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                 </button>
               </div>
-              <button
+              <button type="button"
                 onClick={() => {
                   setShowSearch(false);
                   setSearchQuery('');
@@ -565,11 +562,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
         )}
       </AnimatePresence>
 
-      {/* Current Action Indicator - shows at top when agent is working */}
-      {/* Only render when there's actually an action to show to prevent layout jumps */}
-      <div className="px-4 pt-2 mb-1 overflow-visible">
-        <CurrentActionBadge />
-      </div>
+      {/* Current Action Indicator removed per user request */}
 
       {/* Active Tool Streams - shows real-time progress for running tools (hidden in simple mode) */}
       {!isSimpleMode && (
@@ -692,7 +685,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
             // Check if this message is a search match or keyboard focused
             const isSearchMatch =
-              searchQuery && searchMatches.some((m) => m.index === messageIndex);
+              deferredSearchQuery && searchMatches.some((m) => m.index === messageIndex);
             const isCurrentMatch =
               isSearchMatch && searchMatches[currentMatchIndex]?.index === messageIndex;
             const isKeyboardFocused = focusedMessageIndex === messageIndex;
@@ -729,21 +722,14 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
               );
             }
 
-            const toolEntries = toolTimelineByMessage[message.id];
-            const thinkingContent = thinkingByMessage[message.id];
-
             return (
               <React.Fragment key={message.id}>
-                {message.role === 'assistant' && toolEntries && toolEntries.length > 0 && (
-                  <ToolTimeline entries={toolEntries} className="mx-4 mb-1" />
-                )}
-                {message.role === 'assistant' && thinkingContent && (
-                  <div className="mx-4 mb-1">
-                    <ThinkingBlock
-                      content={thinkingContent}
-                      isStreaming={Boolean(message.metadata?.streaming) && isStreaming}
-                    />
-                  </div>
+                {message.role === 'assistant' && (
+                  <MessageRuntimeDecorators
+                    messageId={message.id}
+                    isStreaming={Boolean(message.metadata?.streaming) && isStreaming}
+                    className="mx-4 mb-1"
+                  />
                 )}
                 <ChatMessageItem
                   message={message}
@@ -759,6 +745,21 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
               </React.Fragment>
             );
           })
+        )}
+        {pendingApprovals.length > 0 && (
+          <div className="mx-4 mb-2 space-y-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-yellow-300">
+              <PanelTopOpen className="h-3.5 w-3.5" />
+              Unassigned approvals
+            </div>
+            {pendingApprovals.map((approval) => (
+              <ApprovalRequestCard
+                key={approval.id}
+                approval={approval}
+                className="border-yellow-500/30 bg-transparent"
+              />
+            ))}
+          </div>
         )}
       </div>
 

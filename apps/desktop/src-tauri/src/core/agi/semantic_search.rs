@@ -127,11 +127,12 @@ const STOPWORDS: &[&str] = &[
 // TF-IDF INDEX
 // =============================================================================
 
-/// TF-IDF index for semantic similarity search
+/// TF-IDF index for semantic similarity search, with optional dense embedding support.
 ///
 /// This provides a lightweight vector-based search without external ML dependencies.
 /// Documents are represented as sparse TF-IDF vectors, and similarity is computed
-/// using cosine similarity.
+/// using cosine similarity. When real (dense) embeddings are available, they are
+/// blended with TF-IDF scores for higher-quality retrieval.
 #[derive(Debug, Default)]
 pub struct TfIdfIndex {
     /// Maps terms to their index in the vocabulary
@@ -144,6 +145,9 @@ pub struct TfIdfIndex {
     document_count: usize,
     /// Document frequency for each term (number of documents containing the term)
     document_frequencies: Vec<usize>,
+    /// Optional dense embeddings stored per document (from external embedding models)
+    #[allow(dead_code)]
+    dense_embeddings: HashMap<i64, Vec<f32>>,
 }
 
 impl TfIdfIndex {
@@ -224,7 +228,7 @@ impl TfIdfIndex {
 
     /// Build or rebuild the entire index from a set of memories
     pub fn build_from_memories(&mut self, memories: &[MemoryEntry]) {
-        // Reset the index
+        // Reset the index (dense_embeddings are preserved since they come from external sources)
         self.vocabulary.clear();
         self.idf_scores.clear();
         self.document_vectors.clear();
@@ -322,11 +326,12 @@ impl TfIdfIndex {
             .insert(memory_id, SparseVector::new(entries));
     }
 
-    /// Remove a memory from the index
+    /// Remove a memory from the index (including any dense embedding)
     pub fn remove_memory(&mut self, memory_id: i64) {
         if self.document_vectors.remove(&memory_id).is_some() {
             self.document_count = self.document_count.saturating_sub(1);
         }
+        self.dense_embeddings.remove(&memory_id);
     }
 
     /// Search the index for memories similar to the query
@@ -373,6 +378,93 @@ impl TfIdfIndex {
         scores
     }
 
+    /// Store a dense embedding for a document (from an external embedding model).
+    /// When available, `search_with_embedding` will blend dense cosine similarity
+    /// with TF-IDF scores for higher-quality retrieval.
+    pub fn set_dense_embedding(&mut self, memory_id: i64, embedding: Vec<f32>) {
+        if !embedding.is_empty() && embedding.iter().any(|&v| v != 0.0) {
+            self.dense_embeddings.insert(memory_id, embedding);
+        }
+    }
+
+    /// Remove a dense embedding
+    pub fn remove_dense_embedding(&mut self, memory_id: i64) {
+        self.dense_embeddings.remove(&memory_id);
+    }
+
+    /// Search using a query embedding (cosine similarity on dense vectors),
+    /// blended with TF-IDF results when both are available.
+    ///
+    /// Scoring: 60% dense cosine similarity + 40% TF-IDF similarity.
+    /// Falls back to TF-IDF-only when no dense embeddings are stored.
+    pub fn search_with_embedding(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        limit: usize,
+    ) -> Vec<(i64, f32)> {
+        let tfidf_results = self.search(query_text, limit * 2);
+
+        // If no query embedding or no dense embeddings stored, return TF-IDF only
+        let query_emb = match query_embedding {
+            Some(e) if !self.dense_embeddings.is_empty() && !e.is_empty() => e,
+            _ => {
+                let mut results = tfidf_results;
+                results.truncate(limit);
+                return results;
+            }
+        };
+
+        // Compute dense cosine similarity for all documents that have embeddings
+        let mut dense_scores: HashMap<i64, f32> = HashMap::new();
+        let query_norm = query_emb.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if query_norm > 0.0 {
+            for (&doc_id, doc_emb) in &self.dense_embeddings {
+                let doc_norm = doc_emb.iter().map(|v| v * v).sum::<f32>().sqrt();
+                if doc_norm > 0.0 {
+                    let dot: f32 = query_emb
+                        .iter()
+                        .zip(doc_emb.iter())
+                        .map(|(a, b)| a * b)
+                        .sum();
+                    let similarity = dot / (query_norm * doc_norm);
+                    if similarity > 0.0 {
+                        dense_scores.insert(doc_id, similarity);
+                    }
+                }
+            }
+        }
+
+        // Merge TF-IDF and dense scores
+        let mut merged: HashMap<i64, f32> = HashMap::new();
+
+        // Normalize TF-IDF scores
+        let tfidf_max = tfidf_results.iter().map(|(_, s)| *s).fold(0.0f32, f32::max);
+
+        for (id, score) in &tfidf_results {
+            let norm_tfidf = if tfidf_max > 0.0 {
+                score / tfidf_max
+            } else {
+                0.0
+            };
+            merged.insert(*id, norm_tfidf * 0.4);
+        }
+
+        // Blend dense scores (60% weight)
+        for (id, dense_score) in &dense_scores {
+            let entry = merged.entry(*id).or_insert(0.0);
+            *entry += dense_score * 0.6;
+        }
+
+        let mut results: Vec<(i64, f32)> = merged
+            .into_iter()
+            .filter(|(_, score)| *score > 0.0)
+            .collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+        results
+    }
+
     /// Get the number of indexed documents
     pub fn document_count(&self) -> usize {
         self.document_count
@@ -381,6 +473,11 @@ impl TfIdfIndex {
     /// Get the vocabulary size
     pub fn vocabulary_size(&self) -> usize {
         self.vocabulary.len()
+    }
+
+    /// Get the number of documents with dense embeddings
+    pub fn dense_embedding_count(&self) -> usize {
+        self.dense_embeddings.len()
     }
 }
 

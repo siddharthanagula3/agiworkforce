@@ -144,7 +144,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
             ) : (
               <div className="divide-y divide-border">
                 {filteredArticles.map((article) => (
-                  <button
+                  <button type="button"
                     key={article.id}
                     onClick={() => setSelectedArticle(article)}
                     className={`w-full p-4 text-left transition-colors hover:bg-accent ${
@@ -212,7 +212,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
                         const related = articles.find((a) => a.id === relatedId);
                         if (!related) return null;
                         return (
-                          <button
+                          <button type="button"
                             key={relatedId}
                             onClick={() => setSelectedArticle(related)}
                             className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent transition-colors"
