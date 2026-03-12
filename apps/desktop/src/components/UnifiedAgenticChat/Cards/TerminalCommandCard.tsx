@@ -60,7 +60,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
   // Compact mode: Show simple one-line status
   if (compactMode && !showExpanded) {
     return (
-      <button
+      <button type="button"
         onClick={() => setShowExpanded(true)}
         className={`w-full text-left px-3 py-2 rounded-lg ${
           isSuccess
@@ -91,7 +91,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
     >
       {compactMode && (
         <div className="px-4 pt-3 pb-2">
-          <button
+          <button type="button"
             onClick={() => setShowExpanded(false)}
             className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           >
@@ -137,7 +137,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
               <div className="flex-1 font-mono text-sm bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 overflow-x-auto">
                 <code className="text-gray-900 dark:text-gray-100">{command.command}</code>
               </div>
-              <button
+              <button type="button"
                 onClick={handleCopyCommand}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors shrink-0"
                 title="Copy command"
@@ -174,7 +174,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
         {}
         <div className="flex items-center gap-1 shrink-0 ml-2">
           {enableRerun && onRerun && (
-            <button
+            <button type="button"
               onClick={onRerun}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               title="Re-run command"
@@ -196,7 +196,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
                   {command.stderr?.split('\n').length || 0} stderr lines)
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={() => setShowFullOutput(true)}
                 className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
@@ -206,7 +206,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <button
+              <button type="button"
                 onClick={() => setShowFullOutput(false)}
                 className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:underline mb-2"
               >

@@ -291,7 +291,7 @@ export const KnowledgeBaseViewer: React.FC<KnowledgeBaseViewerProps> = ({
 
                     {}
                     {entry.content.length > 150 && (
-                      <button
+                      <button type="button"
                         onClick={() => toggleExpanded(entry.id)}
                         className="ml-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                       >

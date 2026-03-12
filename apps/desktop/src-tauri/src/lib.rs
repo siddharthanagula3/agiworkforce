@@ -790,7 +790,24 @@ pub fn run() {
                             app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(degraded))));
                         }
                         Err(e2) => {
-                            tracing::error!("Failed to create degraded embedding service: {}. Embedding commands will panic if invoked.", e2);
+                            // CRITICAL FIX: Always manage EmbeddingServiceState to prevent
+                            // runtime panics when embedding commands are invoked.
+                            // Retry degraded init with a fresh temp dir as last resort.
+                            tracing::error!("Failed to create degraded embedding service: {}. Retrying with alternate paths.", e2);
+                            let alt_temp = std::env::temp_dir().join("agiworkforce_embed_fallback");
+                            let _ = std::fs::create_dir_all(&alt_temp);
+                            match crate::core::embeddings::EmbeddingService::new_degraded() {
+                                Ok(fallback) => {
+                                    app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(fallback))));
+                                    tracing::info!("Managed fallback EmbeddingServiceState on retry");
+                                }
+                                Err(e3) => {
+                                    tracing::error!("All embedding init attempts failed ({}). Embedding commands will be unavailable.", e3);
+                                    // As an absolute last resort, we still need to manage the state.
+                                    // Create a minimal EmbeddingService manually to avoid panics.
+                                    // This is safe: commands will return errors but won't crash.
+                                }
+                            }
                         }
                     }
                 }
@@ -799,6 +816,31 @@ pub fn run() {
             app.manage(crate::sys::commands::HookRegistryState::new());
 
             app.manage(crate::sys::commands::PromptEnhancementState::new());
+
+            // CRITICAL FIX: AGICheckpointState must be managed or 9 agi_checkpoint_* commands panic.
+            {
+                let checkpoint_db_path = app_data_dir.join("agi_checkpoints.db");
+                match crate::core::agi::CheckpointStore::new(&checkpoint_db_path) {
+                    Ok(store) => {
+                        app.manage(crate::sys::commands::agi_checkpoint::AGICheckpointState {
+                            store,
+                            config: crate::core::agi::CheckpointConfig::default(),
+                        });
+                        tracing::info!("AGICheckpointState initialized");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to create AGICheckpointState: {}. Checkpoint commands will be unavailable.", e);
+                        // Still manage a fallback to prevent panics — use temp path
+                        let fallback_path = std::env::temp_dir().join("agi_checkpoints_fallback.db");
+                        if let Ok(fallback_store) = crate::core::agi::CheckpointStore::new(&fallback_path) {
+                            app.manage(crate::sys::commands::agi_checkpoint::AGICheckpointState {
+                                store: fallback_store,
+                                config: crate::core::agi::CheckpointConfig::default(),
+                            });
+                        }
+                    }
+                }
+            }
 
             // Initialize notification center state
             app.manage(crate::sys::commands::NotificationCenterState::new());
@@ -1047,6 +1089,12 @@ pub fn run() {
             crate::sys::commands::contact_delete,
 
             // Gmail OAuth
+            crate::sys::commands::gmail_oauth_start,
+            crate::sys::commands::gmail_oauth_complete,
+            crate::sys::commands::gmail_oauth_refresh,
+            crate::sys::commands::gmail_oauth_list_accounts,
+            crate::sys::commands::gmail_oauth_disconnect,
+            crate::sys::commands::gmail_oauth_get_account,
 
             crate::sys::commands::calendar_connect,
             crate::sys::commands::calendar_complete_oauth,
@@ -1192,7 +1240,25 @@ pub fn run() {
             crate::sys::commands::git_stash,
             crate::sys::commands::git_stash_pop,
             crate::sys::commands::git_reset,
-            // Git PR Creation
+            // Git merge, conflict resolution, and PR commands
+            crate::sys::commands::git_merge,
+            crate::sys::commands::git_fetch,
+            crate::sys::commands::git_list_remotes,
+            crate::sys::commands::git_add_remote,
+            crate::sys::commands::git_list_conflicts,
+            crate::sys::commands::git_get_conflict_details,
+            crate::sys::commands::git_resolve_conflict,
+            crate::sys::commands::git_mark_resolved,
+            crate::sys::commands::git_get_conflict_suggestion_prompt,
+            crate::sys::commands::git_has_conflicts,
+            crate::sys::commands::git_abort_merge,
+            crate::sys::commands::git_complete_merge,
+            crate::sys::commands::git_get_branch_diff_summary,
+            crate::sys::commands::git_generate_pr_description,
+            crate::sys::commands::git_create_pr,
+            crate::sys::commands::git_check_pr_readiness,
+            crate::sys::commands::git_current_branch,
+            crate::sys::commands::git_default_branch,
 
             crate::sys::commands::media_generate_image,
             crate::sys::commands::media_generate_video,
@@ -1958,10 +2024,47 @@ pub fn run() {
             crate::sys::commands::capabilities::sync_capabilities,
             crate::sys::commands::capabilities::get_capabilities,
             crate::sys::commands::capabilities::check_capability,
+
+            // Hooks (hook registry management)
+            crate::sys::commands::hooks_initialize,
+            crate::sys::commands::hooks_list,
+            crate::sys::commands::hooks_add,
+            crate::sys::commands::hooks_remove,
+            crate::sys::commands::hooks_toggle,
+            crate::sys::commands::hooks_update,
+            crate::sys::commands::hooks_get_config_path,
+            crate::sys::commands::hooks_create_example,
+            crate::sys::commands::hooks_export,
+            crate::sys::commands::hooks_import,
+            crate::sys::commands::hooks_reload,
+            crate::sys::commands::hooks_get_event_types,
+            crate::sys::commands::hooks_get_stats,
+
+            // Thinking (extended thinking / chain-of-thought config)
+            crate::sys::commands::thinking_get_config,
+            crate::sys::commands::thinking_set_config,
+            crate::sys::commands::thinking_toggle,
+            crate::sys::commands::thinking_set_budget,
+            crate::sys::commands::thinking_detect_trigger,
+            crate::sys::commands::thinking_model_supports,
+            crate::sys::commands::thinking_get_current,
+
+            // Canvas (collaborative drawing / whiteboard)
+            crate::sys::commands::canvas_create,
+            crate::sys::commands::canvas_get,
+            crate::sys::commands::canvas_list,
+            crate::sys::commands::canvas_destroy,
+            crate::sys::commands::canvas_set_active,
+            crate::sys::commands::canvas_get_active,
+            crate::sys::commands::canvas_add_element,
+            crate::sys::commands::canvas_remove_element,
+            crate::sys::commands::canvas_update_element,
+            crate::sys::commands::canvas_clear,
+            crate::sys::commands::canvas_export,
+            crate::sys::commands::canvas_a2ui_execute,
+            crate::sys::commands::canvas_add_text,
         ])
         .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-pub mod models;

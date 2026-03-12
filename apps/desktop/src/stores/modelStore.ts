@@ -1012,20 +1012,26 @@ let _unsubscribePlanChanges: (() => void) | null = null;
 // This runs when the user's plan tier is loaded/changed
 if (typeof window !== 'undefined') {
   // Dynamic import to avoid circular dependencies
-  import('./auth').then(({ useUnifiedAuthStore }) => {
-    // Guard against undefined in test environments where auth store may not be properly initialized
-    if (useUnifiedAuthStore?.subscribe) {
-      // [C3 fix] Clean up previous subscription before creating a new one (HMR safety)
-      _unsubscribePlanChanges?.();
-      _unsubscribePlanChanges = useUnifiedAuthStore.subscribe(
-        (state) => state.plan,
-        (plan) => {
-          if (plan) {
-            console.debug(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
-            enforceModelTierRestriction(plan);
-          }
-        },
-      );
-    }
-  });
+  import('./auth')
+    .then(({ useUnifiedAuthStore }) => {
+      // Guard against undefined in test environments where auth store may not be properly initialized
+      if (useUnifiedAuthStore?.subscribe) {
+        // [C3 fix] Clean up previous subscription before creating a new one (HMR safety)
+        _unsubscribePlanChanges?.();
+        _unsubscribePlanChanges = useUnifiedAuthStore.subscribe(
+          (state) => state.plan,
+          (plan) => {
+            if (plan) {
+              console.debug(
+                `[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`,
+              );
+              enforceModelTierRestriction(plan);
+            }
+          },
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn('[ModelStore] Failed to load auth for plan subscription:', err);
+    });
 }

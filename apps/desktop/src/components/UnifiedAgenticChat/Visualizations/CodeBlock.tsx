@@ -93,8 +93,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName || `code.${language}`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('Code downloaded');
   };
 
@@ -137,7 +139,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         </div>
         <div className="flex items-center gap-1">
           {/* Word wrap toggle */}
-          <button
+          <button type="button"
             onClick={() => setWordWrap(!wordWrap)}
             className={`p-1.5 rounded transition-colors ${wordWrap ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
             title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
@@ -145,7 +147,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             <WrapText size={14} />
           </button>
           {enableRun && onRun && (
-            <button
+            <button type="button"
               onClick={handleRun}
               className="p-1.5 hover:bg-green-600/20 rounded transition-colors text-green-400"
               title="Run code"
@@ -154,7 +156,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             </button>
           )}
           {enableDownload && (
-            <button
+            <button type="button"
               onClick={handleDownload}
               className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-200"
               title="Download"
@@ -162,7 +164,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
               <Download size={14} />
             </button>
           )}
-          <button
+          <button type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className={`p-1.5 rounded transition-colors ${isExpanded ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'}`}
             title={isExpanded ? 'Collapse' : 'Expand'}
@@ -170,7 +172,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             <Maximize2 size={14} />
           </button>
           {enableCopy && (
-            <button
+            <button type="button"
               onClick={handleCopy}
               className="p-1.5 hover:bg-gray-700 rounded transition-colors"
               title="Copy code"

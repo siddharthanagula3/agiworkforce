@@ -80,7 +80,7 @@ pub struct OAuthConfig {
 pub struct OAuthAuthorizationUrl {
     pub url: String,
     pub state: String,
-    pub pkce_verifier: String,
+    // SECURITY: pkce_verifier is stored internally in pending_verifiers, not exposed to caller
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,7 +206,7 @@ impl OAuthManager {
         Ok(OAuthAuthorizationUrl {
             url: auth_url.to_string(),
             state: csrf_state.secret().clone(),
-            pkce_verifier: pkce_verifier.secret().clone(),
+            // SECURITY: pkce_verifier is NOT returned to caller — it stays in pending_verifiers map
         })
     }
 
@@ -474,6 +474,5 @@ mod tests {
 
         assert!(auth_url.url.contains("accounts.google.com"));
         assert!(!auth_url.state.is_empty());
-        assert!(!auth_url.pkce_verifier.is_empty());
     }
 }

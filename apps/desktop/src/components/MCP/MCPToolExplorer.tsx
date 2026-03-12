@@ -28,7 +28,7 @@ interface ToolTestDialogProps {
   tool: (McpToolInfo & { parameters?: string[] }) | null;
   open: boolean;
   onClose: () => void;
-  onExecute: (toolId: string, args: Record<string, unknown>) => Promise<void>;
+  onExecute: (toolId: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
 function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps) {
@@ -173,7 +173,7 @@ function ToolCard({ tool, isFavorite, onToggleFavorite, onTest, usageCount = 0 }
           </div>
           <p className="text-sm text-gray-600 mb-2">{tool.description}</p>
         </div>
-        <button
+        <button type="button"
           onClick={() => onToggleFavorite(tool.id)}
           className="text-yellow-500 hover:scale-110 transition-transform"
         >
@@ -265,9 +265,10 @@ export function MCPToolExplorer() {
   const handleExecuteTool = async (
     toolId: string,
     args: Record<string, unknown>,
-  ): Promise<void> => {
+  ): Promise<unknown> => {
     const { McpClient } = await import('../../api/mcp');
-    await McpClient.callTool(toolId, args);
+    const result = await McpClient.callTool(toolId, args);
+    return result;
   };
 
   const favoriteTools = tools.filter((tool) => favorites.has(tool.id));

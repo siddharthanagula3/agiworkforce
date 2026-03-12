@@ -51,7 +51,10 @@ impl LLMResponseCache {
         messages: &[ChatMessage],
     ) -> Result<Option<LLMResponse>> {
         let cache_key = Self::compute_cache_key(provider, model, messages);
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT response, tokens, cost, model, created_at, expires_at
@@ -120,7 +123,10 @@ impl LLMResponseCache {
         let prompt_hash = Self::compute_prompt_hash(messages);
         let expires_at = chrono::Utc::now() + chrono::Duration::from_std(self.ttl)?;
 
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
         conn.execute(
             "INSERT INTO cache_entries (
@@ -202,13 +208,19 @@ impl LLMResponseCache {
     }
 
     pub fn clear(&self) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
         conn.execute("DELETE FROM cache_entries", [])?;
         Ok(())
     }
 
     pub fn stats(&self) -> Result<CacheStats> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
         let total_entries: i64 =
             conn.query_row("SELECT COUNT(*) FROM cache_entries", [], |row| row.get(0))?;
 

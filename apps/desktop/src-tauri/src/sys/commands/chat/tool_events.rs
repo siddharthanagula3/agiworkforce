@@ -3,9 +3,9 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Instant;
 use tauri::Emitter;
-use std::sync::Mutex;
 
 /// Global rate-limit map: tracks the last emission timestamp per tool execution ID.
 static PROGRESS_LAST_EMIT: std::sync::LazyLock<Mutex<HashMap<String, Instant>>> =
@@ -74,6 +74,27 @@ pub struct ToolDisplayInfo {
     pub display_args: String,
 }
 
+/// Decode b64-encoded MCP tool name segments.
+/// e.g. `mcp__b64_YXBpZnk__b64_YXBpZnktc2xhc2gtcmFnLXdlYi1icm93c2Vy`
+///    → `mcp__apify__apify-slash-rag-web-browser`
+fn decode_b64_tool_name(name: &str) -> String {
+    use base64::Engine;
+    name.split("__")
+        .map(|seg| {
+            if let Some(encoded) = seg.strip_prefix("b64_") {
+                base64::engine::general_purpose::STANDARD
+                    .decode(encoded)
+                    .ok()
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+                    .unwrap_or_else(|| seg.to_string())
+            } else {
+                seg.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("__")
+}
+
 /// Maps a raw MCP tool name + JSON arguments to a Claude Code-style display label.
 ///
 /// Examples:
@@ -81,7 +102,9 @@ pub struct ToolDisplayInfo {
 ///   mcp__bash__execute + {"command":"cargo test"} → Bash(cargo test)
 pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDisplayInfo {
     let args: Value = serde_json::from_str(arguments_json).unwrap_or_default();
-    let lower = tool_name.to_lowercase();
+    // Decode b64-encoded MCP segments before matching
+    let decoded = decode_b64_tool_name(tool_name);
+    let lower = decoded.to_lowercase();
 
     // Extract common argument fields
     let path = args
@@ -125,10 +148,7 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
     } else if contains_any(&lower, &["list_directory", "directory_tree", "list_dir"]) {
         ("LS", path.unwrap_or_else(|| ".".to_string()))
     } else if contains_any(&lower, &["code_search"]) {
-        let symbol_type = args
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("any");
+        let symbol_type = args.get("type").and_then(|v| v.as_str()).unwrap_or("any");
         let display = if symbol_type != "any" {
             format!("{} {}", symbol_type, query.unwrap_or_default())
         } else {
@@ -182,8 +202,8 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
             .map(|s| truncate(s, 50));
         ("Question", q.unwrap_or_default())
     } else {
-        // Fallback: extract the last segment of the MCP tool name
-        let short_name = tool_name.rsplit("__").next().unwrap_or(tool_name);
+        // Fallback: extract the last segment of the decoded MCP tool name
+        let short_name = decoded.rsplit("__").next().unwrap_or(&decoded);
         let display = path.or(command).or(query).or(url).unwrap_or_default();
         (short_name, display)
     };

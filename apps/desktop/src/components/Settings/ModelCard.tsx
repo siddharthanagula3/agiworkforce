@@ -70,7 +70,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           </div>
         </div>
         {onToggleFavorite && (
-          <button
+          <button type="button"
             onClick={handleFavoriteClick}
             className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
@@ -103,7 +103,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-lg">{model.name}</h3>
             {onToggleFavorite && (
-              <button
+              <button type="button"
                 onClick={handleFavoriteClick}
                 className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
               >

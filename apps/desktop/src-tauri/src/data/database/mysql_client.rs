@@ -67,8 +67,18 @@ impl MySqlClient {
 
         // Block dangerous keywords even within allowed statements (e.g., subqueries with mutations)
         let blocked_keywords = [
-            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE",
-            "GRANT", "REVOKE", "LOAD_FILE", "INTO OUTFILE", "INTO DUMPFILE",
+            "DROP",
+            "TRUNCATE",
+            "DELETE",
+            "ALTER",
+            "CREATE",
+            "INSERT",
+            "UPDATE",
+            "GRANT",
+            "REVOKE",
+            "LOAD_FILE",
+            "INTO OUTFILE",
+            "INTO DUMPFILE",
         ];
         for keyword in &blocked_keywords {
             if sql_upper.contains(keyword) {
@@ -139,7 +149,11 @@ impl MySqlClient {
         // SECURITY: Validate SQL statement before execution
         Self::validate_query_sql(sql)?;
 
-        tracing::info!("[SECURITY][MySQL] Executing query on '{}': {}", connection_id, sql);
+        tracing::info!(
+            "[SECURITY][MySQL] Executing query on '{}': {}",
+            connection_id,
+            sql
+        );
 
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
@@ -211,7 +225,11 @@ impl MySqlClient {
             })?;
         }
 
-        tracing::info!("[SECURITY][MySQL] Executing validated batch of {} queries on '{}'", queries.len(), connection_id);
+        tracing::info!(
+            "[SECURITY][MySQL] Executing validated batch of {} queries on '{}'",
+            queries.len(),
+            connection_id
+        );
 
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
@@ -491,7 +509,11 @@ impl MySqlClient {
         // SECURITY: Validate SQL statement before execution
         Self::validate_query_sql(sql)?;
 
-        tracing::info!("[SECURITY][MySQL] Executing stream query on '{}': {}", connection_id, sql);
+        tracing::info!(
+            "[SECURITY][MySQL] Executing stream query on '{}': {}",
+            connection_id,
+            sql
+        );
 
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool

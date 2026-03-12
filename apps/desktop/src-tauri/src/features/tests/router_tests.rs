@@ -19,6 +19,7 @@ mod sse_parser_tests {
             model: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 
@@ -41,6 +42,7 @@ mod sse_parser_tests {
             model: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 

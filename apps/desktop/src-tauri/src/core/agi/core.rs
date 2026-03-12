@@ -1,3 +1,4 @@
+#[allow(deprecated)] // AGIMemory is deprecated but still used for in-session caching
 use super::*;
 use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
@@ -79,6 +80,7 @@ impl Default for PlanStepRuntimeState {
     }
 }
 
+#[allow(deprecated)]
 pub struct AGICore {
     config: AGIConfig,
     capabilities: AGICapabilities,
@@ -91,9 +93,13 @@ pub struct AGICore {
     learning: Arc<LearningSystem>,
     router: Arc<RwLock<LLMRouter>>,
     automation: Arc<AutomationService>,
-    // HIGH-007: std::sync::Mutex used here because AGICore is constructed outside async context.
-    // TODO: Migrate to tokio::sync::Mutex to eliminate blocking-in-async risk when the AGI
-    //       execution loop is fully async-native (requires async-aware callers throughout).
+    // Bug #36: std::sync::Mutex used here because AGICore is constructed outside async
+    // context AND several sync methods (get_goal_status, list_goals, cleanup_goal) access
+    // these fields. Migrating to tokio::sync::Mutex would require making those methods
+    // async, which propagates through the orchestrator. The lock scopes are kept minimal
+    // (clone-and-release pattern) to avoid blocking the async runtime for meaningful
+    // durations. lock_with_recovery() additionally handles poison from panicked threads.
+    // TODO: Migrate to tokio::sync::Mutex when all callers are fully async-native.
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
     stop_signal: Arc<AtomicBool>,
@@ -149,10 +155,9 @@ impl AGICore {
             Some(change_tracker),
         )?);
         let memory = Arc::new(AGIMemory::new()?);
-        let learning = Arc::new(LearningSystem::new(
-            config.enable_learning,
-            config.enable_self_improvement,
-        )?);
+        // Bug #35 fix: Removed duplicate LearningSystem::new() call.
+        // The `learning` Arc created at line 121 is reused here; the second
+        // instantiation leaked the first instance.
 
         tool_registry.register_all_tools()?;
 

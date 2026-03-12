@@ -431,10 +431,11 @@ Return ONLY the JSON array."#,
                 _ => 5,
             };
 
-            let resource_multiplier = if step.estimated_resources.cpu_percent > 50.0 {
-                1.5
-            } else if step.estimated_resources.cpu_percent > 80.0 {
+            // Check >80 before >50 so the 2x multiplier is reachable
+            let resource_multiplier = if step.estimated_resources.cpu_percent > 80.0 {
                 2.0
+            } else if step.estimated_resources.cpu_percent > 50.0 {
+                1.5
             } else {
                 1.0
             };

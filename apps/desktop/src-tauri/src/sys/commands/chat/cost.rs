@@ -1,66 +1,9 @@
-//! Billing budget checks and cost analytics commands.
-
-use crate::data::db::repository;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use tauri::State;
 
-use super::state::AppDatabase;
-use super::types::{CostAnalyticsResponse, CostOverviewResponse};
+use crate::data::db::repository;
 
-/// Check billing subscription access and monthly budget limits.
-/// Returns Ok(()) if the request is allowed, Err(String) if blocked.
-pub(crate) fn check_billing_and_budget(
-    #[cfg(feature = "billing")] _billing_state: &tokio::sync::MutexGuard<
-        '_,
-        crate::sys::billing::BillingState,
-    >,
-    db: &AppDatabase,
-    user_id: &str,
-) -> Result<(), String> {
-    #[cfg(feature = "billing")]
-    {
-        if !_billing_state.check_cloud_access() {
-            return Err(
-                "Subscription required. Please upgrade to the Hobby plan to use the AGI agent."
-                    .to_string(),
-            );
-        }
-    }
-
-    {
-        let conn = db
-            .connection()
-            .map_err(|e| format!("Budget check failed: {e}"))?;
-
-        if let Ok(budget_setting) = repository::get_setting(&conn, "billing.monthly_budget") {
-            if let Ok(budget_limit) = budget_setting.value.parse::<f64>() {
-                if budget_limit > 0.0 {
-                    let now = Utc::now();
-                    let start_of_month = now
-                        .date_naive()
-                        .with_day(1)
-                        .ok_or_else(|| "Failed to determine start of month".to_string())?
-                        .and_hms_opt(0, 0, 0)
-                        .ok_or_else(|| "Failed to set time for start of month".to_string())?
-                        .and_utc();
-
-                    let current_usage = repository::sum_cost_since(&conn, start_of_month, user_id)
-                        .map_err(|e| format!("Failed to query usage for budget check: {}", e))?;
-
-                    if current_usage >= budget_limit {
-                        return Err(format!(
-                            "Monthly budget exceeded. Usage: ${:.2}, Limit: ${:.2}. Please update settings.",
-                            current_usage,
-                            budget_limit
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
+use super::{AppDatabase, CostAnalyticsResponse, CostOverviewResponse};
 
 #[tauri::command]
 pub fn chat_get_cost_overview(
@@ -112,14 +55,17 @@ pub fn chat_get_cost_analytics(
     if user_id.is_empty() {
         return Err("User ID cannot be empty".to_string());
     }
-    if let Some(d) = days {
-        if d <= 0 {
-            return Err(format!("Invalid days value: {}. Days must be positive", d));
+    if let Some(value) = days {
+        if value <= 0 {
+            return Err(format!(
+                "Invalid days value: {}. Days must be positive",
+                value
+            ));
         }
-        if d > 3650 {
+        if value > 3650 {
             return Err(format!(
                 "Invalid days value: {}. Days cannot exceed 3650 (10 years)",
-                d
+                value
             ));
         }
     }
@@ -129,12 +75,12 @@ pub fn chat_get_cost_analytics(
 
     let provider_clean = provider
         .as_ref()
-        .map(|p| p.trim().to_string())
-        .filter(|p| !p.is_empty());
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
     let model_clean = model
         .as_ref()
-        .map(|m| m.trim().to_string())
-        .filter(|m| !m.is_empty());
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
 
     let provider_ref = provider_clean.as_deref();
     let model_ref = model_clean.as_deref();

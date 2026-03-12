@@ -39,7 +39,9 @@ pub fn create_azure_provider(
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-')
     {
-        return Err("Azure resource name must contain only alphanumeric characters and hyphens".into());
+        return Err(
+            "Azure resource name must contain only alphanumeric characters and hyphens".into(),
+        );
     }
 
     let base_url = format!(
@@ -56,45 +58,26 @@ mod tests {
 
     #[test]
     fn create_azure_provider_valid() {
-        let provider = create_azure_provider(
-            "test-key".to_string(),
-            "my-resource",
-            "gpt-4o",
-            None,
-        );
+        let provider = create_azure_provider("test-key".to_string(), "my-resource", "gpt-4o", None);
         assert!(provider.is_ok());
     }
 
     #[test]
     fn create_azure_provider_empty_resource() {
-        let provider = create_azure_provider(
-            "test-key".to_string(),
-            "",
-            "gpt-4o",
-            None,
-        );
+        let provider = create_azure_provider("test-key".to_string(), "", "gpt-4o", None);
         assert!(provider.is_err());
     }
 
     #[test]
     fn create_azure_provider_empty_deployment() {
-        let provider = create_azure_provider(
-            "test-key".to_string(),
-            "my-resource",
-            "",
-            None,
-        );
+        let provider = create_azure_provider("test-key".to_string(), "my-resource", "", None);
         assert!(provider.is_err());
     }
 
     #[test]
     fn create_azure_provider_invalid_resource_name() {
-        let provider = create_azure_provider(
-            "test-key".to_string(),
-            "my resource!",
-            "gpt-4o",
-            None,
-        );
+        let provider =
+            create_azure_provider("test-key".to_string(), "my resource!", "gpt-4o", None);
         assert!(provider.is_err());
     }
 }

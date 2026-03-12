@@ -159,33 +159,44 @@ impl ProjectMemoryManager {
 
         let importance = importance.unwrap_or(5).clamp(1, 10);
 
-        conn.execute(
-            "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))
-             ON CONFLICT(project_folder, memory_type) DO UPDATE SET
-                content = excluded.content,
-                importance = excluded.importance,
-                updated_at = datetime('now')",
-            params![
-                project_folder,
-                ProjectMemoryType::Context.as_str(),
-                serde_json::to_string(&ProjectContext {
-                    id: 0,
-                    project_folder: project_folder.to_string(),
-                    tech_stack,
-                    main_language: main_language.map(|s| s.to_string()),
-                    conventions: conventions.map(|s| s.to_string()),
-                    frameworks,
-                    importance,
-                    created_at: String::new(),
-                    updated_at: String::new(),
-                    last_accessed: None,
-                })
-                .map_err(|e| Error::Generic(format!("Failed to serialize project context: {}", e)))?,
-                importance
-            ],
-        )
-        .map_err(|e| Error::Database(format!("Failed to save project context: {}", e)))?;
+        let content_json = serde_json::to_string(&ProjectContext {
+            id: 0,
+            project_folder: project_folder.to_string(),
+            tech_stack,
+            main_language: main_language.map(|s| s.to_string()),
+            conventions: conventions.map(|s| s.to_string()),
+            frameworks,
+            importance,
+            created_at: String::new(),
+            updated_at: String::new(),
+            last_accessed: None,
+        })
+        .map_err(|e| Error::Generic(format!("Failed to serialize project context: {}", e)))?;
+
+        // Application-level upsert: update existing row or insert new one.
+        // Context should be unique per (project_folder, memory_type).
+        let existing_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
+                params![project_folder, ProjectMemoryType::Context.as_str()],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(eid) = existing_id {
+            conn.execute(
+                "UPDATE project_memories SET content = ?1, importance = ?2, updated_at = datetime('now') WHERE id = ?3",
+                params![content_json, importance, eid],
+            )
+            .map_err(|e| Error::Database(format!("Failed to update project context: {}", e)))?;
+        } else {
+            conn.execute(
+                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
+                params![project_folder, ProjectMemoryType::Context.as_str(), content_json, importance],
+            )
+            .map_err(|e| Error::Database(format!("Failed to save project context: {}", e)))?;
+        }
 
         let id: i64 = conn
             .query_row(
@@ -267,16 +278,29 @@ impl ProjectMemoryManager {
         let content = serde_json::to_string(&style)
             .map_err(|e| Error::Generic(format!("Failed to serialize style: {}", e)))?;
 
-        conn.execute(
-            "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))
-             ON CONFLICT(project_folder, memory_type) DO UPDATE SET
-                content = excluded.content,
-                importance = excluded.importance,
-                updated_at = datetime('now')",
-            params![project_folder, ProjectMemoryType::CodingStyle.as_str(), content, importance],
-        )
-        .map_err(|e| Error::Database(format!("Failed to save coding style: {}", e)))?;
+        // Application-level upsert: coding style is unique per (project_folder, memory_type).
+        let existing_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
+                params![project_folder, ProjectMemoryType::CodingStyle.as_str()],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(eid) = existing_id {
+            conn.execute(
+                "UPDATE project_memories SET content = ?1, importance = ?2, updated_at = datetime('now') WHERE id = ?3",
+                params![content, importance, eid],
+            )
+            .map_err(|e| Error::Database(format!("Failed to update coding style: {}", e)))?;
+        } else {
+            conn.execute(
+                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
+                params![project_folder, ProjectMemoryType::CodingStyle.as_str(), content, importance],
+            )
+            .map_err(|e| Error::Database(format!("Failed to save coding style: {}", e)))?;
+        }
 
         let id: i64 = conn
             .query_row(
@@ -646,8 +670,7 @@ mod tests {
                 importance INTEGER NOT NULL DEFAULT 5,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                last_accessed TEXT,
-                UNIQUE(project_folder, memory_type)
+                last_accessed TEXT
             )",
             [],
         )

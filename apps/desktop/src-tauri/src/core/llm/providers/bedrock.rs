@@ -31,8 +31,7 @@ impl BedrockProvider {
     ///
     /// The provider is marked as configured if all credentials are non-empty.
     pub fn new(access_key: String, secret_key: String, region: String) -> Self {
-        let configured =
-            !access_key.is_empty() && !secret_key.is_empty() && !region.is_empty();
+        let configured = !access_key.is_empty() && !secret_key.is_empty() && !region.is_empty();
         Self {
             _access_key: access_key,
             _secret_key: secret_key,

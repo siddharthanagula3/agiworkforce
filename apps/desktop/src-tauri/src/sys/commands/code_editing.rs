@@ -593,6 +593,35 @@ pub async fn apply_changes(changes: Vec<FileChange>) -> Result<ApplyResult, Stri
     let mut errors = Vec::new();
 
     for change in changes {
+        // SECURITY: Validate path to prevent directory traversal attacks
+        let path = std::path::Path::new(&change.path);
+        if let Ok(canonical) = path.canonicalize() {
+            // Reject paths that contain ".." traversal components
+            if change.path.contains("..") {
+                errors.push(format!("Rejected path with traversal: {}", change.path));
+                continue;
+            }
+            // Reject paths outside the user's home directory or common workspace paths
+            let path_str = canonical.to_string_lossy();
+            if path_str.starts_with("/etc/")
+                || path_str.starts_with("/usr/")
+                || path_str.starts_with("/bin/")
+                || path_str.starts_with("/sbin/")
+                || path_str.starts_with("/System/")
+                || path_str.starts_with("/Library/")
+            {
+                errors.push(format!(
+                    "Rejected write to protected system path: {}",
+                    change.path
+                ));
+                continue;
+            }
+        } else if change.path.contains("..") {
+            // File doesn't exist yet but has traversal — reject
+            errors.push(format!("Rejected path with traversal: {}", change.path));
+            continue;
+        }
+
         match std::fs::write(&change.path, &change.modified_content) {
             Ok(_) => {
                 files_modified.push(change.path.clone());
@@ -727,6 +756,19 @@ pub struct FailedRevert {
 
 /// Attempt to revert a file using git checkout
 fn try_git_revert(file_path: &str) -> Result<(), String> {
+    // SECURITY: Validate file_path to prevent command injection via crafted paths
+    if file_path.contains('\0') {
+        return Err("Invalid file path: contains null byte".to_string());
+    }
+    if file_path.starts_with('-') {
+        return Err("Invalid file path: must not start with a dash".to_string());
+    }
+    if file_path.contains("..") {
+        return Err("Invalid file path: directory traversal not allowed".to_string());
+    }
+
+    // Use Command with separate args (not shell) — safe from injection as long as
+    // the path is passed as a single argument via the args array.
     let output = std::process::Command::new("git")
         .args(["checkout", "HEAD", "--", file_path])
         .output()

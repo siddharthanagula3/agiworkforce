@@ -144,7 +144,7 @@ impl AuditLogger {
         });
 
         let event_data_str = serde_json::to_string(&event_data)?;
-        let signature = self.generate_signature(&event_data_str);
+        let signature = self.generate_signature(&event_data_str)?;
 
         conn.execute(
             "INSERT INTO audit_events (
@@ -243,23 +243,22 @@ impl AuditLogger {
         });
 
         let event_data_str = serde_json::to_string(&event_data)?;
-        let computed_signature = self.generate_signature(&event_data_str);
+        let computed_signature = self.generate_signature(&event_data_str)?;
 
         Ok(computed_signature == stored_signature)
     }
 
-    fn generate_signature(&self, data: &str) -> String {
-        let mut mac = match HmacSha256::new_from_slice(&self.hmac_key) {
-            Ok(mac) => mac,
-            Err(e) => {
-                tracing::error!("Failed to create HMAC: {}. This should never happen.", e);
-
-                return String::new();
-            }
-        };
+    /// Generate HMAC-SHA256 signature for audit event data.
+    ///
+    /// Returns `Err` on HMAC failure instead of an empty string, so callers
+    /// can detect and handle the error (Bug #66 fix).
+    fn generate_signature(&self, data: &str) -> std::result::Result<String, Error> {
+        let mut mac = HmacSha256::new_from_slice(&self.hmac_key).map_err(|e| {
+            Error::Other(format!("Failed to create HMAC for audit signature: {}", e))
+        })?;
         mac.update(data.as_bytes());
         let result = mac.finalize();
-        hex::encode(result.into_bytes())
+        Ok(hex::encode(result.into_bytes()))
     }
 
     pub fn get_events(&self, filters: AuditFilters) -> Result<Vec<AuditEvent>> {

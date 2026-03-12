@@ -65,7 +65,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(super) async fn execute_ui_click_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(super) async fn execute_ui_click_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::automation::{input::MouseButton, types::ElementQuery, AutomationService};
             use tauri::Manager;
@@ -197,7 +200,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(super) async fn execute_ui_type_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(super) async fn execute_ui_type_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::automation::{
                 input::KeyboardSimulator, types::ElementQuery, AutomationService,

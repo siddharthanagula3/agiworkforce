@@ -12,16 +12,24 @@ const TRELLO_BASE_URL: &str = "https://api.trello.com/1";
 
 /// FIX-004: URL-encode a path segment to prevent issues with special characters
 /// While Trello IDs are typically alphanumeric, user-provided values (like list names)
-/// could contain special characters that need encoding
+/// could contain special characters that need encoding.
+/// Bug #227 fix: Iterate over bytes instead of using `c as u8` which is incorrect
+/// for multi-byte UTF-8 characters.
 fn encode_path_segment(segment: &str) -> String {
     // Percent-encode characters that are not unreserved according to RFC 3986
-    segment
-        .chars()
-        .map(|c| match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            _ => format!("%{:02X}", c as u8),
-        })
-        .collect()
+    // Iterate over raw bytes to correctly handle multi-byte UTF-8 characters
+    let mut encoded = String::with_capacity(segment.len() * 3);
+    for &byte in segment.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                encoded.push_str(&format!("%{:02X}", byte));
+            }
+        }
+    }
+    encoded
 }
 
 /// RTL-001 fix: Sliding window rate limiter for Trello API
@@ -511,9 +519,19 @@ impl UnifiedTaskProvider for TrelloClient {
     }
 
     async fn update_task(&self, task: Task) -> Result<()> {
-        let boards = self.list_boards().await?;
-        if let Some(board) = boards.first() {
-            let lists = self.list_board_lists(&board.id).await?;
+        // Bug #228 fix: Use task.project_id (board ID) when available instead of always
+        // using the first board
+        let board_id = if let Some(ref project_id) = task.project_id {
+            project_id.clone()
+        } else {
+            let boards = self.list_boards().await?;
+            boards
+                .first()
+                .map(|b| b.id.clone())
+                .ok_or_else(|| Error::Provider("No Trello boards found".to_string()))?
+        };
+        {
+            let lists = self.list_board_lists(&board_id).await?;
             let target_list_name = task.status.to_trello_list_name();
 
             if let Some(target_list) = lists.iter().find(|l| {
@@ -523,7 +541,7 @@ impl UnifiedTaskProvider for TrelloClient {
             }) {
                 self.move_card(&task.id, &target_list.id).await?;
             }
-        }
+        };
         Ok(())
     }
 

@@ -637,8 +637,16 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                 variant="outline"
                 className="h-11"
                 onClick={async () => {
-                  const { signInWithOAuth } = useAuthStore.getState();
-                  await signInWithOAuth('github');
+                  try {
+                    const { signInWithOAuth } = useAuthStore.getState();
+                    const result = await signInWithOAuth('github');
+                    if (result.error) {
+                      setLocalError(result.error);
+                    }
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    setLocalError(msg);
+                  }
                 }}
               >
                 <Github className="w-4 h-4" />
@@ -649,8 +657,16 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                 variant="outline"
                 className="h-11"
                 onClick={async () => {
-                  const { signInWithOAuth } = useAuthStore.getState();
-                  await signInWithOAuth('google');
+                  try {
+                    const { signInWithOAuth } = useAuthStore.getState();
+                    const result = await signInWithOAuth('google');
+                    if (result.error) {
+                      setLocalError(result.error);
+                    }
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    setLocalError(msg);
+                  }
                 }}
               >
                 <Mail className="w-4 h-4" />

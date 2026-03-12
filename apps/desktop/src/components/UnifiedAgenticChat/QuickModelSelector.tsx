@@ -302,7 +302,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           )}
         />
         {searchQuery && (
-          <button
+          <button type="button"
             onClick={() => {
               setSearchQuery('');
               searchInputRef.current?.focus();
@@ -324,7 +324,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           const isSelected = selectedModel === modeId;
           const IconComponent = config?.icon ?? Wand2;
           return (
-            <button
+            <button type="button"
               key={modeId}
               onClick={() => handleModelChange(modeId)}
               className={cn(
@@ -408,7 +408,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             <p className="text-xs text-gray-500 dark:text-gray-400">
               No models found for "{searchQuery}"
             </p>
-            <button
+            <button type="button"
               onClick={() => setSearchQuery('')}
               className="mt-2 text-[10px] text-primary hover:underline"
             >
@@ -430,7 +430,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                   const isActive = model.id === selectedModel;
 
                   return (
-                    <button
+                    <button type="button"
                       key={model.id}
                       onClick={() => handleModelChange(model.id)}
                       className={cn(
@@ -545,7 +545,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               </div>
               <div className="flex items-center gap-1">
                 {budgetOptions.map((opt) => (
-                  <button
+                  <button type="button"
                     key={opt.value}
                     onClick={() => handleBudgetSelect(opt.value)}
                     disabled={isDisabled}

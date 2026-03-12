@@ -14,11 +14,14 @@ import remarkMath from 'remark-math';
 import { Bookmark, BookmarkCheck, Check, Copy } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { EnhancedMessage } from '../../../stores/unifiedChatStore';
+import { MessageRuntimeInlineActivity } from '../MessageRuntimeActivity';
 import { ReasoningAccordion } from '../ReasoningAccordion';
 import { SourcesFooter } from '../SourcesFooter';
-import { StatusTrail } from '../StatusTrail';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 import { MessageAttachments } from './MessageAttachments';
+import { InlinePanelList } from './InlinePanelList';
+import { WidgetList } from './WidgetList';
+import { getMessageWidgets } from './messageRuntime';
 import { ThinkingMatch, ThinkingMessageMetadata, LightboxImage } from './types';
 
 export interface ThinkingMessageBlockProps {
@@ -54,6 +57,8 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
   const steps = thinkingMeta?.steps;
 
   const thinkingBlock = thinkingMatch.content;
+  const widgets = getMessageWidgets(message);
+  const isStreaming = Boolean(message.metadata?.streaming);
 
   // Remove all thinking-related tags from the remaining content
   const remainingContent = message.content
@@ -77,15 +82,14 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
         </div>
       )}
       <div className="min-w-0 relative max-w-full flex-1">
-        {/* Status Trail - Using inline variant to prevent overlap */}
-        <StatusTrail messageId={message.id} variant="inline" />
+        <MessageRuntimeInlineActivity messageId={message.id} className="mb-3" />
 
         {/* Reasoning Accordion */}
         <ReasoningAccordion
           content={thinkingBlock}
           summary={summary}
           metadata={{ duration, steps, thinkingPattern: thinkingMatch.pattern }}
-          isStreaming={Boolean(message.metadata?.streaming)}
+          isStreaming={isStreaming}
         />
 
         {/* Remaining content after thinking block */}
@@ -124,13 +128,28 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
             </ReactMarkdown>
 
             {/* Sources footer for messages with citations */}
-            {!message.metadata?.streaming && <SourcesFooter content={remainingContent} />}
+            {!isStreaming && <SourcesFooter content={remainingContent} />}
           </div>
         )}
 
         {/* Attachments */}
         {Array.isArray(message.attachments) && message.attachments.length > 0 && (
           <MessageAttachments attachments={message.attachments} onImageClick={onImageClick} />
+        )}
+
+        {/* Inline Panels */}
+        {message.inlinePanels && message.inlinePanels.length > 0 && (
+          <InlinePanelList messageId={message.id} panels={message.inlinePanels} />
+        )}
+
+        {/* Embedded Widgets */}
+        {widgets.length > 0 && (
+          <WidgetList
+            messageId={message.id}
+            widgets={widgets}
+            isAssistant={message.role === 'assistant'}
+            isStreaming={isStreaming}
+          />
         )}
 
         {/* Action buttons - visible on hover or focus-within for keyboard accessibility */}
@@ -143,14 +162,14 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
             role="group"
             aria-label="Message actions"
           >
-            <button
+            <button type="button"
               onClick={onCopy}
               className="p-1 text-zinc-500 hover:text-zinc-300"
               title="Copy message"
             >
               {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
             </button>
-            <button
+            <button type="button"
               onClick={onBookmark}
               className="p-1 text-zinc-500 hover:text-zinc-300"
               title={message.bookmarked ? 'Remove bookmark' : 'Bookmark message'}

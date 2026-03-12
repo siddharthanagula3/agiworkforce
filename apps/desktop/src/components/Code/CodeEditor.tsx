@@ -158,8 +158,10 @@ export function CodeEditor({
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = path?.split('/').pop() || 'code.txt';
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('Downloaded');
   };
 

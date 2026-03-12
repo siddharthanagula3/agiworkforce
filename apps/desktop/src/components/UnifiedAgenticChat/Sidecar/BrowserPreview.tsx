@@ -143,7 +143,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
       {}
       <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/50 px-4 py-2">
         {}
-        <button
+        <button type="button"
           onClick={handleGoBack}
           disabled={!tabId || isLoading}
           className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
@@ -151,7 +151,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <button
+        <button type="button"
           onClick={handleGoForward}
           disabled={!tabId || isLoading}
           className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
@@ -161,7 +161,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
         </button>
 
         {}
-        <button
+        <button type="button"
           onClick={handleRefresh}
           disabled={isLoading || !tabId}
           className={cn(
@@ -198,7 +198,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
         </form>
 
         {}
-        <button
+        <button type="button"
           onClick={handleOpenExternal}
           disabled={!url}
           className={cn(
@@ -222,7 +222,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
           <div className="flex items-center gap-2 text-sm">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
             <span className="text-rose-300">{error}</span>
-            <button
+            <button type="button"
               onClick={() => setError(null)}
               className="ml-auto text-xs text-rose-400 hover:text-rose-300"
             >

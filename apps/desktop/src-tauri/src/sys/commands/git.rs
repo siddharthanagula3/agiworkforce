@@ -35,9 +35,7 @@ fn make_git_credentials(
         }
 
         // Fallback: probe default key files in ~/.ssh
-        let ssh_dir = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".ssh");
+        let ssh_dir = dirs::home_dir().unwrap_or_default().join(".ssh");
 
         for key_name in &["id_ed25519", "id_rsa", "id_ecdsa"] {
             let private_key = ssh_dir.join(key_name);

@@ -51,8 +51,7 @@ impl DirectApiProvider {
         base_url: Option<String>,
         config: HttpClientConfig,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let client =
-            create_http_client(&config).map_err(Box::<dyn Error + Send + Sync>::from)?;
+        let client = create_http_client(&config).map_err(Box::<dyn Error + Send + Sync>::from)?;
 
         let streaming_config = HttpClientConfig {
             proxy_url: config.proxy_url.clone(),
@@ -94,10 +93,7 @@ impl DirectApiProvider {
                 // Azure OpenAI uses: {base_url}/chat/completions?api-version=2024-10-21
                 // The base_url should already include the deployment path, e.g.:
                 // https://{resource}.openai.azure.com/openai/deployments/{deployment}
-                format!(
-                    "{}/chat/completions?api-version=2024-10-21",
-                    self.base_url
-                )
+                format!("{}/chat/completions?api-version=2024-10-21", self.base_url)
             }
             // OpenAI-compatible providers all use /chat/completions
             _ => format!("{}/chat/completions", self.base_url),
@@ -116,10 +112,7 @@ impl DirectApiProvider {
     }
 
     /// Apply the correct authentication headers for this provider.
-    fn apply_auth(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
+    fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         match self.provider {
             Provider::Anthropic => builder
                 .header("x-api-key", &self.api_key)
@@ -161,7 +154,8 @@ impl DirectApiProvider {
 /// Loopback addresses (127.0.0.0/8, ::1) are allowed with HTTP only,
 /// to support local services like Ollama.
 fn validate_provider_base_url(url: &str) -> Result<(), String> {
-    let parsed = url.parse::<reqwest::Url>()
+    let parsed = url
+        .parse::<reqwest::Url>()
         .map_err(|e| format!("Invalid base URL: {e}"))?;
 
     // Determine if the host is a loopback address.
@@ -289,10 +283,13 @@ impl LLMProvider for DirectApiProvider {
             ))));
         }
 
-        let body: Value = res
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse {} response: {}", self.provider.as_string(), e))?;
+        let body: Value = res.json().await.map_err(|e| {
+            format!(
+                "Failed to parse {} response: {}",
+                self.provider.as_string(),
+                e
+            )
+        })?;
 
         adapter.adapt_response(&body)
     }
@@ -390,10 +387,7 @@ impl LLMProvider for DirectApiProvider {
 
     fn supports_function_calling(&self) -> bool {
         // Perplexity/Sonar and Sambanova do not support function calling
-        !matches!(
-            self.provider,
-            Provider::Perplexity | Provider::Sambanova
-        )
+        !matches!(self.provider, Provider::Perplexity | Provider::Sambanova)
     }
 }
 
@@ -423,17 +417,17 @@ mod tests {
         ];
         for provider in providers {
             let url = default_base_url(provider);
-            assert!(url.starts_with("https://"), "Provider {:?} should have HTTPS URL", provider);
+            assert!(
+                url.starts_with("https://"),
+                "Provider {:?} should have HTTPS URL",
+                provider
+            );
         }
     }
 
     #[test]
     fn new_creates_provider_with_default_url() {
-        let provider = DirectApiProvider::new(
-            Provider::OpenAI,
-            "sk-test-key".to_string(),
-            None,
-        );
+        let provider = DirectApiProvider::new(Provider::OpenAI, "sk-test-key".to_string(), None);
         assert!(provider.is_ok());
         let p = provider.expect("should create");
         assert_eq!(p.base_url, "https://api.openai.com/v1");
@@ -454,11 +448,7 @@ mod tests {
 
     #[test]
     fn empty_api_key_is_not_configured() {
-        let provider = DirectApiProvider::new(
-            Provider::OpenAI,
-            String::new(),
-            None,
-        );
+        let provider = DirectApiProvider::new(Provider::OpenAI, String::new(), None);
         assert!(provider.is_ok());
         let p = provider.expect("should create");
         assert!(!p.is_configured());
@@ -468,7 +458,10 @@ mod tests {
     fn chat_endpoint_openai_compat() {
         let p = DirectApiProvider::new(Provider::OpenAI, "key".to_string(), None)
             .expect("should create");
-        assert_eq!(p.chat_endpoint(), "https://api.openai.com/v1/chat/completions");
+        assert_eq!(
+            p.chat_endpoint(),
+            "https://api.openai.com/v1/chat/completions"
+        );
     }
 
     #[test]
@@ -531,7 +524,9 @@ mod tests {
     fn validate_blocks_http_non_loopback() {
         let result = validate_provider_base_url("http://10.0.0.5:8080");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("HTTP (non-TLS) is only allowed for localhost"));
+        assert!(result
+            .unwrap_err()
+            .contains("HTTP (non-TLS) is only allowed for localhost"));
     }
 
     #[test]

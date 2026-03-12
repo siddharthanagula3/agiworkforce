@@ -9,18 +9,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { QuickModelSelector } from './QuickModelSelector';
 
 export const ChatInputToolbar = () => {
-  const { conversationMode, setConversationMode, activeConversationId, conversations } =
-    useUnifiedChatStore(
-      useShallow((s) => ({
-        conversationMode: s.conversationMode,
-        setConversationMode: s.setConversationMode,
-        activeConversationId: s.activeConversationId,
-        conversations: s.conversations,
-      })),
-    );
+  const { conversationMode, setConversationMode, activeConversationId } = useUnifiedChatStore(
+    useShallow((s) => ({
+      conversationMode: s.conversationMode,
+      setConversationMode: s.setConversationMode,
+      activeConversationId: s.activeConversationId,
+    })),
+  );
 
-  const activeConvo = conversations.find((c) => c.id === activeConversationId);
-  const isIncognito = activeConvo?.incognito ?? false;
+  // BUG-346: Read incognito from useChatStore directly (same store the toggle writes to)
+  // to avoid dual-store read/write split that caused UI not updating.
+  const isIncognito = useChatStore(
+    (s) => s.conversations.find((c) => c.id === activeConversationId)?.incognito ?? false,
+  );
 
   const toggleMode = useCallback(() => {
     const newMode: ConversationMode = conversationMode === 'auto' ? 'manual' : 'auto';

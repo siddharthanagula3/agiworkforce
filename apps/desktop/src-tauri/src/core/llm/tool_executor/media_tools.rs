@@ -162,7 +162,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_image_ocr_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_image_ocr_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let image_path = args
             .get("image_path")
             .and_then(|v| v.as_str())

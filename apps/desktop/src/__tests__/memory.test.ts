@@ -430,11 +430,11 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('memory_forget', {
-        memory_id: 1,
+        memoryId: 1,
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_forget', {
-        memory_id: 1,
+        memoryId: 1,
       });
       expect(result).toBe(true);
     });
@@ -443,7 +443,7 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('memory_forget', {
-        memory_id: 9999,
+        memoryId: 9999,
       });
 
       expect(result).toBe(false);
@@ -454,7 +454,7 @@ describe('Memory Tauri Commands', () => {
 
       await expect(
         invoke('memory_forget', {
-          memory_id: 1,
+          memoryId: 1,
         }),
       ).rejects.toThrow('Database constraint violation');
     });
@@ -514,12 +514,12 @@ describe('Memory Tauri Commands', () => {
 
       const result = await invoke('memory_log_context', {
         content: 'Executed backup workflow',
-        entry_type: 'action',
+        entryType: 'action',
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_log_context', {
         content: 'Executed backup workflow',
-        entry_type: 'action',
+        entryType: 'action',
       });
       expect(result).toBe(101);
     });
@@ -529,7 +529,7 @@ describe('Memory Tauri Commands', () => {
 
       const result = await invoke('memory_log_context', {
         content: 'User mentioned they work in finance',
-        entry_type: 'note',
+        entryType: 'note',
       });
 
       expect(result).toBe(102);
@@ -540,13 +540,13 @@ describe('Memory Tauri Commands', () => {
 
       const result = await invoke('memory_log_context', {
         content: 'Project completed successfully',
-        entry_type: 'milestone',
+        entryType: 'milestone',
         metadata: JSON.stringify({ project_id: 'proj-123', duration_hours: 5 }),
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_log_context', {
         content: 'Project completed successfully',
-        entry_type: 'milestone',
+        entryType: 'milestone',
         metadata: JSON.stringify({ project_id: 'proj-123', duration_hours: 5 }),
       });
       expect(result).toBe(103);
@@ -680,11 +680,11 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(mockImportant);
 
       const result = await invoke('memory_get_important', {
-        min_importance: 7,
+        minImportance: 7,
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_get_important', {
-        min_importance: 7,
+        minImportance: 7,
       });
       expect(result).toHaveLength(2);
       (result as MemoryEntry[]).forEach((entry) => {
@@ -696,11 +696,11 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce([]);
 
       await invoke('memory_get_important', {
-        min_importance: 9,
+        minImportance: 9,
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_get_important', {
-        min_importance: 9,
+        minImportance: 9,
       });
     });
   });
@@ -749,11 +749,11 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(deletedCount);
 
       const result = await invoke('memory_cleanup_logs', {
-        keep_days: 30,
+        keepDays: 30,
       });
 
       expect(invoke).toHaveBeenCalledWith('memory_cleanup_logs', {
-        keep_days: 30,
+        keepDays: 30,
       });
       expect(result).toBe(15);
     });
@@ -762,7 +762,7 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(50);
 
       const result = await invoke('memory_cleanup_logs', {
-        keep_days: 7,
+        keepDays: 7,
       });
 
       expect(result).toBe(50);
@@ -772,7 +772,7 @@ describe('Memory Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(0);
 
       const result = await invoke('memory_cleanup_logs', {
-        keep_days: 30,
+        keepDays: 30,
       });
 
       expect(result).toBe(0);

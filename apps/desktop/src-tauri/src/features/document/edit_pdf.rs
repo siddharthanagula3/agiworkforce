@@ -1,7 +1,8 @@
-use anyhow::Result;
 use lopdf::{Document, Object, ObjectId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use crate::sys::error::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PdfEdit {
@@ -41,7 +42,8 @@ impl PdfEditor {
 
     /// Apply multiple edits to a PDF file
     pub fn edit_pdf(&self, file_path: &str, edits: Vec<PdfEdit>, output_path: &str) -> Result<()> {
-        let mut doc = Document::load(file_path)?;
+        let mut doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
 
         for edit in edits {
             match edit {
@@ -56,7 +58,8 @@ impl PdfEditor {
                     self.delete_page_internal(&mut doc, page)?;
                 }
                 PdfEdit::MergePages { source_path } => {
-                    let source_doc = Document::load(&source_path)?;
+                    let source_doc = Document::load(&source_path)
+                        .map_err(|e| Error::Generic(format!("Failed to load source PDF: {}", e)))?;
                     self.merge_documents(&mut doc, source_doc)?;
                 }
                 PdfEdit::AddWatermark { text } => {
@@ -65,7 +68,8 @@ impl PdfEditor {
             }
         }
 
-        doc.save(output_path)?;
+        doc.save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
         tracing::info!("PDF saved to: {}", output_path);
         Ok(())
     }
@@ -82,7 +86,7 @@ impl PdfEditor {
         let pages = doc.get_pages();
         let page_id = pages
             .get(&page_num)
-            .ok_or_else(|| anyhow::anyhow!("Page {} not found", page_num))?;
+            .ok_or_else(|| Error::Generic(format!("Page {} not found", page_num)))?;
 
         // Create text content stream
         let content = format!(
@@ -94,9 +98,10 @@ impl PdfEditor {
 
         // Get page object
         let page_dict = doc
-            .get_object(*page_id)?
+            .get_object(*page_id)
+            .map_err(|e| Error::Generic(format!("Failed to get page object: {}", e)))?
             .as_dict()
-            .map_err(|_| anyhow::anyhow!("Invalid page object"))?
+            .map_err(|_| Error::Generic("Invalid page object".to_string()))?
             .clone();
 
         // Ensure Font resource exists
@@ -172,7 +177,7 @@ impl PdfEditor {
     fn delete_page_internal(&self, doc: &mut Document, page_num: u32) -> Result<()> {
         let pages = doc.get_pages();
         if !pages.contains_key(&page_num) {
-            return Err(anyhow::anyhow!("Page {} not found", page_num));
+            return Err(Error::Generic(format!("Page {} not found", page_num)));
         }
 
         doc.delete_pages(&[page_num]);
@@ -196,7 +201,7 @@ impl PdfEditor {
                 let pages_map = doc.get_pages();
                 *pages_map
                     .get(&page_num)
-                    .ok_or_else(|| anyhow::anyhow!("Page {} not found", page_num))?
+                    .ok_or_else(|| Error::Generic(format!("Page {} not found", page_num)))?
             };
 
             self.ensure_font_resource(doc, page_id)?;
@@ -208,9 +213,10 @@ impl PdfEditor {
 
             // Prepend watermark content (so it appears behind existing content)
             let page_dict = doc
-                .get_object(page_id)?
+                .get_object(page_id)
+                .map_err(|e| Error::Generic(format!("Failed to get page object: {}", e)))?
                 .as_dict()
-                .map_err(|_| anyhow::anyhow!("Invalid page object"))?
+                .map_err(|_| Error::Generic("Invalid page object".to_string()))?
                 .clone();
 
             if let Ok(existing_contents) = page_dict.get(b"Contents") {
@@ -320,15 +326,17 @@ impl PdfEditor {
 
     /// Append text to the last page of a PDF
     pub fn append_text(&self, file_path: &str, text: &str, output_path: &str) -> Result<()> {
-        let mut doc = Document::load(file_path)?;
+        let mut doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         let pages = doc.get_pages();
         let last_page = *pages
             .keys()
             .max()
-            .ok_or_else(|| anyhow::anyhow!("No pages found"))?;
+            .ok_or_else(|| Error::Generic("No pages found".to_string()))?;
 
         self.add_text_to_page(&mut doc, last_page, text, 72.0, 72.0)?;
-        doc.save(output_path)?;
+        doc.save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         tracing::info!("Appended text to PDF, saved to: {}", output_path);
         Ok(())
@@ -337,17 +345,21 @@ impl PdfEditor {
     /// Merge multiple PDF files into one
     pub fn merge_pdfs(&self, pdf_paths: Vec<String>, output_path: &str) -> Result<()> {
         if pdf_paths.is_empty() {
-            return Err(anyhow::anyhow!("No PDF files to merge"));
+            return Err(Error::Generic("No PDF files to merge".to_string()));
         }
 
-        let mut target = Document::load(&pdf_paths[0])?;
+        let mut target = Document::load(&pdf_paths[0])
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
 
         for path in pdf_paths.iter().skip(1) {
-            let source = Document::load(path)?;
+            let source = Document::load(path)
+                .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
             self.merge_documents(&mut target, source)?;
         }
 
-        target.save(output_path)?;
+        target
+            .save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
         tracing::info!("Merged {} PDFs into: {}", pdf_paths.len(), output_path);
         Ok(())
     }
@@ -359,9 +371,11 @@ impl PdfEditor {
         watermark_text: &str,
         output_path: &str,
     ) -> Result<()> {
-        let mut doc = Document::load(file_path)?;
+        let mut doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         self.add_watermark_to_all_pages(&mut doc, watermark_text)?;
-        doc.save(output_path)?;
+        doc.save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         tracing::info!("Added watermark to PDF, saved to: {}", output_path);
         Ok(())
@@ -375,21 +389,20 @@ impl PdfEditor {
         end_page: u32,
         output_path: &str,
     ) -> Result<()> {
-        let doc = Document::load(file_path)?;
+        let doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         let pages = doc.get_pages();
 
         // Validate page range
         let max_page = *pages
             .keys()
             .max()
-            .ok_or_else(|| anyhow::anyhow!("No pages found"))?;
+            .ok_or_else(|| Error::Generic("No pages found".to_string()))?;
         if start_page < 1 || end_page > max_page || start_page > end_page {
-            return Err(anyhow::anyhow!(
+            return Err(Error::Generic(format!(
                 "Invalid page range: {}-{} (document has {} pages)",
-                start_page,
-                end_page,
-                max_page
-            ));
+                start_page, end_page, max_page
+            )));
         }
 
         // Collect page numbers to delete (everything outside the range)
@@ -401,7 +414,9 @@ impl PdfEditor {
 
         let mut output_doc = doc.clone();
         output_doc.delete_pages(&pages_to_delete);
-        output_doc.save(output_path)?;
+        output_doc
+            .save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         tracing::info!(
             "Extracted pages {}-{} from PDF, saved to: {}",
@@ -414,25 +429,28 @@ impl PdfEditor {
 
     /// Get the number of pages in a PDF
     pub fn get_page_count(&self, file_path: &str) -> Result<u32> {
-        let doc = Document::load(file_path)?;
+        let doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         let count = doc.get_pages().len() as u32;
         Ok(count)
     }
 
     /// Delete specific pages from a PDF
     pub fn delete_pages(&self, file_path: &str, pages: &[u32], output_path: &str) -> Result<()> {
-        let mut doc = Document::load(file_path)?;
+        let mut doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         let all_pages = doc.get_pages();
 
         // Validate page numbers
         for page in pages {
             if !all_pages.contains_key(page) {
-                return Err(anyhow::anyhow!("Page {} not found", page));
+                return Err(Error::Generic(format!("Page {} not found", page)));
             }
         }
 
         doc.delete_pages(pages);
-        doc.save(output_path)?;
+        doc.save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         tracing::info!(
             "Deleted {} pages from PDF, saved to: {}",
@@ -450,7 +468,8 @@ impl PdfEditor {
         rotation: i32,
         output_path: &str,
     ) -> Result<()> {
-        let mut doc = Document::load(file_path)?;
+        let mut doc = Document::load(file_path)
+            .map_err(|e| Error::Generic(format!("Failed to load PDF: {}", e)))?;
         let all_pages = doc.get_pages();
 
         // Normalize rotation to 0, 90, 180, or 270
@@ -460,7 +479,9 @@ impl PdfEditor {
             && normalized_rotation != 180
             && normalized_rotation != 270
         {
-            return Err(anyhow::anyhow!("Rotation must be a multiple of 90 degrees"));
+            return Err(Error::Generic(
+                "Rotation must be a multiple of 90 degrees".to_string(),
+            ));
         }
 
         for page_num in pages {
@@ -473,7 +494,8 @@ impl PdfEditor {
             }
         }
 
-        doc.save(output_path)?;
+        doc.save(output_path)
+            .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
         tracing::info!(
             "Rotated {} pages by {} degrees, saved to: {}",
             pages.len(),

@@ -31,8 +31,6 @@ pub struct ResolvedConflict {
 
 pub struct ConflictResolver {
     /// Whether to automatically resolve conflicts
-    // Used by: sync configuration — will gate auto-resolution logic
-    #[allow(dead_code)]
     auto_resolve: bool,
 }
 
@@ -57,7 +55,21 @@ impl ConflictResolver {
         false
     }
 
+    /// Returns `true` if this resolver is configured for automatic conflict resolution.
+    pub fn is_auto_resolve_enabled(&self) -> bool {
+        self.auto_resolve
+    }
+
     pub fn auto_resolve(&self, conflict_data: &ConflictData) -> Result<ResolvedConflict> {
+        if !self.auto_resolve {
+            return Ok(ResolvedConflict {
+                entity_id: conflict_data.entity_id.clone(),
+                resolution: ConflictResolution::Manual,
+                merged_data: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            });
+        }
+
         let local_time = chrono::DateTime::parse_from_rfc3339(&conflict_data.local_timestamp)?;
         let remote_time = chrono::DateTime::parse_from_rfc3339(&conflict_data.remote_timestamp)?;
 

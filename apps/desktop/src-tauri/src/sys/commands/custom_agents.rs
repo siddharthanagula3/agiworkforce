@@ -43,8 +43,12 @@ fn parse_agent_file(path: &PathBuf, scope: &str) -> Result<CustomAgentConfig, St
             let body_start = end_idx + 4; // skip "\n---"
             let body = rest[body_start..].trim_start().to_string();
 
-            let fm: AgentFrontmatter = serde_yaml::from_str(yaml_str)
-                .map_err(|e| format!("Failed to parse YAML frontmatter in {}: {e}", path.display()))?;
+            let fm: AgentFrontmatter = serde_yaml::from_str(yaml_str).map_err(|e| {
+                format!(
+                    "Failed to parse YAML frontmatter in {}: {e}",
+                    path.display()
+                )
+            })?;
 
             let name = fm.name.unwrap_or_else(|| {
                 path.file_stem()
@@ -114,7 +118,9 @@ fn agents_dir(scope: &str) -> Result<PathBuf, String> {
         "project" => std::env::current_dir()
             .map(|d| d.join(".claude").join("agents"))
             .map_err(|e| format!("Cannot determine current directory: {e}")),
-        other => Err(format!("Unknown scope '{other}'. Expected 'global' or 'project'")),
+        other => Err(format!(
+            "Unknown scope '{other}'. Expected 'global' or 'project'"
+        )),
     }
 }
 
@@ -126,7 +132,13 @@ fn quote_yaml_value(value: &str) -> String {
     let needs_quoting = value.is_empty()
         || value.starts_with(' ')
         || value.ends_with(' ')
-        || value.contains(|c: char| [':', '#', '"', '\'', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '%', '@', '`', '\n', '\r'].contains(&c));
+        || value.contains(|c: char| {
+            [
+                ':', '#', '"', '\'', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '%', '@',
+                '`', '\n', '\r',
+            ]
+            .contains(&c)
+        });
 
     if needs_quoting {
         let escaped = value
@@ -144,7 +156,13 @@ fn quote_yaml_value(value: &str) -> String {
 /// Allows alphanumerics, hyphens, underscores, and dots. Strips everything else.
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect()
 }
 
@@ -206,7 +224,10 @@ pub async fn save_custom_agent(config: CustomAgentConfig) -> Result<(), String> 
                 frontmatter.push_str(&format!("  {line}\n"));
             }
         } else {
-            frontmatter.push_str(&format!("description: {}\n", quote_yaml_value(config.description.trim())));
+            frontmatter.push_str(&format!(
+                "description: {}\n",
+                quote_yaml_value(config.description.trim())
+            ));
         }
     }
 
@@ -219,7 +240,10 @@ pub async fn save_custom_agent(config: CustomAgentConfig) -> Result<(), String> 
         }
     }
 
-    let file_content = format!("---\n{frontmatter}---\n\n{}", config.system_prompt.trim_start());
+    let file_content = format!(
+        "---\n{frontmatter}---\n\n{}",
+        config.system_prompt.trim_start()
+    );
 
     tokio::fs::write(&path, file_content)
         .await

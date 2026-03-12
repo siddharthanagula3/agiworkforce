@@ -104,6 +104,9 @@ interface ApiState {
   clearError: () => void;
 }
 
+/** Maximum number of API history items to retain. */
+const API_HISTORY_LIMIT = 1000;
+
 export const useApiStore = create<ApiState>((set, get) => {
   const SENSITIVE_HEADERS = [
     'authorization',
@@ -165,7 +168,7 @@ export const useApiStore = create<ApiState>((set, get) => {
           loading: false,
           error: null,
           history: [
-            ...state.history.slice(-99),
+            ...state.history.slice(-(API_HISTORY_LIMIT - 1)),
             {
               request: redactRequest(request),
               response: redactResponse(response),
@@ -192,7 +195,7 @@ export const useApiStore = create<ApiState>((set, get) => {
           loading: false,
           error: null,
           history: [
-            ...state.history.slice(-99),
+            ...state.history.slice(-(API_HISTORY_LIMIT - 1)),
             {
               request: redactRequest(request),
               response: redactResponse(response),
@@ -224,7 +227,7 @@ export const useApiStore = create<ApiState>((set, get) => {
           loading: false,
           error: null,
           history: [
-            ...state.history.slice(-99),
+            ...state.history.slice(-(API_HISTORY_LIMIT - 1)),
             {
               request: redactRequest(request),
               response: redactResponse(response),
@@ -256,7 +259,7 @@ export const useApiStore = create<ApiState>((set, get) => {
           loading: false,
           error: null,
           history: [
-            ...state.history.slice(-99),
+            ...state.history.slice(-(API_HISTORY_LIMIT - 1)),
             {
               request: redactRequest(request),
               response: redactResponse(response),
@@ -283,7 +286,7 @@ export const useApiStore = create<ApiState>((set, get) => {
           loading: false,
           error: null,
           history: [
-            ...state.history.slice(-99),
+            ...state.history.slice(-(API_HISTORY_LIMIT - 1)),
             {
               request: redactRequest(request),
               response: redactResponse(response),

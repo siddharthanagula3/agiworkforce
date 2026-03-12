@@ -65,8 +65,10 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
     const a = document.createElement('a');
     a.href = url;
     a.download = `ocr-result-${captureId}.txt`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('Text downloaded');
   };
 

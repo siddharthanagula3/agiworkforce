@@ -165,7 +165,7 @@ impl EmbeddingCache {
 
     pub fn get_top_accessed(&self, limit: usize) -> Result<Vec<(String, u64)>> {
         let mut stmt = self.db.prepare(
-            "SELECT key, access_coun
+            "SELECT key, access_count
              FROM cache_metadata
              ORDER BY access_count DESC
              LIMIT ?1",

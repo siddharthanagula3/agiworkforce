@@ -168,7 +168,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
       <div className="flex items-center justify-between p-3 bg-gray-800/80">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Expand/Collapse Button */}
-          <button
+          <button type="button"
             onClick={() => setExpanded(!expanded)}
             className="p-1 hover:bg-gray-700 rounded transition-colors shrink-0"
             title={expanded ? 'Collapse' : 'Expand'}
@@ -204,7 +204,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
 
           {/* Cancel button for running tools */}
           {stream.status === 'running' && onCancel && (
-            <button
+            <button type="button"
               onClick={onCancel}
               className="p-1.5 hover:bg-red-900/50 rounded transition-colors text-red-400 hover:text-red-300"
               title="Cancel execution"
@@ -215,7 +215,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
 
           {/* Retry button for failed tools */}
           {stream.status === 'error' && stream.retryable && onRetry && (
-            <button
+            <button type="button"
               onClick={onRetry}
               className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-300"
               title="Retry execution"
@@ -226,7 +226,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
 
           {/* Copy button when there's output */}
           {stream.outputBuffer.length > 0 && (
-            <button
+            <button type="button"
               onClick={handleCopy}
               className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-300"
               title={copied ? 'Copied!' : 'Copy output'}

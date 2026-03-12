@@ -1,7 +1,10 @@
 use super::*;
 
 impl ToolExecutor {
-    pub(crate) async fn execute_git_status_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_status_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -46,7 +49,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_git_commit_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_commit_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -95,7 +101,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_git_clone_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_clone_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -145,7 +154,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_git_add_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_add_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -195,7 +207,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_git_push_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_push_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
@@ -262,7 +277,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_git_init_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_git_init_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())

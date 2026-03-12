@@ -91,7 +91,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
             )}
           </div>
 
-          <button
+          <button type="button"
             onClick={onDismiss}
             className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
             aria-label="Dismiss"
@@ -103,7 +103,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
         {(onRetry || errorDef.helpLink) && (
           <div className="mt-3 flex gap-2">
             {onRetry && errorDef.recoverable && (
-              <button
+              <button type="button"
                 onClick={onRetry}
                 className="flex items-center gap-1 rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >

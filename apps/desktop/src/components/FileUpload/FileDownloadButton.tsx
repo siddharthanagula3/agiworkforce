@@ -102,7 +102,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
 
   if (variant === 'inline') {
     return (
-      <button
+      <button type="button"
         onClick={handleDownload}
         disabled={isDownloading}
         className={cn(
@@ -149,7 +149,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
             </p>
           </div>
         </div>
-        <button
+        <button type="button"
           onClick={handleDownload}
           disabled={isDownloading}
           className={cn(
@@ -176,7 +176,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
   }
 
   return (
-    <button
+    <button type="button"
       onClick={handleDownload}
       disabled={isDownloading}
       className={cn(

@@ -131,7 +131,7 @@ impl ProjectManager {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_a
+            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
              FROM projects WHERE id = ?1",
         )?;
 
@@ -159,7 +159,7 @@ impl ProjectManager {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_a
+            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
              FROM projects WHERE created_by = ?1 ORDER BY updated_at DESC",
         )?;
 

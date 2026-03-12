@@ -730,6 +730,11 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAutoApproveTools',
           );
+          try {
+            await invoke('set_auto_approve_all', { enabled });
+          } catch (error) {
+            console.error('Failed to sync auto-approve-all to backend:', error);
+          }
         },
 
         setAgentMode: async (mode: AgentMode) => {
@@ -750,6 +755,7 @@ export const useSettingsStore = create<SettingsState>()(
           );
           try {
             await invoke('set_agent_mode', { mode });
+            await invoke('set_auto_approve_all', { enabled: mode === 'autopilot' });
           } catch (error) {
             console.error('Failed to sync agent mode to backend:', error);
           }
@@ -950,6 +956,14 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to sync auto-approve-all to backend:', error);
             }
 
+            try {
+              await invoke('set_agent_mode', {
+                mode: mergedChatPreferences.agentMode ?? 'build',
+              });
+            } catch (error) {
+              console.error('Failed to sync agent mode to backend:', error);
+            }
+
             // Keep backend capability enforcement in sync with loaded settings.
             try {
               await invoke('sync_capabilities', {
@@ -1044,6 +1058,12 @@ export const useSettingsStore = create<SettingsState>()(
               await invoke('set_auto_approve_all', { enabled: chatPreferences.autoApproveTools });
             } catch (error) {
               console.error('Failed to sync auto-approve-all to backend:', error);
+            }
+
+            try {
+              await invoke('set_agent_mode', { mode: chatPreferences.agentMode });
+            } catch (error) {
+              console.error('Failed to sync agent mode to backend:', error);
             }
 
             // Sync capability toggles on explicit save.
@@ -1385,16 +1405,20 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
 };
 
 if (typeof window !== 'undefined') {
-  import('./auth').then(({ useUnifiedAuthStore }) => {
-    if (useUnifiedAuthStore?.subscribe) {
-      useUnifiedAuthStore.subscribe(
-        (state) => state.plan,
-        (plan) => {
-          enforceTaskRoutingTierRestriction(plan ?? 'free');
-        },
-      );
-    }
-  });
+  import('./auth')
+    .then(({ useUnifiedAuthStore }) => {
+      if (useUnifiedAuthStore?.subscribe) {
+        useUnifiedAuthStore.subscribe(
+          (state) => state.plan,
+          (plan) => {
+            enforceTaskRoutingTierRestriction(plan ?? 'free');
+          },
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn('[settingsStore] Failed to load auth for plan subscription:', err);
+    });
 }
 
 /**
