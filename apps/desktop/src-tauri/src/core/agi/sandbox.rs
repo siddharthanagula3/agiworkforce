@@ -574,7 +574,10 @@ impl Sandbox {
         Ok((stdout_result, stderr_result, exit_code, timed_out))
     }
 
-    /// Kill all active processes in this sandbox
+    /// Kill all active processes in this sandbox.
+    ///
+    /// Before sending SIGKILL, verifies that the PID still belongs to a child
+    /// process we spawned (guards against recycled-PID kills on Unix).
     pub async fn kill_all_processes(&self) -> Result<usize> {
         let pids = self.active_processes.lock().await.clone();
         let mut killed = 0;
@@ -582,9 +585,20 @@ impl Sandbox {
         for pid in pids {
             #[cfg(unix)]
             {
-                // SAFETY: libc::kill is safe to call with any PID. If the PID doesn't exist
-                // or we don't have permission, the call simply returns an error which we ignore.
-                // We're sending SIGKILL to processes we spawned in this sandbox.
+                // Verify the process still exists and belongs to us by sending
+                // signal 0 (no-op probe). If it returns an error (ESRCH = no
+                // such process, EPERM = not our process) we skip the kill to
+                // avoid hitting a recycled PID.
+                #[allow(unsafe_code)]
+                let probe = unsafe { libc::kill(pid as i32, 0) };
+                if probe != 0 {
+                    tracing::debug!(
+                        "[Sandbox] PID {} no longer valid (probe failed), skipping kill",
+                        pid
+                    );
+                    continue;
+                }
+
                 #[allow(unsafe_code)]
                 unsafe {
                     libc::kill(pid as i32, libc::SIGKILL);

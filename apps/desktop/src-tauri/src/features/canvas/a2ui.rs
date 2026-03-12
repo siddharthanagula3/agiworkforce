@@ -550,14 +550,22 @@ impl A2UIProtocol {
                 notification_type,
                 duration_ms,
             } => {
-                // Notifications are handled by emitting an event to the frontend
-                // The canvas_id is optional for notifications
                 let canvas_id =
                     canvas_id.or_else(|| self.canvas_manager.get_active().ok().flatten());
 
-                // In a full implementation, this would emit a notification event
-                // For now, we just acknowledge the command
-                let _ = (message, notification_type, duration_ms);
+                let type_str = match notification_type {
+                    NotificationType::Info => "info",
+                    NotificationType::Success => "success",
+                    NotificationType::Warning => "warning",
+                    NotificationType::Error => "error",
+                };
+
+                self.canvas_manager.emit_notification(
+                    canvas_id.clone(),
+                    message,
+                    type_str.to_string(),
+                    duration_ms,
+                );
 
                 Ok(A2UIResponse::success(None, canvas_id))
             }

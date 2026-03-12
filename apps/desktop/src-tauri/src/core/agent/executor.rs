@@ -145,10 +145,7 @@ impl TaskExecutor {
                     let bridge_guard = bridge.lock().await;
                     match bridge_guard.navigate(safe_url).await {
                         Ok(()) => {
-                            tracing::info!(
-                                "[Executor] Navigated via CDP: {}",
-                                safe_url
-                            );
+                            tracing::info!("[Executor] Navigated via CDP: {}", safe_url);
                             return Ok(format!("Navigated (CDP): {}", safe_url));
                         }
                         Err(e) => {

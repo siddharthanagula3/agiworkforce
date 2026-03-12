@@ -319,6 +319,12 @@ pub async fn send_message(
                 .map_err(|e| format!("Failed to authenticate: {}", e))?;
             router.set_teams(client);
         }
+        MessagingPlatform::Discord | MessagingPlatform::Telegram | MessagingPlatform::Signal => {
+            return Err(format!(
+                "{} messaging not yet supported via this command",
+                platform.as_str()
+            ));
+        }
     }
 
     let request = SendMessageRequest {

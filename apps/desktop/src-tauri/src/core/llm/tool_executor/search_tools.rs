@@ -1,4 +1,138 @@
 use super::*;
+use regex::Regex;
+use std::sync::LazyLock;
+
+/// Regex to match <script>...</script> blocks (including content)
+static SCRIPT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<script[^>]*>.*?</script>").expect("valid script regex"));
+/// Regex to match <style>...</style> blocks (including content)
+static STYLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<style[^>]*>.*?</style>").expect("valid style regex"));
+/// Regex to match HTML comments
+static COMMENT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").expect("valid comment regex"));
+/// Regex to match any HTML tag
+static TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<[^>]+>").expect("valid tag regex"));
+
+/// Check if a string looks like HTML content
+pub(super) fn looks_like_html(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    trimmed.starts_with("<!doctype")
+        || trimmed.starts_with("<!DOCTYPE")
+        || trimmed.starts_with("<html")
+        || trimmed.starts_with("<HTML")
+        || (trimmed.starts_with('<') && trimmed.contains("</"))
+}
+
+/// Decode common HTML entities to their text equivalents
+fn decode_html_entities(text: &str) -> String {
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+        .replace("&mdash;", "—")
+        .replace("&ndash;", "–")
+        .replace("&hellip;", "…")
+        .replace("&copy;", "©")
+        .replace("&reg;", "®")
+        .replace("&trade;", "™")
+}
+
+/// Extract the page title from HTML
+pub(super) fn extract_title(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    if let Some(start) = lower.find("<title>") {
+        if let Some(end) = lower[start..].find("</title>") {
+            let title_start = start + 7;
+            let title_end = start + end;
+            if title_end > title_start {
+                let title = html[title_start..title_end].trim().to_string();
+                if !title.is_empty() {
+                    return Some(decode_html_entities(&title));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract readable text content from HTML, stripping scripts, styles, tags,
+/// and normalizing whitespace. Returns a clean text representation suitable
+/// for LLM consumption.
+fn extract_text_from_html(html: &str, max_chars: usize) -> String {
+    // Remove scripts, styles, and comments first
+    let no_scripts = SCRIPT_RE.replace_all(html, " ");
+    let no_styles = STYLE_RE.replace_all(&no_scripts, " ");
+    let no_comments = COMMENT_RE.replace_all(&no_styles, " ");
+
+    // Replace block-level tags with newlines for readability
+    let with_breaks = no_comments
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n")
+        .replace("</p>", "\n")
+        .replace("</div>", "\n")
+        .replace("</li>", "\n")
+        .replace("</h1>", "\n")
+        .replace("</h2>", "\n")
+        .replace("</h3>", "\n")
+        .replace("</h4>", "\n")
+        .replace("</h5>", "\n")
+        .replace("</h6>", "\n")
+        .replace("</tr>", "\n");
+
+    // Strip all remaining HTML tags
+    let text = TAG_RE.replace_all(&with_breaks, " ");
+
+    // Decode HTML entities
+    let decoded = decode_html_entities(text.as_ref());
+
+    // Normalize whitespace: collapse multiple spaces, preserve single newlines
+    let mut result = String::new();
+    let mut prev_newline = false;
+    let mut prev_space = false;
+    for ch in decoded.chars() {
+        if ch == '\n' {
+            if !prev_newline {
+                result.push('\n');
+            }
+            prev_newline = true;
+            prev_space = false;
+        } else if ch.is_whitespace() {
+            if !prev_space && !prev_newline {
+                result.push(' ');
+            }
+            prev_space = true;
+        } else {
+            result.push(ch);
+            prev_newline = false;
+            prev_space = false;
+        }
+        if result.len() >= max_chars {
+            break;
+        }
+    }
+
+    result.trim().to_string()
+}
+
+/// Process an HTTP response body: if it looks like HTML, extract readable text.
+/// Otherwise return as-is (truncated to max_chars).
+pub(super) fn process_response_body(body: &str, max_chars: usize) -> (String, bool) {
+    if looks_like_html(body) {
+        let text = extract_text_from_html(body, max_chars);
+        (text, true)
+    } else if body.len() > max_chars {
+        (body[..max_chars].to_string(), false)
+    } else {
+        (body.to_string(), false)
+    }
+}
 
 impl ToolExecutor {
     pub(crate) async fn execute_search_web_tool(
@@ -51,7 +185,8 @@ impl ToolExecutor {
                 }),
                 error: Some(
                     "Image search is not yet supported. Use 'web' or 'news' search type instead, \
-                     or use the image_generate tool for AI-generated images.".to_string(),
+                     or use the image_generate tool for AI-generated images."
+                        .to_string(),
                 ),
                 metadata: HashMap::from([
                     ("query".to_string(), json!(&query)),
@@ -204,24 +339,26 @@ impl ToolExecutor {
             .map_err(|e| anyhow!("Scrape request failed: {}", e))?;
 
         let status = response.status().as_u16();
-        let html = response.text().await.unwrap_or_default();
+        let raw_body = response.text().await.unwrap_or_default();
+        let raw_len = raw_body.len();
 
-        // If selector provided, note it for the response
-        // Full CSS selector parsing would require the scraper crate
+        // Extract readable text from HTML responses instead of returning raw HTML
+        let title = if looks_like_html(&raw_body) {
+            extract_title(&raw_body)
+        } else {
+            None
+        };
+        let (content, was_html) = process_response_body(&raw_body, 15000);
+
         let extracted = if let Some(sel) = selector {
             format!(
-                "Selector '{}' requested. Full HTML returned for client-side extraction.",
+                "Selector '{}' requested. Text content extracted from page.",
                 sel
             )
+        } else if was_html {
+            "Text content extracted from HTML page.".to_string()
         } else {
-            "Full HTML content returned.".to_string()
-        };
-
-        // Truncate HTML if too large to prevent memory issues
-        let content = if html.len() > 50000 {
-            html[..50000].to_string()
-        } else {
-            html.clone()
+            "Raw content returned.".to_string()
         };
 
         Ok(ToolResult {
@@ -229,10 +366,12 @@ impl ToolExecutor {
             data: json!({
                 "url": url,
                 "status": status,
+                "title": title,
                 "content": content,
                 "extracted": extracted,
-                "content_length": html.len(),
-                "truncated": html.len() > 50000
+                "content_length": raw_len,
+                "was_html": was_html,
+                "truncated": content.len() < raw_len
             }),
             error: if status >= 400 {
                 Some(format!("HTTP {}", status))

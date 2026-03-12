@@ -12,6 +12,7 @@ mod tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 
@@ -34,6 +35,7 @@ mod tests {
             }),
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 
@@ -65,6 +67,7 @@ mod tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 
@@ -99,6 +102,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             };
             assert!(chunk.finish_reason.is_some());
@@ -116,6 +120,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
             StreamChunk {
@@ -126,6 +131,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
             StreamChunk {
@@ -136,6 +142,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
         ];
@@ -971,6 +978,7 @@ mod keepalive_tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: true,
         }
     }
@@ -1071,6 +1079,7 @@ mod keepalive_tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
             StreamChunk {
@@ -1081,6 +1090,7 @@ mod keepalive_tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
             StreamChunk {
@@ -1091,6 +1101,7 @@ mod keepalive_tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                reasoning: None,
                 keepalive: false,
             },
         ];

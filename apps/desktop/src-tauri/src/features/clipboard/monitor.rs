@@ -178,34 +178,32 @@ impl ClipboardMonitor {
         }
 
         if config.track_images {
-            let has_bitmap = Clipboard::new()
-                .and_then(|mut cb| cb.get_image())
-                .is_ok();
+            let has_bitmap = Clipboard::new().and_then(|mut cb| cb.get_image()).is_ok();
             if has_bitmap {
-                    let entry = ClipboardEntry {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        data_type: ClipboardDataType::Image,
-                        content: None,
-                        file_path: None,
-                        thumbnail: Some("[Image in clipboard]".to_string()),
-                        size: 0,
-                        timestamp: chrono::Utc::now().to_rfc3339(),
-                        source_app: Self::get_foreground_app_name(),
-                    };
+                let entry = ClipboardEntry {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    data_type: ClipboardDataType::Image,
+                    content: None,
+                    file_path: None,
+                    thumbnail: Some("[Image in clipboard]".to_string()),
+                    size: 0,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    source_app: Self::get_foreground_app_name(),
+                };
 
-                    let mut last = last_content.lock().await;
-                    let image_marker = "[IMAGE_CLIPBOARD]".to_string();
-                    if last.as_ref() != Some(&image_marker) {
-                        *last = Some(image_marker);
-                        Self::save_to_database(db_path, &entry)?;
+                let mut last = last_content.lock().await;
+                let image_marker = "[IMAGE_CLIPBOARD]".to_string();
+                if last.as_ref() != Some(&image_marker) {
+                    *last = Some(image_marker);
+                    Self::save_to_database(db_path, &entry)?;
 
-                        let mut hist = history.lock().await;
-                        hist.push(entry);
-                        if hist.len() > config.max_history {
-                            hist.remove(0);
-                        }
+                    let mut hist = history.lock().await;
+                    hist.push(entry);
+                    if hist.len() > config.max_history {
+                        hist.remove(0);
                     }
                 }
+            }
         }
 
         if config.track_files {
@@ -213,29 +211,29 @@ impl ClipboardMonitor {
             // as a proxy to determine if the clipboard has changed with file content.
             let has_files = false; // file-drop detection requires platform APIs not in arboard
             if has_files {
-                    let entry = ClipboardEntry {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        data_type: ClipboardDataType::File,
-                        content: None,
-                        file_path: Some("[File(s) in clipboard]".to_string()),
-                        thumbnail: None,
-                        size: 0,
-                        timestamp: chrono::Utc::now().to_rfc3339(),
-                        source_app: Self::get_foreground_app_name(),
-                    };
+                let entry = ClipboardEntry {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    data_type: ClipboardDataType::File,
+                    content: None,
+                    file_path: Some("[File(s) in clipboard]".to_string()),
+                    thumbnail: None,
+                    size: 0,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    source_app: Self::get_foreground_app_name(),
+                };
 
-                    let mut last = last_content.lock().await;
-                    let file_marker = "[FILE_CLIPBOARD]".to_string();
-                    if last.as_ref() != Some(&file_marker) {
-                        *last = Some(file_marker);
-                        Self::save_to_database(db_path, &entry)?;
+                let mut last = last_content.lock().await;
+                let file_marker = "[FILE_CLIPBOARD]".to_string();
+                if last.as_ref() != Some(&file_marker) {
+                    *last = Some(file_marker);
+                    Self::save_to_database(db_path, &entry)?;
 
-                        let mut hist = history.lock().await;
-                        hist.push(entry);
-                        if hist.len() > config.max_history {
-                            hist.remove(0);
-                        }
+                    let mut hist = history.lock().await;
+                    hist.push(entry);
+                    if hist.len() > config.max_history {
+                        hist.remove(0);
                     }
+                }
             }
         }
 

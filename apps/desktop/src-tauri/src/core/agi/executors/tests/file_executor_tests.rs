@@ -29,7 +29,9 @@ mod tests {
                 crate::automation::AutomationService::new()
                     .expect("Failed to create AutomationService for tests"),
             ),
-            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::default())),
+            router: Arc::new(tokio::sync::RwLock::new(
+                crate::core::llm::LLMRouter::default(),
+            )),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::default()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::default()),
             change_tracker: None,

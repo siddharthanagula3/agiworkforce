@@ -43,7 +43,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         >
           <div className="max-h-72 overflow-y-auto">
             {suggestions.map((suggestion, index) => (
-              <button
+              <button type="button"
                 key={suggestion.command}
                 onClick={() => onSelect(suggestion)}
                 onMouseEnter={() => onHover(index)}

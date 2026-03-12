@@ -164,7 +164,7 @@ function SkillGridCard({
       )}
     >
       {/* Card header — click to expand */}
-      <button
+      <button type="button"
         className="flex w-full flex-col gap-2 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-t-lg"
         onClick={onExpand}
         aria-expanded={isExpanded}
@@ -245,7 +245,7 @@ function SkillListRow({
         isExpanded ? 'border-primary ring-1 ring-primary/30' : 'border-border',
       )}
     >
-      <button
+      <button type="button"
         className="flex items-center gap-3 w-full text-left px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-t-lg"
         onClick={onExpand}
         aria-expanded={isExpanded}

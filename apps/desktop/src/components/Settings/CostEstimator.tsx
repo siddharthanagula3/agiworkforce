@@ -77,7 +77,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
             <BarChart3 className="h-5 w-5" />
             Usage & Cost Tracking
           </h2>
-          <button
+          <button type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"

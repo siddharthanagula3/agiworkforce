@@ -178,38 +178,111 @@ impl DomOperations {
     }
 
     pub async fn set_attribute(
-        tab_id: &TabId,
+        client: &CdpClient,
         selector: &str,
         attribute: &str,
-        _value: &str,
+        value: &str,
     ) -> Result<()> {
-        tracing::info!(
-            "Setting attribute {} on element in tab {}: {}",
-            attribute,
-            tab_id,
-            selector
+        tracing::info!("Setting attribute {} on element: {}", attribute, selector);
+
+        // Use Runtime.evaluate to set the attribute via CDP
+        let js = format!(
+            r#"(function() {{
+                var el = document.querySelector('{}');
+                if (!el) throw new Error('Element not found: {}');
+                el.setAttribute('{}', '{}');
+                return true;
+            }})()"#,
+            Self::escape_js(selector),
+            Self::escape_js(selector),
+            Self::escape_js(attribute),
+            Self::escape_js(value),
         );
+
+        client.evaluate(&js).await?;
 
         tracing::info!("Attribute set successfully");
         Ok(())
     }
 
-    pub async fn get_element_info(tab_id: &TabId, selector: &str) -> Result<ElementInfo> {
-        tracing::info!("Getting element info in tab {}: {}", tab_id, selector);
+    pub async fn get_element_info(client: &CdpClient, selector: &str) -> Result<ElementInfo> {
+        tracing::debug!("Getting element info: {}", selector);
 
-        let info = ElementInfo {
-            tag_name: "div".to_string(),
-            text: "Element text".to_string(),
-            attributes: std::collections::HashMap::new(),
-            bounds: Some(ElementBounds {
-                x: 100.0,
-                y: 200.0,
-                width: 300.0,
-                height: 50.0,
-            }),
-        };
+        // Use Runtime.evaluate to extract element info via CDP
+        let js = format!(
+            r#"(function() {{
+                var el = document.querySelector('{}');
+                if (!el) return null;
+                var rect = el.getBoundingClientRect();
+                var attrs = {{}};
+                for (var i = 0; i < el.attributes.length; i++) {{
+                    attrs[el.attributes[i].name] = el.attributes[i].value;
+                }}
+                return {{
+                    tagName: el.tagName.toLowerCase(),
+                    text: (el.innerText || el.textContent || '').substring(0, 1000),
+                    attributes: attrs,
+                    bounds: {{
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height
+                    }}
+                }};
+            }})()"#,
+            Self::escape_js(selector),
+        );
 
-        Ok(info)
+        let result = client.evaluate(&js).await?;
+
+        if result.is_null() {
+            return Err(crate::sys::error::Error::Other(format!(
+                "Element not found: {}",
+                selector
+            )));
+        }
+
+        let tag_name = result
+            .get("tagName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let text = result
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let mut attributes = std::collections::HashMap::new();
+        if let Some(attrs) = result.get("attributes").and_then(|v| v.as_object()) {
+            for (k, v) in attrs {
+                if let Some(val) = v.as_str() {
+                    attributes.insert(k.clone(), val.to_string());
+                }
+            }
+        }
+
+        let bounds = result.get("bounds").map(|b| ElementBounds {
+            x: b.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            y: b.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            width: b.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            height: b.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        });
+
+        Ok(ElementInfo {
+            tag_name,
+            text,
+            attributes,
+            bounds,
+        })
+    }
+
+    /// Escape special characters for safe insertion into JavaScript string literals.
+    fn escape_js(s: &str) -> String {
+        s.replace('\\', "\\\\")
+            .replace('\'', "\\'")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
     }
 
     pub async fn wait_for_selector(

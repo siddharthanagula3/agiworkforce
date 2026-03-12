@@ -258,8 +258,8 @@ pub async fn db_execute_prepared(
             undo_description: None,
         };
 
-        let approved = request_tool_confirmation(&app, &confirmation_state, confirmation_request, 60)
-            .await?;
+        let approved =
+            request_tool_confirmation(&app, &confirmation_state, confirmation_request, 60).await?;
 
         if !approved {
             return Err("Database write operation denied by user".to_string());

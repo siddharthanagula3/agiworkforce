@@ -1,7 +1,10 @@
 use super::*;
 
 impl ToolExecutor {
-    pub(super) async fn execute_llm_reason_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(super) async fn execute_llm_reason_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let prompt = args
             .get("prompt")
             .and_then(|v| v.as_str())

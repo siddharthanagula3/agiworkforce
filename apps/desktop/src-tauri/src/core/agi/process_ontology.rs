@@ -73,6 +73,26 @@ pub struct ProcessOntology {
 
 impl ProcessOntology {
     pub fn new(db_path: String) -> Result<Self> {
+        // Ensure the process_templates table exists before any reads or writes
+        let conn = Connection::open(&db_path)?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS process_templates (
+                id TEXT PRIMARY KEY,
+                process_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                typical_steps TEXT NOT NULL,
+                success_criteria TEXT NOT NULL,
+                required_tools TEXT NOT NULL,
+                expected_duration_ms INTEGER NOT NULL,
+                risk_factors TEXT NOT NULL,
+                best_practices TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        drop(conn);
+
         let mut ontology = Self {
             db_path: db_path.clone(),
             templates: HashMap::new(),

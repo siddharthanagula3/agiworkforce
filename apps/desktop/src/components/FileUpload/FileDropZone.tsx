@@ -118,7 +118,12 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   );
 
   const handleRemoveFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+    setUploadedFiles((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      // BUG-392: Notify parent of the updated file list after removal
+      onFilesSelected(updated);
+      return updated;
+    });
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -175,10 +180,10 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           <button
+            type="button"
             onClick={() => setError(null)}
             className="ml-auto p-1 hover:bg-red-100 dark:hover:bg-red-800 rounded"
             aria-label="Dismiss error"
-            type="button"
           >
             <X className="w-3 h-3 text-red-500" />
           </button>
@@ -209,10 +214,10 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => handleRemoveFile(index)}
                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors text-gray-500 hover:text-red-500"
                   aria-label={`Remove ${file.name}`}
-                  type="button"
                 >
                   <X className="w-4 h-4" />
                 </button>

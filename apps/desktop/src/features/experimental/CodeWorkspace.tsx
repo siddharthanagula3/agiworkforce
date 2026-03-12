@@ -367,27 +367,27 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
           style={{ left: tabMenu.x, top: tabMenu.y }}
         >
-          <button
+          <button type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeCurrent}
           >
             <X className="h-4 w-4" />
             Close tab
           </button>
-          <button
+          <button type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeOthers}
           >
             Close others
           </button>
-          <button
+          <button type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeAll}
           >
             Close all
           </button>
           <div className="my-1 h-px bg-border/60" />
-          <button
+          <button type="button"
             className={cn(
               'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveLeft && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
@@ -398,7 +398,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             <MoveLeft className="h-4 w-4" />
             Move left
           </button>
-          <button
+          <button type="button"
             className={cn(
               'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveRight && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
@@ -410,14 +410,14 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             Move right
           </button>
           <div className="my-1 h-px bg-border/60" />
-          <button
+          <button type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTab}
           >
             <Save className="h-4 w-4" />
             Save tab
           </button>
-          <button
+          <button type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTabAsCopy}
           >
@@ -466,7 +466,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2">
           <div className="flex items-center gap-2">
-            <button
+            <button type="button"
               className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
               onClick={() => setSidebarVisible((value) => !value)}
             >
@@ -550,7 +550,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                     {file.isDirty && ' *'}
                   </span>
 
-                  <button
+                  <button type="button"
                     onClick={(e) => requestCloseTab(file.path, e)}
                     className={cn(
                       'text-muted-foreground hover:text-foreground',

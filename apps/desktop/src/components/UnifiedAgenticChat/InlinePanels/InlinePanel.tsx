@@ -108,7 +108,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <button
+            <button type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleCollapse();
@@ -126,7 +126,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
               />
             </button>
             {onClose && (
-              <button
+              <button type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onClose();

@@ -214,10 +214,13 @@ const DesktopShell = () => {
       task: () => Promise<void>,
       options?: { notify?: boolean },
     ) => {
+      if (disposed) return;
       try {
         await task();
       } catch (error) {
-        reportStartupFailure(step, error, options?.notify === true);
+        if (!disposed) {
+          reportStartupFailure(step, error, options?.notify === true);
+        }
       }
     };
 
@@ -236,6 +239,7 @@ const DesktopShell = () => {
       // Wait for settings store hydration from localStorage before loading from backend
       const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
       await runStartupStep('Settings hydration', () => waitForSettingsHydration());
+      if (disposed) return;
 
       // Initialize settings (syncs with backend and configures providers)
       await runStartupStep(
@@ -264,10 +268,12 @@ const DesktopShell = () => {
         });
       }
 
+      if (disposed) return;
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
       await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
         notify: true,
       });
+      if (disposed) return;
 
       // Initialize Ollama health service for graceful degradation of local models
       if (isTauri) {
@@ -278,11 +284,13 @@ const DesktopShell = () => {
         });
       }
 
+      if (disposed) return;
       // Load custom instructions from backend (syncs with stored data)
       const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
       await runStartupStep('Custom instructions sync', async () => {
         await useCustomInstructionsStore.getState().loadFromBackend();
       });
+      if (disposed) return;
 
       // Sync access token to keyring if user is already authenticated
       if (isTauri) {
@@ -654,7 +662,7 @@ const DesktopShell = () => {
               <AlertTriangle className="h-4 w-4" />
               <span>Using cached account data. Subscription status may be outdated.</span>
             </div>
-            <button
+            <button type="button"
               onClick={() => {
                 setSubscriptionFetchFailed(false);
                 void useAccountStore
@@ -679,7 +687,7 @@ const DesktopShell = () => {
                     <p className="mb-4 text-lg font-semibold text-foreground">
                       Chat interface encountered an error
                     </p>
-                    <button
+                    <button type="button"
                       onClick={() => window.location.reload()}
                       className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/90"
                     >

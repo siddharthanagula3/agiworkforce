@@ -1736,7 +1736,10 @@ pub async fn save_api_key(
                         None,
                     )
                     .map_err(|e| {
-                        format!("Key stored but failed to activate {} provider: {}", provider, e)
+                        format!(
+                            "Key stored but failed to activate {} provider: {}",
+                            provider, e
+                        )
                     })?;
                 let mut router = llm_state.router.write().await;
                 router.set_provider(provider_enum, Box::new(direct));

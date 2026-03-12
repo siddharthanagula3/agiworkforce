@@ -5,6 +5,7 @@ use crate::core::agi::executors::{ExecutorContext, ExecutorRegistry};
 use crate::core::agi::outcome_tracker::OutcomeTracker;
 use crate::core::agi::planner::PlanStep;
 use crate::core::agi::process_reasoning::ProcessReasoning;
+use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::LLMRouter;
 use crate::data::cache::ToolResultCache;
 use crate::sys::security::ToolExecutionGuard;
@@ -12,7 +13,6 @@ use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use std::collections::HashMap;
-use crate::core::agi::reflection::ReflectionEngine;
 use std::sync::Arc;
 
 /// The AGI Executor handles tool execution with security validation,
@@ -532,12 +532,10 @@ impl AGIExecutor {
     ) -> Result<serde_json::Value> {
         match tool_name {
             // MCP tool calls are handled separately via the MCP client
-            tool if tool.starts_with("mcp__") => {
-                Err(anyhow!(
-                    "MCP tool '{}' should be executed via the MCP client, not the AGI executor",
-                    tool_name
-                ))
-            }
+            tool if tool.starts_with("mcp__") => Err(anyhow!(
+                "MCP tool '{}' should be executed via the MCP client, not the AGI executor",
+                tool_name
+            )),
 
             // Common file operation aliases — redirect to the registered FileExecutor
             "read_file" | "read" | "file_read" | "open_file" => {
@@ -613,9 +611,13 @@ impl AGIExecutor {
             }
 
             _ => {
-                tracing::warn!(
-                    "[Executor] Unknown tool '{}' - not found in registry or fallback handlers. \
-                    Session: {}",
+                // Bug #31 fix: Log at error level (not warn) so this configuration mismatch
+                // is impossible to miss. Tools registered in ToolRegistry but not in
+                // ExecutorRegistry silently fall through to here.
+                tracing::error!(
+                    "[Executor] Tool '{}' not found in ExecutorRegistry or fallback handlers. \
+                    This tool may be registered in ToolRegistry (tools/mod.rs) but lacks an \
+                    executor implementation. Session: {}",
                     tool_name,
                     session_id
                 );
@@ -725,23 +727,24 @@ impl AGIExecutor {
                     }
                 };
 
-                let outcome_tracker = match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
-                    Ok(ot) => ot,
-                    Err(e) => {
-                        tracing::error!("[Executor] Failed to create OutcomeTracker: {}", e);
-                        return crate::core::agi::ExecutionResult {
-                            plan_id,
-                            sandbox_id,
-                            success: false,
-                            steps_completed: 0,
-                            steps_failed: 1,
-                            output: serde_json::json!({}),
-                            error: Some(format!("Failed to create OutcomeTracker: {}", e)),
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
-                            cost: None,
-                        };
-                    }
-                };
+                let outcome_tracker =
+                    match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
+                        Ok(ot) => ot,
+                        Err(e) => {
+                            tracing::error!("[Executor] Failed to create OutcomeTracker: {}", e);
+                            return crate::core::agi::ExecutionResult {
+                                plan_id,
+                                sandbox_id,
+                                success: false,
+                                steps_completed: 0,
+                                steps_failed: 1,
+                                output: serde_json::json!({}),
+                                error: Some(format!("Failed to create OutcomeTracker: {}", e)),
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                                cost: None,
+                            };
+                        }
+                    };
 
                 let mut executor = match AGIExecutor::with_process_reasoning(
                     tool_registry,
@@ -933,7 +936,8 @@ impl AGIExecutor {
                                 }
 
                                 // Store the reflection for future use
-                                if let Err(store_err) = reflection.store_reflection(&insight).await {
+                                if let Err(store_err) = reflection.store_reflection(&insight).await
+                                {
                                     tracing::warn!(
                                         "[Executor] Failed to store reflection: {}",
                                         store_err

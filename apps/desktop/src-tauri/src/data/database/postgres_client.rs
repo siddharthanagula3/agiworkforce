@@ -53,9 +53,20 @@ impl PostgresClient {
 
         // Block dangerous keywords even within allowed statements (e.g., subqueries with mutations)
         let blocked_keywords = [
-            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE",
-            "GRANT", "REVOKE", "COPY", "PG_READ_FILE", "PG_WRITE_FILE",
-            "LO_IMPORT", "LO_EXPORT",
+            "DROP",
+            "TRUNCATE",
+            "DELETE",
+            "ALTER",
+            "CREATE",
+            "INSERT",
+            "UPDATE",
+            "GRANT",
+            "REVOKE",
+            "COPY",
+            "PG_READ_FILE",
+            "PG_WRITE_FILE",
+            "LO_IMPORT",
+            "LO_EXPORT",
         ];
         for keyword in &blocked_keywords {
             if sql_upper.contains(keyword) {
@@ -138,7 +149,11 @@ impl PostgresClient {
         // SECURITY: Validate SQL statement before execution
         Self::validate_query_sql(sql)?;
 
-        tracing::info!("[SECURITY][PostgreSQL] Executing query on '{}': {}", connection_id, sql);
+        tracing::info!(
+            "[SECURITY][PostgreSQL] Executing query on '{}': {}",
+            connection_id,
+            sql
+        );
 
         let pool = self.get_pool(connection_id).await?;
         let client = pool
@@ -214,7 +229,11 @@ impl PostgresClient {
             })?;
         }
 
-        tracing::info!("[SECURITY][PostgreSQL] Executing validated batch of {} queries on '{}'", queries.len(), connection_id);
+        tracing::info!(
+            "[SECURITY][PostgreSQL] Executing validated batch of {} queries on '{}'",
+            queries.len(),
+            connection_id
+        );
 
         let pool = self.get_pool(connection_id).await?;
         let mut client = pool

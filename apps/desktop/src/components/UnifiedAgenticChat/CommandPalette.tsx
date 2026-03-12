@@ -438,7 +438,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   const renderItem = (result: PaletteResult, flatIndex: number) => {
     const isSelected = flatIndex === selectedIndex;
     return (
-      <button
+      <button type="button"
         key={result.id}
         id={`palette-result-${flatIndex}`}
         onClick={() => handleSelect(result)}
@@ -533,7 +533,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 flatResults.length > 0 ? `palette-result-${selectedIndex}` : undefined
               }
             />
-            <button
+            <button type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
               aria-label="Close command palette"

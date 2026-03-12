@@ -127,7 +127,7 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
             size="xs"
             variant="ghost"
             onClick={() => {
-              navigator.clipboard.writeText(output);
+              void navigator.clipboard.writeText(output).catch(() => {});
               toast.success('Output copied to clipboard', {
                 icon: <Check className="h-4 w-4" />,
                 duration: 2000,

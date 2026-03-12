@@ -148,10 +148,12 @@ export function ToolCallCard({
   const timerStartRef = useRef<number>(startedAt ?? Date.now());
 
   useEffect(() => {
-    if (status !== 'running') return;
+    // BUG-315: Don't start interval when startedAt is undefined — the displayDuration
+    // logic won't show anything anyway, so avoid wasted ticks.
+    if (status !== 'running' || startedAt == null) return;
 
     // BUG-TCC-002: Reset the timer start whenever we enter 'running' state
-    timerStartRef.current = startedAt ?? Date.now();
+    timerStartRef.current = startedAt;
 
     const tick = () => setLiveElapsed(Date.now() - timerStartRef.current);
     tick();

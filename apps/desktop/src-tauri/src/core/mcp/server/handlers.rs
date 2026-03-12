@@ -84,11 +84,7 @@ fn handle_tools_call(request: &JsonRpcRequest) -> JsonRpcResponse {
     let params = match &request.params {
         Some(p) => p,
         None => {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                -32602,
-                "Missing params".to_string(),
-            )
+            return JsonRpcResponse::error(request.id.clone(), -32602, "Missing params".to_string())
         }
     };
 

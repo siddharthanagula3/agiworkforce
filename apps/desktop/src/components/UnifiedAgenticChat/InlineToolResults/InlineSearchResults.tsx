@@ -131,7 +131,7 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
         </div>
 
         {results.length > 3 && (
-          <button
+          <button type="button"
             onClick={() => setExpanded(!expanded)}
             className="text-blue-400 hover:text-blue-300 transition text-xs font-medium"
           >

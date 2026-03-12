@@ -5,6 +5,7 @@
  * Shows real-time progress for running tools and recent completions.
  */
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useUnifiedChatStore, type ToolStreamStateEntry } from '../../../stores/unifiedChatStore';
 import { ToolExecutionProgress } from './ToolExecutionProgress';
 
@@ -28,8 +29,12 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
   onCancelStream,
   onRetryStream,
 }) => {
-  const activeToolStreams = useUnifiedChatStore((state) => state.activeToolStreams);
-  const cancelToolExecution = useUnifiedChatStore((state) => state.cancelToolExecution);
+  const { activeToolStreams, cancelToolExecution } = useUnifiedChatStore(
+    useShallow((state) => ({
+      activeToolStreams: state.activeToolStreams,
+      cancelToolExecution: state.cancelToolExecution,
+    })),
+  );
 
   // Convert Map to array and filter
   const streams = React.useMemo(() => {
@@ -85,21 +90,29 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
 
 /**
  * Hook to get active tool streams count
+ * Returns a primitive (number), so no shallow comparison needed.
  */
 export function useActiveToolStreamsCount(): number {
   return useUnifiedChatStore((state) => {
-    return Array.from(state.activeToolStreams.values()).filter((s) => s.status === 'running')
-      .length;
+    let count = 0;
+    for (const s of state.activeToolStreams.values()) {
+      if (s.status === 'running') count++;
+    }
+    return count;
   });
 }
 
 /**
  * Hook to get all active tool streams
+ * Uses useShallow to avoid re-renders when the returned array is structurally equal.
  */
 export function useActiveToolStreams(): ToolStreamStateEntry[] {
-  return useUnifiedChatStore((state) => {
-    return Array.from(state.activeToolStreams.values()).filter((s) => s.status === 'running');
-  });
+  const activeToolStreams = useUnifiedChatStore(
+    useShallow((state) => {
+      return Array.from(state.activeToolStreams.values()).filter((s) => s.status === 'running');
+    }),
+  );
+  return activeToolStreams;
 }
 
 export default ActiveToolStreams;

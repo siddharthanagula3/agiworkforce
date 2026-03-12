@@ -20,7 +20,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   onChange,
   language: propLanguage,
   filePath,
-  rootPath = process.cwd?.() || '/',
+  rootPath = '/',
   height = '100%',
   theme = 'vs-dark',
   options = {},

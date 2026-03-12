@@ -1,5 +1,5 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ToolTimeline.tsx
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
 import { type ToolLabelEntry } from './ToolLabel';
@@ -40,10 +40,20 @@ interface EntryGroup {
 
 export function ToolTimeline({ entries, className }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [userForcedClosed, setUserForcedClosed] = useState(false);
   const hasRunning = entries.some((e) => e.status === 'running');
 
-  // Auto-expand while tools are running, but preserve user's manual expansion
-  const isOpen = hasRunning || isExpanded;
+  // Reset userForcedClosed when all tools finish so next batch auto-expands
+  const prevHasRunning = useRef(hasRunning);
+  useEffect(() => {
+    if (prevHasRunning.current && !hasRunning) {
+      setUserForcedClosed(false);
+    }
+    prevHasRunning.current = hasRunning;
+  }, [hasRunning]);
+
+  // Auto-expand while tools are running, but respect user's manual close
+  const isOpen = userForcedClosed ? false : hasRunning || isExpanded;
   const errorCount = entries.filter((e) => e.status === 'error').length;
 
   // Group consecutive entries that share the same parallelGroup value.
@@ -89,7 +99,17 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
       {/* Header — always visible */}
       <button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => {
+          if (isOpen) {
+            // User is collapsing — if tools are running, force closed
+            setUserForcedClosed(true);
+            setIsExpanded(false);
+          } else {
+            // User is expanding — clear forced close
+            setUserForcedClosed(false);
+            setIsExpanded(true);
+          }
+        }}
         aria-expanded={isOpen}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
       >

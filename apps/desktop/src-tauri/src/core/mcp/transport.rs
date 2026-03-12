@@ -115,8 +115,7 @@ fn build_augmented_path() -> String {
         let appdata = std::env::var("APPDATA").unwrap_or_default();
         let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
         let programfiles = std::env::var("ProgramFiles").unwrap_or_default();
-        let programfiles_x86 =
-            std::env::var("ProgramFiles(x86)").unwrap_or_default();
+        let programfiles_x86 = std::env::var("ProgramFiles(x86)").unwrap_or_default();
         let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
 
         // npm global bin (most common location for npx on Windows)
@@ -203,9 +202,7 @@ fn build_augmented_path() -> String {
                     let name_str = name.to_string_lossy();
                     if name_str.starts_with("node") {
                         let bin = format!("{}/bin", entry.path().display());
-                        if std::path::Path::new(&bin).is_dir()
-                            && !dirs.iter().any(|d| d == &bin)
-                        {
+                        if std::path::Path::new(&bin).is_dir() && !dirs.iter().any(|d| d == &bin) {
                             dirs.push(bin);
                         }
                     }
@@ -216,8 +213,7 @@ fn build_augmented_path() -> String {
         // Include nvm directories dynamically.
         // Honour $NVM_DIR if set; otherwise fall back to the conventional ~/.nvm location.
         let home = std::env::var("HOME").unwrap_or_default();
-        let nvm_base = std::env::var("NVM_DIR")
-            .unwrap_or_else(|_| format!("{}/.nvm", home));
+        let nvm_base = std::env::var("NVM_DIR").unwrap_or_else(|_| format!("{}/.nvm", home));
         let nvm_dir = format!("{}/versions/node", nvm_base);
         if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
             for entry in entries.flatten() {
@@ -252,10 +248,7 @@ fn is_absolute_command(command: &str) -> bool {
     {
         // Drive-letter path: e.g. C:\ or C:/
         let bytes = command.as_bytes();
-        if bytes.len() >= 3
-            && bytes[1] == b':'
-            && (bytes[2] == b'\\' || bytes[2] == b'/')
-        {
+        if bytes.len() >= 3 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/') {
             return true;
         }
         // UNC path: \\server\share
@@ -297,11 +290,14 @@ fn resolve_command_path(command: &str) -> String {
             continue;
         }
         for ext in &extensions {
-            let candidate = std::path::Path::new(dir)
-                .join(format!("{}{}", command, ext));
+            let candidate = std::path::Path::new(dir).join(format!("{}{}", command, ext));
             if candidate.is_file() {
                 let candidate_str = candidate.to_string_lossy().into_owned();
-                tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate_str);
+                tracing::debug!(
+                    "[MCP Transport] Resolved '{}' -> '{}'",
+                    command,
+                    candidate_str
+                );
                 return candidate_str;
             }
         }
@@ -318,12 +314,18 @@ fn resolve_command_path(command: &str) -> String {
 /// Allowlist of permitted MCP server executors.
 /// Only these binary names (not full paths) are allowed as MCP server commands.
 const ALLOWED_MCP_EXECUTORS: &[&str] = &[
-    "node", "node.exe",
-    "python", "python3", "python3.exe",
-    "npx", "npx.cmd",
+    "node",
+    "node.exe",
+    "python",
+    "python3",
+    "python3.exe",
+    "npx",
+    "npx.cmd",
     "uvx",
-    "deno", "deno.exe",
-    "bun", "bun.exe",
+    "deno",
+    "deno.exe",
+    "bun",
+    "bun.exe",
 ];
 
 fn validate_mcp_command(command: &str) -> McpResult<()> {
@@ -334,7 +336,10 @@ fn validate_mcp_command(command: &str) -> McpResult<()> {
         .unwrap_or(command);
 
     // Reject shell metacharacters in any argument
-    if command.chars().any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r')) {
+    if command
+        .chars()
+        .any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r'))
+    {
         return Err(McpError::InvalidConfig(format!(
             "MCP command contains forbidden characters: {command}"
         )));
@@ -361,7 +366,10 @@ impl StdioTransport {
 
         // Validate each arg for shell metacharacters
         for arg in args {
-            if arg.chars().any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r')) {
+            if arg
+                .chars()
+                .any(|c| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r'))
+            {
                 return Err(McpError::InvalidConfig(format!(
                     "MCP arg contains forbidden characters: {arg}"
                 )));

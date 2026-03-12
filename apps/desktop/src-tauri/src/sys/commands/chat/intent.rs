@@ -1,12 +1,5 @@
-//! Smart intent detection system — automatically determines user intent without explicit commands.
-
-use tracing::info;
-
 use super::types::{IntentResult, UserIntent};
-
-// ============================================================================
-// Pattern constants
-// ============================================================================
+use tracing::info;
 
 /// Stop patterns - user wants to halt current operation
 const STOP_PATTERNS: &[&str] = &[
@@ -30,7 +23,6 @@ const STOP_PATTERNS: &[&str] = &[
 
 /// Action verbs that indicate user wants something done
 const ACTION_VERBS: &[&str] = &[
-    // File operations
     "open",
     "close",
     "create",
@@ -46,7 +38,6 @@ const ACTION_VERBS: &[&str] = &[
     "modify",
     "write",
     "read",
-    // Communication
     "send",
     "email",
     "message",
@@ -56,7 +47,6 @@ const ACTION_VERBS: &[&str] = &[
     "share",
     "tweet",
     "slack",
-    // Browser/Web
     "browse",
     "search",
     "google",
@@ -70,7 +60,6 @@ const ACTION_VERBS: &[&str] = &[
     "login",
     "sign in",
     "logout",
-    // System
     "run",
     "execute",
     "launch",
@@ -80,7 +69,6 @@ const ACTION_VERBS: &[&str] = &[
     "update",
     "restart",
     "shutdown",
-    // Development
     "build",
     "compile",
     "deploy",
@@ -93,7 +81,6 @@ const ACTION_VERBS: &[&str] = &[
     "test",
     "debug",
     "refactor",
-    // Data
     "fetch",
     "get",
     "find",
@@ -105,7 +92,6 @@ const ACTION_VERBS: &[&str] = &[
     "convert",
     "generate",
     "summarize",
-    // Organization
     "schedule",
     "book",
     "reserve",
@@ -173,15 +159,10 @@ const CLARIFICATION_PATTERNS: &[&str] = &[
     "what else",
 ];
 
-// ============================================================================
-// Intent detection functions
-// ============================================================================
-
-/// Detect user intent with confidence scoring
+/// Detect user intent with confidence scoring.
 pub fn detect_user_intent(content: &str) -> IntentResult {
     let content_lower = content.to_lowercase().trim().to_string();
 
-    // Early return for empty content
     if content_lower.is_empty() {
         return IntentResult {
             intent: UserIntent::Conversation,
@@ -191,7 +172,6 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
         };
     }
 
-    // Check for stop intent first (highest priority)
     if matches_stop_intent(&content_lower) {
         return IntentResult {
             intent: UserIntent::Stop,
@@ -201,7 +181,6 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
         };
     }
 
-    // Check for clarification patterns
     if matches_clarification(&content_lower) {
         return IntentResult {
             intent: UserIntent::Clarification,
@@ -211,12 +190,10 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
         };
     }
 
-    // Detect action verbs
     let detected_actions = detect_action_verbs(&content_lower);
     let action_score = calculate_action_score(&content_lower, &detected_actions);
     let conversation_score = calculate_conversation_score(&content_lower);
 
-    // Determine intent based on scores
     if action_score > conversation_score && action_score > 0.3 {
         IntentResult {
             intent: UserIntent::ActionRequest,
@@ -234,9 +211,8 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
     }
 }
 
-/// Check if message matches stop intent
-pub(crate) fn matches_stop_intent(content: &str) -> bool {
-    // Check for exact matches or patterns at start
+/// Check if message matches stop intent.
+pub(super) fn matches_stop_intent(content: &str) -> bool {
     for pattern in STOP_PATTERNS {
         if content == *pattern
             || content.starts_with(&format!("{} ", pattern))
@@ -249,20 +225,17 @@ pub(crate) fn matches_stop_intent(content: &str) -> bool {
     false
 }
 
-/// Check if message is a clarification question
 fn matches_clarification(content: &str) -> bool {
     CLARIFICATION_PATTERNS
         .iter()
         .any(|pattern| content.contains(pattern))
 }
 
-/// Detect action verbs in the content
 fn detect_action_verbs(content: &str) -> Vec<String> {
     let words: Vec<&str> = content.split_whitespace().collect();
     let mut detected = Vec::new();
 
     for verb in ACTION_VERBS {
-        // Check if verb appears at start or after common prefixes
         if content.starts_with(verb)
             || content.starts_with(&format!("please {}", verb))
             || content.starts_with(&format!("can you {}", verb))
@@ -279,7 +252,6 @@ fn detect_action_verbs(content: &str) -> Vec<String> {
         }
     }
 
-    // Also check for imperative form (verb at start)
     if let Some(first_word) = words.first() {
         if ACTION_VERBS.contains(first_word) && !detected.contains(&first_word.to_string()) {
             detected.push(first_word.to_string());
@@ -289,20 +261,16 @@ fn detect_action_verbs(content: &str) -> Vec<String> {
     detected
 }
 
-/// Calculate action intent score
 fn calculate_action_score(content: &str, detected_verbs: &[String]) -> f32 {
     let mut score = 0.0;
 
-    // Base score from detected verbs
     score += (detected_verbs.len() as f32) * 0.3;
 
-    // Boost for imperative form (starts with verb)
     let first_word = content.split_whitespace().next().unwrap_or("");
     if ACTION_VERBS.contains(&first_word) {
         score += 0.4;
     }
 
-    // Boost for polite requests
     if content.starts_with("please")
         || content.starts_with("can you")
         || content.starts_with("could you")
@@ -310,12 +278,10 @@ fn calculate_action_score(content: &str, detected_verbs: &[String]) -> f32 {
         score += 0.2;
     }
 
-    // Boost for desire expressions
     if content.contains("i want") || content.contains("i need") || content.contains("i'd like") {
         score += 0.25;
     }
 
-    // Boost for multi-step indicators
     let multi_step_patterns = ["and then", "after that", "then", "followed by", "next"];
     for pattern in multi_step_patterns {
         if content.contains(pattern) {
@@ -324,7 +290,6 @@ fn calculate_action_score(content: &str, detected_verbs: &[String]) -> f32 {
         }
     }
 
-    // Boost for specific targets
     if content.contains("the file")
         || content.contains("this file")
         || content.contains("the email")
@@ -340,11 +305,9 @@ fn calculate_action_score(content: &str, detected_verbs: &[String]) -> f32 {
     score.min(1.0)
 }
 
-/// Calculate conversation intent score
 fn calculate_conversation_score(content: &str) -> f32 {
-    let mut score: f32 = 0.3; // Base score for any message
+    let mut score: f32 = 0.3;
 
-    // Boost for question patterns
     for pattern in CONVERSATION_PATTERNS {
         if content.contains(pattern) {
             score += 0.3;
@@ -352,12 +315,10 @@ fn calculate_conversation_score(content: &str) -> f32 {
         }
     }
 
-    // Boost for question marks
     if content.contains('?') {
         score += 0.2;
     }
 
-    // Boost for discussion starters
     if content.starts_with("i think")
         || content.starts_with("in my opinion")
         || content.starts_with("it seems")
@@ -370,7 +331,7 @@ fn calculate_conversation_score(content: &str) -> f32 {
 }
 
 /// Detect if the user is asking about what is visible on their screen.
-pub(crate) fn should_attach_screen_context(content: &str) -> bool {
+pub(super) fn should_attach_screen_context(content: &str) -> bool {
     let content_lower = content.to_lowercase();
     let patterns = [
         "what is on my screen",
@@ -388,19 +349,13 @@ pub(crate) fn should_attach_screen_context(content: &str) -> bool {
     patterns.iter().any(|p| content_lower.contains(p))
 }
 
-/// Legacy function for backward compatibility
-/// Returns true if the message has action intent
-pub(crate) fn detect_agentic_intent(content: &str) -> bool {
+/// Legacy function for backward compatibility.
+/// Returns true if the message has action intent.
+pub(super) fn detect_agentic_intent(content: &str) -> bool {
     let result = detect_user_intent(content);
     result.intent == UserIntent::ActionRequest && result.should_auto_execute
 }
 
-// ============================================================================
-// Tauri command handlers
-// ============================================================================
-
-/// Detect intent from a user message
-/// Returns the intent type, confidence score, and detected action verbs
 #[tauri::command]
 pub fn chat_detect_intent(content: String) -> IntentResult {
     info!(
@@ -415,8 +370,6 @@ pub fn chat_detect_intent(content: String) -> IntentResult {
     result
 }
 
-/// Quick check if message is a stop command
-/// Returns true if user wants to stop/cancel current operation
 #[tauri::command]
 pub fn chat_is_stop_command(content: String) -> bool {
     let content_lower = content.to_lowercase().trim().to_string();
@@ -425,4 +378,36 @@ pub fn chat_is_stop_command(content: String) -> bool {
         info!("[Chat] Stop command detected: {}", content);
     }
     is_stop
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_intent_has_priority() {
+        let result = detect_user_intent("stop that");
+        assert_eq!(result.intent, UserIntent::Stop);
+        assert!(result.should_auto_execute);
+    }
+
+    #[test]
+    fn action_request_detects_verb_and_auto_executes() {
+        let result = detect_user_intent("please open the file and then summarize it");
+        assert_eq!(result.intent, UserIntent::ActionRequest);
+        assert!(result.should_auto_execute);
+        assert!(result.action_verbs.iter().any(|verb| verb == "open"));
+        assert!(result.action_verbs.iter().any(|verb| verb == "summarize"));
+    }
+
+    #[test]
+    fn screen_context_detection_matches_screen_queries() {
+        assert!(should_attach_screen_context(
+            "what is on my screen right now?"
+        ));
+        assert!(should_attach_screen_context(
+            "take a screenshot and explain"
+        ));
+        assert!(!should_attach_screen_context("open the README"));
+    }
 }

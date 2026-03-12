@@ -88,7 +88,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         metadata: {
           platform: 'desktop',
           version: '5.0.0',
-          user_agent: navigator.userAgent,
+          userAgent: navigator.userAgent,
         },
         logs: logsText,
       });

@@ -200,11 +200,9 @@ pub async fn grep_search(
         pattern, root, include_pattern, ci
     );
 
-    let result = tokio::task::spawn_blocking(move || {
-        grep_blocking(&root, &re, file_glob.as_ref())
-    })
-    .await
-    .map_err(|e| format!("grep_search task panicked: {}", e))?;
+    let result = tokio::task::spawn_blocking(move || grep_blocking(&root, &re, file_glob.as_ref()))
+        .await
+        .map_err(|e| format!("grep_search task panicked: {}", e))?;
 
     result
 }
@@ -315,8 +313,8 @@ pub async fn glob_search(
     let limit = limit.unwrap_or(200).min(MAX_GLOB_MATCHES);
 
     // Validate glob pattern upfront.
-    let _ = Pattern::new(&pattern)
-        .map_err(|e| format!("Invalid glob pattern '{}': {}", pattern, e))?;
+    let _ =
+        Pattern::new(&pattern).map_err(|e| format!("Invalid glob pattern '{}': {}", pattern, e))?;
 
     info!(
         "[glob_search] pattern={:?} root={:?} limit={}",
@@ -330,11 +328,7 @@ pub async fn glob_search(
     result
 }
 
-fn glob_blocking(
-    root: &Path,
-    pattern: &str,
-    limit: usize,
-) -> Result<GlobSearchResult, String> {
+fn glob_blocking(root: &Path, pattern: &str, limit: usize) -> Result<GlobSearchResult, String> {
     let pat = Pattern::new(pattern).map_err(|e| format!("Pattern error: {}", e))?;
     let mut matches: Vec<(GlobMatch, std::time::SystemTime)> = Vec::new();
     let mut truncated = false;
@@ -640,11 +634,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
                 FormatterInfo {
                     language: "typescript".to_string(),
                     formatter: "prettier".to_string(),
-                    command: vec![
-                        prettier_bin,
-                        "--write".to_string(),
-                        "$FILE".to_string(),
-                    ],
+                    command: vec![prettier_bin, "--write".to_string(), "$FILE".to_string()],
                     available: true,
                 }
             } else {
@@ -688,11 +678,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
         "go" => FormatterInfo {
             language: "go".to_string(),
             formatter: "gofmt".to_string(),
-            command: vec![
-                "gofmt".to_string(),
-                "-w".to_string(),
-                "$FILE".to_string(),
-            ],
+            command: vec!["gofmt".to_string(), "-w".to_string(), "$FILE".to_string()],
             available: which_available("gofmt"),
         },
 
@@ -724,11 +710,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
         "sh" | "bash" | "zsh" | "fish" => FormatterInfo {
             language: "shell".to_string(),
             formatter: "shfmt".to_string(),
-            command: vec![
-                "shfmt".to_string(),
-                "-w".to_string(),
-                "$FILE".to_string(),
-            ],
+            command: vec!["shfmt".to_string(), "-w".to_string(), "$FILE".to_string()],
             available: which_available("shfmt"),
         },
 
@@ -745,11 +727,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
                 FormatterInfo {
                     language: "json".to_string(),
                     formatter: "prettier".to_string(),
-                    command: vec![
-                        prettier_bin,
-                        "--write".to_string(),
-                        "$FILE".to_string(),
-                    ],
+                    command: vec![prettier_bin, "--write".to_string(), "$FILE".to_string()],
                     available: true,
                 }
             } else {
@@ -770,11 +748,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
         "toml" => FormatterInfo {
             language: "toml".to_string(),
             formatter: "taplo".to_string(),
-            command: vec![
-                "taplo".to_string(),
-                "fmt".to_string(),
-                "$FILE".to_string(),
-            ],
+            command: vec!["taplo".to_string(), "fmt".to_string(), "$FILE".to_string()],
             available: which_available("taplo"),
         },
 
@@ -790,11 +764,7 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
             FormatterInfo {
                 language: ext.to_string(),
                 formatter: "prettier".to_string(),
-                command: vec![
-                    prettier_bin,
-                    "--write".to_string(),
-                    "$FILE".to_string(),
-                ],
+                command: vec![prettier_bin, "--write".to_string(), "$FILE".to_string()],
                 available: which_available("prettier") || has_prettier,
             }
         }

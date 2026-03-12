@@ -166,6 +166,7 @@ export interface ApprovalRequest {
   actionId?: string;
   scope?: ApprovalScope;
   actionSignature?: string;
+  messageId?: string;
 }
 
 /**
@@ -204,6 +205,60 @@ const ACTION_LOG_LIMIT = 500; // actionLog entries (newest-first via unshift + s
 const PENDING_APPROVALS_LIMIT = 50; // pendingApprovals queue depth
 
 const STORAGE_VERSION = 1;
+
+function upsertApprovalAuditEntry(
+  actionLog: ActionLogEntry[],
+  approval: ApprovalRequest,
+  status: ActionLogStatus,
+  extras?: Partial<ActionLogEntry>,
+): void {
+  const now = new Date();
+  const existingIndex = actionLog.findIndex(
+    (entry) =>
+      entry.id === approval.id ||
+      entry.actionId === approval.id ||
+      (approval.actionId !== undefined && entry.actionId === approval.actionId),
+  );
+
+  const baseMetadata = {
+    approvalId: approval.id,
+    approvalType: approval.type,
+    riskLevel: approval.riskLevel,
+    details: approval.details,
+    ...(approval.messageId ? { messageId: approval.messageId } : {}),
+    ...(approval.workflowHash ? { workflowHash: approval.workflowHash } : {}),
+    ...(approval.actionSignature ? { actionSignature: approval.actionSignature } : {}),
+  };
+
+  const nextEntry: ActionLogEntry = {
+    ...(existingIndex !== -1 ? actionLog[existingIndex]! : { id: approval.id, createdAt: now }),
+    actionId: approval.actionId ?? approval.id,
+    workflowHash: approval.workflowHash,
+    type: 'approval',
+    title: approval.description,
+    description: approval.impact ?? approval.scope?.description,
+    status,
+    requiresApproval: true,
+    scope: approval.scope,
+    metadata: {
+      ...(existingIndex !== -1 ? actionLog[existingIndex]!.metadata : {}),
+      ...baseMetadata,
+      ...(extras?.metadata ?? {}),
+    },
+    updatedAt: now,
+    ...extras,
+  };
+
+  if (existingIndex !== -1) {
+    actionLog[existingIndex] = nextEntry;
+    return;
+  }
+
+  actionLog.unshift(nextEntry);
+  if (actionLog.length > ACTION_LOG_LIMIT) {
+    actionLog.splice(ACTION_LOG_LIMIT);
+  }
+}
 
 export interface ToolState {
   // Operations
@@ -535,6 +590,8 @@ export const useToolStore = create<ToolState>()(
                     state.pendingApprovals = state.pendingApprovals.slice(-PENDING_APPROVALS_LIMIT);
                   }
                 }
+
+                upsertApprovalAuditEntry(state.actionLog, normalized, 'blocked');
               },
               undefined,
               'tool/addApprovalRequest',
@@ -545,6 +602,10 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
+                  const approval = state.pendingApprovals[index]!;
+                  upsertApprovalAuditEntry(state.actionLog, approval, 'success', {
+                    result: 'Approved by user',
+                  });
                   // Remove directly - no need to update status on an item being removed
                   state.pendingApprovals.splice(index, 1);
                 }
@@ -558,10 +619,14 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
+                  const approval = state.pendingApprovals[index]!;
                   // Record rejection details before removing (preserves audit trail)
-                  state.pendingApprovals[index]!.status = 'rejected';
-                  state.pendingApprovals[index]!.rejectedAt = new Date();
-                  if (reason) state.pendingApprovals[index]!.rejectionReason = reason;
+                  approval.status = 'rejected';
+                  approval.rejectedAt = new Date();
+                  if (reason) approval.rejectionReason = reason;
+                  upsertApprovalAuditEntry(state.actionLog, approval, 'failed', {
+                    error: reason ?? 'Rejected by user',
+                  });
                   state.pendingApprovals.splice(index, 1);
                 }
               },
@@ -927,6 +992,23 @@ function getExistingToolTimelineEntry(
     .toolTimelineByMessage[messageId]?.find((entry) => entry.id === toolId);
 }
 
+/** Decode b64-encoded segments in MCP tool names (e.g. b64_YXBpZnk → apify) */
+function decodeB64ToolName(name: string): string {
+  return name
+    .split('__')
+    .map((seg) => {
+      if (seg.startsWith('b64_')) {
+        try {
+          return atob(seg.slice(4));
+        } catch {
+          return seg;
+        }
+      }
+      return seg;
+    })
+    .join('__');
+}
+
 function resolveToolLabel(payload: ToolEventPayload): {
   displayName: string;
   displayArgs: string;
@@ -949,8 +1031,9 @@ function resolveToolLabel(payload: ToolEventPayload): {
       ? activeStream.parameters['displayArgs']
       : '';
 
+  const rawName = payload.display_name ?? payload.tool_name ?? streamDisplayName ?? 'Tool';
   return {
-    displayName: payload.display_name ?? payload.tool_name ?? streamDisplayName ?? 'Tool',
+    displayName: rawName.includes('b64_') ? decodeB64ToolName(rawName) : rawName,
     displayArgs: payload.display_args ?? streamDisplayArgs,
   };
 }
@@ -979,10 +1062,10 @@ export async function initializeToolEventListener(): Promise<void> {
       const { displayName, displayArgs } = resolveToolLabel(payload);
 
       if (payload.type === 'started') {
-        // Update tool stream in toolStore
+        // Update tool stream in toolStore — use decoded display name, not raw MCP b64 name
         useToolStore.getState().updateToolStream(toolId, {
           tool_id: toolId,
-          tool_name: payload.tool_name ?? displayName,
+          tool_name: displayName,
           status: 'running',
           progress: 0,
           startedAt: new Date(),

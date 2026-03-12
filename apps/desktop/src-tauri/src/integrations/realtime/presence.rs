@@ -44,6 +44,19 @@ pub struct PresenceManager {
 
 impl PresenceManager {
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
+        // Ensure the user_presence table exists before any reads/writes
+        if let Ok(conn) = db.try_lock() {
+            let _ = conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS user_presence (
+                    user_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    last_seen INTEGER NOT NULL,
+                    current_activity TEXT,
+                    updated_at INTEGER NOT NULL
+                )",
+            );
+        }
+
         Self {
             db,
             online_users: Arc::new(Mutex::new(HashMap::new())),

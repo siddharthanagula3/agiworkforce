@@ -63,6 +63,7 @@ export function SpreadsheetArtifact({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [data, artifact.title]);
 
   const handleCellClick = (r: number, c: string, val: string | number) => {

@@ -72,6 +72,9 @@ impl SyncQueue {
         Ok(queue)
     }
 
+    /// Bug #231 fix: Create both tables at initialization time so that
+    /// `store_remote_update` and `get_pending_remote_updates` don't need to
+    /// run CREATE TABLE on every call.
     fn init_database(&self) -> Result<()> {
         let conn = self.conn.lock();
 
@@ -99,6 +102,23 @@ impl SyncQueue {
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entity_type, entity_id)",
+            [],
+        )?;
+
+        // Also create received_updates table at init (previously created lazily)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS received_updates (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                data TEXT,
+                timestamp TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                applied BOOLEAN DEFAULT 0,
+                applied_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
             [],
         )?;
 
@@ -286,23 +306,7 @@ impl SyncQueue {
     ) -> Result<String> {
         let conn = self.conn.lock();
 
-        // Ensure the received_updates table exists
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS received_updates (
-                id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                data TEXT,
-                timestamp TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                applied BOOLEAN DEFAULT 0,
-                applied_at DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-            [],
-        )?;
-
+        // Table is created in init_database()
         let id = uuid::Uuid::new_v4().to_string();
         conn.execute(
             "INSERT OR REPLACE INTO received_updates
@@ -338,23 +342,7 @@ impl SyncQueue {
     pub fn get_pending_remote_updates(&self, limit: usize) -> Result<Vec<SyncQueueItem>> {
         let conn = self.conn.lock();
 
-        // First ensure table exists
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS received_updates (
-                id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                data TEXT,
-                timestamp TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                applied BOOLEAN DEFAULT 0,
-                applied_at DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-            [],
-        )?;
-
+        // Table is created in init_database()
         let mut stmt = conn.prepare(
             "SELECT id, entity_type, entity_id, action, data, timestamp, 0 as retry_count, applied, NULL as error
              FROM received_updates

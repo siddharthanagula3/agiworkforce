@@ -56,7 +56,7 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
               <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 Command
               </span>
-              <button
+              <button type="button"
                 onClick={handleCopyCommand}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                 title="Copy command"
@@ -94,7 +94,7 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
                   <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                     Output
                   </span>
-                  <button
+                  <button type="button"
                     onClick={() => handleCopyOutput(terminalContent.stdout!)}
                     className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                     title="Copy output"
@@ -117,7 +117,7 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
                   <span className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider">
                     Error Output
                   </span>
-                  <button
+                  <button type="button"
                     onClick={() => handleCopyOutput(terminalContent.stderr!)}
                     className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors text-red-600 dark:text-red-400"
                     title="Copy error output"

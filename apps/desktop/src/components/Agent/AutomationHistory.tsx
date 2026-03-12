@@ -194,7 +194,7 @@ export function AutomationHistory({ className }: AutomationHistoryProps) {
             return (
               <div key={run.id} className={cn('group', isActive && 'bg-primary/5')}>
                 {/* Run Header */}
-                <button
+                <button type="button"
                   onClick={() => toggleExpanded(run.id)}
                   className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors text-left"
                 >

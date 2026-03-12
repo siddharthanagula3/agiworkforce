@@ -111,7 +111,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
         <div className="text-red-500">
           <p className="text-lg font-semibold">Error loading metrics</p>
           <p className="text-sm">{error}</p>
-          <button
+          <button type="button"
             onClick={loadStats}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
@@ -136,7 +136,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
       {}
       <div className="flex gap-2">
         {TIME_RANGE_OPTIONS.map((r) => (
-          <button
+          <button type="button"
             key={r}
             onClick={() => setRange(r)}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${

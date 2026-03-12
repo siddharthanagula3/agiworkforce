@@ -134,7 +134,7 @@ export function DocumentGenerator({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Generate Document</h3>
           {onClose && (
-            <button
+            <button type="button"
               onClick={onClose}
               className="text-muted-foreground hover:text-foreground text-xs transition-colors"
             >
@@ -145,7 +145,7 @@ export function DocumentGenerator({
 
         <div className="flex gap-1 mt-3">
           {FORMAT_TABS.map((tab) => (
-            <button
+            <button type="button"
               key={tab.id}
               onClick={() => {
                 setFormat(tab.id);
@@ -200,7 +200,7 @@ export function DocumentGenerator({
               <label className="block text-xs text-muted-foreground mb-1">Page Size</label>
               <div className="flex gap-1">
                 {PAGE_SIZE_OPTIONS.map((opt) => (
-                  <button
+                  <button type="button"
                     key={opt.value}
                     onClick={() => setPageSize(opt.value)}
                     className={cn(
@@ -216,7 +216,7 @@ export function DocumentGenerator({
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <button
+              <button type="button"
                 onClick={() => setIncludeCover(!includeCover)}
                 className={cn(
                   'w-8 h-5 rounded-full transition-colors relative',
