@@ -298,7 +298,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                   {session.title}
                 </span>
 
-                <button
+                <button type="button"
                   onClick={(e) => handleCloseSession(session.id, e)}
                   className={cn(
                     'text-muted-foreground transition-colors hover:text-foreground',

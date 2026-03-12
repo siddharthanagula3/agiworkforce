@@ -332,9 +332,11 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             goal.success_criteria.join(", ")
         );
 
+        // Use Auto strategy so the router picks the best available cheap/fast model
+        // instead of hardcoding a specific model that may not be configured.
         let preferences = RouterPreferences {
-            provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some("claude-haiku-4-5".to_string()),
+            provider: None,
+            model: None,
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -348,7 +350,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-haiku-4-5".to_string(),
+            model: String::new(),
             temperature: Some(0.1),
             max_tokens: Some(50),
             stream: false,

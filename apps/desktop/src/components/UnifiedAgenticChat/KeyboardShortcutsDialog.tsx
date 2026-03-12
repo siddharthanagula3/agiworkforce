@@ -100,7 +100,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                   Keyboard Shortcuts
                 </h2>
               </div>
-              <button
+              <button type="button"
                 onClick={onClose}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >

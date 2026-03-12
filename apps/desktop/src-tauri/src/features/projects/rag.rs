@@ -129,7 +129,13 @@ impl RAGEngine {
         let mut start = 0;
 
         while start < content.len() {
-            let end = std::cmp::min(start + self.chunking_config.chunk_size, content.len());
+            let mut end = std::cmp::min(start + self.chunking_config.chunk_size, content.len());
+
+            // Ensure we don't slice in the middle of a multi-byte UTF-8 character
+            while end < content.len() && !content.is_char_boundary(end) {
+                end += 1;
+            }
+
             let chunk_content = &content[start..end];
 
             if chunk_content.len() >= self.chunking_config.min_chunk_size {
@@ -137,7 +143,15 @@ impl RAGEngine {
                 chunk_index += 1;
             }
 
-            start = end - self.chunking_config.chunk_overlap;
+            let overlap = self.chunking_config.chunk_overlap;
+            if end <= overlap {
+                break;
+            }
+            start = end - overlap;
+            // Ensure overlap start is also on a char boundary
+            while start > 0 && !content.is_char_boundary(start) {
+                start -= 1;
+            }
             if start >= content.len() {
                 break;
             }
@@ -286,7 +300,7 @@ impl RAGEngine {
         top_k: usize,
     ) -> Vec<RAGResult> {
         let semantic_results =
-            self.find_similar_chunks(query_embedding, semantic_chunks, top_k * 2);
+            self.find_similar_chunks(query_embedding, semantic_chunks.clone(), top_k * 2);
 
         let mut final_results: Vec<RAGResult> = semantic_results
             .into_iter()
@@ -299,8 +313,18 @@ impl RAGEngine {
             .collect();
 
         if final_results.len() < top_k {
-            let mut additional =
-                self.find_similar_chunks(query_embedding, vec![], top_k - final_results.len());
+            // Use the full semantic chunks for the second pass (not an empty vec)
+            let existing_ids: std::collections::HashSet<String> =
+                final_results.iter().map(|r| r.chunk_id.clone()).collect();
+            let remaining_chunks: Vec<KnowledgeChunk> = semantic_chunks
+                .into_iter()
+                .filter(|c| !existing_ids.contains(&c.id))
+                .collect();
+            let mut additional = self.find_similar_chunks(
+                query_embedding,
+                remaining_chunks,
+                top_k - final_results.len(),
+            );
             final_results.append(&mut additional);
         }
 

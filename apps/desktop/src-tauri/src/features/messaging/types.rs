@@ -1,11 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Bug #223 fix: Added Discord, Telegram, Signal variants to match
+/// the Platform enum in channel.rs which has all six platforms.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessagingPlatform {
     Slack,
     WhatsApp,
     Teams,
+    Discord,
+    Telegram,
+    Signal,
 }
 
 impl MessagingPlatform {
@@ -14,6 +19,9 @@ impl MessagingPlatform {
             MessagingPlatform::Slack => "slack",
             MessagingPlatform::WhatsApp => "whatsapp",
             MessagingPlatform::Teams => "teams",
+            MessagingPlatform::Discord => "discord",
+            MessagingPlatform::Telegram => "telegram",
+            MessagingPlatform::Signal => "signal",
         }
     }
 
@@ -22,6 +30,9 @@ impl MessagingPlatform {
             "slack" => Some(MessagingPlatform::Slack),
             "whatsapp" => Some(MessagingPlatform::WhatsApp),
             "teams" => Some(MessagingPlatform::Teams),
+            "discord" => Some(MessagingPlatform::Discord),
+            "telegram" => Some(MessagingPlatform::Telegram),
+            "signal" => Some(MessagingPlatform::Signal),
             _ => None,
         }
     }
@@ -217,6 +228,16 @@ impl MessagingRouter {
                     platform: MessagingPlatform::Teams,
                 })
             }
+            platform @ (MessagingPlatform::Discord
+            | MessagingPlatform::Telegram
+            | MessagingPlatform::Signal) => Err(MessagingError {
+                code: "NOT_SUPPORTED".to_string(),
+                message: format!(
+                    "{} messaging not yet supported via MessagingRouter",
+                    platform.as_str()
+                ),
+                platform,
+            }),
         }
     }
 
@@ -288,12 +309,24 @@ impl MessagingRouter {
                         sender_id: msg.from_user_id.clone(),
                         sender_name: msg.from_user_name.clone(),
                         text: msg.body,
-                        timestamp: msg.created_at,
+                        timestamp: chrono::DateTime::parse_from_rfc3339(&msg.created_at)
+                            .map(|dt| dt.timestamp())
+                            .unwrap_or(0),
                         attachments: vec![],
                         metadata: HashMap::new(),
                     })
                     .collect())
             }
+            platform @ (MessagingPlatform::Discord
+            | MessagingPlatform::Telegram
+            | MessagingPlatform::Signal) => Err(MessagingError {
+                code: "NOT_SUPPORTED".to_string(),
+                message: format!(
+                    "{} message history not yet supported via MessagingRouter",
+                    platform.as_str()
+                ),
+                platform,
+            }),
         }
     }
 }

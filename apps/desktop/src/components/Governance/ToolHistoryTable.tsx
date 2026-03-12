@@ -59,8 +59,10 @@ function exportToCSV(entries: ActionLogEntry[]): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = `tool-history-${Date.now()}.csv`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 type StatusFilter = 'all' | 'success' | 'failed' | 'running' | 'pending' | 'blocked';
@@ -120,7 +122,7 @@ export const ToolHistoryTable: React.FC<ToolHistoryTableProps> = ({ className })
             className="w-full rounded-lg border border-gray-700 bg-gray-900 pl-8 pr-8 py-1.5 text-xs text-gray-200 placeholder:text-gray-600 focus:border-gray-600 focus:outline-none"
           />
           {searchTerm && (
-            <button
+            <button type="button"
               onClick={() => setSearchTerm('')}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
             >
@@ -134,7 +136,7 @@ export const ToolHistoryTable: React.FC<ToolHistoryTableProps> = ({ className })
           <Filter size={12} className="text-gray-500" />
           {(['all', 'success', 'failed', 'running', 'pending', 'blocked'] as StatusFilter[]).map(
             (status) => (
-              <button
+              <button type="button"
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={cn(

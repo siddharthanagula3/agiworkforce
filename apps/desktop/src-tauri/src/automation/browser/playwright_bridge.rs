@@ -138,12 +138,26 @@ impl PlaywrightBridge {
 
         tracing::info!("Starting Playwright server on port {}", self.config.ws_port);
 
+        // Platform-appropriate stub command until real Playwright integration
+        #[cfg(target_os = "windows")]
         let child = Command::new("cmd")
-            .args([
-                "/C",
-                "echo",
-                "Playwright server stub - integrate with real Playwright in production",
-            ])
+            .args(["/C", "echo", "Playwright server stub"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| Error::Other(format!("Failed to start Playwright server: {}", e)))?;
+
+        #[cfg(target_os = "macos")]
+        let child = Command::new("echo")
+            .arg("Playwright server stub")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| Error::Other(format!("Failed to start Playwright server: {}", e)))?;
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let child = Command::new("echo")
+            .arg("Playwright server stub")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -266,7 +280,44 @@ impl PlaywrightBridge {
             args.push(format!("--proxy-server={}", proxy));
         }
 
-        args.extend(options.args.clone());
+        // Sanitize user-provided browser args: only allow known-safe flags to prevent
+        // arbitrary command injection via malicious args (e.g., --remote-debugging-pipe,
+        // --disable-web-security, --load-extension, etc.)
+        let allowed_prefixes: &[&str] = &[
+            "--window-size=",
+            "--window-position=",
+            "--disable-extensions",
+            "--disable-gpu",
+            "--disable-software-rasterizer",
+            "--disable-dev-shm-usage",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-sync",
+            "--disable-translate",
+            "--disable-popup-blocking",
+            "--no-sandbox",
+            "--mute-audio",
+            "--incognito",
+            "--start-maximized",
+            "--start-fullscreen",
+            "--lang=",
+            "--force-device-scale-factor=",
+            "--auto-open-devtools-for-tabs",
+        ];
+
+        for arg in &options.args {
+            let is_allowed = allowed_prefixes
+                .iter()
+                .any(|prefix| arg.starts_with(prefix));
+            if is_allowed {
+                args.push(arg.clone());
+            } else {
+                tracing::warn!(
+                    "Rejected disallowed browser argument: '{}'. Only whitelisted flags are permitted.",
+                    arg
+                );
+            }
+        }
 
         let exe = match browser_type {
             BrowserType::Chromium => {
@@ -328,9 +379,11 @@ impl PlaywrightBridge {
                 Ok(())
             }
             Err(e) => {
-                tracing::warn!("Failed to connect to browser: {}", e);
-
-                Ok(())
+                tracing::error!("Failed to connect to browser: {}", e);
+                Err(Error::Other(format!(
+                    "Failed to connect to browser at {}: {}",
+                    ws_endpoint, e
+                )))
             }
         }
     }

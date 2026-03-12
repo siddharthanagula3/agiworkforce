@@ -506,8 +506,11 @@ impl OneDriveClient {
                 .await
                 .map_err(|e| Error::Other(format!("OneDrive chunk upload failed: {}", e)))?;
 
-            if !(response.status().is_success() || response.status() == 202) {
-                let status = response.status();
+            let status = response.status();
+
+            // Bug #229 fix: 202 Accepted is an intermediate response (more chunks needed).
+            // Only 200 OK or 201 Created indicate upload completion.
+            if !(status.is_success() || status == 202) {
                 let body = response
                     .text()
                     .await
@@ -520,7 +523,8 @@ impl OneDriveClient {
 
             offset += read as u64;
 
-            if response.status().is_success() && offset >= total_size {
+            // Check for 200 OK or 201 Created (completion responses)
+            if (status == 200 || status == 201) && offset >= total_size {
                 let payload: DriveItem = response.json().await.map_err(|e| {
                     Error::Other(format!("Failed to parse final upload response: {}", e))
                 })?;

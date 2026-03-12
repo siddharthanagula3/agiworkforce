@@ -279,7 +279,10 @@ impl ResultAggregator {
 
         if successful_outputs.len() == 1 {
             // Safe: we just confirmed len() == 1
-            return successful_outputs.into_iter().next().unwrap_or(serde_json::Value::Null);
+            return successful_outputs
+                .into_iter()
+                .next()
+                .unwrap_or(serde_json::Value::Null);
         }
 
         // If all outputs are objects, merge them

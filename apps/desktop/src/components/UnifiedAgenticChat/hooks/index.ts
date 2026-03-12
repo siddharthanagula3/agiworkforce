@@ -10,9 +10,6 @@ export type { UseAttachmentsOptions, UseAttachmentsReturn } from './useAttachmen
 export { useDragAndDrop } from './useDragAndDrop';
 export type { UseDragAndDropOptions, UseDragAndDropReturn } from './useDragAndDrop';
 
-export { useChatSubmit } from './useChatSubmit';
-export type { UseChatSubmitOptions, UseChatSubmitReturn, SendOptions } from './useChatSubmit';
-
 export { useKeyboardShortcuts } from './useKeyboardShortcuts';
 export type { UseKeyboardShortcutsOptions } from './useKeyboardShortcuts';
 

@@ -130,7 +130,7 @@ export const TeamDashboard: React.FC = () => {
           {}
           <div className="flex space-x-1 border-b border-gray-200 dark:border-gray-700">
             {tabs.map((tab) => (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center px-4 py-2 text-sm font-medium transition-colors ${
@@ -152,7 +152,7 @@ export const TeamDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 py-4 w-full">
           <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative">
             <span className="block sm:inline">{error}</span>
-            <button onClick={clearError} className="absolute top-0 bottom-0 right-0 px-4 py-3">
+            <button type="button" onClick={clearError} className="absolute top-0 bottom-0 right-0 px-4 py-3">
               <span className="text-2xl">&times;</span>
             </button>
           </div>

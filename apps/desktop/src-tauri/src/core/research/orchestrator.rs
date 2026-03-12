@@ -909,7 +909,8 @@ Be objective and note any conflicting information or gaps in the research."#,
                 "time_elapsed": time_elapsed,
                 "success": success,
             });
-            let _ = app.emit("research:complete", payload.clone());
+            // Bug #687 fix: Standardize on "research:completed" event name
+            // (matches the frontend listener in useTauriStreamListeners.ts and ResearchPanel.tsx)
             let _ = app.emit("research:completed", payload);
         }
     }

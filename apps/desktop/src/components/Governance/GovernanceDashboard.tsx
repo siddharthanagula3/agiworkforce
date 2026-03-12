@@ -93,7 +93,7 @@ export const GovernanceDashboard: React.FC = () => {
           {}
           <div className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 mt-6">
             {tabs.map((tab) => (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center px-4 py-2 text-sm font-medium transition-colors ${

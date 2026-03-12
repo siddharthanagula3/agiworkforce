@@ -11,7 +11,8 @@ static SCRIPT_TAG_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)<script[^>]*>.*?</script>").expect("valid regex: script tag pattern")
 });
 static EVENT_HANDLER_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)\s+on\w+\s*=\s*"[^"]*""#).expect("valid regex: event handler pattern")
+    Regex::new(r#"(?i)\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*')"#)
+        .expect("valid regex: event handler pattern")
 });
 static JAVASCRIPT_URI_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)javascript:").expect("valid regex: javascript URI pattern"));
@@ -265,17 +266,11 @@ fn find_attachment_recursive<'a>(
 pub fn sanitize_html(html: &str) -> String {
     let mut sanitized = html.to_string();
 
-    sanitized = SCRIPT_TAG_RE
-        .replace_all(&sanitized, "")
-        .to_string();
+    sanitized = SCRIPT_TAG_RE.replace_all(&sanitized, "").to_string();
 
-    sanitized = EVENT_HANDLER_RE
-        .replace_all(&sanitized, "")
-        .to_string();
+    sanitized = EVENT_HANDLER_RE.replace_all(&sanitized, "").to_string();
 
-    sanitized = JAVASCRIPT_URI_RE
-        .replace_all(&sanitized, "")
-        .to_string();
+    sanitized = JAVASCRIPT_URI_RE.replace_all(&sanitized, "").to_string();
 
     sanitized
 }

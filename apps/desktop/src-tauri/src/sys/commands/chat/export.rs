@@ -1,9 +1,7 @@
-//! Conversation export commands (markdown and PDF).
-
 use tauri::State;
 use tracing::warn;
 
-use super::state::AppDatabase;
+use super::AppDatabase;
 
 /// Export a conversation as formatted text.
 ///
@@ -28,7 +26,6 @@ pub async fn conversation_export(
 
     let conn = db.connection()?;
 
-    // Fetch conversation title (optional — fall back to "Untitled").
     let title: String = conn
         .query_row(
             "SELECT title FROM conversations WHERE id = ?1",
@@ -40,7 +37,6 @@ pub async fn conversation_export(
             "Untitled Conversation".to_string()
         });
 
-    // Fetch messages ordered by creation time.
     let mut stmt = conn
         .prepare(
             "SELECT role, content, created_at FROM messages \
@@ -90,7 +86,6 @@ pub async fn conversation_export_pdf(
 ) -> Result<String, String> {
     use crate::features::document::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
 
-    // C4 fix: Validate output_path to prevent arbitrary file writes
     let path = std::path::Path::new(&output_path);
     if let Some(ext) = path.extension() {
         if ext != "pdf" {
@@ -99,7 +94,7 @@ pub async fn conversation_export_pdf(
     } else {
         return Err("Output path must have a .pdf extension".to_string());
     }
-    // Reject path traversal
+
     let canonical_dir = path
         .parent()
         .unwrap_or(std::path::Path::new("."))
@@ -109,7 +104,7 @@ pub async fn conversation_export_pdf(
     if canonical_str.contains("..") {
         return Err("Path traversal not allowed".to_string());
     }
-    // Block writes to sensitive system directories
+
     let blocked_prefixes = ["/etc", "/usr", "/bin", "/sbin", "/var", "/System"];
     for prefix in &blocked_prefixes {
         if canonical_str.starts_with(prefix) {
@@ -123,7 +118,6 @@ pub async fn conversation_export_pdf(
 
     let conn = db.connection()?;
 
-    // Fetch the conversation title
     let title: String = conn
         .query_row(
             "SELECT title FROM conversations WHERE id = ?1",
@@ -135,7 +129,6 @@ pub async fn conversation_export_pdf(
             "Untitled Conversation".to_string()
         });
 
-    // Fetch messages ordered by creation time
     let mut stmt = conn
         .prepare(
             "SELECT role, content FROM messages \
@@ -151,10 +144,7 @@ pub async fn conversation_export_pdf(
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to read message rows: {e}"))?;
 
-    // Build PDF content blocks
     let mut contents: Vec<PdfContent> = Vec::new();
-
-    // Document title
     contents.push(PdfContent::Heading {
         level: 1,
         text: title.clone(),
@@ -169,19 +159,17 @@ pub async fn conversation_export_pdf(
         }
         .to_string();
 
-        // Role header
         contents.push(PdfContent::Heading {
             level: 2,
             text: role_label,
         });
 
-        // Message body — split on newlines so each line is a paragraph
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
-            // Detect code-block fences and render in a visually distinct style
+
             if trimmed.starts_with("```") || trimmed.ends_with("```") {
                 contents.push(PdfContent::Paragraph {
                     text: trimmed.to_string(),

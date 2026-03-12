@@ -311,7 +311,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
             <h3 className="mb-4 text-sm font-medium text-muted-foreground">Connected Accounts</h3>
             <div className="space-y-2">
               {accounts.map((account) => (
-                <button
+                <button type="button"
                   key={account.account_id}
                   onClick={() => selectAccount(account.account_id)}
                   className="flex w-full items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent hover:text-accent-foreground"

@@ -22,7 +22,7 @@ export function TerminalView({ contextId, className }: TerminalViewProps) {
             <span className="text-xs text-zinc-500">• Session: {contextId.slice(0, 8)}</span>
           )}
         </div>
-        <button
+        <button type="button"
           onClick={() => setIsFullHeight(!isFullHeight)}
           className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           title={isFullHeight ? 'Restore height' : 'Maximize height'}

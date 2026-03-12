@@ -1,4 +1,5 @@
 {
-  "provider": "minimax",
-  "model": "minimax2.5"
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {},
+  "model": "openai/gpt-4o"
 }

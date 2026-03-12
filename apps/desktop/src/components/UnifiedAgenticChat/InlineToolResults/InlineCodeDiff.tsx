@@ -139,7 +139,7 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
             variant="ghost"
             onClick={() => {
               const textToCopy = operation === 'read' ? after : `${before}${after}`;
-              navigator.clipboard.writeText(textToCopy);
+              void navigator.clipboard.writeText(textToCopy).catch(() => {});
               toast.success('Copied to clipboard', {
                 icon: <Check className="h-4 w-4" />,
                 duration: 2000,

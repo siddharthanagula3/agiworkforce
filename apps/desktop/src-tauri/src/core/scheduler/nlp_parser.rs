@@ -257,9 +257,10 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
         // Use calendar-day arithmetic (succ_opt) instead of Duration::days(1)
         // to correctly handle DST transitions where a day may not be exactly 24 hours.
         let target = if target <= now {
-            let tomorrow = now.date_naive().succ_opt().ok_or_else(|| {
-                ParseError::InvalidDate("Cannot compute next day".to_string())
-            })?;
+            let tomorrow = now
+                .date_naive()
+                .succ_opt()
+                .ok_or_else(|| ParseError::InvalidDate("Cannot compute next day".to_string()))?;
             tomorrow
                 .and_time(time)
                 .and_local_timezone(Local)
@@ -275,9 +276,10 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     // Pattern: "tomorrow at HH:MM"
     if let Some(caps) = RE_TOMORROW_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
-        let tomorrow = Local::now().date_naive().succ_opt().ok_or_else(|| {
-            ParseError::InvalidDate("Cannot compute next day".to_string())
-        })?;
+        let tomorrow = Local::now()
+            .date_naive()
+            .succ_opt()
+            .ok_or_else(|| ParseError::InvalidDate("Cannot compute next day".to_string()))?;
         let target = tomorrow
             .and_time(time)
             .and_local_timezone(Local)

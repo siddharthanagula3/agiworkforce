@@ -247,8 +247,8 @@ impl TeamManager {
 
         let mut stmt = conn
             .prepare(
-                "SELECT t.id, t.name, t.description, t.owner_id, t.settings, t.created_at, t.updated_a
-                 FROM teams
+                "SELECT t.id, t.name, t.description, t.owner_id, t.settings, t.created_at, t.updated_at
+                 FROM teams t
                  INNER JOIN team_members tm ON t.id = tm.team_id
                  WHERE tm.user_id = ?1
                  ORDER BY t.updated_at DESC"

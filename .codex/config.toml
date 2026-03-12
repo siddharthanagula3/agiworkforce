@@ -8,22 +8,10 @@
 
 # Model selection
 model = "o4-mini"
-model_provider = "openai"
-
-# Permissions
-[permissions]
-# "untrusted" = no writes, "on-request" = ask per action, "never" = full auto
-approval_policy = "on-request"
-# "off", "workspace-read", "workspace-write", "danger-full-access"
-sandbox_mode = "workspace-write"
-
-# Notifications (macOS)
-[notify]
-command = "terminal-notifier -title 'Codex AGI' -message 'Task completed!' -sound default"
-on_complete = true
 
 # History - persistent instructions applied to every session
 [history]
+persistence = "save-all"
 persistent_instructions = """
 Follow AGI Workforce project rules:
 
@@ -59,20 +47,3 @@ args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 [mcp_servers.supabase]
 command = "npx"
 args = ["-y", "supabase-mcp-server@latest", "--read-only"]
-
-[mcp_servers.vercel]
-command = "npx"
-args = ["-y", "vercel-mcp-server@latest"]
-
-# Features
-[features]
-web_search_request = true
-
-# Profiles — switch with CODEX_PROFILE=<name>
-[profiles.strict]
-approval_policy = "on-request"
-sandbox_mode = "workspace-read"
-
-[profiles.yolo]
-approval_policy = "never"
-sandbox_mode = "workspace-write"

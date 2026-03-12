@@ -9,7 +9,9 @@
 /// - Serialization round-trips
 #[cfg(test)]
 mod llm_tests {
-    use crate::core::llm::sse_parser::{parse_sse_event, StreamChunk, StreamingToolCall, TokenUsage};
+    use crate::core::llm::sse_parser::{
+        parse_sse_event, StreamChunk, StreamingToolCall, TokenUsage,
+    };
     use crate::core::llm::Provider;
 
     // -----------------------------------------------------------------------
@@ -25,6 +27,7 @@ mod llm_tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         }
     }
@@ -38,6 +41,7 @@ mod llm_tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         }
     }
@@ -86,6 +90,7 @@ mod llm_tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: true,
         };
         assert!(chunk.keepalive);
@@ -107,6 +112,7 @@ mod llm_tests {
             }),
             credits: None,
             tool_calls: None,
+            reasoning: None,
             keepalive: false,
         };
 
@@ -364,7 +370,8 @@ mod llm_tests {
     fn test_parse_openai_sse_empty_event_gives_empty_chunk() {
         // Event with no data lines at all — produces an empty chunk (not an error)
         let event = "";
-        let chunk = parse_sse_event(event, Provider::OpenAI).expect("parse should succeed on empty input");
+        let chunk =
+            parse_sse_event(event, Provider::OpenAI).expect("parse should succeed on empty input");
         assert!(chunk.content.is_empty());
         assert!(!chunk.done);
     }
@@ -456,7 +463,8 @@ mod llm_tests {
     #[test]
     fn test_parse_anthropic_sse_content_block_stop_does_not_set_done() {
         // content_block_stop is an intermediate event — does not signal stream end
-        let event = "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
+        let event =
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
         let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
         assert!(!chunk.done);
         assert!(chunk.content.is_empty());
@@ -523,7 +531,8 @@ mod llm_tests {
 
     #[test]
     fn test_parse_google_sse_recitation_returns_err() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"RECITATION"}]}"#;
+        let event =
+            r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"RECITATION"}]}"#;
         let result = parse_sse_event(event, Provider::Google);
         assert!(result.is_err());
     }
@@ -554,7 +563,8 @@ mod llm_tests {
 
     #[test]
     fn test_parse_ollama_sse_basic_content() {
-        let event = r#"{"model":"llama3","message":{"role":"assistant","content":"Hello"},"done":false}"#;
+        let event =
+            r#"{"model":"llama3","message":{"role":"assistant","content":"Hello"},"done":false}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
@@ -636,7 +646,8 @@ mod llm_tests {
 
     #[test]
     fn test_xai_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"xAI answer"},"finish_reason":"stop"}]}"#;
+        let event =
+            r#"data: {"choices":[{"delta":{"content":"xAI answer"},"finish_reason":"stop"}]}"#;
         let chunk = parse_sse_event(event, Provider::XAI).expect("parse failed");
         assert_eq!(chunk.content, "xAI answer");
         assert!(chunk.done);

@@ -74,7 +74,7 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
         {!account && (
           <p className="text-sm text-zinc-500">
             Not signed in?{' '}
-            <button
+            <button type="button"
               onClick={() => {
                 window.location.reload();
               }}

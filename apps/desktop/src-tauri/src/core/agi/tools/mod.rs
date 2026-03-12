@@ -8,6 +8,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+/// Bug #54 fix: Returns the platform-appropriate default shell name.
+fn default_shell() -> &'static str {
+    match std::env::consts::OS {
+        "windows" => "powershell",
+        "macos" => "zsh",
+        _ => "bash", // Linux and other Unix-like systems
+    }
+}
+
 pub struct ToolRegistry {
     tools: Mutex<HashMap<String, Tool>>,
     capabilities_index: Mutex<HashMap<ToolCapability, Vec<String>>>,
@@ -1307,7 +1316,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "api_call".to_string(),
             name: "API Call".to_string(),
-            description: "Make HTTP API call with full authentication support (bearer, basic, API key, OAuth2)".to_string(),
+            description: "Make HTTP API call to REST/JSON endpoints with authentication support (bearer, basic, API key, OAuth2). For web searches, use search_web instead. For browsing websites, use physical_scrape instead.".to_string(),
             capabilities: vec![ToolCapability::APICall, ToolCapability::NetworkOperation],
             parameters: vec![
                 ToolParameter {
@@ -2362,8 +2371,11 @@ impl ToolRegistry {
                     name: "shell".to_string(),
                     parameter_type: ParameterType::String,
                     required: false,
-                    description: "Shell to execute command in (powershell|cmd|bash)".to_string(),
-                    default: Some(serde_json::json!("powershell")),
+                    description: "Shell to execute command in (bash|zsh|powershell|cmd|fish|sh)"
+                        .to_string(),
+                    // Bug #54 fix: Select platform-appropriate default shell instead
+                    // of hardcoding "powershell" which is wrong on macOS/Linux.
+                    default: Some(serde_json::json!(default_shell())),
                 },
                 ToolParameter {
                     name: "timeout_ms".to_string(),

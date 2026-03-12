@@ -6,13 +6,15 @@
  */
 import type { Artifact } from '../types/chat';
 import { getToolDisplayInfo } from './toolDisplayNames';
+import { decodeCompositeToolName } from './toolNameEncoding';
 
 export const normalizeToolNameForUi = (toolName: string): string => {
-  if (toolName.startsWith('__server__')) {
-    const trimmed = toolName.slice('__server__'.length);
-    return trimmed || toolName;
+  let name = toolName;
+  if (name.startsWith('__server__')) {
+    name = name.slice('__server__'.length) || name;
   }
-  return toolName;
+
+  return decodeCompositeToolName(name);
 };
 
 export const toolNameToArtifactType = (toolName: string): Artifact['type'] => {

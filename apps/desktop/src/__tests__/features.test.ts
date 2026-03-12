@@ -1381,9 +1381,25 @@ describe('unifiedChatStore - Extended Tests', () => {
       expect(state.sidecarOpen).toBe(false);
     });
 
-    it('should set sidecar section from event', async () => {
+    it('should ignore event-driven sidecar section updates while the sidecar is closed', async () => {
       const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
       useUnifiedChatStore.setState({ sidecarUserSelected: false, sidecarOpen: false });
+
+      const store = useUnifiedChatStore.getState();
+      store.setSidecarSectionFromEvent('terminal_execute');
+
+      const state = useUnifiedChatStore.getState();
+      expect(state.sidecarSection).toBe('operations');
+      expect(state.sidecarOpen).toBe(false);
+    });
+
+    it('should update sidecar section from event only when the sidecar is already open', async () => {
+      const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
+      useUnifiedChatStore.setState({
+        sidecarUserSelected: false,
+        sidecarOpen: true,
+        sidecar: { isOpen: true, activeMode: 'code', contextId: null, autoTrigger: false },
+      });
 
       const store = useUnifiedChatStore.getState();
       store.setSidecarSectionFromEvent('terminal_execute');

@@ -13,16 +13,19 @@ pub async fn approve_operation(
     tracing::info!("[Commands] Approving operation: {}", approval_id);
 
     let workflow = {
-        let conn = db
-            .conn
-            .lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+        let db_path = {
+            let conn = db
+                .conn
+                .lock()
+                .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+            conn.path()
+                .ok_or_else(|| "Database path not available".to_string())?
+                .to_string()
+        };
+        // Open a separate connection outside the mutex lock to avoid SQLITE_BUSY
         ApprovalWorkflow::new(std::sync::Arc::new(std::sync::Mutex::new(
-            rusqlite::Connection::open(
-                conn.path()
-                    .ok_or_else(|| "Database path not available".to_string())?,
-            )
-            .map_err(|e| format!("Failed to open database: {}", e))?,
+            rusqlite::Connection::open(&db_path)
+                .map_err(|e| format!("Failed to open database: {}", e))?,
         )))
     };
 
@@ -77,16 +80,19 @@ pub async fn reject_operation(
     let rejection_reason = reason.unwrap_or_else(|| "User rejected operation".to_string());
 
     let workflow = {
-        let conn = db
-            .conn
-            .lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+        let db_path = {
+            let conn = db
+                .conn
+                .lock()
+                .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+            conn.path()
+                .ok_or_else(|| "Database path not available".to_string())?
+                .to_string()
+        };
+        // Open a separate connection outside the mutex lock to avoid SQLITE_BUSY
         ApprovalWorkflow::new(std::sync::Arc::new(std::sync::Mutex::new(
-            rusqlite::Connection::open(
-                conn.path()
-                    .ok_or_else(|| "Database path not available".to_string())?,
-            )
-            .map_err(|e| format!("Failed to open database: {}", e))?,
+            rusqlite::Connection::open(&db_path)
+                .map_err(|e| format!("Failed to open database: {}", e))?,
         )))
     };
 

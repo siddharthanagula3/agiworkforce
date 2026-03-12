@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Search, Code, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useUnifiedChatStore, type ActionTrailEntry } from '../../stores/unifiedChatStore';
+import { type ActionTrailEntry } from '../../stores/unifiedChatStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMessageActionTrail } from './useMessageRuntimeActivity';
 
 interface StatusTrailProps {
   messageId?: string;
@@ -138,9 +139,31 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
 
 export function StatusTrail({ messageId, className, variant = 'inline' }: StatusTrailProps) {
   const prefersReducedMotion = useReducedMotion();
-  const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
-  const actionTrail = getActiveActionTrail(messageId);
+  const actionTrail = useMessageActionTrail(messageId);
 
+  return (
+    <StatusTrailContent
+      actionTrail={actionTrail}
+      className={className}
+      prefersReducedMotion={prefersReducedMotion}
+      variant={variant}
+    />
+  );
+}
+
+interface StatusTrailContentProps {
+  actionTrail: ActionTrailEntry[];
+  className?: string;
+  prefersReducedMotion?: boolean;
+  variant?: 'absolute' | 'inline';
+}
+
+export function StatusTrailContent({
+  actionTrail,
+  className,
+  prefersReducedMotion = false,
+  variant = 'inline',
+}: StatusTrailContentProps) {
   if (actionTrail.length === 0) {
     return null;
   }
@@ -164,11 +187,7 @@ export function StatusTrail({ messageId, className, variant = 'inline' }: Status
     >
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (
-          <StatusTrailItem
-            key={entry.id}
-            entry={entry}
-            prefersReducedMotion={prefersReducedMotion}
-          />
+          <StatusTrailItem key={entry.id} entry={entry} prefersReducedMotion={prefersReducedMotion} />
         ))}
       </AnimatePresence>
     </div>
@@ -182,8 +201,7 @@ interface FloatingStatusTrailProps {
 
 export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrailProps) {
   const prefersReducedMotion = useReducedMotion();
-  const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
-  const actionTrail = getActiveActionTrail(messageId);
+  const actionTrail = useMessageActionTrail(messageId);
 
   if (actionTrail.length === 0) {
     return null;

@@ -162,7 +162,7 @@ const ConversationItem = memo<ConversationItemProps>(
           />
         ) : (
           <div className="flex items-center">
-            <button
+            <button type="button"
               onClick={() => onSelect(conv.id)}
               onDoubleClick={() => onStartEdit(conv)}
               className="flex-1 text-left px-3 py-2 overflow-hidden"
@@ -403,7 +403,7 @@ export function Sidebar({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       toast.success('Conversation exported');
     },
@@ -572,7 +572,12 @@ export function Sidebar({
           // Load messages from backend asynchronously
           loadConversationMessages(id, userId).catch((error) => {
             console.error('[Sidebar] Failed to load conversation messages:', error);
+            toast.error('Failed to load conversation messages');
           });
+        } else {
+          // BUG-342: Surface an error instead of silently skipping
+          console.warn('[Sidebar] Cannot load messages: user not authenticated');
+          toast.error('Please sign in to load conversation messages');
         }
       }
     },
@@ -853,7 +858,7 @@ export function Sidebar({
                 <ScrollArea className="max-h-96">
                   <div className="p-2">
                     {filtered.slice(0, 10).map((conv) => (
-                      <button
+                      <button type="button"
                         key={conv.id}
                         onClick={() => {
                           selectConversationFn(conv.id);
@@ -919,7 +924,7 @@ export function Sidebar({
               New Chat
             </Button>
           </div>
-          <button
+          <button type="button"
             onClick={() => setShowSearch(true)}
             className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
@@ -937,7 +942,7 @@ export function Sidebar({
         {/* Navigation - hide projects section in simple mode */}
         {!collapsed && !isSimpleMode && (
           <div className="px-3 py-2 space-y-1 overflow-y-auto max-h-[40vh] scrollbar-thin scrollbar-thumb-zinc-700">
-            <button
+            <button type="button"
               onClick={() => onOpenResearch?.()}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
             >
@@ -948,7 +953,7 @@ export function Sidebar({
             </button>
 
             {canAccessMediaLab && (
-              <button
+              <button type="button"
                 onClick={() => onToggleMediaLab?.()}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
               >
@@ -959,7 +964,7 @@ export function Sidebar({
               </button>
             )}
 
-            <button
+            <button type="button"
               onClick={() => setActiveView('projects')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -974,7 +979,7 @@ export function Sidebar({
               Projects
             </button>
 
-            <button
+            <button type="button"
               onClick={() => setActiveView('help')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -993,7 +998,7 @@ export function Sidebar({
             {projects.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
+                  <button type="button"
                     className={cn(
                       'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                       selectedProjectFilter
@@ -1061,7 +1066,7 @@ export function Sidebar({
 
             {/* Clear project filter indicator */}
             {selectedProjectFilter && (
-              <button
+              <button type="button"
                 onClick={() => setSelectedProjectFilter(null)}
                 className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
               >
@@ -1075,7 +1080,7 @@ export function Sidebar({
         {/* Archive toggle - hidden in simple mode */}
         {!collapsed && !isSimpleMode && archivedConversations.length > 0 && (
           <div className="px-3 py-1">
-            <button
+            <button type="button"
               onClick={() => setShowArchived(!showArchived)}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -1121,7 +1126,7 @@ export function Sidebar({
             {}
             {Array.from(groupedConversations.entries()).map(([group, convs]) => (
               <div key={group} className="mb-4">
-                <button
+                <button type="button"
                   onClick={() => toggleGroup(group)}
                   aria-expanded={expandedGroups.has(group)}
                   aria-controls={`conversation-group-${group}`}

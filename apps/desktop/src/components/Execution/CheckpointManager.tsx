@@ -68,7 +68,7 @@ export function CheckpointResume({
             </p>
           )}
         </div>
-        <button
+        <button type="button"
           onClick={handleResume}
           disabled={isLoading}
           className="ml-4 px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
@@ -137,7 +137,7 @@ export function CheckpointList({
                 {cp.progress_percent.toFixed(1)}% complete
               </p>
             </div>
-            <button
+            <button type="button"
               onClick={() => setExpanding(expanding === cp.id ? null : cp.id)}
               className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-700"
             >
@@ -150,7 +150,7 @@ export function CheckpointList({
               <div className="text-xs space-y-1">
                 <p>
                   <span className="font-semibold">Elapsed:</span>{' '}
-                  {formatDuration(cp.created_at_ms || 0)}
+                  {formatDuration(cp.created_at_ms ? Date.now() - cp.created_at_ms : 0)}
                 </p>
                 <p>
                   <span className="font-semibold">Remaining:</span>{' '}
@@ -160,7 +160,7 @@ export function CheckpointList({
                 </p>
               </div>
               <div className="flex gap-2">
-                <button
+                <button type="button"
                   onClick={() => {
                     onResumeClick?.(cp.id);
                   }}
@@ -168,7 +168,7 @@ export function CheckpointList({
                 >
                   Resume
                 </button>
-                <button
+                <button type="button"
                   onClick={() => actions.deleteCheckpoint(cp.id)}
                   className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
                 >
@@ -181,14 +181,14 @@ export function CheckpointList({
       ))}
 
       <div className="mt-4 flex gap-2">
-        <button
+        <button type="button"
           onClick={() => actions.refreshCheckpoints()}
           disabled={state.isLoading}
           className="text-xs px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
         >
           Refresh
         </button>
-        <button
+        <button type="button"
           onClick={() => actions.cleanup(10)}
           disabled={state.isLoading}
           className="text-xs px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
@@ -220,7 +220,7 @@ export function CheckpointManager({
       <CheckpointResume taskId={taskId} onResumeClick={onResumeClick} />
 
       <div className="border rounded-lg p-4 bg-white">
-        <button
+        <button type="button"
           onClick={() => setShowDetails(!showDetails)}
           className="text-sm font-medium text-blue-600 hover:text-blue-700"
         >

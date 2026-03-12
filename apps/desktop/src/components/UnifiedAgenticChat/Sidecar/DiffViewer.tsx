@@ -1,5 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { DiffEditor } from '@monaco-editor/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, Copy, FileCode, Loader2, X } from 'lucide-react';
@@ -89,22 +89,27 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
     const originalLines = diffData.originalContent.split('\n');
     const modifiedLines = diffData.modifiedContent.split('\n');
 
+    // Build frequency maps for accurate diff-stat that handles
+    // reordered and duplicate lines correctly.
+    const origCounts = new Map<string, number>();
+    for (const line of originalLines) {
+      origCounts.set(line, (origCounts.get(line) ?? 0) + 1);
+    }
+    const modCounts = new Map<string, number>();
+    for (const line of modifiedLines) {
+      modCounts.set(line, (modCounts.get(line) ?? 0) + 1);
+    }
+
     let additions = 0;
     let deletions = 0;
 
-    const maxLength = Math.max(originalLines.length, modifiedLines.length);
-    for (let i = 0; i < maxLength; i++) {
-      const origLine = originalLines[i];
-      const modLine = modifiedLines[i];
-
-      if (origLine === undefined && modLine !== undefined) {
-        additions++;
-      } else if (origLine !== undefined && modLine === undefined) {
-        deletions++;
-      } else if (origLine !== modLine) {
-        deletions++;
-        additions++;
-      }
+    for (const [line, count] of modCounts) {
+      const origCount = origCounts.get(line) ?? 0;
+      if (count > origCount) additions += count - origCount;
+    }
+    for (const [line, count] of origCounts) {
+      const modCount = modCounts.get(line) ?? 0;
+      if (count > modCount) deletions += count - modCount;
     }
 
     setStats({ additions, deletions });
@@ -122,10 +127,7 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
         content: diffData.modifiedContent,
       });
 
-      toast({
-        title: 'Changes applied',
-        description: 'Changes applied successfully!',
-      });
+      toast.success('Changes applied successfully!');
     } catch (err) {
       console.error('[DiffViewer] Failed to apply changes:', err);
       setError('Failed to apply changes. Please try again.');
@@ -209,6 +211,7 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
       <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-900/50 px-4 py-3">
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleCopy}
             className={cn(
               'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
@@ -223,6 +226,7 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleAccept}
             disabled={isSaving}
             className={cn(
@@ -264,6 +268,7 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
                 <p className="mt-1 text-xs text-rose-300">{error}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setError(null)}
                 className="shrink-0 rounded-lg p-1 hover:bg-rose-500/20 transition-colors"
               >

@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
-const NOTION_API_VERSION: &str = "2025-12-01";
+const NOTION_API_VERSION: &str = "2022-06-28";
 const NOTION_BASE_URL: &str = "https://api.notion.com/v1";
 
 const MAX_REQUESTS_PER_SECOND: usize = 3;
@@ -189,7 +189,7 @@ impl NotionClient {
     }
 
     pub async fn get_page_content(&self, page_id: &str) -> Result<serde_json::Value> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let response = self
             .client
@@ -218,7 +218,7 @@ impl NotionClient {
         title: &str,
         properties: Option<serde_json::Value>,
     ) -> Result<String> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let mut body = serde_json::json!({
             "parent": { "page_id": parent_id },
@@ -275,7 +275,7 @@ impl NotionClient {
         filter: Option<serde_json::Value>,
         sorts: Option<Vec<serde_json::Value>>,
     ) -> Result<Vec<serde_json::Value>> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let query = NotionDatabaseQuery { filter, sorts };
 
@@ -310,7 +310,7 @@ impl NotionClient {
         database_id: &str,
         properties: serde_json::Value,
     ) -> Result<String> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let body = serde_json::json!({
             "parent": { "database_id": database_id },
@@ -557,7 +557,7 @@ impl UnifiedTaskProvider for NotionClient {
     }
 
     async fn get_task(&self, page_id: &str) -> Result<Task> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let response = self
             .client

@@ -7,8 +7,9 @@ static API_KEY_REGEX: Lazy<Regex> =
 static BEARER_TOKEN_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"Bearer\s+([a-zA-Z0-9\-\._~\+\/]+=*)").expect("valid regex: bearer token pattern")
 });
-static GOOGLE_API_KEY_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"AIza[0-9A-Za-z-_]{35}").expect("valid regex: Google API key pattern"));
+static GOOGLE_API_KEY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"AIza[0-9A-Za-z-_]{35}").expect("valid regex: Google API key pattern")
+});
 static GITHUB_TOKEN_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(ghp_[a-zA-Z0-9]{36})").expect("valid regex: GitHub token pattern"));
 

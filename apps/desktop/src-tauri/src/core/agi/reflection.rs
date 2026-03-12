@@ -341,7 +341,10 @@ impl ReflectionEngine {
         // Wire learning feedback loop: trigger strategy optimization after each
         // successful reflection so tool performance data stays current.
         if let Err(e) = self.learning.update().await {
-            tracing::warn!("[Reflection] Learning update failed after reflection: {}", e);
+            tracing::warn!(
+                "[Reflection] Learning update failed after reflection: {}",
+                e
+            );
         }
 
         tracing::info!(

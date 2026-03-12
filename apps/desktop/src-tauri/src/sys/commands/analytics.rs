@@ -213,12 +213,29 @@ pub async fn analytics_get_usage_stats(
         )
         .unwrap_or(0);
 
-    let new_users_today: i64 = conn
+    // Bug #82 fix: The old query compared session `id` (which is unique per
+    // session) to itself, so it would always return 0. For a single-user
+    // desktop app we check whether any sessions exist before today — if not,
+    // this is a new user today.
+    let has_prior_sessions: bool = conn
         .query_row(
-            "SELECT COUNT(*) FROM user_sessions WHERE started_at >= ?1 AND id NOT IN (SELECT id FROM user_sessions WHERE started_at < ?1)",
+            "SELECT EXISTS(SELECT 1 FROM user_sessions WHERE started_at < ?1)",
             [today_start],
             |row| row.get(0),
-        ).unwrap_or(0);
+        )
+        .unwrap_or(false);
+    let has_sessions_today: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM user_sessions WHERE started_at >= ?1)",
+            [today_start],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    let new_users_today: i64 = if has_sessions_today && !has_prior_sessions {
+        1
+    } else {
+        0
+    };
 
     Ok(serde_json::json!({
         "dau": if events_today > 0 { 1 } else { 0 },
@@ -278,20 +295,30 @@ use crate::data::analytics::{
 use crate::sys::commands::AppDatabase;
 use rusqlite::Connection;
 
+/// Wrap the managed `AppDatabase` connection in an `Arc<tokio::sync::Mutex<Connection>>`
+/// for use with the `MetricsAggregator` and related analytics code.
+///
+/// Bug #76 fix: Previously opened a *separate* SQLite file via an env var,
+/// bypassing the managed `AppDatabase`. Now reuses the same `Arc<Mutex<Connection>>`
+/// that the rest of the app uses, just re-wrapped for the tokio mutex interface.
 fn create_analytics_db_connection(
     app_db: &AppDatabase,
 ) -> Result<Arc<tokio::sync::Mutex<Connection>>, String> {
-    let _conn = app_db
+    // Obtain the path from the existing managed connection so we open the
+    // *same* database file, not a random working-directory-relative one.
+    let conn = app_db
         .conn
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let db_path = std::env::var("AGI_DB_PATH").unwrap_or_else(|_| {
-        std::path::PathBuf::from(".")
-            .join("agiworkforce.db")
-            .to_string_lossy()
-            .to_string()
-    });
+    // Use the existing connection's path (returns "" for in-memory DBs)
+    let db_path: String = conn.path().map(|p| p.to_string()).unwrap_or_default();
+
+    drop(conn);
+
+    if db_path.is_empty() {
+        return Err("AppDatabase has no file path (in-memory)".to_string());
+    }
 
     let new_conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open analytics connection: {}", e))?;

@@ -1,9 +1,12 @@
 //! Webhook automation module
 
 use crate::sys::error::{Error, Result};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use subtle::ConstantTimeEq;
 use tokio::sync::mpsc;
 
 /// Webhook configuration
@@ -241,11 +244,27 @@ impl WebhookManager {
             return Err(Error::Generic("Webhook is not an incoming webhook".into()));
         }
 
-        // Verify signature if secret is set
+        // Bug #231 fix: Implement HMAC-SHA256 signature verification
         if let Some(ref secret) = webhook.secret {
-            if let Some(sig) = signature {
-                // Simple HMAC verification would go here
-                let _ = (secret, sig); // Placeholder
+            let sig = signature.ok_or_else(|| {
+                Error::Generic("Webhook signature required but not provided".into())
+            })?;
+
+            let payload_bytes =
+                serde_json::to_vec(&data).map_err(|e| Error::Generic(e.to_string()))?;
+
+            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+                .map_err(|e| Error::Generic(format!("HMAC key error: {}", e)))?;
+            mac.update(&payload_bytes);
+            let computed = hex::encode(mac.finalize().into_bytes());
+
+            // Strip optional "sha256=" prefix from signature
+            let sig_hex = sig.strip_prefix("sha256=").unwrap_or(sig);
+
+            if computed.as_bytes().ct_ne(sig_hex.as_bytes()).into() {
+                return Err(Error::Generic(
+                    "Webhook signature verification failed".into(),
+                ));
             }
         }
 

@@ -152,7 +152,7 @@ export const SearchResultsRenderer: React.FC<SearchResultsRendererProps> = ({
                 {data?.error || 'Unable to perform web search. Please try again.'}
               </p>
               {onRetry && (
-                <button
+                <button type="button"
                   onClick={onRetry}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition"
                 >
@@ -221,7 +221,7 @@ export const SearchResultsRenderer: React.FC<SearchResultsRendererProps> = ({
 
         {/* Expand/Collapse button */}
         {hasMoreResults && (
-          <button
+          <button type="button"
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-1 text-xs font-medium text-blue-400 hover:text-blue-300 transition"
           >
@@ -264,7 +264,7 @@ export const SearchResultsRenderer: React.FC<SearchResultsRendererProps> = ({
       {/* Show more indicator */}
       {!expanded && hasMoreResults && (
         <div className="mt-3 text-center">
-          <button
+          <button type="button"
             onClick={() => setExpanded(true)}
             className="text-xs text-muted-foreground hover:text-foreground transition"
           >
@@ -340,7 +340,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({
       {/* Actions */}
       <div className="shrink-0 flex items-center gap-2">
         {/* Copy URL button */}
-        <button
+        <button type="button"
           onClick={onCopy}
           className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-surface-base transition"
           title="Copy URL"

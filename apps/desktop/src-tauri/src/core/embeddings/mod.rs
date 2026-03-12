@@ -226,7 +226,11 @@ pub async fn semantic_search_codebase(
     let similarity_guard = similarity.lock().await;
 
     let results = similarity_guard
-        .search_with_model(query_embedding, limit.unwrap_or(10), Some(&current_model_id))
+        .search_with_model(
+            query_embedding,
+            limit.unwrap_or(10),
+            Some(&current_model_id),
+        )
         .map_err(|e| format!("Failed to search: {}", e))?;
 
     Ok(results)

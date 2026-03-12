@@ -76,6 +76,21 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
   const success = data?.success ?? true;
   const failed = status === 'failed' || status === 'error' || !success || Boolean(data?.error);
 
+  // Check running state before null guard so the spinner is reachable
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-muted-foreground">Generating document...</span>
+          {data?.title && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{data?.title}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     return (
@@ -95,20 +110,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
   }
 
   if (!data) return null;
-
-  if (status === 'running') {
-    return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
-        <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-muted-foreground">Generating document...</span>
-          {data.title && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{data.title}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   if (failed || (!resolvedPath && !downloadUrl)) {
     return (

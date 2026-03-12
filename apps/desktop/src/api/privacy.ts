@@ -228,10 +228,12 @@ export async function downloadUserData(): Promise<string> {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 
-  // Cleanup
-  URL.revokeObjectURL(url);
+  // Cleanup after browser initiates download
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 
   return filename;
 }

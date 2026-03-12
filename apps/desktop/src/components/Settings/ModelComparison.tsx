@@ -128,7 +128,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
               key={model.id}
               className="relative p-3 border-2 border-blue-500 rounded-lg bg-blue-50 dark:bg-blue-900/20"
             >
-              <button
+              <button type="button"
                 onClick={() => removeModel(model.id)}
                 className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
               >
@@ -144,7 +144,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
           ))}
 
           {selectedModels.length < maxModels && (
-            <button
+            <button type="button"
               onClick={() => setIsSelectingModel(true)}
               className="p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
             >
@@ -288,7 +288,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Select Model to Compare</h3>
-              <button
+              <button type="button"
                 onClick={() => setIsSelectingModel(false)}
                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
               >
@@ -298,7 +298,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
             <div className="p-4 overflow-y-auto max-h-[60vh]">
               <div className="space-y-2">
                 {availableModels.map((model) => (
-                  <button
+                  <button type="button"
                     key={model.id}
                     onClick={() => addModel(model.id)}
                     className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"

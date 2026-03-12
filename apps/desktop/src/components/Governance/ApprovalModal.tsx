@@ -61,7 +61,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
               </>
             )}
           </h2>
-          <button
+          <button type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
           >

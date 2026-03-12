@@ -19,9 +19,16 @@ import {
   useAgentStore,
   initializeAgentStatusListener,
   applyAgentStatusSnapshot,
+  type ActionTrailEntry,
 } from './chat/agentStore';
-import { useToolStore, initializeToolEventListener } from './chat/toolStore';
+import {
+  useToolStore,
+  initializeToolEventListener,
+  type ActionLogEntry,
+  type ApprovalRequest,
+} from './chat/toolStore';
 import { useUIStore as useSidecarStore } from './ui';
+import { resolveActiveConversationMessageId } from '../lib/runtimeMessageOwnership';
 
 // Re-export all types for backwards compatibility
 export type {
@@ -98,6 +105,140 @@ function combinedResetOnLogout(): void {
   useAgentStore.getState().resetOnLogout();
   useToolStore.getState().resetOnLogout();
   useSidecarStore.getState().resetOnLogout();
+}
+
+type ChatStateSnapshot = Pick<
+  ReturnType<typeof useChatStore.getState>,
+  'activeConversationId' | 'messagesByConversation' | 'messages' | 'currentStreamingMessageId'
+>;
+
+type ActionTrailInput = Omit<ActionTrailEntry, 'id' | 'timestamp'>;
+type ActionLogInput = Omit<ActionLogEntry, 'createdAt' | 'updatedAt'>;
+type ApprovalRequestInput = Omit<ApprovalRequest, 'createdAt' | 'status'>;
+
+function resolveActionTrailMessageId(chatState: ChatStateSnapshot): string | null {
+  return resolveActiveConversationMessageId(chatState);
+}
+
+function normalizeActionTrailEntry(
+  entry: ActionTrailInput,
+  chatState: ChatStateSnapshot,
+): ActionTrailInput {
+  const existingMessageId = entry.metadata?.['messageId'];
+  if (typeof existingMessageId === 'string' && existingMessageId.length > 0) {
+    return entry;
+  }
+
+  const targetMessageId = resolveActionTrailMessageId(chatState);
+  if (!targetMessageId) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    metadata: {
+      ...(entry.metadata ?? {}),
+      messageId: targetMessageId,
+    },
+  };
+}
+
+function normalizeActionLogEntry(
+  entry: ActionLogInput,
+  chatState: ChatStateSnapshot,
+  existingEntry?: ActionLogEntry,
+): ActionLogInput {
+  const existingMessageId = entry.metadata?.['messageId'] ?? existingEntry?.metadata?.['messageId'];
+  if (typeof existingMessageId === 'string' && existingMessageId.length > 0) {
+    return {
+      ...entry,
+      metadata: {
+        ...(existingEntry?.metadata ?? {}),
+        ...(entry.metadata ?? {}),
+        messageId: existingMessageId,
+      },
+    };
+  }
+
+  const targetMessageId = resolveActionTrailMessageId(chatState);
+  if (!targetMessageId) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    metadata: {
+      ...(existingEntry?.metadata ?? {}),
+      ...(entry.metadata ?? {}),
+      messageId: targetMessageId,
+    },
+  };
+}
+
+function normalizeActionLogUpdates(
+  updates: Partial<ActionLogEntry>,
+  chatState: ChatStateSnapshot,
+  existingEntry?: ActionLogEntry,
+): Partial<ActionLogEntry> {
+  const existingMessageId = updates.metadata?.['messageId'] ?? existingEntry?.metadata?.['messageId'];
+  if (typeof existingMessageId === 'string' && existingMessageId.length > 0) {
+    return {
+      ...updates,
+      metadata: {
+        ...(existingEntry?.metadata ?? {}),
+        ...(updates.metadata ?? {}),
+        messageId: existingMessageId,
+      },
+    };
+  }
+
+  const targetMessageId = resolveActionTrailMessageId(chatState);
+  if (!targetMessageId) {
+    return updates;
+  }
+
+  return {
+    ...updates,
+    metadata: {
+      ...(existingEntry?.metadata ?? {}),
+      ...(updates.metadata ?? {}),
+      messageId: targetMessageId,
+    },
+  };
+}
+
+function normalizeApprovalRequest(
+  request: ApprovalRequestInput,
+  chatState: ChatStateSnapshot,
+): ApprovalRequestInput {
+  const existingMessageId =
+    request.messageId ??
+    (typeof request.details?.['messageId'] === 'string' ? (request.details['messageId'] as string) : undefined);
+
+  if (existingMessageId && existingMessageId.length > 0) {
+    return {
+      ...request,
+      messageId: existingMessageId,
+      details: {
+        ...(request.details ?? {}),
+        messageId: existingMessageId,
+      },
+    };
+  }
+
+  const targetMessageId = resolveActionTrailMessageId(chatState);
+  if (!targetMessageId) {
+    return request;
+  }
+
+  return {
+    ...request,
+    messageId: targetMessageId,
+    details: {
+      ...(request.details ?? {}),
+      messageId: targetMessageId,
+    },
+  };
 }
 
 /**
@@ -437,7 +578,8 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       addBackgroundTask: agentState.addBackgroundTask,
       updateBackgroundTask: agentState.updateBackgroundTask,
       clearBackgroundTasks: agentState.clearBackgroundTasks,
-      addActionTrailEntry: agentState.addActionTrailEntry,
+      addActionTrailEntry: (entry) =>
+        agentState.addActionTrailEntry(normalizeActionTrailEntry(entry, useChatStore.getState())),
       removeActionTrailEntry: agentState.removeActionTrailEntry,
       clearActionTrail: agentState.clearActionTrail,
       getActiveActionTrail: agentState.getActiveActionTrail,
@@ -450,14 +592,25 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       updateTerminalOutput: toolState.updateTerminalOutput,
       addToolExecution: toolState.addToolExecution,
       addScreenshot: toolState.addScreenshot,
-      addActionLogEntry: toolState.addActionLogEntry,
-      updateActionLogEntry: toolState.updateActionLogEntry,
+      addActionLogEntry: (entry) =>
+        toolState.addActionLogEntry(normalizeActionLogEntry(entry, useChatStore.getState())),
+      updateActionLogEntry: (id, updates) => {
+        const existingEntry =
+          useToolStore
+            .getState()
+            .actionLog.find((item) => item.id === id || item.actionId === id) ?? undefined;
+        toolState.updateActionLogEntry(
+          id,
+          normalizeActionLogUpdates(updates, useChatStore.getState(), existingEntry),
+        );
+      },
       clearActionLog: toolState.clearActionLog,
       setWorkflowContext: toolState.setWorkflowContext,
       setPlan: toolState.setPlan,
       updatePlanStep: toolState.updatePlanStep,
       clearPlan: toolState.clearPlan,
-      addApprovalRequest: toolState.addApprovalRequest,
+      addApprovalRequest: (request) =>
+        toolState.addApprovalRequest(normalizeApprovalRequest(request, useChatStore.getState())),
       approveOperation: toolState.approveOperation,
       rejectOperation: toolState.rejectOperation,
       removeApprovalRequest: toolState.removeApprovalRequest,
@@ -548,7 +701,8 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     addBackgroundTask: agentState.addBackgroundTask,
     updateBackgroundTask: agentState.updateBackgroundTask,
     clearBackgroundTasks: agentState.clearBackgroundTasks,
-    addActionTrailEntry: agentState.addActionTrailEntry,
+    addActionTrailEntry: (entry) =>
+      agentState.addActionTrailEntry(normalizeActionTrailEntry(entry, useChatStore.getState())),
     removeActionTrailEntry: agentState.removeActionTrailEntry,
     clearActionTrail: agentState.clearActionTrail,
     getActiveActionTrail: agentState.getActiveActionTrail,
@@ -572,14 +726,25 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     updateTerminalOutput: toolState.updateTerminalOutput,
     addToolExecution: toolState.addToolExecution,
     addScreenshot: toolState.addScreenshot,
-    addActionLogEntry: toolState.addActionLogEntry,
-    updateActionLogEntry: toolState.updateActionLogEntry,
+    addActionLogEntry: (entry) =>
+      toolState.addActionLogEntry(normalizeActionLogEntry(entry, useChatStore.getState())),
+    updateActionLogEntry: (id, updates) => {
+      const existingEntry =
+        useToolStore
+          .getState()
+          .actionLog.find((item) => item.id === id || item.actionId === id) ?? undefined;
+      toolState.updateActionLogEntry(
+        id,
+        normalizeActionLogUpdates(updates, useChatStore.getState(), existingEntry),
+      );
+    },
     clearActionLog: toolState.clearActionLog,
     setWorkflowContext: toolState.setWorkflowContext,
     setPlan: toolState.setPlan,
     updatePlanStep: toolState.updatePlanStep,
     clearPlan: toolState.clearPlan,
-    addApprovalRequest: toolState.addApprovalRequest,
+    addApprovalRequest: (request) =>
+      toolState.addApprovalRequest(normalizeApprovalRequest(request, useChatStore.getState())),
     approveOperation: toolState.approveOperation,
     rejectOperation: toolState.rejectOperation,
     removeApprovalRequest: toolState.removeApprovalRequest,

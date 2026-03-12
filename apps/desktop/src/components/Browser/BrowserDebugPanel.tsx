@@ -399,10 +399,11 @@ function StorageViewer({ tabId: _tabId }: { tabId?: string }) {
   useEffect(() => {
     setIsLoading(true);
     // Simulate loading storage data
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setStorageItems(mockStorageData[storageType] || []);
       setIsLoading(false);
     }, 300);
+    return () => clearTimeout(timer);
   }, [storageType, mockStorageData]);
 
   const filteredItems = storageItems.filter(

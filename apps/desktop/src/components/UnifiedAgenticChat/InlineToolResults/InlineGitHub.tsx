@@ -2,6 +2,16 @@ import { GitPullRequest, AlertCircle, GitCommit, MessageSquare, Loader2 } from '
 import type { ToolResultProps } from './index';
 import { cn } from '@/lib/utils';
 
+/** Validate that a URL uses https or http protocol before rendering as href */
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export interface GitHubPR {
   number: number;
   title: string;
@@ -94,10 +104,11 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) =>
   const stateColor =
     state === 'merged' ? 'text-purple-400' : state === 'open' ? 'text-emerald-400' : 'text-red-400';
   const stateLabel = state === 'merged' ? 'Merged' : state === 'open' ? 'Open' : 'Closed';
+  const safeHref = isSafeUrl(html_url) ? html_url : undefined;
 
   return (
     <a
-      href={html_url}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"
@@ -166,10 +177,11 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status })
 
   const stateColor = state === 'open' ? 'text-emerald-400' : 'text-red-400';
   const stateLabel = state === 'open' ? 'Open' : 'Closed';
+  const safeHref = isSafeUrl(html_url) ? html_url : undefined;
 
   return (
     <a
-      href={html_url}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"
@@ -247,10 +259,11 @@ export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result, status }
 
   const { message, sha, html_url, author } = data;
   const shortSha = sha.substring(0, 7);
+  const safeHref = isSafeUrl(html_url) ? html_url : undefined;
 
   return (
     <a
-      href={html_url}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"

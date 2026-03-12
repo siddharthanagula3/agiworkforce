@@ -106,8 +106,10 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
     const a = document.createElement('a');
     a.href = url;
     a.download = `${artifact.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('File exported');
   }, [artifact]);
 

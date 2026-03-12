@@ -163,8 +163,10 @@ export const useROIStore = create<ROIStore>()(
             const a = document.createElement('a');
             a.href = url;
             a.download = `roi-report-${Date.now()}.${format === 'markdown' ? 'md' : format}`;
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
 
             return report;
           } catch (error) {

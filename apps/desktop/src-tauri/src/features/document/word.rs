@@ -25,7 +25,7 @@ const CORE_PROPS_NS: &str =
 const DC_NS: &str = "http://purl.org/dc/elements/1.1/";
 
 const EXT_PROPS_NS: &str =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+    "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
 
 pub struct WordHandler;
 
@@ -193,7 +193,23 @@ impl WordHandler {
         Ok(metadata)
     }
 
-    pub async fn search(&self, _file_path: &str, _query: &str) -> Result<Vec<SearchResult>> {
-        Ok(vec![])
+    pub async fn search(&self, file_path: &str, query: &str) -> Result<Vec<SearchResult>> {
+        let text = self.extract_text(file_path).await?;
+        let query_lower = query.to_lowercase();
+        let mut results = Vec::new();
+
+        for (line_num, line) in text.lines().enumerate() {
+            let line_lower = line.to_lowercase();
+            if line_lower.contains(&query_lower) {
+                results.push(SearchResult {
+                    page: None,
+                    line: Some(line_num + 1),
+                    context: line.to_string(),
+                    match_text: query.to_string(),
+                });
+            }
+        }
+
+        Ok(results)
     }
 }

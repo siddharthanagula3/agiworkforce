@@ -7,7 +7,7 @@
  * @module useGit
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -369,7 +369,7 @@ export function useGit(initialPath?: string): UseGitReturn {
       try {
         const diffs = await invoke<GitDiff[]>('git_diff', {
           path: repoPath,
-          file_path: filePath ?? null,
+          filePath: filePath ?? null,
           staged: staged ?? false,
         });
         return diffs;
@@ -416,7 +416,7 @@ export function useGit(initialPath?: string): UseGitReturn {
       try {
         await invoke('git_checkout', {
           path: repoPath,
-          branch_name: branchName,
+          branchName,
         });
         toast.success(`Switched to branch '${branchName}'`);
         await refreshStatus();
@@ -441,7 +441,7 @@ export function useGit(initialPath?: string): UseGitReturn {
       try {
         await invoke('git_checkout_new_branch', {
           path: repoPath,
-          branch_name: branchName,
+          branchName,
         });
         toast.success(`Created and switched to branch '${branchName}'`);
         await refreshStatus();

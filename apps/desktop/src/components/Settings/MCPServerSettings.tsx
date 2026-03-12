@@ -65,7 +65,7 @@ export function MCPServerSettings() {
             {config?.running ? `Running on port ${config.port}` : 'Stopped'}
           </span>
         </div>
-        <button
+        <button type="button"
           onClick={config?.running ? stopServer : startServer}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             config?.running
@@ -99,7 +99,7 @@ export function MCPServerSettings() {
           <code className="flex-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono">
             {tokenVisible ? config?.token : '\u2022'.repeat(36)}
           </code>
-          <button
+          <button type="button"
             onClick={() => setTokenVisible((v) => !v)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -130,7 +130,7 @@ export function MCPServerSettings() {
       </div>
 
       {/* Copy .mcp.json snippet */}
-      <button
+      <button type="button"
         onClick={copySnippet}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
       >

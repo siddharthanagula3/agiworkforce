@@ -586,11 +586,9 @@ impl SearchAgent for EmailSearchAgent {
             agent_type: AgentType::EmailSearch,
             results: Vec::new(),
             search_time_ms: start.elapsed().as_millis() as u64,
-            warnings: vec![
-                "Email search integration is pending. Gmail API and IMAP \
+            warnings: vec!["Email search integration is pending. Gmail API and IMAP \
                  connectors are on the roadmap."
-                    .into(),
-            ],
+                .into()],
             complete: true,
             error: None,
         })

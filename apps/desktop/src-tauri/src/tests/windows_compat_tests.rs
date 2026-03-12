@@ -39,24 +39,22 @@ mod windows_compat_tests {
     use xcap::Monitor;
 
     // AES-GCM encryption (same crate the app uses in encryption.rs)
+    use aes_gcm::aead::rand_core::OsRng;
     use aes_gcm::{
         aead::{rand_core::RngCore, Aead, KeyInit},
-        Aes256Gcm,
-        Key,
-        Nonce,
+        Aes256Gcm, Key, Nonce,
     };
-    use aes_gcm::aead::rand_core::OsRng;
 
     // rusqlite — in-memory DB (same as SecretManager tests)
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex};
 
     // Internal modules under test
+    use crate::features::terminal::shells::{detect_available_shells, get_default_shell};
+    use crate::features::terminal::ShellType;
     use crate::sys::security::encryption::{decrypt_secret, encrypt_secret};
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use crate::sys::security::secret_manager::SecretManager;
-    use crate::features::terminal::shells::{detect_available_shells, get_default_shell};
-    use crate::features::terminal::ShellType;
 
     // -----------------------------------------------------------------------
     // Helpers
@@ -105,7 +103,11 @@ mod windows_compat_tests {
             "Joined path should use backslashes on Windows: {}",
             s
         );
-        assert!(s.starts_with("C:\\"), "Path should start with drive letter: {}", s);
+        assert!(
+            s.starts_with("C:\\"),
+            "Path should start with drive letter: {}",
+            s
+        );
     }
 
     #[test]
@@ -176,7 +178,10 @@ mod windows_compat_tests {
     fn test_dirs_data_dir_resolves_on_windows() {
         // On Windows, dirs::data_dir() returns %APPDATA% (Roaming).
         let data = dirs::data_dir();
-        assert!(data.is_some(), "dirs::data_dir() should return Some on Windows");
+        assert!(
+            data.is_some(),
+            "dirs::data_dir() should return Some on Windows"
+        );
         let path = data.unwrap();
         assert!(path.exists(), "Data dir should exist: {}", path.display());
     }
@@ -190,7 +195,11 @@ mod windows_compat_tests {
             "dirs::data_local_dir() should return Some on Windows"
         );
         let path = local.unwrap();
-        assert!(path.exists(), "LocalAppData dir should exist: {}", path.display());
+        assert!(
+            path.exists(),
+            "LocalAppData dir should exist: {}",
+            path.display()
+        );
         let s = path.to_string_lossy().to_lowercase();
         assert!(
             s.contains("local"),
@@ -202,9 +211,16 @@ mod windows_compat_tests {
     #[test]
     fn test_dirs_home_dir_resolves_on_windows() {
         let home = dirs::home_dir();
-        assert!(home.is_some(), "dirs::home_dir() should return Some on Windows");
+        assert!(
+            home.is_some(),
+            "dirs::home_dir() should return Some on Windows"
+        );
         let path = home.unwrap();
-        assert!(path.exists(), "Home directory should exist: {}", path.display());
+        assert!(
+            path.exists(),
+            "Home directory should exist: {}",
+            path.display()
+        );
         // Typically C:\Users\<username>
         let s = path.to_string_lossy().to_lowercase();
         assert!(
@@ -270,9 +286,15 @@ mod windows_compat_tests {
         let jwt = derive_key(KeyPurpose::JwtSecret);
         let db = derive_key(KeyPurpose::DatabaseEncryption);
         let mcp = derive_key(KeyPurpose::McpCredentials);
-        assert_ne!(jwt, db, "JwtSecret and DatabaseEncryption keys should differ");
+        assert_ne!(
+            jwt, db,
+            "JwtSecret and DatabaseEncryption keys should differ"
+        );
         assert_ne!(jwt, mcp, "JwtSecret and McpCredentials keys should differ");
-        assert_ne!(db, mcp, "DatabaseEncryption and McpCredentials keys should differ");
+        assert_ne!(
+            db, mcp,
+            "DatabaseEncryption and McpCredentials keys should differ"
+        );
     }
 
     #[test]
@@ -280,10 +302,10 @@ mod windows_compat_tests {
         let key = derive_key(KeyPurpose::MasterEncryption);
         let plaintext = "windows-secret-test-42!@#$%^&*()";
 
-        let encrypted = encrypt_secret(&key, plaintext)
-            .expect("encrypt_secret should succeed on Windows");
-        let decrypted = decrypt_secret(&key, &encrypted)
-            .expect("decrypt_secret should succeed on Windows");
+        let encrypted =
+            encrypt_secret(&key, plaintext).expect("encrypt_secret should succeed on Windows");
+        let decrypted =
+            decrypt_secret(&key, &encrypted).expect("decrypt_secret should succeed on Windows");
 
         assert_eq!(plaintext, decrypted, "Decrypted value must match original");
     }
@@ -344,7 +366,10 @@ mod windows_compat_tests {
         let secret2 = manager
             .get_or_create_jwt_secret()
             .expect("second get_or_create_jwt_secret failed");
-        assert_eq!(secret1, secret2, "Persisted secret must be stable across calls");
+        assert_eq!(
+            secret1, secret2,
+            "Persisted secret must be stable across calls"
+        );
     }
 
     #[test]
@@ -359,13 +384,19 @@ mod windows_compat_tests {
             .rotate_jwt_secret()
             .expect("rotate_jwt_secret failed");
 
-        assert_ne!(original, rotated, "Rotated secret must differ from original");
+        assert_ne!(
+            original, rotated,
+            "Rotated secret must differ from original"
+        );
 
         // After rotation, retrieval should return the new secret.
         let after = manager
             .get_or_create_jwt_secret()
             .expect("retrieve after rotation failed");
-        assert_eq!(rotated, after, "Post-rotation retrieval must match rotated value");
+        assert_eq!(
+            rotated, after,
+            "Post-rotation retrieval must match rotated value"
+        );
     }
 
     #[test]
@@ -424,9 +455,9 @@ mod windows_compat_tests {
             "detect_available_shells() must return at least one shell on Windows"
         );
 
-        let has_cmd_or_ps = shells.iter().any(|s| {
-            matches!(s.shell_type, ShellType::Cmd | ShellType::PowerShell)
-        });
+        let has_cmd_or_ps = shells
+            .iter()
+            .any(|s| matches!(s.shell_type, ShellType::Cmd | ShellType::PowerShell));
         assert!(
             has_cmd_or_ps,
             "At least one of Cmd or PowerShell should be detected on Windows"
@@ -506,10 +537,7 @@ mod windows_compat_tests {
 
     #[test]
     fn test_cfg_not_unix_on_windows() {
-        assert!(
-            !cfg!(unix),
-            "cfg!(unix) must be false on Windows"
-        );
+        assert!(!cfg!(unix), "cfg!(unix) must be false on Windows");
     }
 
     #[test]
@@ -544,7 +572,10 @@ mod windows_compat_tests {
     fn test_sysinfo_kernel_version_non_empty_on_windows() {
         let kernel = System::kernel_version();
         if let Some(k) = kernel {
-            assert!(!k.is_empty(), "Kernel version should be non-empty on Windows");
+            assert!(
+                !k.is_empty(),
+                "Kernel version should be non-empty on Windows"
+            );
         }
     }
 
@@ -552,7 +583,8 @@ mod windows_compat_tests {
     fn test_std_env_os_returns_windows() {
         // std::env::consts::OS is set at compile time.
         assert_eq!(
-            std::env::consts::OS, "windows",
+            std::env::consts::OS,
+            "windows",
             "std::env::consts::OS must be 'windows'"
         );
     }
@@ -564,8 +596,7 @@ mod windows_compat_tests {
         let homedrive = std::env::var("HOMEDRIVE");
         let windir = std::env::var("WINDIR").or_else(|_| std::env::var("SystemRoot"));
 
-        let any_set =
-            userprofile.is_ok() || homedrive.is_ok() || windir.is_ok();
+        let any_set = userprofile.is_ok() || homedrive.is_ok() || windir.is_ok();
         assert!(
             any_set,
             "At least one of USERPROFILE, HOMEDRIVE, or WINDIR/SystemRoot should be set on Windows"
@@ -665,7 +696,10 @@ mod windows_compat_tests {
 
         std::fs::write(&path, content).expect("write failed");
         let read_back = std::fs::read(&path).expect("read failed");
-        assert_eq!(read_back, content, "Binary roundtrip must be lossless on Windows");
+        assert_eq!(
+            read_back, content,
+            "Binary roundtrip must be lossless on Windows"
+        );
     }
 
     #[test]
@@ -798,7 +832,11 @@ mod windows_compat_tests {
 
         // After clear, get_text may error (no text) or return empty — either is correct.
         match clipboard.get_text() {
-            Ok(s) => assert!(s.is_empty(), "Clipboard should be empty after clear, got: {}", s),
+            Ok(s) => assert!(
+                s.is_empty(),
+                "Clipboard should be empty after clear, got: {}",
+                s
+            ),
             Err(_) => { /* expected — clipboard has no text */ }
         }
     }
@@ -808,8 +846,12 @@ mod windows_compat_tests {
     fn test_arboard_clipboard_overwrites_previous_value() {
         let mut clipboard = Clipboard::new().expect("arboard::Clipboard::new() failed");
 
-        clipboard.set_text("first".to_string()).expect("set 1 failed");
-        clipboard.set_text("second".to_string()).expect("set 2 failed");
+        clipboard
+            .set_text("first".to_string())
+            .expect("set 1 failed");
+        clipboard
+            .set_text("second".to_string())
+            .expect("set 2 failed");
 
         let result = clipboard.get_text().expect("get_text failed");
         assert_eq!(result, "second", "Second set should overwrite first");
@@ -835,12 +877,10 @@ mod windows_compat_tests {
 
     #[test]
     fn test_windows_path_entry_parsing_handles_backslash() {
-        let path_var = r"C:\Windows\System32;C:\Program Files\nodejs;C:\Users\test\AppData\Roaming\npm";
+        let path_var =
+            r"C:\Windows\System32;C:\Program Files\nodejs;C:\Users\test\AppData\Roaming\npm";
         for entry in path_var.split(';') {
-            assert!(
-                !entry.is_empty(),
-                "Each PATH entry should be non-empty"
-            );
+            assert!(!entry.is_empty(), "Each PATH entry should be non-empty");
             // Every entry should look like an absolute Windows path
             if !entry.is_empty() {
                 let p = std::path::Path::new(entry);
@@ -895,7 +935,10 @@ mod windows_compat_tests {
         if !pf.is_empty() {
             let nodejs_path = format!("{}\\nodejs", pf);
             let p = std::path::PathBuf::from(&nodejs_path);
-            assert!(p.is_absolute(), "Program Files nodejs path should be absolute");
+            assert!(
+                p.is_absolute(),
+                "Program Files nodejs path should be absolute"
+            );
         }
     }
 
@@ -905,16 +948,15 @@ mod windows_compat_tests {
         let cases = [
             (r"C:\Windows\System32\node.exe", true),
             (r"D:\tools\uvx.exe", true),
-            ("C:/tools/npx.cmd", true), // forward slash variant
-            ("npx", false),             // bare name — not absolute
-            ("./bin/node", false),      // relative
+            ("C:/tools/npx.cmd", true),        // forward slash variant
+            ("npx", false),                    // bare name — not absolute
+            ("./bin/node", false),             // relative
             (r"\\server\share\bin.exe", true), // UNC
         ];
         for (cmd, expected) in &cases {
             let bytes = cmd.as_bytes();
-            let is_drive_abs = bytes.len() >= 3
-                && bytes[1] == b':'
-                && (bytes[2] == b'\\' || bytes[2] == b'/');
+            let is_drive_abs =
+                bytes.len() >= 3 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/');
             let is_unc = cmd.starts_with("\\\\") || cmd.starts_with("//");
             let actual = is_drive_abs || is_unc;
             assert_eq!(
@@ -998,7 +1040,11 @@ mod windows_compat_tests {
     fn test_windows_path_in_cargo_build_is_safe() {
         use crate::sys::security::command_validator::{validate_command, ValidationConfig};
         let cfg = ValidationConfig::interactive();
-        assert!(validate_command(r"cargo build --manifest-path C:\projects\app\Cargo.toml", &cfg).is_ok());
+        assert!(validate_command(
+            r"cargo build --manifest-path C:\projects\app\Cargo.toml",
+            &cfg
+        )
+        .is_ok());
     }
 
     #[test]
@@ -1028,7 +1074,10 @@ mod windows_compat_tests {
     fn test_app_settings_default_schema_version() {
         use crate::data::settings::models::AppSettings;
         let settings = AppSettings::default();
-        assert_eq!(settings.schema_version, 1, "Default schema version must be 1");
+        assert_eq!(
+            settings.schema_version, 1,
+            "Default schema version must be 1"
+        );
     }
 
     #[test]
@@ -1037,8 +1086,14 @@ mod windows_compat_tests {
         let settings = AppSettings::default();
         let sec = &settings.security_settings;
         // File system and network access are enabled by default
-        assert!(sec.allow_file_system_access, "File system access should be enabled by default");
-        assert!(sec.allow_network_access, "Network access should be enabled by default");
+        assert!(
+            sec.allow_file_system_access,
+            "File system access should be enabled by default"
+        );
+        assert!(
+            sec.allow_network_access,
+            "Network access should be enabled by default"
+        );
         // Confirmation is required by default (important on Windows where UAC exists)
         assert!(
             sec.require_confirmation_for_actions,

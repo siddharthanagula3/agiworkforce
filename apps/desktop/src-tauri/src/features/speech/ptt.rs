@@ -45,6 +45,9 @@ pub struct PttEvent {
     pub audio_duration_ms: Option<u64>,
 }
 
+/// Maximum audio buffer size (10 MB) to prevent memory exhaustion
+const MAX_AUDIO_BUFFER_SIZE: usize = 10 * 1024 * 1024;
+
 /// Push-to-talk manager
 pub struct PushToTalk {
     config: PttConfig,
@@ -213,6 +216,18 @@ impl PushToTalk {
             .audio_buffer
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
+
+        if buffer.len().saturating_add(data.len()) > MAX_AUDIO_BUFFER_SIZE {
+            tracing::warn!(
+                "Audio buffer size limit reached ({} bytes). Dropping incoming audio data.",
+                MAX_AUDIO_BUFFER_SIZE
+            );
+            return Err(Error::Generic(format!(
+                "Audio buffer full: exceeded {} byte limit",
+                MAX_AUDIO_BUFFER_SIZE
+            )));
+        }
+
         buffer.extend_from_slice(data);
 
         Ok(())

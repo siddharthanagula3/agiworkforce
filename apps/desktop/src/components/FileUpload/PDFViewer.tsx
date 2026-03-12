@@ -236,7 +236,7 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-800 border-b border-zinc-700">
         {/* Page navigation */}
         <div className="flex items-center gap-2">
-          <button
+          <button type="button"
             onClick={goToPrevPage}
             disabled={currentPage <= 1}
             className={cn(
@@ -250,7 +250,7 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
           <span className="text-sm text-zinc-300 tabular-nums min-w-[80px] text-center">
             {currentPage} / {numPages}
           </span>
-          <button
+          <button type="button"
             onClick={goToNextPage}
             disabled={currentPage >= numPages}
             className={cn(
@@ -265,7 +265,7 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
 
         {/* Zoom and rotation controls */}
         <div className="flex items-center gap-1">
-          <button
+          <button type="button"
             onClick={zoomOut}
             disabled={scale <= 0.5}
             className={cn(
@@ -279,7 +279,7 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
           <span className="text-xs text-zinc-400 min-w-[50px] text-center">
             {Math.round(scale * 100)}%
           </span>
-          <button
+          <button type="button"
             onClick={zoomIn}
             disabled={scale >= 4}
             className={cn(
@@ -291,7 +291,7 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
             <ZoomIn className="w-4 h-4 text-zinc-300" />
           </button>
           <div className="w-px h-4 bg-zinc-600 mx-2" />
-          <button
+          <button type="button"
             onClick={rotate}
             className="p-1.5 rounded hover:bg-zinc-700 transition-colors"
             aria-label="Rotate"

@@ -6,12 +6,8 @@ use std::path::Path;
 /// If `projectRoot` is provided, the project-level config at
 /// `{projectRoot}/.agiworkforce/config.json` is consulted first.
 #[tauri::command]
-pub async fn get_resolved_config(
-    project_root: Option<String>,
-) -> Result<ProjectConfig, String> {
-    let hierarchy = ConfigHierarchy::load(
-        project_root.as_deref().map(Path::new),
-    );
+pub async fn get_resolved_config(project_root: Option<String>) -> Result<ProjectConfig, String> {
+    let hierarchy = ConfigHierarchy::load(project_root.as_deref().map(Path::new));
     Ok(hierarchy.resolved())
 }
 
