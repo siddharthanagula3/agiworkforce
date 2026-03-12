@@ -4,9 +4,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
-use super::types::ElementSelector;
 #[cfg(any(windows, target_os = "macos"))]
 use super::inspector::UIInspector;
+use super::types::ElementSelector;
 use super::InspectorService;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::screen::{capture_primary_screen, capture_region};
@@ -412,8 +412,30 @@ impl ExecutorService {
                     "down" => enigo::Key::DownArrow,
                     "left" => enigo::Key::LeftArrow,
                     "right" => enigo::Key::RightArrow,
-
-                    _ => return Err(anyhow!("Unsupported key for hotkey: {}", p)),
+                    "home" => enigo::Key::Home,
+                    "end" => enigo::Key::End,
+                    "pageup" => enigo::Key::PageUp,
+                    "pagedown" => enigo::Key::PageDown,
+                    "f1" => enigo::Key::F1,
+                    "f2" => enigo::Key::F2,
+                    "f3" => enigo::Key::F3,
+                    "f4" => enigo::Key::F4,
+                    "f5" => enigo::Key::F5,
+                    "f6" => enigo::Key::F6,
+                    "f7" => enigo::Key::F7,
+                    "f8" => enigo::Key::F8,
+                    "f9" => enigo::Key::F9,
+                    "f10" => enigo::Key::F10,
+                    "f11" => enigo::Key::F11,
+                    "f12" => enigo::Key::F12,
+                    other => {
+                        // Fall back to Unicode key for single-character alphanumeric keys
+                        let mut chars = other.chars();
+                        match (chars.next(), chars.next()) {
+                            (Some(c), None) => enigo::Key::Unicode(c),
+                            _ => return Err(anyhow!("Unsupported key for hotkey: {}", p)),
+                        }
+                    }
                 });
             } else if let Some(mod_key) = KeyboardSimulator::modifier_key(p) {
                 modifiers.push(mod_key);

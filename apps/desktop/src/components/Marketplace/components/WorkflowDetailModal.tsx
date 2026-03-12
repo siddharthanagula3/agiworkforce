@@ -334,7 +334,7 @@ export function WorkflowDetailModal() {
                         <label className="text-sm font-medium mb-2 block">Your Rating</label>
                         <div className="flex gap-2">
                           {[1, 2, 3, 4, 5].map((rating) => (
-                            <button
+                            <button type="button"
                               key={rating}
                               onClick={() => setUserRating(rating)}
                               className="transition-transform hover:scale-110"
@@ -407,7 +407,7 @@ export function WorkflowDetailModal() {
                           {review.review_text && (
                             <p className="text-muted-foreground mb-2">{review.review_text}</p>
                           )}
-                          <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
                             <ThumbsUp className="h-4 w-4" />
                             <span>Helpful ({review.helpful_count})</span>
                           </button>

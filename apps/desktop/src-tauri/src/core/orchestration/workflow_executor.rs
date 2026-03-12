@@ -1,6 +1,6 @@
 use super::workflow_engine::*;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
@@ -29,6 +29,9 @@ pub struct ExecutionContext {
     pub current_node_id: Option<String>,
     pub execution_path: Vec<String>,
     pub loop_counters: HashMap<String, i32>,
+    /// Tracks nodes already executed in this run to prevent infinite cycles
+    /// from back-edges in the workflow graph.
+    pub visited_nodes: HashSet<String>,
 }
 
 impl ExecutionContext {
@@ -40,6 +43,7 @@ impl ExecutionContext {
             current_node_id: None,
             execution_path: Vec::new(),
             loop_counters: HashMap::new(),
+            visited_nodes: HashSet::new(),
         }
     }
 
@@ -185,8 +189,21 @@ impl WorkflowExecutor {
         context: &'a mut ExecutionContext,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
         Box::pin(async move {
-            context.current_node_id = Some(node.id().to_string());
-            context.execution_path.push(node.id().to_string());
+            // Cycle detection: if this node has already been executed in this
+            // run, a back-edge is creating an infinite loop.  LoopNodes manage
+            // their own iteration via loop_counters and are exempt.
+            let node_id_str = node.id().to_string();
+            if !matches!(node, WorkflowNode::LoopNode { .. })
+                && !context.visited_nodes.insert(node_id_str.clone())
+            {
+                return Err(format!(
+                    "Cycle detected: node '{}' has already been executed in this workflow run",
+                    node_id_str
+                ));
+            }
+
+            context.current_node_id = Some(node_id_str.clone());
+            context.execution_path.push(node_id_str);
 
             self.engine.add_execution_log(
                 &context.execution_id,
@@ -389,7 +406,7 @@ impl WorkflowExecutor {
 
     async fn execute_loop_node(
         &self,
-        _workflow: &WorkflowDefinition,
+        workflow: &WorkflowDefinition,
         node: &WorkflowNode,
         data: &LoopNodeData,
         context: &mut ExecutionContext,
@@ -402,12 +419,18 @@ impl WorkflowExecutor {
                 for i in 0..iterations {
                     context.set_variable(data.item_variable.clone(), Value::Number(i.into()));
 
+                    // Bug #236 fix: Execute child nodes on each iteration
+                    self.execute_next_nodes(workflow, node, context).await?;
+
                     sleep(Duration::from_millis(50)).await;
                 }
             }
             LoopType::Condition => {
                 if let Some(condition) = &data.condition {
                     while self.evaluate_condition(condition, context)? {
+                        // Bug #237 fix: Execute child nodes on each iteration
+                        self.execute_next_nodes(workflow, node, context).await?;
+
                         sleep(Duration::from_millis(50)).await;
 
                         let counter = context.increment_loop_counter(node.id());
@@ -422,6 +445,10 @@ impl WorkflowExecutor {
                     if let Some(Value::Array(items)) = context.get_variable(collection_name) {
                         for item in items.clone() {
                             context.set_variable(data.item_variable.clone(), item);
+
+                            // Bug #238 fix: Execute child nodes on each iteration
+                            self.execute_next_nodes(workflow, node, context).await?;
+
                             sleep(Duration::from_millis(50)).await;
                         }
                     }
@@ -454,9 +481,7 @@ impl WorkflowExecutor {
         let branch_nodes: Vec<WorkflowNode> = data
             .branches
             .iter()
-            .filter_map(|branch_id| {
-                workflow.nodes.iter().find(|n| n.id() == branch_id).cloned()
-            })
+            .filter_map(|branch_id| workflow.nodes.iter().find(|n| n.id() == branch_id).cloned())
             .collect();
 
         if branch_nodes.is_empty() {
@@ -561,7 +586,11 @@ impl WorkflowExecutor {
         data: &WaitNodeData,
         context: &mut ExecutionContext,
     ) -> Result<(), String> {
-        tracing::info!("Executing wait node: {} (type: {:?})", data.label, data.wait_type);
+        tracing::info!(
+            "Executing wait node: {} (type: {:?})",
+            data.label,
+            data.wait_type
+        );
 
         match data.wait_type {
             WaitType::Duration => {
@@ -570,7 +599,8 @@ impl WorkflowExecutor {
                         return Ok(());
                     }
                     let total = Duration::from_secs(duration_secs as u64);
-                    self.interruptible_sleep(total, &context.execution_id).await?;
+                    self.interruptible_sleep(total, &context.execution_id)
+                        .await?;
                 }
             }
             WaitType::UntilTime => {
@@ -580,16 +610,19 @@ impl WorkflowExecutor {
                     if delta_secs <= 0 {
                         tracing::debug!(
                             "Wait node target time {} already passed (now={}), continuing",
-                            until_timestamp, now
+                            until_timestamp,
+                            now
                         );
                         return Ok(());
                     }
                     let wait_duration = Duration::from_secs(delta_secs as u64);
                     tracing::info!(
                         "Wait node sleeping until timestamp {} ({} seconds from now)",
-                        until_timestamp, delta_secs
+                        until_timestamp,
+                        delta_secs
                     );
-                    self.interruptible_sleep(wait_duration, &context.execution_id).await?;
+                    self.interruptible_sleep(wait_duration, &context.execution_id)
+                        .await?;
                 }
             }
             WaitType::Condition => {
@@ -597,7 +630,9 @@ impl WorkflowExecutor {
                     let max_polls = 3600u32;
                     let poll_interval = Duration::from_secs(1);
                     for poll_count in 0..max_polls {
-                        if let Ok(execution) = self.engine.get_execution_status(&context.execution_id) {
+                        if let Ok(execution) =
+                            self.engine.get_execution_status(&context.execution_id)
+                        {
                             if execution.status == WorkflowStatus::Cancelled {
                                 return Err("Wait cancelled".to_string());
                             }
@@ -610,7 +645,8 @@ impl WorkflowExecutor {
                         if self.evaluate_condition(condition, context)? {
                             tracing::info!(
                                 "Wait node condition met after {} polls: {}",
-                                poll_count, condition
+                                poll_count,
+                                condition
                             );
                             return Ok(());
                         }
@@ -629,11 +665,7 @@ impl WorkflowExecutor {
 
     /// Sleep for a duration in 1-second chunks, checking each second whether the
     /// execution has been cancelled or paused. Returns `Err` if cancelled.
-    async fn interruptible_sleep(
-        &self,
-        total: Duration,
-        execution_id: &str,
-    ) -> Result<(), String> {
+    async fn interruptible_sleep(&self, total: Duration, execution_id: &str) -> Result<(), String> {
         let chunk = Duration::from_secs(1);
         let mut remaining = total;
 
@@ -815,9 +847,7 @@ impl WorkflowExecutor {
                 } else if which_exists("node") {
                     "node"
                 } else {
-                    return Err(
-                        "No JavaScript runtime found (install node or deno)".to_string()
-                    );
+                    return Err("No JavaScript runtime found (install node or deno)".to_string());
                 };
                 if runtime == "deno" {
                     // Deno sandbox: only allow env reads (for WF_ vars), deny net/fs/run
@@ -835,7 +865,11 @@ impl WorkflowExecutor {
                         data.code.clone(),
                     )
                 } else {
-                    ("node".to_string(), vec!["-e".to_string(), data.code.clone()], String::new())
+                    (
+                        "node".to_string(),
+                        vec!["-e".to_string(), data.code.clone()],
+                        String::new(),
+                    )
                 }
             }
             ScriptLanguage::Python => {
@@ -846,7 +880,11 @@ impl WorkflowExecutor {
                 } else {
                     return Err("No Python runtime found (install python3)".to_string());
                 };
-                (runtime.to_string(), vec!["-c".to_string(), data.code.clone()], String::new())
+                (
+                    runtime.to_string(),
+                    vec!["-c".to_string(), data.code.clone()],
+                    String::new(),
+                )
             }
             ScriptLanguage::Bash => {
                 let shell = if cfg!(target_os = "windows") {
@@ -857,8 +895,16 @@ impl WorkflowExecutor {
                 // Use restricted bash mode (-r) when available; disables some dangerous
                 // operations like changing directories via cd, setting/unsetting PATH,
                 // and redirecting output to files.
-                let flag = if cfg!(target_os = "windows") { "/C" } else { "-rc" };
-                (shell.to_string(), vec![flag.to_string(), data.code.clone()], String::new())
+                let flag = if cfg!(target_os = "windows") {
+                    "/C"
+                } else {
+                    "-rc"
+                };
+                (
+                    shell.to_string(),
+                    vec![flag.to_string(), data.code.clone()],
+                    String::new(),
+                )
             }
         };
 
@@ -869,7 +915,9 @@ impl WorkflowExecutor {
         // Clear inherited environment to prevent leaking secrets (API keys, tokens, etc.)
         // Only pass through safe system variables needed for runtime execution.
         cmd.env_clear();
-        let safe_inherited_vars = ["PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "TMPDIR", "TMP", "TEMP"];
+        let safe_inherited_vars = [
+            "PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "TMPDIR", "TMP", "TEMP",
+        ];
         for var in &safe_inherited_vars {
             if let Ok(val) = std::env::var(var) {
                 cmd.env(var, val);
@@ -879,7 +927,8 @@ impl WorkflowExecutor {
         // Pass workflow variables as environment variables (WF_ prefix)
         for (key, value) in &context.variables {
             // Sanitize key: only allow alphanumeric + underscore
-            let sanitized_key: String = key.chars()
+            let sanitized_key: String = key
+                .chars()
                 .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
                 .collect();
             if sanitized_key.is_empty() {
@@ -977,15 +1026,12 @@ impl WorkflowExecutor {
     ) -> Result<(), String> {
         tracing::info!("Executing tool node: {}", data.label);
 
-        let executor = self
-            .mcp_tool_executor
-            .as_ref()
-            .ok_or_else(|| {
-                format!(
-                    "MCP tool executor not available — cannot execute tool '{}'",
-                    data.tool_name
-                )
-            })?;
+        let executor = self.mcp_tool_executor.as_ref().ok_or_else(|| {
+            format!(
+                "MCP tool executor not available — cannot execute tool '{}'",
+                data.tool_name
+            )
+        })?;
 
         let timeout_secs = data
             .timeout_seconds

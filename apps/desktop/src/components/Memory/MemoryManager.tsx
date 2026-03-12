@@ -168,7 +168,7 @@ export const MemoryManager = memo(function MemoryManager({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [displayedMemories, activeTab, sortBy, searchQuery]);
 
   const handleTabChange = useCallback((value: string) => {

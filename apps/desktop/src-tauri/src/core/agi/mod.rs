@@ -52,6 +52,7 @@ pub use core::AGICore;
 pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
+#[allow(deprecated)]
 pub use memory::AGIMemory;
 pub use memory_manager::{
     DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,

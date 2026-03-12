@@ -165,7 +165,7 @@ function IterationHistoryCard({
 
   return (
     <div className="bg-surface-base rounded-lg border border-border">
-      <button
+      <button type="button"
         onClick={onToggle}
         className="w-full p-3 flex items-center justify-between hover:bg-surface-hover transition"
       >
@@ -381,12 +381,13 @@ export function IterationProgressPanel({
     addListener<ReflectionCompletedEvent>('agi:reflection:completed', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => {
-        // Update the last iteration with the insight
-        const iterations = [...prev.iterations];
-        const lastIteration = iterations[iterations.length - 1];
-        if (lastIteration) {
-          lastIteration.insight = event.payload.insight;
-        }
+        // Update the last iteration with the insight (immutable copy)
+        const iterations = prev.iterations.map((iter, idx) => {
+          if (idx === prev.iterations.length - 1) {
+            return { ...iter, insight: event.payload.insight };
+          }
+          return iter;
+        });
         return {
           ...prev,
           iterations,
@@ -579,7 +580,7 @@ export function IterationProgressPanel({
       {/* Current Insight */}
       {state.currentInsight && (
         <div className="px-4 pt-4">
-          <button
+          <button type="button"
             onClick={() => setShowInsight(!showInsight)}
             className="w-full flex items-center justify-between p-2 rounded-lg bg-surface-base hover:bg-surface-hover transition mb-2"
           >

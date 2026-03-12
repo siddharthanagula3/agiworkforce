@@ -627,7 +627,7 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
             "SELECT
             COALESCE(SUM(tokens), 0) as total_tokens,
             COALESCE(SUM(cost), 0.0) as total_cost,
-            COUNT(*) as message_coun
+            COUNT(*) as message_count
          FROM messages
          WHERE role = 'assistant'",
             [],

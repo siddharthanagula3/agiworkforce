@@ -216,7 +216,11 @@ export function subscribeToComputerUseEvents(): () => void {
   );
 
   return () => {
-    unlisteners.forEach((p) => p.then((unlisten) => unlisten()));
+    unlisteners.forEach((p) =>
+      p
+        .then((unlisten) => unlisten())
+        .catch((err) => console.warn('[computerUseStore] Failed to unlisten:', err)),
+    );
   };
 }
 

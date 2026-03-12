@@ -110,7 +110,7 @@ function StatusBannerItem({ message, onDismiss }: StatusBannerItemProps) {
         )}
       </div>
       {message.dismissible && (
-        <button
+        <button type="button"
           onClick={() => onDismiss(message.id)}
           className={`shrink-0 rounded p-0.5 transition-colors ${config.dismissClass}`}
           aria-label={`Dismiss: ${message.title}`}

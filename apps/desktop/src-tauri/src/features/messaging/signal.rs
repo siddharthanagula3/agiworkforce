@@ -1,7 +1,7 @@
 //! Signal messaging integration via signal-cli
 
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use tokio::process::Command;
 
 use crate::sys::error::{Error, Result};
 
@@ -60,8 +60,11 @@ impl SignalClient {
     }
 
     /// Check if signal-cli is available
-    pub fn check_availability(&self) -> Result<bool> {
-        let output = Command::new(self.get_cli_path()).arg("--version").output();
+    pub async fn check_availability(&self) -> Result<bool> {
+        let output = Command::new(self.get_cli_path())
+            .arg("--version")
+            .output()
+            .await;
 
         Ok(output.is_ok())
     }
@@ -99,6 +102,7 @@ impl SignalClient {
 
         let output = cmd
             .output()
+            .await
             .map_err(|e| Error::Generic(format!("signal-cli error: {}", e)))?;
 
         if !output.status.success() {
@@ -132,6 +136,7 @@ impl SignalClient {
 
         let output = cmd
             .output()
+            .await
             .map_err(|e| Error::Generic(format!("signal-cli error: {}", e)))?;
 
         if !output.status.success() {
@@ -164,6 +169,7 @@ impl SignalClient {
 
         let output = cmd
             .output()
+            .await
             .map_err(|e| Error::Generic(format!("signal-cli error: {}", e)))?;
 
         if output.stdout.is_empty() {
@@ -216,6 +222,7 @@ impl SignalClient {
 
         let output = cmd
             .output()
+            .await
             .map_err(|e| Error::Generic(format!("signal-cli error: {}", e)))?;
 
         // Parse contacts from output

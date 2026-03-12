@@ -92,6 +92,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
         {}
         <div className="flex items-center gap-1 shrink-0 ml-2">
           <button
+            type="button"
             onClick={handleCopyImage}
             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
             title="Copy image"
@@ -99,6 +100,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
             <Copy size={14} className="text-gray-600 dark:text-gray-400" />
           </button>
           <button
+            type="button"
             onClick={handleDownload}
             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
             title="Download image"
@@ -106,6 +108,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
             <Download size={14} className="text-gray-600 dark:text-gray-400" />
           </button>
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
             title={isExpanded ? 'Collapse' : 'Expand'}
@@ -135,26 +138,28 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
           {isImageLoaded && screenshot.elementBounds && (
             <svg
               className="absolute top-0 left-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
               style={{ zIndex: 10 }}
             >
               <rect
-                x={`${(screenshot.elementBounds.x / 100) * 100}%`}
-                y={`${(screenshot.elementBounds.y / 100) * 100}%`}
-                width={`${(screenshot.elementBounds.width / 100) * 100}%`}
-                height={`${(screenshot.elementBounds.height / 100) * 100}%`}
+                x={screenshot.elementBounds.x}
+                y={screenshot.elementBounds.y}
+                width={screenshot.elementBounds.width}
+                height={screenshot.elementBounds.height}
                 fill="none"
                 stroke="#8b5cf6"
-                strokeWidth="2"
-                strokeDasharray="4 2"
-                rx="4"
+                strokeWidth="0.5"
+                strokeDasharray="1 0.5"
+                rx="0.5"
               />
               <rect
-                x={`${(screenshot.elementBounds.x / 100) * 100}%`}
-                y={`${(screenshot.elementBounds.y / 100) * 100}%`}
-                width={`${(screenshot.elementBounds.width / 100) * 100}%`}
-                height={`${(screenshot.elementBounds.height / 100) * 100}%`}
+                x={screenshot.elementBounds.x}
+                y={screenshot.elementBounds.y}
+                width={screenshot.elementBounds.width}
+                height={screenshot.elementBounds.height}
                 fill="rgba(139, 92, 246, 0.1)"
-                rx="4"
+                rx="0.5"
               />
             </svg>
           )}

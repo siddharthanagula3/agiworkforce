@@ -66,7 +66,9 @@ fn validate_app_name(name: &str) -> Result<()> {
     }
 
     // Reject shell metacharacters
-    let forbidden = [';', '|', '&', '$', '`', '(', ')', '{', '}', '<', '>', '!', '#', '*', '?', '[', ']', '~'];
+    let forbidden = [
+        ';', '|', '&', '$', '`', '(', ')', '{', '}', '<', '>', '!', '#', '*', '?', '[', ']', '~',
+    ];
     for ch in &forbidden {
         if name.contains(*ch) {
             return Err(anyhow!(
@@ -78,7 +80,10 @@ fn validate_app_name(name: &str) -> Result<()> {
     }
 
     // Only allow alphanumeric + hyphens + spaces + dots
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == ' ' || c == '.') {
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == ' ' || c == '.')
+    {
         return Err(anyhow!(
             "Application name contains invalid characters (only alphanumeric, hyphens, spaces, dots allowed): '{}'",
             name
@@ -606,10 +611,26 @@ impl WindowCoordinator {
     }
 
     /// Activates a window by handle (macOS).
+    ///
+    /// On macOS, window handles are indices (not real HWNDs). We use
+    /// AppleScript via `activate_by_title` for title-based activation,
+    /// but this method is also called directly so we attempt to activate
+    /// by finding the window at the given index via System Events.
     #[cfg(target_os = "macos")]
-    async fn activate_window_internal(&self, _handle: isize) -> Result<()> {
-        // On macOS, we need to use accessibility APIs or AppleScript
-        // For now, this is handled by activate_by_title using AppleScript
+    async fn activate_window_internal(&self, handle: isize) -> Result<()> {
+        // Look up the window by its index handle and activate its owning process
+        let windows = WindowEnumerator::list_windows().unwrap_or_default();
+        if let Some(window) = windows.iter().find(|w| w.handle == handle) {
+            let safe_process = sanitize_applescript_string(&window.process_name);
+            let script = format!(r#"tell application "{}" to activate"#, safe_process);
+            Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .status()
+                .context("Failed to activate window via AppleScript")?;
+        }
+
+        sleep(self.config.post_activation_delay).await;
         Ok(())
     }
 
@@ -847,18 +868,12 @@ mod tests {
             sanitize_applescript_string("title\r\ndo shell script \"evil\""),
             "titledo shell script evil"
         );
-        assert_eq!(
-            sanitize_applescript_string("clean title"),
-            "clean title"
-        );
+        assert_eq!(sanitize_applescript_string("clean title"), "clean title");
     }
 
     #[test]
     fn test_sanitize_window_title_arg_strips_null_and_newlines() {
-        assert_eq!(
-            sanitize_window_title_arg("title\0rest"),
-            "titlerest"
-        );
+        assert_eq!(sanitize_window_title_arg("title\0rest"), "titlerest");
         assert_eq!(
             sanitize_window_title_arg("title\ninjected"),
             "titleinjected"
@@ -867,10 +882,7 @@ mod tests {
             sanitize_window_title_arg("title\r\ninjected"),
             "titleinjected"
         );
-        assert_eq!(
-            sanitize_window_title_arg("normal title"),
-            "normal title"
-        );
+        assert_eq!(sanitize_window_title_arg("normal title"), "normal title");
     }
 
     #[test]

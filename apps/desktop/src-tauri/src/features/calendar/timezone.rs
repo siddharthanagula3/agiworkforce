@@ -12,6 +12,44 @@ pub fn convert_to_timezone(utc_time: DateTime<Utc>, tz_str: &str) -> Result<Date
 }
 
 pub fn get_system_timezone() -> Tz {
+    // Try TZ environment variable first (works on all platforms)
+    if let Ok(tz_env) = std::env::var("TZ") {
+        // TZ may be a path like ":/etc/localtime" or an IANA name like "America/New_York"
+        let tz_str = tz_env.trim_start_matches(':');
+        if let Ok(tz) = Tz::from_str(tz_str) {
+            return tz;
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        // On macOS/Linux, /etc/localtime is typically a symlink to a zoneinfo file
+        // e.g. /var/db/timezone/zoneinfo/America/New_York or /usr/share/zoneinfo/America/New_York
+        if let Ok(target) = std::fs::read_link("/etc/localtime") {
+            let target_str = target.to_string_lossy();
+            // Extract IANA timezone from the zoneinfo path
+            for prefix in &[
+                "/usr/share/zoneinfo/",
+                "/var/db/timezone/zoneinfo/",
+                "/usr/share/lib/zoneinfo/",
+            ] {
+                if let Some(tz_name) = target_str.strip_prefix(prefix) {
+                    if let Ok(tz) = Tz::from_str(tz_name) {
+                        return tz;
+                    }
+                }
+            }
+        }
+
+        // Fallback: try reading /etc/timezone (common on Debian/Ubuntu)
+        if let Ok(tz_content) = std::fs::read_to_string("/etc/timezone") {
+            let tz_name = tz_content.trim();
+            if let Ok(tz) = Tz::from_str(tz_name) {
+                return tz;
+            }
+        }
+    }
+
     #[cfg(windows)]
     {
         if let Ok(tz_id) = windows_timezone_to_iana() {
@@ -21,6 +59,7 @@ pub fn get_system_timezone() -> Tz {
         }
     }
 
+    tracing::warn!("Could not detect system timezone, falling back to UTC");
     Tz::UTC
 }
 

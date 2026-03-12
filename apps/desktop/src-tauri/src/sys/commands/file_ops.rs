@@ -205,7 +205,6 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
 }
 
-
 fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
     let canonical_normalized = canonical_path.replace('\\', "/");
     allowed_dirs.iter().any(|dir| {
@@ -1053,7 +1052,10 @@ pub async fn file_read_range(
     limit: Option<usize>,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<FileReadRangeResult, String> {
-    debug!("Reading file with range: {} offset={:?} limit={:?}", path, offset, limit);
+    debug!(
+        "Reading file with range: {} offset={:?} limit={:?}",
+        path, offset, limit
+    );
 
     let _ = validate_path_security(&path)?;
 

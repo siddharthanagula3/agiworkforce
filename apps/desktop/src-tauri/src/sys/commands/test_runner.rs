@@ -789,10 +789,7 @@ fn timed_command(
         ));
     }
 
-    debug!(
-        "[test_runner] running: {} {:?} in {:?}",
-        cmd, args, cwd
-    );
+    debug!("[test_runner] running: {} {:?} in {:?}", cmd, args, cwd);
 
     // We use std::process::Command (blocking). The calling function already
     // runs inside spawn_blocking so this is fine.
@@ -819,13 +816,13 @@ fn timed_command(
         Ok(Ok(out)) => out,
         Ok(Err(e)) => return Err(e),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            return Err(format!(
-                "Command timed out after {}s",
-                timeout.as_secs()
-            ));
+            return Err(format!("Command timed out after {}s", timeout.as_secs()));
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            return Err(format!("Command '{}' channel disconnected unexpectedly", cmd));
+            return Err(format!(
+                "Command '{}' channel disconnected unexpectedly",
+                cmd
+            ));
         }
     };
 

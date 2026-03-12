@@ -1,7 +1,13 @@
 use super::*;
 
+// HTML extraction utilities from search_tools module
+use super::search_tools::{extract_title, process_response_body};
+
 impl ToolExecutor {
-    pub(crate) async fn execute_api_call_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_api_call_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -39,16 +45,45 @@ impl ToolExecutor {
             };
 
             match api_state.execute_request(request).await {
-                Ok(response) => Ok(ToolResult {
-                    success: true,
-                    data: json!({
+                Ok(response) => {
+                    // If response body is HTML, extract readable text instead of
+                    // returning raw HTML that would be useless to the LLM
+                    let raw_body = &response.body;
+                    let (processed_body, was_html) = process_response_body(raw_body, 15000);
+                    let title = if was_html {
+                        extract_title(raw_body)
+                    } else {
+                        None
+                    };
+
+                    let mut data = json!({
                         "status": response.status,
-                        "headers": response.headers,
-                        "body": response.body,
-                    }),
-                    error: None,
-                    metadata: HashMap::from([("url".to_string(), json!(url))]),
-                }),
+                        "statusCode": response.status,
+                        "url": url,
+                        "method": method.to_uppercase(),
+                        "body": processed_body,
+                        "success": response.success,
+                    });
+
+                    if was_html {
+                        data["note"] = json!("HTML response was converted to readable text. For web searches, prefer the search_web tool.");
+                        if let Some(t) = title {
+                            data["page_title"] = json!(t);
+                        }
+                    }
+
+                    // Only include headers for non-HTML (API) responses
+                    if !was_html {
+                        data["headers"] = json!(response.headers);
+                    }
+
+                    Ok(ToolResult {
+                        success: true,
+                        data,
+                        error: None,
+                        metadata: HashMap::from([("url".to_string(), json!(url))]),
+                    })
+                }
                 Err(e) => {
                     let err_msg = format!("API call failed: {}", e);
                     Ok(ToolResult {
@@ -69,7 +104,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_api_download_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_api_download_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -190,7 +228,10 @@ impl ToolExecutor {
         }
     }
 
-    pub(crate) async fn execute_api_upload_tool(&self, args: &HashMap<String, Value>) -> Result<ToolResult> {
+    pub(crate) async fn execute_api_upload_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
         let url = args
             .get("url")
             .and_then(|v| v.as_str())

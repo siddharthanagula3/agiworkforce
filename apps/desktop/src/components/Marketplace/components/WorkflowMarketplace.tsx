@@ -181,7 +181,7 @@ export const WorkflowMarketplace: React.FC = () => {
             placeholder="Search workflows..."
             className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
-          <button
+          <button type="button"
             onClick={handleSearch}
             className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
           >
@@ -227,7 +227,7 @@ export const WorkflowMarketplace: React.FC = () => {
         <h2 className="text-3xl font-bold text-gray-900 mb-6">Browse by Category</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {Object.entries(categoryCounts).map(([category, count]) => (
-            <button
+            <button type="button"
               key={category}
               onClick={() => setSelectedCategory(category)}
               className={`p-6 rounded-lg border-2 transition ${
@@ -326,13 +326,13 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onShare 
 
         {}
         <div className="flex gap-2">
-          <button
+          <button type="button"
             onClick={() => onClone(workflow.id)}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
             Clone & Customize
           </button>
-          <button
+          <button type="button"
             onClick={() => setShowShareMenu(!showShareMenu)}
             className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
           >
@@ -343,19 +343,19 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onShare 
         {}
         {showShareMenu && (
           <div className="mt-2 p-2 bg-gray-50 rounded">
-            <button
+            <button type="button"
               onClick={() => onShare(workflow.id, 'twitter')}
               className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
             >
               Share on Twitter
             </button>
-            <button
+            <button type="button"
               onClick={() => onShare(workflow.id, 'linkedin')}
               className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
             >
               Share on LinkedIn
             </button>
-            <button
+            <button type="button"
               onClick={() => onShare(workflow.id, 'direct_link')}
               className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
             >
@@ -381,7 +381,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template }) => {
         <div>⏱️ {template.estimated_time_saved}min saved</div>
         <div>💰 ${template.estimated_cost_saved.toFixed(0)} saved</div>
       </div>
-      <button className="w-full px-3 py-2 bg-gray-100 text-gray-900 rounded hover:bg-gray-200 transition text-sm">
+      <button type="button" className="w-full px-3 py-2 bg-gray-100 text-gray-900 rounded hover:bg-gray-200 transition text-sm">
         Use Template
       </button>
     </div>

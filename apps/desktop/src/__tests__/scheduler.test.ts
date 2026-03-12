@@ -32,8 +32,8 @@ interface ScheduledJob {
   id: string;
   name: string;
   schedule: string;
-  action_type: SchedulerActionType;
-  action_data: Record<string, unknown>;
+  actionType: SchedulerActionType;
+  actionData: Record<string, unknown>;
   status: JobStatus;
   created_at: string;
   updated_at: string;
@@ -45,7 +45,7 @@ interface ScheduledJob {
 }
 
 interface NextRunEntry {
-  job_id: string;
+  jobId: string;
   next_run: string;
 }
 
@@ -65,15 +65,15 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Daily Backup',
         schedule: '0 0 9 * * *', // 9 AM daily
-        action_type: 'shell_command',
-        action_data: { command: 'backup.sh' },
+        actionType: 'shell_command',
+        actionData: { command: 'backup.sh' },
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
         name: 'Daily Backup',
         schedule: '0 0 9 * * *',
-        action_type: 'shell_command',
-        action_data: { command: 'backup.sh' },
+        actionType: 'shell_command',
+        actionData: { command: 'backup.sh' },
       });
       expect(result).toBe(mockJobId);
     });
@@ -85,8 +85,8 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Morning Briefing',
         schedule: '0 0 8 * * 1-5', // 8 AM weekdays
-        action_type: 'agi_task',
-        action_data: {
+        actionType: 'agi_task',
+        actionData: {
           prompt: 'Give me a summary of my emails and calendar for today',
         },
       });
@@ -94,8 +94,8 @@ describe('Scheduler Tauri Commands', () => {
       expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
         name: 'Morning Briefing',
         schedule: '0 0 8 * * 1-5',
-        action_type: 'agi_task',
-        action_data: {
+        actionType: 'agi_task',
+        actionData: {
           prompt: 'Give me a summary of my emails and calendar for today',
         },
       });
@@ -108,8 +108,8 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Stand-up Reminder',
         schedule: '0 55 9 * * 1-5', // 9:55 AM weekdays
-        action_type: 'notification',
-        action_data: {
+        actionType: 'notification',
+        actionData: {
           title: 'Stand-up in 5 minutes',
           message: 'Daily stand-up meeting starting soon',
         },
@@ -124,10 +124,10 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Weekly Report',
         schedule: '0 0 17 * * 5', // Friday 5 PM
-        action_type: 'workflow',
-        action_data: {
-          workflow_id: 'wf-weekly-report-123',
-          parameters: { include_charts: true },
+        actionType: 'workflow',
+        actionData: {
+          workflowId: 'wf-weekly-report-123',
+          parameters: { includeCharts: true },
         },
       });
 
@@ -140,8 +140,8 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Health Check',
         schedule: '0 */5 * * * *', // Every 5 minutes
-        action_type: 'webhook',
-        action_data: {
+        actionType: 'webhook',
+        actionData: {
           url: 'https://api.example.com/health',
           method: 'GET',
         },
@@ -156,9 +156,9 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Data Sync',
         schedule: '0 0 */2 * * *', // Every 2 hours
-        action_type: 'script',
-        action_data: {
-          script_path: '/scripts/sync.js',
+        actionType: 'script',
+        actionData: {
+          scriptPath: '/scripts/sync.js',
           args: ['--force', '--verbose'],
         },
       });
@@ -173,8 +173,8 @@ describe('Scheduler Tauri Commands', () => {
         invoke('scheduler_add_job', {
           name: 'Bad Job',
           schedule: 'invalid-cron',
-          action_type: 'notification',
-          action_data: {},
+          actionType: 'notification',
+          actionData: {},
         }),
       ).rejects.toThrow('Invalid cron expression');
     });
@@ -190,8 +190,8 @@ describe('Scheduler Tauri Commands', () => {
         invoke('scheduler_add_job', {
           name: 'Bad Job',
           schedule: '0 0 * * * *',
-          action_type: 'invalid_type',
-          action_data: {},
+          actionType: 'invalid_type',
+          actionData: {},
         }),
       ).rejects.toThrow('Invalid action type');
     });
@@ -207,8 +207,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-1',
           name: 'Daily Backup',
           schedule: '0 0 9 * * *',
-          action_type: 'shell_command',
-          action_data: { command: 'backup.sh' },
+          actionType: 'shell_command',
+          actionData: { command: 'backup.sh' },
           status: 'active',
           created_at: '2024-01-15T10:00:00Z',
           updated_at: '2024-01-15T10:00:00Z',
@@ -220,8 +220,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-2',
           name: 'Morning Briefing',
           schedule: '0 0 8 * * 1-5',
-          action_type: 'agi_task',
-          action_data: { prompt: 'Daily summary' },
+          actionType: 'agi_task',
+          actionData: { prompt: 'Daily summary' },
           status: 'active',
           created_at: '2024-01-10T08:00:00Z',
           updated_at: '2024-01-15T08:00:00Z',
@@ -234,8 +234,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-3',
           name: 'Paused Job',
           schedule: '0 0 12 * * *',
-          action_type: 'notification',
-          action_data: { message: 'Test' },
+          actionType: 'notification',
+          actionData: { message: 'Test' },
           status: 'paused',
           created_at: '2024-01-05T12:00:00Z',
           updated_at: '2024-01-14T12:00:00Z',
@@ -266,8 +266,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-active',
           name: 'Active Job',
           schedule: '0 0 * * * *',
-          action_type: 'notification',
-          action_data: {},
+          actionType: 'notification',
+          actionData: {},
           status: 'active',
           created_at: '2024-01-15T10:00:00Z',
           updated_at: '2024-01-15T10:00:00Z',
@@ -278,8 +278,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-paused',
           name: 'Paused Job',
           schedule: '0 0 * * * *',
-          action_type: 'notification',
-          action_data: {},
+          actionType: 'notification',
+          actionData: {},
           status: 'paused',
           created_at: '2024-01-14T10:00:00Z',
           updated_at: '2024-01-14T10:00:00Z',
@@ -290,8 +290,8 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-failed',
           name: 'Failed Job',
           schedule: '0 0 * * * *',
-          action_type: 'webhook',
-          action_data: { url: 'https://bad.url' },
+          actionType: 'webhook',
+          actionData: { url: 'https://bad.url' },
           status: 'failed',
           created_at: '2024-01-13T10:00:00Z',
           updated_at: '2024-01-15T10:00:00Z',
@@ -319,11 +319,11 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('scheduler_pause_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_pause_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
       expect(result).toBe(true);
     });
@@ -332,7 +332,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('scheduler_pause_job', {
-        job_id: 'job-already-paused',
+        jobId: 'job-already-paused',
       });
 
       expect(result).toBe(false);
@@ -342,7 +342,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('scheduler_pause_job', {
-        job_id: 'nonexistent-job',
+        jobId: 'nonexistent-job',
       });
 
       expect(result).toBe(false);
@@ -353,7 +353,7 @@ describe('Scheduler Tauri Commands', () => {
 
       await expect(
         invoke('scheduler_pause_job', {
-          job_id: 'job-123',
+          jobId: 'job-123',
         }),
       ).rejects.toThrow('Failed to acquire write lock');
     });
@@ -367,11 +367,11 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('scheduler_resume_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_resume_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
       expect(result).toBe(true);
     });
@@ -380,7 +380,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('scheduler_resume_job', {
-        job_id: 'job-already-active',
+        jobId: 'job-already-active',
       });
 
       expect(result).toBe(false);
@@ -390,7 +390,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('scheduler_resume_job', {
-        job_id: 'nonexistent-job',
+        jobId: 'nonexistent-job',
       });
 
       expect(result).toBe(false);
@@ -401,7 +401,7 @@ describe('Scheduler Tauri Commands', () => {
 
       await expect(
         invoke('scheduler_resume_job', {
-          job_id: 'job-123',
+          jobId: 'job-123',
         }),
       ).rejects.toThrow('Failed to acquire write lock');
     });
@@ -415,11 +415,11 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('scheduler_remove_job', {
-        job_id: 'job-to-delete',
+        jobId: 'job-to-delete',
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_remove_job', {
-        job_id: 'job-to-delete',
+        jobId: 'job-to-delete',
       });
       expect(result).toBe(true);
     });
@@ -428,7 +428,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(false);
 
       const result = await invoke('scheduler_remove_job', {
-        job_id: 'nonexistent-job',
+        jobId: 'nonexistent-job',
       });
 
       expect(result).toBe(false);
@@ -439,7 +439,7 @@ describe('Scheduler Tauri Commands', () => {
 
       await expect(
         invoke('scheduler_remove_job', {
-          job_id: 'job-123',
+          jobId: 'job-123',
         }),
       ).rejects.toThrow('Failed to acquire write lock');
     });
@@ -448,7 +448,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('scheduler_remove_job', {
-        job_id: 'paused-job',
+        jobId: 'paused-job',
       });
 
       expect(result).toBe(true);
@@ -458,7 +458,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
 
       const result = await invoke('scheduler_remove_job', {
-        job_id: 'failed-job',
+        jobId: 'failed-job',
       });
 
       expect(result).toBe(true);
@@ -472,15 +472,15 @@ describe('Scheduler Tauri Commands', () => {
     it('should get next runs with default limit', async () => {
       const mockNextRuns: NextRunEntry[] = [
         {
-          job_id: 'job-1',
+          jobId: 'job-1',
           next_run: '2024-01-16T08:00:00Z',
         },
         {
-          job_id: 'job-2',
+          jobId: 'job-2',
           next_run: '2024-01-16T09:00:00Z',
         },
         {
-          job_id: 'job-3',
+          jobId: 'job-3',
           next_run: '2024-01-16T12:00:00Z',
         },
       ];
@@ -500,7 +500,7 @@ describe('Scheduler Tauri Commands', () => {
     it('should respect custom limit', async () => {
       const mockNextRuns: NextRunEntry[] = [
         {
-          job_id: 'job-1',
+          jobId: 'job-1',
           next_run: '2024-01-16T08:00:00Z',
         },
       ];
@@ -519,15 +519,15 @@ describe('Scheduler Tauri Commands', () => {
     it('should return results sorted by next run time', async () => {
       const mockNextRuns: NextRunEntry[] = [
         {
-          job_id: 'job-early',
+          jobId: 'job-early',
           next_run: '2024-01-16T06:00:00Z',
         },
         {
-          job_id: 'job-mid',
+          jobId: 'job-mid',
           next_run: '2024-01-16T12:00:00Z',
         },
         {
-          job_id: 'job-late',
+          jobId: 'job-late',
           next_run: '2024-01-16T18:00:00Z',
         },
       ];
@@ -560,11 +560,11 @@ describe('Scheduler Tauri Commands', () => {
       // Backend should only return active jobs, not paused/failed ones
       const mockNextRuns: NextRunEntry[] = [
         {
-          job_id: 'active-job-1',
+          jobId: 'active-job-1',
           next_run: '2024-01-16T08:00:00Z',
         },
         {
-          job_id: 'active-job-2',
+          jobId: 'active-job-2',
           next_run: '2024-01-16T09:00:00Z',
         },
       ];
@@ -577,7 +577,7 @@ describe('Scheduler Tauri Commands', () => {
 
       expect(result).toHaveLength(2);
       result.forEach((entry) => {
-        expect(entry.job_id).toContain('active');
+        expect(entry.jobId).toContain('active');
       });
     });
   });
@@ -591,8 +591,8 @@ describe('Scheduler Tauri Commands', () => {
         id: 'job-123',
         name: 'Test Job',
         schedule: '0 0 9 * * *',
-        action_type: 'notification',
-        action_data: { message: 'Hello' },
+        actionType: 'notification',
+        actionData: { message: 'Hello' },
         status: 'active',
         created_at: '2024-01-15T10:00:00Z',
         updated_at: '2024-01-15T10:00:00Z',
@@ -605,11 +605,11 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(mockJob);
 
       const result = await invoke('scheduler_get_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_get_job', {
-        job_id: 'job-123',
+        jobId: 'job-123',
       });
       expect(result).toEqual(mockJob);
     });
@@ -618,7 +618,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(null);
 
       const result = await invoke('scheduler_get_job', {
-        job_id: 'nonexistent-job',
+        jobId: 'nonexistent-job',
       });
 
       expect(result).toBeNull();
@@ -629,8 +629,8 @@ describe('Scheduler Tauri Commands', () => {
         id: 'job-with-stats',
         name: 'Stats Job',
         schedule: '0 0 * * * *',
-        action_type: 'shell_command',
-        action_data: { command: 'echo test' },
+        actionType: 'shell_command',
+        actionData: { command: 'echo test' },
         status: 'active',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-15T10:00:00Z',
@@ -643,7 +643,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(mockJob);
 
       const result = (await invoke('scheduler_get_job', {
-        job_id: 'job-with-stats',
+        jobId: 'job-with-stats',
       })) as ScheduledJob;
 
       expect(result.run_count).toBe(350);
@@ -664,8 +664,8 @@ describe('Scheduler Tauri Commands', () => {
       const createdId = await invoke('scheduler_add_job', {
         name: 'Lifecycle Test',
         schedule: '0 0 * * * *',
-        action_type: 'notification',
-        action_data: { message: 'Test' },
+        actionType: 'notification',
+        actionData: { message: 'Test' },
       });
       expect(createdId).toBe(jobId);
 
@@ -693,8 +693,8 @@ describe('Scheduler Tauri Commands', () => {
         id: 'failing-job',
         name: 'Failing Job',
         schedule: '0 0 * * * *',
-        action_type: 'webhook',
-        action_data: { url: 'https://unreachable.url' },
+        actionType: 'webhook',
+        actionData: { url: 'https://unreachable.url' },
         status: 'failed',
         created_at: '2024-01-15T10:00:00Z',
         updated_at: '2024-01-15T13:00:00Z',
@@ -706,7 +706,7 @@ describe('Scheduler Tauri Commands', () => {
       vi.mocked(invoke).mockResolvedValueOnce(mockFailedJob);
 
       const result = (await invoke('scheduler_get_job', {
-        job_id: 'failing-job',
+        jobId: 'failing-job',
       })) as ScheduledJob;
 
       expect(result.status).toBe('failed');
@@ -734,15 +734,15 @@ describe('Scheduler Tauri Commands', () => {
         await invoke('scheduler_add_job', {
           name: `Test ${desc}`,
           schedule: expr,
-          action_type: 'notification',
-          action_data: {},
+          actionType: 'notification',
+          actionData: {},
         });
 
         expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
           name: `Test ${desc}`,
           schedule: expr,
-          action_type: 'notification',
-          action_data: {},
+          actionType: 'notification',
+          actionData: {},
         });
       });
     });
@@ -757,8 +757,8 @@ describe('Scheduler Tauri Commands', () => {
           invoke('scheduler_add_job', {
             name: 'Bad Job',
             schedule: expr,
-            action_type: 'notification',
-            action_data: {},
+            actionType: 'notification',
+            actionData: {},
           }),
         ).rejects.toThrow('Invalid cron expression');
       });
@@ -770,12 +770,12 @@ describe('Scheduler Tauri Commands', () => {
   // ==========================================================================
   describe('Action type support', () => {
     const actionTypes: Array<{ type: SchedulerActionType; data: Record<string, unknown> }> = [
-      { type: 'workflow', data: { workflow_id: 'wf-123' } },
+      { type: 'workflow', data: { workflowId: 'wf-123' } },
       { type: 'agi_task', data: { prompt: 'Do something' } },
       { type: 'shell_command', data: { command: 'echo hello' } },
       { type: 'notification', data: { title: 'Test', message: 'Hello' } },
       { type: 'webhook', data: { url: 'https://api.example.com', method: 'POST' } },
-      { type: 'script', data: { script_path: '/scripts/test.js' } },
+      { type: 'script', data: { scriptPath: '/scripts/test.js' } },
     ];
 
     actionTypes.forEach(({ type, data }) => {
@@ -785,16 +785,16 @@ describe('Scheduler Tauri Commands', () => {
         const result = await invoke('scheduler_add_job', {
           name: `${type} job`,
           schedule: '0 0 * * * *',
-          action_type: type,
-          action_data: data,
+          actionType: type,
+          actionData: data,
         });
 
         expect(result).toBe(`job-${type}`);
         expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
           name: `${type} job`,
           schedule: '0 0 * * * *',
-          action_type: type,
-          action_data: data,
+          actionType: type,
+          actionData: data,
         });
       });
     });

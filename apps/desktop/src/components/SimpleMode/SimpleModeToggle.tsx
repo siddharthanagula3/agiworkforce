@@ -32,7 +32,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
   return (
     <div className={cn('relative', className)}>
       <div className="flex items-center gap-2">
-        <button
+        <button type="button"
           onClick={toggleMode}
           className={cn(
             'relative flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-300',
@@ -62,7 +62,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
         </button>
 
         {!compact && (
-          <button
+          <button type="button"
             onClick={() => setShowTooltip(!showTooltip)}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
@@ -83,7 +83,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
             <div className="bg-blue-600 text-white text-xs rounded-lg px-3 py-2 shadow-lg max-w-[200px]">
               <div className="flex items-start justify-between gap-2">
                 <p>Click here to switch between simple and advanced modes!</p>
-                <button onClick={dismissModeSwitcherHint} className="shrink-0">
+                <button type="button" onClick={dismissModeSwitcherHint} className="shrink-0">
                   <X className="h-3 w-3" />
                 </button>
               </div>
@@ -107,7 +107,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
                 <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
                   What's the difference?
                 </h4>
-                <button
+                <button type="button"
                   onClick={() => setShowTooltip(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >

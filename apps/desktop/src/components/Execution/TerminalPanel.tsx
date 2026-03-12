@@ -115,18 +115,24 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
 
     terminal.clear();
 
+    // Strip ANSI escape sequences from untrusted content before writing to xterm
+    // eslint-disable-next-line no-control-regex
+    const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]/g;
+    const stripAnsi = (text: string) => text.replace(ansiPattern, '');
+
     terminalLogs.forEach((log) => {
       if (log.command) {
-        terminal.writeln(`\x1b[1;36m$ ${log.command}\x1b[0m`);
+        terminal.writeln(`\x1b[1;36m$ ${stripAnsi(log.command)}\x1b[0m`);
       }
 
       if (log.output) {
         const lines = log.output.split('\n');
         lines.forEach((line) => {
+          const sanitizedLine = stripAnsi(line);
           if (log.isError) {
-            terminal.writeln(`\x1b[1;31m${line}\x1b[0m`);
+            terminal.writeln(`\x1b[1;31m${sanitizedLine}\x1b[0m`);
           } else {
-            terminal.writeln(line);
+            terminal.writeln(sanitizedLine);
           }
         });
       }

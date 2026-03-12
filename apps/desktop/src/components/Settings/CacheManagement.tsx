@@ -144,7 +144,7 @@ export const CacheManagement: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to export cache');
       console.error('Error exporting cache:', err);
@@ -164,7 +164,7 @@ export const CacheManagement: React.FC = () => {
     return (
       <div className="p-4 text-red-600">
         <p>Failed to load cache statistics. Please try again.</p>
-        <button
+        <button type="button"
           onClick={loadStats}
           className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
@@ -213,7 +213,7 @@ export const CacheManagement: React.FC = () => {
         <div className="bg-white border rounded-lg p-4 shadow-xs">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">LLM Cache</h3>
-            <button
+            <button type="button"
               onClick={() => handleClearByType('llm')}
               disabled={loading || stats.llm_cache.entries === 0}
               className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -280,7 +280,7 @@ export const CacheManagement: React.FC = () => {
                   <p className="text-sm font-semibold text-green-600">
                     {formatCurrency(provider.cost_saved)}
                   </p>
-                  <button
+                  <button type="button"
                     onClick={() => void handleClearByProvider(provider.provider)}
                     disabled={loading}
                     className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
@@ -298,28 +298,28 @@ export const CacheManagement: React.FC = () => {
       <div className="bg-white border rounded-lg p-4 shadow-xs">
         <h3 className="text-lg font-semibold mb-4">Cache Actions</h3>
         <div className="flex flex-wrap gap-2">
-          <button
+          <button type="button"
             onClick={loadStats}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
             Refresh Stats
           </button>
-          <button
+          <button type="button"
             onClick={handlePruneExpired}
             disabled={loading}
             className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
           >
             Prune Expired
           </button>
-          <button
+          <button type="button"
             onClick={handleExport}
             disabled={loading}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
             Export Cache
           </button>
-          <button
+          <button type="button"
             onClick={() => setClearAllDialogOpen(true)}
             disabled={loading}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"

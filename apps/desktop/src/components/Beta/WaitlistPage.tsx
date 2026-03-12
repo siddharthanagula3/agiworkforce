@@ -125,7 +125,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
                   <WaitlistForm referralCode={referralCode} />
 
                   <div className="mt-4 pt-4 border-t border-border/50">
-                    <button
+                    <button type="button"
                       onClick={() => setShowInviteCode(true)}
                       className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2"
                     >
@@ -139,7 +139,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
                   <BetaInviteCode />
 
                   <div className="mt-4 pt-4 border-t border-border/50">
-                    <button
+                    <button type="button"
                       onClick={() => setShowInviteCode(false)}
                       className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >

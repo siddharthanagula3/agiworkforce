@@ -13,7 +13,7 @@ interface FocusPillProps {
 
 function FocusPill({ icon, label, mode: _mode, active, onClick, description }: FocusPillProps) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className={cn(
         'group relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium',

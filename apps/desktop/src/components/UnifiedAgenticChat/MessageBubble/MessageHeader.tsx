@@ -30,9 +30,11 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
 }) => {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
 
-  // Get live status from action trail for streaming messages
-  const actionTrail = useUnifiedChatStore((state) => state.actionTrail);
-  const lastActionTrailEntry = actionTrail.length > 0 ? actionTrail[actionTrail.length - 1] : null;
+  // BUG-334: Select only the last action trail entry instead of the entire array
+  // to prevent all MessageHeaders from re-rendering on every trail update.
+  const lastActionTrailEntry = useUnifiedChatStore((state) =>
+    state.actionTrail.length > 0 ? state.actionTrail[state.actionTrail.length - 1] : null,
+  );
 
   const roleName = useMemo(() => {
     if (isUser) return 'You';

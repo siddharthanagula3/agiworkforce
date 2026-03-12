@@ -59,11 +59,30 @@ impl DiscordClient {
         }
     }
 
-    /// Connect to Discord
+    /// Connect to Discord and validate credentials
+    /// Bug #222 fix: Validate bot token with GET /users/@me on connect instead of
+    /// just storing the token without verification
     pub async fn connect(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if self.config.bot_token.is_none() && self.config.webhook_url.is_none() {
             return Err("Discord bot token or webhook URL required".into());
         }
+
+        // Validate bot token by calling GET /users/@me
+        if let Some(token) = &self.config.bot_token {
+            let response = self
+                .client
+                .get("https://discord.com/api/v10/users/@me")
+                .header("Authorization", format!("Bot {}", token))
+                .send()
+                .await
+                .map_err(|e| format!("Discord API error during validation: {}", e))?;
+
+            if !response.status().is_success() {
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(format!("Discord token validation failed: {}", error_text).into());
+            }
+        }
+
         self.connected = true;
         Ok(())
     }

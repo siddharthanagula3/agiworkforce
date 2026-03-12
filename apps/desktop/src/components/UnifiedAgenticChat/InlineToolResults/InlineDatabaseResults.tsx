@@ -164,7 +164,7 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
                 columns.join(','),
                 ...rows.map((row) => row.map((cell) => `"${String(cell ?? '')}"`).join(',')),
               ].join('\n');
-              navigator.clipboard.writeText(csvContent);
+              void navigator.clipboard.writeText(csvContent).catch(() => {});
               toast.success('Results copied as CSV', {
                 icon: <Check className="h-4 w-4" />,
                 duration: 2000,

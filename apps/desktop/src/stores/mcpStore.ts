@@ -222,9 +222,11 @@ export const useMcpStore = create<McpState>()(
 
       loadConfig: async () => {
         try {
-          const config = await McpClient.getConfig();
-          set({ config, error: null }, undefined, 'mcp/loadConfig');
-          await get().refreshConfigLocation();
+          const [config, configLocation] = await Promise.all([
+            McpClient.getConfig(),
+            McpClient.getConfigLocation(),
+          ]);
+          set({ config, configLocation, error: null }, undefined, 'mcp/loadConfig');
         } catch (error) {
           set(
             {

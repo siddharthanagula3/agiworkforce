@@ -132,7 +132,10 @@ impl ToolExecutor {
                     ));
                 }
                 Err(e) => {
-                    let msg = format!("Edit #{}: path validation failed for '{}': {}", i, resolved, e);
+                    let msg = format!(
+                        "Edit #{}: path validation failed for '{}': {}",
+                        i, resolved, e
+                    );
                     return Ok(ToolResult {
                         success: false,
                         data: json!({ "error": &msg, "success": false }),
@@ -200,7 +203,10 @@ impl ToolExecutor {
                 } else {
                     old_text.clone()
                 };
-                let msg = format!("Edit #{}: old_text not found in '{}': '{}'", i, path, preview);
+                let msg = format!(
+                    "Edit #{}: old_text not found in '{}': '{}'",
+                    i, path, preview
+                );
                 return Ok(ToolResult {
                     success: false,
                     data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
@@ -556,7 +562,10 @@ fn apply_hunk(content: &str, hunk: &DiffHunk) -> Result<String> {
                     first.clone()
                 }
             };
-            return Err(anyhow!("Could not find expected block starting with: {}", preview));
+            return Err(anyhow!(
+                "Could not find expected block starting with: {}",
+                preview
+            ));
         }
     };
 

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 // Constants similar to Gemini CLI
 const PROMPT_COMPLETION_DEBOUNCE_MS = 250;

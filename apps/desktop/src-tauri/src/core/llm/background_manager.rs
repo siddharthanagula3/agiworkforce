@@ -12,8 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
-use tokio::time::sleep;
+use tokio::sync::{Notify, RwLock};
 
 /// Status of a background LLM request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +74,9 @@ pub struct BackgroundManager {
     requests: Arc<RwLock<HashMap<String, BackgroundRequest>>>,
     pending: Arc<RwLock<HashMap<String, PendingEntry>>>,
     max_concurrent: usize,
+    /// Notifies the processing loop that a new request has been queued,
+    /// replacing the previous 500ms polling interval.
+    notify: Arc<Notify>,
 }
 
 impl BackgroundManager {
@@ -85,6 +87,7 @@ impl BackgroundManager {
             requests: Arc::new(RwLock::new(HashMap::new())),
             pending: Arc::new(RwLock::new(HashMap::new())),
             max_concurrent,
+            notify: Arc::new(Notify::new()),
         }
     }
 
@@ -103,9 +106,18 @@ impl BackgroundManager {
         let requests = self.requests.clone();
         let pending = self.pending.clone();
         let max_concurrent = self.max_concurrent;
+        let notify = self.notify.clone();
 
         tokio::spawn(async move {
             loop {
+                // Wait until notified that a new request was queued, with a
+                // 5-second ceiling to handle edge cases (e.g. if a notify was
+                // missed due to a race).
+                tokio::select! {
+                    _ = notify.notified() => {}
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+
                 // Collect IDs that are Queued and not yet being processed.
                 let queued_ids: Vec<String> = {
                     let reqs = requests.read().await;
@@ -177,9 +189,6 @@ impl BackgroundManager {
                         }
                     }
                 }
-
-                // Poll every 500 ms to avoid busy-spinning.
-                sleep(Duration::from_millis(500)).await;
             }
         });
     }
@@ -208,17 +217,15 @@ impl BackgroundManager {
         // Store the pending execution data so the processing loop can pick it up.
         {
             let mut pend = self.pending.write().await;
-            pend.insert(
-                id.clone(),
-                PendingEntry {
-                    request,
-                    provider,
-                },
-            );
+            pend.insert(id.clone(), PendingEntry { request, provider });
         }
 
         let mut requests = self.requests.write().await;
         requests.insert(id.clone(), bg_request);
+        drop(requests);
+
+        // Wake the processing loop immediately instead of waiting for the next poll.
+        self.notify.notify_one();
 
         Ok(BackgroundSubmitResult {
             response_id: id,
@@ -248,7 +255,10 @@ impl BackgroundManager {
         let mut requests = self.requests.write().await;
         if let Some(req) = requests.get_mut(response_id) {
             // Only cancel if not yet completed/failed.
-            if matches!(req.status, BackgroundStatus::Queued | BackgroundStatus::Processing) {
+            if matches!(
+                req.status,
+                BackgroundStatus::Queued | BackgroundStatus::Processing
+            ) {
                 req.status = BackgroundStatus::Cancelled;
             }
             Ok(())

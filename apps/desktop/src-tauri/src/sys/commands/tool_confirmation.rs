@@ -4,9 +4,7 @@
 //! It handles user responses to tool confirmation requests and manages pending confirmations.
 
 use crate::sys::security::tool_guard::RiskLevel;
-use crate::sys::security::{
-    ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
-};
+use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -80,10 +78,7 @@ impl ToolConfirmationState {
     pub fn set_agent_mode(&self, mode: AgentMode) {
         let mut lock = self.agent_mode.lock();
         *lock = mode;
-        info!(
-            "[ToolConfirmation] Agent mode set to: {:?}",
-            mode
-        );
+        info!("[ToolConfirmation] Agent mode set to: {:?}", mode);
     }
 
     /// Get the current agent execution mode
@@ -472,9 +467,7 @@ pub fn set_agent_mode(
 
 /// Get the current agent execution mode.
 #[tauri::command]
-pub fn get_agent_mode(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<AgentMode, String> {
+pub fn get_agent_mode(state: State<'_, ToolConfirmationState>) -> Result<AgentMode, String> {
     Ok(state.get_agent_mode())
 }
 
@@ -925,36 +918,99 @@ mod tests {
     #[test]
     fn test_tool_permitted_safe_mode() {
         // Safe mode allows only read-only tools
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_read", AgentMode::Safe));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("search_web", AgentMode::Safe));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_read", AgentMode::Safe));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_read",
+            AgentMode::Safe
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "search_web",
+            AgentMode::Safe
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "document_read",
+            AgentMode::Safe
+        ));
 
         // Safe mode blocks write/destructive tools
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Safe));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Safe));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("browser_navigate", AgentMode::Safe));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_write",
+            AgentMode::Safe
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_execute",
+            AgentMode::Safe
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "browser_navigate",
+            AgentMode::Safe
+        ));
     }
 
     #[test]
     fn test_tool_permitted_plan_mode() {
         // Plan mode allows the same read-only tools as Safe mode
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_read", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("search_web", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_read", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("git_status", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("llm_reason", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_analyze", AgentMode::Plan));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("document_search", AgentMode::Plan));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_read",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "search_web",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "document_read",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "git_status",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "llm_reason",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_analyze",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "document_search",
+            AgentMode::Plan
+        ));
 
         // Plan mode blocks write/destructive tools
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("file_delete", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("terminal_execute", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("git_push", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("git_commit", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("browser_navigate", AgentMode::Plan));
-        assert!(!ToolConfirmationState::is_tool_permitted_for_mode("email_send", AgentMode::Plan));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_write",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_delete",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_execute",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "terminal_execute",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "git_push",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "git_commit",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "browser_navigate",
+            AgentMode::Plan
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "email_send",
+            AgentMode::Plan
+        ));
     }
 
     #[test]
@@ -1003,10 +1059,22 @@ mod tests {
     #[test]
     fn test_tool_permitted_build_autopilot() {
         // Build and Autopilot modes allow everything
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Build));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Build));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("file_write", AgentMode::Autopilot));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode("code_execute", AgentMode::Autopilot));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_write",
+            AgentMode::Build
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_execute",
+            AgentMode::Build
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "file_write",
+            AgentMode::Autopilot
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_execute",
+            AgentMode::Autopilot
+        ));
     }
 
     #[test]

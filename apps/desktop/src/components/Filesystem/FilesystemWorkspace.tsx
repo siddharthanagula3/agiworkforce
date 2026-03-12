@@ -55,7 +55,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     clearError,
   } = useFilesystemStore();
 
-  const [pathInput, setPathInput] = useState('C:\\Users');
+  const [pathInput, setPathInput] = useState('/');
   const [newFolderName, setNewFolderName] = useState('');
   const [renameInput, setRenameInput] = useState('');
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -67,7 +67,9 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
 
   useEffect(() => {
     if (!currentPath) {
-      navigateTo('C:\\Users').catch((err) => {
+      // Use platform-appropriate default path
+      const defaultPath = navigator.platform?.startsWith('Win') ? 'C:\\Users' : '/';
+      navigateTo(defaultPath).catch((err) => {
         console.error('Failed to initialize filesystem:', err);
         toast.error('Failed to load default directory');
       });
@@ -269,7 +271,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleNavigate('C:\\')}
+              onClick={() => handleNavigate(navigator.platform?.startsWith('Win') ? 'C:\\' : '/')}
               disabled={loading}
             >
               <Home className="h-4 w-4" />

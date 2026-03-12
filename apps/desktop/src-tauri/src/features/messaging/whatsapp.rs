@@ -1,6 +1,9 @@
+use hmac::{Hmac, Mac};
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::Sha256;
+use subtle::ConstantTimeEq;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhatsAppConfig {
@@ -14,6 +17,7 @@ pub struct WhatsAppClient {
     client: Client,
     phone_number_id: String,
     access_token: String,
+    app_secret: Option<String>,
 }
 
 impl WhatsAppClient {
@@ -29,7 +33,14 @@ impl WhatsAppClient {
             client,
             phone_number_id,
             access_token,
+            app_secret: None,
         })
+    }
+
+    /// Set the app secret used for webhook signature verification (HMAC-SHA256).
+    pub fn with_app_secret(mut self, secret: String) -> Self {
+        self.app_secret = Some(secret);
+        self
     }
 
     pub async fn send_text(
@@ -318,6 +329,44 @@ impl WhatsAppClient {
         Ok(())
     }
 
+    /// Verify the HMAC-SHA256 signature of an incoming webhook payload.
+    ///
+    /// `signature_header` is the value of the `X-Hub-Signature-256` header
+    /// (format: `sha256=<hex>`). `raw_body` is the raw request body bytes.
+    pub fn verify_webhook_signature(
+        &self,
+        signature_header: &str,
+        raw_body: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let secret = self
+            .app_secret
+            .as_ref()
+            .ok_or("App secret not configured — cannot verify webhook signature")?;
+
+        let expected_hex = signature_header
+            .strip_prefix("sha256=")
+            .ok_or("Invalid signature header format: missing 'sha256=' prefix")?;
+
+        let expected_bytes = hex::decode(expected_hex)
+            .map_err(|e| format!("Invalid hex in signature header: {}", e))?;
+
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+            .map_err(|e| format!("HMAC key error: {}", e))?;
+        mac.update(raw_body);
+        let computed = mac.finalize().into_bytes();
+
+        if !bool::from(computed.as_slice().ct_eq(&expected_bytes)) {
+            return Err("Webhook signature verification failed".into());
+        }
+
+        Ok(())
+    }
+
+    /// Handle an incoming webhook payload after signature verification.
+    ///
+    /// Callers MUST call `verify_webhook_signature` first with the raw body and
+    /// the `X-Hub-Signature-256` header value. This method processes a
+    /// pre-verified, deserialized payload.
     pub fn handle_webhook(
         &self,
         payload: WhatsAppWebhook,
@@ -327,7 +376,11 @@ impl WhatsAppClient {
                 if let Some(value) = change.value {
                     if let Some(messages) = value.messages {
                         for message in messages {
-                            tracing::info!("Received message from {}: {:?}", message.from, message.text);
+                            tracing::info!(
+                                "Received message from {}: {:?}",
+                                message.from,
+                                message.text
+                            );
                         }
                     }
 

@@ -106,7 +106,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
     const draw = () => {
       if (!isPlaying) {
-        // Draw static waveform when paused
+        // Draw static waveform when paused using seeded values (no Math.random)
         ctx.fillStyle = 'rgba(0, 0, 0, 0)';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -114,7 +114,8 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
         const barGap = 2;
 
         for (let i = 0; i < 32; i++) {
-          const barHeight = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2;
+          const seed = (i * 7 + 3) % 17;
+          const barHeight = (seed / 17) * (canvas.height * 0.6) + canvas.height * 0.2;
           const x = i * (barWidth + barGap);
           const y = (canvas.height - barHeight) / 2;
 
@@ -202,10 +203,15 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      audioRef.current.play().catch(console.error);
+      audioRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(console.error);
     }
-    setIsPlaying(!isPlaying);
   }, [isPlaying, setupAudioAnalyser]);
 
   const formatTime = (seconds: number): string => {

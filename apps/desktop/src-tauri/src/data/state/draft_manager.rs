@@ -12,6 +12,19 @@ pub struct DraftManager {
 
 impl DraftManager {
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
+        // Ensure the message_drafts table exists (Bug #91 fix)
+        if let Ok(conn) = db.lock() {
+            let _ = conn.execute(
+                "CREATE TABLE IF NOT EXISTS message_drafts (
+                    conversation_id TEXT PRIMARY KEY,
+                    content TEXT NOT NULL DEFAULT '',
+                    attachments TEXT NOT NULL DEFAULT '[]',
+                    focus_mode TEXT,
+                    saved_at INTEGER NOT NULL
+                )",
+                [],
+            );
+        }
         Self { db }
     }
 
@@ -78,7 +91,7 @@ impl DraftManager {
         let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         let mut stmt = db.prepare(
-            "SELECT conversation_id, content, attachments, focus_mode, saved_a
+            "SELECT conversation_id, content, attachments, focus_mode, saved_at
              FROM message_drafts
              ORDER BY saved_at DESC"
         )?;

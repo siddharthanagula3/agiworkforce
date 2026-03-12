@@ -90,12 +90,12 @@ function ConnectSlackForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await invoke('connect_slack', {
         request: {
-          user_id: 'local',
-          bot_token: form.botToken,
-          app_token: form.appToken,
-          signing_secret: form.signingSecret,
-          workspace_name: form.workspaceName || null,
-          workspace_id: null,
+          userId: 'local',
+          botToken: form.botToken,
+          appToken: form.appToken,
+          signingSecret: form.signingSecret,
+          workspaceName: form.workspaceName || null,
+          workspaceId: null,
         },
       });
       toast.success('Slack connected.');
@@ -168,10 +168,10 @@ function ConnectWhatsAppForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await invoke('connect_whatsapp', {
         request: {
-          user_id: 'local',
-          phone_number_id: form.phoneNumberId,
-          access_token: form.accessToken,
-          verify_token: form.verifyToken,
+          userId: 'local',
+          phoneNumberId: form.phoneNumberId,
+          accessToken: form.accessToken,
+          verifyToken: form.verifyToken,
         },
       });
       toast.success('WhatsApp connected.');
@@ -238,11 +238,11 @@ function ConnectTeamsForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await invoke('connect_teams', {
         request: {
-          user_id: 'local',
-          tenant_id: form.tenantId,
-          client_id: form.clientId,
-          client_secret: form.clientSecret,
-          workspace_name: form.workspaceName || null,
+          userId: 'local',
+          tenantId: form.tenantId,
+          clientId: form.clientId,
+          clientSecret: form.clientSecret,
+          workspaceName: form.workspaceName || null,
         },
       });
       toast.success('Microsoft Teams connected.');
@@ -312,7 +312,7 @@ function ConnectDiscordForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
     try {
       await invoke('messaging_connect_discord', {
-        config: { bot_token: form.botToken, guild_id: form.guildId || null },
+        config: { botToken: form.botToken, guildId: form.guildId || null },
       });
       toast.success('Discord connected.');
       onSuccess();
@@ -363,7 +363,7 @@ function ConnectTelegramForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
     try {
       await invoke('messaging_connect_telegram', {
-        config: { bot_token: botToken },
+        config: { botToken },
       });
       toast.success('Telegram connected.');
       onSuccess();
@@ -404,7 +404,7 @@ function ConnectSignalForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
     try {
       await invoke('messaging_connect_signal', {
-        config: { phone_number: phoneNumber },
+        config: { phoneNumber },
       });
       toast.success('Signal registered.');
       onSuccess();
@@ -751,157 +751,159 @@ export function MessagingPanel() {
 
   return (
     <ErrorBoundary>
-    <div className="flex h-full flex-col gap-6 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
-            Messaging Platforms
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Connect Discord, Telegram, Signal, Slack, WhatsApp, and Microsoft Teams.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={refreshConnections}
-          disabled={loadingConnections}
-        >
-          <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-          Refresh
-        </Button>
-      </div>
-
-      <Separator />
-
-      {/* Add Platform */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-4">
-        <div className="flex items-center gap-2">
-          <Plus className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Add Platform</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select value={addPlatform} onValueChange={setAddPlatform}>
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="Choose a platform..." />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(PLATFORM_LABELS).map(([key, label]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {addPlatform && (
-          <div className="mt-2 rounded-md border border-border/40 bg-background/60 p-3">
-            {renderAddForm()}
+      <div className="flex h-full flex-col gap-6 p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" />
+              Messaging Platforms
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Connect Discord, Telegram, Signal, Slack, WhatsApp, and Microsoft Teams.
+            </p>
           </div>
-        )}
-      </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshConnections}
+            disabled={loadingConnections}
+          >
+            <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </div>
 
-      {/* Connections List */}
-      <div className="flex flex-col gap-2">
-        <div className="text-sm font-medium text-muted-foreground">Active Connections</div>
+        <Separator />
 
-        {/* DB-backed connections (Slack, WhatsApp, Teams) */}
-        {connections
-          .filter((c) => c.is_active)
-          .map((conn) => (
+        {/* Add Platform */}
+        <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-4">
+          <div className="flex items-center gap-2">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Add Platform</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Select value={addPlatform} onValueChange={setAddPlatform}>
+              <SelectTrigger className="w-52">
+                <SelectValue placeholder="Choose a platform..." />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PLATFORM_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {addPlatform && (
+            <div className="mt-2 rounded-md border border-border/40 bg-background/60 p-3">
+              {renderAddForm()}
+            </div>
+          )}
+        </div>
+
+        {/* Connections List */}
+        <div className="flex flex-col gap-2">
+          <div className="text-sm font-medium text-muted-foreground">Active Connections</div>
+
+          {/* DB-backed connections (Slack, WhatsApp, Teams) */}
+          {connections
+            .filter((c) => c.is_active)
+            .map((conn) => (
+              <div
+                key={conn.id}
+                className={`flex items-center justify-between rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
+                  selectedConnection?.id === conn.id
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border/60 bg-card/60 hover:bg-muted/40'
+                }`}
+                onClick={() =>
+                  setSelectedConnection((prev) => (prev?.id === conn.id ? null : conn))
+                }
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">
+                    {PLATFORM_LABELS[conn.platform] ?? conn.platform}
+                    {conn.workspace_name ? ` — ${conn.workspace_name}` : ''}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Connected {new Date(conn.created_at * 1000).toLocaleDateString()}
+                    {conn.last_used_at
+                      ? ` · Last used ${new Date(conn.last_used_at * 1000).toLocaleDateString()}`
+                      : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge connected={conn.is_active} />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDisconnectDb(conn.id);
+                    }}
+                    title="Disconnect"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+          {/* State-managed platforms (Discord, Telegram, Signal) */}
+          {statuses.map((status) => (
             <div
-              key={conn.id}
-              className={`flex items-center justify-between rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
-                selectedConnection?.id === conn.id
-                  ? 'border-primary/40 bg-primary/5'
-                  : 'border-border/60 bg-card/60 hover:bg-muted/40'
-              }`}
-              onClick={() => setSelectedConnection((prev) => (prev?.id === conn.id ? null : conn))}
+              key={status.platform}
+              className="flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-4 py-3"
             >
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">
-                  {PLATFORM_LABELS[conn.platform] ?? conn.platform}
-                  {conn.workspace_name ? ` — ${conn.workspace_name}` : ''}
+                  {PLATFORM_LABELS[status.platform] ?? status.platform}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  Connected {new Date(conn.created_at * 1000).toLocaleDateString()}
-                  {conn.last_used_at
-                    ? ` · Last used ${new Date(conn.last_used_at * 1000).toLocaleDateString()}`
-                    : ''}
-                </span>
+                {status.error && <span className="text-xs text-destructive">{status.error}</span>}
               </div>
               <div className="flex items-center gap-3">
-                <StatusBadge connected={conn.is_active} />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleDisconnectDb(conn.id);
-                  }}
-                  title="Disconnect"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <StatusBadge connected={status.connected} />
+                {status.connected && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => void handleDisconnectState(status.platform)}
+                    title="Disconnect"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}
 
-        {/* State-managed platforms (Discord, Telegram, Signal) */}
-        {statuses.map((status) => (
-          <div
-            key={status.platform}
-            className="flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-4 py-3"
-          >
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">
-                {PLATFORM_LABELS[status.platform] ?? status.platform}
-              </span>
-              {status.error && <span className="text-xs text-destructive">{status.error}</span>}
-            </div>
-            <div className="flex items-center gap-3">
-              <StatusBadge connected={status.connected} />
-              {status.connected && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => void handleDisconnectState(status.platform)}
-                  title="Disconnect"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
+          {connections.filter((c) => c.is_active).length === 0 &&
+            statuses.filter((s) => s.connected).length === 0 && (
+              <div className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-xs text-muted-foreground">
+                No platforms connected. Use the form above to add one.
+              </div>
+            )}
+        </div>
 
-        {connections.filter((c) => c.is_active).length === 0 &&
-          statuses.filter((s) => s.connected).length === 0 && (
-            <div className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-xs text-muted-foreground">
-              No platforms connected. Use the form above to add one.
-            </div>
-          )}
+        <Separator />
+
+        {/* Send Message */}
+        <SendMessageForm
+          connections={connections}
+          statePlatformStatuses={statuses}
+          onSent={refreshConnections}
+        />
+
+        <Separator />
+
+        {/* Message History (for DB-backed connections only) */}
+        <div className="flex flex-col gap-2">
+          <div className="text-sm font-medium text-muted-foreground">Message History</div>
+          <MessageHistory connection={selectedConnection} />
+        </div>
       </div>
-
-      <Separator />
-
-      {/* Send Message */}
-      <SendMessageForm
-        connections={connections}
-        statePlatformStatuses={statuses}
-        onSent={refreshConnections}
-      />
-
-      <Separator />
-
-      {/* Message History (for DB-backed connections only) */}
-      <div className="flex flex-col gap-2">
-        <div className="text-sm font-medium text-muted-foreground">Message History</div>
-        <MessageHistory connection={selectedConnection} />
-      </div>
-    </div>
     </ErrorBoundary>
   );
 }

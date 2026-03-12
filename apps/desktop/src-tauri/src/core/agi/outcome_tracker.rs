@@ -2,17 +2,25 @@ use super::process_reasoning::{Outcome, ProcessType, Strategy};
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+
+/// Number of writes between forced success rate refreshes
+const REFRESH_EVERY_N_WRITES: u64 = 10;
+/// Minimum seconds between success rate refreshes
+const REFRESH_INTERVAL_SECS: u64 = 60;
 
 pub struct OutcomeTracker {
     db_path: String,
     cache: Arc<Mutex<OutcomeCache>>,
+    /// Counter and timestamp for debouncing refresh_success_rates
+    write_counter: Mutex<u64>,
+    last_refresh_time: Mutex<std::time::Instant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OutcomeCache {
-    recent_outcomes: Vec<TrackedOutcome>,
+    recent_outcomes: VecDeque<TrackedOutcome>,
     success_rates: HashMap<String, f64>,
 }
 
@@ -51,9 +59,11 @@ impl OutcomeTracker {
         let tracker = Self {
             db_path,
             cache: Arc::new(Mutex::new(OutcomeCache {
-                recent_outcomes: Vec::new(),
+                recent_outcomes: VecDeque::new(),
                 success_rates: HashMap::new(),
             })),
+            write_counter: Mutex::new(0),
+            last_refresh_time: Mutex::new(std::time::Instant::now()),
         };
 
         tracker.refresh_cache()?;
@@ -94,15 +104,41 @@ impl OutcomeTracker {
 
         {
             if let Ok(mut cache) = self.cache.lock() {
-                cache.recent_outcomes.push(tracked);
+                cache.recent_outcomes.push_back(tracked);
 
                 if cache.recent_outcomes.len() > 100 {
-                    cache.recent_outcomes.remove(0);
+                    cache.recent_outcomes.pop_front();
                 }
             }
         }
 
-        self.refresh_success_rates()?;
+        // Debounce: only refresh success rates every N writes or every 60 seconds
+        // to avoid opening a new DB connection on every single write.
+        let should_refresh = {
+            let mut counter = self
+                .write_counter
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Write counter lock poisoned: {}", e))?;
+            *counter += 1;
+            let count_trigger = *counter % REFRESH_EVERY_N_WRITES == 0;
+
+            let mut last_refresh = self
+                .last_refresh_time
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Last refresh time lock poisoned: {}", e))?;
+            let time_trigger = last_refresh.elapsed().as_secs() >= REFRESH_INTERVAL_SECS;
+
+            if count_trigger || time_trigger {
+                *last_refresh = std::time::Instant::now();
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_refresh {
+            self.refresh_success_rates()?;
+        }
 
         Ok(())
     }
@@ -376,7 +412,7 @@ impl OutcomeTracker {
 
         {
             if let Ok(mut cache) = self.cache.lock() {
-                cache.recent_outcomes = outcomes;
+                cache.recent_outcomes = VecDeque::from(outcomes);
             }
         }
 

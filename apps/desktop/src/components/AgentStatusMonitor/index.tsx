@@ -98,7 +98,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
               {(agent.status === 'running' || agent.status === 'paused') && (
                 <div className="flex items-center space-x-2 ml-2">
                   {agent.status === 'running' && onPauseAgent && (
-                    <button
+                    <button type="button"
                       onClick={() => onPauseAgent(agent.id)}
                       className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                       title="Pause agent"
@@ -107,7 +107,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
                     </button>
                   )}
                   {agent.status === 'paused' && onResumeAgent && (
-                    <button
+                    <button type="button"
                       onClick={() => onResumeAgent(agent.id)}
                       className="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200 transition-colors"
                       title="Resume agent"
@@ -116,7 +116,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
                     </button>
                   )}
                   {onCancelAgent && (
-                    <button
+                    <button type="button"
                       onClick={() => onCancelAgent(agent.id)}
                       className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors"
                       title="Cancel agent"

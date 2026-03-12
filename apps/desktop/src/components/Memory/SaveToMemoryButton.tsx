@@ -55,7 +55,7 @@ export const SaveToMemoryButton = memo(function SaveToMemoryButton({
   }, [content, remember, saved, saving]);
 
   return (
-    <button
+    <button type="button"
       onClick={handleSave}
       disabled={saved || saving || !content.trim()}
       className={cn(

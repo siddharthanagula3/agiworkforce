@@ -54,6 +54,16 @@ pub struct FrameContext {
     pub url: String,
 }
 
+/// Escape special characters in a string intended for insertion into a
+/// JavaScript single-quoted string literal.
+fn escape_js_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('`', "\\`")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
 pub struct AdvancedBrowserOps;
 
 impl AdvancedBrowserOps {
@@ -137,7 +147,7 @@ impl AdvancedBrowserOps {
                     x: rect.x,
                     y: rect.y,
                     width: rect.width,
-                    height: rect.heigh
+                    height: rect.height
                 }},
                 computedStyles: {{
                     display: styles.display,
@@ -147,7 +157,7 @@ impl AdvancedBrowserOps {
                 }}
             }};
             ",
-            selector.replace('\'', "\\'")
+            escape_js_string(selector)
         );
 
         let result = cdp.evaluate(&script).await?;
@@ -355,8 +365,8 @@ impl AdvancedBrowserOps {
 
             return true;
             ",
-            source_selector.replace('\'', "\\'"),
-            target_selector.replace('\'', "\\'")
+            escape_js_string(source_selector),
+            escape_js_string(target_selector)
         );
 
         cdp.evaluate(&script).await?;
@@ -364,10 +374,7 @@ impl AdvancedBrowserOps {
     }
 
     pub async fn upload_file(cdp: Arc<CdpClient>, selector: &str, file_path: &str) -> Result<()> {
-        let get_node_script = format!(
-            "document.querySelector('{}')",
-            selector.replace('\'', "\\'")
-        );
+        let get_node_script = format!("document.querySelector('{}')", escape_js_string(selector));
 
         let params = json!({
             "objectId": get_node_script,
@@ -388,7 +395,7 @@ impl AdvancedBrowserOps {
 
         let script = format!(
             "window['{}'](...{})",
-            function_name.replace('\'', "\\'"),
+            escape_js_string(function_name),
             args_json
         );
 

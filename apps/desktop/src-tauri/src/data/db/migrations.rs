@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 57;
+const CURRENT_VERSION: i32 = 58;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -539,6 +539,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 57 {
         run_migration_in_transaction(conn, 57, apply_migration_v57)?;
+    }
+
+    if current_version < 58 {
+        run_migration_in_transaction(conn, 58, apply_migration_v58)?;
     }
 
     Ok(())
@@ -4932,6 +4936,49 @@ fn apply_migration_v57(conn: &Connection) -> Result<()> {
     }
 
     tracing::info!("Migration v57: Added token hash/encrypted columns to auth_sessions");
+
+    Ok(())
+}
+
+/// Migration v58: Fix project_memories UNIQUE constraint
+///
+/// The original UNIQUE(project_folder, memory_type) blocks storing multiple
+/// architectural decisions (or coding styles) for the same project. Fix by
+/// removing the unique constraint entirely -- context/coding_style rows use
+/// UPSERT at the application layer, so uniqueness is enforced in code.
+fn apply_migration_v58(conn: &Connection) -> Result<()> {
+    // SQLite cannot ALTER constraints, so we recreate the table via rename-copy-drop.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS project_memories_v58 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_folder TEXT NOT NULL,
+            memory_type TEXT NOT NULL CHECK(memory_type IN ('context', 'coding_style', 'architectural_decision')),
+            content TEXT NOT NULL,
+            importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_accessed TEXT
+        );
+
+        INSERT OR IGNORE INTO project_memories_v58
+            (id, project_folder, memory_type, content, importance, created_at, updated_at, last_accessed)
+        SELECT id, project_folder, memory_type, content, importance, created_at, updated_at, last_accessed
+        FROM project_memories;
+
+        DROP TABLE IF EXISTS project_memories;
+        ALTER TABLE project_memories_v58 RENAME TO project_memories;
+
+        CREATE INDEX IF NOT EXISTS idx_project_memories_folder ON project_memories(project_folder);
+        CREATE INDEX IF NOT EXISTS idx_project_memories_type ON project_memories(memory_type);
+        CREATE INDEX IF NOT EXISTS idx_project_memories_importance ON project_memories(importance DESC);
+        CREATE INDEX IF NOT EXISTS idx_project_memories_updated ON project_memories(updated_at DESC);
+        "
+    )?;
+
+    tracing::info!(
+        "Migration v58: Removed UNIQUE(project_folder, memory_type) from project_memories \
+         to allow multiple architectural decisions per project"
+    );
 
     Ok(())
 }

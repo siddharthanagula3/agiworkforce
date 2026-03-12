@@ -191,7 +191,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2 text-sm">
-        <button
+        <button type="button"
           className={cn(
             'flex items-center gap-2 rounded-full px-3 py-1 transition',
             tab === 'image' ? 'bg-white text-black' : 'text-slate-300 hover:bg-white/5',
@@ -201,7 +201,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <ImageIcon className="h-4 w-4" />
           Images
         </button>
-        <button
+        <button type="button"
           className={cn(
             'flex items-center gap-2 rounded-full px-3 py-1 transition',
             tab === 'video' ? 'bg-white text-black' : 'text-slate-300 hover:bg-white/5',

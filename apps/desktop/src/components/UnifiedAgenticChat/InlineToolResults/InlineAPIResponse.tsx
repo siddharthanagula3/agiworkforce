@@ -18,7 +18,8 @@ import { Badge } from '../../ui/Badge';
 export interface APIResponseData {
   url: string;
   method?: string;
-  statusCode: number;
+  statusCode?: number;
+  status?: number;
   statusText?: string;
   headers?: Record<string, string>;
   body?: string | object;
@@ -35,17 +36,10 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
 
   const data = result?.data as APIResponseData | undefined;
 
-  const {
-    url = '',
-    method = 'GET',
-    statusCode = 0,
-    statusText,
-    headers = {},
-    body,
-    durationMs,
-    success = statusCode >= 200 && statusCode < 400,
-    error,
-  } = data || {};
+  const rawData = data || ({} as APIResponseData);
+  const { url = '', method = 'GET', statusText, headers = {}, body, durationMs, error } = rawData;
+  const statusCode = rawData.statusCode || rawData.status || 0;
+  const success = rawData.success ?? (statusCode >= 200 && statusCode < 400);
 
   // Parse body if it's a string
   const parsedBody = useMemo(() => {
@@ -208,7 +202,7 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
             size="xs"
             variant="ghost"
             onClick={() => {
-              navigator.clipboard.writeText(formattedBody);
+              void navigator.clipboard.writeText(formattedBody).catch(() => {});
               toast.success('Response copied to clipboard', {
                 icon: <Check className="h-4 w-4" />,
                 duration: 2000,

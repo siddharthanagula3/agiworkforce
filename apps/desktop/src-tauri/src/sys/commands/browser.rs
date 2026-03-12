@@ -39,10 +39,7 @@ fn sanitize_selector(selector: &str) -> String {
     // We strip the outer quotes to get the safely escaped interior.
     let json_encoded = serde_json::to_string(selector).unwrap_or_else(|_| selector.to_string());
     // Strip the outer double quotes added by JSON encoding
-    if json_encoded.len() >= 2
-        && json_encoded.starts_with('"')
-        && json_encoded.ends_with('"')
-    {
+    if json_encoded.len() >= 2 && json_encoded.starts_with('"') && json_encoded.ends_with('"') {
         json_encoded[1..json_encoded.len() - 1].to_string()
     } else {
         json_encoded
@@ -54,10 +51,7 @@ fn sanitize_selector(selector: &str) -> String {
 /// Uses JSON encoding for robust escaping of all special characters.
 fn sanitize_js_value(value: &str) -> String {
     let json_encoded = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
-    if json_encoded.len() >= 2
-        && json_encoded.starts_with('"')
-        && json_encoded.ends_with('"')
-    {
+    if json_encoded.len() >= 2 && json_encoded.starts_with('"') && json_encoded.ends_with('"') {
         json_encoded[1..json_encoded.len() - 1].to_string()
     } else {
         json_encoded

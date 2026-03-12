@@ -181,7 +181,7 @@ interface FilterBadgeProps {
 
 function FilterBadge({ label, active, onClick }: FilterBadgeProps) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
         active
@@ -203,7 +203,7 @@ function ActiveFilterBadge({ label, onRemove }: ActiveFilterBadgeProps) {
   return (
     <Badge variant="secondary" className="gap-2 pr-1">
       <span>{label}</span>
-      <button onClick={onRemove} className="hover:bg-secondary-foreground/20 rounded-full p-0.5">
+      <button type="button" onClick={onRemove} className="hover:bg-secondary-foreground/20 rounded-full p-0.5">
         <X className="h-3 w-3" />
       </button>
     </Badge>

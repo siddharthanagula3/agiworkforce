@@ -261,11 +261,11 @@ impl ProviderAdapterFactory {
             Provider::Fireworks => Box::new(OpenAIAdapter),
             Provider::Cerebras => Box::new(OpenAIAdapter),
             Provider::DeepInfra => Box::new(OpenAIAdapter),
-            Provider::Cohere => Box::new(OpenAIAdapter),  // Cohere v2 uses OpenAI-compatible format
+            Provider::Cohere => Box::new(OpenAIAdapter), // Cohere v2 uses OpenAI-compatible format
             Provider::AI21 => Box::new(OpenAIAdapter),
             Provider::Sambanova => Box::new(OpenAIAdapter),
-            Provider::Azure => Box::new(OpenAIAdapter),   // Azure OpenAI uses OpenAI format
-            Provider::Bedrock => Box::new(OpenAIAdapter),  // Bedrock stub — will need custom adapter later
+            Provider::Azure => Box::new(OpenAIAdapter), // Azure OpenAI uses OpenAI format
+            Provider::Bedrock => Box::new(OpenAIAdapter), // Bedrock stub — will need custom adapter later
         }
     }
 }
@@ -1555,6 +1555,42 @@ impl ProviderAdapter for AnthropicAdapter {
                     }
                     out.push(serde_json::json!({
                         "role": msg.role,
+                        "content": content_blocks
+                    }));
+                } else if msg.role == "tool" {
+                    // Convert OpenAI-style tool result messages to Anthropic format.
+                    // Anthropic expects role="user" with a tool_result content block.
+                    let tool_use_id = msg.tool_call_id.as_deref().unwrap_or("unknown");
+                    out.push(serde_json::json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": msg.content
+                        }]
+                    }));
+                } else if let Some(tool_calls) = &msg.tool_calls {
+                    // Convert OpenAI-style assistant tool_calls to Anthropic format.
+                    // Anthropic expects content blocks with type="tool_use".
+                    let mut content_blocks: Vec<Value> = Vec::new();
+                    if !msg.content.is_empty() {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": msg.content
+                        }));
+                    }
+                    for tc in tool_calls {
+                        let input: Value = serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({}));
+                        content_blocks.push(serde_json::json!({
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": input
+                        }));
+                    }
+                    out.push(serde_json::json!({
+                        "role": "assistant",
                         "content": content_blocks
                     }));
                 } else {
