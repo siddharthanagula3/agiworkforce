@@ -169,8 +169,10 @@ pub async fn metrics_set_cache_hit_rate(
 pub async fn analytics_get_usage_stats(
     state: State<'_, AppDatabase>,
 ) -> Result<serde_json::Value, String> {
-    let db = create_analytics_db_connection(&state)?;
-    let conn = db.lock().await;
+    let db = create_analytics_db_connection(&state);
+    let conn = db
+        .lock()
+        .map_err(|e| format!("Failed to lock analytics database: {}", e))?;
 
     let total_events: i64 = conn
         .query_row("SELECT COUNT(*) FROM automation_history", [], |row| {
@@ -255,8 +257,10 @@ pub async fn analytics_get_usage_stats(
 pub async fn analytics_get_feature_usage(
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let db = create_analytics_db_connection(&state)?;
-    let conn = db.lock().await;
+    let db = create_analytics_db_connection(&state);
+    let conn = db
+        .lock()
+        .map_err(|e| format!("Failed to lock analytics database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
@@ -293,37 +297,15 @@ use crate::data::analytics::{
     ScheduledReportGenerator, ToolMetrics, TrendPoint, UserMetrics,
 };
 use crate::sys::commands::AppDatabase;
-use rusqlite::Connection;
 
-/// Wrap the managed `AppDatabase` connection in an `Arc<tokio::sync::Mutex<Connection>>`
-/// for use with the `MetricsAggregator` and related analytics code.
+/// Reuse the managed `AppDatabase` connection for analytics work.
 ///
-/// Bug #76 fix: Previously opened a *separate* SQLite file via an env var,
-/// bypassing the managed `AppDatabase`. Now reuses the same `Arc<Mutex<Connection>>`
-/// that the rest of the app uses, just re-wrapped for the tokio mutex interface.
+/// Bug #76 fix: analytics now shares the desktop runtime's SQLite connection
+/// instead of opening a second writer.
 fn create_analytics_db_connection(
     app_db: &AppDatabase,
-) -> Result<Arc<tokio::sync::Mutex<Connection>>, String> {
-    // Obtain the path from the existing managed connection so we open the
-    // *same* database file, not a random working-directory-relative one.
-    let conn = app_db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-    // Use the existing connection's path (returns "" for in-memory DBs)
-    let db_path: String = conn.path().map(|p| p.to_string()).unwrap_or_default();
-
-    drop(conn);
-
-    if db_path.is_empty() {
-        return Err("AppDatabase has no file path (in-memory)".to_string());
-    }
-
-    let new_conn = Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open analytics connection: {}", e))?;
-
-    Ok(Arc::new(tokio::sync::Mutex::new(new_conn)))
+) -> Arc<std::sync::Mutex<rusqlite::Connection>> {
+    Arc::clone(&app_db.conn)
 }
 
 #[tauri::command]
@@ -332,7 +314,7 @@ pub async fn analytics_calculate_roi(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<ROIReport, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let calculator = ROICalculator::new(db);
 
     calculator
@@ -347,7 +329,7 @@ pub async fn analytics_get_process_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ProcessMetrics>, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let aggregator = MetricsAggregator::new(db);
 
     aggregator
@@ -362,7 +344,7 @@ pub async fn analytics_get_user_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<UserMetrics>, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let aggregator = MetricsAggregator::new(db);
 
     aggregator
@@ -377,7 +359,7 @@ pub async fn analytics_get_tool_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ToolMetrics>, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let aggregator = MetricsAggregator::new(db);
 
     aggregator
@@ -392,7 +374,7 @@ pub async fn analytics_get_metric_trends(
     days: usize,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<TrendPoint>, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let aggregator = MetricsAggregator::new(db);
 
     aggregator
@@ -425,7 +407,7 @@ pub async fn analytics_export_report(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
 
     let calculator = ROICalculator::new(db.clone());
     let aggregator = MetricsAggregator::new(db.clone());
@@ -482,7 +464,7 @@ pub async fn analytics_generate_weekly_report(
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
     let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let generator = ScheduledReportGenerator::new(db);
 
     generator.generate_weekly_report(&user_id).await
@@ -494,7 +476,7 @@ pub async fn analytics_generate_monthly_report(
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
     let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let generator = ScheduledReportGenerator::new(db);
 
     generator.generate_monthly_report(&user_id).await
@@ -507,7 +489,7 @@ pub async fn analytics_get_top_processes(
     limit: usize,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ProcessMetrics>, String> {
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let aggregator = MetricsAggregator::new(db);
 
     aggregator
@@ -525,7 +507,7 @@ pub async fn analytics_save_snapshot(
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
     let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state)?;
+    let db = create_analytics_db_connection(&state);
     let calculator = ROICalculator::new(db);
 
     let roi = calculator
@@ -615,6 +597,8 @@ pub async fn acknowledge_milestone(
 mod tests {
     use super::*;
     use crate::sys::telemetry::CollectorConfig;
+    use rusqlite::Connection;
+    use std::sync::{Arc, Mutex};
 
     fn create_test_state() -> TelemetryState {
         let config = CollectorConfig {
@@ -706,5 +690,15 @@ mod tests {
         let flags = result.unwrap();
         assert!(!flags.is_empty());
         assert_eq!(flags.get("parallel_execution"), Some(&true));
+    }
+
+    #[test]
+    fn test_create_analytics_db_connection_reuses_managed_connection() {
+        let app_db = AppDatabase {
+            conn: Arc::new(Mutex::new(Connection::open_in_memory().unwrap())),
+        };
+
+        let analytics_db = create_analytics_db_connection(&app_db);
+        assert!(Arc::ptr_eq(&app_db.conn, &analytics_db));
     }
 }

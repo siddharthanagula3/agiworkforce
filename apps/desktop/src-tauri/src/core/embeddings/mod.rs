@@ -27,6 +27,28 @@ pub struct EmbeddingService {
 }
 
 impl EmbeddingService {
+    fn from_components(
+        workspace_root: PathBuf,
+        generator: EmbeddingGenerator,
+        similarity: SimilaritySearch,
+        cache: EmbeddingCache,
+    ) -> Self {
+        let generator_arc = Arc::new(Mutex::new(generator));
+        let similarity_arc = Arc::new(Mutex::new(similarity));
+        let indexer = IncrementalIndexer::new(
+            workspace_root,
+            generator_arc.clone(),
+            similarity_arc.clone(),
+        );
+
+        Self {
+            generator: generator_arc,
+            similarity: similarity_arc,
+            cache: Arc::new(Mutex::new(cache)),
+            indexer: Arc::new(Mutex::new(indexer)),
+        }
+    }
+
     /// Create a degraded EmbeddingService using temp paths and skipping async init.
     /// Commands will function but may return errors on actual embedding operations.
     pub fn new_degraded() -> Result<Self> {
@@ -40,18 +62,27 @@ impl EmbeddingService {
         let similarity = SimilaritySearch::new(db_path)?;
         let cache = EmbeddingCache::new(cache_path)?;
 
-        let generator_arc = Arc::new(Mutex::new(generator));
-        let similarity_arc = Arc::new(Mutex::new(similarity));
+        Ok(Self::from_components(
+            temp_dir, generator, similarity, cache,
+        ))
+    }
 
-        let indexer =
-            IncrementalIndexer::new(temp_dir, generator_arc.clone(), similarity_arc.clone());
+    /// Create a fully in-memory degraded EmbeddingService.
+    /// This is the last-resort fallback to keep Tauri state managed even if
+    /// the filesystem-backed degraded service cannot be created.
+    pub fn new_in_memory_degraded() -> Result<Self> {
+        let config = EmbeddingConfig::default();
+        let generator = EmbeddingGenerator::new_degraded(config)?;
+        let similarity = SimilaritySearch::new_in_memory()?;
+        let cache = EmbeddingCache::new_in_memory()?;
+        let workspace_root = std::env::temp_dir().join("agiworkforce_embeddings_in_memory");
 
-        Ok(Self {
-            generator: generator_arc,
-            similarity: similarity_arc,
-            cache: Arc::new(Mutex::new(cache)),
-            indexer: Arc::new(Mutex::new(indexer)),
-        })
+        Ok(Self::from_components(
+            workspace_root,
+            generator,
+            similarity,
+            cache,
+        ))
     }
 
     pub async fn new(workspace_root: PathBuf, config: EmbeddingConfig) -> Result<Self> {
@@ -65,21 +96,12 @@ impl EmbeddingService {
         let similarity = SimilaritySearch::new(db_path)?;
         let cache = EmbeddingCache::new(cache_path)?;
 
-        let generator_arc = Arc::new(Mutex::new(generator));
-        let similarity_arc = Arc::new(Mutex::new(similarity));
-
-        let indexer = IncrementalIndexer::new(
+        Ok(Self::from_components(
             workspace_root,
-            generator_arc.clone(),
-            similarity_arc.clone(),
-        );
-
-        Ok(Self {
-            generator: generator_arc,
-            similarity: similarity_arc,
-            cache: Arc::new(Mutex::new(cache)),
-            indexer: Arc::new(Mutex::new(indexer)),
-        })
+            generator,
+            similarity,
+            cache,
+        ))
     }
 
     pub fn generator(&self) -> Arc<Mutex<EmbeddingGenerator>> {
@@ -147,6 +169,19 @@ impl EmbeddingMetadata {
     pub fn with_model_id(mut self, model_id: String) -> Self {
         self.model_id = Some(model_id);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EmbeddingService;
+
+    #[test]
+    fn test_new_in_memory_degraded_initializes() {
+        let service = EmbeddingService::new_in_memory_degraded().unwrap();
+        let generator = service.generator();
+        let guard = generator.blocking_lock();
+        assert!(guard.dimensions() > 0);
     }
 }
 

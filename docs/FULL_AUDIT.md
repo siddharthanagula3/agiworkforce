@@ -21,8 +21,8 @@
 | 6 | LOW | server_tools.rs | Anthropic server tool definitions built but never integrated | S |
 | 7 | LOW | background_manager.rs | 500ms polling loop instead of tokio notify | S |
 | 8 | LOW | prompt_policy.rs | Searches all messages even after finding marker | S |
-| 9 | CRITICAL | server/handlers.rs | MCP Server tool execution NOT IMPLEMENTED — returns placeholder | M |
-| 10 | CRITICAL | server/http_server.rs | No AppHandle access — cannot execute tools or emit events | L |
+| 9 | CRITICAL | server/handlers.rs | Historical issue resolved: embedded MCP `tools/call` now routes through `DesktopMcpServerExecutor` into the live desktop backend runtime instead of returning a placeholder | Fixed in live desktop runtime |
+| 10 | CRITICAL | server/http_server.rs | Historical issue resolved: embedded MCP server now receives `AppHandle` through `McpServerState` and can execute tools / emit runtime events | Fixed in live desktop runtime |
 | 11 | HIGH | extensions/manager.rs | Config encryption NOT implemented — API keys stored plaintext | M |
 | 12 | HIGH | extensions/installer.rs | Install progress callback not wired to frontend | M |
 | 13 | HIGH | server/handlers.rs | No ToolGuard/approval integration — bash runs without consent | L |
@@ -36,7 +36,7 @@
 | 21 | MEDIUM | browser_tools.rs | CSS selector injection — not escaped in querySelector | M |
 | 22 | MEDIUM | code_executor.rs | MAX_CODE_LENGTH and DANGEROUS_PATTERNS defined but not enforced | M |
 | 23 | LOW | mcp_tools.rs | MCP tool timeout hardcoded at 120s/300s max | S |
-| 24 | CRITICAL | memory_manager.rs | remember() never calls update_index() — semantic search stale at runtime | S |
+| 24 | CRITICAL | memory_manager.rs | Historical issue resolved: `remember()` now updates the semantic index immediately; stale-search audit claim was based on older code | Fixed in live desktop runtime |
 | 25 | CRITICAL | providers/bedrock.rs | Bedrock provider NOT IMPLEMENTED — blocks all AWS users | L |
 | 26 | CRITICAL | provider_adapter.rs | Bedrock routed to OpenAI adapter — wrong API format | L |
 | 27 | HIGH | sse_parser.rs | Tool call index out-of-order bug — corrupts tool calls during streaming | M |
@@ -65,59 +65,59 @@
 | 50 | MEDIUM | provider_adapter.rs | Anthropic adapter via DirectAPI doesn't convert tool_calls/tool-role messages | M |
 | 51 | MEDIUM | autonomous.rs | agent:task_approval_required event uses snake_case keys — violates IPC convention | S |
 | 52 | MEDIUM | autonomous.rs | System::new_all() + refresh_all() called every 50ms loop iteration — expensive | S |
-| 53 | MEDIUM | orchestrator.rs | spawn_parallel spawns agents sequentially via await loop — not actually parallel | S |
-| 54 | MEDIUM | tools/mod.rs | Terminal shell defaults to "powershell" even on macOS/Linux | S |
-| 55 | MEDIUM | search.rs (chat) | FTS5 MATCH injection — metacharacters (*,NOT,NEAR) not escaped from user query | S |
-| 56 | MEDIUM | control.rs | clear_local_database: 8 DELETE statements without transaction — partial wipe on failure | S |
-| 57 | MEDIUM | compaction.rs | Compaction result NOT persisted — returns success but next load gets full history | L |
-| 58 | MEDIUM | search.rs (chat) | TF-IDF magnitude only accumulates query terms — cosine similarity inflated | M |
-| 59 | CRITICAL | auth_db.rs | Plaintext tokens stored in DB alongside encrypted versions — encryption pointless | M |
-| 60 | CRITICAL | oauth.rs | PKCE verifier leaked to caller in OAuthAuthorizationUrl struct — defeats PKCE | S |
-| 61 | HIGH | auth_db.rs | update_session_tokens also stores plaintext alongside hash+encrypted form | S |
-| 62 | HIGH | auth_db.rs | decrypt_token silently returns raw plaintext if JSON deserialization fails | S |
-| 63 | HIGH | auth.rs | Token validation rate-limit key is first 8 chars of token — DoS vector | M |
-| 64 | HIGH | permissions.rs | SQL typo: `updated_a` instead of `updated_at` — get_all_permissions always crashes | S |
-| 65 | HIGH | storage.rs | Non-volatile key zeroization — compiler can optimize away naive zeroing loop | S |
-| 66 | HIGH | audit_logger.rs | generate_signature returns empty string on HMAC failure — silently degraded integrity | S |
-| 67 | MEDIUM | tool_guard.rs | SQL injection filter overly aggressive — blocks hex literals, comments, sleep() | M |
+| 53 | MEDIUM | orchestrator.rs | Historical issue resolved: live AGI orchestrator now uses `join_all` for true parallel agent spawning | Fixed in live desktop runtime |
+| 54 | MEDIUM | tools/mod.rs | Historical issue resolved: platform-aware shell defaults now route Windows to PowerShell, macOS to zsh, and Linux to bash | Fixed in live desktop runtime |
+| 55 | MEDIUM | search.rs (chat) | Historical issue resolved: chat search now escapes user terms into literal FTS queries instead of passing raw MATCH syntax through | Fixed in live desktop runtime |
+| 56 | MEDIUM | control.rs | Historical issue resolved: local database reset now runs inside one transaction before clearing the pending queue | Fixed in live desktop runtime |
+| 57 | MEDIUM | compaction.rs | Historical issue resolved: context compaction now persists a replacement summary message locally instead of returning a no-op success | Fixed in live desktop runtime |
+| 58 | MEDIUM | search.rs (chat) | Historical issue resolved: semantic chat search now computes document magnitude across all document terms instead of only query terms | Fixed in live desktop runtime |
+| 59 | CRITICAL | auth_db.rs | Historical issue resolved: `auth_sessions` now rebuilds to unique hash/encrypted columns, re-encrypts legacy rows in migration `v59`, and keeps legacy token columns redacted | Fixed in live desktop runtime |
+| 60 | CRITICAL | oauth.rs | Historical issue resolved: `OAuthAuthorizationUrl` no longer exposes `pkce_verifier`; verifier remains internal to the pending verifier store | Fixed in live desktop runtime |
+| 61 | HIGH | auth_db.rs | Historical issue resolved: `update_session_tokens` now rotates hash/encrypted fields while keeping legacy token columns redacted | Fixed in live desktop runtime |
+| 62 | HIGH | auth_db.rs | Historical issue resolved: auth session reads now require encrypted token payloads; plaintext legacy rows are migrated instead of being returned raw | Fixed in live desktop runtime |
+| 63 | HIGH | auth.rs | Historical issue resolved: token validation rate limiting now keys on a full-token digest instead of the first 8 characters | Fixed in live desktop runtime |
+| 64 | HIGH | permissions.rs | Historical issue resolved: `get_all_permissions` now uses `updated_at`, and the live permissions module has regression coverage for full-row reads | Fixed in live desktop runtime |
+| 65 | HIGH | storage.rs | Historical issue resolved: `SecureStorage::lock()` uses volatile writes plus a compiler fence for zeroization | Fixed in live desktop runtime |
+| 66 | HIGH | audit_logger.rs | Historical issue resolved: `generate_signature` now returns an error on HMAC failure instead of silently producing an empty signature | Fixed in live desktop runtime |
+| 67 | MEDIUM | tool_guard.rs | Historical issue resolved: SQL validation now normalizes comments, allows legitimate comments/hex literals, and still blocks classical injection plus time-based abuse patterns | Fixed in live desktop runtime |
 | 68 | MEDIUM | dm_protection.rs | All state in-memory only — pairing codes lost on restart | M |
 | 69 | MEDIUM | machine_key.rs | has_machine_only_secrets() is stub (always true) — migration detection broken | S |
-| 70 | MEDIUM | updater.rs | should_update() uses string != instead of semver — downgrades appear as updates | S |
-| 71 | MEDIUM | validator.rs + command_validator.rs | Two overlapping command validation systems — inconsistent security boundaries | M |
-| 72 | CRITICAL | chat/mod.rs + 6 submodule files | Dead submodule refactor: 6 files (~4,000 LOC) never declared as `mod X;` — entire refactored codebase unreachable | L |
-| 73 | HIGH | chat/messages.rs vs mod.rs | `save_assistant_message` signature divergence — cloud sync silently broken | S |
+| 70 | MEDIUM | updater.rs | Historical issue resolved: `should_update()` now parses semantic versions and rejects downgrades instead of using raw string inequality | Fixed in live desktop runtime |
+| 71 | MEDIUM | validator.rs + command_validator.rs | Historical issue resolved: `validator.rs` was removed as dead duplicate code, and `command_validator.rs` is now the sole command-validation surface exported from `sys/security/mod.rs` | Fixed in live desktop runtime |
+| 72 | CRITICAL | chat/mod.rs + 6 submodule files | Historical issue resolved: the live chat runtime now declares and uses real submodules instead of leaving the refactor unreachable | Fixed in live desktop runtime |
+| 73 | HIGH | chat/messages.rs vs mod.rs | Historical issue resolved: assistant-message persistence/cloud-sync logic now lives in the canonical chat persistence path | Fixed in live desktop runtime |
 | 74 | HIGH | chat/mod.rs | `total_input_tokens` and `total_output_tokens` permanently hardcoded to 0 — billing broken | M |
-| 75 | HIGH | chat/mod.rs (context.rs) | `build_tool_definitions` 2-tuple vs 3-tuple — latent API break on wiring | M |
-| 76 | CRITICAL | analytics.rs | `create_analytics_db_connection` opens separate SQLite via env var — connection leak, wrong DB | M |
-| 77 | CRITICAL | code_editing.rs | `apply_changes` writes to arbitrary file paths with no path validation | S |
-| 78 | CRITICAL | code_editing.rs | `try_git_revert` unsanitized `file_path` in shell — git command injection | S |
-| 79 | HIGH | cache.rs | SQL typo `last_used_a` in `cache_get_analytics` — runtime crash every call | S |
-| 80 | HIGH | cache.rs | `get_codebase_cache_stats` casts f32 to u64 → always returns 0 hits/misses | S |
-| 81 | HIGH | error_reporting.rs | Sentry URL strips auth key — all error reports fail with 401 | S |
+| 75 | HIGH | chat/mod.rs (context.rs) | Historical issue resolved: tool-definition ownership now lives in canonical chat helper modules instead of the dead split path | Fixed in live desktop runtime |
+| 76 | CRITICAL | analytics.rs | Historical issue resolved: analytics now reuse the managed `AppDatabase` SQLite connection instead of opening a second writer | Fixed in live desktop runtime |
+| 77 | CRITICAL | code_editing.rs | Historical issue resolved: `apply_changes` / composer edit writes now use the canonical `validate_path_security()` guard before filesystem writes | Fixed in live desktop runtime |
+| 78 | CRITICAL | code_editing.rs | Historical issue resolved: `try_git_revert` now routes paths through the canonical path-security guard before invoking `git checkout -- <path>` | Fixed in live desktop runtime |
+| 79 | HIGH | cache.rs | Historical issue resolved: cache analytics now read `last_used_at` correctly instead of the truncated `last_used_a` column | Fixed in live desktop runtime |
+| 80 | HIGH | cache.rs | Historical issue resolved: codebase cache stats now derive hit/miss counts from percentage rates instead of truncating them to 0 | Fixed in live desktop runtime |
+| 81 | HIGH | error_reporting.rs | Historical issue resolved: Sentry reporting now preserves DSN auth by building the `/api/{project}/store/` endpoint and sending `X-Sentry-Auth` | Fixed in live desktop runtime |
 | 82 | HIGH | analytics.rs | `new_users_today` compares session `id` (UUID) to user ID — always 0 | S |
-| 83 | HIGH | checkpoints.rs | `checkpoint_restore` uses raw SQL strings instead of rusqlite transactions | M |
-| 84 | CRITICAL | llm.rs:630 | SQL alias `message_coun` (typo) — usage stats `message_count` always 0 | S |
-| 85 | CRITICAL | operations.rs | Approve/reject reopen DB under Mutex lock — `SQLITE_BUSY` + hardcoded reviewer | S |
-| 86 | HIGH | github.rs | HTTPS repos always fail — only SSH credentials attempted | M |
+| 83 | HIGH | checkpoints.rs | Historical issue resolved: `checkpoint_restore` now uses a real rusqlite transaction helper and records restore history atomically | Fixed in live desktop runtime |
+| 84 | CRITICAL | llm.rs:630 | Historical issue resolved: usage stats query now aliases `COUNT(*) AS message_count` correctly | Fixed in live desktop runtime |
+| 85 | CRITICAL | operations.rs | Historical issue resolved: approve/reject now reuse the managed `AppDatabase` connection via `ApprovalWorkflow` instead of opening a second SQLite writer | Fixed in live desktop runtime |
+| 86 | HIGH | github.rs | Historical issue resolved: GitHub clone/fetch now reuses the canonical `make_git_credentials` fallback chain, so HTTPS remotes can use the system credential helper instead of SSH-only auth | Fixed in live desktop runtime |
 | 87 | HIGH | scheduler.rs | `ShellCommand` action type with no validated executor — unvalidated shell if wired | M |
-| 88 | HIGH | migration.rs | Fake validation (key contains "lovable"), hardcoded data presented as real | S |
-| 89 | HIGH | mcp_server.rs | Auth token exposed in IPC response payload — frontend renderer sees raw token | S |
-| 90 | HIGH | draft_manager.rs:81 | Truncated SQL `saved_a` → `saved_at` — `get_all_drafts()` always crashes | S |
-| 91 | HIGH | draft_manager.rs | `message_drafts` table never created in migrations — all draft ops fail | M |
+| 88 | HIGH | migration.rs | Historical issue resolved: Lovable migration commands now fail honestly with a not-implemented error instead of returning fake validation or fabricated workflow data | Fixed in live desktop runtime |
+| 89 | HIGH | mcp_server.rs | Historical issue resolved: embedded MCP server IPC responses redact the auth token before exposing state to the renderer | Fixed in live desktop runtime |
+| 90 | HIGH | draft_manager.rs:81 | Historical issue resolved: draft queries use `saved_at` and no longer crash on the truncated `saved_a` column name | Fixed in live desktop runtime |
+| 91 | HIGH | draft_manager.rs | Historical issue resolved: `message_drafts` is created by the live draft manager before use, so draft CRUD no longer fails on a missing table | Fixed in live desktop runtime |
 | 92 | HIGH | database/postgres.rs | `get_client()` creates new TCP connection every call — pool bypassed | M |
-| 93 | CRITICAL | billing/webhooks.rs:252 | Truncated column `updated_a` → `updated_at` in subscription INSERT | S |
-| 94 | CRITICAL | billing/webhooks.rs:597 | Retry passes empty `""` as signature — all retries fail | S |
-| 95 | CRITICAL | permissions/manager.rs:102 | Loaded policies HashMap never written to `self.policies` — persistence dead | S |
-| 96 | HIGH | billing/webhooks.rs:441 | `grace_period_end` column missing from billing_subscriptions schema | M |
-| 97 | HIGH | billing/stripe_client.rs:790 | Unquoted `type` reserved keyword in payment_methods INSERT | S |
-| 98 | HIGH | permissions/audit.rs | New SQLite connection on every `log_execution` call | M |
-| 99 | CRITICAL | lib.rs | AGICheckpointState never managed — 9 registered commands always panic at runtime | S |
-| 100 | CRITICAL | lib.rs | EmbeddingServiceState can go unmanaged if both init paths fail — embedding commands panic | S |
-| 101 | HIGH | lib.rs | 13 hooks_* commands implemented but not in generate_handler! — hooks unreachable | S |
-| 102 | HIGH | lib.rs | 7 thinking_* commands not registered — thinking UI non-functional | S |
-| 103 | HIGH | lib.rs | 13 canvas_* commands not registered — canvas feature unreachable | S |
-| 104 | HIGH | lib.rs | 6 Gmail OAuth commands not registered — Gmail integration broken | S |
-| 105 | HIGH | lib.rs | 11 git merge/PR/conflict commands not registered — PR creation unreachable | S |
+| 93 | CRITICAL | billing/webhooks.rs:252 | Historical issue resolved: subscription writes now use `updated_at` in the live webhook INSERT path | Fixed in live desktop runtime |
+| 94 | CRITICAL | billing/webhooks.rs:597 | Historical issue resolved: retry processing reuses the stored payload directly instead of sending an empty signature | Fixed in live desktop runtime |
+| 95 | CRITICAL | permissions/manager.rs:102 | Historical issue resolved: loaded permission policies are now written into `self.policies` during startup | Fixed in live desktop runtime |
+| 96 | HIGH | billing/webhooks.rs:441 | Historical issue resolved: payment-failed handling now tracks `grace_period_end` in logs only and updates persisted subscription state without referencing a missing column | Fixed in live desktop runtime |
+| 97 | HIGH | billing/stripe_client.rs:790 | Historical issue resolved: payment-method persistence now funnels through the canonical helper and quotes the `"type"` column in both Stripe write paths | Fixed in live desktop runtime |
+| 98 | HIGH | permissions/audit.rs | Historical issue resolved: permissions audit logger now keeps a single owned SQLite connection instead of reopening the DB on every call | Fixed in live desktop runtime |
+| 99 | CRITICAL | lib.rs | Historical issue resolved: `AGICheckpointState` is managed during startup, including fallback initialization | Fixed in live desktop runtime |
+| 100 | CRITICAL | lib.rs | Historical issue resolved: embeddings now manage the exact `Arc<Mutex<EmbeddingService>>` Tauri state type with an in-memory degraded fallback | Fixed in live desktop runtime |
+| 101 | HIGH | lib.rs | Historical issue resolved: audited `hooks_*` commands are now registered in `generate_handler!` | Fixed in live desktop runtime |
+| 102 | HIGH | lib.rs | Historical issue resolved: audited `thinking_*` commands are now registered in `generate_handler!` | Fixed in live desktop runtime |
+| 103 | HIGH | lib.rs | Historical issue resolved: audited `canvas_*` commands are now registered in `generate_handler!` | Fixed in live desktop runtime |
+| 104 | HIGH | lib.rs | Historical issue resolved: audited Gmail OAuth commands are now registered in `generate_handler!` | Fixed in live desktop runtime |
+| 105 | HIGH | lib.rs | Historical issue resolved: audited git merge / PR / conflict commands are now registered in `generate_handler!` | Fixed in live desktop runtime |
 
 ---
 
@@ -314,7 +314,7 @@
 | semantic_search.rs | 542 | Partial | TF-IDF in-memory search — no real embeddings |
 | conversation_summarizer.rs | 1,052 | Partial | Auto-summarize + real embeddings (3-tier fallback) — empty on LLM failure |
 | reflection.rs | 1,220 | Working | Post-execution failure analysis |
-| memory_manager.rs | 2,190 | Broken | CRITICAL: remember() never calls update_index() — stale search |
+| memory_manager.rs | 2,190 | Working | `remember()` updates the semantic index immediately; semantic search freshness is covered by live regression tests |
 | memory_persistence.rs | 1,436 | Working | Enhanced memory with vectors + decay |
 | project_memory.rs | 775 | Working | Project-scoped memories |
 | planner_memory_integration.rs | 263 | Working | Memory-aware planning |
@@ -381,9 +381,9 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 |------|-------|--------|---------|
 | attachments.rs | 498 | Working | Text extraction from files/PDFs, multimodal image conversion |
 | branching.rs | 200 | Working | Conversation forking with ownership verification |
-| compaction.rs | 178 | Broken | Compaction computes summary but NEVER persists — feature is no-op |
+| compaction.rs | 178 | Working | Compaction computes and persists a replacement summary message inside one local transaction |
 | context.rs | 363 | Working | Context building — OS info, project structure, browser, memory |
-| control.rs | 116 | Partial | Stop/cancel/clear — clear_local_database not transactional |
+| control.rs | 116 | Working | Stop/cancel/clear — clear_local_database now wipes tables transactionally and clears pending queue state |
 | cost.rs | 216 | Working | Billing budget checks, cost analytics, monthly budget |
 | export.rs | 219 | Working | Markdown + PDF export with path-traversal protection |
 | intent.rs | 429 | Working | NLP intent detection — stop, action, conversation classification |
@@ -396,8 +396,8 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 **Key Finding:** Compaction feature is a complete no-op — it returns success with statistics but never writes to the database, so the next message load gets the full uncompacted history. FTS5 search passes user input directly to MATCH without escaping metacharacters (*, NOT, NEAR), enabling DoS-style queries.
 
 ### W2-A3: Security (Core) — COMPLETE
-**Files audited:** 9 | **Total LOC:** ~5,226 | **Bugs:** 12 (1 CRITICAL, 4 HIGH, 5 MEDIUM, 2 LOW)
-**Overall:** Architecturally sound (AES-256-GCM, Argon2, rate limiting, SSRF protection). Critical: plaintext tokens stored in DB alongside encrypted versions.
+**Files audited:** 9 | **Total LOC:** ~5,226 | **Bugs:** 8 (0 CRITICAL, 2 HIGH, 4 MEDIUM, 2 LOW)
+**Overall:** Architecturally sound (AES-256-GCM, Argon2, rate limiting, SSRF protection). Live auth-session storage now uses hash-based lookup, encrypted token storage, and redacted legacy columns.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
@@ -405,22 +405,22 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | secret_manager.rs | 363 | Working | JWT secret + encryption key lifecycle with machine-derived keys |
 | encryption.rs | 171 | Working | AES-256-GCM primitives + SecretStore (in-memory HashMap) |
 | auth.rs | 658 | Working | AuthManager — Argon2 login, sessions, rate limiting, account lockout |
-| auth_db.rs | 637 | Broken | DB-backed auth — STORES PLAINTEXT TOKENS alongside encrypted versions |
+| auth_db.rs | 637 | Working | DB-backed auth — `auth_sessions` now uses hashed lookup + encrypted storage with legacy token columns redacted |
 | rbac.rs | 404 | Working | Role-based access control with permission cache |
 | rate_limit.rs | 132 | Working | Sliding-window rate limiter (bounded VecDeque per key) |
 | sandbox.rs | 325 | Working | Session sandbox with path/host allowlists, symlink-aware cleanup |
-| permissions.rs | 318 | Broken | SQL typo: `updated_a` instead of `updated_at` — get_all_permissions always fails |
+| permissions.rs | 318 | Working | Permission persistence/query layer — `get_all_permissions` reads `updated_at` correctly and has regression coverage |
 
-**Key Finding:** **CRITICAL** — `auth_db.rs` stores plaintext access/refresh tokens in DB columns alongside their HMAC hashes and AES-GCM encrypted versions, completely undermining token protection. Additionally, `permissions.rs:get_all_permissions` has a SQL column typo (`updated_a`) that causes runtime failure on every call. The tool_guard SQL injection filter is overly aggressive, blocking legitimate hex literals and comments.
+**Key Finding:** The previously-critical `auth_db.rs` plaintext-token issue is resolved in the live runtime: migration `v59` rebuilds `auth_sessions`, re-encrypts recoverable legacy rows, redacts legacy token columns, and shifts uniqueness to the hash columns. `tool_guard.rs` now normalizes comments so legitimate SQL comments and hex literals are allowed while classical injection and time-based abuse patterns remain blocked.
 
 ### W2-A4: Security (Secondary) — COMPLETE
-**Files audited:** 21 | **Total LOC:** ~8,347 | **Bugs:** 14 (1 CRITICAL, 3 HIGH, 7 MEDIUM, 3 LOW)
-**Overall:** Real crypto throughout (Argon2id, AES-256-GCM, HKDF, Ed25519). PKCE verifier leaked to caller, non-volatile key zeroization, dual audit loggers.
+**Files audited:** 21 | **Total LOC:** ~8,347 | **Bugs:** 8 (0 CRITICAL, 1 HIGH, 4 MEDIUM, 3 LOW)
+**Overall:** Real crypto throughout (Argon2id, AES-256-GCM, HKDF, Ed25519). The live OAuth PKCE path now keeps the verifier internal; remaining issues in this wave are outside the old duplicate validator surface.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
 | approval_workflow.rs | 616 | Working | Approval request lifecycle with SQLite, risk classification |
-| audit.rs | 457 | Working | Automation audit logger (SQLite-backed operation logs) |
+| audit.rs | 457 | Removed | Dead duplicate automation-audit helper removed from the live security surface |
 | audit_logger.rs | 541 | Working | HMAC-signed tamper-evident audit trail |
 | command_validator.rs | 592 | Working | Shell command validation, dangerous pattern blocking |
 | dm_protection.rs | 241 | Partial | DM pairing — in-memory only, lost on restart |
@@ -428,11 +428,11 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | log_redaction.rs | 88 | Working | Regex-based secret redaction from logs |
 | machine_key.rs | 334 | Partial | PBKDF2 machine keys — has_machine_only_secrets() is stub (always true) |
 | master_password.rs | 769 | Working | Argon2id + HKDF key derivation, secure zeroization |
-| oauth.rs | 479 | Broken | OAuth2 PKCE — verifier leaked to caller, defeating PKCE purpose |
+| oauth.rs | 479 | Working | OAuth2 + PKCE — verifier remains internal to the pending verifier store and is not returned to callers |
 | prompt_injection.rs | 499 | Working | 24-pattern detector with Unicode normalization |
-| storage.rs | 595 | Partial | AES-256-GCM storage — non-volatile key zeroization in lock() |
-| updater.rs | 616 | Partial | Update verification — uses string != instead of semver comparison |
-| validator.rs | 499 | Working | Command safety classification (overlaps with command_validator.rs) |
+| storage.rs | 595 | Working | AES-256-GCM storage — `lock()` now uses volatile zeroization plus a compiler fence |
+| updater.rs | 616 | Working | Update verification — semantic version comparison rejects downgrades and handles `v` prefixes |
+| validator.rs | 499 | Removed | Dead duplicate command classifier removed; `command_validator.rs` is canonical |
 | api.rs | 419 | Working | API key management, HMAC validation, rate limiting |
 | policy_integration.rs | 313 | Working | Policy enforcement facade |
 | policy/mod.rs | 9 | Working | Module re-exports |
@@ -441,52 +441,52 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | policy/decisions.rs | 107 | Working | PolicyDecision + TrustLevel + RiskLevel enums |
 | policy/scope.rs | 229 | Working | Workspace scope with path blacklisting |
 
-**Key Finding:** **CRITICAL** — `oauth.rs` leaks the PKCE verifier to the caller in the `OAuthAuthorizationUrl` struct, defeating PKCE's purpose (code interception protection). The verifier is already stored internally — the field should be removed. Also: `storage.rs` uses naive zeroing loop (compiler can optimize away) unlike `master_password.rs` which uses volatile writes. Two audit loggers and two command validators create confusing duplication.
+**Key Finding:** The previously-critical PKCE verifier leak is already resolved in the live `oauth.rs` path: the verifier stays internal to the pending verifier store and is not exposed on `OAuthAuthorizationUrl`. `storage.rs` now zeroizes with volatile writes, `audit_logger.rs` errors instead of silently emitting an empty signature, `updater.rs` compares semantic versions correctly, and `command_validator.rs` is the sole command-validation surface. The old dead duplicates `audit.rs` and `validator.rs` have been removed from the live security surface.
 
 ### W2-A5: System Commands (A-F) — COMPLETE
 **Files audited:** 38 | **Total LOC:** ~23,029 | **Bugs:** 28 (3 CRITICAL, 6 HIGH, 10 MEDIUM, 9 LOW)
-**Overall:** Browser and automation commands are mostly clean. Critical cluster in `analytics.rs` (separate DB connection leak, fabricated data), `cache.rs` (SQL typo, float cast bug), and `code_editing.rs` (path injection, git command injection).
+**Overall:** Browser and automation commands are mostly clean. The earlier `analytics.rs` second-writer defect and the `code_editing.rs` path-security issues are resolved in the live runtime. The remaining high-risk cluster here is stale/fabricated analytics metrics plus the cache SQL/typing defects.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
 | agent.rs | 267 | Bugs | Autonomous agent init/start/stop — resource leak on reinit |
 | agi.rs | 1,440 | Review | AGI orchestration commands |
 | agi_checkpoint.rs | 384 | Stubs | Checkpoint restore always returns empty |
-| analytics.rs | 683 | Critical | Separate DB connection per call, fabricated stats |
+| analytics.rs | 683 | Partial | Managed connection reuse fixed; some synthesized analytics values remain |
 | browser.rs | 1,394 | Clean | CDP browser automation |
-| cache.rs | 624 | Bugs | SQL typo `last_used_a`, float-to-u64 always 0 |
+| cache.rs | 624 | Working | Cache analytics uses `last_used_at` correctly and codebase hit/miss counts are derived from percentage rates |
 | code_editing.rs | 741 | Security | Arbitrary file write + git command injection |
 | continuous_job_runner.rs | 3,250 | Review | Autonomous job application runner |
 | email.rs | 1,451 | Clean | IMAP/SMTP email + keyring storage |
 | file_ops.rs | 1,691 | Clean | Sandboxed file read/write/delete |
 | (28 more files) | ~11,604 | Mixed | Various command handlers |
 
-**Key Finding:** `analytics.rs` opens a brand-new SQLite connection per call using `AGI_DB_PATH` env var instead of managed `AppDatabase` — connection leak targeting the wrong DB. `code_editing.rs` has two security issues: `apply_changes` writes to any file path without validation, and `try_git_revert` shells out with unsanitized `file_path` enabling git command injection.
+**Key Finding:** `analytics.rs` now reuses the managed `AppDatabase` connection for analytics commands, closing the earlier second-writer/connection-leak defect. The remaining analytics debt is data quality: several top-level usage numbers are still synthetic desktop approximations rather than fully modeled multi-user analytics. The earlier `code_editing.rs` arbitrary-write / git-path injection issues are resolved in the live runtime through the shared canonical path-security guard.
 
 ### W2-A6: System Commands (G-Z) — COMPLETE
 **Files audited:** 47 | **Total LOC:** ~36,606 | **Bugs:** 18 (2 CRITICAL, 5 HIGH, 8 MEDIUM, 3 LOW)
-**Overall:** Architecturally mature in security-sensitive paths (Gmail OAuth, master password, privacy deletion). 6 acknowledged stub modules. SQL typo drops `message_count`, hardcoded placeholder model IDs, duplicate scheduler type hierarchy.
+**Overall:** Architecturally mature in security-sensitive paths (Gmail OAuth, master password, privacy deletion). The previously audited usage-stats SQL typo and Lovable fake-data path are resolved in the live runtime. Remaining issues on this surface are concentrated around acknowledged stubs and the duplicate scheduler type hierarchy.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
 | git.rs | 1,782 | Functional — HTTPS auth bug | Git operations via git2 with LLM-assisted conflict resolution |
-| llm.rs | 888 | Critical — SQL typo | Provider routing, BYOK, Ollama detection; `message_coun` alias bug |
+| llm.rs | 888 | Working | Provider routing, BYOK, Ollama detection; usage stats alias bug fixed in live runtime |
 | voice.rs | 2,218 | Functional | Full voice pipeline: STT, TTS, wake word, PTT, barge-in |
 | mcpb.rs | 2,774 | Functional | MCP bridge with circuit-breaker, tool filtering |
 | gmail_oauth.rs | 820 | Healthy | Gmail OAuth2 + PKCE; tokens encrypted; 5 tests |
 | scheduler.rs | 1,393 | Duplicate types | Proactive scheduler; incompatible with core::scheduler |
-| operations.rs | 227 | Critical — DB lock | Approve/reject reopens DB under Mutex lock |
+| operations.rs | 227 | Historical issue resolved | Approve/reject now reuse the managed DB connection instead of opening a second SQLite writer |
 | google_batch.rs | 424 | Stub | In-memory only, no real API, no persistence |
 | knowledge.rs | 138 | Stub | Keyword-only search, no embeddings |
 | tray.rs | 7 | Stub | `tray_set_unread_badge` — no-op placeholder |
-| migration.rs | 174 | Stub/Demo | Lovable.com mock: hardcoded fake data |
+| migration.rs | 174 | Honest stub | Lovable migration now returns explicit not-implemented errors instead of fake data |
 | (36 more files) | ~24,362 | Mixed | Various command handlers |
 
-**Key Finding:** `llm.rs` line 630 has SQL alias `message_coun` (missing `t`), silently returning 0 for usage stats. `operations.rs` reopens SQLite under Mutex lock creating a second concurrent writer — `SQLITE_BUSY` errors in WAL mode. `scheduler.rs` has a self-documented duplicate type hierarchy incompatible with `core::scheduler`.
+**Key Finding:** The earlier `llm.rs` usage-stats alias bug and the Lovable fake-data path are fixed in the live runtime. The earlier `operations.rs` double-writer lock hazard is also resolved. The remaining material issue on this surface is `scheduler.rs`, which still maintains a duplicate type hierarchy incompatible with `core::scheduler`.
 
 ### W2-A7: Data Layer — COMPLETE
 **Files audited:** 42 | **Total LOC:** ~20,816 | **Bugs:** 10 (0 CRITICAL, 3 HIGH, 5 MEDIUM, 2 LOW)
-**Overall:** Architecturally solid with well-guarded SQL, proper WAL/encryption, and 57-version migration chain. Truncated SQL column, phantom table with no migration, PostgreSQL pool bypass.
+**Overall:** Architecturally solid with well-guarded SQL, proper WAL/encryption, and a long migration chain. The earlier draft-manager crash/missing-table issues are resolved in the live runtime; the remaining notable data-layer issue in this slice is PostgreSQL pool bypass.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
@@ -495,16 +495,16 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | database/postgres.rs | 257 | HIGH | `get_client()` creates new connection every call; pool bypassed |
 | database/query_builder.rs | 970 | MEDIUM | Uses PostgreSQL `$N` syntax, not SQLite `?` |
 | database/pool.rs | 357 | MEDIUM | ConnectionPool is tracking-only stub — holds no real connections |
-| state/draft_manager.rs | 161 | HIGH | Truncated SQL `saved_a`; phantom `message_drafts` table |
+| state/draft_manager.rs | 161 | Working | Draft manager now creates `message_drafts` on startup and uses `saved_at` consistently |
 | supabase_sync.rs | 298 | MEDIUM | Reads `VITE_SUPABASE_URL` (Vite-only, never set in Rust) |
 | analytics/metrics_aggregator.rs | 407 | MEDIUM | Hardcodes `user_id: "default_user"` |
 | (34 more files) | ~12,370 | OK | Settings, cache, metrics, config |
 
-**Key Finding:** `draft_manager.rs:81` has truncated SQL column `saved_a` (should be `saved_at`) causing runtime crash on every `get_all_drafts()` call. `message_drafts` table has no migration in the 57-migration chain — all draft operations fail with "no such table". `database/pool.rs` ConnectionPool tracks metadata only (UUID + timestamps) — no actual connections, pure accounting stub.
+**Key Finding:** The earlier `draft_manager.rs` truncated-column crash and missing-table failure are fixed in the live runtime. `database/pool.rs` still tracks metadata only (UUID + timestamps) rather than managing real pooled connections.
 
 ### W2-A8: Root + lib.rs + state.rs — COMPLETE
-**Files audited:** 5 | **Total LOC:** ~2,491 | **Bugs:** 14 (2 CRITICAL, 5 HIGH, 5 MEDIUM, 2 LOW)
-**Overall:** `lib.rs` is well-structured but has a guaranteed runtime panic on `agi_checkpoint_*` commands (unmanaged state), plus 60+ implemented commands that are unreachable from frontend (not in `generate_handler!`).
+**Files audited:** 5 | **Total LOC:** ~2,491 | **Live issues:** repo-wide Tauri command registration drift + dead root `src/state.rs`
+**Overall:** `lib.rs` is well-structured and the previously audited checkpoint / embedding / hooks / thinking / canvas / Gmail OAuth / git registration gaps have been fixed. The remaining live issue on this surface is broader registration drift: a current repo-wide scan still finds `387` `#[tauri::command]` functions under `sys/commands/` that are not present in `generate_handler!`.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
@@ -514,26 +514,26 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | Cargo.toml | 286 | Clean | Feature flags correct |
 | tauri.conf.json | 87 | Note | `removeUnusedCommands: true` strips unreferenced commands at bundle time |
 
-**Key Finding:** `AGICheckpointState` is used by 9 registered commands but **never initialized with `app.manage()`** — every call panics at runtime. 60+ commands across hooks (13), thinking (7), canvas (13), Gmail OAuth (6), git merge/PR (11), GitHub (6), swarm (2), native messaging (5), background LLM (7) are implemented but absent from `generate_handler!`, making entire feature surfaces unreachable. Root `src/state.rs` is dead duplicate of `data/state.rs`.
+**Key Finding:** The historical unmanaged `AGICheckpointState` / embeddings state issue in `lib.rs` has been fixed, and the previously audited hooks / thinking / canvas / Gmail OAuth / git / GitHub / swarm / native messaging / background LLM registration gaps are now closed. The remaining material issue is broader registration drift: a repo-wide scan of `sys/commands/*.rs` still finds `387` `#[tauri::command]` functions absent from `generate_handler!`. Root `src/state.rs` is still a dead duplicate of `data/state.rs`.
 
 ### W2-A9: System Services — COMPLETE
-**Files audited:** 54 | **Total LOC:** ~15,621 | **Bugs:** 13 (1 CRITICAL, 3 HIGH, 4 MEDIUM, 5 LOW)
-**Overall:** Billing webhook pipeline has three compounding failures (truncated column, broken retry, missing column) making subscription lifecycle non-functional. Permissions manager silently discards all persisted policies on startup.
+**Files audited:** 54 | **Total LOC:** ~15,621 | **Bugs:** 11 (0 CRITICAL, 2 HIGH, 4 MEDIUM, 5 LOW)
+**Overall:** The earlier billing webhook truncation/retry/schema issues are resolved in the live runtime, and the live permissions manager now restores persisted policies on startup while reusing a single audit connection.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
-| billing/webhooks.rs | 677 | CRITICAL | Truncated `updated_a`, broken retry, missing `grace_period_end` |
-| billing/stripe_client.rs | 1,021 | HIGH | Unquoted `type` reserved keyword in SQL |
+| billing/webhooks.rs | 677 | Working | Webhook processing now uses `updated_at`, retries without fake signatures, and logs grace-period timing without a missing-column write |
+| billing/stripe_client.rs | 1,021 | Working | Payment-method persistence now uses the canonical quoted `"type"` column helper across Stripe write paths |
 | billing/mod.rs | 773 | OK | Billing state + command wrappers |
-| permissions/manager.rs | 287 | CRITICAL | Loaded policies never written to `self.policies` |
-| permissions/audit.rs | 387 | HIGH | New DB connection per log call |
+| permissions/manager.rs | 287 | Working | Loaded policies are written into `self.policies` during startup |
+| permissions/audit.rs | 387 | Working | Permissions audit logger now owns one SQLite connection and reuses it across writes/reads |
 | error/translator.rs | 1,414 | OK | MCP/LLM error translation + friendly messages |
 | diagnostics/ (9 files) | ~2,250 | OK | Health checks, DB integrity, dependency detection |
 | telemetry/ (7 files) | ~1,412 | OK | Event buffering, metrics, correlation |
 | logging/mod.rs | 257 | MEDIUM | Regex compiled on every call |
 | (34 more files) | ~7,143 | OK | API client, filesystem, account, power |
 
-**Key Finding:** Three independent bugs in `billing/webhooks.rs` completely break subscription lifecycle: (1) truncated column `updated_a` in INSERT, (2) retry passes empty string as signature (always fails), (3) `handle_invoice_payment_failed` references non-existent `grace_period_end` column. In `permissions/manager.rs`, `load_policies_async()` builds HashMap but never writes to `self.policies` — persistence is dead code.
+**Key Finding:** The earlier `billing/webhooks.rs` subscription lifecycle failures, `billing/stripe_client.rs` payment-method SQL bug, and the `permissions/manager.rs` startup-persistence bug are fixed in the live runtime. The remaining issues on this surface are secondary quality defects and non-critical utility inefficiencies.
 
 ### W2-A10: UI Helpers + Models — COMPLETE
 **Files audited:** 23 | **Total LOC:** ~6,426 | **Bugs:** 12 (0 CRITICAL, 2 HIGH, 6 MEDIUM, 4 LOW)
@@ -557,7 +557,7 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 
 **Files audited:** 8 | **Total LOC:** ~4,256 | **Bugs:** 17 (2 CRITICAL, 5 HIGH, 7 MEDIUM, 3 LOW)
 
-**Overall:** The module has solid structural foundations but contains a critical typo that corrupts element bounds data, a stub-heavy dom_operations layer with no real implementation, widespread JS injection vulnerabilities through unescaped selectors, and a phantom PlaywrightBridge `start_server()` that runs a Windows-only `cmd /C echo` stub on all platforms.
+**Overall:** Historical audit snapshot. Several issues from this pass have since been stabilized in the live desktop runtime, including the hardcoded CDP port drift, the fabricated browser websocket endpoint contract, and the fake `start_server()` success path. The remaining high-risk items in this section are still useful for cleanup prioritization.
 
 | File | Lines | Status | Purpose |
 |------|-------|--------|---------|
@@ -565,21 +565,21 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | cdp_client.rs | 541 | Mostly functional | Core CDP WebSocket client: connect, evaluate, click, type, screenshot |
 | dom_operations.rs | 343 | Heavily stubbed | DOM interaction wrapper; `set_attribute`, `get_element_info`, `blur` are hollow |
 | extension_bridge.rs | 970 | Functional | Realtime WebSocket bridge to Chrome extension; auth retry logic is solid |
-| mod.rs | 55 | OK | Module wiring + BrowserState; CDP port hardcoded to 9222 |
-| playwright_bridge.rs | 749 | Critically stubbed | Browser lifecycle + direct CDP commands; start_server is a Windows echo stub |
+| mod.rs | 55 | Working | Module wiring + BrowserState; live runtime now resolves per-tab CDP endpoints through shared endpoint helpers |
+| playwright_bridge.rs | 749 | Partial | Browser lifecycle + direct CDP commands; live launch path now waits for a real DevTools endpoint and `start_server()` fails honestly |
 | semantic.rs | 679 | Functional (logic bugs) | NL-to-selector translation; CSS :contains() invalid in browsers |
 | tab_manager.rs | 393 | Partially stubbed | Tab registry; navigate/go_back/go_forward/reload are simulations, screenshot writes placeholder |
 
-**Key Finding:** `advanced.rs` line 140 has a typo `rect.heigh` (missing `t`) that always returns `undefined` for element height in `get_element_state()`, causing every visibility check that compares `rect.height > 0` to silently pass with incorrect data. The `playwright_bridge.rs::start_server()` calls `cmd /C echo` — a Windows-only no-op — meaning browser server startup fails silently on macOS/Linux. Additionally, at least nine JS-injection sites across `cdp_client.rs` and `advanced.rs` escape only single quotes but not backticks or angle brackets, enabling partial JS injection through malicious selector strings.
+**Key Finding:** `advanced.rs` line 140 has a typo `rect.heigh` (missing `t`) that always returns `undefined` for element height in `get_element_state()`, causing every visibility check that compares `rect.height > 0` to silently pass with incorrect data. The older `PlaywrightBridge.start_server()` echo-stub issue is resolved in the live runtime, but the remaining JS-injection sites across `cdp_client.rs` and `advanced.rs` still matter because selectors are not uniformly escaped across every code path.
 
 | # | Severity | File | Issue | Fix Effort |
 |---|----------|------|-------|-----------|
 | 160 | CRITICAL | advanced.rs:140 | Typo `rect.heigh` instead of `rect.height` in injected JS — element height always `undefined`, corrupting all visibility/bounds checks | 5 min |
-| 161 | CRITICAL | playwright_bridge.rs:141-150 | `start_server()` runs `cmd /C echo "..."` — Windows-only stub runs on all platforms; on macOS/Linux `cmd` does not exist, spawning a process that immediately errors; server state shows "started" but no server runs | 1 hr |
+| 161 | RESOLVED | playwright_bridge.rs:141-150 | Historical issue: `start_server()` used to report fake success via an echo stub. The live runtime now reuses a reachable CDP endpoint or returns a clear error instructing callers to use `launch_browser()` | Fixed in live runtime |
 | 162 | HIGH | cdp_client.rs:166-191 | `send_command()` holds `self.connection` Mutex across the entire synchronous `recv()` loop using `std::sync::mpsc::Receiver` — any concurrent caller blocks indefinitely; long-running responses starve all other CDP operations | 2 hr |
 | 163 | HIGH | advanced.rs:366-378 | `upload_file()` passes a raw JS expression string as `objectId` to `DOM.setFileInputFiles` — the `objectId` field requires a Remote Object ID from `Runtime.evaluate`, not a raw script; this API call will always fail with a CDP error | 2 hr |
 | 164 | HIGH | cdp_client.rs & advanced.rs (9 sites) | JS injection: selectors are escaped only for single quotes (`replace('\'', "\\'")`); backticks, `\`, `\n`, `\r` allow breaking out of the injected JS template in `click_element`, `type_into_element`, `get_text`, `get_attribute`, `wait_for_selector`, `element_exists`, `select_option`, `set_checked`, `focus_element` | 3 hr |
-| 165 | HIGH | playwright_bridge.rs:319-336 | `connect_to_browser()` silently swallows connection failures — on error it logs a warning and returns `Ok(())`, making callers believe connection succeeded when it did not | 30 min |
+| 165 | RESOLVED | playwright_bridge.rs:319-336 | Historical issue: the audit captured an older implementation. The live runtime now returns a real error from `connect_to_browser()` on connection failure | Fixed before current stabilization pass |
 | 166 | HIGH | dom_operations.rs:180-213 | `set_attribute()` and `get_element_info()` are full stubs — `set_attribute` does nothing (ignores `_value`), `get_element_info` returns hardcoded fake data (`"div"`, `"Element text"`, x:100/y:200/w:300/h:50); any code path relying on these returns garbage | 2 hr |
 | 167 | MEDIUM | advanced.rs:287-313 | `wait_for_navigation()` races: it attaches a `window.load` event listener after `document.readyState` check — if page reaches `complete` between the check and the listener, the promise never resolves and the `timeout_ms` outer timeout fires | 1 hr |
 | 168 | MEDIUM | semantic.rs:139,143 | CSS `:contains()` pseudo-class is not a standard CSS3 selector and is unsupported in modern browsers (Chrome, Firefox, Safari); generated selectors like `button:contains('login')` will throw a `SyntaxError` at querySelector | 1 hr |
@@ -588,7 +588,7 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | 171 | MEDIUM | tab_manager.rs:216-238 | `go_back()` and `go_forward()` are no-ops — they verify the tab exists and log, but perform no actual browser navigation; silently succeed | 2 hr |
 | 172 | MEDIUM | playwright_bridge.rs:246-316 | `build_browser_command()` accepts arbitrary `options.args` (user-provided) and appends them directly to the process `Command` with no sanitization — allows injection of arbitrary browser flags (e.g., `--load-extension`, `--disable-web-security`) | 1 hr |
 | 173 | MEDIUM | dom_operations.rs:257-262 | `blur()` is a stub — logs "Element blurred" but sends no CDP command; focus state on the page is never changed | 30 min |
-| 174 | LOW | mod.rs:46 | CDP WebSocket URL hardcoded to `ws://127.0.0.1:9222/devtools/page/{tab_id}` — no way to configure port; conflicts with `PlaywrightConfig` which does support `CDP_PORT` env var override | 30 min |
+| 174 | RESOLVED | mod.rs:46 | Historical issue: BrowserState now resolves per-tab CDP websocket URLs through the shared `CdpEndpoint` contract instead of hardcoding `127.0.0.1:9222` | Fixed in live runtime |
 | 175 | LOW | advanced.rs:381-396 | `call_function()` uses `window['function_name']` — only works for window-level globals; cannot call module-scoped or arbitrary JS functions; misleading API name | 30 min |
 | 176 | LOW | extension_bridge.rs:563 | `CaptureScreenshot` ignores the `quality` field (`quality: _`) when building the native payload — screenshot quality setting is always silently dropped | 15 min |### W3-A2: Computer Use — COMPLETE
 
@@ -964,23 +964,23 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | **swarm/task_decomposer.rs** | 908 | Clean | LLM-assisted task decomposition + DAG builder |
 | **sync_utils.rs** | 117 | Clean | Safe mutex/rwlock extension traits |
 
-**Key Finding:** The workflow executor (`workflow_executor.rs`) has no cycle-detection in `execute_next_nodes` — a graph with a back-edge (node A → node B → node A) causes unbounded recursion via `Box::pin` and will stack-overflow at runtime. The scheduler's `check_scheduled_workflows()` is an empty stub, so all cron-based workflow scheduling is silently non-functional. The `EmbeddingCache::get_top_accessed()` SQL has a typo (`access_coun` missing the `t`) that makes the query fail at runtime. These three issues together mean two advertised features (scheduled workflows, cache analytics) silently don't work.
+**Key Finding:** The workflow executor now has cycle detection and live loop-body execution, and the workflow scheduler now executes registered cron entries instead of acting as an empty stub. The remaining live workflow risk in this area is script execution hardening and the still-duplicate `sys/commands/scheduler.rs` hierarchy. The `EmbeddingCache::get_top_accessed()` SQL typo was also resolved in the live runtime.
 
 | # | Severity | File | Issue | Fix Effort |
 |---|----------|------|-------|------------|
 | 230 | HIGH | `orchestration/workflow_executor.rs:250-278` | `execute_next_nodes` → `execute_node` recursion has no visited-set or depth limit; a cyclic workflow graph (A→B→A) causes unbounded `Box::pin` recursion and stack overflow | Medium — add `execution_path` HashSet check before calling `execute_node` |
-| 231 | HIGH | `orchestration/workflow_scheduler.rs:43-45` | `check_scheduled_workflows()` body is `Ok(())` — the running scheduler loop calls it every 60 s but no cron job ever fires; scheduled workflows are completely non-functional | High — implement trigger evaluation using the cron `Schedule` already parsed in `schedule_workflow` |
+| 231 | HIGH | `orchestration/workflow_scheduler.rs:43-45` | Historical issue resolved: the scheduler now registers runtime schedules, starts with `WorkflowEngineState`, and executes due cron entries instead of returning `Ok(())` | Fixed in live desktop runtime |
 | 232 | HIGH | `embeddings/cache.rs:167-181` | SQL typo: `"access_coun"` (missing `t`) in `get_top_accessed()` — query fails with a rusqlite column error at runtime; function always returns an error | Trivial — fix column name to `access_count` |
-| 233 | HIGH | `orchestration/workflow_scheduler.rs:80-93` | `trigger_via_webhook` accepts `auth_token: Option<&str>` but the validation block `if let Some(_token) = auth_token {}` is empty — any caller can invoke any workflow with no authentication | Low — validate token against a stored secret or remove the parameter if auth is out-of-scope |
+| 233 | HIGH | `orchestration/workflow_scheduler.rs:80-93` | Historical issue resolved: webhook-triggered workflows now validate the configured auth token before execution and reject mismatches | Fixed in live desktop runtime |
 | 234 | MEDIUM | `codebase/indexer.rs:457-462` | `extract_pattern()` calls `regex::Regex::new(pattern)` on every line of every file — O(lines × symbols) regex compilations; on a 50k-line codebase this is a ~200k regex construction calls | Low — use `once_cell::sync::Lazy` static patterns (as done correctly in `chunker.rs`) |
 | 235 | MEDIUM | `artifacts/types.rs:472-479` | `hash_content()` uses `std::collections::hash_map::DefaultHasher` (non-deterministic, not guaranteed stable across Rust versions) for version deduplication — two identical artifacts could get different hashes if the hasher seed changes | Low — replace with SHA-256 (already used in `codebase/indexer.rs::hash_content`) |
-| 236 | MEDIUM | `orchestration/workflow_executor.rs:400-406` | `LoopType::Count` iterates 0..iterations setting `item_variable` each iteration but never executes any child nodes — the loop body is a no-op; count-based loops appear to work but silently do nothing to the workflow graph | Medium — add `execute_next_nodes` call inside the loop body |
-| 237 | MEDIUM | `orchestration/workflow_executor.rs:408-417` | `LoopType::Condition` loop body only `sleep(50ms)` and checks counter — it never executes child nodes either (same bug as #236); the condition loop spins up to 1000×50ms=50 seconds doing nothing | Medium — same fix: call `execute_next_nodes` in the loop body |
-| 238 | MEDIUM | `orchestration/workflow_executor.rs:420-428` | `LoopType::ForEach` iterates items but again never calls child nodes — for-each loop body does not execute the subgraph | Medium — call `execute_next_nodes` for each item |
-| 239 | MEDIUM | `orchestration/workflow_executor.rs:923-933` | On script timeout, `child.wait_with_output()` is dropped but the process is NOT killed — the child process continues running after the timeout error is returned, leaking processes | Medium — take `child` before move, call `child.kill().await` in the timeout branch |
+| 236 | MEDIUM | `orchestration/workflow_executor.rs:400-406` | Historical issue resolved: count-based loop nodes now execute child nodes on each iteration instead of being no-op iteration wrappers | Fixed in live desktop runtime |
+| 237 | MEDIUM | `orchestration/workflow_executor.rs:408-417` | Historical issue resolved: condition loop nodes now execute child nodes in the loop body instead of spinning without traversing the graph | Fixed in live desktop runtime |
+| 238 | MEDIUM | `orchestration/workflow_executor.rs:420-428` | Historical issue resolved: for-each loop nodes now execute child nodes for each collection item instead of only rebinding the loop variable | Fixed in live desktop runtime |
+| 239 | MEDIUM | `orchestration/workflow_executor.rs:923-933` | Historical issue resolved: script-node timeouts now kill and reap the child process before returning the timeout error | Fixed in live desktop runtime |
 | 240 | LOW | `embeddings/generator.rs:8-15` | `EmbeddingModel::FastembedAllMiniLM` enum variant is permanently unreachable — `generate_fastembed()` always returns `Err(...)` and the variant has no `ollama_model_name()`, so selecting it always fails; it is dead code that confuses the API | Low — remove the variant or implement it |
 | 241 | LOW | `orchestration/workflow_executor.rs:53-62` | `LoopType::Count` guard: `data.iterations` is `Option<i32>` and defaults to 1 — a workflow that sets `iterations: -1` silently runs 0 iterations (Rust `0..-1` is empty); there is no validation that the value is non-negative | Trivial — clamp or error on negative values |
-| 242 | LOW | `orchestration/workflow_scheduler.rs:47-62` | `schedule_workflow()` validates the cron expression and logs a message but does not persist or register the schedule anywhere — calling this returns `Ok(())` and the schedule is immediately forgotten | Medium — store schedules in `WorkflowEngine` and check them in `check_scheduled_workflows` |
+| 242 | LOW | `orchestration/workflow_scheduler.rs:47-62` | Historical issue resolved for the live desktop runtime: schedules are now registered in scheduler state and surfaced via `list_scheduled_workflows()` instead of being dropped immediately | Fixed in live desktop runtime |
 | 243 | LOW | `artifacts/store.rs:441-464` | `prune_versions` logic is off-by-one: when `versions.len() == max_versions + 1`, it keeps `first + (max_versions - 1)` recent entries, which is correct, but the first entry may already be included in the `recent` slice, causing a duplicate first version | Low — check if `recent` already contains the first version before prepending |### W3-A9: AGI (Remaining) — COMPLETE
 
 **Files audited:** 15 | **Total LOC:** ~8,113 | **Bugs:** 16 (0 CRITICAL, 5 HIGH, 7 MEDIUM, 4 LOW)
@@ -1078,7 +1078,7 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 
 | Agent | Scope | Files | LOC | Bugs | Key Issue |
 |-------|-------|-------|-----|------|-----------|
-| W4-A1 | UnifiedAgenticChat Core | 8 | 8,574 | 11 | Duplicate listener registration — every event handled twice |
+| W4-A1 | UnifiedAgenticChat Core | 8 | 8,574 | 11 | Historical broad duplicate-listener issue resolved; live overlap is now limited to `agi:tool_stream` cancellation cleanup |
 | W4-A2 | UnifiedAgenticChat Tools UI | 12 | 2,244 | 8 | ApprovalRequestCard double-click bypass |
 | W4-A3 | InlineToolResults | 27 | 4,770 | 12 | URL injection via `html_url` in InlineGitHub |
 | W4-A4 | Message Rendering | 14 | 3,136 | 10 | Store mutation inside JSX render IIFE |
@@ -1093,11 +1093,11 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 
 | # | Severity | File | Issue | Fix |
 |---|----------|------|-------|-----|
-| 300 | CRITICAL | UnifiedAgenticChat/index.tsx | Duplicate listener registration — index.tsx + useTauriStreamListeners.ts both register ~26 events, every event handled twice (duplicate artifacts, double state writes) | Delete inline useEffect block in index.tsx, call useTauriStreamListeners(config) |
-| 301 | CRITICAL | UnifiedAgenticChat/index.tsx | IPC snake_case violation: `workflow_hash` instead of `workflowHash` at line 2235, silently sends undefined | Change to `workflowHash` |
-| 370 | CRITICAL | MCP/MCPToolExplorer.tsx | `handleExecuteTool` returns void, discards callTool() return — result panel always shows empty | Return await McpClient.callTool() |
-| 302 | HIGH | UnifiedAgenticChat/index.tsx | Orphaned `handleSendMessage` inline (stale closures) coexists with unused extracted `useSendMessage` hook | Remove inline, wire useSendMessage |
-| 303 | HIGH | ChatMessageList.tsx | `window.confirm()` blocks renderer, non-functional in some Tauri WebView configs | Use RiskConfirmationDialog |
+| 300 | CRITICAL | UnifiedAgenticChat/index.tsx | Historical issue resolved: the old inline listener block is gone; current live listener overlap is limited to `agi:tool_stream` cancellation cleanup between the two canonical hooks | Fixed in live desktop runtime |
+| 301 | CRITICAL | UnifiedAgenticChat/index.tsx | Historical issue resolved: `agent_set_workflow_hash` is now invoked with `workflowHash` | Fixed in live desktop runtime |
+| 370 | CRITICAL | MCP/MCPToolExplorer.tsx | Historical issue resolved: `handleExecuteTool` returns the awaited `McpClient.callTool()` result | Fixed in live desktop runtime |
+| 302 | HIGH | UnifiedAgenticChat/index.tsx | Historical issue resolved: the old duplicate `useSendMessage` split path is gone; the live send path is the inline `handleSendMessage` in `index.tsx` | Fixed in live desktop runtime |
+| 303 | HIGH | ChatMessageList.tsx | Historical issue resolved: the chat UI now uses `RiskConfirmationDialog` instead of `window.confirm()` | Fixed in live desktop runtime |
 | 310 | HIGH | ApprovalRequestCard.tsx | `onApprove` prop bypasses `pendingDecision` guard — double-click sends duplicate approvals | Set pendingDecision before calling external handler |
 | 311 | HIGH | ToolRationaleDisplay.tsx | `showAlternatives` toggles chevron but no content renders on expand | Add conditional content block |
 | 320 | HIGH | InlineGitHub.tsx | `html_url` passed to href without `https?://` guard — javascript: URL injection | Add protocol validation |
@@ -1140,12 +1140,12 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | 357 | MEDIUM | Sidecar/DiffViewer.tsx | Diff-stat algorithm overcounts additions/deletions | Use proper LCS diff |
 | 358 | MEDIUM | hooks/useChatSubmit.ts | Stale isSending closure allows double-send | Use useRef guard |
 | 359 | MEDIUM | Widgets/DiffWidget.tsx | Duplicate DiffViewerWidgetData type definition | Import from shared index |
-| 360 | MEDIUM | ApiKeysSettings.tsx | Error `<p>` absolute-positioned without relative parent | Add relative class |
-| 362-365 | MEDIUM | 3 Settings files | async onClick handlers without void wrapper (unhandled promises) | Wrap with void |
-| 364 | MEDIUM | MCPServerSettings.tsx | Uncontrolled port input — external config changes not reflected | Switch to controlled input |
-| 373 | MEDIUM | MCPCredentialManager.tsx | OAuth callback passes untrusted URL state instead of stored state | Pass storedState |
-| 375-376 | MEDIUM | BrowserDebugPanel.tsx | StorageViewer + PerformanceMetrics show hardcoded fake data | Wire to real data or remove |
-| 377 | MEDIUM | BrowserRecorder.tsx | Step editing non-functional — edits silently discarded | Use controlled input + persist |
+| 360 | MEDIUM | ApiKeysSettings.tsx | Historical issue resolved by removing an unreferenced duplicate API Keys settings component; live API Keys UX remains inline in `SettingsPanel.tsx` | Removed dead duplicate surface |
+| 362-365 | MEDIUM | 3 Settings files | Historical issue resolved: settings/MCP async UI handlers now route through explicit callbacks or `void` wrappers instead of returning raw promises from React handlers | Wrapped/normalized live handlers |
+| 364 | MEDIUM | MCPServerSettings.tsx | Historical issue resolved: port input is controlled from `mcpServerStore` and re-syncs when runtime config changes | Controlled input + regression added |
+| 373 | MEDIUM | MCPCredentialManager.tsx | Historical issue resolved: OAuth callback now uses the locally stored verified state and rejects mismatches before calling the backend | Fixed + regression added |
+| 375-376 | MEDIUM | BrowserDebugPanel.tsx | Historical issue resolved by removing an unmounted panel that only showed cosmetic mock data | Removed from live browser surface |
+| 377 | MEDIUM | BrowserRecorder.tsx | Historical issue resolved by removing an unmounted duplicate recorder UI; live recording remains in `browserStore` / `useBrowserAutomation` | Removed duplicate UI surface |
 | 378 | MEDIUM | MCPToolExplorer.tsx | "View Schema" button has no onClick handler | Add schema modal |
 | 379-384 | MEDIUM | MCPServerManager, MCPConfigEditor | Silent error swallowing, wrong save conditions | Add toast.error, fix conditions |
 | 383 | MEDIUM | Execution/CheckpointManager.tsx | formatDuration receives epoch timestamp instead of elapsed ms | Use Date.now() - ts |
@@ -1170,7 +1170,7 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | W5-A2 | Components S-W | 89 | 129,173 | 7 | TerminalAIAssistant unhandled promise, regex injection in TemplateInstaller |
 | W5-A3 | Chat Stores | 7 | 5,700 | 3 | IPC snake_case violation in chatStore.ts (conversation_id, user_id) |
 | W5-A4 | Settings + Auth Stores | 9 | 6,200 | 6 | IPC violation in settingsStore, OAuth token plaintext in deviceLink |
-| W5-A5 | Model + MCP Stores | 6 | 2,050 | 8 | Unhandled import promise in llmConfigStore, mcpServerStore missing error field |
+| W5-A5 | Model + MCP Stores | 6 | 2,050 | 8 | Historical issue resolved: `llmConfigStore` plan subscription now uses a guarded one-time initializer, and `mcpServerStore` exposes a real error field with a validated failure path |
 | W5-A6 | Remaining Stores | 44 | 13,400 | 5 | IPC snake_case in ui.ts error_report, unbounded history in apiStore |
 | W5-A7 | Hooks | 56 | 18,500 | 5 | 5 IPC snake_case violations in useEmail/useCalendar, 3 direct @tauri-apps imports |
 | W5-A8 | lib + utils + services | 54 | 14,900 | 4 | Unhandled Promise.allSettled in newChatReset, placeholder Supabase key |
@@ -1186,12 +1186,12 @@ Both implement ~18 identical tool categories. Bug fixes in one don't propagate t
 | 521 | CRITICAL | useCalendar.ts | 4 IPC snake_case violations: account_id, calendar_id, event_id | Convert to camelCase |
 | 560-562 | CRITICAL | api/chat.ts | 3 IPC command names use snake_case instead of camelCase | Convert to camelCase |
 | 580 | CRITICAL | test/msw-setup.ts | Duplicate POST handler for OpenAI endpoint — second handler unreachable | Remove duplicate |
-| 581 | CRITICAL | App.tsx | Unguarded async startup IIFE — race conditions leave app in inconsistent state | Add error boundary + cancelled checks |
-| 442 | HIGH | chat/chatStore.ts:1870 | Unhandled promise in cross-store subscription import | Add .catch() handler |
+| 581 | CRITICAL | App.tsx | Historical issue resolved: desktop shell startup IIFE now catches outer bootstrap failures, routes listener setup through guarded startup steps, and cleans up delayed window-centering work on unmount | Fixed in live desktop runtime |
+| 442 | HIGH | chat/chatStore.ts:1870 | Historical issue resolved: chatStore model subscription bootstrap is now guarded, manually invokable in tests, and no longer auto-initializes during Vitest teardown | Fixed in live desktop runtime |
 | 460 | HIGH | settingsStore.ts:752 | IPC: `set_agent_mode` param `{ mode }` should be `{ agentMode: mode }` | Fix param name |
 | 461 | HIGH | deviceLinkStore.ts:99 | OAuth tokens persisted to localStorage without encryption | Use secure store |
 | 522-524 | HIGH | useGit, useNotifications, useTeam | Direct @tauri-apps/api imports instead of tauri-mock shim | Switch to tauri-mock |
-| 582 | HIGH | App.tsx | Missing cancelled flag check in auth orchestration sequence | Add cancelled guard |
+| 582 | HIGH | App.tsx | Historical issue resolved: root auth bootstrap now guards imports/hydration with cancellation and catches async failures instead of leaking rejections after unmount | Fixed in live desktop runtime |
 | 583 | HIGH | handlers/slashCommandHandlers.ts | Promise fire-and-forget in terminal commands without cleanup | Add proper error handling |
 | 401 | HIGH | Research/ResearchPanel.tsx | Event listener unresolved promises — memory leak on unmount | Await unlistens |
 | 420 | HIGH | TerminalAIAssistant.tsx | Unhandled promise in smart commit flow | Add .catch() |
@@ -1278,16 +1278,13 @@ Full codebase stabilization audit of AGI Workforce — a Tauri v2 desktop applic
 
 ### Critical Issues (Must Fix Before Launch)
 
-1. **Memory search index never updated** (W1) — remember() never calls update_index(), making semantic search return stale results
-2. **Duplicate event listener registration** (W4) — index.tsx + useTauriStreamListeners.ts both register ~26 events, every event handled twice
-3. **AGICheckpointState never managed** (W2) — 9 commands always panic at runtime
-4. **Billing webhook pipeline broken** (W2) — truncated column name, broken retry, missing column
-5. **MCP server tool execution placeholder** (W1) — tool execution returns "Not yet implemented"
-6. **Code editing path injection** (W2) — apply_changes writes to arbitrary paths, try_git_revert has command injection
-7. **12+ IPC snake_case violations** (W5-W6) — email, calendar, chat, messaging commands silently send undefined
-8. **MCPToolExplorer discards tool results** (W4) — handleExecuteTool returns void, result always undefined
-9. **xterm escape injection** (W4) — untrusted content injected into terminal without sanitization
-10. **App.tsx startup race conditions** (W5) — unguarded async IIFE leaves app in inconsistent state
+1. **387 `#[tauri::command]` functions still unregistered** (W2) — repo-wide IPC surface drift remains large
+2. **Billing webhook pipeline broken** (W2) — truncated column name, broken retry, missing column
+3. **Code editing path injection** (W2) — apply_changes writes to arbitrary paths, try_git_revert has command injection
+4. **12+ IPC snake_case violations** (W5-W6) — email, calendar, chat, messaging commands silently send undefined
+5. **MCP embedded server coverage still narrow** (W1) — embedded HTTP MCP server now executes built-in tools, but server-level coverage is still focused on JSON-RPC routing instead of full end-to-end app-handle execution
+6. **xterm escape injection** (W4) — untrusted content injected into terminal without sanitization
+7. **App.tsx startup races reduced** (W5) — shell/root bootstrap now use guarded async startup paths; remaining startup work should follow the same cancellation/error-handling pattern
 
 ### High-Impact Patterns
 

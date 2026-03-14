@@ -22,26 +22,40 @@ pub struct ChatSearchResult {
     pub rank: f64,
 }
 
-/// Full-text search across all chat messages using the FTS5 index.
-///
-/// The query string is passed directly to FTS5 MATCH, so standard FTS5 query
-/// syntax is supported (phrase search with quotes, prefix search with `*`,
-/// boolean `AND`/`OR`/`NOT`). Results are ordered by BM25 relevance (most
-/// relevant first) and limited to `limit` rows (default 20, max 100).
-///
-/// Returns an empty list when the FTS5 table is not available (e.g. on an
-/// SQLite build without the FTS5 extension), rather than surfacing an error.
-#[tauri::command]
-pub fn search_chat_history(
-    query: String,
+fn escape_fts_term(term: &str) -> String {
+    let escaped = term.trim().replace('"', "\"\"");
+    format!("\"{escaped}\"")
+}
+
+fn build_literal_fts_query(query: &str, operator: &str) -> Result<String, String> {
+    let terms: Vec<String> = query
+        .split(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
+        .filter(|term| !term.is_empty())
+        .map(escape_fts_term)
+        .collect();
+
+    if terms.is_empty() {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Err("Search query contains no searchable words".to_string());
+        }
+        return Ok(escape_fts_term(trimmed));
+    }
+
+    Ok(terms.join(&format!(" {operator} ")))
+}
+
+fn search_chat_history_inner(
+    query: &str,
     limit: Option<i64>,
-    db: State<'_, AppDatabase>,
+    db: &AppDatabase,
 ) -> Result<Vec<ChatSearchResult>, String> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return Err("Search query cannot be empty".to_string());
     }
 
+    let fts_query = build_literal_fts_query(trimmed, "AND")?;
     let effective_limit = limit.unwrap_or(20).clamp(1, 100);
     let conn = db.connection()?;
 
@@ -84,7 +98,7 @@ pub fn search_chat_history(
         .map_err(|e| format!("Failed to prepare FTS search statement: {e}"))?;
 
     let rows = stmt
-        .query_map(rusqlite::params![trimmed, effective_limit], |row| {
+        .query_map(rusqlite::params![fts_query, effective_limit], |row| {
             Ok(ChatSearchResult {
                 message_id: row.get(0)?,
                 conversation_id: row.get(1)?,
@@ -101,19 +115,10 @@ pub fn search_chat_history(
     results.map_err(|e| format!("Failed to collect FTS search results: {e}"))
 }
 
-/// Semantic-like search over chat history using FTS5 + TF-IDF reranking.
-///
-/// This expands the user query into individual words joined with OR for broader
-/// recall via FTS5, then applies TF-IDF cosine similarity reranking on the
-/// candidate set to surface the most relevant results.
-///
-/// Returns up to `limit` results (default 20, max 100) in the same
-/// `ChatSearchResult` format as `search_chat_history`.
-#[tauri::command]
-pub fn search_chat_history_semantic(
-    query: String,
+fn search_chat_history_semantic_inner(
+    query: &str,
     limit: Option<i64>,
-    db: State<'_, AppDatabase>,
+    db: &AppDatabase,
 ) -> Result<Vec<ChatSearchResult>, String> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
@@ -129,7 +134,7 @@ pub fn search_chat_history_semantic(
         return Err("Search query contains no searchable words".to_string());
     }
 
-    let fts_query = words.join(" OR ");
+    let fts_query = build_literal_fts_query(trimmed, "OR")?;
     let effective_limit = limit.unwrap_or(20).clamp(1, 100);
     let conn = db.connection()?;
 
@@ -172,7 +177,7 @@ pub fn search_chat_history_semantic(
         .map_err(|e| format!("Failed to prepare semantic search statement: {e}"))?;
 
     let candidates: Vec<(ChatSearchResult, String)> = stmt
-        .query_map(rusqlite::params![&fts_query], |row| {
+        .query_map(rusqlite::params![fts_query], |row| {
             Ok((
                 ChatSearchResult {
                     message_id: row.get(0)?,
@@ -245,14 +250,20 @@ pub fn search_chat_history_semantic(
 
         let mut dot = 0.0_f64;
         let mut mag_q = 0.0_f64;
-        let mut mag_d = 0.0_f64;
+        let mag_d = term_freq
+            .iter()
+            .map(|(term, frequency)| {
+                let d_tf = *frequency / total;
+                let d_tfidf = d_tf * idf(term);
+                d_tfidf * d_tfidf
+            })
+            .sum::<f64>();
 
         for (term, q_tfidf) in &query_tfidf {
             let d_tf = term_freq.get(term.as_str()).copied().unwrap_or(0.0) / total;
             let d_tfidf = d_tf * idf(term);
             dot += q_tfidf * d_tfidf;
             mag_q += q_tfidf * q_tfidf;
-            mag_d += d_tfidf * d_tfidf;
         }
 
         let cosine = if mag_q > 0.0 && mag_d > 0.0 {
@@ -277,4 +288,163 @@ pub fn search_chat_history_semantic(
         .collect();
 
     Ok(results)
+}
+
+/// Full-text search across all chat messages using the FTS5 index.
+///
+/// The user query is normalized into a literal-term MATCH query so FTS5 control
+/// operators are treated as plain text instead of being executed. Results are
+/// ordered by BM25 relevance (most relevant first) and limited to `limit` rows
+/// (default 20, max 100).
+///
+/// Returns an empty list when the FTS5 table is not available (e.g. on an
+/// SQLite build without the FTS5 extension), rather than surfacing an error.
+#[tauri::command]
+pub fn search_chat_history(
+    query: String,
+    limit: Option<i64>,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<ChatSearchResult>, String> {
+    search_chat_history_inner(&query, limit, db.inner())
+}
+
+/// Semantic-like search over chat history using FTS5 + TF-IDF reranking.
+///
+/// This expands the user query into individual words joined with OR for broader
+/// recall via FTS5, then applies TF-IDF cosine similarity reranking on the
+/// candidate set to surface the most relevant results.
+///
+/// Returns up to `limit` results (default 20, max 100) in the same
+/// `ChatSearchResult` format as `search_chat_history`.
+#[tauri::command]
+pub fn search_chat_history_semantic(
+    query: String,
+    limit: Option<i64>,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<ChatSearchResult>, String> {
+    search_chat_history_semantic_inner(&query, limit, db.inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_literal_fts_query, search_chat_history_inner, search_chat_history_semantic_inner,
+    };
+    use crate::data::db::{
+        models::{Message, MessageRole},
+        repository, Database,
+    };
+    use crate::sys::commands::chat::state::AppDatabase;
+
+    fn test_db() -> AppDatabase {
+        let db = Database::in_memory().expect("in-memory db");
+        AppDatabase {
+            conn: db.get_connection(),
+        }
+    }
+
+    #[test]
+    fn build_literal_fts_query_quotes_reserved_terms() {
+        let query = build_literal_fts_query("alpha NOT beta", "AND").expect("query");
+        assert_eq!(query, "\"alpha\" AND \"NOT\" AND \"beta\"");
+    }
+
+    #[test]
+    fn build_literal_fts_query_for_semantic_search_uses_or_operator() {
+        let query = build_literal_fts_query("alpha near beta", "OR").expect("query");
+        assert_eq!(query, "\"alpha\" OR \"near\" OR \"beta\"");
+    }
+
+    #[test]
+    fn search_chat_history_treats_reserved_tokens_as_plain_text() {
+        let db = test_db();
+        let user_id = "test-user";
+
+        {
+            let conn = db.connection().expect("db connection");
+            let conversation_id = repository::create_conversation(
+                &conn,
+                "Search Test".to_string(),
+                user_id.to_string(),
+            )
+            .expect("conversation");
+            repository::create_message(
+                &conn,
+                &Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    MessageRole::Assistant,
+                    "alpha NOT beta".to_string(),
+                ),
+            )
+            .expect("message");
+        }
+
+        let results = search_chat_history_inner("alpha NOT beta", Some(10), &db).expect("search");
+        assert_eq!(results.len(), 1);
+
+        let semantic_results = search_chat_history_semantic_inner("alpha NOT beta", Some(10), &db)
+            .expect("semantic search");
+        assert_eq!(semantic_results.len(), 1);
+    }
+
+    #[test]
+    fn semantic_search_penalizes_noisy_documents_in_ranking() {
+        let db = test_db();
+        let user_id = "test-user";
+
+        {
+            let conn = db.connection().expect("db connection");
+            let conversation_id = repository::create_conversation(
+                &conn,
+                "Semantic Search Ranking".to_string(),
+                user_id.to_string(),
+            )
+            .expect("conversation");
+            repository::create_message(
+                &conn,
+                &Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    MessageRole::Assistant,
+                    "alpha beta".to_string(),
+                ),
+            )
+            .expect("concise message");
+            repository::create_message(
+                &conn,
+                &Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    MessageRole::Assistant,
+                    "alpha noise1 noise2 noise3 noise4 noise5 noise6".to_string(),
+                ),
+            )
+            .expect("noisy message");
+            repository::create_message(
+                &conn,
+                &Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    MessageRole::Assistant,
+                    "beta beta context".to_string(),
+                ),
+            )
+            .expect("partial match message");
+        }
+
+        let results = search_chat_history_semantic_inner("alpha beta", Some(10), &db)
+            .expect("semantic search");
+
+        assert_eq!(results.len(), 3);
+        assert!(results[0].content_snippet.to_lowercase().contains("alpha"));
+        assert!(
+            results[0].rank > results[1].rank,
+            "expected concise document to outrank noisy document: {:?}",
+            results
+                .iter()
+                .map(|result| (result.content_snippet.clone(), result.rank))
+                .collect::<Vec<_>>()
+        );
+    }
 }

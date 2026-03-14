@@ -3,6 +3,10 @@ use serde_json::{json, Value};
 pub struct McpServerToolRegistry;
 
 impl McpServerToolRegistry {
+    pub fn is_tool_enabled(enabled_tools: &[String], tool_name: &str) -> bool {
+        enabled_tools.is_empty() || enabled_tools.iter().any(|enabled| enabled == tool_name)
+    }
+
     pub fn list_tools(enabled_tools: &[String]) -> Vec<Value> {
         let all_tools = vec![
             json!({
@@ -72,8 +76,27 @@ impl McpServerToolRegistry {
             .into_iter()
             .filter(|t| {
                 let name = t["name"].as_str().unwrap_or("");
-                enabled_tools.is_empty() || enabled_tools.iter().any(|e| e == name)
+                Self::is_tool_enabled(enabled_tools, name)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::McpServerToolRegistry;
+
+    #[test]
+    fn enabled_tool_check_respects_allowlist() {
+        let allowlist = vec!["agi_chat".to_string(), "agi_bash".to_string()];
+
+        assert!(McpServerToolRegistry::is_tool_enabled(
+            &allowlist, "agi_chat"
+        ));
+        assert!(!McpServerToolRegistry::is_tool_enabled(
+            &allowlist,
+            "agi_research"
+        ));
+        assert!(McpServerToolRegistry::is_tool_enabled(&[], "agi_research"));
     }
 }

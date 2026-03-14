@@ -1876,6 +1876,8 @@ type ChatStoreModelSubscriptionState = {
 const CHAT_STORE_MODEL_SUBSCRIPTION_STATE = Symbol.for(
   'agiworkforce.chatStore.modelStoreSubscriptionState',
 );
+const IS_TEST_ENVIRONMENT =
+  typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
 
 function getChatStoreModelSubscriptionState(): ChatStoreModelSubscriptionState {
   const globalScope = globalThis as typeof globalThis & {
@@ -1951,6 +1953,6 @@ export async function initializeChatStoreModelStoreSubscription(): Promise<void>
   return subscriptionState.pending;
 }
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {
   void initializeChatStoreModelStoreSubscription();
 }

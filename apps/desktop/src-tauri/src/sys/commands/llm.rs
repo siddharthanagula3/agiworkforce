@@ -98,6 +98,21 @@ impl LLMState {
             cache_manager: CacheManager::new(Duration::from_secs(60 * 60 * 24), 512),
         }
     }
+
+    pub async fn with_cache(db_connection: Arc<std::sync::Mutex<rusqlite::Connection>>) -> Self {
+        let cache_manager = CacheManager::new(Duration::from_secs(60 * 60 * 24), 512);
+        let router = Arc::new(RwLock::new(LLMRouter::new()));
+
+        {
+            let mut router_guard = router.write().await;
+            router_guard.set_cache(cache_manager.clone(), db_connection);
+        }
+
+        Self {
+            router,
+            cache_manager,
+        }
+    }
 }
 
 #[tauri::command]
@@ -885,4 +900,108 @@ pub async fn reset_session_cost(state: State<'_, LLMState>) -> Result<(), String
     router.reset_cumulative_cost();
     tracing::info!("Session cost accumulator reset to zero");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::llm::LLMProvider;
+    use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct MockProvider {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for MockProvider {
+        async fn send_message(
+            &self,
+            request: &LLMRequest,
+        ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(LLMResponse {
+                content: format!("echo: {}", request.messages[0].content),
+                model: "gpt-5-nano".to_string(),
+                cached: false,
+                tokens: Some(12),
+                prompt_tokens: Some(7),
+                completion_tokens: Some(5),
+                cost: Some(0.01),
+                ..Default::default()
+            })
+        }
+
+        fn is_configured(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_llm_state_with_cache_serves_second_response_from_cache() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::data::db::migrations::run_migrations(&conn).unwrap();
+        let db = Arc::new(std::sync::Mutex::new(conn));
+
+        let state = LLMState::with_cache(db.clone()).await;
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        {
+            let mut router = state.router.write().await;
+            router.set_provider(
+                Provider::OpenAI,
+                Box::new(MockProvider {
+                    calls: calls.clone(),
+                }),
+            );
+        }
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "cache me".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5-nano".to_string(),
+            temperature: Some(0.0),
+            max_tokens: Some(32),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            ..Default::default()
+        };
+
+        let preferences = RouterPreferences {
+            provider: Some(Provider::OpenAI),
+            model: Some("gpt-5-nano".to_string()),
+            strategy: RoutingStrategy::Auto,
+            context: None,
+            prefer_cloud_credits: false,
+        };
+
+        let candidate = {
+            let router = state.router.read().await;
+            router.candidates(&request, &preferences).remove(0)
+        };
+
+        let first = {
+            let router = state.router.read().await;
+            router.invoke_candidate(&candidate, &request).await.unwrap()
+        };
+        assert!(!first.response.cached);
+
+        let second = {
+            let router = state.router.read().await;
+            router.invoke_candidate(&candidate, &request).await.unwrap()
+        };
+        assert!(second.response.cached);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
 }

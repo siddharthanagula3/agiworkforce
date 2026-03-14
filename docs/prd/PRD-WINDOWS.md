@@ -2252,7 +2252,7 @@ App (root)
 │       │       ├── AnalyticsDashboard (/analytics)
 │       │       ├── SettingsPanel (/settings)
 │       │       │   ├── GeneralSettings
-│       │       │   ├── ApiKeysSettings
+│       │       │   ├── API Keys tab (inline in SettingsPanel)
 │       │       │   ├── ModelsSettings
 │       │       │   ├── AppearanceSettings
 │       │       │   ├── ChatSettings

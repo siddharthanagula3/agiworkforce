@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessMetrics {
@@ -70,7 +70,7 @@ impl MetricsAggregator {
         start: i64,
         end: i64,
     ) -> Result<Vec<ProcessMetrics>> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
         let mut stmt = conn.prepare(
             "SELECT
                 task_type,
@@ -144,7 +144,7 @@ impl MetricsAggregator {
         start: i64,
         end: i64,
     ) -> Result<Vec<UserMetrics>> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let automation_count: i64 = conn
             .query_row(
@@ -229,7 +229,7 @@ impl MetricsAggregator {
     }
 
     pub async fn aggregate_by_tool(&self, start: i64, end: i64) -> Result<Vec<ToolMetrics>> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
         let mut stmt = conn.prepare(
             "SELECT
                 tool_name,
@@ -282,7 +282,7 @@ impl MetricsAggregator {
     }
 
     pub async fn calculate_trends(&self, metric: &str, days: usize) -> Result<Vec<TrendPoint>> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
         let end = chrono::Utc::now().timestamp();
         let start = end - (days as i64 * 24 * 60 * 60);
 
@@ -359,7 +359,7 @@ impl MetricsAggregator {
     }
 
     pub async fn get_summary(&self, start: i64, end: i64) -> Result<HashMap<String, f64>> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
         let mut summary = HashMap::new();
 
         let total: f64 = conn

@@ -22,13 +22,16 @@ describe('streamContentRuntime', () => {
   });
 
   it('parses tool-call arguments and builds a running artifact patch', () => {
-    expect(parseToolArguments('{\"prompt\":\"Generate image\",\"output_path\":\"/tmp/out.png\"}'))
-      .toEqual({
+    expect(parseToolArguments('{"prompt":"Generate image","output_path":"/tmp/out.png"}')).toEqual(
+      {
         prompt: 'Generate image',
         output_path: '/tmp/out.png',
-      });
+      },
+    );
 
-    expect(buildRunningToolArtifactPatch('image.generate', '{\"file_path\":\"src/app.ts\"}')).toMatchObject({
+    expect(
+      buildRunningToolArtifactPatch('image.generate', '{"file_path":"src/app.ts"}'),
+    ).toMatchObject({
       toolName: 'image.generate',
       status: 'running',
       filePath: 'src/app.ts',
@@ -37,7 +40,7 @@ describe('streamContentRuntime', () => {
 
   it('builds terminal artifact patches from structured or raw tool results', () => {
     expect(parseToolResultData('plain text')).toEqual({ raw_result: 'plain text' });
-    expect(parseToolResultData('{\"url\":\"https://example.com/image.png\"}')).toEqual({
+    expect(parseToolResultData('{"url":"https://example.com/image.png"}')).toEqual({
       url: 'https://example.com/image.png',
     });
 

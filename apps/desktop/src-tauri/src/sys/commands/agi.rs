@@ -1,7 +1,7 @@
 use crate::automation::AutomationService;
 use crate::core::agi::{
-    AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, ExecutionContext, Goal,
-    Priority, ScoredResult,
+    AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, Constraint, ConstraintValue,
+    ExecutionContext, Goal, Priority, ScoredResult,
 };
 // use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::Provider;
@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as TokioMutex;
+use tokio::time::{sleep, Duration};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -259,6 +260,7 @@ pub struct SpawnAgentRequest {
     pub priority: Option<String>,
     pub deadline: Option<u64>,
     pub success_criteria: Option<Vec<String>>,
+    pub max_steps: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -356,7 +358,18 @@ pub async fn orchestrator_spawn_agent(
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: vec![],
+        constraints: request
+            .max_steps
+            .map(|max_steps| {
+                vec![Constraint {
+                    name: "max_steps".to_string(),
+                    value: ConstraintValue::Custom {
+                        key: "max_steps".to_string(),
+                        value: max_steps.to_string(),
+                    },
+                }]
+            })
+            .unwrap_or_default(),
         success_criteria: request.success_criteria.unwrap_or_default(),
     };
 
@@ -396,7 +409,18 @@ pub async fn orchestrator_spawn_parallel(
             description: req.description,
             priority,
             deadline: req.deadline,
-            constraints: vec![],
+            constraints: req
+                .max_steps
+                .map(|max_steps| {
+                    vec![Constraint {
+                        name: "max_steps".to_string(),
+                        value: ConstraintValue::Custom {
+                            key: "max_steps".to_string(),
+                            value: max_steps.to_string(),
+                        },
+                    }]
+                })
+                .unwrap_or_default(),
             success_criteria: req.success_criteria.unwrap_or_default(),
         };
         goals.push(goal);
@@ -493,6 +517,55 @@ pub async fn orchestrator_wait_all() -> Result<Vec<AgentResult>, String> {
     let results = orchestrator.wait_for_all().await;
 
     Ok(results)
+}
+
+pub async fn wait_for_agent_result(
+    agent_id: &str,
+    timeout: Duration,
+) -> Result<AgentResult, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let started = std::time::Instant::now();
+
+    loop {
+        if started.elapsed() > timeout {
+            return Err(format!(
+                "Agent '{}' did not finish within {} seconds.",
+                agent_id,
+                timeout.as_secs()
+            ));
+        }
+
+        {
+            let orchestrator = orchestrator_arc.lock().await;
+
+            let status = orchestrator
+                .get_agent_status(agent_id)
+                .await
+                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
+
+            if matches!(
+                status.status,
+                crate::core::agi::AgentState::Completed | crate::core::agi::AgentState::Failed
+            ) {
+                let result = orchestrator
+                    .get_agent_result(agent_id)
+                    .await
+                    .ok_or_else(|| format!("Agent '{}' completed without a result", agent_id))?;
+
+                let _ = orchestrator.cleanup_completed().await;
+                return Ok(result);
+            }
+        }
+
+        sleep(Duration::from_millis(100)).await;
+    }
 }
 
 #[tauri::command]

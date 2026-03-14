@@ -67,6 +67,23 @@ fn escape_js_string(s: &str) -> String {
 pub struct AdvancedBrowserOps;
 
 impl AdvancedBrowserOps {
+    fn extract_node_id(payload: &Value, parent_key: &str, field_key: &str) -> Result<u64> {
+        payload
+            .get(parent_key)
+            .and_then(|value| value.get(field_key))
+            .and_then(|value| {
+                value
+                    .as_u64()
+                    .or_else(|| value.as_i64().map(|id| id as u64))
+            })
+            .ok_or_else(|| {
+                Error::Other(format!(
+                    "Missing CDP node id at {}.{}",
+                    parent_key, field_key
+                ))
+            })
+    }
+
     pub async fn execute_async_js(
         cdp: Arc<CdpClient>,
         script: &str,
@@ -373,16 +390,72 @@ impl AdvancedBrowserOps {
         Ok(())
     }
 
-    pub async fn upload_file(cdp: Arc<CdpClient>, selector: &str, file_path: &str) -> Result<()> {
-        let get_node_script = format!("document.querySelector('{}')", escape_js_string(selector));
+    pub async fn upload_files(
+        cdp: Arc<CdpClient>,
+        selector: &str,
+        file_paths: &[String],
+    ) -> Result<()> {
+        let document = cdp
+            .send_command("DOM.getDocument", json!({ "depth": 0, "pierce": true }))
+            .await?;
+        let root_node_id = Self::extract_node_id(&document, "root", "nodeId")?;
 
-        let params = json!({
-            "objectId": get_node_script,
-            "files": [file_path],
-        });
+        let query_result = cdp
+            .send_command(
+                "DOM.querySelector",
+                json!({
+                    "nodeId": root_node_id,
+                    "selector": selector,
+                }),
+            )
+            .await?;
 
-        cdp.send_command("DOM.setFileInputFiles", params).await?;
+        let node_id = query_result
+            .get("nodeId")
+            .and_then(|value| {
+                value
+                    .as_u64()
+                    .or_else(|| value.as_i64().map(|id| id as u64))
+            })
+            .ok_or_else(|| {
+                Error::Other("Missing nodeId in DOM.querySelector response".to_string())
+            })?;
+
+        if node_id == 0 {
+            return Err(Error::Other(format!("File input not found: {}", selector)));
+        }
+
+        cdp.send_command(
+            "DOM.setFileInputFiles",
+            json!({
+                "nodeId": node_id,
+                "files": file_paths,
+            }),
+        )
+        .await?;
+
+        let dispatch_script = format!(
+            r#"
+            (function() {{
+                const el = document.querySelector('{}');
+                if (!el) {{
+                    throw new Error('File input not found: {}');
+                }}
+                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                return true;
+            }})()
+            "#,
+            escape_js_string(selector),
+            escape_js_string(selector)
+        );
+        cdp.evaluate(&dispatch_script).await?;
+
         Ok(())
+    }
+
+    pub async fn upload_file(cdp: Arc<CdpClient>, selector: &str, file_path: &str) -> Result<()> {
+        Self::upload_files(cdp, selector, &[file_path.to_string()]).await
     }
 
     pub async fn call_function(

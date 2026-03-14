@@ -13,9 +13,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { invoke } from '../../lib/tauri-mock';
+import { McpClient } from '../../api/mcp';
 import { useMcpStore } from '../../stores/mcpStore';
-import type { McpServerInfo } from '../../types/mcp';
+import type { McpServerInfo, McpServersConfig } from '../../types/mcp';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -358,17 +358,13 @@ export function MCPServerManager() {
     try {
       await disconnectServer(serverName);
 
-      const currentConfig = await invoke<{ mcpServers?: Record<string, unknown> }>(
-        'mcp_get_config',
-      );
+      const currentConfig = await McpClient.getConfig();
       const updatedServers = { ...(currentConfig.mcpServers || {}) };
       delete updatedServers[serverName];
 
-      await invoke('mcp_update_config', {
-        newConfig: {
-          ...currentConfig,
-          mcpServers: updatedServers,
-        },
+      await McpClient.updateConfig({
+        ...(currentConfig as McpServersConfig),
+        mcpServers: updatedServers,
       });
 
       await refreshServers();

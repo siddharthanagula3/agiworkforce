@@ -21,6 +21,7 @@ impl WorkflowEngineState {
             Arc::clone(&engine),
             Arc::clone(&executor),
         ));
+        scheduler.start();
 
         Self {
             engine,
@@ -46,6 +47,7 @@ impl WorkflowEngineState {
             Arc::clone(&engine),
             Arc::clone(&executor),
         ));
+        scheduler.start();
 
         Self {
             engine,

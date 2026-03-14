@@ -58,6 +58,13 @@ function setupSuccessfulScan({ claudeMdFound = true }: { claudeMdFound?: boolean
   });
 }
 
+async function renderAndWaitForScan() {
+  render(<InstructionFilesSettings />);
+  await waitFor(() => {
+    expect(mockInvoke).toHaveBeenCalledWith('file_exists', expect.any(Object));
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('InstructionFilesSettings', () => {
@@ -82,12 +89,12 @@ describe('InstructionFilesSettings', () => {
 
   describe('Section heading and file list', () => {
     it('renders without crashing', () => {
-      setupSuccessfulScan();
+      mockIsTauriContext.mockReturnValue(false);
       expect(() => render(<InstructionFilesSettings />)).not.toThrow();
     });
 
     it('shows the "Instruction Files" section heading', () => {
-      setupSuccessfulScan();
+      mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
       // Multiple elements may contain "instruction files" (heading + description);
       // confirm at least one is present.
@@ -96,7 +103,7 @@ describe('InstructionFilesSettings', () => {
     });
 
     it('shows known instruction file patterns in the table', () => {
-      setupSuccessfulScan();
+      mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
       // All patterns from INSTRUCTION_FILE_PATTERNS should be visible
       expect(screen.getByText('CLAUDE.md')).toBeInTheDocument();
@@ -107,7 +114,7 @@ describe('InstructionFilesSettings', () => {
     });
 
     it('shows source labels for files', () => {
-      setupSuccessfulScan();
+      mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
       // Multiple files may share the same source label (e.g. both CLAUDE.md and AGENTS.md
       // are "Claude Code"), so use getAllByText.
@@ -121,7 +128,7 @@ describe('InstructionFilesSettings', () => {
   describe('File status display', () => {
     it('shows "Found" for CLAUDE.md after scan completes', async () => {
       setupSuccessfulScan({ claudeMdFound: true });
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
       await waitFor(() => {
         // At least one "Found" status must be visible
         expect(screen.getAllByText(/^found$/i).length).toBeGreaterThan(0);
@@ -130,7 +137,7 @@ describe('InstructionFilesSettings', () => {
 
     it('shows "Not found" for files that do not exist', async () => {
       setupSuccessfulScan({ claudeMdFound: false });
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
       await waitFor(() => {
         const notFoundItems = screen.getAllByText(/not found/i);
         expect(notFoundItems.length).toBeGreaterThan(0);
@@ -139,7 +146,7 @@ describe('InstructionFilesSettings', () => {
 
     it('displays the home directory path in the footer', async () => {
       setupSuccessfulScan();
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
       await waitFor(() => {
         expect(screen.getByText(/\/home\/user/)).toBeInTheDocument();
       });
@@ -149,7 +156,7 @@ describe('InstructionFilesSettings', () => {
   describe('File actions', () => {
     it('shows "View / Edit" button for found files', async () => {
       setupSuccessfulScan({ claudeMdFound: true });
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
       await waitFor(() => {
         const viewButtons = screen.getAllByRole('button', { name: /view.*edit/i });
         expect(viewButtons.length).toBeGreaterThan(0);
@@ -158,7 +165,7 @@ describe('InstructionFilesSettings', () => {
 
     it('shows "Create" button for missing files', async () => {
       setupSuccessfulScan({ claudeMdFound: false });
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
       await waitFor(() => {
         const createButtons = screen.getAllByRole('button', { name: /create/i });
         expect(createButtons.length).toBeGreaterThan(0);
@@ -167,11 +174,7 @@ describe('InstructionFilesSettings', () => {
 
     it('opens view/edit dialog with file content when clicked', async () => {
       setupSuccessfulScan({ claudeMdFound: true });
-      render(<InstructionFilesSettings />);
-
-      await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /view.*edit/i }).length).toBeGreaterThan(0);
-      });
+      await renderAndWaitForScan();
 
       const viewBtn = screen.getAllByRole('button', { name: /view.*edit/i })[0]!;
       await userEvent.click(viewBtn);
@@ -183,11 +186,7 @@ describe('InstructionFilesSettings', () => {
 
     it('opens create dialog when Create button is clicked', async () => {
       setupSuccessfulScan({ claudeMdFound: false });
-      render(<InstructionFilesSettings />);
-
-      await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /create/i }).length).toBeGreaterThan(0);
-      });
+      await renderAndWaitForScan();
 
       const createBtn = screen.getAllByRole('button', { name: /create/i })[0]!;
       await userEvent.click(createBtn);
@@ -202,11 +201,7 @@ describe('InstructionFilesSettings', () => {
   describe('Edit / Save dialog', () => {
     it('calls file_write when Save File is clicked', async () => {
       setupSuccessfulScan({ claudeMdFound: true });
-      render(<InstructionFilesSettings />);
-
-      await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /view.*edit/i }).length).toBeGreaterThan(0);
-      });
+      await renderAndWaitForScan();
 
       const viewBtn = screen.getAllByRole('button', { name: /view.*edit/i })[0]!;
       await userEvent.click(viewBtn);
@@ -227,11 +222,7 @@ describe('InstructionFilesSettings', () => {
 
     it('closes dialog when Cancel is clicked', async () => {
       setupSuccessfulScan({ claudeMdFound: false });
-      render(<InstructionFilesSettings />);
-
-      await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /create/i }).length).toBeGreaterThan(0);
-      });
+      await renderAndWaitForScan();
 
       await userEvent.click(screen.getAllByRole('button', { name: /create/i })[0]!);
 
@@ -256,7 +247,7 @@ describe('InstructionFilesSettings', () => {
         return Promise.resolve(undefined);
       });
 
-      render(<InstructionFilesSettings />);
+      await renderAndWaitForScan();
 
       await waitFor(() => {
         // Component should settle without crashing — file list is still displayed

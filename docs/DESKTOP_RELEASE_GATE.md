@@ -64,6 +64,19 @@ Minimum required checks:
 Required regression areas:
 
 - sidecar does not auto-take over runtime visibility
+- `apps/desktop/check-wiring.sh` extracts real `invoke('command')` names without treating `invoke` itself or test-only sentinels as missing commands
+- browser extension runtime state is shared across mounted surfaces instead of using duplicate listener-local state
+- browser extension events do not auto-open the sidecar
+- browser close operations use the registered `browser_close` command instead of sending session ids to `browser_close_tab`
+- browser launch commands accept the live frontend `browserType` / `headless` payload instead of silently ignoring it
+- browser tab open/close commands use the shared CDP endpoint contract instead of hardcoded `127.0.0.1:9222` URLs
+- browser no-tab navigation paths create a real CDP target or fail clearly; they do not invent internal-only tabs that later break CDP control
+- browser frame-scoped JavaScript evaluation (`browser_execute_in_frame`) uses the same explicit approval gate as other arbitrary JS execution commands
+- the mounted browser UI does not expose fake console/network telemetry commands or polling paths that only return empty data
+- browser file uploads use the CDP DOM file-input path with canonicalized host paths; they do not rely on page-side `file://` fetch behavior
+- browser semantic commands are backed by the live semantic selector/accessibility scripts instead of registered stub handlers
+- browser tab-list IPC returns structured tab metadata, not bare string ids that drift from the TS browser API contract
+- `apps/desktop/src/lib/browserAutomation.ts` mirrors the live browser Tauri payloads instead of sending stale wrapper-only fields
 - reasoning renders inline
 - approvals render inline
 - approvals resolve to the correct transcript message
@@ -77,6 +90,8 @@ Required regression areas:
 - tool-stream cleanup and terminal artifact reconciliation use shared helpers instead of duplicated listener-side message patch logic
 - `agi:tool_stream` store updates use shared helper builders instead of open-coded per-case payload mutation
 - thinking-event and tool-call/result payload shaping use shared helpers instead of open-coded stream-listener transforms
+- tool timeline label/status shaping uses `apps/desktop/src/lib/toolTimelineRuntime.ts`
+- `chat:tool-calls` / `chat:tool-executing` / `chat:tool-result` keep transcript tool timeline state in sync
 
 ## 5. Backend Validation
 
@@ -95,14 +110,50 @@ Required regression areas:
 - extracted Rust compaction/export submodules stay the canonical owners of their registered commands instead of drifting back into `chat/mod.rs`
 - extracted Rust conversation/message CRUD submodules stay the canonical owners of their registered commands instead of drifting back into `chat/mod.rs`
 - extracted Rust intent/agent-mode helpers stay the canonical owners of classification and mode-selection policy instead of drifting back into `chat/mod.rs`
+- chat intent classification keeps explicit action verbs above clarification phrases so multi-step execution requests are not downgraded to follow-up chatter
 - extracted Rust persistence/provider-access/prompt-context/timeout helpers stay the canonical owners of send-loop policy instead of drifting back into `chat/mod.rs`
 - extracted Rust browser-context/attachments/tool-config/message-context helpers stay the canonical owners of those send-loop policies instead of drifting back into `chat/mod.rs`
 - extracted Rust stream/tool-execution helpers stay the canonical owners of streaming consumption and tool execution orchestration instead of drifting back into `chat/mod.rs`
 - extracted Rust command modules (`send_message.rs`, `maintenance.rs`, `intent.rs`) stay the canonical owners of their Tauri command implementations instead of drifting back into `chat/mod.rs`
+- embedded MCP `agi_run_task.max_steps` propagates into the AGI goal iteration limit instead of being metadata-only
+- workflow scheduler runtime commands register due schedules, execute cron triggers, and reject invalid webhook auth tokens instead of acting as no-op stubs
+- workflow scheduler startup is safe both under the live Tauri runtime and in plain unit-test construction with no ambient Tokio reactor
 - extracted Rust `send_message_setup.rs` and `send_message_execution.rs` stay the canonical owners of chat bootstrap and branch orchestration instead of growing the command file back into a monolith
 - extracted Rust chat submodules stay source-compatible with the registered Tauri command table
+- browser CDP target resolution comes from the shared endpoint contract in `playwright_bridge.rs` / `browser/mod.rs` instead of hardcoded websocket URLs
+- browser process launch waits for a reachable DevTools endpoint before reporting success
+- `PlaywrightBridge.start_server()` does not report fake success when no live browser/CDP endpoint exists
 - approval events reconcile correctly
 - conversation persistence and cloud sync remain intact
+- analytics/report commands reuse the managed `AppDatabase` connection instead of opening a second SQLite writer
+- auth session storage keeps legacy token columns redacted while using hash + encrypted columns as the canonical lookup/retrieval path
+- migration `v59` re-encrypts recoverable legacy auth session rows and removes the old unique-plaintext-session constraint trap
+- the desktop image router only auto-selects executable providers; unavailable providers like Midjourney stay out of the automatic routing pool until a real backend path exists
+- OAuth provider tokens persist to `oauth_providers.access_token_encrypted` / `refresh_token_encrypted`, not plaintext-style columns
+- auth token validation rate limiting uses a digest of the full token instead of a shared prefix bucket
+- desktop OAuth authorization payloads do not expose PKCE verifiers to the renderer
+- frontend `secret_manager_has` / `secret_manager_set` / `secret_manager_delete` invokes stay backed by registered Tauri commands
+- embedded MCP `tools/call` stays wired to the live desktop backend command/runtime states instead of a placeholder or second shadow execution path
+- desktop MCP runtime telemetry stays on the typed `api/mcp.ts` → `mcpStore.ts` path, not ad hoc raw `invoke()` calls for health/history/stats
+- MCP settings/components stay on `api/mcp.ts` / `McpClient` for registry install, logs, OAuth, and config mutation instead of direct raw MCP `invoke()` calls
+- connector settings/state stay on `api/mcp.ts` / `McpClient` for OAuth start/disconnect, connected-provider hydration, connector activation, and API-key persistence instead of direct raw connector `invoke()` calls
+- embedded MCP server control (`mcpServerStore.ts`) and MCP filesystem directory sync (`settingsStore.ts`) stay on typed `api/mcp.ts` helpers instead of direct raw `invoke()` calls
+- `MCPServerSettings.tsx` keeps the port input controlled from `mcpServerStore.ts`, and `mcpServerStore.ts` exposes an error field instead of swallowing embedded-server failures
+- `llmConfigStore.ts` initializes its auth-plan subscription through a guarded one-time async initializer instead of an unbounded module-load import/subscription path
+- `MCPCredentialManager.tsx` verifies deep-link OAuth state against session storage and passes the stored verified state to the backend callback path instead of trusting the URL payload directly
+- `mcp_get_health` refreshes currently connected servers before returning and does not leave stale disconnected rows in the UI
+- `mcp_get_execution_history` / `mcp_get_tool_execution_stats` stay registered and feed the live MCP runtime surface
+- `mcp:server_unhealthy` updates the frontend reactively through `useAgenticEvents.ts` + `mcpStore.ts`, with polling only as a fallback
+- `App.tsx` startup work uses guarded async bootstrap paths with cancellation/error handling instead of unbounded fire-and-forget mount IIFEs
+- tool SQL validation allows legitimate comments / hex literals while still blocking classical injection and time-based abuse patterns
+- `apps/desktop/src-tauri/src/sys/security/mod.rs` exposes `audit_logger.rs` / `command_validator.rs` as the canonical audit and shell-validation surfaces, with no dead duplicate public helpers shadowing them
+- the embedding runtime is managed as `Arc<tokio::sync::Mutex<EmbeddingService>>`, which matches the registered embedding command signatures exactly
+- `LLMState` must be initialized through the cache-wired constructor so the canonical `LLMRouter` has `cache_entries` persistence in the live desktop runtime
+- repeated identical non-streaming requests through the managed `LLMRouter` must return a cached second response instead of re-calling the provider
+- the dedicated cache-management UI must stay mounted from `SettingsPanel.tsx`, not exist as a dead unrendered component
+- embedding initialization degrades to an in-memory `EmbeddingService` instead of leaving registered embedding commands without managed state
+- `AGICore` does not allocate the deprecated `AGIMemory` helper on its live construction path; backend checks run without that warning
+- workflow script-node timeouts kill and reap the child process before returning an error instead of leaking the timed-out process
 
 ## 6. Deletion Safety
 

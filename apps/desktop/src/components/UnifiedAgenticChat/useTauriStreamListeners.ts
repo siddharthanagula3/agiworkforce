@@ -41,6 +41,10 @@ import {
   reconcileToolArtifactTerminalState,
 } from '../../lib/toolStreamRuntime';
 import {
+  buildRunningToolTimelineEntry,
+  buildTerminalToolTimelineUpdate,
+} from '../../lib/toolTimelineRuntime';
+import {
   buildRunningToolArtifactPatch,
   buildTerminalToolArtifactPatch,
   buildThinkingContentPlan,
@@ -217,6 +221,57 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         for (const entry of entriesToRemove) {
           state.removeActionTrailEntry(entry.id);
         }
+      };
+
+      const getToolTimelineEntry = (messageId: string, toolCallId: string) => {
+        return useChatStore
+          .getState()
+          .toolTimelineByMessage[messageId]?.find((entry) => entry.id === toolCallId);
+      };
+
+      const ensureToolTimelineEntry = (
+        conversationId: number,
+        input: {
+          toolCallId: string;
+          rawName?: string | null;
+          argumentsText?: string | null;
+          displayName?: string | null;
+          displayArgs?: string | null;
+        },
+        payloadMessageId?: string | number,
+      ): string | null => {
+        const targetMessageId = resolveStreamTargetMessageId(conversationId, payloadMessageId);
+        if (!targetMessageId) {
+          return null;
+        }
+
+        const existingEntry = getToolTimelineEntry(targetMessageId, input.toolCallId);
+        if (existingEntry) {
+          useChatStore.getState().updateToolTimelineEntry(targetMessageId, input.toolCallId, {
+            ...buildRunningToolTimelineEntry({
+              id: input.toolCallId,
+              rawName: input.rawName,
+              argumentsText: input.argumentsText,
+              displayName: input.displayName,
+              displayArgs: input.displayArgs,
+              existing: existingEntry,
+            }),
+            status: 'running',
+          });
+          return targetMessageId;
+        }
+
+        useChatStore.getState().addToolTimelineEntry(
+          targetMessageId,
+          buildRunningToolTimelineEntry({
+            id: input.toolCallId,
+            rawName: input.rawName,
+            argumentsText: input.argumentsText,
+            displayName: input.displayName,
+            displayArgs: input.displayArgs,
+          }),
+        );
+        return targetMessageId;
       };
 
       const clearToolExecutionTimeout = (toolCallId: string) => {
@@ -525,7 +580,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             conversationMessages: getConversationMessagesForStream(payload.conversation_id),
           });
           const { finalizedMessageId } = resolution;
-          let { hasValidTarget } = resolution;
+          const { hasValidTarget } = resolution;
 
           // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
           // This prevents stale stream-end events from one conversation clearing
@@ -638,7 +693,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               conversationMessages: getConversationMessagesForStream(payload.conversation_id),
             });
             const { finalizedMessageId } = resolution;
-            let { hasValidTarget } = resolution;
+            const { hasValidTarget } = resolution;
 
             if (finalizedMessageId) {
               const displayError = formatErrorForChat(payload.error, true);
@@ -869,13 +924,16 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (!isMountedRef.current) return;
           markStreamActivity();
 
-          // Resolve which message this thinking belongs to
+          const state = useUnifiedChatStore.getState();
           const activeStreamValues = [...activeStreamSessionsRef.current.values()];
-          const targetMessageId =
-            (payload.message_id ? String(payload.message_id) : null) ??
-            (activeStreamValues.length > 0
-              ? activeStreamValues[activeStreamValues.length - 1]!
-              : null);
+          const fallbackSessionMessageId =
+            activeStreamValues.length > 0 ? activeStreamValues[activeStreamValues.length - 1]! : null;
+          const targetMessageId = resolveActiveStreamMessageId(state, {
+            conversationMessages: state.messages,
+            sessionMessageId: fallbackSessionMessageId,
+            payloadMessageId: payload.message_id,
+            currentStreamingMessageId: state.currentStreamingMessageId,
+          });
 
           if (!targetMessageId) return;
 
@@ -942,6 +1000,16 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           for (const tc of payload.tool_calls) {
             const normalizedToolName = normalizeToolNameForUi(tc.name);
 
+            ensureToolTimelineEntry(
+              payload.conversation_id,
+              {
+                toolCallId: tc.id,
+                rawName: tc.name,
+                argumentsText: tc.arguments,
+              },
+              payload.message_id,
+            );
+
             upsertToolArtifact(
               payload.conversation_id,
               tc.id,
@@ -978,6 +1046,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
+          ensureToolTimelineEntry(
+            payload.conversation_id,
+            {
+              toolCallId: payload.tool_call_id,
+              rawName: payload.tool_name,
+              argumentsText: payload.arguments,
+            },
+            payload.message_id,
+          );
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
             normalizedToolName,
@@ -1055,6 +1132,23 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             payload.message_id,
           );
           if (targetMessageId) {
+            if (!getToolTimelineEntry(targetMessageId, payload.tool_call_id)) {
+              useChatStore.getState().addToolTimelineEntry(
+                targetMessageId,
+                buildRunningToolTimelineEntry({
+                  id: payload.tool_call_id,
+                  rawName: payload.tool_name,
+                }),
+              );
+            }
+            useChatStore.getState().updateToolTimelineEntry(
+              targetMessageId,
+              payload.tool_call_id,
+              buildTerminalToolTimelineUpdate({
+                success: payload.success,
+                error: payload.success ? null : payload.result,
+              }),
+            );
             useUnifiedChatStore
               .getState()
               .updateMessage(targetMessageId, buildToolResultStateMessageUpdate({ success: payload.success }));
@@ -1317,6 +1411,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
     // Capture ref values inside the effect for safe cleanup
     const activeStreamSessions = activeStreamSessionsRef.current;
+    const toolExecutionTimeouts = toolExecutionTimeoutsRef.current;
 
     return () => {
       // Mark as unmounted first to prevent new registrations
@@ -1340,11 +1435,11 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       // Bug #305 fix: Clear the live ref directly instead of a snapshot copy.
       // A snapshot copy clears its own Map but leaves the ref's Map untouched,
       // causing stale timeouts to persist if the hook re-mounts.
-      toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+      toolExecutionTimeouts.forEach((timeoutEntry) => {
         clearTimeout(timeoutEntry.softTimeoutId);
         clearTimeout(timeoutEntry.hardTimeoutId);
       });
-      toolExecutionTimeoutsRef.current.clear();
+      toolExecutionTimeouts.clear();
 
       // Clean up all registered listeners - handle both sync and async unlisten functions
       // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections

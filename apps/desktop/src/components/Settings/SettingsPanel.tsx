@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
+import { McpClient } from '@/api/mcp';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
@@ -51,6 +52,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
+import { CacheManagement } from './CacheManagement';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
 import { MasterPasswordSettings } from './MasterPasswordSettings';
 import { UpdateSettings } from './UpdateSettings';
@@ -118,7 +120,7 @@ function BYOKApiKeysSection() {
       setStatuses((s) => ({ ...s, [providerId]: 'saving' }));
       setErrors((e) => ({ ...e, [providerId]: '' }));
       try {
-        await invoke('save_api_key', { provider: providerId, key });
+        await McpClient.saveApiKey(providerId, key);
         setStatuses((s) => ({ ...s, [providerId]: 'saved' }));
         setKeys((k) => ({ ...k, [providerId]: '' }));
         setTimeout(() => setStatuses((s) => ({ ...s, [providerId]: 'idle' })), 2500);
@@ -248,6 +250,33 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
   const isBusy = loading || isSaving || notificationLoading;
+
+  const handleExportSettings = useCallback(async () => {
+    try {
+      const settings = useSettingsStore.getState();
+      const exportData = JSON.stringify(
+        {
+          llmConfig: settings.llmConfig,
+          windowPreferences: settings.windowPreferences,
+          chatPreferences: settings.chatPreferences,
+          executionPreferences: settings.executionPreferences,
+          globalHotkeyPreferences: settings.globalHotkeyPreferences,
+          customModels: settings.customModels,
+        },
+        null,
+        2,
+      );
+      const savePath = await save({
+        defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (savePath) {
+        await writeTextFile(savePath, exportData);
+      }
+    } catch (error) {
+      console.error('Failed to export settings:', error);
+    }
+  }, []);
 
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
@@ -843,6 +872,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                         <DataPrivacyTab />
                       </div>
                       <div className="pt-6 border-t border-border">
+                        <CacheManagement />
+                      </div>
+                      <div className="pt-6 border-t border-border">
                         <AllowedDirectoriesSettings />
                       </div>
                     </>
@@ -1011,32 +1043,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={async () => {
-                            try {
-                              const settings = useSettingsStore.getState();
-                              const exportData = JSON.stringify(
-                                {
-                                  llmConfig: settings.llmConfig,
-                                  windowPreferences: settings.windowPreferences,
-                                  chatPreferences: settings.chatPreferences,
-                                  executionPreferences: settings.executionPreferences,
-                                  globalHotkeyPreferences: settings.globalHotkeyPreferences,
-                                  customModels: settings.customModels,
-                                },
-                                null,
-                                2,
-                              );
-                              const savePath = await save({
-                                defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
-                                filters: [{ name: 'JSON', extensions: ['json'] }],
-                              });
-                              if (savePath) {
-                                await writeTextFile(savePath, exportData);
-                              }
-                            } catch (error) {
-                              console.error('Failed to export settings:', error);
-                            }
-                          }}
+                          onClick={() => void handleExportSettings()}
                         >
                           <Download className="mr-2 h-4 w-4" />
                           Export Settings

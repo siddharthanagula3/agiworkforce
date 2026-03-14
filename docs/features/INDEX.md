@@ -468,7 +468,7 @@ All Tauri events emitted from Rust → listened in TypeScript frontend.
 | `useTTS.ts` | Voice | Text-to-speech playback |
 | `useScreenCapture.ts` | Vision | Screen capture |
 | `useOCR.ts` | Vision | OCR text extraction |
-| `useMCP.ts` | MCP | MCP server management |
+| `mcpStore.ts` + `api/mcp.ts` | MCP | MCP server management, health, and runtime telemetry |
 | `useFileOperations.ts` | Files | File CRUD operations |
 | `useFileTerminalEvents.ts` | Files/Terminal | File + terminal event bridge |
 | `useDocuments.ts` | Files | Document processing |

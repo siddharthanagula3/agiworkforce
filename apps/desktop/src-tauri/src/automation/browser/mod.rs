@@ -43,7 +43,11 @@ impl BrowserState {
             return Ok(Arc::clone(client));
         }
 
-        let ws_url = format!("ws://127.0.0.1:9222/devtools/page/{}", tab_id);
+        let endpoint = {
+            let bridge = self.playwright.lock().await;
+            bridge.endpoint()
+        };
+        let ws_url = endpoint.resolve_page_ws_endpoint(tab_id).await?;
         let client = Arc::new(CdpClient::new(ws_url));
 
         client.connect().await?;
