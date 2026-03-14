@@ -12,6 +12,7 @@
  * - subscribeWithSelector for granular subscriptions
  */
 import { invoke, isTauriContext } from '../lib/tauri-mock';
+import { McpClient } from '../api/mcp';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
@@ -986,7 +987,7 @@ export const useSettingsStore = create<SettingsState>()(
               // Also update MCP filesystem server to use the allowed directories.
               // Empty directory lists are represented by ToolGuard only.
               if (dirs.length > 0) {
-                await invoke('mcp_update_filesystem_directories', { directories: dirs });
+                await McpClient.updateFilesystemDirectories(dirs);
                 console.debug(
                   '[settingsStore] Updated MCP filesystem with allowed directories:',
                   dirs.length,
@@ -1041,9 +1042,7 @@ export const useSettingsStore = create<SettingsState>()(
 
               if (allowedDirectories.length > 0) {
                 // Also update MCP filesystem server to use the allowed directories
-                await invoke('mcp_update_filesystem_directories', {
-                  directories: allowedDirectories,
-                });
+                await McpClient.updateFilesystemDirectories(allowedDirectories);
                 console.debug(
                   '[settingsStore] Updated MCP filesystem with allowed directories:',
                   allowedDirectories.length,
@@ -1414,6 +1413,7 @@ if (typeof window !== 'undefined') {
             enforceTaskRoutingTierRestriction(plan ?? 'free');
           },
         );
+        enforceTaskRoutingTierRestriction(useUnifiedAuthStore.getState().plan ?? 'free');
       }
     })
     .catch((err) => {

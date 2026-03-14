@@ -15,20 +15,18 @@ pub struct PermissionManager {
 
 impl PermissionManager {
     pub fn new(db_path: PathBuf, audit_db_path: PathBuf) -> Result<Self> {
-        let manager = Self {
-            db_path: db_path.clone(),
+        Self::init_database_at(&db_path)?;
+        let policies = Self::load_policies(&db_path)?;
+
+        Ok(Self {
+            db_path,
             audit_logger: Arc::new(AuditLogger::new(audit_db_path)?),
-            policies: Arc::new(RwLock::new(std::collections::HashMap::new())),
-        };
-
-        manager.init_database()?;
-        manager.load_policies_async()?;
-
-        Ok(manager)
+            policies: Arc::new(RwLock::new(policies)),
+        })
     }
 
-    fn init_database(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+    fn init_database_at(db_path: &std::path::Path) -> Result<()> {
+        let conn = Connection::open(db_path)?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tool_permissions (
@@ -52,8 +50,10 @@ impl PermissionManager {
         Ok(())
     }
 
-    fn load_policies_async(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+    fn load_policies(
+        db_path: &std::path::Path,
+    ) -> Result<std::collections::HashMap<String, ToolPermissionPolicy>> {
+        let conn = Connection::open(db_path)?;
 
         let mut stmt = conn.prepare(
             "SELECT tool_id, tool_name, permission_level, file_permissions, network_permissions,
@@ -105,12 +105,7 @@ impl PermissionManager {
             map.insert(tool_id, policy_obj);
         }
 
-        // Write loaded policies to self.policies so they are actually usable
-        // Use try_write to avoid blocking — this is called during init, not async context
-        let mut policies_lock = self.policies.blocking_write();
-        *policies_lock = map;
-
-        Ok(())
+        Ok(map)
     }
 
     pub async fn get_policy(&self, tool_id: &str) -> Option<ToolPermissionPolicy> {

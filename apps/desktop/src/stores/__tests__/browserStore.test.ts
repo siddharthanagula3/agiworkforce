@@ -30,8 +30,6 @@ describe('browserStore', () => {
       screenshots: [],
       actions: [],
       domSnapshots: [],
-      consoleLogs: [],
-      networkRequests: [],
       highlightedElement: null,
       isRecording: false,
       recordedSteps: [],
@@ -114,6 +112,21 @@ describe('browserStore', () => {
     expect(session?.tabs).toHaveLength(0);
   });
 
+  it('should close browser via the browser_close command', async () => {
+    invokeMock.mockResolvedValueOnce('session-1');
+    await useBrowserStore.getState().launchBrowser('Chromium', false);
+
+    invokeMock.mockResolvedValueOnce('tab-1');
+    await useBrowserStore.getState().openTab('https://example.com');
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await useBrowserStore.getState().closeBrowser('session-1');
+
+    expect(invokeMock).toHaveBeenCalledWith('browser_close', { browserId: 'session-1' });
+    expect(useBrowserStore.getState().sessions).toEqual([]);
+    expect(useBrowserStore.getState().activeSessionId).toBeNull();
+  });
+
   it('should navigate tab to new URL', async () => {
     invokeMock.mockResolvedValueOnce('session-1');
     await useBrowserStore.getState().launchBrowser('Webkit', true);
@@ -129,6 +142,41 @@ describe('browserStore', () => {
 
     const session = useBrowserStore.getState().sessions[0];
     expect(session?.tabs[0]?.url).toBe(newUrl);
+  });
+
+  it('marks only the newest tab as active when opening a new tab', async () => {
+    invokeMock.mockResolvedValueOnce('session-1');
+    await useBrowserStore.getState().launchBrowser('Chromium', false);
+
+    invokeMock.mockResolvedValueOnce('tab-1');
+    await useBrowserStore.getState().openTab('https://example.com');
+
+    invokeMock.mockResolvedValueOnce('tab-2');
+    await useBrowserStore.getState().openTab('https://openai.com');
+
+    const tabs = useBrowserStore.getState().sessions[0]?.tabs ?? [];
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0]?.active).toBe(false);
+    expect(tabs[1]?.active).toBe(true);
+  });
+
+  it('promotes the next tab when closing the active tab', async () => {
+    invokeMock.mockResolvedValueOnce('session-1');
+    await useBrowserStore.getState().launchBrowser('Chromium', false);
+
+    invokeMock.mockResolvedValueOnce('tab-1');
+    await useBrowserStore.getState().openTab('https://example.com');
+
+    invokeMock.mockResolvedValueOnce('tab-2');
+    await useBrowserStore.getState().openTab('https://openai.com');
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await useBrowserStore.getState().closeTab('tab-2');
+
+    const tabs = useBrowserStore.getState().sessions[0]?.tabs ?? [];
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.id).toBe('tab-1');
+    expect(tabs[0]?.active).toBe(true);
   });
 
   it('should switch active session', () => {

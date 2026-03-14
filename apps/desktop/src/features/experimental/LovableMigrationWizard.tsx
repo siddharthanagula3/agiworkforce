@@ -53,41 +53,6 @@ const LOVABLE_MILESTONES = [
   },
 ];
 
-const DEFAULT_WORKFLOWS: LovableWorkflow[] = [
-  {
-    id: 'wf-accural',
-    name: 'Monthly Accrual Journal',
-    owner: 'Finance Ops',
-    lastRun: 'Oct 26 • 08:41',
-    status: 'healthy',
-    estimatedMinutes: 6,
-  },
-  {
-    id: 'wf-ticket-routing',
-    name: 'CS Ticket Routing',
-    owner: 'Support Automation',
-    lastRun: 'Oct 26 • 05:12',
-    status: 'healthy',
-    estimatedMinutes: 4,
-  },
-  {
-    id: 'wf-salesforce-sync',
-    name: 'Salesforce → HubSpot Sync',
-    owner: 'RevOps',
-    lastRun: 'Oct 25 • 21:05',
-    status: 'broken',
-    estimatedMinutes: 12,
-  },
-  {
-    id: 'wf-google-sheets',
-    name: 'Daily Metrics Sheet',
-    owner: 'Analytics',
-    lastRun: 'Oct 25 • 18:32',
-    status: 'deprecated',
-    estimatedMinutes: 3,
-  },
-];
-
 const STEP_ORDER: WizardStep[] = ['connect', 'select', 'configure', 'review'];
 
 const StepIndicator = ({
@@ -139,14 +104,9 @@ export function LovableMigrationWizard() {
     'idle' | 'testing' | 'passed' | 'failed'
   >('idle');
   const [connectionInfo, setConnectionInfo] = useState<LovableConnectionResponse | null>(null);
-  const [workflows, setWorkflows] = useState<LovableWorkflow[]>(DEFAULT_WORKFLOWS);
-  const [workflowsSource, setWorkflowsSource] = useState<'fallback' | 'api'>('fallback');
+  const [workflows, setWorkflows] = useState<LovableWorkflow[]>([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
-  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>(
-    DEFAULT_WORKFLOWS.filter((workflow) => workflow.status === 'healthy').map(
-      (workflow) => workflow.id,
-    ),
-  );
+  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
   const [targetWorkspace, setTargetWorkspace] = useState('Finance Automation Hub');
   const [namingPrefix, setNamingPrefix] = useState('Lovable → AGI');
   const [autoEnableSchedules, setAutoEnableSchedules] = useState(true);
@@ -206,23 +166,19 @@ export function LovableMigrationWizard() {
       const listResponse = await listLovableWorkflows(workspaceSlug.trim());
       if (listResponse.workflows.length > 0) {
         setWorkflows(listResponse.workflows);
-        setWorkflowsSource('api');
         updateSelectedWorkflows(listResponse.workflows);
       } else {
-        setWorkflows(DEFAULT_WORKFLOWS);
-        setWorkflowsSource('fallback');
-        updateSelectedWorkflows(DEFAULT_WORKFLOWS);
-        toast.info(
-          'No workflows returned from Lovable. Loaded sample workflows to continue planning.',
-        );
+        setWorkflows([]);
+        setSelectedWorkflows([]);
+        toast.info('No workflows were returned for this Lovable workspace.');
       }
     } catch (error) {
       console.error('[LovableMigrationWizard] connection failed', error);
       setConnectionStatus('failed');
-      setWorkflows(DEFAULT_WORKFLOWS);
-      setWorkflowsSource('fallback');
-      updateSelectedWorkflows(DEFAULT_WORKFLOWS);
-      toast.error('Connection failed. Validate your API key or workspace slug.');
+      setWorkflows([]);
+      setSelectedWorkflows([]);
+      const message = error instanceof Error ? error.message : 'Connection failed.';
+      toast.error(message);
     } finally {
       setLoadingWorkflows(false);
     }
@@ -278,7 +234,9 @@ export function LovableMigrationWizard() {
       );
     } catch (error) {
       console.error('[LovableMigrationWizard] failed to launch migration', error);
-      toast.error('Failed to queue migration. Please retry or contact concierge.');
+      const message =
+        error instanceof Error ? error.message : 'Failed to queue migration. Please retry.';
+      toast.error(message);
     } finally {
       setImporting(false);
     }
@@ -374,7 +332,8 @@ export function LovableMigrationWizard() {
                   <CardTitle>Step 1 · Connect Lovable Workspace</CardTitle>
                   <CardDescription>
                     Provide a Lovable API key with workflow read access and specify the workspace
-                    slug. We only use this connection for migration and auditing.
+                    slug. This flow is still experimental and currently blocked until a real
+                    Lovable backend integration is implemented.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -482,7 +441,6 @@ export function LovableMigrationWizard() {
                     <span className="text-xs text-muted-foreground">
                       {selectedWorkflows.length} workflow{selectedWorkflows.length === 1 ? '' : 's'}{' '}
                       selected
-                      {workflowsSource === 'fallback' && ' • sample data'}
                     </span>
                   </div>
 

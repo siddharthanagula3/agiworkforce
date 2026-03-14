@@ -1050,7 +1050,7 @@ The ToolTimeline component displays a collapsible timeline of tool executions du
 | Item             | Component                                             | Description                                       |
 | ---------------- | ----------------------------------------------------- | ------------------------------------------------- |
 | General          | `GeneralSettings.tsx`                                 | Theme, language, startup behavior, data directory |
-| API Keys         | `ApiKeysSettings.tsx`                                 | Provider API key management                       |
+| API Keys         | API Keys tab inline in `SettingsPanel.tsx`           | Provider API key management                       |
 | Models           | `ModelSelector.tsx` + `CustomModelsSettings.tsx`      | Model selection, custom endpoints, favorites      |
 | Automation       | `AutomationPermissionsSettings.tsx`                   | Computer use permissions, safety settings         |
 | MCP Tools        | `MCPToolsSettings.tsx`                                | MCP tool configuration and permissions            |
@@ -1088,9 +1088,9 @@ The ToolTimeline component displays a collapsible timeline of tool executions du
 | Zoom level           | Dropdown                     | 75%, 100%, 125%, 150%, 200% | 100%                                           | WebKitGTK zoom                                        |
 | Send with Enter      | Toggle                       | On/Off                      | Off                                            | When on, Enter sends; Shift+Enter for newline         |
 
-### 4.3.3 API Keys Settings
+### 4.3.3 API Keys Tab
 
-**Component**: `ApiKeysSettings.tsx`
+**Component**: API Keys tab inline in `SettingsPanel.tsx`
 
 **Layout**:
 
@@ -2056,7 +2056,7 @@ App (root)
 │       │       └── DynamicSidecar
 │       ├── SettingsPanel (modal overlay)
 │       │   ├── GeneralSettings
-│       │   ├── ApiKeysSettings
+│       │   ├── API Keys tab (inline in SettingsPanel)
 │       │   ├── CustomModelsSettings
 │       │   ├── AutomationPermissionsSettings
 │       │   ├── MCPToolsSettings
@@ -2264,7 +2264,7 @@ This location follows XDG base directory specification when `XDG_DATA_HOME` is s
 | `useVoiceHotkey`              | `useVoiceHotkey.ts`              | Voice hotkey detection                     |
 | `useVoiceTranscription`       | `useVoiceTranscription.ts`       | Audio-to-text conversion                   |
 | `useTTS`                      | `useTTS.ts`                      | Text-to-speech playback                    |
-| `useMCP`                      | `useMCP.ts`                      | MCP server connection management           |
+| `mcpStore` + `api/mcp.ts`    | `mcpStore.ts` + `api/mcp.ts`    | MCP server connection management, health, and runtime telemetry |
 | `useTerminal`                 | `useTerminal.ts`                 | Terminal session management                |
 | `useScreenCapture`            | `useScreenCapture.ts`            | Screen capture operations                  |
 | `useOCR`                      | `useOCR.ts`                      | OCR text extraction                        |

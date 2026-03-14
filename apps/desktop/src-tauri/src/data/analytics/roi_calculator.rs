@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ROIReport {
@@ -77,7 +77,7 @@ impl ROICalculator {
     }
 
     async fn calculate_time_saved(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let time_saved_seconds: f64 = conn
             .query_row(
@@ -127,7 +127,7 @@ impl ROICalculator {
     }
 
     async fn calculate_error_reduction(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let (total_automations, successful): (i64, i64) = conn
             .query_row(
@@ -153,7 +153,7 @@ impl ROICalculator {
     }
 
     async fn calculate_productivity_gains(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let (total_sessions, completed_sessions): (i64, i64) = conn
             .query_row(
@@ -177,7 +177,7 @@ impl ROICalculator {
     }
 
     async fn count_executions(&self, start: i64, end: i64) -> Result<(usize, usize, usize)> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let (total, successful): (i64, i64) = conn
             .query_row(
@@ -195,7 +195,7 @@ impl ROICalculator {
     }
 
     async fn calculate_avg_execution_time(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let avg_time: f64 = conn
             .query_row(
@@ -212,7 +212,7 @@ impl ROICalculator {
     }
 
     async fn calculate_llm_costs(&self, start: i64, end: i64) -> Result<(f64, f64)> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let total_cost: f64 = conn
             .query_row(
@@ -242,7 +242,7 @@ impl ROICalculator {
     }
 
     async fn calculate_error_cost_savings(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let errors_prevented: i64 = conn
             .query_row(
@@ -262,7 +262,7 @@ impl ROICalculator {
     }
 
     async fn calculate_llm_cost_optimization(&self, start: i64, end: i64) -> Result<f64> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
 
         let cache_savings: f64 = conn
             .query_row(
@@ -283,7 +283,7 @@ impl ROICalculator {
         team_id: Option<&str>,
         report: &ROIReport,
     ) -> Result<String> {
-        let conn = self.db.lock().await;
+        let conn = self.db.lock().expect("analytics db mutex poisoned");
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
 

@@ -1,9 +1,14 @@
 import { invoke } from '../lib/tauri-mock';
 import type {
   McpServerConfig,
+  McpServerHealth,
   McpServerInfo,
   McpServersConfig,
+  McpExecutionHistoryEntry,
+  McpRegistryPackage,
+  McpRuntimeServerConfig,
   McpToolInfo,
+  McpToolExecutionStats,
   McpConfigLocation,
   McpOAuthProvider,
   McpOAuthStartResponse,
@@ -14,9 +19,14 @@ import type {
 
 export type {
   McpServerConfig,
+  McpServerHealth,
   McpServerInfo,
   McpServersConfig,
+  McpExecutionHistoryEntry,
+  McpRegistryPackage,
+  McpRuntimeServerConfig,
   McpToolInfo,
+  McpToolExecutionStats,
   McpConfigLocation,
   McpOAuthProvider,
   McpOAuthStartResponse,
@@ -224,6 +234,72 @@ export async function mcpGetStats(): Promise<Record<string, number>> {
   }
 }
 
+export async function mcpGetRegistry(): Promise<McpRegistryPackage[]> {
+  try {
+    return await invokeWithTimeout<McpRegistryPackage[]>('mcp_get_registry');
+  } catch (error) {
+    throw new Error(`Failed to get MCP registry: ${error}`);
+  }
+}
+
+export async function mcpInstallServer(serverId: string): Promise<string> {
+  try {
+    validateNonEmpty(serverId, 'server ID');
+    return await invokeWithTimeout<string>('mcp_install_server', { serverId });
+  } catch (error) {
+    throw new Error(`Failed to install MCP server '${serverId}': ${error}`);
+  }
+}
+
+export async function mcpGetExecutionHistory(
+  limit: number = 20,
+): Promise<McpExecutionHistoryEntry[]> {
+  try {
+    return await invokeWithTimeout<McpExecutionHistoryEntry[]>('mcp_get_execution_history', {
+      limit,
+    });
+  } catch (error) {
+    throw new Error(`Failed to get MCP execution history: ${error}`);
+  }
+}
+
+export async function mcpGetToolExecutionStats(): Promise<McpToolExecutionStats[]> {
+  try {
+    return await invokeWithTimeout<McpToolExecutionStats[]>('mcp_get_tool_execution_stats');
+  } catch (error) {
+    throw new Error(`Failed to get MCP tool execution statistics: ${error}`);
+  }
+}
+
+export async function mcpGetHealth(): Promise<McpServerHealth[]> {
+  try {
+    return await invokeWithTimeout<McpServerHealth[]>('mcp_get_health');
+  } catch (error) {
+    throw new Error(`Failed to get MCP health: ${error}`);
+  }
+}
+
+export async function mcpCheckServerHealth(serverName: string): Promise<McpServerHealth> {
+  try {
+    validateNonEmpty(serverName, 'server name');
+    return await invokeWithTimeout<McpServerHealth>('mcp_check_server_health', { serverName });
+  } catch (error) {
+    throw new Error(`Failed to check MCP server health for '${serverName}': ${error}`);
+  }
+}
+
+export async function mcpGetServerLogs(
+  serverName: string,
+  lines?: number,
+): Promise<string[]> {
+  try {
+    validateNonEmpty(serverName, 'server name');
+    return await invokeWithTimeout<string[]>('mcp_get_server_logs', { serverName, lines });
+  } catch (error) {
+    throw new Error(`Failed to get MCP server logs for '${serverName}': ${error}`);
+  }
+}
+
 export async function mcpStoreCredential(
   serverName: string,
   key: string,
@@ -321,6 +397,30 @@ export async function mcpOAuthStart(provider: McpOAuthProvider): Promise<McpOAut
  */
 export async function mcpOAuthCallback(
   provider: McpOAuthProvider,
+  code: string,
+  callbackState: string,
+): Promise<McpOAuthTokenResponse> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    validateNonEmpty(code, 'authorization code');
+    validateNonEmpty(callbackState, 'callback state');
+    const result = await invokeWithTimeout<{
+      provider: string;
+      connected: boolean;
+      expires_at: number | null;
+    }>('mcp_oauth_callback', { provider, code, callbackState }, MCP_OAUTH_TIMEOUT_MS);
+    return {
+      provider: result.provider,
+      connected: result.connected,
+      expiresAt: result.expires_at,
+    };
+  } catch (error) {
+    throw new Error(`Failed to complete OAuth callback for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpOAuthCallbackRaw(
+  provider: string,
   code: string,
   callbackState: string,
 ): Promise<McpOAuthTokenResponse> {
@@ -446,6 +546,139 @@ export async function mcpOAuthSetCredentials(
   }
 }
 
+export async function mcpOAuthCredentialsStatus(
+  provider: string,
+): Promise<{ configured: boolean }> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    return await invokeWithTimeout<{ configured: boolean }>('mcp_oauth_credentials_status', {
+      provider,
+    });
+  } catch (error) {
+    throw new Error(`Failed to get OAuth credentials status for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpOAuthSetCredentialsRaw(
+  provider: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<void> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    validateNonEmpty(clientId, 'client ID');
+    validateNonEmpty(clientSecret, 'client secret');
+    await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
+      provider,
+      clientId,
+      clientSecret,
+    });
+  } catch (error) {
+    throw new Error(`Failed to set OAuth credentials for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpOAuthStartRaw(
+  provider: string,
+): Promise<McpOAuthStartResponse> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    const result = await invokeWithTimeout<{ auth_url: string; state: string }>(
+      'mcp_oauth_start',
+      { provider },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
+    return {
+      authUrl: result.auth_url,
+      state: result.state,
+    };
+  } catch (error) {
+    throw new Error(`Failed to start OAuth flow for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpOAuthDisconnectRaw(provider: string): Promise<void> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    await invokeWithTimeout<void>('mcp_oauth_disconnect', { provider });
+  } catch (error) {
+    throw new Error(`Failed to disconnect OAuth for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpListConnectedProviders(): Promise<string[]> {
+  try {
+    return await invokeWithTimeout<string[]>('mcp_list_connected_providers');
+  } catch (error) {
+    throw new Error(`Failed to list connected MCP providers: ${error}`);
+  }
+}
+
+export async function mcpConnectConnector(connectorId: string): Promise<unknown> {
+  try {
+    validateNonEmpty(connectorId, 'connector ID');
+    return await invokeWithTimeout('mcp_connect_connector', { connectorId });
+  } catch (error) {
+    throw new Error(`Failed to connect MCP connector '${connectorId}': ${error}`);
+  }
+}
+
+export async function mcpSaveApiKey(provider: string, key: string): Promise<void> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    validateNonEmpty(key, 'API key');
+    await invokeWithTimeout<void>('save_api_key', { provider, key });
+  } catch (error) {
+    throw new Error(`Failed to save API key for ${provider}: ${error}`);
+  }
+}
+
+export async function mcpServerGetConfig(): Promise<McpRuntimeServerConfig> {
+  try {
+    return await invokeWithTimeout<McpRuntimeServerConfig>('mcp_server_get_config');
+  } catch (error) {
+    throw new Error(`Failed to get MCP server config: ${error}`);
+  }
+}
+
+export async function mcpServerStart(): Promise<void> {
+  try {
+    await invokeWithTimeout<void>('mcp_server_start');
+  } catch (error) {
+    throw new Error(`Failed to start MCP server: ${error}`);
+  }
+}
+
+export async function mcpServerStop(): Promise<void> {
+  try {
+    await invokeWithTimeout<void>('mcp_server_stop');
+  } catch (error) {
+    throw new Error(`Failed to stop MCP server: ${error}`);
+  }
+}
+
+export async function mcpServerUpdateConfig(
+  port?: number,
+  enabledTools?: string[],
+): Promise<void> {
+  try {
+    await invokeWithTimeout<void>('mcp_server_update_config', {
+      port: port ?? null,
+      enabledTools: enabledTools ?? null,
+    });
+  } catch (error) {
+    throw new Error(`Failed to update MCP server config: ${error}`);
+  }
+}
+
+export async function mcpUpdateFilesystemDirectories(directories: string[]): Promise<void> {
+  try {
+    await invokeWithTimeout<void>('mcp_update_filesystem_directories', { directories });
+  } catch (error) {
+    throw new Error(`Failed to update MCP filesystem directories: ${error}`);
+  }
+}
+
 /**
  * Get the status of all OAuth providers.
  *
@@ -548,6 +781,34 @@ export class McpClient {
     return mcpGetStats();
   }
 
+  static async getRegistry(): Promise<McpRegistryPackage[]> {
+    return mcpGetRegistry();
+  }
+
+  static async installServer(serverId: string): Promise<string> {
+    return mcpInstallServer(serverId);
+  }
+
+  static async getExecutionHistory(limit: number = 20): Promise<McpExecutionHistoryEntry[]> {
+    return mcpGetExecutionHistory(limit);
+  }
+
+  static async getToolExecutionStats(): Promise<McpToolExecutionStats[]> {
+    return mcpGetToolExecutionStats();
+  }
+
+  static async getHealth(): Promise<McpServerHealth[]> {
+    return mcpGetHealth();
+  }
+
+  static async checkServerHealth(serverName: string): Promise<McpServerHealth> {
+    return mcpCheckServerHealth(serverName);
+  }
+
+  static async getServerLogs(serverName: string, lines?: number): Promise<string[]> {
+    return mcpGetServerLogs(serverName, lines);
+  }
+
   static async storeCredential(serverName: string, key: string, value: string): Promise<string> {
     return mcpStoreCredential(serverName, key, value);
   }
@@ -585,6 +846,14 @@ export class McpClient {
     return mcpOAuthCallback(provider, code, callbackState);
   }
 
+  static async oauthCallbackRaw(
+    provider: string,
+    code: string,
+    callbackState: string,
+  ): Promise<McpOAuthTokenResponse> {
+    return mcpOAuthCallbackRaw(provider, code, callbackState);
+  }
+
   /**
    * Check connection status for a provider
    */
@@ -615,6 +884,61 @@ export class McpClient {
     clientSecret: string,
   ): Promise<void> {
     return mcpOAuthSetCredentials(provider, clientId, clientSecret);
+  }
+
+  static async oauthCredentialsStatus(provider: string): Promise<{ configured: boolean }> {
+    return mcpOAuthCredentialsStatus(provider);
+  }
+
+  static async oauthSetCredentialsRaw(
+    provider: string,
+    clientId: string,
+    clientSecret: string,
+  ): Promise<void> {
+    return mcpOAuthSetCredentialsRaw(provider, clientId, clientSecret);
+  }
+
+  static async oauthStartRaw(provider: string): Promise<McpOAuthStartResponse> {
+    return mcpOAuthStartRaw(provider);
+  }
+
+  static async oauthDisconnectRaw(provider: string): Promise<void> {
+    return mcpOAuthDisconnectRaw(provider);
+  }
+
+  static async listConnectedProviders(): Promise<string[]> {
+    return mcpListConnectedProviders();
+  }
+
+  static async connectConnector(connectorId: string): Promise<unknown> {
+    return mcpConnectConnector(connectorId);
+  }
+
+  static async saveApiKey(provider: string, key: string): Promise<void> {
+    return mcpSaveApiKey(provider, key);
+  }
+
+  static async getRuntimeServerConfig(): Promise<McpRuntimeServerConfig> {
+    return mcpServerGetConfig();
+  }
+
+  static async startRuntimeServer(): Promise<void> {
+    return mcpServerStart();
+  }
+
+  static async stopRuntimeServer(): Promise<void> {
+    return mcpServerStop();
+  }
+
+  static async updateRuntimeServerConfig(
+    port?: number,
+    enabledTools?: string[],
+  ): Promise<void> {
+    return mcpServerUpdateConfig(port, enabledTools);
+  }
+
+  static async updateFilesystemDirectories(directories: string[]): Promise<void> {
+    return mcpUpdateFilesystemDirectories(directories);
   }
 
   /**

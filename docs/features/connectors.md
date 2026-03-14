@@ -23,11 +23,11 @@
 
 ### OAuth Path (GitHub, Google, Slack, Notion, Figma, Microsoft, Atlassian)
 
-1. Settings > Connectors tab mounts. `ConnectorsGallery` calls `fetchConnected()` which invokes `mcp_list_connected_providers` to hydrate `connectedIds` from `settings_v2` in SQLite.
+1. Settings > Connectors tab mounts. `ConnectorsGallery` calls `fetchConnected()`, and `connectorsStore` uses `apps/desktop/src/api/mcp.ts` / `McpClient.listConnectedProviders()` to hydrate `connectedIds` from `settings_v2` in SQLite.
 
 2. User clicks `+` on an OAuth connector. `handleConnectClick` → `connect(id)` in store.
 
-3. Store detects `authType: 'oauth'`, invokes `mcp_oauth_start({ provider: id })`.
+3. Store detects `authType: 'oauth'`, calls `McpClient.oauthStartRaw(id)` which invokes `mcp_oauth_start({ provider: id })`.
 
 4. Rust `mcp_oauth_start`:
    - Resolves `McpOAuthProvider` from the string.
@@ -47,7 +47,7 @@
 
 8. `handleDeepLink()` parses the URL with regex `/^\/oauth\/mcp\/([a-zA-Z0-9_-]+)$/`. Dispatches `mcp-oauth-callback` DOM CustomEvent on success, `mcp-oauth-error` on failure.
 
-9. `ConnectorsGallery` listener fires. Calls `invoke('mcp_oauth_callback', { provider, code, callbackState: state })`.
+9. `ConnectorsGallery` listener fires. Calls `McpClient.oauthCallbackRaw(provider, code, state)`, which invokes `mcp_oauth_callback`.
 
 10. Rust `mcp_oauth_callback`:
     - Acquires write lock on `pending_flows`. Validates state match, provider match, and that the flow is under 10 minutes old. Atomically removes (consumes) the flow.
@@ -57,7 +57,7 @@
     - Builds `StoredTokens` and encrypts with AES-256-GCM (machine-derived key). Writes three rows to `settings_v2`: full blob (`mcp_oauth_tokens_{provider}`), access token, refresh token.
     - Returns `OAuthTokenResponse { provider, connected: true, expires_at }`.
 
-11. Gallery calls `completeOAuth(id)` on the store. Store clears the timeout timer and invokes `mcp_connect_connector({ connectorId: id })`.
+11. Gallery calls `completeOAuth(id)` on the store. Store clears the timeout timer and calls `McpClient.connectConnector(id)`.
 
 12. Rust `mcp_connect_connector`:
     - Looks up `ConnectorMcpMapping` for the connector ID. If none, emits `connector:connected` and returns (allows UI-only connectors).
@@ -75,17 +75,17 @@
 
 1. User clicks `+`. `handleConnectClick` opens `ConnectorApiKeyDialog`.
 2. User enters key, clicks Connect. Gallery calls `connectWithApiKey(connector, apiKey)`.
-3. Store invokes `save_api_key({ provider: id, key: apiKey })`. Rust encrypts and upserts under `api_key_{provider}` in `settings_v2`.
-4. Store invokes `mcp_connect_connector({ connectorId: id })`. Rust calls `retrieve_api_key()` to decrypt, injects as environment variable (e.g., `STRIPE_SECRET_KEY`, `VERCEL_TOKEN`, `SUPABASE_ACCESS_TOKEN`).
+3. Store calls `McpClient.saveApiKey(id, apiKey)`. Rust encrypts and upserts under `api_key_{provider}` in `settings_v2`.
+4. Store calls `McpClient.connectConnector(id)`. Rust calls `retrieve_api_key()` to decrypt, injects as environment variable (e.g., `STRIPE_SECRET_KEY`, `VERCEL_TOKEN`, `SUPABASE_ACCESS_TOKEN`).
 5. Same MCP server activation path as step 12-13 above.
 
 ### MCP Remote Path (Context7, Excalidraw, PubMed)
 
-`authType: 'mcp_remote'`, `mcpTransport: 'http'`. Store calls `mcp_connect_connector` directly. These connectors have no entry in `get_connector_mcp_mapping()`, so Rust emits `connector:connected` immediately without spawning a process. Effectively stubs today.
+`authType: 'mcp_remote'`, `mcpTransport: 'http'`. Store calls `McpClient.connectConnector(id)`. These connectors have no entry in `get_connector_mcp_mapping()`, so Rust emits `connector:connected` immediately without spawning a process. Effectively stubs today.
 
 ### Disconnect Path
 
-1. Popover → Disconnect. Store calls `disconnect(id)`, invokes `mcp_oauth_disconnect({ provider: id })`.
+1. Popover → Disconnect. Store calls `disconnect(id)`, which uses `McpClient.oauthDisconnectRaw(id)` to invoke `mcp_oauth_disconnect({ provider: id })`.
 2. Rust: disconnects the MCP stdio process, removes from persisted config, deletes OAuth tokens (all rows + legacy key), deletes API key. Emits `McpEvent::ServerConnectionChanged { connected: false }`, `McpEvent::ToolsUpdated { tool_count: 0 }`, and Tauri event `connector:disconnected`.
 3. Store removes `id` from `connectedIds`.
 
@@ -189,7 +189,7 @@ AES-256-GCM with a 12-byte random nonce per write. Key derived via `KeyPurpose::
 
 ## Known Issues / Tech Debt
 
-1. **`mcp_list_connected_providers` is a hardcoded 50-item allowlist.** New connectors added to `connectorDefinitions.ts` must also be added to this list in `mcp_oauth.rs:1393`, or they will appear disconnected after an app restart even if tokens are stored.
+1. **`mcp_list_connected_providers` is still a hardcoded allowlist.** New connectors added to `connectorDefinitions.ts` must still be added to that list in `mcp_oauth.rs`, but Google-family aliases now resolve through the canonical token lookup path so `gmail`, `google_calendar`, and `google_drive` do not disappear after restart when only `mcp_oauth_tokens_google` exists.
 
 2. **`completeOAuth` marks connected even if MCP server fails.** The `catch` block in `connectorsStore.completeOAuth()` still adds the ID to `connectedIds` and only logs a warning if `mcp_connect_connector` fails. The user sees "Connected" with no MCP tools available.
 

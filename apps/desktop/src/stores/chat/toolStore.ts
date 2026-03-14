@@ -16,6 +16,11 @@ import { invoke, isTauri, listen } from '../../lib/tauri-mock';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 import type { ToolLabelEntry } from '../../components/UnifiedAgenticChat/ToolLabel';
+import {
+  buildRunningToolTimelineEntry,
+  buildTerminalToolTimelineUpdate,
+  resolveToolTimelineLabel,
+} from '../../lib/toolTimelineRuntime';
 import { useAgentStore } from './agentStore';
 import { useChatStore } from './chatStore';
 
@@ -992,34 +997,11 @@ function getExistingToolTimelineEntry(
     .toolTimelineByMessage[messageId]?.find((entry) => entry.id === toolId);
 }
 
-/** Decode b64-encoded segments in MCP tool names (e.g. b64_YXBpZnk → apify) */
-function decodeB64ToolName(name: string): string {
-  return name
-    .split('__')
-    .map((seg) => {
-      if (seg.startsWith('b64_')) {
-        try {
-          return atob(seg.slice(4));
-        } catch {
-          return seg;
-        }
-      }
-      return seg;
-    })
-    .join('__');
-}
-
 function resolveToolLabel(payload: ToolEventPayload): {
   displayName: string;
   displayArgs: string;
 } {
   const existingEntry = getExistingToolTimelineEntry(payload.message_id, payload.id);
-  if (existingEntry) {
-    return {
-      displayName: existingEntry.displayName,
-      displayArgs: existingEntry.displayArgs,
-    };
-  }
 
   const activeStream = useToolStore.getState().activeToolStreams.get(payload.id);
   const streamDisplayName =
@@ -1031,11 +1013,14 @@ function resolveToolLabel(payload: ToolEventPayload): {
       ? activeStream.parameters['displayArgs']
       : '';
 
-  const rawName = payload.display_name ?? payload.tool_name ?? streamDisplayName ?? 'Tool';
-  return {
-    displayName: rawName.includes('b64_') ? decodeB64ToolName(rawName) : rawName,
+  return resolveToolTimelineLabel({
+    rawName: payload.tool_name ?? streamDisplayName ?? 'Tool',
+    displayName: payload.display_name ?? streamDisplayName,
     displayArgs: payload.display_args ?? streamDisplayArgs,
-  };
+    existing: existingEntry ?? null,
+    activeStreamDisplayName: streamDisplayName,
+    activeStreamDisplayArgs: streamDisplayArgs,
+  });
 }
 
 /**
@@ -1076,15 +1061,17 @@ export async function initializeToolEventListener(): Promise<void> {
         });
 
         // Add entry to chat timeline
-        useChatStore.getState().addToolTimelineEntry(messageId, {
-          id: toolId,
-          displayName,
-          displayArgs,
-          status: 'running',
-          ...(payload.parallel_group !== undefined
-            ? { parallelGroup: payload.parallel_group }
-            : {}),
-        });
+        useChatStore.getState().addToolTimelineEntry(
+          messageId,
+          buildRunningToolTimelineEntry({
+            id: toolId,
+            rawName: payload.tool_name ?? displayName,
+            displayName,
+            displayArgs,
+            existing: getExistingToolTimelineEntry(messageId, toolId) ?? null,
+            parallelGroup: payload.parallel_group,
+          }),
+        );
 
         // Push to agent action trail
         useAgentStore.getState().addActionTrailEntry({
@@ -1123,11 +1110,15 @@ export async function initializeToolEventListener(): Promise<void> {
         }, 5000);
 
         // Update chat timeline entry
-        useChatStore.getState().updateToolTimelineEntry(messageId, toolId, {
-          status,
-          durationMs: payload.duration_ms,
-          ...(payload.error !== undefined ? { error: payload.error } : {}),
-        });
+        useChatStore.getState().updateToolTimelineEntry(
+          messageId,
+          toolId,
+          buildTerminalToolTimelineUpdate({
+            success: status !== 'error',
+            error: payload.error,
+            durationMs: payload.duration_ms,
+          }),
+        );
 
         // Push completion to agent action trail
         useAgentStore.getState().addActionTrailEntry({

@@ -20,12 +20,12 @@ use crate::sys::commands::{
     mcp_server::McpServerState,
     project_memory::ProjectMemoryState,
     research::ResearchState,
-    security::AuthManagerState,
+    security::{AuthManagerState, SecretManagerState},
     skills::SkillsState,
     tool_confirmation::ToolConfirmationState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
-    ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
+    ComputerUseState, DatabaseState, DocumentState, EmbeddingService, FileWatcherState,
     GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState, MemoryState,
     NativeMessagingStateWrapper, NotificationState, ProductivityState, SchedulerState,
     SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState,
@@ -67,6 +67,40 @@ pub use ui::window::{
     initialize_window, is_floating_window_visible, set_always_on_top, set_pinned, show_window,
     toggle_floating_window, undock, DockPreviewEvent, DockState,
 };
+
+fn initialize_embedding_service_state(
+    app_data_dir: &std::path::Path,
+) -> anyhow::Result<Arc<TokioMutex<EmbeddingService>>> {
+    let embedding_config = crate::core::embeddings::EmbeddingConfig::default();
+
+    match async_runtime::block_on(EmbeddingService::new(
+        app_data_dir.to_path_buf(),
+        embedding_config,
+    )) {
+        Ok(service) => Ok(Arc::new(TokioMutex::new(service))),
+        Err(e) => {
+            tracing::warn!(
+                "Failed to initialize embedding service: {}. Falling back to degraded service.",
+                e
+            );
+
+            match EmbeddingService::new_degraded() {
+                Ok(service) => Ok(Arc::new(TokioMutex::new(service))),
+                Err(e2) => {
+                    tracing::error!(
+                        "Failed to create filesystem-backed degraded embedding service: {}. Falling back to in-memory degraded service.",
+                        e2
+                    );
+
+                    let service = EmbeddingService::new_in_memory_degraded()
+                        .context("failed to create in-memory degraded embedding service")?;
+
+                    Ok(Arc::new(TokioMutex::new(service)))
+                }
+            }
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -233,6 +267,7 @@ pub fn run() {
 
             let secret_manager = Arc::new(SecretManager::new(db_conn_arc.clone()));
             tracing::info!("SecretManager initialized");
+            app.manage(SecretManagerState(secret_manager.clone()));
 
             let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
             app.manage(AuthManagerState(auth_manager));
@@ -268,7 +303,8 @@ pub fn run() {
             let analytics_metrics = AnalyticsMetricsCollector::new();
             app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
 
-            app.manage(LLMState::new());
+            let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
+            app.manage(llm_state);
 
             // Initialize browser automation with graceful degradation.
             // If initialization fails, we still manage a degraded state so commands
@@ -501,7 +537,7 @@ pub fn run() {
             app.manage(McpbState::new());
 
             // MCP Server Mode state (expose app as an MCP server)
-            app.manage(McpServerState::new(9090));
+            app.manage(McpServerState::new(9090, app.handle().clone()));
 
             // MCP Extensions state for desktop extension management
             let mcp_state_ref: tauri::State<McpState> = app.state();
@@ -772,46 +808,9 @@ pub fn run() {
             app.manage(crate::sys::commands::MetricsCollectorState(metrics_collector));
             app.manage(crate::sys::commands::MetricsComparisonState(metrics_comparison));
 
-            let embedding_config = crate::core::embeddings::EmbeddingConfig::default();
-
-            match async_runtime::block_on(
-                crate::core::embeddings::EmbeddingService::new(
-                    app_data_dir.clone(),
-                    embedding_config,
-                ),
-            ) {
-                Ok(embedding_service) => {
-                    app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(embedding_service))));
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to initialize embedding service: {}. Embedding features may be degraded.", e);
-                    match crate::core::embeddings::EmbeddingService::new_degraded() {
-                        Ok(degraded) => {
-                            app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(degraded))));
-                        }
-                        Err(e2) => {
-                            // CRITICAL FIX: Always manage EmbeddingServiceState to prevent
-                            // runtime panics when embedding commands are invoked.
-                            // Retry degraded init with a fresh temp dir as last resort.
-                            tracing::error!("Failed to create degraded embedding service: {}. Retrying with alternate paths.", e2);
-                            let alt_temp = std::env::temp_dir().join("agiworkforce_embed_fallback");
-                            let _ = std::fs::create_dir_all(&alt_temp);
-                            match crate::core::embeddings::EmbeddingService::new_degraded() {
-                                Ok(fallback) => {
-                                    app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(fallback))));
-                                    tracing::info!("Managed fallback EmbeddingServiceState on retry");
-                                }
-                                Err(e3) => {
-                                    tracing::error!("All embedding init attempts failed ({}). Embedding commands will be unavailable.", e3);
-                                    // As an absolute last resort, we still need to manage the state.
-                                    // Create a minimal EmbeddingService manually to avoid panics.
-                                    // This is safe: commands will return errors but won't crash.
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            let embedding_service = initialize_embedding_service_state(&app_data_dir)
+                .map_err(|e| anyhow::anyhow!("Failed to initialize managed embedding service: {}", e))?;
+            app.manage(embedding_service);
 
             app.manage(crate::sys::commands::HookRegistryState::new());
 
@@ -1173,8 +1172,10 @@ pub fn run() {
             crate::sys::commands::automation_screenshot,
 
             crate::sys::commands::browser_init,
+            crate::sys::commands::browser_check_status,
             crate::sys::commands::browser_launch,
             crate::sys::commands::browser_open_tab,
+            crate::sys::commands::browser_close,
             crate::sys::commands::browser_close_tab,
             crate::sys::commands::browser_switch_tab,
             crate::sys::commands::browser_list_tabs,
@@ -1209,12 +1210,13 @@ pub fn run() {
             crate::sys::commands::browser_clear_cookies,
             crate::sys::commands::browser_get_performance_metrics,
             crate::sys::commands::browser_wait_for_navigation,
+            crate::sys::commands::browser_get_frames,
+            crate::sys::commands::browser_execute_in_frame,
+            crate::sys::commands::browser_call_function,
             crate::sys::commands::browser_get_screenshot_stream,
             crate::sys::commands::browser_highlight_element,
             crate::sys::commands::browser_get_content,
             crate::sys::commands::browser_get_dom_snapshot,
-            crate::sys::commands::browser_get_console_logs,
-            crate::sys::commands::browser_get_network_activity,
             crate::features::search::web_search::web_search,
 
             crate::sys::commands::find_element_semantic,
@@ -1222,6 +1224,10 @@ pub fn run() {
             crate::sys::commands::click_semantic,
             crate::sys::commands::type_semantic,
             crate::sys::commands::get_accessibility_tree,
+            crate::sys::commands::test_selector_strategies,
+            crate::sys::commands::get_dom_semantic_graph,
+            crate::sys::commands::get_interactive_elements,
+            crate::sys::commands::find_by_role,
 
             crate::sys::commands::git_init,
             crate::sys::commands::git_status,
@@ -1259,6 +1265,12 @@ pub fn run() {
             crate::sys::commands::git_check_pr_readiness,
             crate::sys::commands::git_current_branch,
             crate::sys::commands::git_default_branch,
+            crate::sys::commands::github_clone_repo,
+            crate::sys::commands::github_get_repo_context,
+            crate::sys::commands::github_search_files,
+            crate::sys::commands::github_read_file,
+            crate::sys::commands::github_get_file_tree,
+            crate::sys::commands::github_list_repos,
 
             crate::sys::commands::media_generate_image,
             crate::sys::commands::media_generate_video,
@@ -1407,6 +1419,11 @@ pub fn run() {
             crate::sys::commands::screen_watcher_capture_now,
 
             // Native Messaging (browser extension communication)
+            crate::sys::commands::native_messaging_check_status,
+            crate::sys::commands::native_messaging_install,
+            crate::sys::commands::native_messaging_uninstall,
+            crate::sys::commands::native_messaging_set_extension_id,
+            crate::sys::commands::native_messaging_get_connection_state,
 
             crate::sys::commands::file_read,
             crate::sys::commands::file_write,
@@ -1591,6 +1608,8 @@ pub fn run() {
             crate::sys::commands::mcp_enable_server,
             crate::sys::commands::mcp_disable_server,
             crate::sys::commands::mcp_get_stats,
+            crate::sys::commands::mcp_get_execution_history,
+            crate::sys::commands::mcp_get_tool_execution_stats,
             crate::sys::commands::mcp_get_server_logs,
             crate::sys::commands::mcp_store_credential,
             crate::sys::commands::mcp_get_tool_schemas,
@@ -1884,6 +1903,9 @@ pub fn run() {
 
             crate::sys::commands::agent::agent_stop,
             crate::sys::commands::security::auth_login,
+            crate::sys::commands::security::secret_manager_has,
+            crate::sys::commands::security::secret_manager_set,
+            crate::sys::commands::security::secret_manager_delete,
 
             // Tool Confirmation (safety tier confirmation dialogs)
             crate::sys::commands::tool_confirmation::respond_tool_confirmation,
@@ -1918,6 +1940,13 @@ pub fn run() {
             crate::sys::commands::background_agents::background_agent_push,
             crate::sys::commands::background_agents::background_agent_list,
             crate::sys::commands::background_agents::background_agent_resume,
+            crate::sys::commands::background_llm::bg_llm_submit,
+            crate::sys::commands::background_llm::bg_llm_get_status,
+            crate::sys::commands::background_llm::bg_llm_cancel,
+            crate::sys::commands::background_llm::bg_llm_get_statistics,
+            crate::sys::commands::background_llm::bg_llm_process_queue,
+            crate::sys::commands::background_llm::bg_llm_cleanup,
+            crate::sys::commands::background_llm::bg_llm_verify_webhook,
 
             crate::sys::commands::governance::get_audit_events,
             crate::sys::commands::governance::verify_audit_event,
@@ -1999,7 +2028,10 @@ pub fn run() {
             #[cfg(feature = "updater")]
             crate::features::updater::get_version_info,
             // Swarm Commands (Phase 5 Wiring)
+            crate::sys::commands::swarm::swarm_init,
             crate::sys::commands::swarm::swarm_execute_goal,
+            crate::sys::commands::swarm::swarm_get_stats,
+            crate::sys::commands::swarm::swarm_stop,
 
             // Vision Commands (Phase 7 Wiring)
             crate::sys::commands::vision::vision_send_message,

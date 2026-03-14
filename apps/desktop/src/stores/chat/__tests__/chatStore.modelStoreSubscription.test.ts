@@ -37,8 +37,8 @@ describe('chatStore modelStore subscription', () => {
       },
     }));
 
-    const { useChatStore } = await import('../chatStore');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { initializeChatStoreModelStoreSubscription, useChatStore } = await import('../chatStore');
+    await initializeChatStoreModelStoreSubscription();
 
     expect(warnSpy).not.toHaveBeenCalled();
     expect(useChatStore.getState().tokenUsage.max).toBeGreaterThan(0);
@@ -63,11 +63,27 @@ describe('chatStore modelStore subscription', () => {
       },
     }));
 
-    const { useChatStore } = await import('../chatStore');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { initializeChatStoreModelStoreSubscription, useChatStore } = await import('../chatStore');
+    await initializeChatStoreModelStoreSubscription();
 
     expect(subscribe).toHaveBeenCalled();
     expect(unsubscribe).not.toHaveBeenCalled();
     expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.2'));
+  });
+
+  it('does not auto-initialize the subscription on import in test mode', async () => {
+    const subscribe = vi.fn(() => vi.fn());
+
+    vi.doMock('../../modelStore', () => ({
+      useModelStore: {
+        getState: () => ({ selectedModel: 'gpt-5.2' }),
+        subscribe,
+      },
+    }));
+
+    await import('../chatStore');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(subscribe).not.toHaveBeenCalled();
   });
 });

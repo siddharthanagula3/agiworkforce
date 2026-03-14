@@ -10,9 +10,9 @@ pub struct McpServerState {
 }
 
 impl McpServerState {
-    pub fn new(port: u16) -> Self {
+    pub fn new(port: u16, app_handle: tauri::AppHandle) -> Self {
         Self {
-            server: Arc::new(Mutex::new(McpHttpServer::new(port))),
+            server: Arc::new(Mutex::new(McpHttpServer::new(port, app_handle))),
         }
     }
 }

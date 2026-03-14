@@ -76,6 +76,10 @@ vi.mock('../../../stores/settingsStore', () => ({
   ),
 }));
 
+vi.mock('../CustomAgentsList', () => ({
+  CustomAgentsList: () => <div>Custom Agents</div>,
+}));
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('AgentsSettings', () => {
@@ -119,9 +123,9 @@ describe('AgentsSettings', () => {
       expect(screen.getByText(/execution/i)).toBeInTheDocument();
     });
 
-    it('shows the Custom Agents info card', () => {
+    it('renders the Custom Agents section component', () => {
       render(<AgentsSettings />);
-      expect(screen.getByText(/configure via .claude\/agents\//i)).toBeInTheDocument();
+      expect(screen.getByText(/^custom agents$/i)).toBeInTheDocument();
     });
 
     it('shows three approval mode radio options', () => {

@@ -8,21 +8,28 @@ use tokio::sync::oneshot;
 use tracing::{error, info, warn};
 
 use super::auth::McpAuth;
+use super::executor::{DesktopMcpServerExecutor, McpServerExecutor};
 use super::handlers::{dispatch, JsonRpcRequest};
 
 pub struct McpHttpServer {
     pub port: u16,
     pub auth: Arc<McpAuth>,
     pub enabled_tools: Arc<Mutex<Vec<String>>>,
+    executor: Arc<dyn McpServerExecutor>,
     shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 impl McpHttpServer {
-    pub fn new(port: u16) -> Self {
+    pub fn new(port: u16, app_handle: tauri::AppHandle) -> Self {
+        Self::new_with_executor(port, Arc::new(DesktopMcpServerExecutor::new(app_handle)))
+    }
+
+    pub fn new_with_executor(port: u16, executor: Arc<dyn McpServerExecutor>) -> Self {
         Self {
             port,
             auth: Arc::new(McpAuth::new()),
             enabled_tools: Arc::new(Mutex::new(Vec::new())),
+            executor,
             shutdown_tx: None,
         }
     }
@@ -43,6 +50,7 @@ impl McpHttpServer {
 
         let auth = self.auth.clone();
         let enabled_tools = self.enabled_tools.clone();
+        let executor = self.executor.clone();
 
         tokio::spawn(async move {
             loop {
@@ -61,7 +69,8 @@ impl McpHttpServer {
                                 }
                                 let auth = auth.clone();
                                 let tools = enabled_tools.lock().clone();
-                                tokio::spawn(handle_connection(stream, auth, tools));
+                                let executor = executor.clone();
+                                tokio::spawn(handle_connection(stream, auth, tools, executor));
                             }
                             Err(e) => {
                                 error!("Accept error: {e}");
@@ -90,6 +99,7 @@ async fn handle_connection(
     mut stream: tokio::net::TcpStream,
     auth: Arc<McpAuth>,
     enabled_tools: Vec<String>,
+    executor: Arc<dyn McpServerExecutor>,
 ) {
     let mut buf = vec![0u8; 65536];
     let n = match stream.read(&mut buf).await {
@@ -150,7 +160,7 @@ async fn handle_connection(
         }
     };
 
-    let rpc_resp = dispatch(&request, &enabled_tools);
+    let rpc_resp = dispatch(&request, &enabled_tools, executor).await;
     let resp_body = serde_json::to_string(&rpc_resp).unwrap_or_default();
     let resp = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",

@@ -8,7 +8,7 @@
 |-------|----------|
 | Frontend Components | `apps/desktop/src/components/MCP/MCPWorkspace.tsx` (root workspace), `MCPServerManager.tsx` (lifecycle UI), `MCPServerCard.tsx` (connect/disconnect card), `MCPToolBrowser.tsx` (grouped tool list), `MCPToolExplorer.tsx` (search + test dialog), `MCPConfigEditor.tsx` (JSON editor), `MCPCredentialManager.tsx` (OAuth + API key UI), `MCPConnectionStatus.tsx` (health dashboard), `MCPLogsViewer.tsx` (per-server log dialog), `MCPBundleBrowser.tsx` (bundle install gallery), `MCPServerBrowser.tsx` (server catalog), `McpAppRenderer.tsx` (sandboxed iframe), `McpAppCard.tsx` (app wrapper card), `McpAppGallery.tsx` (session app gallery), `index.tsx` (barrel exports) |
 | Stores | `apps/desktop/src/stores/mcpStore.ts` (primary: servers, tools, config, search), `mcpbStore.ts` (bundle registry), `mcpServerStore.ts` (embedded HTTP server), `mcpAppStore.ts` (sandboxed app instances) |
-| Hooks | `apps/desktop/src/hooks/useMCP.ts` — comprehensive React hook wrapping all Tauri IPC; event listener setup for `mcp:connection_changed`, `mcp:tools_updated`, `mcp:system_initialized` |
+| Hooks | No dedicated MCP hook is authoritative anymore; the live frontend path is `apps/desktop/src/api/mcp.ts` + `apps/desktop/src/stores/mcpStore.ts` |
 | Rust Command Files | `apps/desktop/src-tauri/src/sys/commands/mcp.rs` (30+ commands, McpState), `mcp_server.rs` (embedded HTTP server), `mcp_extensions.rs` (.agiext packages), `mcp_oauth.rs` (OAuth PKCE flows), `mcpb.rs` (bundle registry/install) |
 | Rust Core Logic | `apps/desktop/src-tauri/src/core/mcp/client.rs` (McpClient, session map), `manager.rs` (ManagedServer, status state machine), `session.rs` (JSON-RPC handshake, tool listing), `transport.rs` (StdioTransport + HttpSseTransport), `registry.rs` (McpToolRegistry, tool ID encoding), `tool_executor.rs` (McpToolExecutor, history/stats), `config.rs` (McpServersConfig, file I/O, credential injection), `health.rs` (McpHealthMonitor), `events.rs` (McpEvent enum), `logs.rs` (log capture), `extensions/` (.agiext format), `server/` (embedded HTTP MCP server), `protocol.rs` (JSON-RPC types), `error.rs` (McpError enum) |
 | API Client Layer | `apps/desktop/src/api/mcp.ts` — McpClient static class with timeout/retry wrappers and OAuth helpers |
@@ -50,26 +50,23 @@
    - `session.list_tools()`: sends `tools/list` request. Caches `Vec<McpToolDefinition>` in `RwLock`.
    - Stores `Arc<McpSession>` keyed by server name.
 5. Command emits `McpEvent::ServerConnectionChanged { connected: true }` and `McpEvent::ToolsUpdated`.
-6. `useMCP` hook's `useEffect` listens to `mcp:connection_changed` → calls `listServers()` to refresh store.
-7. `mcpStore.connectServer()` refreshes servers, tools, and stats.
+6. `mcpStore.connectServer()` refreshes servers, tools, and stats after the backend events are emitted.
 
 ### Tool Execution (Agentic Invocation)
 
 1. LLM returns tool call: `name: "mcp__b64_ZmlsZXN5c3RlbQ__b64_cmVhZF9maWxl"` (base64-encoded `filesystem / read_file`).
 2. Agentic executor obtained tool list from `McpToolRegistry::get_all_tool_definitions()` when building the LLM prompt.
 3. Executor calls Tauri `mcp_call_tool` with `toolId` and `arguments`.
-4. `mcp_call_tool` (`mcp.rs:882`):
+4. `mcp_call_tool` (`mcp.rs`) :
    - Generates UUID correlation ID for structured logging.
    - Extracts server name from tool ID prefix for logging.
    - Creates `ToolConfirmationRequest` (risk: High; tier: RequiresExplicitApproval). All MCP tools require explicit user approval.
    - Calls `request_tool_confirmation()` — 120 s window for user to approve or deny.
    - On denial: returns error `"Tool execution cancelled by user"`.
    - Emits `McpEvent::ToolExecutionStarted`.
-   - Calls `state.registry.execute_tool(&tool_id, arguments)` with 300 s outer timeout.
-5. `McpToolRegistry::execute_tool()` (`registry.rs:277`):
-   - `resolve_tool_id(tool_id)`: tries `parse_tool_id()` first (splits on `__`, decodes base64/hex components). If parsing succeeds but ID starts with `mcp__h__`, falls back to linear scan of all tools by hash match.
-   - Validates server exists in connected sessions.
-   - Calls `client.call_tool(server_name, tool_name, args_value)`.
+   - Calls `state.tool_executor.execute_tool(&tool_id, arguments)` so timeout/history/stats use the shared runtime executor.
+5. `McpToolExecutor::execute_tool()` (`tool_executor.rs`):
+   - Decodes the MCP tool ID, validates server existence, executes the request through `McpClient::call_tool()`, and records duration/history/stats.
 6. `McpClient::call_tool()` (`client.rs:128`):
    - Retrieves `Arc<McpSession>` from sessions map.
    - Normalizes arguments (plain object passed through; non-object wrapped in `{ "input": value }`).
@@ -135,7 +132,9 @@ All commands in `sys/commands/mcp.rs` unless noted. TS callers must use camelCas
 | `mcp_get_registry` | — | `Result<Vec<RegistryPackage>>` | 10-item curated catalog with install status |
 | `mcp_install_server` | `server_id: String` | `Result<String>` | Adds config entry (disabled); user confirmation required |
 | `mcp_get_stats` | — | `Result<HashMap<String,usize>>` | Tool count per server name |
-| `mcp_get_health` | — | `Result<Vec<ServerHealth>>` | Cached health records from monitor |
+| `mcp_get_execution_history` | `limit: Option<usize>` | `Result<Vec<ToolExecutionResult>>` | Recent MCP tool executions, newest first |
+| `mcp_get_tool_execution_stats` | — | `Result<Vec<ToolStats>>` | Per-tool execution totals, failures, avg duration |
+| `mcp_get_health` | — | `Result<Vec<ServerHealth>>` | Refreshes connected-server health and drops stale disconnected rows |
 | `mcp_check_server_health` | `server_name: String` | `Result<ServerHealth>` | Immediate health check |
 | `mcp_get_server_logs` | `serverName: String` (camelCase in Rust per `#[allow(non_snake_case)]`), `lines: Option<usize>` | `Result<Vec<String>>` | Last N lines from log ring-buffer |
 | `mcp_store_credential` | `server_name: String`, `key: String`, `value: String` | `Result<String>` | Encrypts + stores in settings_v2 |
@@ -205,6 +204,12 @@ interface McpbState {
 Key derived selector: `selectFilteredBundles` — applies category filter + client-side fuzzy search on name/description/tags. `selectBundlesWithUpdates` for update badge count.
 
 ### `mcpServerStore.ts` — `useMcpServerStore`
+
+The embedded HTTP MCP server store is a thin typed client wrapper over `apps/desktop/src/api/mcp.ts`:
+`McpClient.getRuntimeServerConfig()`, `startRuntimeServer()`, `stopRuntimeServer()`, and
+`updateRuntimeServerConfig()`. It should not call raw Tauri `invoke()` directly. The store also
+owns the live error channel for the embedded server surface, and `MCPServerSettings.tsx` keeps its
+port input controlled from store config so runtime refreshes do not drift from the UI.
 
 ```typescript
 interface McpServerConfig {
@@ -328,7 +333,7 @@ Config files use safe placeholders instead of raw secrets:
 
 ### Health Monitoring
 
-`McpHealthMonitor` runs a background tokio task on 30 s intervals. For each connected server: calls `client.list_server_tools(name)` — empty list → `Degraded`; error → `Unhealthy`. Tracks `consecutive_failures` counter. On `Unhealthy`, emits `mcp:server_unhealthy` Tauri event. `MCPConnectionStatus` independently polls `mcp_get_health` every 5 s.
+`McpHealthMonitor` runs a background tokio task on 30 s intervals. For each connected server: calls `client.list_server_tools(name)` — empty list → `Degraded`; error → `Unhealthy`. Tracks `consecutive_failures` counter. On `Unhealthy`, emits `mcp:server_unhealthy` Tauri event. The authoritative frontend path is now `apps/desktop/src/api/mcp.ts` → `apps/desktop/src/stores/mcpStore.ts` → `apps/desktop/src/components/MCP/MCPConnectionStatus.tsx`. `mcp_get_health` actively refreshes currently connected servers before returning, `useAgenticEvents` pushes immediate store updates on `mcp:server_unhealthy`, and `MCPConnectionStatus` keeps an optional 5 s auto-refresh only as a fallback.
 
 ### Tool Confirmation Gate
 
@@ -351,7 +356,7 @@ When MCP tools return HTML or URL payloads, `McpAppRenderer` (`McpAppRenderer.ts
 
 ### Embedded HTTP MCP Server (Outbound)
 
-`McpHttpServer` (`core/mcp/server/http_server.rs`) is a separate capability from the client connections: AGI Workforce can _serve_ as an MCP server for other clients. It binds to `127.0.0.1:{port}` (localhost-only enforcement), uses bearer token authentication (`McpAuth`), and exposes only the tools in its `enabled_tools` allowlist. Start/stop is controlled via `mcp_server_start`/`mcp_server_stop` commands and the `mcpServerStore`.
+`McpHttpServer` (`core/mcp/server/http_server.rs`) is a separate capability from the client connections: AGI Workforce can _serve_ as an MCP server for other clients. It binds to `127.0.0.1:{port}` (localhost-only enforcement), uses bearer token authentication (`McpAuth`), and exposes only the tools in its `enabled_tools` allowlist. `tools/call` is routed through the injected `DesktopMcpServerExecutor` (`core/mcp/server/executor.rs`), which reuses the live desktop backend command/runtime states instead of a second shadow runtime. Start/stop is controlled via `mcp_server_start`/`mcp_server_stop` commands and the `mcpServerStore`.
 
 ### .agiext Extension Package Format
 
@@ -361,15 +366,15 @@ When MCP tools return HTML or URL payloads, `McpAppRenderer` (`McpAppRenderer.ts
 
 1. **Duplicate tool ID decoding in three places.** `parse_tool_id()` / decode logic exists independently in `core/mcp/registry.rs`, `core/mcp/tool_executor.rs`, and inline in `sys/commands/mcp.rs:mcp_call_tool`. Any future encoding change must be applied to all three. A single shared utility in `core/mcp/mod.rs` would eliminate divergence risk.
 
-2. **IPC snake_case violations in `useMCP.ts`.** The `useMCP` hook calls `invoke('mcp_call_tool', { tool_id: toolId, arguments: args })` at line 330 — `tool_id` is snake_case and silently passes `undefined` to the Rust handler per Tauri's camelCase conversion rule. Should be `toolId`. Similarly `server_name` params at lines 543 and 562 should be `serverName`. The `api/mcp.ts` wrapper functions (used by `mcpStore`) do use correct camelCase, so the bug only affects callers of the raw hook.
+2. **Resolved: MCP docs now point at the live frontend path.** The authoritative frontend/runtime surface is `apps/desktop/src/api/mcp.ts` + `apps/desktop/src/stores/mcpStore.ts`, not the removed `useMCP.ts` hook.
 
 3. **`McpServerManager` (`manager.rs`) is instantiated but not wired.** The `ManagedServer` status state machine with restart logic and log ring-buffer was designed to replace inline connection management in command handlers. However, `McpState::new()` does not instantiate `McpServerManager` — connection logic is implemented inline in `mcp.rs` command handlers. The manager's auto-restart and log features are therefore unused.
 
-4. **`McpToolExecutor` (`tool_executor.rs`) is not used in the production execution path.** `McpToolExecutor` provides timed execution, parallel execution, and history/stats tracking (1000-entry ring-buffer, per-tool success rates). The actual `mcp_call_tool` command delegates to `McpToolRegistry::execute_tool()` which bypasses `McpToolExecutor` entirely. Tool history and stats are never populated during normal operation.
+4. **Resolved: `McpToolExecutor` history/stats now have a frontend command surface.** `mcp_get_execution_history` and `mcp_get_tool_execution_stats` expose runtime telemetry to `api/mcp.ts`, `mcpStore.ts`, and `MCPConnectionStatus.tsx`, so MCP runtime state is no longer backend-only.
 
-5. **Health monitor event not subscribed in TypeScript.** `mcp:server_unhealthy` is emitted by `core/mcp/health.rs` but no TypeScript listener is registered in `useMCP.ts` or any component. `MCPConnectionStatus` polls instead of reacting. A listener would enable real-time toast alerts on server failures.
+5. **Resolved: health monitor events now update the frontend reactively.** `mcp:server_unhealthy` is consumed in `useAgenticEvents.ts`, which upserts server health into `mcpStore` immediately and refreshes server/runtime state.
 
-6. **`useMCP` hook and `mcpStore` are redundant abstractions.** Both expose overlapping server/tool management. Components inconsistently choose one or the other (e.g., `MCPWorkspace` uses `mcpStore`; `MCPConnectionStatus` uses raw `invoke()`). A single canonical source would reduce surface area.
+6. **Resolved: MCP settings/components now use the typed client/store surface.** `MCPServerBrowser.tsx`, `MCPServerManager.tsx`, `MCPCredentialManager.tsx`, `MCPLogsViewer.tsx`, and `OAuthCredentialsPanel.tsx` now use `api/mcp.ts` / `McpClient` instead of raw MCP `invoke()` calls.
 
 7. **Registry is a hardcoded static catalog.** `mcp_get_registry` returns 10 servers defined as Rust literals. There is no live registry API. The `mcpb.rs` module is intended to be the registry-backed bundle system, but `MCPServerBrowser` independently lists servers from its own curated catalog. These two paths should converge.
 
@@ -377,7 +382,7 @@ When MCP tools return HTML or URL payloads, `McpAppRenderer` (`McpAppRenderer.ts
 
 9. **No circuit breaker state visible to frontend.** The CLAUDE.md documents an MCP circuit breaker (Closed/Open/HalfOpen with 30 s cooldown) implemented in Sprint S2, but `McpState` contains no circuit breaker field and no circuit breaker state is surfaced through any command or event for the UI to display.
 
-10. **`mcpStore.storeCredential` IPC param mismatch.** `api/mcp.ts:mcpStoreCredential` calls `invoke('mcp_store_credential', { serverName, key, value })` but the Rust handler `mcp_store_credential` expects `server_name` (snake_case). Since Tauri converts camelCase from TS to snake_case in Rust, this is actually correct — `serverName` (TS) → `server_name` (Rust). However, the `useMCP.ts` hook calls `invoke('mcp_set_credential', { server_name: serverName, key, value })` with snake_case, which would fail silently. The hook should use `serverName`.
+10. **Credential persistence still has two backend entrypoints.** Both `mcp_store_credential` and `mcp_set_credential` are registered and map to the same behavior. The live `api/mcp.ts` path is correct, but the backend surface can be simplified to one canonical credential-write command.
 
 ---
 
@@ -399,7 +404,6 @@ TypeScript Frontend:
 - `/apps/desktop/src/stores/mcpServerStore.ts`
 - `/apps/desktop/src/stores/mcpAppStore.ts`
 - `/apps/desktop/src/api/mcp.ts`
-- `/apps/desktop/src/hooks/useMCP.ts`
 - `/apps/desktop/src/components/MCP/MCPWorkspace.tsx`
 - `/apps/desktop/src/components/MCP/MCPServerManager.tsx`
 - `/apps/desktop/src/components/MCP/McpAppRenderer.tsx`

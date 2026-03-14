@@ -102,6 +102,44 @@ impl StripeService {
         Self { client, db }
     }
 
+    fn persist_payment_method_info(
+        db: &Connection,
+        payment_method_info: &PaymentMethodInfo,
+        replace_existing: bool,
+    ) -> Result<()> {
+        let insert_keyword = if replace_existing {
+            "INSERT OR REPLACE"
+        } else {
+            "INSERT"
+        };
+
+        let sql = format!(
+            "{insert_keyword} INTO billing_payment_methods (
+                id, customer_id, stripe_payment_method_id, \"type\", card_brand, card_last4,
+                card_exp_month, card_exp_year, is_default, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"
+        );
+
+        db.execute(
+            &sql,
+            rusqlite::params![
+                &payment_method_info.id,
+                &payment_method_info.customer_id,
+                &payment_method_info.stripe_payment_method_id,
+                &payment_method_info.payment_type,
+                &payment_method_info.card_brand,
+                &payment_method_info.card_last4,
+                &payment_method_info.card_exp_month,
+                &payment_method_info.card_exp_year,
+                if payment_method_info.is_default { 1 } else { 0 },
+                payment_method_info.created_at,
+                payment_method_info.updated_at,
+            ],
+        )?;
+
+        Ok(())
+    }
+
     pub async fn create_customer(self, email: &str, name: Option<&str>) -> Result<CustomerInfo> {
         let mut params = CreateCustomer::new();
         params.email = Some(email);
@@ -786,25 +824,7 @@ impl StripeService {
                 updated_at: now,
             };
 
-            db.execute(
-                "INSERT OR REPLACE INTO billing_payment_methods (
-                    id, customer_id, stripe_payment_method_id, \"type\", card_brand, card_last4,
-                    card_exp_month, card_exp_year, is_default, created_at, updated_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-                rusqlite::params![
-                    &payment_method_info.id,
-                    &payment_method_info.customer_id,
-                    &payment_method_info.stripe_payment_method_id,
-                    &payment_method_info.payment_type,
-                    &payment_method_info.card_brand,
-                    &payment_method_info.card_last4,
-                    &payment_method_info.card_exp_month,
-                    &payment_method_info.card_exp_year,
-                    if payment_method_info.is_default { 1 } else { 0 },
-                    payment_method_info.created_at,
-                    payment_method_info.updated_at,
-                ],
-            )?;
+            Self::persist_payment_method_info(&db, &payment_method_info, true)?;
 
             payment_method_infos.push(payment_method_info);
         }
@@ -869,25 +889,7 @@ impl StripeService {
             updated_at: now,
         };
 
-        db.execute(
-            "INSERT INTO billing_payment_methods (
-                id, customer_id, stripe_payment_method_id, type, card_brand, card_last4,
-                card_exp_month, card_exp_year, is_default, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![
-                &payment_method_info.id,
-                &payment_method_info.customer_id,
-                &payment_method_info.stripe_payment_method_id,
-                &payment_method_info.payment_type,
-                &payment_method_info.card_brand,
-                &payment_method_info.card_last4,
-                &payment_method_info.card_exp_month,
-                &payment_method_info.card_exp_year,
-                0,
-                payment_method_info.created_at,
-                payment_method_info.updated_at,
-            ],
-        )?;
+        Self::persist_payment_method_info(&db, &payment_method_info, false)?;
 
         Ok(payment_method_info)
     }
@@ -1017,5 +1019,52 @@ mod tests {
 
         let stats = service.get_usage(&customer_id, now, now + 86400).unwrap();
         assert_eq!(stats.automations_executed, 5);
+    }
+
+    #[test]
+    fn test_persist_payment_method_info_quotes_type_column() {
+        let db = setup_test_db();
+        let service = StripeService::new("sk_test_xxx".to_string(), db.clone());
+
+        let customer_id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp();
+
+        {
+            let conn = db.lock().unwrap();
+            conn.execute(
+                "INSERT INTO billing_customers (id, stripe_customer_id, email, name, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![&customer_id, "cus_test", "test@example.com", "Test User", now, now],
+            )
+            .unwrap();
+
+            let info = PaymentMethodInfo {
+                id: Uuid::new_v4().to_string(),
+                customer_id: customer_id.clone(),
+                stripe_payment_method_id: "pm_test".to_string(),
+                payment_type: "card".to_string(),
+                card_brand: Some("visa".to_string()),
+                card_last4: Some("4242".to_string()),
+                card_exp_month: Some(1),
+                card_exp_year: Some(2030),
+                is_default: false,
+                created_at: now,
+                updated_at: now,
+            };
+
+            StripeService::persist_payment_method_info(&conn, &info, false).unwrap();
+
+            let stored_type: String = conn
+                .query_row(
+                    "SELECT \"type\" FROM billing_payment_methods WHERE id = ?1",
+                    rusqlite::params![&info.id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+
+            assert_eq!(stored_type, "card");
+        }
+
+        drop(service);
     }
 }

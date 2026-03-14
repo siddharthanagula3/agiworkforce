@@ -68,7 +68,7 @@ pub struct DangerousOpEvent {
 
 /// Validates path security by canonicalizing first, then checking for traversal attacks.
 /// Returns the canonical PathBuf on success to prevent TOCTOU vulnerabilities.
-fn validate_path_security(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn validate_path_security(path: &str) -> Result<PathBuf, String> {
     // Basic validation before any filesystem operations
     if path.is_empty() {
         return Err("Path cannot be empty".to_string());

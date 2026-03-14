@@ -20,9 +20,12 @@ import type {
 } from '../stores/unifiedChatStore';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 import type {
-  McpToolExecutionStartedPayload,
-  McpToolExecutionCompletedPayload,
   McpConnectionChangedPayload,
+  McpServerUnhealthyPayload,
+  McpSystemInitializedPayload,
+  McpToolExecutionCompletedPayload,
+  McpToolExecutionStartedPayload,
+  McpToolsUpdatedPayload,
 } from '../types/mcp';
 import type {
   ToolStreamEventPayload,
@@ -2458,44 +2461,60 @@ export function useAgenticEvents() {
       try {
         const { useMcpStore } = await import('../stores/mcpStore');
 
-        interface McpServerUnhealthyPayload {
-          server_name: string;
-          error?: string;
-        }
         const unlistenMcpServerUnhealthy = await listen<McpServerUnhealthyPayload>(
           'mcp:server_unhealthy',
-          safeHandler('mcp:server_unhealthy', () => {
-            // Refresh servers when a server becomes unhealthy
-            useMcpStore.getState().refreshServers();
+          safeHandler('mcp:server_unhealthy', (payload) => {
+            const mcpState = useMcpStore.getState();
+            mcpState.upsertServerHealth({
+              server_name: payload.server_name,
+              status: payload.status,
+              last_check: payload.last_check,
+              error_message: payload.error_message ?? null,
+              response_time_ms: payload.response_time_ms ?? null,
+              tool_count: payload.tool_count ?? 0,
+              consecutive_failures: payload.consecutive_failures ?? 0,
+            });
+            mcpState.refreshServers();
           }),
         );
         push(unlistenMcpServerUnhealthy);
 
-        interface McpToolsUpdatedPayload {
-          server_name: string;
-          tools_count?: number;
-        }
+        const unlistenMcpConnectionChanged = await listen<McpConnectionChangedPayload>(
+          'mcp:connection_changed',
+          safeHandler('mcp:connection_changed', () => {
+            const mcpState = useMcpStore.getState();
+            mcpState.refreshServers();
+            mcpState.refreshHealth();
+            mcpState.refreshStats();
+          }),
+        );
+        push(unlistenMcpConnectionChanged);
+
+        const unlistenMcpToolCompletedSync = await listen<McpToolExecutionCompletedPayload>(
+          'mcp:tool_execution_completed',
+          safeHandler('mcp:tool_execution_completed', () => {
+            const mcpState = useMcpStore.getState();
+            mcpState.refreshExecutionHistory();
+            mcpState.refreshToolExecutionStats();
+          }),
+        );
+        push(unlistenMcpToolCompletedSync);
+
         const unlistenMcpToolsUpdated = await listen<McpToolsUpdatedPayload>(
           'mcp:tools_updated',
           safeHandler('mcp:tools_updated', () => {
-            // Refresh tools when tools are updated on any server
-            useMcpStore.getState().refreshTools();
+            const mcpState = useMcpStore.getState();
+            mcpState.refreshTools();
+            mcpState.refreshHealth();
+            mcpState.refreshStats();
           }),
         );
         push(unlistenMcpToolsUpdated);
 
-        interface McpSystemInitializedPayload {
-          servers_count?: number;
-          tools_count?: number;
-        }
         const unlistenMcpSystemInitialized = await listen<McpSystemInitializedPayload>(
           'mcp:system_initialized',
           safeHandler('mcp:system_initialized', () => {
-            // When MCP system is initialized, refresh everything
-            const mcpState = useMcpStore.getState();
-            mcpState.refreshServers();
-            mcpState.refreshTools();
-            mcpState.refreshStats();
+            useMcpStore.getState().refreshRuntimeTelemetry();
           }),
         );
         push(unlistenMcpSystemInitialized);

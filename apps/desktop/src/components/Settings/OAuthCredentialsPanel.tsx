@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Loader2, KeyRound } from 'lucide-react';
-import { invoke } from '@/lib/tauri-mock';
+import { McpClient } from '@/api/mcp';
 import { toast } from '@/hooks/useToast';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
@@ -150,7 +150,7 @@ export function OAuthCredentialsPanel() {
   // On mount, check which providers already have credentials configured.
   useEffect(() => {
     for (const p of PROVIDERS) {
-      invoke<{ configured: boolean }>('mcp_oauth_credentials_status', { provider: p.id })
+      McpClient.oauthCredentialsStatus(p.id)
         .then((result) => {
           setState((prev) => ({
             ...prev,
@@ -205,11 +205,7 @@ export function OAuthCredentialsPanel() {
       }));
 
       try {
-        await invoke('mcp_oauth_set_credentials', {
-          provider: id,
-          clientId: clientId.trim(),
-          clientSecret: clientSecret.trim(),
-        });
+        await McpClient.oauthSetCredentialsRaw(id, clientId.trim(), clientSecret.trim());
         setState((prev) => ({
           ...prev,
           [id]: {

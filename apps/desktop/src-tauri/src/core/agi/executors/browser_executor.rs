@@ -139,37 +139,10 @@ async fn resolve_tab_id(
     use tauri::Manager;
 
     let browser_state = app.state::<BrowserStateWrapper>();
-    let tab_manager = browser_state
-        .get_tab_manager()
-        .map_err(|e| anyhow!("Browser is not ready: {}", e))?;
-    let tab_manager = tab_manager.lock().await;
-
-    if let Some(tab_id) = requested_tab_id {
-        return Ok(tab_id.to_string());
-    }
-
-    let tabs = tab_manager
-        .list_tabs()
+    browser_state
+        .resolve_cdp_tab(requested_tab_id, allow_create, initial_url)
         .await
-        .map_err(|e| anyhow!("Could not access browser tabs: {}", e))?;
-
-    if let Some(tab) = tabs.first() {
-        return Ok(tab.id.clone());
-    }
-
-    if !allow_create {
-        return Err(anyhow!(
-            "No browser tabs available. Please navigate to a URL first using browser_navigate."
-        ));
-    }
-
-    let url = initial_url.unwrap_or("about:blank");
-    let tab_id = tab_manager
-        .open_tab(url)
-        .await
-        .map_err(|e| anyhow!("Could not open a new browser tab: {}", e))?;
-
-    Ok(tab_id)
+        .map_err(|e| anyhow!("Could not resolve browser tab: {}", e))
 }
 
 async fn get_cdp_client(
