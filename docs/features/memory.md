@@ -11,7 +11,7 @@
 | Rust Commands (chat handler) | `sys/commands/chat/memory_handler.rs` -- `ChatMemoryHandler` that bridges `MemoryManager` with `MemoryInjector` |
 | Rust Commands (project memory) | `sys/commands/project_memory.rs` -- project-scoped memory commands (save/get project context, coding styles, architectural decisions) |
 | Rust Core -- Manager | `core/agi/memory_manager.rs` -- SQLite-backed `MemoryManager`; two-layer: `user_memory` + `daily_logs`; decay, compaction, hybrid search, import/export |
-| Rust Core -- In-Memory | `core/agi/memory.rs` -- `AGIMemory` volatile working memory (VecDeque, max 1000 entries, not persisted) |
+| Rust Core -- Legacy In-Memory | `core/agi/memory.rs` -- deprecated `AGIMemory` helper retained for legacy callers; not part of the active `AGICore` runtime path |
 | Rust Core -- LLM Integration | `core/llm/memory_integration.rs` -- `MemoryInjector`, `MemoryInjectionConfig`, decision regex detection, `format_memories()` |
 | Rust Core -- Planner Integration | `core/agi/planner_memory_integration.rs` -- `PlannerMemoryIntegration` feeds memories into AGI planner prompts |
 | Rust Core -- Summarizer | `core/agi/conversation_summarizer.rs` -- `ConversationSummarizer<HttpSummaryLLM>` auto-summarizes conversations; embedding 3-tier fallback |
@@ -599,7 +599,7 @@ The `persistent_memory` system extends this with two additional categories:
 
 4. **Two parallel storage systems**: `MemoryManager` (uses `user_memory` table) and `MemoryStore` (uses `persistent_memory` table with embeddings and FTS5) coexist but are not unified. The `MemoryManager` powers all frontend CRUD; `MemoryStore` powers the summarizer. This creates potential confusion about which system stores what.
 
-5. **`AGIMemory` (working memory) is separate and volatile**: `core/agi/memory.rs` maintains a simple in-memory `VecDeque<MemoryEntry>` with max 1000 entries. This is used by the AGI runtime for within-session context but is completely separate from persistent memory. It has no IPC commands and is not surfaced in the UI.
+5. **`AGIMemory` is now legacy, not active runtime state**: `core/agi/memory.rs` still exists as a deprecated in-memory `VecDeque<MemoryEntry>` helper for legacy callers, but the active `AGICore` runtime no longer allocates or depends on it. Persistent/searchable memory lives in `MemoryManager` / `MemoryStore`.
 
 6. **Frontend-only context injection**: The active memory injection path is JavaScript-only (`buildMemoryContext` in `useSendMessage.ts`). The Rust `MemoryInjector` and `PlannerMemoryIntegration` are implemented but not wired into the default chat send pipeline.
 

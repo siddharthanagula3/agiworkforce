@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { McpClient } from '../../api/mcp';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -21,10 +21,7 @@ export function MCPLogsViewer({ serverName, open, onClose }: MCPLogsViewerProps)
     setLoading(true);
     setError(null);
     try {
-      const logLines = await invoke<string[]>('mcp_get_server_logs', {
-        serverName,
-        lines: 200,
-      });
+      const logLines = await McpClient.getServerLogs(serverName, 200);
       setLogs(logLines);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load logs');

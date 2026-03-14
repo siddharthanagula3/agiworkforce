@@ -20,11 +20,11 @@
 | Planner Memory Integration | `core/agi/planner_memory_integration.rs` -- `PlannerMemoryIntegration` feeds hybrid search results into AGI planner (decisions, preferences, solutions, patterns) |
 | Knowledge Base | `core/agi/knowledge.rs` -- `KnowledgeBase` with separate SQLite store; category-based retrieval |
 | LLM Memory Tools | `core/llm/tool_executor/memory_tools.rs` -- `memory_remember`, `memory_recall` tool implementations callable by LLMs |
-| IPC Commands (embeddings) | `sys/commands/embeddings.rs` -- re-exports all 8 embedding commands; `EmbeddingServiceState` wrapper |
+| IPC Commands (embeddings) | `sys/commands/embeddings.rs` -- re-exports all 8 embedding commands from `core/embeddings/mod.rs`; no wrapper state |
 | IPC Commands (code search) | `sys/commands/code_search.rs` -- `grep_search`, `glob_search`, `format_file`, `format_detect` (non-embedding code search) |
 | Frontend API | `src/api/embeddings.ts` -- TypeScript wrappers for all 8 embedding IPC commands with timeouts and validation |
 | Frontend Hook | `src/hooks/useMemory.ts` -- `useMemory()`, `useMemoryStats()`, `useKnowledgeBase()` hooks for memory CRUD and knowledge base |
-| State Registration | `lib.rs` lines 775-793 -- `EmbeddingService::new()` with `new_degraded()` fallback; managed as `EmbeddingServiceState` |
+| State Registration | `lib.rs` -- `EmbeddingService::new()` with degraded and in-memory degraded fallbacks; managed as `Arc<TokioMutex<EmbeddingService>>` |
 
 ## Architecture Overview
 
@@ -329,10 +329,11 @@ TypeScript wrappers with timeout guards:
 
 ### 1. Graceful Degradation
 
-The `EmbeddingService` initializes with `new_degraded()` when Ollama is unavailable:
-- Creates temp-dir SQLite databases.
-- Commands function but return errors on actual embedding operations.
-- Registered in `lib.rs` as `EmbeddingServiceState(Arc<TokioMutex<EmbeddingService>>)`.
+The `EmbeddingService` initializes with a staged fallback when the primary service is unavailable:
+- First tries the normal filesystem-backed service.
+- Falls back to `new_degraded()` with temp-dir SQLite databases.
+- Falls back again to `new_in_memory_degraded()` if even the degraded filesystem path cannot be created.
+- Registered in `lib.rs` as `Arc<TokioMutex<EmbeddingService>>`, which matches the Tauri command signatures exactly.
 - Pattern mirrors other degraded states (`MemoryState::degraded()`, `MasterPasswordState::degraded()`, etc.).
 
 ### 2. Model-Scoped Vector Spaces

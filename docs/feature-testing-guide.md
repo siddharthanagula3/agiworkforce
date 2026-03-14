@@ -651,7 +651,8 @@ data and actions become available as MCP tools.
 ### How It Works
 
 1. `connectorsStore` manages connection state: `connectedIds`, `loading`, `error`,
-   `pendingOAuth`, `oauthStartedAt`.
+   `pendingOAuth`, `oauthStartedAt`, and uses the typed `apps/desktop/src/api/mcp.ts`
+   client instead of direct raw connector IPC calls.
 2. Connector definitions are in `components/Connectors/connectorDefinitions.ts`, each
    specifying `authType` (oauth | api_key | mcp_remote | none).
 3. OAuth flow:

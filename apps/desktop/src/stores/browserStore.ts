@@ -66,20 +66,6 @@ export interface DOMSnapshot {
   timestamp: number;
 }
 
-export interface ConsoleLog {
-  level: 'log' | 'warn' | 'error' | 'info';
-  message: string;
-  timestamp: number;
-}
-
-export interface NetworkRequest {
-  url: string;
-  method: string;
-  status: number;
-  duration_ms: number;
-  timestamp: number;
-}
-
 export interface RecordedStep {
   id: string;
   type: ActionType;
@@ -96,8 +82,6 @@ interface BrowserState {
   screenshots: Screenshot[];
   actions: BrowserAction[];
   domSnapshots: DOMSnapshot[];
-  consoleLogs: ConsoleLog[];
-  networkRequests: NetworkRequest[];
   highlightedElement: ElementBounds | null;
 
   isRecording: boolean;
@@ -124,8 +108,6 @@ interface BrowserState {
   highlightElement: (tabId: string, selector: string) => Promise<void>;
   clearHighlight: () => void;
   getDOMSnapshot: (tabId: string) => Promise<DOMSnapshot>;
-  getConsoleLogs: (tabId: string) => Promise<ConsoleLog[]>;
-  getNetworkActivity: (tabId: string) => Promise<NetworkRequest[]>;
 
   startStreaming: (tabId: string) => void;
   stopStreaming: () => void;
@@ -155,8 +137,6 @@ export const useBrowserStore = create<BrowserState>()(
         screenshots: [],
         actions: [],
         domSnapshots: [],
-        consoleLogs: [],
-        networkRequests: [],
         highlightedElement: null,
 
         isRecording: false,
@@ -182,9 +162,6 @@ export const useBrowserStore = create<BrowserState>()(
 
             await invoke('browser_init');
             set({ initialized: true }, undefined, 'browser/initialize');
-            // NOTE: browser:action, browser:console, and browser:network Tauri events are
-            // never emitted by Rust. Console/network data is fetched via polling
-            // (getConsoleLogs / getNetworkActivity). Dead listeners removed.
           } catch (error) {
             console.error('Failed to initialize browser:', error);
             set({ initialized: false }, undefined, 'browser/initialize/error');
@@ -224,9 +201,8 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         closeBrowser: async (sessionId: string) => {
-          // BUG-001 fix: invoke backend to terminate the browser process before removing from state
           try {
-            await invoke('browser_close_tab', { tabId: sessionId });
+            await invoke('browser_close', { browserId: sessionId });
           } catch (error) {
             console.error('[browserStore] Failed to close browser process on backend:', error);
             // Continue so UI state is still cleaned up even if backend call fails
@@ -235,13 +211,23 @@ export const useBrowserStore = create<BrowserState>()(
           try {
             set(
               (state) => {
+                const session = state.sessions.find((s) => s.id === sessionId);
+                const removedTabIds = new Set(session?.tabs.map((tab) => tab.id) ?? []);
                 const sessionIndex = state.sessions.findIndex((s) => s.id === sessionId);
                 if (sessionIndex >= 0) {
                   state.sessions.splice(sessionIndex, 1);
                 }
 
-                if (state.activeSessionId === sessionId) {
-                  state.activeSessionId = state.sessions[0]?.id ?? null;
+                state.screenshots = state.screenshots.filter((shot) => !removedTabIds.has(shot.tabId));
+
+                const nextActiveSessionId =
+                  state.activeSessionId === sessionId
+                    ? (state.sessions[0]?.id ?? null)
+                    : state.activeSessionId;
+                state.activeSessionId = nextActiveSessionId;
+
+                for (const activeSession of state.sessions) {
+                  activeSession.active = activeSession.id === nextActiveSessionId;
                 }
               },
               undefined,
@@ -261,6 +247,9 @@ export const useBrowserStore = create<BrowserState>()(
               (state) => {
                 const session = state.sessions.find((s) => s.id === state.activeSessionId);
                 if (session) {
+                  for (const tab of session.tabs) {
+                    tab.active = false;
+                  }
                   session.tabs.push({ id: tabId, url, title: url, active: true });
                 }
               },
@@ -284,7 +273,11 @@ export const useBrowserStore = create<BrowserState>()(
                 for (const session of state.sessions) {
                   const tabIndex = session.tabs.findIndex((t) => t.id === tabId);
                   if (tabIndex >= 0) {
+                    const wasActive = session.tabs[tabIndex]?.active === true;
                     session.tabs.splice(tabIndex, 1);
+                    if (wasActive && session.tabs.length > 0) {
+                      session.tabs[0]!.active = true;
+                    }
                     break;
                   }
                 }
@@ -373,7 +366,16 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         setActiveSession: (sessionId: string) => {
-          set({ activeSessionId: sessionId }, undefined, 'browser/setActiveSession');
+          set(
+            (state) => {
+              state.activeSessionId = sessionId;
+              for (const session of state.sessions) {
+                session.active = session.id === sessionId;
+              }
+            },
+            undefined,
+            'browser/setActiveSession',
+          );
         },
 
         addAction: (action: BrowserAction) => {
@@ -449,30 +451,6 @@ export const useBrowserStore = create<BrowserState>()(
             return snapshot;
           } catch (error) {
             console.error('Failed to get DOM snapshot:', error);
-            throw error;
-          }
-        },
-
-        getConsoleLogs: async (tabId: string) => {
-          try {
-            const logs = await invoke<ConsoleLog[]>('browser_get_console_logs', { tabId });
-            set({ consoleLogs: logs }, undefined, 'browser/getConsoleLogs');
-            return logs;
-          } catch (error) {
-            console.error('Failed to get console logs:', error);
-            throw error;
-          }
-        },
-
-        getNetworkActivity: async (tabId: string) => {
-          try {
-            const requests = await invoke<NetworkRequest[]>('browser_get_network_activity', {
-              tabId,
-            });
-            set({ networkRequests: requests }, undefined, 'browser/getNetworkActivity');
-            return requests;
-          } catch (error) {
-            console.error('Failed to get network activity:', error);
             throw error;
           }
         },
@@ -605,8 +583,6 @@ test('recorded automation', async ({ page }) => {
               screenshots: [],
               actions: [],
               domSnapshots: [],
-              consoleLogs: [],
-              networkRequests: [],
               highlightedElement: null,
               isRecording: false,
               recordedSteps: [],
@@ -635,8 +611,6 @@ export const selectBrowserInitialized = (state: BrowserState) => state.initializ
 export const selectScreenshots = (state: BrowserState) => state.screenshots;
 export const selectBrowserActions = (state: BrowserState) => state.actions;
 export const selectDomSnapshots = (state: BrowserState) => state.domSnapshots;
-export const selectConsoleLogs = (state: BrowserState) => state.consoleLogs;
-export const selectNetworkRequests = (state: BrowserState) => state.networkRequests;
 export const selectHighlightedElement = (state: BrowserState) => state.highlightedElement;
 
 export const selectBrowserIsRecording = (state: BrowserState) => state.isRecording;
@@ -665,7 +639,3 @@ export const selectLatestScreenshot = (state: BrowserState) =>
 export const selectScreenshotCount = (state: BrowserState) => state.screenshots.length;
 export const selectActionCount = (state: BrowserState) => state.actions.length;
 export const selectRecordedStepCount = (state: BrowserState) => state.recordedSteps.length;
-export const selectErrorLogs = (state: BrowserState) =>
-  state.consoleLogs.filter((log) => log.level === 'error');
-export const selectFailedRequests = (state: BrowserState) =>
-  state.networkRequests.filter((req) => req.status >= 400);

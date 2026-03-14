@@ -101,9 +101,15 @@ pub async fn checkpoint_restore(
     request: RestoreCheckpointRequest,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let conn = db.connection()?;
+    let mut conn = db.connection()?;
+    restore_checkpoint_inner(&mut conn, &request)
+}
 
-    let checkpoint = get_checkpoint(&conn, &request.checkpoint_id)
+fn restore_checkpoint_inner(
+    conn: &mut Connection,
+    request: &RestoreCheckpointRequest,
+) -> Result<(), String> {
+    let checkpoint = get_checkpoint(conn, &request.checkpoint_id)
         .map_err(|e| format!("Failed to get checkpoint: {}", e))?;
 
     if checkpoint.conversation_id != request.conversation_id {
@@ -113,20 +119,18 @@ pub async fn checkpoint_restore(
     let messages: Vec<serde_json::Value> = serde_json::from_str(&checkpoint.messages_snapshot)
         .map_err(|e| format!("Failed to parse messages snapshot: {}", e))?;
 
-    conn.execute("BEGIN TRANSACTION", [])
+    let tx = conn
+        .transaction()
         .map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
-    conn.execute(
+    tx.execute(
         "DELETE FROM messages WHERE conversation_id = ?1",
         params![request.conversation_id],
     )
-    .map_err(|e| {
-        let _ = conn.execute("ROLLBACK", []);
-        format!("Failed to delete messages: {}", e)
-    })?;
+    .map_err(|e| format!("Failed to delete messages: {}", e))?;
 
     for msg in messages {
-        conn.execute(
+        tx.execute(
             "INSERT INTO messages (
                 id, conversation_id, role, content, provider, model, tokens, cost,
                 context_items, images, tool_calls, created_at
@@ -146,15 +150,12 @@ pub async fn checkpoint_restore(
                 msg.get("created_at").and_then(|v| v.as_str()),
             ],
         )
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("Failed to restore message: {}", e)
-        })?;
+        .map_err(|e| format!("Failed to restore message: {}", e))?;
     }
 
     let restore_id = Uuid::new_v4().to_string();
     let restored_at = Utc::now().timestamp_millis();
-    conn.execute(
+    tx.execute(
         "INSERT INTO checkpoint_restore_history (
             id, checkpoint_id, conversation_id, restored_at,
             restored_message_count, success
@@ -167,12 +168,9 @@ pub async fn checkpoint_restore(
             checkpoint.message_count,
         ],
     )
-    .map_err(|e| {
-        let _ = conn.execute("ROLLBACK", []);
-        format!("Failed to record restore history: {}", e)
-    })?;
+    .map_err(|e| format!("Failed to record restore history: {}", e))?;
 
-    conn.execute("COMMIT", [])
+    tx.commit()
         .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
     Ok(())
@@ -293,4 +291,126 @@ fn get_checkpoint(conn: &Connection, checkpoint_id: &str) -> Result<Checkpoint, 
             })
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_restore_checkpoint_inner_replaces_messages_and_records_history() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::data::db::migrations::run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                1_i64,
+                "Test",
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO messages (
+                id, conversation_id, role, content, provider, model, tokens, cost,
+                context_items, images, tool_calls, created_at
+            ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?5)",
+            params![
+                101_i64,
+                1_i64,
+                "user",
+                "stale message",
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        let snapshot = serde_json::json!([
+            {
+                "id": 201,
+                "conversation_id": 1,
+                "role": "user",
+                "content": "restored user",
+                "provider": null,
+                "model": null,
+                "tokens": null,
+                "cost": null,
+                "context_items": null,
+                "images": null,
+                "tool_calls": null,
+                "created_at": "2026-01-01T00:01:00Z"
+            },
+            {
+                "id": 202,
+                "conversation_id": 1,
+                "role": "assistant",
+                "content": "restored assistant",
+                "provider": null,
+                "model": null,
+                "tokens": null,
+                "cost": null,
+                "context_items": null,
+                "images": null,
+                "tool_calls": null,
+                "created_at": "2026-01-01T00:02:00Z"
+            }
+        ]);
+
+        conn.execute(
+            "INSERT INTO conversation_checkpoints (
+                id, conversation_id, checkpoint_name, description, message_count, messages_snapshot,
+                context_snapshot, metadata, parent_checkpoint_id, branch_name, created_at
+            ) VALUES (?1, ?2, ?3, NULL, ?4, ?5, NULL, NULL, NULL, NULL, ?6)",
+            params![
+                "cp_1",
+                1_i64,
+                "Initial",
+                2_i64,
+                snapshot.to_string(),
+                Utc::now().timestamp_millis()
+            ],
+        )
+        .unwrap();
+
+        restore_checkpoint_inner(
+            &mut conn,
+            &RestoreCheckpointRequest {
+                checkpoint_id: "cp_1".to_string(),
+                conversation_id: 1,
+            },
+        )
+        .unwrap();
+
+        let messages: Vec<(i64, String)> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, content FROM messages WHERE conversation_id = ?1 ORDER BY id ASC",
+                )
+                .unwrap();
+            stmt.query_map(params![1_i64], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+
+        assert_eq!(
+            messages,
+            vec![
+                (201_i64, "restored user".to_string()),
+                (202_i64, "restored assistant".to_string())
+            ]
+        );
+
+        let restore_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM checkpoint_restore_history WHERE checkpoint_id = ?1",
+                params!["cp_1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(restore_count, 1);
+    }
 }

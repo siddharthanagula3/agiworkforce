@@ -13,6 +13,46 @@ pub struct MarketplaceState {
     pub db: Arc<Mutex<Connection>>,
 }
 
+fn load_workflow_definition(
+    db: &Connection,
+    workflow_id: &str,
+) -> Result<WorkflowDefinition, String> {
+    let mut stmt = db
+        .prepare(
+            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_at
+             FROM workflow_definitions WHERE id = ?1",
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    stmt.query_row(rusqlite::params![workflow_id], |row| {
+        let nodes_json: String = row.get(4)?;
+        let edges_json: String = row.get(5)?;
+        let triggers_json: String = row.get(6)?;
+        let metadata_json: String = row.get(7)?;
+
+        let nodes = serde_json::from_str(&nodes_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let edges = serde_json::from_str(&edges_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let triggers =
+            serde_json::from_str(&triggers_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let metadata =
+            serde_json::from_str(&metadata_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+        Ok(WorkflowDefinition {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            nodes,
+            edges,
+            triggers,
+            metadata,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
+        })
+    })
+    .map_err(|e| format!("Workflow not found: {}", e))
+}
+
 #[tauri::command]
 pub async fn publish_workflow_to_marketplace(
     workflow_id: String,
@@ -30,42 +70,7 @@ pub async fn publish_workflow_to_marketplace(
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let workflow: WorkflowDefinition = {
-        let mut stmt = db.prepare(
-            "SELECT id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_a
-             FROM workflow_definitions WHERE id = ?1"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-        stmt.query_row(rusqlite::params![&workflow_id], |row| {
-            let nodes_json: String = row.get(4)?;
-            let edges_json: String = row.get(5)?;
-            let triggers_json: String = row.get(6)?;
-            let metadata_json: String = row.get(7)?;
-
-            let nodes =
-                serde_json::from_str(&nodes_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let edges =
-                serde_json::from_str(&edges_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let triggers =
-                serde_json::from_str(&triggers_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let metadata =
-                serde_json::from_str(&metadata_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
-
-            Ok(WorkflowDefinition {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                name: row.get(2)?,
-                description: row.get(3)?,
-                nodes,
-                edges,
-                triggers,
-                metadata,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
-            })
-        })
-        .map_err(|e| format!("Workflow not found: {}", e))?
-    };
+    let workflow = load_workflow_definition(&db, &workflow_id)?;
 
     drop(db);
 
@@ -717,4 +722,43 @@ pub async fn increment_workflow_view_count(
     .map_err(|e| format!("Failed to update view count: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn test_load_workflow_definition_reads_updated_at_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::data::db::migrations::run_migrations(&conn).unwrap();
+
+        let workflow_id = "wf_test";
+        let now = Utc::now().timestamp();
+
+        conn.execute(
+            "INSERT INTO workflow_definitions (
+                id, user_id, name, description, nodes, edges, triggers, metadata, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                workflow_id,
+                "user_1",
+                "Test Workflow",
+                "Demo",
+                "[]",
+                "[]",
+                "[]",
+                "{}",
+                now,
+                now
+            ],
+        )
+        .unwrap();
+
+        let workflow = load_workflow_definition(&conn, workflow_id).unwrap();
+
+        assert_eq!(workflow.id, workflow_id);
+        assert_eq!(workflow.updated_at, now);
+    }
 }

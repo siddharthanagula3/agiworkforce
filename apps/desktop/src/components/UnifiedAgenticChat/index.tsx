@@ -16,7 +16,6 @@ import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
-import { useExtensionEvents } from '../../hooks/useExtensionEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
@@ -30,6 +29,7 @@ import {
 import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { initializeExtensionEventListeners } from '../../stores/extensionEventsStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import {
   useChatStore,
@@ -336,7 +336,9 @@ export const UnifiedAgenticChat: React.FC<{
   } = useRiskConfirmation();
 
   useAgenticEvents();
-  useExtensionEvents();
+  useEffect(() => {
+    void initializeExtensionEventListeners();
+  }, []);
 
   // Initialize slash command parsing
   const { parseSlashCommand } = useSlashCommands();

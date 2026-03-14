@@ -88,7 +88,7 @@ The desktop frontend uses its own provider ID scheme that maps to web API provid
 | `google_imagen_lite` | Nano Banana Pro | `google` | `imagen-3.2-flash-image` |
 | `dalle` | DALL-E 3 | `openai` | `dall-e-3` |
 | `stable_diffusion` | Stable Diffusion XL | `stability` | `stability-sdxl` |
-| `midjourney` | (defined in types, not wired) | N/A | N/A |
+| `midjourney` | Stub only (not executable) | N/A | N/A |
 
 ### Provider Normalization (Agentic Path)
 
@@ -359,7 +359,7 @@ Media Lab access is gated at three levels:
 
 2. **Frontend provider IDs mismatch web API**: The frontend defines `ImageProviderId` values like `google_imagen`, `google_imagen_lite`, `dalle`, `stable_diffusion` with model strings like `imagen-3.1-pro`, `imagen-3.2-flash-image`. The web API uses `imagen-4.0-generate-001` as the actual model. The frontend model values are sent but may be ignored server-side in favor of the provider's latest model.
 
-3. **Midjourney provider defined but not wired**: `ImageProviderId` includes `'midjourney'` but there is no corresponding web API provider handler.
+3. **Midjourney provider remains unavailable**: `ImageProviderId` still includes `'midjourney'`, but the backend path returns a “not yet available” error. The desktop image router now excludes unavailable providers from automatic selection until a real execution path exists.
 
 4. **Video `plan` field still sent from frontend**: `MediaLab.tsx` includes `plan` in the `generateVideo` payload, and `api/media.ts` passes it to the Rust command. The Rust struct `MediaVideoRequest` removed the `plan` field (commented as a security fix), so the value is silently ignored. The frontend should stop sending it.
 

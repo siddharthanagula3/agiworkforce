@@ -23,6 +23,13 @@ impl SimilaritySearch {
         Ok(search)
     }
 
+    pub fn new_in_memory() -> Result<Self> {
+        let db = Connection::open_in_memory()?;
+        let search = Self { db };
+        search.init_schema()?;
+        Ok(search)
+    }
+
     fn init_schema(&self) -> Result<()> {
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS embeddings (
@@ -415,5 +422,11 @@ mod tests {
         let serialized = serialize_vector(&vector).unwrap();
         let deserialized = deserialize_vector(&serialized).unwrap();
         assert_eq!(vector, deserialized);
+    }
+
+    #[test]
+    fn test_new_in_memory_initializes_schema() {
+        let search = SimilaritySearch::new_in_memory().unwrap();
+        assert_eq!(search.count_embeddings().unwrap(), 0);
     }
 }

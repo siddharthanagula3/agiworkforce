@@ -2,7 +2,7 @@ use crate::core::mcp::client::McpClient;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
@@ -99,6 +99,24 @@ impl McpHealthMonitor {
     pub fn get_server_health(&self, server_name: &str) -> Option<ServerHealth> {
         let records = self.health_records.lock();
         records.get(server_name).cloned()
+    }
+
+    pub async fn refresh_connected_health(&self) -> Vec<ServerHealth> {
+        let connected_servers = self.client.get_connected_servers();
+        let connected_names: HashSet<String> = connected_servers.iter().cloned().collect();
+
+        {
+            let mut records = self.health_records.lock();
+            records.retain(|server_name, _| connected_names.contains(server_name));
+        }
+
+        let mut health_rows = Vec::with_capacity(connected_servers.len());
+        for server_name in connected_servers {
+            health_rows.push(self.check_server_health(&server_name).await);
+        }
+
+        health_rows.sort_by(|left, right| left.server_name.cmp(&right.server_name));
+        health_rows
     }
 
     pub fn start_monitoring(

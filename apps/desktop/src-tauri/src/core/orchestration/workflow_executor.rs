@@ -964,16 +964,42 @@ impl WorkflowExecutor {
             }
         }
 
-        // Wait with timeout
-        let output = timeout(Duration::from_secs(timeout_secs), child.wait_with_output()).await;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Failed to capture script stdout".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "Failed to capture script stderr".to_string())?;
 
-        let output = match output {
-            Ok(Ok(output)) => output,
+        let stdout_task = tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = stdout;
+            let mut bytes = Vec::new();
+            let _ = reader.read_to_end(&mut bytes).await;
+            bytes
+        });
+        let stderr_task = tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = stderr;
+            let mut bytes = Vec::new();
+            let _ = reader.read_to_end(&mut bytes).await;
+            bytes
+        });
+
+        let status = match timeout(Duration::from_secs(timeout_secs), child.wait()).await {
+            Ok(Ok(status)) => status,
             Ok(Err(e)) => {
+                stdout_task.abort();
+                stderr_task.abort();
                 return Err(format!("Script process error: {}", e));
             }
             Err(_) => {
-                // Timeout — attempt to kill the process (best effort, child already moved)
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                stdout_task.abort();
+                stderr_task.abort();
                 return Err(format!(
                     "Script execution timed out after {} seconds",
                     timeout_secs
@@ -981,8 +1007,15 @@ impl WorkflowExecutor {
             }
         };
 
-        let mut stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let mut stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = stdout_task
+            .await
+            .map_err(|e| format!("Failed to join stdout reader: {}", e))?;
+        let stderr = stderr_task
+            .await
+            .map_err(|e| format!("Failed to join stderr reader: {}", e))?;
+
+        let mut stdout = String::from_utf8_lossy(&stdout).to_string();
+        let mut stderr = String::from_utf8_lossy(&stderr).to_string();
 
         // Truncate oversized output
         if stdout.len() > MAX_OUTPUT_BYTES {
@@ -994,8 +1027,8 @@ impl WorkflowExecutor {
             stderr.push_str("\n... [output truncated]");
         }
 
-        if !output.status.success() {
-            let exit_code = output.status.code().unwrap_or(-1);
+        if !status.success() {
+            let exit_code = status.code().unwrap_or(-1);
             return Err(format!(
                 "Script exited with code {}.\nstderr: {}",
                 exit_code, stderr
@@ -1375,5 +1408,38 @@ mod tests {
         assert_eq!(context.increment_loop_counter("loop-1"), 2);
         context.reset_loop_counter("loop-1");
         assert_eq!(context.increment_loop_counter("loop-1"), 1);
+    }
+
+    #[tokio::test]
+    async fn test_script_node_timeout_returns_prompt_error() {
+        let engine = Arc::new(WorkflowEngine::new(":memory:".to_string()));
+        let executor = WorkflowExecutor::new(Arc::clone(&engine));
+        let mut context = ExecutionContext::new(
+            "exec-1".to_string(),
+            "workflow-1".to_string(),
+            HashMap::new(),
+        );
+        let script = if cfg!(target_os = "windows") {
+            "ping 127.0.0.1 -n 5 > nul".to_string()
+        } else {
+            "sleep 5".to_string()
+        };
+
+        let started = std::time::Instant::now();
+        let error = executor
+            .execute_script_node(
+                &ScriptNodeData {
+                    label: "timeout".to_string(),
+                    language: ScriptLanguage::Bash,
+                    code: script,
+                    timeout_seconds: Some(1),
+                },
+                &mut context,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(error.contains("timed out"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(4));
     }
 }

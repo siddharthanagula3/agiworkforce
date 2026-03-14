@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import MCPConfigEditor from '../MCP/MCPConfigEditor';
 import MCPCredentialManager from '../MCP/MCPCredentialManager';
+import MCPConnectionStatus from '../MCP/MCPConnectionStatus';
 import MCPServerCard from '../MCP/MCPServerCard';
 import MCPToolBrowser from '../MCP/MCPToolBrowser';
 import { Alert, AlertDescription } from '../ui/Alert';
@@ -25,7 +26,7 @@ export function MCPToolsSettings() {
     initialize,
     refreshServers,
     refreshTools,
-    refreshStats,
+    refreshRuntimeTelemetry,
     refreshConfigLocation,
     searchTools,
     setSearchQuery,
@@ -49,13 +50,13 @@ export function MCPToolsSettings() {
       await Promise.all([
         refreshServers(),
         refreshTools(),
-        refreshStats(),
+        refreshRuntimeTelemetry(),
         refreshConfigLocation(),
       ]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshConfigLocation, refreshServers, refreshStats, refreshTools]);
+  }, [refreshConfigLocation, refreshRuntimeTelemetry, refreshServers, refreshTools]);
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -161,6 +162,8 @@ export function MCPToolsSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <MCPConnectionStatus />
 
       <Tabs defaultValue="servers" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
