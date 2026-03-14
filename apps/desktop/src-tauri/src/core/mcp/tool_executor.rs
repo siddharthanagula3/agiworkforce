@@ -1,6 +1,7 @@
 use crate::core::mcp::{McpClient, McpError, McpResult};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -13,7 +14,7 @@ const ENCODED_HEX_PREFIX_LEGACY: &str = "hex:";
 const ENCODED_B64_PREFIX: &str = "b64_";
 const ENCODED_B64_PREFIX_LEGACY: &str = "b64:";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionResult {
     pub tool_id: String,
     pub server_name: String,
@@ -24,7 +25,7 @@ pub struct ToolExecutionResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolStats {
     pub tool_id: String,
     pub total_executions: u64,

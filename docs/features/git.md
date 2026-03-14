@@ -163,7 +163,7 @@ State is managed via `GitHubState` (stored in `Arc<Mutex<GitHubState>>`):
 
 `RepoContext` includes: repo metadata, file list with content, directory tree, README, and language analysis (14 languages detected by extension).
 
-**Note**: These GitHub commands are NOT registered in `lib.rs` -- they are available as internal Rust code but not exposed via IPC.
+These GitHub commands are registered in `lib.rs` and exposed via IPC.
 
 ## MCP Integration
 
@@ -368,7 +368,7 @@ GitDiff { file_path, additions, deletions, diff_content }
 
 5. **Missing `git_show`/`git_branch` IPC**: The MCP bundle defines `git_show` and `git_branch` tools, but no corresponding Tauri command exists in `git.rs` for direct IPC invocation.
 
-6. **GitHub cloning credentials**: `github.rs` only supports SSH agent for credentials (single `Cred::ssh_key_from_agent` call), unlike `git.rs` which has the full `make_git_credentials` fallback chain.
+6. **GitHub cloning credentials**: Fixed in the live runtime. `github.rs` now reuses the same `make_git_credentials` fallback chain as `git.rs`, so HTTPS remotes can use the system credential helper instead of failing on SSH-only auth.
 
 7. **Pull merge commit message**: `git_pull` uses the hardcoded message `"Merge"` for non-fast-forward merges. Should use a more descriptive message.
 

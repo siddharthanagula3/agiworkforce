@@ -1387,7 +1387,6 @@ async fn fetch_user_info(
 #[tauri::command]
 pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
     let conn = open_mcp_settings_db()?;
-
     let mut providers = Vec::new();
 
     let known_providers = [
@@ -1444,16 +1443,7 @@ pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
     ];
 
     for provider in &known_providers {
-        // Check OAuth token
-        let token_key = format!("mcp_oauth_tokens_{}", provider);
-        let has_token: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
-                rusqlite::params![token_key],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
+        let has_token = has_stored_tokens_for_provider(&conn, provider)?;
 
         if has_token {
             providers.push(provider.to_string());
@@ -1477,6 +1467,42 @@ pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
     }
 
     Ok(providers)
+}
+
+fn has_stored_tokens_for_provider(
+    conn: &rusqlite::Connection,
+    provider_id: &str,
+) -> Result<bool, String> {
+    let token_exists = |key: &str| -> Result<bool, String> {
+        conn.query_row(
+            "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![key],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)
+        .map_err(|e| {
+            format!(
+                "Failed to inspect OAuth token presence for '{}': {}",
+                key, e
+            )
+        })
+    };
+
+    if let Some(oauth_provider) = McpOAuthProvider::from_str(provider_id) {
+        let canonical_key = format!("mcp_oauth_tokens_{}", oauth_provider.as_str());
+        if token_exists(&canonical_key)? {
+            return Ok(true);
+        }
+
+        if oauth_provider == McpOAuthProvider::Google {
+            return token_exists("mcp_oauth_tokens_google_drive");
+        }
+
+        return Ok(false);
+    }
+
+    let direct_key = format!("mcp_oauth_tokens_{}", provider_id);
+    token_exists(&direct_key)
 }
 
 /// Connects a connector by spawning its MCP server with stored credentials
@@ -1926,5 +1952,50 @@ mod tests {
             McpOAuthProvider::Slack.redirect_uri(),
             "agiworkforce://oauth/mcp/slack"
         );
+    }
+
+    #[tokio::test]
+    async fn list_connected_providers_resolves_google_aliases_from_canonical_storage() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let previous = std::env::var("AGIWORKFORCE_APP_DATA_DIR").ok();
+        std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", temp_dir.path());
+
+        let stored_tokens = StoredTokens {
+            access_token: "test-access".to_string(),
+            refresh_token: Some("test-refresh".to_string()),
+            expires_at: Some(1_893_456_000),
+            scope: Some("gmail".to_string()),
+            user_info: None,
+        };
+
+        let result = async {
+            let conn = open_mcp_settings_db()?;
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS settings_v2 (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    encrypted INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+            )
+            .map_err(|e| format!("Failed to prepare settings_v2 schema: {}", e))?;
+
+            store_tokens(McpOAuthProvider::Google, &stored_tokens)?;
+            let providers = mcp_list_connected_providers().await?;
+            Ok::<Vec<String>, String>(providers)
+        }
+        .await;
+
+        match previous {
+            Some(value) => std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", value),
+            None => std::env::remove_var("AGIWORKFORCE_APP_DATA_DIR"),
+        }
+
+        let providers = result.expect("provider listing should succeed");
+        assert!(providers.contains(&"gmail".to_string()));
+        assert!(providers.contains(&"google_calendar".to_string()));
+        assert!(providers.contains(&"google_drive".to_string()));
     }
 }

@@ -41,6 +41,15 @@ pub async fn chat_compact_context(
     focus: Option<String>,
     user_id: String,
 ) -> Result<ContextCompactionResponse, String> {
+    compact_context(db.inner(), conversation_id, focus, &user_id).await
+}
+
+pub(super) async fn compact_context(
+    db: &AppDatabase,
+    conversation_id: i64,
+    focus: Option<String>,
+    user_id: &str,
+) -> Result<ContextCompactionResponse, String> {
     if conversation_id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
@@ -54,7 +63,7 @@ pub async fn chat_compact_context(
     let messages = {
         let conn = db.connection()?;
 
-        repository::get_conversation(&conn, conversation_id, &user_id)
+        repository::get_conversation(&conn, conversation_id, user_id)
             .map_err(|e| format!("Access denied or conversation not found: {e}"))?;
 
         repository::list_messages(&conn, conversation_id)
@@ -127,6 +136,7 @@ pub async fn chat_compact_context(
         .map_err(|e| format!("Failed to generate summary: {e}"))?;
 
     let compacted = compactor.get_compacted_messages(&messages, &summary);
+    persist_compacted_context(db, conversation_id, user_id, &messages, &compacted)?;
     let tokens_after: usize = compacted
         .iter()
         .map(|message| message.tokens.unwrap_or(0) as usize)
@@ -160,4 +170,182 @@ pub async fn chat_compact_context(
             messages_compacted, savings_percent, tokens_before, tokens_after
         ),
     })
+}
+
+fn persist_compacted_context(
+    db: &AppDatabase,
+    conversation_id: i64,
+    user_id: &str,
+    original_messages: &[crate::data::db::models::Message],
+    compacted_messages: &[crate::data::db::models::Message],
+) -> Result<(), String> {
+    let summary_message = compacted_messages
+        .first()
+        .filter(|message| {
+            message.id == 0 && message.role == crate::data::db::models::MessageRole::System
+        })
+        .ok_or_else(|| "Compaction produced no summary message to persist".to_string())?;
+
+    let keep_recent_count = compacted_messages
+        .len()
+        .checked_sub(1)
+        .ok_or_else(|| "Compaction output is missing recent messages".to_string())?;
+    let recent_messages_start = original_messages.len().saturating_sub(keep_recent_count);
+    let old_messages = &original_messages[..recent_messages_start];
+    if old_messages.is_empty() {
+        return Err("Compaction selected no old messages to replace".to_string());
+    }
+
+    let summary_created_at = original_messages
+        .get(recent_messages_start)
+        .map(|message| message.created_at - chrono::Duration::seconds(1))
+        .unwrap_or_else(|| old_messages[old_messages.len() - 1].created_at);
+    let summary_created_at_sql = summary_created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+    let summary_branch_id = old_messages
+        .last()
+        .and_then(|message| message.branch_id.clone())
+        .unwrap_or_else(|| "main".to_string());
+
+    let conn = db.connection()?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("Failed to start compaction transaction: {e}"))?;
+
+    tx.execute(
+        "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND user_id = ?2",
+        rusqlite::params![conversation_id, user_id],
+    )
+    .map_err(|e| format!("Failed to mark conversation as updated: {e}"))?;
+
+    for message in old_messages {
+        tx.execute(
+            "DELETE FROM messages WHERE id = ?1 AND conversation_id = ?2",
+            rusqlite::params![message.id, conversation_id],
+        )
+        .map_err(|e| format!("Failed to remove compacted message {}: {e}", message.id))?;
+    }
+
+    tx.execute(
+        "INSERT INTO messages (
+            conversation_id,
+            user_id,
+            role,
+            content,
+            tokens,
+            cost,
+            provider,
+            model,
+            created_at,
+            parent_message_id,
+            branch_id
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![
+            conversation_id,
+            user_id,
+            summary_message.role.as_str(),
+            summary_message.content,
+            summary_message.tokens,
+            summary_message.cost,
+            summary_message.provider.as_deref(),
+            summary_message.model.as_deref(),
+            summary_created_at_sql,
+            summary_message.parent_message_id,
+            summary_branch_id,
+        ],
+    )
+    .map_err(|e| format!("Failed to save compacted summary: {e}"))?;
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit compacted context: {e}"))?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compact_context;
+    use crate::data::db::{
+        models::{Message, MessageRole},
+        Database,
+    };
+    use crate::sys::commands::chat::state::AppDatabase;
+
+    fn test_db() -> AppDatabase {
+        let db = Database::in_memory().expect("in-memory db");
+        AppDatabase {
+            conn: db.get_connection(),
+        }
+    }
+
+    #[tokio::test]
+    async fn compact_context_persists_summary_and_keeps_recent_messages() {
+        let db = test_db();
+        let user_id = "test-user";
+        let conversation_id = {
+            let conn = db.connection().expect("db connection");
+            crate::data::db::repository::create_conversation(
+                &conn,
+                "Compaction Test".to_string(),
+                user_id.to_string(),
+            )
+            .expect("conversation")
+        };
+
+        {
+            let conn = db.connection().expect("db connection");
+            for index in 0..12 {
+                let message = Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    if index % 2 == 0 {
+                        MessageRole::User
+                    } else {
+                        MessageRole::Assistant
+                    },
+                    format!("message-{index}"),
+                )
+                .with_metrics(10_000, 0.01);
+                crate::data::db::repository::create_message(&conn, &message)
+                    .expect("create message");
+            }
+        }
+
+        let response = compact_context(&db, conversation_id, None, user_id)
+            .await
+            .expect("compact context");
+
+        assert!(response.summary_created);
+        assert!(response.messages_compacted > 0);
+        assert!(response.tokens_after < response.tokens_before);
+
+        let messages = {
+            let conn = db.connection().expect("db connection");
+            crate::data::db::repository::list_messages(&conn, conversation_id)
+                .expect("list messages")
+        };
+
+        assert_eq!(messages.len(), 11);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert!(messages[0].content.starts_with("[Compacted Context]"));
+        let remaining_contents: Vec<&str> = messages
+            .iter()
+            .skip(1)
+            .map(|message| message.content.as_str())
+            .collect();
+        assert_eq!(
+            remaining_contents,
+            vec![
+                "message-2",
+                "message-3",
+                "message-4",
+                "message-5",
+                "message-6",
+                "message-7",
+                "message-8",
+                "message-9",
+                "message-10",
+                "message-11",
+            ]
+        );
+    }
 }

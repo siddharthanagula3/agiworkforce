@@ -216,16 +216,14 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
     const browserId = await invoke<string>('browser_launch', {
       options: { headless: false },
     });
-
-    // Navigate to the URL
-    await invoke<void>('browser_navigate', { browserId, url });
+    const tabId = await invoke<string>('browser_open_tab', { url });
 
     // Get page title
-    const title = await invoke<string>('browser_get_title', { browserId: browserId ?? '' });
+    const title = await invoke<string>('browser_get_title', { tabId: tabId ?? '' });
 
     // Take screenshot
     const screenshot = await invoke<string>('browser_screenshot', {
-      browserId: browserId ?? '',
+      tabId: tabId ?? '',
       selector: null,
     });
 
@@ -240,6 +238,7 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
     panel.metadata = {
       status: 'success',
       browserId,
+      tabId,
     };
   } catch (error) {
     panel.content.browser = {

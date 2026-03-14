@@ -66,8 +66,10 @@ Primary Tauri event bridge for chat/tool streaming:
 - `apps/desktop/src/lib/runtimeActivity.ts`
 - `apps/desktop/src/lib/streamContentRuntime.ts`
 - `apps/desktop/src/lib/streamLifecycle.ts`
+- `apps/desktop/src/lib/toolTimelineRuntime.ts`
 - `apps/desktop/src/lib/toolStreamRuntime.ts`
 - `apps/desktop/src/lib/toolNameEncoding.ts`
+- `apps/desktop/src/stores/extensionEventsStore.ts`
 
 Primary inline reasoning render path:
 
@@ -125,6 +127,28 @@ Active chat submodules declared by the runtime:
 - `apps/desktop/src-tauri/src/sys/commands/chat/tools.rs`
 - `apps/desktop/src-tauri/src/sys/commands/chat/types.rs`
 
+Primary embedded MCP server runtime:
+
+- `apps/desktop/src-tauri/src/core/mcp/server/http_server.rs`
+- `apps/desktop/src-tauri/src/core/mcp/server/handlers.rs`
+- `apps/desktop/src-tauri/src/core/mcp/server/executor.rs`
+- `apps/desktop/src-tauri/src/core/mcp/server/tools.rs`
+- `apps/desktop/src-tauri/src/sys/commands/mcp_server.rs`
+
+Primary desktop MCP frontend/runtime surface:
+
+- `apps/desktop/src/api/mcp.ts`
+- `apps/desktop/src/stores/mcpStore.ts`
+- `apps/desktop/src/stores/connectorsStore.ts`
+- `apps/desktop/src/stores/mcpServerStore.ts`
+- `apps/desktop/src/stores/settingsStore.ts`
+- `apps/desktop/src/components/Settings/MCPToolsSettings.tsx`
+- `apps/desktop/src/components/MCP/MCPConnectionStatus.tsx`
+- `apps/desktop/src/hooks/useAgenticEvents.ts`
+- `apps/desktop/src-tauri/src/sys/commands/mcp.rs`
+- `apps/desktop/src-tauri/src/core/mcp/tool_executor.rs`
+- `apps/desktop/src-tauri/src/core/mcp/health.rs`
+
 Primary SSE parser:
 
 - `apps/desktop/src-tauri/src/core/llm/sse_parser.rs`
@@ -132,6 +156,57 @@ Primary SSE parser:
 Primary provider normalization:
 
 - `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs`
+
+Primary desktop auth/session security runtime:
+
+- `apps/desktop/src-tauri/src/sys/security/auth.rs`
+- `apps/desktop/src-tauri/src/sys/security/auth_db.rs`
+- `apps/desktop/src-tauri/src/sys/security/oauth.rs`
+- `apps/desktop/src-tauri/src/data/db/migrations.rs`
+
+Primary desktop security event / command validation runtime:
+
+- canonical audit event surface: `apps/desktop/src-tauri/src/sys/security/audit_logger.rs`
+- canonical shell command validation: `apps/desktop/src-tauri/src/sys/security/command_validator.rs`
+- canonical public export boundary: `apps/desktop/src-tauri/src/sys/security/mod.rs`
+- frontend-facing secret storage commands (`secret_manager_has`, `secret_manager_set`, `secret_manager_delete`) are owned by `apps/desktop/src-tauri/src/sys/commands/security.rs` and backed by `apps/desktop/src-tauri/src/sys/security/secret_manager.rs`
+
+Primary desktop managed service-state wiring in `apps/desktop/src-tauri/src/lib.rs`:
+
+- `AGICheckpointState` is managed during startup before the registered `agi_checkpoint_*` commands are exposed
+- embeddings are managed as `Arc<tokio::sync::Mutex<EmbeddingService>>`, which is the exact state type requested by the registered embedding commands in `apps/desktop/src-tauri/src/core/embeddings/mod.rs`
+- embedding initialization falls back from filesystem-backed service -> degraded service -> in-memory degraded service, so registered embedding commands do not depend on an unmanaged state edge case
+- `LLMState` is managed with a live `cache_entries` backing connection via `LLMState::with_cache(...)`, so the canonical `LLMRouter` used by `llm_send_message`, `vision_send_message`, and the desktop chat runtime has request/response caching enabled in production
+- `apps/desktop/check-wiring.sh` is the invoke-to-`generate_handler!` guardrail and now ignores `src/__tests__` sentinel invokes while extracting real command names accurately
+- `apps/desktop/src/stores/mcpServerStore.ts` is the canonical embedded MCP server state owner, including fetch/start/stop/update error propagation
+
+Primary desktop cache/runtime surface:
+
+- runtime cache owner: `apps/desktop/src-tauri/src/core/llm/cache_manager.rs`
+- canonical router wiring: `apps/desktop/src-tauri/src/sys/commands/llm.rs`
+- managed startup owner: `apps/desktop/src-tauri/src/lib.rs`
+- cache commands/analytics: `apps/desktop/src-tauri/src/sys/commands/cache.rs`
+- live cache-management UI: `apps/desktop/src/components/Settings/CacheManagement.tsx`, mounted from `apps/desktop/src/components/Settings/SettingsPanel.tsx`
+- `apps/desktop/src/components/Settings/MCPServerSettings.tsx` consumes that state with a controlled port input so runtime config refreshes stay visible in the UI
+- `apps/desktop/src/stores/llmConfigStore.ts` owns task-routing tier enforcement and now initializes its auth-plan subscription through a guarded one-time async bootstrap path
+- `apps/desktop/src/components/MCP/MCPCredentialManager.tsx` owns desktop OAuth credential UI and must validate deep-link state against locally stored CSRF state before invoking the backend callback
+- `apps/desktop/src-tauri/src/core/orchestration/workflow_scheduler.rs` owns live cron/runtime scheduling, and `apps/desktop/src-tauri/src/sys/commands/orchestration.rs` starts that scheduler with `WorkflowEngineState`
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` keeps `browser_execute_in_frame` behind the same explicit confirmation boundary used by `browser_evaluate` / `browser_execute_async_js`
+- embedded MCP `agi_run_task.max_steps` flows through `apps/desktop/src-tauri/src/core/mcp/server/executor.rs` → `apps/desktop/src-tauri/src/sys/commands/agi.rs` → `apps/desktop/src-tauri/src/core/agi/core.rs`
+
+Primary desktop startup/bootstrap surface:
+
+- `apps/desktop/src/App.tsx`
+
+Primary desktop connector/runtime surface:
+
+- `apps/desktop/src/components/Connectors/ConnectorsGallery.tsx`
+- `apps/desktop/src/components/Connectors/connectorDefinitions.ts`
+- `apps/desktop/src/stores/connectorsStore.ts`
+- `apps/desktop/src/api/mcp.ts`
+- `apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs`
+- shell/root startup work must use guarded async bootstrap paths with cancellation/error handling
+- delayed window restore work must register cleanup instead of leaving free-running timers behind
 
 ### Registered Tauri Commands
 
@@ -190,6 +265,85 @@ Thinking events are emitted from:
 Thinking events are consumed in:
 
 - `apps/desktop/src/components/UnifiedAgenticChat/useTauriStreamListeners.ts`
+
+Thinking-event transcript targeting must resolve through:
+
+- `apps/desktop/src/lib/streamLifecycle.ts`
+
+### Browser Extension Runtime State
+
+Canonical browser extension runtime state is owned by:
+
+- `apps/desktop/src/stores/extensionEventsStore.ts`
+
+Browser extension UI consumers must read the shared store via:
+
+- `apps/desktop/src/hooks/useExtensionEvents.ts`
+- `apps/desktop/src/components/Agent/BrowserAutomationPanel.tsx`
+
+The extension state path must not auto-open the sidecar.
+
+### Tool Timeline Runtime
+
+Canonical tool timeline label/status shaping is owned by:
+
+- `apps/desktop/src/lib/toolTimelineRuntime.ts`
+
+The live timeline writers are:
+
+- `apps/desktop/src/stores/chat/toolStore.ts`
+- `apps/desktop/src/components/UnifiedAgenticChat/useTauriStreamListeners.ts`
+
+`chat:tool-calls`, `chat:tool-executing`, and `chat:tool-result` must update `toolTimelineByMessage` for the target transcript message.
+
+### Browser UI Surfaces
+
+The live browser sidecar visualization path is:
+
+- `apps/desktop/src/components/Browser/BrowserVisualization.tsx`
+- `apps/desktop/src/components/Browser/BrowserViewer.tsx`
+- `apps/desktop/src/stores/browserStore.ts`
+
+The live browser sidecar contract is:
+
+- preview streaming plus browser action history
+- no browser console/network telemetry polling or stub commands in the mounted desktop path until a real CDP-backed capture pipeline exists
+
+The canonical desktop browser backend path is:
+
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs`
+- `apps/desktop/src-tauri/src/automation/browser/mod.rs`
+- `apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs`
+
+The canonical CDP endpoint contract is:
+
+- `apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs` owns `CdpEndpoint`
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` must parse the live frontend `browserType` / `headless` launch payload instead of assuming an `options`-only command contract
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` must open and close browser tabs through `CdpEndpoint`, not hardcoded `127.0.0.1:9222` URLs
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` must route file uploads through the CDP DOM file-input path, not page-side `file://` fetch hacks
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` must route semantic browser commands through `automation/browser/semantic.rs` and live CDP evaluation, not hardcoded stub selectors or null payloads
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs` must return structured tab records from `browser_list_tabs`; the desktop browser API contract is richer than a bare list of tab ids
+- `apps/desktop/src/lib/browserAutomation.ts` must mirror the live Tauri browser command payloads; wrapper helpers may not invent dead fields like `fullPage`, `timeoutMs`, or `sourceSelector`
+- `apps/desktop/src-tauri/src/automation/browser/mod.rs` must resolve per-tab websocket targets through the shared endpoint contract instead of constructing a hardcoded `ws://127.0.0.1:9222/devtools/page/{tab_id}` URL
+- `PlaywrightBridge.start_server()` must fail honestly or reuse an already reachable CDP endpoint; it must not report a fake started state
+- no live browser command, AGI executor, or tool-executor path may create an internal-only `TabManager.open_tab()` entry when it expects CDP control; no-tab flows must create a real CDP target or fail clearly
+
+The live browser extension status sidecar path is:
+
+- `apps/desktop/src/components/Agent/BrowserAutomationPanel.tsx`
+- `apps/desktop/src/stores/extensionEventsStore.ts`
+
+The registered browser close command is:
+
+- `apps/desktop/src-tauri/src/sys/commands/browser.rs`
+- `apps/desktop/src-tauri/src/lib.rs`
+
+These browser surfaces were removed because they were not mounted by the live desktop runtime:
+
+- `apps/desktop/src/components/UnifiedAgenticChat/Sidecar/BrowserPreview.tsx`
+- `apps/desktop/src/components/Browser/BrowserWorkspace.tsx`
+- `apps/desktop/src/components/Browser/BrowserDebugPanel.tsx`
+- `apps/desktop/src/components/Browser/BrowserRecorder.tsx`
 - `apps/desktop/src/lib/streamContentRuntime.ts`
 - `apps/desktop/src/lib/streamLifecycle.ts`
 
@@ -250,9 +404,12 @@ Current exported state surface:
 - `should_stop_for_conversation`
 - `should_stop_generation` (tests)
 
+`AppDatabase` is also the canonical SQLite owner for desktop analytics commands in `apps/desktop/src-tauri/src/sys/commands/analytics.rs`; analytics/reporting code must clone the managed connection instead of opening a second database handle.
+
 Rule:
 
 - new Rust chat submodules must import or re-export these from `state.rs`, not recreate local copies
+- analytics/reporting commands must reuse the managed `AppDatabase` connection, not derive a second SQLite writer from a filesystem path
 
 ### Rust Search Commands
 
@@ -267,6 +424,10 @@ Owned commands/types:
 - `search_chat_history`
 - `search_chat_history_semantic`
 - `ChatSearchResult`
+
+Chat search now normalizes user input into literal quoted FTS terms before issuing `MATCH`, so reserved operators like `NOT` or `NEAR` are treated as text rather than executable query syntax.
+
+Semantic chat search now computes document cosine magnitude across the full document TF-IDF vector, so long noisy matches no longer outrank concise relevant messages.
 
 ### Rust Cost Commands
 
@@ -319,6 +480,10 @@ Owned commands:
 - `chat_detect_intent`
 - `chat_is_stop_command`
 
+Intent rule:
+
+- explicit action verbs win over clarification phrases, so follow-on execution requests like `please open the file and then summarize it` stay classified as `ActionRequest` instead of falling back to `Clarification`
+
 ### Rust Command Surface Modules
 
 The live command surface is now split into dedicated modules and re-exported by `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs`.
@@ -334,6 +499,8 @@ Owned commands:
 
 - `chat_send_message`
 - `clear_local_database`
+
+`clear_local_database` now performs one transactional table wipe before clearing the in-memory pending queue, so the reset path cannot leave the local desktop database half-cleared.
 
 Owned helper boundaries under `chat_send_message`:
 
@@ -375,6 +542,8 @@ Canonical compaction module:
 Owned commands/types:
 
 - `chat_compact_context`
+
+Compaction now persists locally by deleting the compacted older messages inside one transaction and inserting a replacement system summary message. Message listing order is stabilized by `created_at, id` in `apps/desktop/src-tauri/src/data/db/repository.rs`.
 - `ContextCompactionResponse`
 
 ### Rust Export Commands

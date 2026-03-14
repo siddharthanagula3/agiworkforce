@@ -102,7 +102,7 @@ AppLayout
 │   ├── RiskConfirmationDialog
 │   └── BudgetAlertsPanel
 ├── DynamicSidecar
-│   └── (TerminalView | BrowserPreview | CodeCanvas | DiffViewer)
+│   └── (TerminalView | BrowserVisualization | CodeCanvas | DiffViewer)
 └── ArtifactPanel / MemoryPanel / ResearchPanel / AgentTaskPanel
 ```
 
@@ -119,7 +119,7 @@ AppLayout
 | `invoke('chat_add_pending_message', {request})` | `chat_add_pending_message` | `request: { content, conversationId? }` | `PendingUserMessage` |
 | `invoke('chat_stop_generation', {conversationId})` | `chat_stop_generation` | `conversationId: number` | `void` |
 | `invoke('chat_get_messages', {conversationId, userId})` | `chat_get_messages` | `conversationId: number, userId: string` | `Message[]` |
-| `invoke('search_chat_history', {query, userId})` | `search_chat_history` | `query: string, userId: string` | `SearchResult[]` |
+| `invoke('search_chat_history', {query, limit?})` | `search_chat_history` | `query: string, limit?: number` | `SearchResult[]` |
 | `invoke('cancel_tool_execution', {toolId})` | `cancel_tool_execution` | `toolId: string` | `void` |
 | `invoke('conversation_delete_branch', {conversationId, branchId})` | `conversation_delete_branch` | `conversationId: number, branchId: string` | `void` |
 

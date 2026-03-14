@@ -1,4 +1,5 @@
 use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences};
+use crate::sys::commands::file_ops::validate_path_security;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -56,6 +57,10 @@ impl Default for CodeEditingState {
     }
 }
 
+fn validated_code_edit_path(path: &std::path::Path) -> Result<PathBuf, String> {
+    validate_path_security(&path.to_string_lossy())
+}
+
 #[tauri::command]
 pub async fn code_generate_edit(
     file_path: PathBuf,
@@ -65,6 +70,7 @@ pub async fn code_generate_edit(
     edit_state: State<'_, Arc<Mutex<CodeEditingState>>>,
 ) -> Result<CodeEdit, String> {
     tracing::info!("Generating code edit for: {:?}", file_path);
+    let file_path = validated_code_edit_path(&file_path)?;
 
     let original_content =
         std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
@@ -158,10 +164,12 @@ pub async fn code_apply_edit(
     let mut edits = editing_state.edits.lock().await;
 
     let edit = edits.get_mut(&edit_id).ok_or("Edit not found")?;
+    let validated_path = validated_code_edit_path(&edit.file_path)?;
 
-    std::fs::write(&edit.file_path, &edit.modified_content)
+    std::fs::write(&validated_path, &edit.modified_content)
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
+    edit.file_path = validated_path;
     edit.status = EditStatus::Applied;
 
     Ok(())
@@ -200,12 +208,14 @@ pub async fn composer_start_session(
 
     let mut context_content = String::new();
     for file_path in &context_files {
-        if let Ok(content) = std::fs::read_to_string(file_path) {
-            context_content.push_str(&format!(
-                "\n\nFILE: {:?}\n```\n{}\n```\n",
-                file_path.file_name().unwrap_or_default(),
-                content
-            ));
+        if let Ok(verified_path) = validated_code_edit_path(file_path) {
+            if let Ok(content) = std::fs::read_to_string(&verified_path) {
+                context_content.push_str(&format!(
+                    "\n\nFILE: {:?}\n```\n{}\n```\n",
+                    verified_path.file_name().unwrap_or_default(),
+                    content
+                ));
+            }
         }
     }
 
@@ -270,7 +280,9 @@ Format your response as JSON:
 
     let mut edits = Vec::new();
     for change in file_changes {
-        let file_path = PathBuf::from(change["file_path"].as_str().ok_or("Missing file_path")?);
+        let file_path = validated_code_edit_path(
+            PathBuf::from(change["file_path"].as_str().ok_or("Missing file_path")?).as_path(),
+        )?;
         let modified_content = change["content"]
             .as_str()
             .ok_or("Missing content")?
@@ -328,8 +340,10 @@ pub async fn composer_apply_session(
     let session = sessions.get_mut(&session_id).ok_or("Session not found")?;
 
     for edit in &mut session.edits {
-        std::fs::write(&edit.file_path, &edit.modified_content)
+        let validated_path = validated_code_edit_path(&edit.file_path)?;
+        std::fs::write(&validated_path, &edit.modified_content)
             .map_err(|e| format!("Failed to write file {:?}: {}", edit.file_path, e))?;
+        edit.file_path = validated_path;
         edit.status = EditStatus::Applied;
     }
 
@@ -593,42 +607,22 @@ pub async fn apply_changes(changes: Vec<FileChange>) -> Result<ApplyResult, Stri
     let mut errors = Vec::new();
 
     for change in changes {
-        // SECURITY: Validate path to prevent directory traversal attacks
-        let path = std::path::Path::new(&change.path);
-        if let Ok(canonical) = path.canonicalize() {
-            // Reject paths that contain ".." traversal components
-            if change.path.contains("..") {
-                errors.push(format!("Rejected path with traversal: {}", change.path));
+        let validated_path = match validate_path_security(&change.path) {
+            Ok(path) => path,
+            Err(error) => {
+                errors.push(format!("Rejected path {}: {}", change.path, error));
                 continue;
             }
-            // Reject paths outside the user's home directory or common workspace paths
-            let path_str = canonical.to_string_lossy();
-            if path_str.starts_with("/etc/")
-                || path_str.starts_with("/usr/")
-                || path_str.starts_with("/bin/")
-                || path_str.starts_with("/sbin/")
-                || path_str.starts_with("/System/")
-                || path_str.starts_with("/Library/")
-            {
-                errors.push(format!(
-                    "Rejected write to protected system path: {}",
-                    change.path
-                ));
-                continue;
-            }
-        } else if change.path.contains("..") {
-            // File doesn't exist yet but has traversal — reject
-            errors.push(format!("Rejected path with traversal: {}", change.path));
-            continue;
-        }
+        };
 
-        match std::fs::write(&change.path, &change.modified_content) {
+        match std::fs::write(&validated_path, &change.modified_content) {
             Ok(_) => {
-                files_modified.push(change.path.clone());
-                tracing::info!("Applied changes to: {}", change.path);
+                let written_path = validated_path.to_string_lossy().to_string();
+                files_modified.push(written_path.clone());
+                tracing::info!("Applied changes to: {}", written_path);
             }
             Err(e) => {
-                let error_msg = format!("Failed to write {}: {}", change.path, e);
+                let error_msg = format!("Failed to write {}: {}", validated_path.display(), e);
                 errors.push(error_msg.clone());
                 tracing::error!("{}", error_msg);
             }
@@ -690,9 +684,22 @@ pub async fn revert_changes(
         match found_original {
             Some(original_content) => {
                 // Restore the original content
-                match std::fs::write(&path, &original_content) {
+                let validated_path = match validate_path_security(&path) {
+                    Ok(path) => path,
+                    Err(error) => {
+                        let msg = format!("Rejected path {}: {}", path, error);
+                        tracing::error!("{}", msg);
+                        failed.push(FailedRevert { path, reason: msg });
+                        continue;
+                    }
+                };
+
+                match std::fs::write(&validated_path, &original_content) {
                     Ok(_) => {
-                        tracing::info!("Reverted file from edit history: {}", path);
+                        tracing::info!(
+                            "Reverted file from edit history: {}",
+                            validated_path.display()
+                        );
 
                         // Update the edit status back to pending
                         for edit in edits.values_mut() {
@@ -711,7 +718,11 @@ pub async fn revert_changes(
                         reverted.push(path);
                     }
                     Err(e) => {
-                        let msg = format!("Failed to write original content to {}: {}", path, e);
+                        let msg = format!(
+                            "Failed to write original content to {}: {}",
+                            validated_path.display(),
+                            e
+                        );
                         tracing::error!("{}", msg);
                         failed.push(FailedRevert { path, reason: msg });
                     }
@@ -756,21 +767,13 @@ pub struct FailedRevert {
 
 /// Attempt to revert a file using git checkout
 fn try_git_revert(file_path: &str) -> Result<(), String> {
-    // SECURITY: Validate file_path to prevent command injection via crafted paths
-    if file_path.contains('\0') {
-        return Err("Invalid file path: contains null byte".to_string());
-    }
-    if file_path.starts_with('-') {
-        return Err("Invalid file path: must not start with a dash".to_string());
-    }
-    if file_path.contains("..") {
-        return Err("Invalid file path: directory traversal not allowed".to_string());
-    }
+    let validated_path = validate_path_security(file_path)?;
+    let validated_path_str = validated_path.to_string_lossy().to_string();
 
     // Use Command with separate args (not shell) — safe from injection as long as
     // the path is passed as a single argument via the args array.
     let output = std::process::Command::new("git")
-        .args(["checkout", "HEAD", "--", file_path])
+        .args(["checkout", "HEAD", "--", &validated_path_str])
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -779,5 +782,31 @@ fn try_git_revert(file_path: &str) -> Result<(), String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("git checkout failed: {}", stderr))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validated_code_edit_path_rejects_protected_system_paths() {
+        let error = validated_code_edit_path(PathBuf::from("/etc/passwd").as_path()).unwrap_err();
+        assert!(error.contains("protected system path") || error.contains("not allowed"));
+    }
+
+    #[tokio::test]
+    async fn apply_changes_rejects_protected_system_paths() {
+        let result = apply_changes(vec![FileChange {
+            path: "/etc/hosts".to_string(),
+            original_content: String::new(),
+            modified_content: "forbidden".to_string(),
+        }])
+        .await
+        .unwrap();
+
+        assert!(!result.success);
+        assert!(result.files_modified.is_empty());
+        assert!(!result.errors.is_empty());
     }
 }

@@ -10,6 +10,15 @@ export interface Tab {
   url: string;
   title: string;
   loading: boolean;
+  favicon?: string | null;
+  created_at?: number;
+}
+
+export interface BrowserFrame {
+  frame_id: string;
+  parent_frame_id?: string | null;
+  name: string;
+  url: string;
 }
 
 export interface ElementInfo {
@@ -53,8 +62,10 @@ export interface PerformanceMetrics {
   memoryUsage: number;
 }
 
+export type BrowserFormData = Record<string, string | number | boolean>;
+
 export class BrowserAutomation {
-  static async init(): Promise<string> {
+  static async init(): Promise<void> {
     return invoke('browser_init');
   }
 
@@ -128,7 +139,7 @@ export class BrowserAutomation {
     selector: string,
     timeoutMs: number = 30000,
   ): Promise<void> {
-    return invoke('browser_wait_for_selector', { tabId, selector, timeoutMs });
+    return invoke('browser_wait_for_selector', { tabId, selector, timeout: timeoutMs });
   }
 
   static async selectOption(tabId: string, selector: string, value: string): Promise<void> {
@@ -143,22 +154,16 @@ export class BrowserAutomation {
     return invoke('browser_uncheck', { tabId, selector });
   }
 
-  static async screenshot(tabId: string, fullPage: boolean = false): Promise<string> {
-    return invoke('browser_screenshot', { tabId, fullPage });
+  static async screenshot(tabId: string, selector?: string): Promise<string> {
+    return invoke('browser_screenshot', { tabId, selector });
   }
 
   static async evaluate(tabId: string, script: string): Promise<unknown> {
     return invoke('browser_evaluate', { tabId, script });
   }
 
-  static async executeAsyncJs(
-    tabId: string,
-    script: string,
-    args?: unknown[],
-    timeoutMs?: number,
-    retryCount?: number,
-  ): Promise<unknown> {
-    return invoke('browser_execute_async_js', { tabId, script, args, timeoutMs, retryCount });
+  static async executeAsyncJs(tabId: string, script: string): Promise<unknown> {
+    return invoke('browser_execute_async_js', { tabId, script });
   }
 
   static async getElementState(tabId: string, selector: string): Promise<ElementState> {
@@ -173,20 +178,20 @@ export class BrowserAutomation {
     return invoke('browser_wait_for_interactive', { tabId, selector, timeoutMs });
   }
 
-  static async fillForm(tabId: string, fields: FormField[]): Promise<void> {
-    return invoke('browser_fill_form', { tabId, fields });
+  static async fillForm(tabId: string, selector: string, data: BrowserFormData): Promise<void> {
+    return invoke('browser_fill_form', { tabId, selector, data });
   }
 
   static async dragAndDrop(
     tabId: string,
-    sourceSelector: string,
-    targetSelector: string,
+    source: string,
+    target: string,
   ): Promise<void> {
-    return invoke('browser_drag_and_drop', { tabId, sourceSelector, targetSelector });
+    return invoke('browser_drag_and_drop', { tabId, source, target });
   }
 
   static async uploadFile(tabId: string, selector: string, filePath: string): Promise<void> {
-    return invoke('browser_upload_file', { tabId, selector, filePath });
+    return invoke('browser_upload_file', { tabId, selector, paths: [filePath] });
   }
 
   static async getCookies(tabId: string): Promise<Cookie[]> {
@@ -205,11 +210,11 @@ export class BrowserAutomation {
     return invoke('browser_get_performance_metrics', { tabId });
   }
 
-  static async findElementSemantic(tabId: string, query: string): Promise<ElementInfo> {
+  static async findElementSemantic(tabId: string, query: string): Promise<string> {
     return invoke('find_element_semantic', { tabId, query });
   }
 
-  static async findAllElementsSemantic(tabId: string, query: string): Promise<ElementInfo[]> {
+  static async findAllElementsSemantic(tabId: string, query: string): Promise<string[]> {
     return invoke('find_all_elements_semantic', { tabId, query });
   }
 
@@ -223,5 +228,21 @@ export class BrowserAutomation {
 
   static async getAccessibilityTree(tabId: string): Promise<unknown> {
     return invoke('get_accessibility_tree', { tabId });
+  }
+
+  static async getFrames(tabId: string): Promise<BrowserFrame[]> {
+    return invoke('browser_get_frames', { tabId });
+  }
+
+  static async executeInFrame(tabId: string, frameId: string, script: string): Promise<unknown> {
+    return invoke('browser_execute_in_frame', { tabId, frameId, script });
+  }
+
+  static async callFunction(
+    tabId: string,
+    functionName: string,
+    args: unknown[] = [],
+  ): Promise<unknown> {
+    return invoke('browser_call_function', { tabId, functionName, args });
   }
 }

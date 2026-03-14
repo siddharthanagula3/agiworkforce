@@ -1,7 +1,7 @@
 use crate::data::analytics::{MetricsAggregator, ROICalculator, ReportGenerator};
 use rusqlite::Connection;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct ScheduledReportGenerator {
     calculator: ROICalculator,

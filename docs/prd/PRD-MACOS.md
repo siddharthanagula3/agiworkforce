@@ -2680,7 +2680,7 @@ App (root)
 │       ├── SettingsPanel
 │       │   ├── GeneralSettings
 │       │   ├── CustomModelsSettings
-│       │   ├── ApiKeysSettings
+│       │   ├── API Keys tab (inline in SettingsPanel)
 │       │   ├── AgentsSettings
 │       │   ├── InstructionFilesSettings
 │       │   ├── ExtensionsSettings (MCP)
@@ -2764,7 +2764,7 @@ App (root)
 | VoiceInputButton     | `voiceInputStore`       | —                                       |
 | SettingsPanel        | `settingsStore`         | `settingsDialogStore`                   |
 | CustomModelsSettings | `settingsStore`         | `modelStore`                            |
-| ApiKeysSettings      | `settingsStore`         | —                                       |
+| API Keys tab (inline) | `settingsStore`       | —                                       |
 | MCPServerSettings    | `mcpStore`              | `mcpServerStore`                        |
 | SkillMarketplace     | `skillMarketplaceStore` | —                                       |
 | ResearchPanel        | `researchStore`         | —                                       |
@@ -2853,7 +2853,7 @@ All stores are located in `apps/desktop/src/stores/`:
 | ToolTimeline            | (listens on `tool:event` channel)                                                                       |
 | VoiceInputButton        | `speech_start_recording`, `speech_stop_and_transcribe`                                                  |
 | SettingsPanel (general) | `get_settings`, `update_settings`                                                                       |
-| ApiKeysSettings         | `secret_store`, `secret_get`, `secret_delete`, `llm_test_connection`                                    |
+| API Keys tab (inline)   | `save_api_key`, `llm_test_connection`                                                                  |
 | CustomModelsSettings    | `get_custom_models`, `add_custom_model`, `remove_custom_model`, `test_custom_model`                     |
 | MCPServerSettings       | `mcp_list_servers`, `mcp_connect_server`, `mcp_disconnect_server`, `mcp_get_tools`                      |
 | SchedulerPanel          | `scheduler_list_jobs`, `scheduler_create_job`, `scheduler_delete_job`, `scheduler_run_now`              |
@@ -3420,7 +3420,7 @@ All React hooks are located in `apps/desktop/src/hooks/`:
 
 | Hook                   | Purpose                              | Key State / Returns                                           |
 | ---------------------- | ------------------------------------ | ------------------------------------------------------------- |
-| `useMCP`               | MCP server management                | `servers`, `connect(config)`, `disconnect(id)`, `tools`       |
+| `mcpStore` + `api/mcp.ts` | MCP server management                | `servers`, `connect(name)`, `disconnect(name)`, `tools`, runtime health/history/stats       |
 | `useTerminal`          | PTY terminal session management      | `sessions`, `createSession()`, `write(data)`, `resize()`      |
 | `useFileOperations`    | File system operations via Tauri IPC | `readFile(path)`, `writeFile(path, content)`, `listDir(path)` |
 | `useGit`               | Git operations via `git2`            | `status()`, `commit(msg)`, `diff()`, `branches()`             |

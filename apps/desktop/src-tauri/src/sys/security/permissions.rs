@@ -321,4 +321,34 @@ mod tests {
             .unwrap();
         assert_eq!(state, PermissionState::Allowed);
     }
+
+    #[test]
+    fn test_get_all_permissions_returns_rows() {
+        let pm = setup_test_db();
+
+        pm.set_permission(PermissionType::FileRead, PermissionState::Allowed, None)
+            .unwrap();
+        pm.set_permission(
+            PermissionType::FileWrite,
+            PermissionState::Prompt,
+            Some("/tmp/project".to_string()),
+        )
+        .unwrap();
+
+        let permissions = pm.get_all_permissions().unwrap();
+
+        assert_eq!(permissions.len(), 2);
+        assert!(permissions
+            .iter()
+            .any(
+                |permission| permission.permission_type == PermissionType::FileRead
+                    && permission.state == PermissionState::Allowed
+            ));
+        assert!(permissions
+            .iter()
+            .any(
+                |permission| permission.permission_type == PermissionType::FileWrite
+                    && permission.pattern.as_deref() == Some("/tmp/project")
+            ));
+    }
 }

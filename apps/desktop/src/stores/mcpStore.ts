@@ -15,7 +15,15 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { McpClient } from '../api/mcp';
-import type { McpConfigLocation, McpServerInfo, McpToolInfo, McpServersConfig } from '../types/mcp';
+import type {
+  McpConfigLocation,
+  McpExecutionHistoryEntry,
+  McpServerHealth,
+  McpServerInfo,
+  McpToolExecutionStats,
+  McpToolInfo,
+  McpServersConfig,
+} from '../types/mcp';
 
 interface McpState {
   servers: McpServerInfo[];
@@ -23,6 +31,9 @@ interface McpState {
   config: McpServersConfig | null;
   configLocation: McpConfigLocation | null;
   stats: Record<string, number>;
+  health: McpServerHealth[];
+  executionHistory: McpExecutionHistoryEntry[];
+  toolExecutionStats: McpToolExecutionStats[];
   isInitialized: boolean;
   isLoading: boolean;
   error: string | null;
@@ -34,6 +45,12 @@ interface McpState {
   refreshServers: () => Promise<void>;
   refreshTools: () => Promise<void>;
   refreshStats: () => Promise<void>;
+  refreshHealth: () => Promise<void>;
+  checkServerHealth: (name: string) => Promise<void>;
+  refreshExecutionHistory: (limit?: number) => Promise<void>;
+  refreshToolExecutionStats: () => Promise<void>;
+  refreshRuntimeTelemetry: () => Promise<void>;
+  upsertServerHealth: (health: McpServerHealth) => void;
 
   // Server connection management - used by MCPServerManager component
   connectServer: (name: string) => Promise<void>;
@@ -71,6 +88,9 @@ export const useMcpStore = create<McpState>()(
       config: null,
       configLocation: null,
       stats: {},
+      health: [],
+      executionHistory: [],
+      toolExecutionStats: [],
       isInitialized: false,
       isLoading: false,
       error: null,
@@ -83,7 +103,12 @@ export const useMcpStore = create<McpState>()(
           await McpClient.initialize();
           await get().refreshServers();
           await get().refreshTools();
-          await get().refreshStats();
+          await Promise.all([
+            get().refreshStats(),
+            get().refreshHealth(),
+            get().refreshExecutionHistory(),
+            get().refreshToolExecutionStats(),
+          ]);
           await get().loadConfig();
           await get().refreshConfigLocation();
           set({ isInitialized: true, isLoading: false }, undefined, 'mcp/initialize/success');
@@ -144,13 +169,109 @@ export const useMcpStore = create<McpState>()(
         }
       },
 
+      refreshHealth: async () => {
+        try {
+          const health = await McpClient.getHealth();
+          set({ health, error: null }, undefined, 'mcp/refreshHealth');
+        } catch (error) {
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to get MCP health',
+            },
+            undefined,
+            'mcp/refreshHealth/error',
+          );
+        }
+      },
+
+      checkServerHealth: async (name: string) => {
+        try {
+          const health = await McpClient.checkServerHealth(name);
+          get().upsertServerHealth(health);
+          set({ error: null }, undefined, 'mcp/checkServerHealth');
+        } catch (error) {
+          set(
+            {
+              error: error instanceof Error ? error.message : `Failed to check health for ${name}`,
+            },
+            undefined,
+            'mcp/checkServerHealth/error',
+          );
+        }
+      },
+
+      refreshExecutionHistory: async (limit = 20) => {
+        try {
+          const executionHistory = await McpClient.getExecutionHistory(limit);
+          set({ executionHistory, error: null }, undefined, 'mcp/refreshExecutionHistory');
+        } catch (error) {
+          set(
+            {
+              error:
+                error instanceof Error ? error.message : 'Failed to get MCP execution history',
+            },
+            undefined,
+            'mcp/refreshExecutionHistory/error',
+          );
+        }
+      },
+
+      refreshToolExecutionStats: async () => {
+        try {
+          const toolExecutionStats = await McpClient.getToolExecutionStats();
+          set({ toolExecutionStats, error: null }, undefined, 'mcp/refreshToolExecutionStats');
+        } catch (error) {
+          set(
+            {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Failed to get MCP tool execution statistics',
+            },
+            undefined,
+            'mcp/refreshToolExecutionStats/error',
+          );
+        }
+      },
+
+      refreshRuntimeTelemetry: async () => {
+        await Promise.all([
+          get().refreshStats(),
+          get().refreshHealth(),
+          get().refreshExecutionHistory(),
+          get().refreshToolExecutionStats(),
+        ]);
+      },
+
+      upsertServerHealth: (health: McpServerHealth) => {
+        set(
+          (state) => {
+            const existingIndex = state.health.findIndex(
+              (entry) => entry.server_name === health.server_name,
+            );
+            if (existingIndex === -1) {
+              return { health: [...state.health, health] };
+            }
+
+            const nextHealth = [...state.health];
+            nextHealth[existingIndex] = {
+              ...nextHealth[existingIndex],
+              ...health,
+            };
+            return { health: nextHealth };
+          },
+          undefined,
+          'mcp/upsertServerHealth',
+        );
+      },
+
       connectServer: async (name: string) => {
         set({ isLoading: true, error: null }, undefined, 'mcp/connectServer/start');
         try {
           await McpClient.connect(name);
           await get().refreshServers();
           await get().refreshTools();
-          await get().refreshStats();
+          await get().refreshRuntimeTelemetry();
           set({ isLoading: false }, undefined, 'mcp/connectServer/success');
         } catch (error) {
           set(
@@ -170,7 +291,7 @@ export const useMcpStore = create<McpState>()(
           await McpClient.disconnect(name);
           await get().refreshServers();
           await get().refreshTools();
-          await get().refreshStats();
+          await get().refreshRuntimeTelemetry();
           set({ isLoading: false }, undefined, 'mcp/disconnectServer/success');
         } catch (error) {
           set(
@@ -189,6 +310,7 @@ export const useMcpStore = create<McpState>()(
         try {
           await McpClient.enableServer(name);
           await get().refreshServers();
+          await get().refreshHealth();
           set({ isLoading: false }, undefined, 'mcp/enableServer/success');
         } catch (error) {
           set(
@@ -207,6 +329,7 @@ export const useMcpStore = create<McpState>()(
         try {
           await McpClient.disableServer(name);
           await get().refreshServers();
+          await get().refreshHealth();
           set({ isLoading: false }, undefined, 'mcp/disableServer/success');
         } catch (error) {
           set(
@@ -331,6 +454,9 @@ export const useMcpStore = create<McpState>()(
             config: null,
             configLocation: null,
             stats: {},
+            health: [],
+            executionHistory: [],
+            toolExecutionStats: [],
             isInitialized: false,
             isLoading: false,
             error: null,
@@ -352,6 +478,9 @@ export const selectMcpTools = (state: McpState) => state.tools;
 export const selectMcpConfig = (state: McpState) => state.config;
 export const selectMcpConfigLocation = (state: McpState) => state.configLocation;
 export const selectMcpStats = (state: McpState) => state.stats;
+export const selectMcpHealth = (state: McpState) => state.health;
+export const selectMcpExecutionHistory = (state: McpState) => state.executionHistory;
+export const selectMcpToolExecutionStats = (state: McpState) => state.toolExecutionStats;
 export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;
 export const selectMcpError = (state: McpState) => state.error;

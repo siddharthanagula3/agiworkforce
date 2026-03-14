@@ -1,10 +1,9 @@
 use crate::data::db::Database;
 use crate::sys::error::Result;
-use crate::sys::security::audit_logger::AuditFilters;
 use crate::sys::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
-    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent, AuditIntegrityReport,
-    AuditStatus, EnhancedAuditLogger,
+    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent, AuditFilters,
+    AuditIntegrityReport, AuditLogger, AuditStatus,
 };
 use tauri::State;
 
@@ -14,7 +13,7 @@ pub async fn get_audit_events(
     db: State<'_, Database>,
 ) -> Result<Vec<AuditEvent>> {
     let conn = db.get_connection();
-    let logger = EnhancedAuditLogger::new(conn)?;
+    let logger = AuditLogger::new(conn)?;
 
     logger.get_events(filters)
 }
@@ -22,7 +21,7 @@ pub async fn get_audit_events(
 #[tauri::command]
 pub async fn verify_audit_event(event_id: String, db: State<'_, Database>) -> Result<bool> {
     let conn = db.get_connection();
-    let logger = EnhancedAuditLogger::new(conn)?;
+    let logger = AuditLogger::new(conn)?;
 
     logger.verify_event(&event_id)
 }
@@ -30,7 +29,7 @@ pub async fn verify_audit_event(event_id: String, db: State<'_, Database>) -> Re
 #[tauri::command]
 pub async fn verify_audit_integrity(db: State<'_, Database>) -> Result<AuditIntegrityReport> {
     let conn = db.get_connection();
-    let logger = EnhancedAuditLogger::new(conn)?;
+    let logger = AuditLogger::new(conn)?;
 
     logger.verify_all_events()
 }
@@ -45,7 +44,7 @@ pub async fn log_tool_execution(
     db: State<'_, Database>,
 ) -> Result<()> {
     let conn = db.get_connection();
-    let logger = EnhancedAuditLogger::new(conn)?;
+    let logger = AuditLogger::new(conn)?;
 
     let event = create_tool_execution_event(user_id, team_id, tool_name, success, metadata);
 
@@ -62,7 +61,7 @@ pub async fn log_workflow_execution(
     db: State<'_, Database>,
 ) -> Result<()> {
     let conn = db.get_connection();
-    let logger = EnhancedAuditLogger::new(conn)?;
+    let logger = AuditLogger::new(conn)?;
 
     let audit_status = match status.as_str() {
         "success" => AuditStatus::Success,

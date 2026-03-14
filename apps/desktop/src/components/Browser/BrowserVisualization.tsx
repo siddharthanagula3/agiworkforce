@@ -30,7 +30,7 @@ export function BrowserVisualization({ className, tabId }: BrowserVisualizationP
             value="actions"
             className="data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800"
           >
-            Console
+            Activity
           </TabsTrigger>
         </TabsList>
 

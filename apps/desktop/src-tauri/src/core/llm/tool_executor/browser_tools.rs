@@ -9,7 +9,6 @@ impl ToolExecutor {
         use crate::automation::browser::dom_operations::{
             ClickOptions, DomOperations, TypeOptions,
         };
-        use crate::automation::browser::NavigationOptions;
         use crate::sys::commands::BrowserStateWrapper;
         use tauri::Manager;
 
@@ -617,37 +616,15 @@ impl ToolExecutor {
                     .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let tab_manager = browser_state
-                    .get_tab_manager()
+                let tab_id = browser_state
+                    .resolve_cdp_tab(None, true, Some(url))
+                    .await
                     .map_err(anyhow::Error::msg)?;
-
-                // NOTE: We must NOT hold the outer tab_manager lock while calling
-                // TabManager methods that acquire internal locks. This would cause a deadlock
-                // because tokio::sync::Mutex is not reentrant.
-                // Instead, we drop the guard and re-acquire for each operation.
-
-                // First, list existing tabs
-                let tabs = {
-                    let guard = tab_manager.lock().await;
-                    guard.list_tabs().await.map_err(anyhow::Error::msg)?
-                };
-
-                let tab_id = if tabs.is_empty() {
-                    // Open a new tab - release outer lock first
-                    let guard = tab_manager.lock().await;
-                    guard.open_tab(url).await.map_err(anyhow::Error::msg)?
-                } else {
-                    tabs[0].id.clone()
-                };
-
-                // Navigate - release outer lock first
-                {
-                    let guard = tab_manager.lock().await;
-                    guard
-                        .navigate(&tab_id, url, NavigationOptions::default())
-                        .await
-                        .map_err(anyhow::Error::msg)?;
-                }
+                let client = browser_state
+                    .get_cdp_client_for_tab(&tab_id)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                client.navigate(url).await.map_err(anyhow::Error::msg)?;
 
                 Ok(ToolResult {
                     success: true,
@@ -672,7 +649,6 @@ impl ToolExecutor {
         let tool_id = action_id;
 
         if let Some(ref app) = self.app_handle {
-            use crate::automation::browser::NavigationOptions;
             use crate::sys::commands::BrowserStateWrapper;
             use tauri::Manager;
 
@@ -685,10 +661,13 @@ impl ToolExecutor {
             );
 
             let browser_state = app.state::<BrowserStateWrapper>();
-            let tab_manager = match browser_state.get_tab_manager() {
-                Ok(tm) => tm.lock().await,
+
+            emit_tool_progress(app, tool_id, 0.3, Some("Browser ready"));
+
+            let tab_id = match browser_state.resolve_cdp_tab(None, true, Some(url)).await {
+                Ok(tab_id) => tab_id,
                 Err(e) => {
-                    let err_msg = format!("Failed to get tab manager: {}", e);
+                    let err_msg = format!("Failed to resolve browser tab: {}", e);
                     return Ok(ToolResult {
                         success: false,
                         data: json!({ "error": err_msg.clone(), "success": false }),
@@ -698,56 +677,33 @@ impl ToolExecutor {
                 }
             };
 
-            emit_tool_progress(app, tool_id, 0.3, Some("Browser ready"));
+            emit_tool_progress(app, tool_id, 0.6, Some("Loading page..."));
 
-            match tab_manager.list_tabs().await {
-                Ok(tabs) => {
-                    let tab_id = if tabs.is_empty() {
-                        emit_tool_progress(app, tool_id, 0.4, Some("Opening new tab"));
-                        match tab_manager.open_tab(url).await {
-                            Ok(tid) => tid,
-                            Err(e) => {
-                                let err_msg = format!("Failed to open tab: {}", e);
-                                return Ok(ToolResult {
-                                    success: false,
-                                    data: json!({ "error": err_msg.clone(), "success": false }),
-                                    error: Some(err_msg),
-                                    metadata: HashMap::new(),
-                                });
-                            }
-                        }
-                    } else {
-                        tabs[0].id.clone()
-                    };
+            let client = match browser_state.get_cdp_client_for_tab(&tab_id).await {
+                Ok(client) => client,
+                Err(e) => {
+                    let err_msg = format!("Failed to connect to browser tab: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
 
-                    emit_tool_progress(app, tool_id, 0.6, Some("Loading page..."));
-
-                    match tab_manager
-                        .navigate(&tab_id, url, NavigationOptions::default())
-                        .await
-                    {
-                        Ok(_) => {
-                            emit_tool_progress(app, tool_id, 1.0, Some("Page loaded"));
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({ "success": true, "url": url, "tab_id": tab_id }),
-                                error: None,
-                                metadata: HashMap::new(),
-                            })
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to navigate: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
-                    }
+            match client.navigate(url).await {
+                Ok(_) => {
+                    emit_tool_progress(app, tool_id, 1.0, Some("Page loaded"));
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "url": url, "tab_id": tab_id }),
+                        error: None,
+                        metadata: HashMap::new(),
+                    })
                 }
                 Err(e) => {
-                    let err_msg = format!("Failed to list tabs: {}", e);
+                    let err_msg = format!("Failed to navigate: {}", e);
                     Ok(ToolResult {
                         success: false,
                         data: json!({ "error": err_msg.clone(), "success": false }),

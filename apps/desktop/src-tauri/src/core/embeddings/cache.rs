@@ -43,7 +43,15 @@ pub struct EmbeddingCache {
 impl EmbeddingCache {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let db = Connection::open(db_path)?;
+        Self::from_connection(db)
+    }
 
+    pub fn new_in_memory() -> Result<Self> {
+        let db = Connection::open_in_memory()?;
+        Self::from_connection(db)
+    }
+
+    fn from_connection(db: Connection) -> Result<Self> {
         let cache = Self {
             db,
             memory_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -242,6 +250,13 @@ mod tests {
 
         cache.clear().unwrap();
 
+        let stats = cache.get_stats().unwrap();
+        assert_eq!(stats.size, 0);
+    }
+
+    #[test]
+    fn test_in_memory_cache_initializes() {
+        let cache = EmbeddingCache::new_in_memory().unwrap();
         let stats = cache.get_stats().unwrap();
         assert_eq!(stats.size, 0);
     }

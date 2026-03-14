@@ -1,7 +1,7 @@
 use crate::core::mcp::config::{open_mcp_settings_db, upsert_settings_v2_value};
 use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
-    McpToolRegistry,
+    McpToolExecutor, McpToolRegistry, ToolExecutionResult, ToolStats,
 };
 use crate::sys::commands::auth::{get_session_user_id, SessionState};
 use crate::sys::commands::tool_confirmation::{
@@ -16,11 +16,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex as TokioMutex;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 pub struct McpState {
     pub client: Arc<McpClient>,
     pub registry: Arc<McpToolRegistry>,
+    pub tool_executor: Arc<McpToolExecutor>,
     pub config: Arc<Mutex<McpServersConfig>>,
     pub persist_lock: Arc<TokioMutex<()>>,
     pub health_monitor: Arc<McpHealthMonitor>,
@@ -92,6 +93,9 @@ impl McpState {
     pub fn new() -> Self {
         let client = Arc::new(McpClient::new());
         let registry = Arc::new(McpToolRegistry::new(client.clone()));
+        let tool_executor = Arc::new(
+            McpToolExecutor::new(client.clone()).with_default_timeout(Duration::from_secs(300)),
+        );
         let config = Arc::new(Mutex::new(McpServersConfig::default()));
         let persist_lock = Arc::new(TokioMutex::new(()));
         let health_monitor = Arc::new(McpHealthMonitor::new(client.clone()));
@@ -99,6 +103,7 @@ impl McpState {
         Self {
             client,
             registry,
+            tool_executor,
             config,
             persist_lock,
             health_monitor,
@@ -979,8 +984,6 @@ pub async fn mcp_call_tool(
         },
     );
 
-    let start_time = std::time::Instant::now();
-
     tracing::debug!(
         target: "mcp",
         correlation_id = %correlation_id,
@@ -988,29 +991,26 @@ pub async fn mcp_call_tool(
         "Executing MCP tool"
     );
 
-    // AUDIT-MCP-026: Wrap tool execution with explicit timeout (5 minutes)
-    const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 300;
-    let result = timeout(
-        Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS),
-        state.registry.execute_tool(&tool_id, arguments),
-    )
-    .await;
+    let start_time = std::time::Instant::now();
 
-    let duration_ms = start_time.elapsed().as_millis() as u64;
+    // Route the live execution path through McpToolExecutor so timeout, history,
+    // and execution stats all share one source of truth.
+    let result = state.tool_executor.execute_tool(&tool_id, arguments).await;
 
     // Handle timeout vs actual result
-    let (success, final_result) = match result {
-        Ok(Ok(value)) => {
+    let (success, duration_ms, final_result) = match result {
+        Ok(execution) => {
             tracing::info!(
                 target: "mcp",
                 correlation_id = %correlation_id,
                 tool_id = %tool_id,
-                duration_ms = duration_ms,
+                duration_ms = execution.duration_ms,
                 "MCP tool call completed successfully"
             );
-            (true, Ok(value))
+            (true, execution.duration_ms, Ok(execution.result))
         }
-        Ok(Err(e)) => {
+        Err(e) => {
+            let duration_ms = start_time.elapsed().as_millis() as u64;
             tracing::error!(
                 target: "mcp",
                 correlation_id = %correlation_id,
@@ -1019,23 +1019,10 @@ pub async fn mcp_call_tool(
                 duration_ms = duration_ms,
                 "MCP tool call failed"
             );
-            (false, Err(format!("Tool execution failed: {}", e)))
-        }
-        Err(_) => {
-            // Timeout elapsed
-            tracing::warn!(
-                target: "mcp",
-                correlation_id = %correlation_id,
-                tool_id = %tool_id,
-                timeout_secs = TOOL_EXECUTION_TIMEOUT_SECS,
-                "MCP tool call timed out"
-            );
             (
                 false,
-                Err(format!(
-                    "Tool execution timed out after {} seconds",
-                    TOOL_EXECUTION_TIMEOUT_SECS
-                )),
+                duration_ms,
+                Err(format!("Tool execution failed: {}", e)),
             )
         }
     };
@@ -1351,6 +1338,37 @@ pub async fn mcp_get_stats(state: State<'_, McpState>) -> Result<HashMap<String,
 }
 
 #[tauri::command]
+pub async fn mcp_get_execution_history(
+    state: State<'_, McpState>,
+    limit: Option<usize>,
+) -> Result<Vec<ToolExecutionResult>, String> {
+    let bounded_limit = limit.unwrap_or(20).min(100);
+    let mut history = state.tool_executor.get_recent_history(bounded_limit);
+    history.reverse();
+    Ok(history)
+}
+
+#[tauri::command]
+pub async fn mcp_get_tool_execution_stats(
+    state: State<'_, McpState>,
+) -> Result<Vec<ToolStats>, String> {
+    let mut stats = state.tool_executor.get_all_stats();
+    stats.sort_by(|left, right| {
+        right
+            .total_executions
+            .cmp(&left.total_executions)
+            .then_with(|| right.failed_executions.cmp(&left.failed_executions))
+            .then_with(|| {
+                right
+                    .last_execution
+                    .unwrap_or_default()
+                    .cmp(&left.last_execution.unwrap_or_default())
+            })
+    });
+    Ok(stats)
+}
+
+#[tauri::command]
 pub async fn mcp_get_server_logs(
     #[allow(non_snake_case)] serverName: String,
     lines: Option<usize>,
@@ -1383,7 +1401,7 @@ pub async fn mcp_get_tool_schemas(state: State<'_, McpState>) -> Result<Vec<Valu
 pub async fn mcp_get_health(
     state: State<'_, McpState>,
 ) -> Result<Vec<crate::core::mcp::ServerHealth>, String> {
-    Ok(state.health_monitor.get_all_health())
+    Ok(state.health_monitor.refresh_connected_health().await)
 }
 
 #[tauri::command]

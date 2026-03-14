@@ -33,21 +33,18 @@ fn encrypt_token(token: &str) -> Result<String, String> {
     serde_json::to_string(&encrypted).map_err(|e| format!("Serialize encrypted token: {e}"))
 }
 
+fn encrypt_optional_token(token: Option<&str>) -> Result<Option<String>, String> {
+    token.map(encrypt_token).transpose()
+}
+
 /// Decrypt a token that was stored as JSON-encoded EncryptedSecret.
-/// Falls back to returning the value as-is if it is not valid JSON (migration path for old plaintext rows).
 fn decrypt_token(stored: &str) -> Result<String, String> {
-    match serde_json::from_str::<crate::sys::security::encryption::EncryptedSecret>(stored) {
-        Ok(enc) => {
-            let key_bytes = crate::sys::security::machine_key::derive_key(
-                crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
-            );
-            crate::sys::security::encryption::decrypt_secret(&key_bytes, &enc)
-        }
-        Err(_) => {
-            // Old plaintext row — return as-is (migration path)
-            Ok(stored.to_string())
-        }
-    }
+    let enc = serde_json::from_str::<crate::sys::security::encryption::EncryptedSecret>(stored)
+        .map_err(|e| format!("Deserialize encrypted token: {e}"))?;
+    let key_bytes = crate::sys::security::machine_key::derive_key(
+        crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
+    );
+    crate::sys::security::encryption::decrypt_secret(&key_bytes, &enc)
 }
 
 pub struct AuthDatabaseManager {
@@ -257,24 +254,19 @@ impl AuthDatabaseManager {
 
         let session = db
             .query_row(
-                "SELECT session_id, user_id, access_token, refresh_token,
-             COALESCE(access_token_encrypted, access_token),
-             COALESCE(refresh_token_encrypted, refresh_token),
+                "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
              created_at, expires_at, last_activity_at
              FROM auth_sessions WHERE access_token_hash = ?1",
                 [&token_hash],
                 |row| {
-                    // AUDIT-003-003 fix: Use unwrap_or_else to prevent panic on malformed dates
-                    let access_token_stored: String = row.get(4)?;
-                    let refresh_token_stored: String = row.get(5)?;
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        access_token_stored,
-                        refresh_token_stored,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
                         row.get::<_, String>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, String>(8)?,
                     ))
                 },
             )
@@ -311,24 +303,19 @@ impl AuthDatabaseManager {
 
         let session = db
             .query_row(
-                "SELECT session_id, user_id, access_token, refresh_token,
-             COALESCE(access_token_encrypted, access_token),
-             COALESCE(refresh_token_encrypted, refresh_token),
+                "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
              created_at, expires_at, last_activity_at
              FROM auth_sessions WHERE refresh_token_hash = ?1",
                 [&token_hash],
                 |row| {
-                    // AUDIT-003-003 fix: Use unwrap_or_else to prevent panic on malformed dates
-                    let access_token_stored: String = row.get(4)?;
-                    let refresh_token_stored: String = row.get(5)?;
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        access_token_stored,
-                        refresh_token_stored,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
                         row.get::<_, String>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, String>(8)?,
                     ))
                 },
             )
@@ -410,8 +397,8 @@ impl AuthDatabaseManager {
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
         db.execute(
-            "DELETE FROM auth_sessions WHERE access_token_hash = ?1 OR access_token = ?2",
-            params![&token_hash, access_token],
+            "DELETE FROM auth_sessions WHERE access_token_hash = ?1",
+            params![&token_hash],
         )?;
 
         Ok(())
@@ -442,10 +429,14 @@ impl AuthDatabaseManager {
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
+        let access_token_encrypted = encrypt_optional_token(access_token)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
+        let refresh_token_encrypted = encrypt_optional_token(refresh_token)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
         db.execute(
             "INSERT OR REPLACE INTO oauth_providers
-             (id, user_id, provider, provider_user_id, access_token, refresh_token,
+             (id, user_id, provider, provider_user_id, access_token_encrypted, refresh_token_encrypted,
               expires_at, scope, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
@@ -453,8 +444,8 @@ impl AuthDatabaseManager {
                 user_id,
                 provider.as_str(),
                 provider_user_id,
-                access_token,
-                refresh_token,
+                access_token_encrypted,
+                refresh_token_encrypted,
                 expires_at.map(|t| t.to_rfc3339()),
                 scope,
                 now.to_rfc3339(),
@@ -635,5 +626,187 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_session_redacts_legacy_columns_and_round_trips() {
+        let db = setup_test_db();
+        let manager = AuthDatabaseManager::new(db.clone());
+        let user = manager
+            .register(
+                "sessions@example.com".to_string(),
+                "password_hash".to_string(),
+                UserRole::Editor,
+            )
+            .unwrap();
+        let session = Session::new(user.id.clone());
+
+        manager
+            .create_session(&session, Some("127.0.0.1".to_string()), None)
+            .unwrap();
+
+        let stored = db
+            .lock()
+            .query_row(
+                "SELECT access_token, refresh_token, access_token_encrypted, refresh_token_encrypted
+                 FROM auth_sessions WHERE session_id = ?1",
+                [&session.session_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(stored.0, "[redacted]");
+        assert_eq!(stored.1, "[redacted]");
+        assert_eq!(decrypt_token(&stored.2).unwrap(), session.access_token);
+        assert_eq!(decrypt_token(&stored.3).unwrap(), session.refresh_token);
+
+        let retrieved = manager
+            .get_session_by_access_token(&session.access_token)
+            .unwrap();
+        assert_eq!(retrieved.session_id, session.session_id);
+        assert_eq!(retrieved.access_token, session.access_token);
+        assert_eq!(retrieved.refresh_token, session.refresh_token);
+    }
+
+    #[test]
+    fn test_create_session_allows_multiple_redacted_rows() {
+        let db = setup_test_db();
+        let manager = AuthDatabaseManager::new(db);
+        let user = manager
+            .register(
+                "multi-session@example.com".to_string(),
+                "password_hash".to_string(),
+                UserRole::Editor,
+            )
+            .unwrap();
+
+        let session_one = Session::new(user.id.clone());
+        let session_two = Session::new(user.id.clone());
+
+        manager.create_session(&session_one, None, None).unwrap();
+        manager.create_session(&session_two, None, None).unwrap();
+    }
+
+    #[test]
+    fn test_update_session_tokens_keeps_legacy_column_redacted() {
+        let db = setup_test_db();
+        let manager = AuthDatabaseManager::new(db.clone());
+        let user = manager
+            .register(
+                "rotate@example.com".to_string(),
+                "password_hash".to_string(),
+                UserRole::Editor,
+            )
+            .unwrap();
+
+        let session = Session::new(user.id.clone());
+        manager.create_session(&session, None, None).unwrap();
+
+        let rotated_token = "rotated-access-token";
+        manager
+            .update_session_tokens(&session.session_id, rotated_token, Utc::now())
+            .unwrap();
+
+        let stored = db
+            .lock()
+            .query_row(
+                "SELECT access_token, access_token_encrypted FROM auth_sessions WHERE session_id = ?1",
+                [&session.session_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(stored.0, "[redacted]");
+        assert_eq!(decrypt_token(&stored.1).unwrap(), rotated_token);
+
+        let retrieved = manager.get_session_by_access_token(rotated_token).unwrap();
+        assert_eq!(retrieved.session_id, session.session_id);
+        assert_eq!(retrieved.access_token, rotated_token);
+    }
+
+    #[test]
+    fn test_delete_session_uses_token_hash_lookup() {
+        let db = setup_test_db();
+        let manager = AuthDatabaseManager::new(db.clone());
+        let user = manager
+            .register(
+                "delete@example.com".to_string(),
+                "password_hash".to_string(),
+                UserRole::Editor,
+            )
+            .unwrap();
+
+        let session = Session::new(user.id.clone());
+        manager.create_session(&session, None, None).unwrap();
+        manager.delete_session(&session.access_token).unwrap();
+
+        let remaining: i64 = db
+            .lock()
+            .query_row("SELECT COUNT(*) FROM auth_sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn test_store_oauth_provider_uses_encrypted_columns() {
+        let db = setup_test_db();
+        let manager = AuthDatabaseManager::new(db.clone());
+        let user = manager
+            .register(
+                "oauth@example.com".to_string(),
+                "password_hash".to_string(),
+                UserRole::Editor,
+            )
+            .unwrap();
+
+        let provider_id = manager
+            .store_oauth_provider(
+                &user.id,
+                OAuthProvider::Google,
+                "provider-user",
+                Some("oauth-access"),
+                Some("oauth-refresh"),
+                None,
+                Some("openid email"),
+            )
+            .unwrap();
+
+        let stored = db
+            .lock()
+            .query_row(
+                "SELECT access_token_encrypted, refresh_token_encrypted
+                 FROM oauth_providers WHERE id = ?1",
+                [&provider_id],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                    ))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            decrypt_token(stored.0.as_deref().unwrap()).unwrap(),
+            "oauth-access"
+        );
+        assert_eq!(
+            decrypt_token(stored.1.as_deref().unwrap()).unwrap(),
+            "oauth-refresh"
+        );
+        assert_eq!(
+            manager
+                .get_oauth_provider(OAuthProvider::Google, "provider-user")
+                .unwrap()
+                .as_deref(),
+            Some(user.id.as_str())
+        );
     }
 }

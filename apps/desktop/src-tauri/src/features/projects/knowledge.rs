@@ -318,7 +318,7 @@ impl KnowledgeBase {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, content, memory_type, source, salience, embedding, created_at, last_accessed, access_coun
+            "SELECT id, project_id, content, memory_type, source, salience, embedding, created_at, last_accessed, access_count
              FROM project_memory
              WHERE project_id = ?1
              ORDER BY salience DESC, last_accessed DESC
@@ -414,5 +414,41 @@ mod tests {
         let db_path = dir.path().join("knowledge.db");
         let kb = KnowledgeBase::new(db_path);
         assert!(kb.is_ok());
+    }
+
+    #[test]
+    fn test_get_project_memories_reads_access_count_column() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("knowledge.db");
+        let kb = KnowledgeBase::new(db_path).unwrap();
+        let conn = Connection::open(&kb.db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO projects (id) VALUES (?1)", ["project-1"])
+            .unwrap();
+        drop(conn);
+
+        kb.add_memory(ProjectMemory {
+            id: "memory-1".to_string(),
+            project_id: "project-1".to_string(),
+            content: "remember this".to_string(),
+            memory_type: "decision".to_string(),
+            source: "user_input".to_string(),
+            salience: 0.8,
+            embedding: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            last_accessed: chrono::Utc::now().to_rfc3339(),
+            access_count: 3,
+        })
+        .unwrap();
+
+        let memories = kb.get_project_memories("project-1", 10).unwrap();
+        assert_eq!(memories.len(), 1);
+        assert_eq!(memories[0].access_count, 3);
     }
 }

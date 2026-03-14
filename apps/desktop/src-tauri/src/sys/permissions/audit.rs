@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecution {
@@ -36,18 +36,24 @@ pub struct PermissionRequest {
 }
 
 pub struct AuditLogger {
-    db_path: PathBuf,
+    conn: Mutex<Connection>,
 }
 
 impl AuditLogger {
-    pub fn new(db_path: PathBuf) -> Result<Self> {
-        let logger = Self { db_path };
+    pub fn new(db_path: std::path::PathBuf) -> Result<Self> {
+        let conn = Connection::open(db_path)?;
+        let logger = Self {
+            conn: Mutex::new(conn),
+        };
         logger.init_database()?;
         Ok(logger)
     }
 
     fn init_database(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tool_executions (
@@ -109,7 +115,10 @@ impl AuditLogger {
     }
 
     pub fn log_execution(&self, execution: ToolExecution) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         conn.execute(
             "INSERT INTO tool_executions
@@ -139,7 +148,10 @@ impl AuditLogger {
     }
 
     pub fn log_permission_request(&self, request: PermissionRequest) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         conn.execute(
             "INSERT INTO permission_requests
@@ -162,7 +174,10 @@ impl AuditLogger {
     }
 
     pub fn get_tool_executions(&self, tool_id: &str, limit: usize) -> Result<Vec<ToolExecution>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, tool_id, tool_name, user_id, conversation_id, parameters, result, success, error,
@@ -202,7 +217,10 @@ impl AuditLogger {
     }
 
     pub fn get_recent_executions(&self, limit: usize) -> Result<Vec<ToolExecution>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, tool_id, tool_name, user_id, conversation_id, parameters, result, success, error,
@@ -241,7 +259,10 @@ impl AuditLogger {
     }
 
     pub fn get_failed_executions(&self, limit: usize) -> Result<Vec<ToolExecution>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, tool_id, tool_name, user_id, conversation_id, parameters, result, success, error,
@@ -281,7 +302,10 @@ impl AuditLogger {
     }
 
     pub fn get_statistics(&self, tool_id: Option<&str>) -> Result<ToolExecutionStats> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         let (sql, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(id) = tool_id {
             (
@@ -349,7 +373,10 @@ impl AuditLogger {
     }
 
     pub fn clear_old_logs(&self, days: u32) -> Result<usize> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire audit database lock: {}", e))?;
 
         let deleted = conn.execute(
             "DELETE FROM tool_executions WHERE created_at < datetime('now', '-' || ?1 || ' days')",
@@ -382,5 +409,40 @@ mod tests {
         let db_path = dir.path().join("audit.db");
         let logger = AuditLogger::new(db_path);
         assert!(logger.is_ok());
+    }
+
+    #[test]
+    fn test_log_and_fetch_execution() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("audit.db");
+        let logger = AuditLogger::new(db_path).unwrap();
+
+        logger
+            .log_execution(ToolExecution {
+                id: "exec-1".to_string(),
+                tool_id: "tool-1".to_string(),
+                tool_name: "Example Tool".to_string(),
+                user_id: Some("user-1".to_string()),
+                conversation_id: Some("conversation-1".to_string()),
+                parameters: "{\"path\":\"/tmp/file\"}".to_string(),
+                result: Some("ok".to_string()),
+                success: true,
+                error: None,
+                execution_time_ms: 42,
+                memory_used_mb: Some(12.5),
+                cpu_usage_percent: Some(5.0),
+                permission_granted: true,
+                auto_approved: false,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            })
+            .unwrap();
+
+        let executions = logger.get_tool_executions("tool-1", 10).unwrap();
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].id, "exec-1");
+
+        let stats = logger.get_statistics(Some("tool-1")).unwrap();
+        assert_eq!(stats.total_executions, 1);
+        assert_eq!(stats.successful_executions, 1);
     }
 }

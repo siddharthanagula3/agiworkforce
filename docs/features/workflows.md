@@ -110,7 +110,7 @@ Nodes are tagged enums (`#[serde(tag = "type")]`), each with an `id`, `position`
 | `loop` | `LoopNodeData` | Iteration: count-based, condition-based (with 1000-iteration safety limit), or for-each over a collection variable. |
 | `parallel` | `ParallelNodeData` | Fork/join. Lists `branches` (node IDs), clones context per branch, executes concurrently via `tokio::spawn`, merges variables back. Configurable `wait_for_all` and `timeout_seconds` (default 300s). |
 | `wait` | `WaitNodeData` | Delays execution: fixed duration, until a timestamp, or until a condition is met (polls every 1s, max 3600s). Uses interruptible sleep that checks for cancellation/pause every second. |
-| `script` | `ScriptNodeData` | Runs JavaScript (deno/node), Python (python3/python), or Bash as a subprocess. Passes workflow variables as `WF_*` environment variables. Output captured as `script_output` variable. Max 1MB output. Configurable timeout (default 30s). |
+| `script` | `ScriptNodeData` | Runs JavaScript (deno/node), Python (python3/python), or Bash as a subprocess. Passes workflow variables as `WF_*` environment variables. Output captured as `script_output` variable. Max 1MB output. Configurable timeout (default 30s); timed-out children are killed before the node returns an error. |
 | `tool` | `ToolNodeData` | Invokes a named tool with input parameters. Currently a **stub** -- sleeps 100ms and sets `{tool_name}_output` variable with placeholder string `"Tool {name} executed"`. Does not actually invoke MCP tools or system tools. |
 
 #### WorkflowEdge
@@ -272,7 +272,7 @@ The scheduler handles recurring and event-based workflow triggering.
 ### Cron Scheduling
 
 - Uses the `cron` crate for expression parsing and next-execution-time calculation
-- `schedule_workflow(workflow_id, cron_expr, timezone)` -- Validates the cron expression and logs the schedule. **The actual persistence and execution loop are stubs** -- `check_scheduled_workflows()` returns `Ok(())` without doing anything, and `list_scheduled_workflows()` returns an empty vector.
+- `schedule_workflow(workflow_id, cron_expr, timezone)` -- Validates the cron expression, registers the schedule in the live runtime scheduler, and exposes it through `list_scheduled_workflows()`. The current implementation is runtime-scoped and does not yet restore schedules automatically after an app restart.
 - `get_next_execution_time(cron_expr)` -- Computes the next upcoming execution timestamp from a cron expression. This is fully functional.
 - The scheduler loop runs in a background `tokio::spawn`, checking every 60 seconds.
 
@@ -281,7 +281,7 @@ The scheduler handles recurring and event-based workflow triggering.
 Trigger registration methods exist but are **stubs** that only log the registration:
 
 - `trigger_on_event(workflow_id, event_type, event_data)` -- Immediately executes the workflow with event data as inputs
-- `trigger_via_webhook(workflow_id, auth_token, payload)` -- Immediately executes the workflow with payload as inputs
+- `trigger_via_webhook(workflow_id, auth_token, payload)` -- Validates the configured webhook auth token and then executes the workflow with payload as inputs
 - `register_file_watcher_trigger(workflow_id, path, event_types)` -- Logs registration only
 - `register_email_trigger(workflow_id, account_id, filter)` -- Logs registration only
 - `register_database_trigger(workflow_id, database_id, table, operation)` -- Logs registration only
@@ -591,7 +591,7 @@ CustomerSupport, SalesMarketing, Development, Operations, PersonalProductivity, 
 
 2. **Condition evaluator is trivial** -- Only supports `$variable_name` for boolean lookup. No expression parsing, no comparison operators, no `output_contains`/`output_equals` despite the `ConditionType` enum defining them. Decision nodes and edge conditions are effectively limited to boolean variable checks.
 
-3. **Scheduler is not persistent** -- `schedule_workflow` validates the cron expression and logs it, but does not persist the schedule. `check_scheduled_workflows()` is empty. `list_scheduled_workflows()` returns an empty vector. Scheduled triggers effectively do nothing beyond the initial API call.
+3. **Scheduler is runtime-scoped** -- `schedule_workflow` now registers and executes live cron schedules within the running desktop process, but schedules are not yet restored automatically after an app restart.
 
 ### High
 
@@ -609,7 +609,7 @@ CustomerSupport, SalesMarketing, Development, Operations, PersonalProductivity, 
 
 9. **Event triggers are fire-and-forget stubs** -- `register_file_watcher_trigger`, `register_email_trigger`, `register_database_trigger`, and `register_api_trigger` only log the registration without setting up actual listeners.
 
-10. **Loop nodes do not execute child nodes** -- The loop body iterates and sets the item variable, but does not execute any child nodes within the loop. The loop node appears to be a placeholder that sets up iteration context without actually running nested workflows.
+10. **Duplicate scheduler hierarchy remains** -- `core/orchestration/workflow_scheduler.rs` is the live runtime scheduler for workflow triggers, but `sys/commands/scheduler.rs` still maintains a separate flat scheduled-job type system for UI-driven scheduled tasks. Those two hierarchies are still not unified.
 
 11. **No workflow versioning** -- Updates overwrite the entire definition. No version history, no rollback, no diff between versions.
 

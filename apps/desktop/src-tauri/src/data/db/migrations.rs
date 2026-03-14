@@ -1,8 +1,12 @@
-use rusqlite::{Connection, Result};
+use hmac::{Hmac, Mac};
+use rusqlite::{params, Connection, Result};
+use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 58;
+const CURRENT_VERSION: i32 = 59;
+const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
+type HmacSha256 = Hmac<Sha256>;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -543,6 +547,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 58 {
         run_migration_in_transaction(conn, 58, apply_migration_v58)?;
+    }
+
+    if current_version < 59 {
+        run_migration_in_transaction(conn, 59, apply_migration_v59)?;
     }
 
     Ok(())
@@ -4983,10 +4991,214 @@ fn apply_migration_v58(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migration_security_error(message: impl Into<String>) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(std::io::Error::other(message.into()).into())
+}
+
+fn migration_hmac_token(token: &str) -> Result<String> {
+    let key_bytes = crate::sys::security::machine_key::derive_key(
+        crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
+    );
+    let mut mac = HmacSha256::new_from_slice(&key_bytes)
+        .map_err(|e| migration_security_error(format!("HMAC init failed: {e}")))?;
+    mac.update(token.as_bytes());
+    Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
+fn migration_encrypt_token(token: &str) -> Result<String> {
+    let key_bytes = crate::sys::security::machine_key::derive_key(
+        crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
+    );
+    let encrypted = crate::sys::security::encryption::encrypt_secret(&key_bytes, token)
+        .map_err(migration_security_error)?;
+    serde_json::to_string(&encrypted).map_err(|e| {
+        migration_security_error(format!("Serialize encrypted auth session token: {e}"))
+    })
+}
+
+fn apply_migration_v59(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE auth_sessions RENAME TO auth_sessions_legacy_v59;
+
+        CREATE TABLE auth_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            access_token TEXT NOT NULL DEFAULT '[redacted]',
+            refresh_token TEXT NOT NULL DEFAULT '[redacted]',
+            access_token_hash TEXT NOT NULL UNIQUE,
+            access_token_encrypted TEXT NOT NULL,
+            refresh_token_hash TEXT NOT NULL UNIQUE,
+            refresh_token_encrypted TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            last_activity_at TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );",
+    )?;
+
+    #[derive(Debug)]
+    struct LegacyAuthSessionRow {
+        session_id: String,
+        user_id: String,
+        access_token: String,
+        refresh_token: String,
+        access_token_hash: Option<String>,
+        access_token_encrypted: Option<String>,
+        refresh_token_hash: Option<String>,
+        refresh_token_encrypted: Option<String>,
+        created_at: String,
+        expires_at: String,
+        last_activity_at: String,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+    }
+
+    let legacy_rows = {
+        let mut stmt = conn.prepare(
+            "SELECT session_id, user_id, access_token, refresh_token,
+             access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
+             created_at, expires_at, last_activity_at, ip_address, user_agent
+             FROM auth_sessions_legacy_v59",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(LegacyAuthSessionRow {
+                session_id: row.get(0)?,
+                user_id: row.get(1)?,
+                access_token: row.get(2)?,
+                refresh_token: row.get(3)?,
+                access_token_hash: row.get(4)?,
+                access_token_encrypted: row.get(5)?,
+                refresh_token_hash: row.get(6)?,
+                refresh_token_encrypted: row.get(7)?,
+                created_at: row.get(8)?,
+                expires_at: row.get(9)?,
+                last_activity_at: row.get(10)?,
+                ip_address: row.get(11)?,
+                user_agent: row.get(12)?,
+            })
+        })?;
+
+        rows.collect::<Result<Vec<_>>>()?
+    };
+
+    let mut migrated = 0usize;
+    let mut deleted_invalid = 0usize;
+    let mut skipped_duplicates = 0usize;
+
+    for row in legacy_rows {
+        let access_hash = match row.access_token_hash.filter(|value| !value.is_empty()) {
+            Some(value) => Some(value),
+            None if row.access_token != REDACTED_TOKEN_SENTINEL => {
+                Some(migration_hmac_token(&row.access_token)?)
+            }
+            None => None,
+        };
+        let refresh_hash = match row.refresh_token_hash.filter(|value| !value.is_empty()) {
+            Some(value) => Some(value),
+            None if row.refresh_token != REDACTED_TOKEN_SENTINEL => {
+                Some(migration_hmac_token(&row.refresh_token)?)
+            }
+            None => None,
+        };
+        let access_encrypted = match row.access_token_encrypted.filter(|value| !value.is_empty()) {
+            Some(value) => Some(value),
+            None if row.access_token != REDACTED_TOKEN_SENTINEL => {
+                Some(migration_encrypt_token(&row.access_token)?)
+            }
+            None => None,
+        };
+        let refresh_encrypted = match row
+            .refresh_token_encrypted
+            .filter(|value| !value.is_empty())
+        {
+            Some(value) => Some(value),
+            None if row.refresh_token != REDACTED_TOKEN_SENTINEL => {
+                Some(migration_encrypt_token(&row.refresh_token)?)
+            }
+            None => None,
+        };
+
+        let (
+            Some(access_hash),
+            Some(access_encrypted),
+            Some(refresh_hash),
+            Some(refresh_encrypted),
+        ) = (
+            access_hash,
+            access_encrypted,
+            refresh_hash,
+            refresh_encrypted,
+        )
+        else {
+            deleted_invalid += 1;
+            tracing::warn!(
+                session_id = %row.session_id,
+                "Migration v59: dropped auth session row missing recoverable encrypted/hash token data"
+            );
+            continue;
+        };
+
+        let inserted = conn.execute(
+            "INSERT OR IGNORE INTO auth_sessions (
+                session_id, user_id, access_token, refresh_token,
+                access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
+                created_at, expires_at, last_activity_at, ip_address, user_agent
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                row.session_id,
+                row.user_id,
+                REDACTED_TOKEN_SENTINEL,
+                REDACTED_TOKEN_SENTINEL,
+                access_hash,
+                access_encrypted,
+                refresh_hash,
+                refresh_encrypted,
+                row.created_at,
+                row.expires_at,
+                row.last_activity_at,
+                row.ip_address,
+                row.user_agent,
+            ],
+        )?;
+        if inserted == 0 {
+            skipped_duplicates += 1;
+            tracing::warn!(
+                session_id = %row.session_id,
+                "Migration v59: skipped duplicate auth session hash during rebuild"
+            );
+            continue;
+        }
+
+        migrated += 1;
+    }
+
+    conn.execute("DROP TABLE auth_sessions_legacy_v59", [])?;
+    conn.execute(
+        "CREATE INDEX idx_auth_sessions_user_id ON auth_sessions(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX idx_auth_sessions_expires_at ON auth_sessions(expires_at)",
+        [],
+    )?;
+
+    tracing::info!(
+        migrated_sessions = migrated,
+        dropped_invalid_sessions = deleted_invalid,
+        skipped_duplicate_sessions = skipped_duplicates,
+        "Migration v59: rebuilt auth_sessions to use hashed lookups, encrypted storage, and redacted legacy columns"
+    );
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
+    use rusqlite::{params, Connection};
 
     #[test]
     fn test_migrations() {
@@ -5028,5 +5240,227 @@ mod tests {
             .unwrap();
 
         assert_eq!(fk_enabled, 1);
+    }
+
+    #[test]
+    fn test_migration_v59_rebuilds_and_redacts_auth_sessions() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
+
+        conn.execute(
+            "CREATE TABLE schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO schema_version (version) VALUES (58)", [])
+            .unwrap();
+
+        conn.execute(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login_at TEXT,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT,
+                email_verified INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params!["user-1", "legacy@example.com", "pw", "editor", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        conn.execute(
+            "CREATE TABLE auth_sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                access_token TEXT NOT NULL UNIQUE,
+                refresh_token TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_activity_at TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                access_token_hash TEXT,
+                access_token_encrypted TEXT,
+                refresh_token_hash TEXT,
+                refresh_token_encrypted TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO auth_sessions (
+                session_id, user_id, access_token, refresh_token,
+                created_at, expires_at, last_activity_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                "legacy-session",
+                "user-1",
+                "legacy-access-token",
+                "legacy-refresh-token",
+                "2026-01-01T00:00:00Z",
+                "2026-01-02T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+            ],
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        let row = conn
+            .query_row(
+                "SELECT access_token, refresh_token, access_token_hash, access_token_encrypted,
+                 refresh_token_hash, refresh_token_encrypted
+                 FROM auth_sessions WHERE session_id = ?1",
+                ["legacy-session"],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(row.0, REDACTED_TOKEN_SENTINEL);
+        assert_eq!(row.1, REDACTED_TOKEN_SENTINEL);
+        assert!(!row.2.is_empty());
+        assert!(!row.3.is_empty());
+        assert!(!row.4.is_empty());
+        assert!(!row.5.is_empty());
+
+        conn.execute(
+            "INSERT INTO auth_sessions (
+                session_id, user_id, access_token, refresh_token,
+                access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
+                created_at, expires_at, last_activity_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                "new-session",
+                "user-1",
+                REDACTED_TOKEN_SENTINEL,
+                REDACTED_TOKEN_SENTINEL,
+                "hash-2",
+                "enc-2",
+                "refresh-hash-2",
+                "refresh-enc-2",
+                "2026-01-01T00:00:00Z",
+                "2026-01-02T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+            ],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_migration_v59_skips_duplicate_hashed_tokens() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
+
+        conn.execute(
+            "CREATE TABLE schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO schema_version (version) VALUES (58)", [])
+            .unwrap();
+
+        conn.execute(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login_at TEXT,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT,
+                email_verified INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params!["user-1", "duplicate@example.com", "pw", "editor", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        conn.execute(
+            "CREATE TABLE auth_sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                access_token TEXT NOT NULL UNIQUE,
+                refresh_token TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_activity_at TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                access_token_hash TEXT,
+                access_token_encrypted TEXT,
+                refresh_token_hash TEXT,
+                refresh_token_encrypted TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .unwrap();
+
+        for session_id in ["session-a", "session-b"] {
+            conn.execute(
+                "INSERT INTO auth_sessions (
+                    session_id, user_id, access_token, refresh_token,
+                    created_at, expires_at, last_activity_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    session_id,
+                    "user-1",
+                    format!("shared-access-{session_id}"),
+                    format!("shared-refresh-{session_id}"),
+                    "2026-01-01T00:00:00Z",
+                    "2026-01-02T00:00:00Z",
+                    "2026-01-01T00:00:00Z",
+                ],
+            )
+            .unwrap();
+        }
+
+        let duplicate_hash = migration_hmac_token("shared-token").unwrap();
+        let duplicate_encrypted = migration_encrypt_token("shared-token").unwrap();
+        conn.execute(
+            "UPDATE auth_sessions
+             SET access_token_hash = ?1,
+                 access_token_encrypted = ?2,
+                 refresh_token_hash = ?1,
+                 refresh_token_encrypted = ?2",
+            params![duplicate_hash, duplicate_encrypted],
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        let row_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM auth_sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 1);
     }
 }

@@ -10,7 +10,7 @@ pub use scheduled_reports::*;
 
 use rusqlite::Connection;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct AnalyticsState {
     pub db: Arc<Mutex<Connection>>,
