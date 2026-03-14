@@ -63,6 +63,7 @@ The analytics system has four distinct subsystems that operate independently:
 - Milestone system: auto-detects thresholds (10h, 100h, 1000h saved), records in `user_milestones`, broadcasts achievement events
 - `ROICalculator` runs comprehensive ROI analysis from `automation_history`, `outcome_tracking`, `messages`, `cache_entries` tables
 - `MetricsAggregator` slices data by process type, user, and tool with trend calculation
+- Analytics commands now reuse the managed desktop `AppDatabase` connection directly; they no longer open a second SQLite writer for ROI/report queries.
 
 **Subsystem 3: Usage Tracking (Billing Meters)**
 - Tracks Stripe-metered usage: automations_executed, api_calls_made, storage_used_mb, llm_tokens_used, browser_sessions, mcp_tool_calls
@@ -449,10 +450,11 @@ Comparison targets by role:
 6. **`analyticsQueries.ts` has stub data**: `queryRetentionRate`, `queryConversionFunnel`, `queryErrorStats`, `queryCategoryData`, `queryPerformanceMetrics` return hardcoded mock data.
 7. **Telemetry endpoint not wired**: `TELEMETRY_ENDPOINT` env var is never configured in production -- all events fall back to local file storage.
 8. **Duplicate store functionality**: `analyticsMetricsStore` and parts of `billingUsage` store overlap in responsibility for system/app metrics loading.
-9. **`roiStore` IPC snake_case concern**: `fetchComparison` passes `automation_type` (snake_case) to `get_manual_vs_automated_comparison` invoke -- this may silently fail per Tauri IPC rules requiring camelCase params. Needs audit.
-10. **Employee names are synthetic**: `RealtimeMetricsCollector.get_top_employees()` generates names as `"Employee {employee_id}"` rather than looking up actual employee names.
-11. **`share_milestone` has BOLA protection**: Ownership check is implemented (user_id verification before update), but milestone sharing has no actual sharing mechanism (just sets a `shared` flag).
-12. **No WebSocket reconnection logic**: `roiStore.subscribeToLiveUpdates()` sets `isConnected = true` synchronously before the listener is established, with no reconnection on disconnect.
+9. **Top-level usage stats are still desktop approximations**: values like `total_users`, `dau`, and `new_users_*` are synthesized for a local-first single-user product, not derived from a true multi-user analytics model.
+10. **`roiStore` IPC snake_case concern**: `fetchComparison` passes `automation_type` (snake_case) to `get_manual_vs_automated_comparison` invoke -- this may silently fail per Tauri IPC rules requiring camelCase params. Needs audit.
+11. **Employee names are synthetic**: `RealtimeMetricsCollector.get_top_employees()` generates names as `"Employee {employee_id}"` rather than looking up actual employee names.
+12. **`share_milestone` has BOLA protection**: Ownership check is implemented (user_id verification before update), but milestone sharing has no actual sharing mechanism (just sets a `shared` flag).
+13. **No WebSocket reconnection logic**: `roiStore.subscribeToLiveUpdates()` sets `isConnected = true` synchronously before the listener is established, with no reconnection on disconnect.
 
 13. **15 commands defined but NOT registered in `generate_handler!()`**: The following commands have `#[tauri::command]` definitions in their respective files but are not listed in `lib.rs`'s `generate_handler![]` macro, making them unreachable via Tauri IPC:
 

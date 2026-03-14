@@ -18,9 +18,11 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
-import { invoke, openUrl } from '../../lib/tauri-mock';
+import { openUrl } from '../../lib/tauri-mock';
+import { McpClient } from '../../api/mcp';
 import { useMcpStore } from '../../stores/mcpStore';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import type { McpOAuthConnectionStatus, McpOAuthProvider } from '../../types/mcp';
 
 interface MCPCredentialManagerProps {
   servers: McpServerInfo[];
@@ -34,7 +36,7 @@ const OAUTH_PROVIDERS = {
     description: 'Connect your GitHub account for repository access',
     scopes: ['repo', 'read:user'],
   },
-  'google-drive': {
+  google_drive: {
     name: 'Google Drive',
     icon: Cloud,
     description: 'Connect your Google Drive for file access',
@@ -54,19 +56,10 @@ const MANUAL_CREDENTIAL_CONFIGS: Record<
   Array<{ key: string; label: string; placeholder: string }>
 > = {};
 
-type OAuthProvider = keyof typeof OAUTH_PROVIDERS;
-
-interface OAuthStatus {
-  connected: boolean;
-  user_info?: {
-    name: string;
-    email?: string;
-    avatar_url?: string;
-  };
-}
+type OAuthProvider = McpOAuthProvider;
 
 interface OAuthState {
-  status: Record<OAuthProvider, OAuthStatus>;
+  status: Record<OAuthProvider, McpOAuthConnectionStatus>;
   loading: Record<OAuthProvider, boolean>;
   error: Record<OAuthProvider, string | null>;
 }
@@ -77,18 +70,18 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
   // OAuth state
   const [oauthState, setOauthState] = useState<OAuthState>({
     status: {
-      github: { connected: false },
-      'google-drive': { connected: false },
-      slack: { connected: false },
+      github: { connected: false, userInfo: null, expiresAt: null },
+      google_drive: { connected: false, userInfo: null, expiresAt: null },
+      slack: { connected: false, userInfo: null, expiresAt: null },
     },
     loading: {
       github: false,
-      'google-drive': false,
+      google_drive: false,
       slack: false,
     },
     error: {
       github: null,
-      'google-drive': null,
+      google_drive: null,
       slack: null,
     },
   });
@@ -102,7 +95,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
   // Check OAuth status for a provider
   const checkOAuthStatus = useCallback(async (provider: OAuthProvider) => {
     try {
-      const result = await invoke<OAuthStatus>('mcp_oauth_status', { provider });
+      const result = await McpClient.oauthStatus(provider);
       setOauthState((prev) => ({
         ...prev,
         status: {
@@ -121,7 +114,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         ...prev,
         status: {
           ...prev.status,
-          [provider]: { connected: false },
+          [provider]: { connected: false, userInfo: null, expiresAt: null },
         },
       }));
     }
@@ -144,9 +137,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }));
 
     try {
-      const result = await invoke<{ auth_url: string; state: string }>('mcp_oauth_start', {
-        provider,
-      });
+      const result = await McpClient.oauthStart(provider);
 
       // Store OAuth state for CSRF verification on callback.
       // Note: This is a random nonce for CSRF protection, NOT a credential.
@@ -155,7 +146,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       sessionStorage.setItem(`oauth_state_${provider}`, result.state);
 
       // Open browser for OAuth
-      await openUrl(result.auth_url);
+      await openUrl(result.authUrl);
 
       // Keep loading state until callback completes
     } catch (error) {
@@ -180,12 +171,12 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }));
 
     try {
-      await invoke('mcp_oauth_disconnect', { provider });
+      await McpClient.oauthDisconnect(provider);
       setOauthState((prev) => ({
         ...prev,
         status: {
           ...prev.status,
-          [provider]: { connected: false },
+          [provider]: { connected: false, userInfo: null, expiresAt: null },
         },
         loading: { ...prev.loading, [provider]: false },
       }));
@@ -222,9 +213,10 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
 
       // Clear stored state
       sessionStorage.removeItem(`oauth_state_${provider}`);
+      const verifiedState = storedState;
 
       try {
-        await invoke('mcp_oauth_callback', { provider, code, callbackState: state });
+        await McpClient.oauthCallback(provider, code, verifiedState);
         // Refresh status
         await checkOAuthStatus(provider);
         setOauthState((prev) => ({
@@ -264,7 +256,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
           const state = parsed.searchParams.get('state');
 
           if (code && state && provider in OAUTH_PROVIDERS) {
-            handleOAuthCallback(provider, code, state);
+            void handleOAuthCallback(provider, code, state);
           }
         }
       } catch (error) {
@@ -398,11 +390,11 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
                         <CheckCircle className="w-4 h-4 text-green-500" />
                         <span className="text-sm">
                           Connected as{' '}
-                          <span className="font-medium">{status.user_info?.name || 'User'}</span>
+                          <span className="font-medium">{status.userInfo?.name || 'User'}</span>
                         </span>
-                        {status.user_info?.email && (
+                        {status.userInfo?.email && (
                           <span className="text-xs text-muted-foreground">
-                            ({status.user_info.email})
+                            ({status.userInfo.email})
                           </span>
                         )}
                       </div>

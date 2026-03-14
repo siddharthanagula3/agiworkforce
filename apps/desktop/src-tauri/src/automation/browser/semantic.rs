@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn escape_script_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SelectorStrategy {
     DataTestId(String),
@@ -34,36 +43,46 @@ impl SelectorStrategy {
     pub fn to_selector_script(&self) -> String {
         match self {
             SelectorStrategy::DataTestId(id) => {
-                format!("document.querySelector('[data-testid=\"{}\"]')", id)
+                format!(
+                    "document.querySelector('[data-testid=\"{}\"]')",
+                    escape_script_value(id)
+                )
             }
             SelectorStrategy::AriaLabel(label) => {
-                format!("document.querySelector('[aria-label=\"{}\"]')", label)
+                format!(
+                    "document.querySelector('[aria-label=\"{}\"]')",
+                    escape_script_value(label)
+                )
             }
             SelectorStrategy::Role(role, name) => {
                 format!(
                     r#"Array.from(document.querySelectorAll('[role="{}"]')).find(el => el.textContent.includes('{}'))"#,
-                    role, name
+                    escape_script_value(role),
+                    escape_script_value(name)
                 )
             }
             SelectorStrategy::Text(text) => {
                 format!(
                     r#"Array.from(document.querySelectorAll('*')).find(el => el.textContent.trim() === '{}')"#,
-                    text
+                    escape_script_value(text)
                 )
             }
             SelectorStrategy::Placeholder(placeholder) => {
                 format!(
                     "document.querySelector('[placeholder=\"{}\"]')",
-                    placeholder
+                    escape_script_value(placeholder)
                 )
             }
             SelectorStrategy::Css(selector) => {
-                format!("document.querySelector('{}')", selector)
+                format!(
+                    "document.querySelector('{}')",
+                    escape_script_value(selector)
+                )
             }
             SelectorStrategy::XPath(xpath) => {
                 format!(
                     "document.evaluate('{}', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue",
-                    xpath
+                    escape_script_value(xpath)
                 )
             }
         }
@@ -415,7 +434,8 @@ impl AccessibilityAnalyzer {
                         selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase()
                     }}))
                 "#,
-                role, name
+                escape_script_value(role),
+                escape_script_value(name)
             )
         } else {
             format!(
@@ -427,7 +447,7 @@ impl AccessibilityAnalyzer {
                         selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase()
                     }}))
                 "#,
-                role
+                escape_script_value(role)
             )
         }
     }
@@ -699,5 +719,19 @@ mod tests {
         let script = strat.to_selector_script();
         assert!(script.contains("data-testid"));
         assert!(script.contains("login-btn"));
+    }
+
+    #[test]
+    fn selector_scripts_escape_single_quotes() {
+        let strat = SelectorStrategy::Text("user's profile".into());
+        let script = strat.to_selector_script();
+        assert!(script.contains("user\\'s profile"));
+    }
+
+    #[test]
+    fn selector_scripts_escape_double_quotes_in_attribute_contexts() {
+        let strat = SelectorStrategy::DataTestId("test\"quote".into());
+        let script = strat.to_selector_script();
+        assert!(script.contains("test\\\"quote"));
     }
 }

@@ -6,11 +6,8 @@
 
 | Layer | Location |
 |-------|----------|
-| Frontend Components | `apps/desktop/src/components/Browser/BrowserWorkspace.tsx` |
-| | `apps/desktop/src/components/Browser/BrowserViewer.tsx` |
-| | `apps/desktop/src/components/Browser/BrowserRecorder.tsx` |
+| Frontend Components | `apps/desktop/src/components/Browser/BrowserViewer.tsx` |
 | | `apps/desktop/src/components/Browser/BrowserActionLog.tsx` |
-| | `apps/desktop/src/components/Browser/BrowserDebugPanel.tsx` |
 | | `apps/desktop/src/components/Browser/BrowserVisualization.tsx` |
 | | `apps/desktop/src/components/Browser/index.ts` |
 | Stores | `apps/desktop/src/stores/browserStore.ts` |
@@ -38,36 +35,36 @@
 
 ```
 User opens Browser panel
-  → BrowserWorkspace.tsx mounts
+  → BrowserVisualization mounts
   → useEffect detects !initialized
   → useBrowserStore.initialize()
   → invoke('browser_init')  [Tauri IPC]
   → browser.rs: browser_init() checks BrowserStateWrapper.is_available()
   → Returns Ok(()) if BrowserState initialized, Err if degraded mode
   → Store sets initialized = true
-  → Three Tauri event listeners registered (NOTE: none of these events are actually emitted by any Rust code — see Known Issues):
-      listen('browser:action')  → addAction() → actions[] (never emitted by Rust)
-      listen('browser:console') → consoleLogs[] (capped at 5000) (never emitted by Rust)
-      listen('browser:network') → networkRequests[] (capped at 5000) (never emitted by Rust)
+  → No browser console/network telemetry listeners are part of the live store contract
+  → Mounted browser UI exposes preview streaming plus the browser action log only
 ```
 
 ### 2. Launching a Browser
 
 ```
 User clicks "Launch Browser" → selects "Chromium (Headed)"
-  → BrowserWorkspace.handleLaunchBrowser('Chromium', false)
-  → useBrowserStore.launchBrowser('Chromium', false)
+  → browser control path invokes useBrowserStore.launchBrowser('Chromium', false)
   → invoke('browser_launch', { browserType: 'Chromium', headless: false })  [Tauri IPC]
   → browser.rs: browser_launch()
-      → BrowserOptions::default() (headless=false, viewport=1280×720, timeout=30s)
-      → PlaywrightBridge.launch_browser(BrowserType::Chromium, options)
+      → Merges the live camelCase launch payload into BrowserLaunchRequest
+      → Resolves BrowserType from browserType ('Chromium' | 'Firefox' | 'Webkit')
+      → Builds BrowserOptions (headless / proxy / args / timeout / optional profile directory)
+      → PlaywrightBridge.launch_browser(browserType, options)
           → build_browser_command() → finds Chrome/Chromium binary via platform paths
               macOS/Linux: "chromium"
               Windows: searches LOCALAPPDATA + Program Files
-          → Args: --remote-debugging-port=9222 --no-first-run --no-default-browser-check
+          → Args: --remote-debugging-port={configured CDP port} --no-first-run --no-default-browser-check
           → std::process::Command::new(exe).args(args).spawn()
-          → Stores Child process in browser_processes HashMap (keyed by uuid)
-          → Returns BrowserHandle { id: uuid, browser_type, ws_endpoint }
+          → CdpEndpoint.wait_for_browser_ws_endpoint() polls `/json/version` on the configured CDP port
+          → Returns BrowserHandle { id: uuid, browser_type, ws_endpoint } with the real browser websocket endpoint
+          → Stores Child process in browser_processes HashMap (keyed by uuid) only after DevTools is reachable
   → Returns sessionId (uuid string)
   → Store creates BrowserSession { id, browserType, headless, tabs: [], active: true }
   → Store sets activeSessionId = sessionId
@@ -77,11 +74,12 @@ User clicks "Launch Browser" → selects "Chromium (Headed)"
 
 ```
 User enters URL → clicks "Go"
-  → BrowserWorkspace.handleOpenTab()
-  → useBrowserStore.openTab(url)
+  → browser control path invokes useBrowserStore.openTab(url)
   → invoke('browser_open_tab', { url })  [Tauri IPC]
   → browser.rs: browser_open_tab()
-      → Tries Chrome HTTP API: PUT http://127.0.0.1:9222/json/new?{url}
+      → Reads the configured CDP port from PlaywrightBridge.endpoint()
+      → Tries CDP target creation via CdpEndpoint.create_target()
+          → PUT /json/new?{url} on the configured CDP port (falls back to GET if needed)
           → On success: parses JSON for { id: chromeTargetId }
           → TabManager.register_tab(chromeTargetId, url)
       → On HTTP failure (Chrome not running): falls back to TabManager.open_tab(url)
@@ -92,15 +90,17 @@ User enters URL → clicks "Go"
   → Store pushes BrowserTab { id, url, title, active: true } into session.tabs
 
 User types URL → presses Enter or clicks refresh icon
-  → BrowserWorkspace.handleNavigate()
-  → useBrowserStore.navigateTab(tabId, url)
+  → browser control path invokes useBrowserStore.navigateTab(tabId, url)
   → invoke('browser_navigate', { tabId, url })  [Tauri IPC]
   → browser.rs: browser_navigate(app, state, url, tab_id)
       → TabManager verifies tab exists, gets target_tab_id
       → BrowserStateWrapper.get_cdp_client_for_tab(target_tab_id)
           → BrowserState.get_cdp_client(tab_id):
               → Checks cdp_clients HashMap; creates new CdpClient if missing
-              → ws_url = "ws://127.0.0.1:9222/devtools/page/{tab_id}"
+              → Reads shared CdpEndpoint from PlaywrightBridge
+              → Resolves tab websocket via CdpEndpoint.resolve_page_ws_endpoint(tab_id)
+                  → prefers `/json` target metadata
+                  → falls back to `ws://127.0.0.1:{configuredPort}/devtools/page/{tab_id}`
               → CdpClient.connect():
                   → tokio_tungstenite::connect_async(ws_url)
                   → Spawns writer task (mpsc::unbounded_channel sender)
@@ -118,8 +118,7 @@ User types URL → presses Enter or clicks refresh icon
 
 ```
 User enters CSS selector → clicks "Click Element"
-  → BrowserWorkspace.handleClick()
-  → useBrowserStore.clickElement(tabId, selector)
+  → browser control path invokes useBrowserStore.clickElement(tabId, selector)
   → invoke('browser_click', { tabId, selector })  [Tauri IPC]
   → browser.rs: browser_click(state, selector, tab_id)
       → is_valid_css_selector(selector):
@@ -172,8 +171,8 @@ User clicks "Stop Recording"
   → useBrowserStore.stopRecording()
   → isRecording = false
 
-User views Code tab in BrowserRecorder
-  → generatePlaywrightCode() / generatePuppeteerCode() / generateSeleniumCode()
+User exports code from the active recording flow
+  → useBrowserStore.generatePlaywrightCode() / generatePuppeteerCode() / generateSeleniumCode()
   → Pure string-template code generation from recordedSteps array
   → No backend call — purely in-store
 
@@ -270,16 +269,17 @@ All commands live in `apps/desktop/src-tauri/src/sys/commands/browser.rs` and re
 | Command Name | Key Parameters | Return Type | Notes |
 |---|---|---|---|
 | `browser_init` | — | `Result<(), String>` | Checks if BrowserStateWrapper is available; errors in degraded mode |
-| `browser_check_status` | — | `Result<Value, String>` | Returns `{ available: bool, error: string \| null }` — **NOT REGISTERED in `generate_handler![]`; function exists in `browser.rs` but IPC calls will fail** |
-| `browser_launch` | `options?: { headless: bool }` | `Result<String, String>` | Spawns browser process, returns session UUID |
-| `browser_open_tab` | `url?: String` | `Result<String, String>` | Creates tab via CDP HTTP API `PUT /json/new`, falls back to internal tracking |
-| `browser_close_tab` | `tabId?: String` | `Result<(), String>` | Closes via `GET /json/close/{id}`, removes from TabManager |
+| `browser_check_status` | — | `Result<Value, String>` | Returns `{ available: bool, error: string \| null }` |
+| `browser_launch` | `browserType?: String`, `headless?: bool`, `profileName?: String`, `proxy?: String`, `options?: { headless?: bool, args?: string[], userDataDir?: string, timeout?: number }` | `Result<String, String>` | Merges live frontend payload into launch options, spawns browser process, waits for a reachable DevTools endpoint, returns session UUID |
+| `browser_close` | `browserId: String` | `Result<(), String>` | Terminates the launched browser process by handle id |
+| `browser_open_tab` | `url?: String` | `Result<String, String>` | Creates a real CDP target via the shared `CdpEndpoint` contract on the configured CDP port |
+| `browser_close_tab` | `tabId?: String` | `Result<(), String>` | Closes via the shared `CdpEndpoint` contract, removes from TabManager |
 | `browser_switch_tab` | `tabId: String` | `Result<(), String>` | Sets active tab in TabManager |
-| `browser_list_tabs` | — | `Result<Vec<String>, String>` | Returns vec of tab IDs |
+| `browser_list_tabs` | — | `Result<Vec<TabInfo>, String>` | Returns structured tab records `{ id, url, title, favicon, loading, created_at }` |
 | `browser_navigate` | `url: String`, `tabId?: String` | `Result<(), String>` | CDP `Page.navigate`; triggers `auto_tile_for_browser` on first call |
-| `browser_go_back` | `tabId?: String` | `Result<(), String>` | Evaluates `window.history.back()` via CDP |
-| `browser_go_forward` | `tabId?: String` | `Result<(), String>` | Evaluates `window.history.forward()` via CDP |
-| `browser_reload` | `tabId?: String` | `Result<(), String>` | Evaluates `window.location.reload()` via CDP |
+| `browser_go_back` | `tabId?: String` | `Result<(), String>` | Uses CDP `Page.getNavigationHistory` + `Page.navigateToHistoryEntry` |
+| `browser_go_forward` | `tabId?: String` | `Result<(), String>` | Uses CDP `Page.getNavigationHistory` + `Page.navigateToHistoryEntry` |
+| `browser_reload` | `tabId?: String` | `Result<(), String>` | Updates TabManager loading state; live CDP page reload remains a separate cleanup target |
 | `browser_get_url` | `tabId?: String` | `Result<String, String>` | CDP Runtime.evaluate → `window.location.href` |
 | `browser_get_title` | `tabId?: String` | `Result<String, String>` | CDP Runtime.evaluate → `document.title` |
 | `browser_click` | `selector: String`, `tabId?: String` | `Result<(), String>` | CSS allowlist validation + `element.click()` via CDP |
@@ -304,26 +304,26 @@ All commands live in `apps/desktop/src-tauri/src/sys/commands/browser.rs` and re
 | `browser_wait_for_interactive` | `selector: String`, `timeoutMs?: u64`, `tabId?: String` | `Result<(), String>` | Polls 100ms until element is visible+enabled; default 30s timeout |
 | `browser_fill_form` | `selector: String`, `data: Value`, `tabId?: String` | `Result<(), String>` | Iterates JSON object fields; matches inputs by `name`, `id`, or selector within form |
 | `browser_drag_and_drop` | `source: String`, `target: String`, `tabId?: String` | `Result<(), String>` | Dispatches `dragstart`/`dragenter`/`dragover`/`drop`/`dragend` events via CDP |
-| `browser_upload_file` | `selector: String`, `paths: Vec<String>`, `tabId?: String` | `Result<(), String>` | Validates paths (no `..`, no null bytes, file must exist); sets `input.files` via DataTransfer API |
+| `browser_upload_file` | `selector: String`, `paths: Vec<String>`, `tabId?: String` | `Result<(), String>` | Validates + canonicalizes host file paths, resolves the file input via CDP DOM APIs, then uses `DOM.setFileInputFiles` |
 | `browser_get_cookies` | `tabId?: String` | `Result<Vec<Value>, String>` | CDP `Network.getCookies` via AdvancedBrowserOps |
 | `browser_set_cookie` | `cookie: Value`, `tabId?: String` | `Result<(), String>` | CDP `Network.setCookie` |
 | `browser_clear_cookies` | `tabId?: String` | `Result<(), String>` | CDP `Network.clearBrowserCookies` |
 | `browser_get_performance_metrics` | `tabId?: String` | `Result<Value, String>` | Reads `performance.timing` + paint entries + `performance.memory` |
 | `browser_wait_for_navigation` | `timeoutMs?: u64`, `tabId?: String` | `Result<(), String>` | Polls `window.location.href` change + listens for `load` event |
 | `browser_highlight_element` | `selector: String`, `tabId?: String` | `Result<Value, String>` | Returns `{ success, bounds: { x, y, width, height } }` from `getBoundingClientRect()` |
-| `browser_get_console_logs` | — | `Result<Vec<String>, String>` | **Stub — returns empty vec** |
-| `browser_get_network_activity` | — | `Result<Vec<Value>, String>` | **Stub — returns empty vec** |
-| `browser_get_frames` | — | `Result<Vec<String>, String>` | **Stub — returns empty vec; NOT REGISTERED in `generate_handler![]`** |
-| `browser_execute_in_frame` | `frameId: String`, `script: String` | `Result<Value, String>` | **Stub — returns null; NOT REGISTERED in `generate_handler![]`** |
-| `browser_call_function` | `function: String`, `args: Value` | `Result<Value, String>` | **Stub — returns null; NOT REGISTERED in `generate_handler![]`** |
+| `browser_get_frames` | `tabId?: String` | `Result<Vec<FrameContext>, String>` | Returns the current page frame tree from CDP `Page.getFrameTree` |
+| `browser_execute_in_frame` | `frameId: String`, `script: String`, `tabId?: String` | `Result<Value, String>` | Evaluates JavaScript within the requested frame context after the same explicit approval gate used by `browser_evaluate` / `browser_execute_async_js` |
+| `browser_call_function` | `functionName: String`, `args: Value`, `tabId?: String` | `Result<Value, String>` | Calls `window[functionName](...args)` inside the active tab |
 | `browser_enable_request_interception` | `enabled: bool` | `Result<(), String>` | **Stub — no-op; NOT REGISTERED in `generate_handler![]`** |
-| `find_element_semantic` | `query: String` | `Result<String, String>` | **Stub — returns `"#semantic-element"`** |
-| `find_all_elements_semantic` | `query: String` | `Result<Vec<String>, String>` | **Stub — returns empty vec** |
-| `click_semantic` | `query: String` | `Result<(), String>` | **Stub — no-op** |
-| `type_semantic` | `query: String`, `text: String` | `Result<(), String>` | **Stub — no-op** |
-| `get_accessibility_tree` | — | `Result<Value, String>` | **Stub — returns null** |
-| `get_interactive_elements` | — | `Result<Vec<String>, String>` | **Stub — returns empty vec; NOT REGISTERED in `generate_handler![]`** |
-| `find_by_role` | `role: String`, `name?: String` | `Result<String, String>` | **Stub — returns `"#element-by-role"`; NOT REGISTERED in `generate_handler![]`** |
+| `find_element_semantic` | `query: String`, `tabId?: String` | `Result<String, String>` | Uses `semantic.rs` selector strategies and returns the first matching selector |
+| `find_all_elements_semantic` | `query: String`, `tabId?: String` | `Result<Vec<String>, String>` | Returns unique matching selectors from the semantic strategy pass |
+| `click_semantic` | `query: String`, `tabId?: String` | `Result<(), String>` | Resolves a semantic selector, then clicks via the live CDP DOM path |
+| `type_semantic` | `query: String`, `text: String`, `tabId?: String` | `Result<(), String>` | Resolves a semantic selector, then types via the live CDP DOM path |
+| `get_accessibility_tree` | `tabId?: String` | `Result<Value, String>` | Evaluates the semantic accessibility-tree script against the active tab |
+| `test_selector_strategies` | `query: String`, `tabId?: String` | `Result<Value, String>` | Returns per-strategy semantic selector results for debugging |
+| `get_dom_semantic_graph` | `tabId?: String` | `Result<Value, String>` | Returns the semantic DOM graph built from the active document |
+| `get_interactive_elements` | `tabId?: String` | `Result<Vec<String>, String>` | Returns selectors for the active page's interactive elements |
+| `find_by_role` | `role: String`, `name?: String`, `tabId?: String` | `Result<String, String>` | Returns the first selector matching the requested accessibility role |
 
 ---
 
@@ -341,8 +341,6 @@ All commands live in `apps/desktop/src-tauri/src/sys/commands/browser.rs` and re
 | `screenshots` | `Screenshot[]` | Screenshot history, capped at 50 |
 | `actions` | `BrowserAction[]` | All executed actions log, capped at 1000 |
 | `domSnapshots` | `DOMSnapshot[]` | DOM HTML captures, capped at 50 |
-| `consoleLogs` | `ConsoleLog[]` | Browser console output, capped at 5000 |
-| `networkRequests` | `NetworkRequest[]` | Observed HTTP requests, capped at 5000 |
 | `highlightedElement` | `ElementBounds \| null` | Bounding box for viewer overlay |
 | `isRecording` | `boolean` | Whether step recording is active |
 | `recordedSteps` | `RecordedStep[]` | Recorded automation steps, capped at 1000 |
@@ -388,7 +386,7 @@ interface RecordedStep {
 }
 ```
 
-**Selectors exported** (memo-safe): `selectActiveSession`, `selectActiveTab`, `selectHasActiveSessions`, `selectIsStreaming`, `selectBrowserIsRecording`, `selectFailedRequests`, `selectErrorLogs`, etc.
+**Selectors exported** (memo-safe): `selectActiveSession`, `selectActiveTab`, `selectHasActiveSessions`, `selectIsStreaming`, `selectBrowserIsRecording`, etc.
 
 **Middleware stack**: `devtools` (DEV only) → `subscribeWithSelector` → `immer`
 
@@ -424,30 +422,8 @@ Tracks OS-level desktop automation (window enumeration, UIA element search, keyb
 ## Component Tree
 
 ```
-BrowserWorkspace
-├── Header bar (Globe icon, session count, "Launch Browser" dropdown)
-│   └── DropdownMenu → handleLaunchBrowser(browserType, headless)
-├── [No session] → Empty state placeholder
-└── [Active session]
-    ├── Navigation bar (Back, Forward, Refresh, URL Input, Go button)
-    └── Tabs
-        ├── Controls tab
-        │   ├── CSS Selector input
-        │   ├── "Click Element" button → handleClick()
-        │   ├── Text input
-        │   └── "Type Text" button → handleType()
-        ├── Content tab
-        │   ├── "Get Page Content" button → handleGetContent()
-        │   └── <pre> showing HTML
-        ├── Screenshot tab
-        │   ├── "Capture Screenshot" button → handleScreenshot()
-        │   └── <img src="data:image/png;base64,...">
-        └── Script tab
-            ├── <textarea> for JS
-            └── "Execute Script" button → handleExecuteScript()
-
 BrowserVisualization
-├── TabsList → "Preview" / "Console"
+├── TabsList → "Preview" / "Activity"
 ├── TabsContent("live") → BrowserViewer
 └── TabsContent("actions") → BrowserActionLog
 
@@ -461,38 +437,11 @@ BrowserViewer
 │   └── Highlight overlay (yellow border box, "Target Element" label)
 └── Status bar (last updated time, screenshot count)
 
-BrowserRecorder
-├── Header (recording indicator dot, step count badge)
-│   ├── "Start Recording" / "Stop" button
-│   └── Trash (clear) button → useConfirm dialog
-└── Tabs
-    ├── Steps tab → ScrollArea of RecordedStep list
-    │   └── Each step: index circle, action badge, timestamp, selector/value, Edit button
-    └── Code tab
-        ├── Format selector (playwright | puppeteer | selenium)
-        ├── Copy / Download buttons
-        └── <pre><code>{generateCode()}</code></pre>
-
 BrowserActionLog
 ├── Search bar + Export JSON + Clear buttons
 ├── Filter buttons (All, navigate, click, type, extract, screenshot, scroll, wait, execute)
 └── ScrollArea of BrowserAction entries (timeline with connector lines)
     └── Each entry: colored icon, action badge, timestamp, duration, success/fail indicator
-
-BrowserDebugPanel
-├── Header (Code icon, Refresh button)
-└── Tabs
-    ├── DOM tab → HTML snapshot viewer with selector search
-    ├── Console tab → filterable log list (log/info/warn/error)
-    ├── Network tab → HTTP request timeline (method, URL, status, duration)
-    ├── Storage tab (StorageViewer sub-component)
-    │   ├── Type selector (localStorage / sessionStorage / cookies)
-    │   ├── Search input
-    │   └── Key/value list [NOTE: currently renders mock data, not live CDP data]
-    └── Performance tab (PerformanceMetrics sub-component)
-        ├── Core Web Vitals grid [NOTE: currently renders hardcoded mock values]
-        ├── Memory usage bar chart [NOTE: hardcoded mock]
-        └── Quick action buttons (Clear Cache, Force GC, Export Report) [NOTE: no-ops]
 ```
 
 ---
@@ -548,7 +497,7 @@ This means every command called through `useBrowserAutomation` is automatically 
 
 ### Tab ID = Chrome Target ID
 
-Tabs created via the CDP HTTP API (`PUT /json/new`) use the real Chrome DevTools target ID as the tab identifier. This same ID is used as the key path segment in the CDP WebSocket URL (`ws://127.0.0.1:9222/devtools/page/{tab_id}`). When the CDP HTTP API is unavailable (Chrome not running with `--remote-debugging-port`), a UUID is generated instead — in this case CDP connections will fail when they try to use this ID as a real target ID.
+Tabs created via the CDP HTTP API use the real Chrome DevTools target ID as the tab identifier. The live runtime now resolves per-tab websocket endpoints through the shared `CdpEndpoint` helper, which reads `/json` target metadata on the configured CDP port and only falls back to `ws://127.0.0.1:{configuredPort}/devtools/page/{tab_id}` if target metadata is unavailable. No-tab browser command/executor/tool paths now create a real CDP target instead of inventing an internal-only UUID tab that later breaks CDP control.
 
 ### Lock Ordering in `TabManager`
 
@@ -566,20 +515,18 @@ The `ExtensionBridge` does not use the CDP path at all. Instead, it connects to 
 
 Several commands exist as Rust functions in `browser.rs` but are **NOT registered** in `lib.rs` `generate_handler![]`, meaning any frontend `invoke()` call to them will fail:
 
-- `browser_check_status` — function exists but not registered
-- `browser_get_frames`, `browser_execute_in_frame`, `browser_call_function`, `browser_enable_request_interception` — stubs AND not registered
-- `get_interactive_elements`, `find_by_role` — stubs AND not registered
+- `browser_enable_request_interception` — stub AND not registered
 
-### Critical — Stubs Masquerading as Features
+### Critical — Remaining Off-Contract Stubs
 
-The following registered commands return empty/null results silently and provide no indication to the caller that they are not implemented. Any code path that depends on them will silently receive empty data:
+The following helper commands still exist as stubs in Rust, but they are intentionally outside the live registered desktop contract:
 
-- `browser_get_console_logs` — returns `[]` always; the `consoleLogs` store array is only populated by the `browser:console` Tauri event (which is never emitted by any Rust code in the codebase).
-- `browser_get_network_activity` — same: returns `[]`; `networkRequests` store only populated by `browser:network` event (never emitted).
-- All semantic commands (`find_element_semantic`, `click_semantic`, `type_semantic`, `find_all_elements_semantic`) — stubs returning hardcoded strings (these ARE registered).
-- `get_accessibility_tree` — stub (IS registered).
+- `browser_enable_request_interception`
 
-The `BrowserDebugPanel` Storage and Performance tabs render hardcoded mock data with no live CDP connection. This is a significant user-experience gap — the debug panel's Storage and Performance views are purely cosmetic.
+The old `BrowserDebugPanel` was removed because it was not mounted by the live desktop runtime and parts of it only rendered cosmetic mock data.
+The live browser sidecar is preview + action history only; console/network telemetry is intentionally absent until a real CDP-backed capture pipeline exists.
+
+The old `BrowserRecorder` was removed because the live browser runtime already uses `browserStore` recording state and code-generation helpers directly; keeping a second unmounted recorder UI created a false source of truth.
 
 ### Architecture — Two Separate CDP Implementations
 
@@ -587,7 +534,7 @@ The `BrowserDebugPanel` Storage and Performance tabs render hardcoded mock data 
 
 ### Tab Lifecycle — No Browser Process Association
 
-`BrowserSession` (in the frontend store) holds a list of `BrowserTab` objects, but there is no mapping between a session and the browser process (child PID) on the Rust side. `BrowserStateWrapper` holds one global `PlaywrightBridge` (which has a `browser_processes` HashMap keyed by UUID). The frontend `closeBrowser(sessionId)` calls `invoke('browser_close', { browserId: sessionId })` but `browser.rs` has no `browser_close` command registered — this call will fail silently (the store still cleans up the UI state). Only `browser_close_tab` exists.
+`BrowserSession` (in the frontend store) still holds a list of `BrowserTab` objects while the Rust side keeps process handles separately in `PlaywrightBridge.browser_processes`. The frontend `closeBrowser(sessionId)` now calls the registered `browser_close` command, which terminates the browser process by handle id. The remaining limitation is that tab/session ownership is still not modeled end-to-end on the Rust side.
 
 ### Screenshot Stream — No True Push
 
@@ -599,11 +546,11 @@ The live view polling at 500ms creates one HTTP round-trip per tick (CDP WebSock
 
 ### File Upload Implementation
 
-`browser_upload_file` validates file paths on the Rust side (no `..`, no null bytes, file must exist, no `file://` prefix, max 4096 chars) but then constructs a `fetch('file://' + path)` call inside a JavaScript snippet that runs in the browser page. The browser page's fetch context will reject `file://` URLs with CORS errors in most security contexts. The CDP `DOM.setFileInputFiles` method (implemented in `advanced.rs`) is the correct approach but is not wired into the command handler.
+`browser_upload_file` now validates and canonicalizes host file paths on the Rust side, resolves the target `<input type="file">` via `DOM.getDocument` + `DOM.querySelector`, and uses `DOM.setFileInputFiles` instead of attempting page-side `fetch('file://...')`.
 
-### `PlaywrightBridge.start_server()` Stub
+### `PlaywrightBridge.start_server()` Status
 
-`start_server()` launches a Windows `cmd /C echo` command as a placeholder. On macOS/Linux, `Command::new("cmd")` will fail. This method is never called from production code paths, but its existence is misleading and will cause a confusing error if ever invoked.
+`start_server()` is not part of the live desktop browser command path. The runtime now handles it honestly: if a browser/CDP endpoint is already reachable on the configured port it reuses that state; otherwise it returns a clear error instructing callers to use `launch_browser()`. It no longer reports a fake started state from a platform-specific echo stub.
 
 ### `automationStore.saveRecordingAsScript` — IPC Violation
 
@@ -645,6 +592,5 @@ The following files are the most critical for understanding the Browser Automati
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/stores/browserStore.ts` | Complete frontend state model, all IPC calls, streaming loop, recording side-effect, event listeners |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/hooks/useBrowserAutomation.ts` | Rich hook API wrapping all IPC calls with unified action logging and playback engine |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/hooks/useAutomationEvents.ts` | Snake_case→camelCase normalization for Rust-emitted events; listener lifecycle management |
-| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserWorkspace.tsx` | Primary user-facing entry point for manual browser control |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserViewer.tsx` | Live screenshot viewer with zoom/pan/highlight overlay |
-| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserRecorder.tsx` | Step recording + multi-framework code generation |
+| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserVisualization.tsx` | Live browser sidecar entry point used by the desktop runtime |

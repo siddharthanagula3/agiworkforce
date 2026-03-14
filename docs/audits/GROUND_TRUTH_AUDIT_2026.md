@@ -637,7 +637,7 @@ Other providers use OpenAI-compatible format.
 - id, content, embedding (BLOB), created_at, project_id, summary, category, importance, topic, source, last_accessed, updated_at
 - No `tags` column (prior audit was wrong)
 
-`EmbeddingServiceState` initialized in `lib.rs:767-784`.
+`EmbeddingService` state is initialized in `lib.rs` as `Arc<TokioMutex<EmbeddingService>>` with degraded and in-memory degraded fallback paths.
 
 ### L4. Reflection System
 

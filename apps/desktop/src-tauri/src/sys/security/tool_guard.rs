@@ -1625,6 +1625,15 @@ impl ToolExecutionGuard {
 
         let query_lower = query.to_lowercase();
         let query_trimmed = query_lower.trim();
+        let normalized_sql = query_lower
+            .replace("/**/", " ")
+            .replace("/* */", " ")
+            .replace("/*", " ")
+            .replace("*/", " ")
+            .replace('#', " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
 
         // Allow SELECT-based queries through without blocking
         let is_select = query_trimmed.starts_with("select")
@@ -1688,12 +1697,6 @@ impl ToolExecutionGuard {
             "' or 1=1",
             "admin'--",
             "' union select",
-            // Hex encoding (common bypass)
-            "0x",
-            // Comment variations
-            "/**/",
-            "/* */",
-            "#",
             // Boolean-based injection
             "' and '1'='1",
             "' and 1=1",
@@ -1701,9 +1704,15 @@ impl ToolExecutionGuard {
             "\" and \"1\"=\"1",
             // Time-based injection
             "waitfor delay",
-            "sleep(",
-            "benchmark(",
-            "pg_sleep(",
+            " or sleep(",
+            " and sleep(",
+            " or benchmark(",
+            " and benchmark(",
+            " or pg_sleep(",
+            " and pg_sleep(",
+            "; sleep(",
+            "; benchmark(",
+            "; pg_sleep(",
             // Stacked queries
             "'; drop",
             "\"; drop",
@@ -1723,12 +1732,14 @@ impl ToolExecutionGuard {
             // Comment-based SQL injection
             "'--",
             "\"--",
-            "/*",
-            "*/",
+            ";--",
+            "'#",
+            "\"#",
+            "; #",
         ];
 
         for pattern in &injection_patterns {
-            if query_lower.contains(pattern) {
+            if normalized_sql.contains(pattern) || query_lower.contains(pattern) {
                 warn!("SQL injection pattern detected: {}", pattern);
                 return Err(SecurityError::CommandInjection(pattern.to_string()));
             }
@@ -1744,9 +1755,8 @@ impl ToolExecutionGuard {
         }
 
         // Check for excessive whitespace (potential obfuscation)
-        let normalized = query_lower.split_whitespace().collect::<Vec<_>>().join(" ");
-        if normalized.contains(" or ")
-            && (normalized.contains("1=1") || normalized.contains("'1'='1"))
+        if normalized_sql.contains(" or ")
+            && (normalized_sql.contains("1=1") || normalized_sql.contains("'1'='1"))
         {
             warn!("Normalized SQL injection pattern detected");
             return Err(SecurityError::CommandInjection(
@@ -1963,6 +1973,30 @@ mod tests {
             .validate_tool_call(
                 "db_query",
                 &json!({"query": "SELECT * FROM users WHERE id = '1' OR '1'='1'"}),
+            )
+            .await;
+        assert!(matches!(result, Err(SecurityError::CommandInjection(_))));
+    }
+
+    #[tokio::test]
+    async fn test_sql_query_allows_hex_literals_and_comments() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "db_query",
+                &json!({"query": "SELECT /* inline comment */ 0x10 AS mask"}),
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sql_time_based_injection_remains_blocked() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "db_query",
+                &json!({"query": "SELECT * FROM users WHERE id = '1' OR SLEEP(5)"}),
             )
             .await;
         assert!(matches!(result, Err(SecurityError::CommandInjection(_))));

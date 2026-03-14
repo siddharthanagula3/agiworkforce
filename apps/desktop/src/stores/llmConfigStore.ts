@@ -308,20 +308,34 @@ export const useLLMConfigStore = create<LLMConfigStore>()(
   ),
 );
 
-// Plan subscription for task routing enforcement
+let hasInitializedPlanSubscription = false;
+
+async function initializePlanSubscription(): Promise<void> {
+  if (hasInitializedPlanSubscription || typeof window === 'undefined') {
+    return;
+  }
+
+  hasInitializedPlanSubscription = true;
+
+  try {
+    const { useUnifiedAuthStore } = await import('./auth');
+    if (!useUnifiedAuthStore?.subscribe) {
+      return;
+    }
+
+    useUnifiedAuthStore.subscribe(
+      (state) => state.plan,
+      (plan) => {
+        enforceTaskRoutingTierRestriction(plan ?? 'free');
+      },
+    );
+    enforceTaskRoutingTierRestriction(useUnifiedAuthStore.getState().plan ?? 'free');
+  } catch (err) {
+    hasInitializedPlanSubscription = false;
+    console.warn('[llmConfigStore] Failed to load auth for plan subscription:', err);
+  }
+}
+
 if (typeof window !== 'undefined') {
-  import('./auth')
-    .then(({ useUnifiedAuthStore }) => {
-      if (useUnifiedAuthStore?.subscribe) {
-        useUnifiedAuthStore.subscribe(
-          (state) => state.plan,
-          (plan) => {
-            enforceTaskRoutingTierRestriction(plan ?? 'free');
-          },
-        );
-      }
-    })
-    .catch((err) => {
-      console.warn('[llmConfigStore] Failed to load auth for plan subscription:', err);
-    });
+  void initializePlanSubscription();
 }

@@ -1,16 +1,11 @@
-import { invoke } from '@/lib/tauri-mock';
+import { McpClient } from '@/api/mcp';
 import { create } from 'zustand';
-
-interface McpServerConfig {
-  port: number;
-  token: string;
-  enabled_tools: string[];
-  running: boolean;
-}
+import type { McpRuntimeServerConfig } from '@/types/mcp';
 
 interface McpServerStore {
-  config: McpServerConfig | null;
+  config: McpRuntimeServerConfig | null;
   loading: boolean;
+  error: string | null;
   fetchConfig: () => Promise<void>;
   startServer: () => Promise<void>;
   stopServer: () => Promise<void>;
@@ -20,32 +15,47 @@ interface McpServerStore {
 export const useMcpServerStore = create<McpServerStore>((set, get) => ({
   config: null,
   loading: false,
+  error: null,
 
   fetchConfig: async () => {
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
-      const config = await invoke<McpServerConfig>('mcp_server_get_config');
-      set({ config });
+      const config = await McpClient.getRuntimeServerConfig();
+      set({ config, error: null });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error) });
     } finally {
       set({ loading: false });
     }
   },
 
   startServer: async () => {
-    await invoke('mcp_server_start');
-    await get().fetchConfig();
+    set({ loading: true, error: null });
+    try {
+      await McpClient.startRuntimeServer();
+      await get().fetchConfig();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+    }
   },
 
   stopServer: async () => {
-    await invoke('mcp_server_stop');
-    await get().fetchConfig();
+    set({ loading: true, error: null });
+    try {
+      await McpClient.stopRuntimeServer();
+      await get().fetchConfig();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+    }
   },
 
   updateConfig: async (port?: number, enabledTools?: string[]) => {
-    await invoke('mcp_server_update_config', {
-      port: port ?? null,
-      enabledTools: enabledTools ?? null,
-    });
-    await get().fetchConfig();
+    set({ loading: true, error: null });
+    try {
+      await McpClient.updateRuntimeServerConfig(port, enabledTools);
+      await get().fetchConfig();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+    }
   },
 }));

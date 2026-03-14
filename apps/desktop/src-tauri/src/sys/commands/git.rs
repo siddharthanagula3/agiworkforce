@@ -21,7 +21,7 @@ use tokio::sync::RwLock;
 /// succeeds on the first try. On Windows the agent is often absent; we fall
 /// back to probing the standard key files in `~/.ssh` and finally to the
 /// system credential helper for HTTPS remotes.
-fn make_git_credentials(
+pub(crate) fn make_git_credentials(
     url: &str,
     username_from_url: Option<&str>,
     allowed_types: git2::CredentialType,

@@ -1,6 +1,5 @@
 pub mod api;
 pub mod approval_workflow;
-pub mod audit;
 pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
@@ -23,20 +22,22 @@ pub mod secret_manager;
 pub mod storage;
 pub mod tool_guard;
 pub mod updater;
-pub mod validator;
 
 pub use api::{ApiKey, ApiSecurityManager, CorsConfig, CspBuilder};
 pub use approval_workflow::{
     ApprovalAction, ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalStatus,
     ApprovalWorkflow, RiskLevel as ApprovalRiskLevel,
 };
-pub use audit::{AuditFilters, AuditLogger, AutomationStats};
 pub use audit_logger::{
     create_tool_execution_event, create_workflow_execution_event, AuditEvent, AuditEventType,
-    AuditIntegrityReport, AuditLogger as EnhancedAuditLogger, AuditStatus,
+    AuditFilters, AuditIntegrityReport, AuditLogger, AuditStatus,
 };
 pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
 pub use auth_db::{AuthAuditLog, AuthDatabaseManager};
+pub use command_validator::{
+    requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
+    ValidationConfig,
+};
 pub use dm_protection::{
     AllowlistedSender, DmProtection, DmProtectionConfig, PairingCode, VerificationMethod,
 };
@@ -73,10 +74,3 @@ pub use tool_guard::{
     ToolPolicy, ToolSafetyTier,
 };
 pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
-pub use validator::{CommandValidator, SafetyLevel};
-
-// Command validation for shell/terminal security
-pub use command_validator::{
-    requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
-    ValidationConfig,
-};

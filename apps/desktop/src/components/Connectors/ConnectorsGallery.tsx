@@ -8,7 +8,8 @@ import {
   type ConnectorCategory,
   type ConnectorDef,
 } from './connectorDefinitions';
-import { invoke, isTauri } from '../../lib/tauri-mock';
+import { McpClient } from '@/api/mcp';
+import { isTauri } from '../../lib/tauri-mock';
 import { ConnectorCard } from './ConnectorCard';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
@@ -53,7 +54,7 @@ export function ConnectorsGallery() {
         setOauthState({ status: 'connecting', connectorName: connector.name });
       }
       try {
-        await invoke('mcp_oauth_callback', { provider, code, callbackState: state });
+        await McpClient.oauthCallbackRaw(provider, code, state);
         await completeOAuth(provider);
         if (connector) {
           setOauthState({ status: 'success', connectorName: connector.name });

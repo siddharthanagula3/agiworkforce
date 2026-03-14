@@ -226,104 +226,126 @@ const DesktopShell = () => {
 
     trackAction('app_loaded');
 
-    void initializeAgentStatusListener();
-    void initializeToolEventListener();
+    void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
+    void runStartupStep('Tool event listener', () => initializeToolEventListener());
 
     // Wire up mcpb:install_progress Tauri event into the MCPB store
     void (async () => {
-      const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
-      void initializeMcpbInstallListener();
+      try {
+        const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
+        await runStartupStep('MCP bundle install listener', () => initializeMcpbInstallListener());
+      } catch (error) {
+        if (!disposed) {
+          reportStartupFailure('MCP bundle install listener', error);
+        }
+      }
     })();
 
     void (async () => {
-      // Wait for settings store hydration from localStorage before loading from backend
-      const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
-      await runStartupStep('Settings hydration', () => waitForSettingsHydration());
-      if (disposed) return;
+      try {
+        // Wait for settings store hydration from localStorage before loading from backend
+        const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
+        await runStartupStep('Settings hydration', () => waitForSettingsHydration());
+        if (disposed) return;
 
-      // Initialize settings (syncs with backend and configures providers)
-      await runStartupStep(
-        'Settings synchronization',
-        () => useSettingsStore.getState().loadSettings(),
-        { notify: true },
-      );
-
-      // Apply window preferences on startup (dock/position)
-      if (isTauri) {
-        await runStartupStep('Window preference restore', async () => {
-          const settings = useSettingsStore.getState();
-          const prefs = settings.windowPreferences;
-
-          // Dock takes precedence over centering.
-          if (prefs?.dockOnStartup === 'left' || prefs?.dockOnStartup === 'right') {
-            await invoke('window_dock', { position: prefs.dockOnStartup });
-          } else if (prefs?.startupPosition === 'center') {
-            const { getCurrentWindow } = await import('@tauri-apps/api/window');
-            const win = getCurrentWindow();
-            // Small delay so any window-state restore has already run.
-            setTimeout(() => {
-              void win.center();
-            }, 50);
-          }
-        });
-      }
-
-      if (disposed) return;
-      const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
-      await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
-        notify: true,
-      });
-      if (disposed) return;
-
-      // Initialize Ollama health service for graceful degradation of local models
-      if (isTauri) {
-        await runStartupStep('Ollama health monitor', async () => {
-          const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
-          const cleanup = initializeOllamaHealthService();
-          registerCleanup(cleanup);
-        });
-      }
-
-      if (disposed) return;
-      // Load custom instructions from backend (syncs with stored data)
-      const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
-      await runStartupStep('Custom instructions sync', async () => {
-        await useCustomInstructionsStore.getState().loadFromBackend();
-      });
-      if (disposed) return;
-
-      // Sync access token to keyring if user is already authenticated
-      if (isTauri) {
+        // Initialize settings (syncs with backend and configures providers)
         await runStartupStep(
-          'Managed cloud credential sync',
-          async () => {
-            const { supabaseAuth } = await import('./services/supabaseAuth');
-            const { waitForAuthReady } = await import('./stores/auth');
-
-            // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
-            await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
-
-            // Wait for auth state to be ready before accessing session data
-            // This prevents race conditions where we read stale/empty state
-            await waitForAuthReady();
-
-            const authState = supabaseAuth.getState();
-            if (!authState.session?.access_token) {
-              return;
-            }
-
-            await invoke('account_store_access_token', {
-              accessToken: authState.session.access_token,
-            });
-            if (authState.session.refresh_token) {
-              await invoke('account_store_refresh_token', {
-                refreshToken: authState.session.refresh_token,
-              });
-            }
-            await invoke('llm_ensure_managed_cloud');
-          },
+          'Settings synchronization',
+          () => useSettingsStore.getState().loadSettings(),
           { notify: true },
         );
+
+        // Apply window preferences on startup (dock/position)
+        if (isTauri) {
+          await runStartupStep('Window preference restore', async () => {
+            const settings = useSettingsStore.getState();
+            const prefs = settings.windowPreferences;
+
+            // Dock takes precedence over centering.
+            if (prefs?.dockOnStartup === 'left' || prefs?.dockOnStartup === 'right') {
+              await invoke('window_dock', { position: prefs.dockOnStartup });
+            } else if (prefs?.startupPosition === 'center') {
+              const { getCurrentWindow } = await import('@tauri-apps/api/window');
+              const win = getCurrentWindow();
+              // Small delay so any window-state restore has already run.
+              const timeoutId = window.setTimeout(() => {
+                if (disposed) return;
+                void win.center().catch((error) => {
+                  if (!disposed) {
+                    reportStartupFailure('Window centering', error);
+                  }
+                });
+              }, 50);
+              registerCleanup(() => window.clearTimeout(timeoutId));
+            }
+          });
+        }
+
+        if (disposed) return;
+        const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
+        await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
+          notify: true,
+        });
+        if (disposed) return;
+
+        // Initialize Ollama health service for graceful degradation of local models
+        if (isTauri) {
+          await runStartupStep('Ollama health monitor', async () => {
+            const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
+            const cleanup = initializeOllamaHealthService();
+            registerCleanup(cleanup);
+          });
+        }
+
+        if (disposed) return;
+        // Load custom instructions from backend (syncs with stored data)
+        const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
+        await runStartupStep('Custom instructions sync', async () => {
+          await useCustomInstructionsStore.getState().loadFromBackend();
+        });
+        if (disposed) return;
+
+        // Sync access token to keyring if user is already authenticated
+        if (isTauri) {
+          await runStartupStep(
+            'Managed cloud credential sync',
+            async () => {
+              const { supabaseAuth } = await import('./services/supabaseAuth');
+              const { waitForAuthReady } = await import('./stores/auth');
+
+              // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
+              await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+              if (disposed) return;
+
+              // Wait for auth state to be ready before accessing session data
+              // This prevents race conditions where we read stale/empty state
+              await waitForAuthReady();
+              if (disposed) return;
+
+              const authState = supabaseAuth.getState();
+              if (!authState.session?.access_token || disposed) {
+                return;
+              }
+
+              await invoke('account_store_access_token', {
+                accessToken: authState.session.access_token,
+              });
+              if (disposed) return;
+              if (authState.session.refresh_token) {
+                await invoke('account_store_refresh_token', {
+                  refreshToken: authState.session.refresh_token,
+                });
+              }
+              if (disposed) return;
+              await invoke('llm_ensure_managed_cloud');
+            },
+            { notify: true },
+          );
+        }
+      } catch (error) {
+        if (!disposed) {
+          reportStartupFailure('Desktop shell startup', error, true);
+        }
       }
     })();
 
@@ -753,18 +775,24 @@ const App = () => {
 
     // Force sync account data after store hydration is complete
     let cancelled = false;
-    (async () => {
-      const { useAccountStore, waitForHydration } = await import('./stores/auth');
-      const { supabaseAuth } = await import('./services/supabaseAuth');
+    void (async () => {
+      try {
+        const { useAccountStore, waitForHydration } = await import('./stores/auth');
+        const { supabaseAuth } = await import('./services/supabaseAuth');
+        if (cancelled) return;
 
-      // Wait for store hydration from localStorage before syncing
-      await waitForHydration();
+        // Wait for store hydration from localStorage before syncing
+        await waitForHydration();
+        if (cancelled) return;
 
-      if (cancelled) return;
-
-      if (supabaseAuth.isAuthenticated()) {
-        console.debug('[App] Store hydrated, forcing account sync with backend...');
-        await useAccountStore.getState().syncWithBackend();
+        if (supabaseAuth.isAuthenticated()) {
+          console.debug('[App] Store hydrated, forcing account sync with backend...');
+          await useAccountStore.getState().syncWithBackend();
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[App] Auth orchestrator bootstrap failed:', error);
+        }
       }
     })();
 

@@ -22,6 +22,7 @@ export default function MCPWorkspace() {
     initialize,
     refreshServers,
     refreshTools,
+    refreshRuntimeTelemetry,
     searchTools,
     setSearchQuery,
     clearError,
@@ -34,7 +35,7 @@ export default function MCPWorkspace() {
   }, [isInitialized, initialize]);
 
   const handleRefreshAll = async () => {
-    await Promise.all([refreshServers(), refreshTools()]);
+    await Promise.all([refreshServers(), refreshTools(), refreshRuntimeTelemetry()]);
   };
 
   const handleSearch = (value: string) => {

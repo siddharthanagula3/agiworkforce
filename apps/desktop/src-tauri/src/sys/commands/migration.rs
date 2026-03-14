@@ -1,5 +1,7 @@
-use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
+
+const LOVABLE_NOT_IMPLEMENTED: &str =
+    "Lovable migration is not implemented in the desktop runtime yet.";
 
 #[derive(Debug, Deserialize)]
 pub struct LovableConnectionCommandRequest {
@@ -23,36 +25,12 @@ pub fn migration_test_lovable_connection(
     if api_key.is_empty() {
         return Err("API key cannot be empty.".into());
     }
-    if !api_key.to_lowercase().contains("lovable") {
-        return Err("Lovable API key invalid.".into());
-    }
 
     let slug = request.workspace_slug.trim();
     if slug.is_empty() {
         return Err("Workspace slug cannot be empty.".into());
     }
-
-    let workspace_name = slug
-        .split(['-', '_'])
-        .map(|segment| {
-            let mut chars = segment.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    Ok(LovableConnectionCommandResponse {
-        workspace_name: if workspace_name.is_empty() {
-            "Lovable Workspace".to_string()
-        } else {
-            workspace_name
-        },
-        total_workflows: 42,
-        beta_access: true,
-    })
+    Err(LOVABLE_NOT_IMPLEMENTED.into())
 }
 
 #[derive(Debug, Serialize)]
@@ -76,54 +54,11 @@ pub struct LovableWorkflowListResponse {
 pub fn migration_list_lovable_workflows(
     workspace_slug: String,
 ) -> Result<LovableWorkflowListResponse, String> {
-    let now = Utc::now();
-    let makeshift_seed = workspace_slug.len() as i64;
-    let candidates = vec![
-        LovableWorkflowItem {
-            id: "wf-accural".into(),
-            name: "Monthly Accrual Journal".into(),
-            owner: "Finance Ops".into(),
-            last_run: (now - Duration::minutes(90))
-                .format("%b %d • %H:%M")
-                .to_string(),
-            status: "healthy".into(),
-            estimated_minutes: 6,
-        },
-        LovableWorkflowItem {
-            id: "wf-ticket-routing".into(),
-            name: "CS Ticket Routing".into(),
-            owner: "Support Automation".into(),
-            last_run: (now - Duration::minutes(240 + makeshift_seed))
-                .format("%b %d • %H:%M")
-                .to_string(),
-            status: "healthy".into(),
-            estimated_minutes: 4,
-        },
-        LovableWorkflowItem {
-            id: "wf-salesforce-sync".into(),
-            name: "Salesforce → HubSpot Sync".into(),
-            owner: "RevOps".into(),
-            last_run: (now - Duration::minutes(720))
-                .format("%b %d • %H:%M")
-                .to_string(),
-            status: "broken".into(),
-            estimated_minutes: 12,
-        },
-        LovableWorkflowItem {
-            id: "wf-google-sheets".into(),
-            name: "Daily Metrics Sheet".into(),
-            owner: "Analytics".into(),
-            last_run: (now - Duration::minutes(960))
-                .format("%b %d • %H:%M")
-                .to_string(),
-            status: "deprecated".into(),
-            estimated_minutes: 3,
-        },
-    ];
+    if workspace_slug.trim().is_empty() {
+        return Err("Workspace slug cannot be empty.".into());
+    }
 
-    Ok(LovableWorkflowListResponse {
-        workflows: candidates,
-    })
+    Err(LOVABLE_NOT_IMPLEMENTED.into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,19 +91,43 @@ pub fn migration_launch_lovable(
         return Err("Select at least one workflow to migrate.".into());
     }
 
-    let estimate = (request.workflow_ids.len() as u32 * 5).max(5);
+    Err(LOVABLE_NOT_IMPLEMENTED.into())
+}
 
-    tracing::info!(
-        workspace = %request.workspace_slug,
-        target = %request.target_workspace,
-        workflows = %request.workflow_ids.len(),
-        auto_enable = request.auto_enable_schedules,
-        include_audit = request.include_audit_logs,
-        "Queued Lovable workflows for migration"
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Ok(LovableMigrationLaunchResponse {
-        queued: request.workflow_ids.len(),
-        estimate_minutes: estimate,
-    })
+    #[test]
+    fn test_lovable_connection_rejects_fake_success_path() {
+        let error = migration_test_lovable_connection(LovableConnectionCommandRequest {
+            api_key: "lovable_live_fake".to_string(),
+            workspace_slug: "acme-ops".to_string(),
+        })
+        .unwrap_err();
+
+        assert!(error.contains("not implemented"));
+    }
+
+    #[test]
+    fn test_lovable_workflow_list_rejects_fake_data_path() {
+        let error = migration_list_lovable_workflows("acme-ops".to_string()).unwrap_err();
+        assert!(error.contains("not implemented"));
+    }
+
+    #[test]
+    fn test_lovable_launch_rejects_fake_queue_path() {
+        let error = migration_launch_lovable(LovableMigrationLaunchRequest {
+            workspace_slug: "acme-ops".to_string(),
+            target_workspace: "target".to_string(),
+            naming_prefix: None,
+            auto_enable_schedules: true,
+            include_audit_logs: true,
+            notes: None,
+            workflow_ids: vec!["wf-1".to_string()],
+        })
+        .unwrap_err();
+
+        assert!(error.contains("not implemented"));
+    }
 }

@@ -32,6 +32,21 @@ export interface McpConfigLocation {
   exists: boolean;
 }
 
+export interface McpRegistryPackage {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  category: 'automation' | 'data' | 'search' | 'productivity' | 'development' | 'integration';
+  npm_package?: string;
+  github?: string;
+  tools: string[];
+  rating: number;
+  downloads: number;
+  installed: boolean;
+}
+
 export interface McpToolResult {
   success: boolean;
   data: unknown;
@@ -58,6 +73,42 @@ export interface McpStats {
   serverName: string;
   toolCount: number;
   connected: boolean;
+}
+
+export interface McpRuntimeServerConfig {
+  port: number;
+  token: string;
+  enabled_tools: string[];
+  running: boolean;
+}
+
+export interface McpServerHealth {
+  server_name: string;
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  last_check: string;
+  error_message: string | null;
+  response_time_ms: number | null;
+  tool_count: number;
+  consecutive_failures: number;
+}
+
+export interface McpExecutionHistoryEntry {
+  tool_id: string;
+  server_name: string;
+  result: unknown;
+  duration_ms: number;
+  timestamp: number;
+  success: boolean;
+  error: string | null;
+}
+
+export interface McpToolExecutionStats {
+  tool_id: string;
+  total_executions: number;
+  successful_executions: number;
+  failed_executions: number;
+  avg_duration_ms: number;
+  last_execution: number | null;
 }
 
 export interface McpCredential {
@@ -118,6 +169,7 @@ export type McpEventType =
   | 'mcp:tools_updated'
   | 'mcp:tool_execution_started'
   | 'mcp:tool_execution_completed'
+  | 'mcp:server_unhealthy'
   | 'mcp:system_initialized'
   | 'mcp:configuration_updated';
 
@@ -148,6 +200,16 @@ export interface McpToolsUpdatedPayload {
   tool_count: number;
 }
 
+export interface McpServerUnhealthyPayload {
+  server_name: string;
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  last_check: string;
+  error_message?: string | null;
+  response_time_ms?: number | null;
+  tool_count?: number;
+  consecutive_failures?: number;
+}
+
 export interface McpSystemInitializedPayload {
   type: 'system_initialized';
   server_count: number;
@@ -159,6 +221,7 @@ export type McpEventPayload =
   | McpToolExecutionCompletedPayload
   | McpConnectionChangedPayload
   | McpToolsUpdatedPayload
+  | McpServerUnhealthyPayload
   | McpSystemInitializedPayload;
 
 // MCPB Bundle Types

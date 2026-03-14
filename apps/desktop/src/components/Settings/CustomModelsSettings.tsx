@@ -21,7 +21,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '../../types/customModel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/Dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/Dialog';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
@@ -254,6 +260,10 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Custom Model' : 'Add Custom Model'}</DialogTitle>
+          <DialogDescription>
+            Configure an OpenAI-compatible endpoint, verify connectivity, and save the model for
+            routing and manual selection.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">

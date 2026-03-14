@@ -30,6 +30,7 @@ export interface ModalityModel {
   name: string;
   provider: string;
   tier: SubscriptionTier; // Minimum tier required
+  isAvailable?: boolean; // Exclude models that are defined but not executable in the product
   costPerUnit: number; // Cost per generation (image, minute of video, etc.)
   quality: 'standard' | 'hd' | 'ultra';
   speed: 'fast' | 'normal' | 'slow';
@@ -124,6 +125,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     name: 'Midjourney v7',
     provider: 'midjourney',
     tier: 'max',
+    isAvailable: false,
     costPerUnit: 0.1, // Premium artistic model
     quality: 'ultra',
     speed: 'slow',
@@ -472,7 +474,9 @@ export function getAvailableModels(
   userTier: SubscriptionTier,
 ): ModalityModel[] {
   const models = MODALITY_MODELS[modality] || [];
-  return models.filter((model) => canAccessModel(userTier, model.tier));
+  return models.filter(
+    (model) => canAccessModel(userTier, model.tier) && model.isAvailable !== false,
+  );
 }
 
 /**

@@ -1,3 +1,4 @@
+use crate::sys::commands::git::make_git_credentials;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -65,7 +66,7 @@ pub async fn github_clone_repo(
     let branch_clone = branch.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository};
+        use git2::{build::RepoBuilder, FetchOptions, RemoteCallbacks, Repository};
 
         if local_path_clone.exists() {
             tracing::info!(
@@ -82,9 +83,7 @@ pub async fn github_clone_repo(
             let branch_name = branch_clone.as_deref().unwrap_or("main");
 
             let mut callbacks = RemoteCallbacks::new();
-            callbacks.credentials(|_url, username_from_url, _allowed_types| {
-                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-            });
+            callbacks.credentials(make_git_credentials);
 
             let mut fetch_opts = FetchOptions::new();
             fetch_opts.remote_callbacks(callbacks);
@@ -160,9 +159,7 @@ pub async fn github_clone_repo(
             }
 
             let mut callbacks = RemoteCallbacks::new();
-            callbacks.credentials(|_url, username_from_url, _allowed_types| {
-                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-            });
+            callbacks.credentials(make_git_credentials);
 
             let mut fetch_opts = FetchOptions::new();
             fetch_opts.remote_callbacks(callbacks);

@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+
+use super::executor::McpServerExecutor;
 
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
@@ -45,11 +50,15 @@ impl JsonRpcResponse {
     }
 }
 
-pub fn dispatch(request: &JsonRpcRequest, enabled_tools: &[String]) -> JsonRpcResponse {
+pub async fn dispatch(
+    request: &JsonRpcRequest,
+    enabled_tools: &[String],
+    executor: Arc<dyn McpServerExecutor>,
+) -> JsonRpcResponse {
     match request.method.as_str() {
         "initialize" => handle_initialize(request),
         "tools/list" => handle_tools_list(request, enabled_tools),
-        "tools/call" => handle_tools_call(request),
+        "tools/call" => handle_tools_call(request, enabled_tools, executor).await,
         _ => JsonRpcResponse::error(
             request.id.clone(),
             -32601,
@@ -80,7 +89,14 @@ fn handle_tools_list(request: &JsonRpcRequest, enabled_tools: &[String]) -> Json
     JsonRpcResponse::success(request.id.clone(), json!({ "tools": tools }))
 }
 
-fn handle_tools_call(request: &JsonRpcRequest) -> JsonRpcResponse {
+async fn handle_tools_call(
+    request: &JsonRpcRequest,
+    enabled_tools: &[String],
+    executor: Arc<dyn McpServerExecutor>,
+) -> JsonRpcResponse {
+    use crate::core::mcp::protocol::ToolCallParams;
+    use crate::core::mcp::server::tools::McpServerToolRegistry;
+
     let params = match &request.params {
         Some(p) => p,
         None => {
@@ -88,27 +104,147 @@ fn handle_tools_call(request: &JsonRpcRequest) -> JsonRpcResponse {
         }
     };
 
-    let tool_name = match params.get("name").and_then(|n| n.as_str()) {
-        Some(n) => n.to_string(),
-        None => {
+    let call_params: ToolCallParams = match serde_json::from_value(params.clone()) {
+        Ok(call_params) => call_params,
+        Err(error) => {
             return JsonRpcResponse::error(
                 request.id.clone(),
                 -32602,
-                "Missing tool name".to_string(),
+                format!("Invalid tool call params: {}", error),
             )
         }
     };
 
-    // Placeholder response -- actual tool routing requires AppHandle access
-    // which is provided by the http_server layer during real execution
-    JsonRpcResponse::success(
-        request.id.clone(),
-        json!({
-            "content": [{
-                "type": "text",
-                "text": format!("Tool '{}' called. Full routing implemented in http_server.rs.", tool_name)
-            }],
-            "isError": false
-        }),
-    )
+    if call_params.name.trim().is_empty() {
+        return JsonRpcResponse::error(request.id.clone(), -32602, "Missing tool name".to_string());
+    }
+
+    if !McpServerToolRegistry::is_tool_enabled(enabled_tools, &call_params.name) {
+        return JsonRpcResponse::error(
+            request.id.clone(),
+            -32601,
+            format!(
+                "Tool '{}' is not enabled on this MCP server.",
+                call_params.name
+            ),
+        );
+    }
+
+    let arguments: HashMap<String, Value> = call_params.arguments.unwrap_or_default();
+
+    match executor.execute_tool(&call_params.name, arguments).await {
+        Ok(outcome) => JsonRpcResponse::success(request.id.clone(), outcome.into_json()),
+        Err(error) => JsonRpcResponse::error(request.id.clone(), -32603, error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::mcp::server::executor::{McpServerExecutor, McpServerToolOutcome};
+    use async_trait::async_trait;
+    use parking_lot::Mutex;
+
+    #[derive(Default)]
+    struct StubExecutor {
+        last_call: Mutex<Option<(String, HashMap<String, Value>)>>,
+        outcome: Mutex<Option<McpServerToolOutcome>>,
+    }
+
+    #[async_trait]
+    impl McpServerExecutor for StubExecutor {
+        async fn execute_tool(
+            &self,
+            tool_name: &str,
+            arguments: HashMap<String, Value>,
+        ) -> Result<McpServerToolOutcome, String> {
+            *self.last_call.lock() = Some((tool_name.to_string(), arguments));
+            Ok(self
+                .outcome
+                .lock()
+                .clone()
+                .unwrap_or_else(|| McpServerToolOutcome::success("ok".to_string(), None)))
+        }
+    }
+
+    #[tokio::test]
+    async fn tools_call_routes_to_executor() {
+        let executor = Arc::new(StubExecutor::default());
+        *executor.outcome.lock() = Some(McpServerToolOutcome::success(
+            "done".to_string(),
+            Some(json!({ "status": "ok" })),
+        ));
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "agi_chat",
+                "arguments": {
+                    "message": "hello"
+                }
+            })),
+            id: Some(json!(1)),
+        };
+
+        let response = dispatch(&request, &["agi_chat".to_string()], executor.clone()).await;
+        assert!(response.error.is_none());
+        assert_eq!(
+            response.result.as_ref().unwrap()["content"][0]["text"],
+            "done"
+        );
+        assert_eq!(
+            executor.last_call.lock().as_ref().unwrap().1["message"],
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_rejects_disabled_tool() {
+        let executor = Arc::new(StubExecutor::default());
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "agi_bash",
+                "arguments": {
+                    "command": "pwd"
+                }
+            })),
+            id: Some(json!(1)),
+        };
+
+        let response = dispatch(&request, &["agi_chat".to_string()], executor).await;
+        assert!(response.result.is_none());
+        assert_eq!(response.error.as_ref().unwrap().code, -32601);
+    }
+
+    #[tokio::test]
+    async fn tools_call_returns_tool_error_result() {
+        let executor = Arc::new(StubExecutor::default());
+        *executor.outcome.lock() = Some(McpServerToolOutcome::error(
+            "failed".to_string(),
+            Some(json!({ "reason": "boom" })),
+        ));
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "agi_chat",
+                "arguments": {
+                    "message": "hello"
+                }
+            })),
+            id: Some(json!(1)),
+        };
+
+        let response = dispatch(&request, &["agi_chat".to_string()], executor).await;
+        assert!(response.error.is_none());
+        assert_eq!(response.result.as_ref().unwrap()["isError"], true);
+        assert_eq!(
+            response.result.as_ref().unwrap()["structuredContent"]["reason"],
+            "boom"
+        );
+    }
 }

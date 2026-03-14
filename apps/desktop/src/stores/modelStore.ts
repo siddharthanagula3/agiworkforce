@@ -1021,14 +1021,18 @@ if (typeof window !== 'undefined') {
         _unsubscribePlanChanges = useUnifiedAuthStore.subscribe(
           (state) => state.plan,
           (plan) => {
-            if (plan) {
-              console.debug(
-                `[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`,
-              );
-              enforceModelTierRestriction(plan);
-            }
+            const normalizedPlan = plan ?? 'free';
+            console.debug(
+              `[ModelStore] Plan changed to ${normalizedPlan}, enforcing model tier restriction`,
+            );
+            enforceModelTierRestriction(normalizedPlan);
           },
         );
+        const initialPlan = useUnifiedAuthStore.getState().plan ?? 'free';
+        console.debug(
+          `[ModelStore] Initial plan is ${initialPlan}, enforcing model tier restriction`,
+        );
+        enforceModelTierRestriction(initialPlan);
       }
     })
     .catch((err) => {

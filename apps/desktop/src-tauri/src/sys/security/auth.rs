@@ -4,6 +4,7 @@ use argon2::{
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -204,7 +205,7 @@ pub struct AuthManager {
     users: Arc<parking_lot::RwLock<HashMap<String, User>>>,
     sessions: Arc<parking_lot::RwLock<HashMap<String, Session>>>,
     secret_manager: Arc<SecretManager>,
-    /// SECSYS-003 fix: Rate limiter for token validation, keyed by partial token hash
+    /// SECSYS-003 fix: Rate limiter for token validation, keyed by a digest of the full token
     validation_attempts: Arc<parking_lot::RwLock<HashMap<String, ValidationAttempt>>>,
 }
 
@@ -313,12 +314,8 @@ impl AuthManager {
 
     pub fn validate_token(&self, access_token: &str) -> Result<User, String> {
         // SECSYS-003 fix: Rate limiting to prevent brute-force token attacks
-        // Use first 8 chars of token as key to group similar attempts
-        let rate_key = if access_token.len() >= 8 {
-            access_token[..8].to_string()
-        } else {
-            access_token.to_string()
-        };
+        // Use a digest of the full token so similar prefixes cannot rate-limit each other.
+        let rate_key = validation_rate_key(access_token);
 
         {
             let mut attempts = self.validation_attempts.write();
@@ -402,6 +399,10 @@ impl AuthManager {
         // SECSYS-003 fix: Also cleanup expired rate limit entries
         self.cleanup_rate_limits();
     }
+}
+
+fn validation_rate_key(access_token: &str) -> String {
+    hex::encode(Sha256::digest(access_token.as_bytes()))
 }
 
 fn hash_password(password: &str) -> Result<String, String> {
@@ -654,5 +655,20 @@ mod tests {
 
         let sessions = manager.sessions.read();
         assert_eq!(sessions.len(), 0);
+    }
+
+    #[test]
+    fn test_validation_rate_limit_is_not_shared_by_prefix() {
+        let manager = create_test_auth_manager();
+        let prefix = "sharedprefix";
+        let token_a = format!("{prefix}-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let token_b = format!("{prefix}-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        for _ in 0..=TOKEN_VALIDATION_MAX_ATTEMPTS {
+            let _ = manager.validate_token(&token_a);
+        }
+
+        let result = manager.validate_token(&token_b);
+        assert_eq!(result.unwrap_err(), "Invalid access token");
     }
 }

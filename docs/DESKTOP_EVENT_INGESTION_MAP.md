@@ -69,11 +69,17 @@ These rules are now in effect:
 - transcript message/artifact lookup is centralized in `apps/desktop/src/lib/messageLookup.ts`
 - repetitive integration-event log/trail/sidecar emission is centralized in `apps/desktop/src/lib/runtimeActivity.ts`
 - calendar, automation, cloud, gmail, and MCP execution events now use the shared runtime activity emission path in `apps/desktop/src/hooks/useAgenticEvents.ts`
+- browser extension event state is centralized in `apps/desktop/src/stores/extensionEventsStore.ts`
+- `apps/desktop/src/hooks/useExtensionEvents.ts` is now a shared store selector/initializer, not an independent listener owner
 - `agi:tool_stream` started/completed/error/cancelled activity now uses shared tool-stream activity builders in `apps/desktop/src/lib/runtimeActivity.ts`
+- the old “every event is registered twice” claim is stale; the only remaining live overlap between `useAgenticEvents.ts` and `useTauriStreamListeners.ts` is `agi:tool_stream` cancellation handling, where the chat hook still owns local timeout / watchdog cleanup
 - stream finalization target resolution and terminal message patches are centralized in `apps/desktop/src/lib/streamLifecycle.ts`
 - active stream target resolution is centralized in `apps/desktop/src/lib/streamLifecycle.ts`
+- `thinking:event` target resolution now uses the shared active stream resolver in `apps/desktop/src/lib/streamLifecycle.ts` instead of ad hoc “last session wins” logic
 - thinking-event content plans are centralized in `apps/desktop/src/lib/streamContentRuntime.ts`
 - tool-call and tool-result artifact payload shaping are centralized in `apps/desktop/src/lib/streamContentRuntime.ts`
+- tool timeline label/status shaping is centralized in `apps/desktop/src/lib/toolTimelineRuntime.ts`
+- `chat:tool-calls`, `chat:tool-executing`, and `chat:tool-result` now populate `toolTimelineByMessage` through shared helpers instead of open-coded listener mutations
 - streaming-state/progress metadata patches are centralized in `apps/desktop/src/lib/streamLifecycle.ts`
 - tool-call and tool-result metadata patches are centralized in `apps/desktop/src/lib/streamLifecycle.ts`
 - artifact terminal-state transitions are centralized in `apps/desktop/src/lib/messageArtifacts.ts`

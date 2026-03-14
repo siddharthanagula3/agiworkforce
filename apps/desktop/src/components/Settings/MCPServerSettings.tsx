@@ -5,14 +5,19 @@ import { useMcpServerStore } from '@/stores/mcpServerStore';
 const ALL_TOOLS = ['agi_chat', 'agi_run_task', 'agi_execute_skill', 'agi_bash', 'agi_research'];
 
 export function MCPServerSettings() {
-  const { config, loading, fetchConfig, startServer, stopServer, updateConfig } =
+  const { config, loading, error, fetchConfig, startServer, stopServer, updateConfig } =
     useMcpServerStore();
   const [copied, setCopied] = useState(false);
   const [tokenVisible, setTokenVisible] = useState(false);
+  const [portValue, setPortValue] = useState('9090');
 
   useEffect(() => {
-    fetchConfig();
+    void fetchConfig();
   }, [fetchConfig]);
+
+  useEffect(() => {
+    setPortValue(String(config?.port ?? 9090));
+  }, [config?.port]);
 
   const copySnippet = async () => {
     if (!config) return;
@@ -39,6 +44,18 @@ export function MCPServerSettings() {
     await updateConfig(undefined, next);
   };
 
+  const handlePortBlur = async () => {
+    if (!config) return;
+    const parsed = Number(portValue);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      setPortValue(String(config.port));
+      return;
+    }
+    if (parsed !== config.port) {
+      await updateConfig(parsed, undefined);
+    }
+  };
+
   if (loading && !config) {
     return <div className="p-6 text-sm text-muted-foreground">Loading MCP server config...</div>;
   }
@@ -54,6 +71,12 @@ export function MCPServerSettings() {
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       {/* Enable/disable */}
       <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
@@ -82,8 +105,9 @@ export function MCPServerSettings() {
         <label className="text-sm font-medium text-muted-foreground">Port</label>
         <input
           type="number"
-          defaultValue={config?.port ?? 9090}
-          onBlur={(e) => updateConfig(Number(e.target.value), undefined)}
+          value={portValue}
+          onChange={(e) => setPortValue(e.target.value)}
+          onBlur={() => void handlePortBlur()}
           disabled={config?.running}
           className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
         />

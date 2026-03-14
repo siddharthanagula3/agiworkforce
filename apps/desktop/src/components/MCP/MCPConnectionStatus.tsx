@@ -1,4 +1,3 @@
-import { invoke } from '@/lib/tauri-mock';
 import {
   Activity,
   AlertTriangle,
@@ -9,112 +8,205 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getMcpToolDisplayName } from '../../hooks/agenticEventUtils';
+import { useMcpStore } from '../../stores/mcpStore';
+import type {
+  McpExecutionHistoryEntry,
+  McpServerHealth,
+  McpToolExecutionStats,
+} from '../../types/mcp';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ScrollArea } from '../ui/ScrollArea';
 
-interface ServerHealth {
-  server_name: string;
-  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
-  last_check: string; // ISO date string from Rust DateTime<Utc>
-  error_message: string | null;
-  response_time_ms: number | null;
-  tool_count: number;
-  consecutive_failures: number;
+const DEFAULT_HISTORY_LIMIT = 10;
+
+function formatResponseTime(ms: number | null) {
+  if (ms === null) return 'N/A';
+  return `${ms}ms`;
+}
+
+function getResponseTimeColor(ms: number | null) {
+  if (ms === null) return 'text-muted-foreground';
+  if (ms < 100) return 'text-green-600';
+  if (ms < 500) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
+function getStatusBadge(status: McpServerHealth['status']) {
+  switch (status) {
+    case 'healthy':
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1 bg-green-100 text-green-800">
+          <CheckCircle className="h-3 w-3" />
+          Healthy
+        </Badge>
+      );
+    case 'degraded':
+      return (
+        <Badge
+          variant="secondary"
+          className="flex items-center gap-1 bg-yellow-100 text-yellow-800"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          Degraded
+        </Badge>
+      );
+    case 'unhealthy':
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1 bg-red-100 text-red-800">
+          <XCircle className="h-3 w-3" />
+          Unhealthy
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Unknown
+        </Badge>
+      );
+  }
+}
+
+function formatExecutionTime(timestamp: number | null | undefined) {
+  if (!timestamp) return 'Never';
+  return new Date(timestamp * 1000).toLocaleTimeString();
+}
+
+function getResultPreview(entry: McpExecutionHistoryEntry): string | null {
+  if (!entry.success) {
+    return entry.error ?? null;
+  }
+
+  if (entry.result === null || entry.result === undefined) {
+    return null;
+  }
+
+  try {
+    const serialized = JSON.stringify(entry.result, null, 2);
+    return serialized.length > 500 ? `${serialized.slice(0, 500)}…` : serialized;
+  } catch {
+    return String(entry.result);
+  }
+}
+
+function ToolStatRow({ stat }: { stat: McpToolExecutionStats }) {
+  const successRate =
+    stat.total_executions === 0
+      ? 0
+      : Math.round((stat.successful_executions / stat.total_executions) * 100);
+  const toolName = getMcpToolDisplayName(stat.tool_id);
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <div className="truncate font-medium">{toolName}</div>
+        <div className="text-xs text-muted-foreground">{stat.tool_id}</div>
+      </div>
+      <div className="grid shrink-0 grid-cols-3 gap-4 text-right text-sm">
+        <div>
+          <div className="font-semibold">{stat.total_executions}</div>
+          <div className="text-xs text-muted-foreground">Runs</div>
+        </div>
+        <div>
+          <div className="font-semibold">{successRate}%</div>
+          <div className="text-xs text-muted-foreground">Success</div>
+        </div>
+        <div>
+          <div className="font-semibold">{Math.round(stat.avg_duration_ms)}ms</div>
+          <div className="text-xs text-muted-foreground">Avg</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function MCPConnectionStatus() {
-  const [healthData, setHealthData] = useState<ServerHealth[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    health,
+    executionHistory,
+    toolExecutionStats,
+    refreshServers,
+    refreshHealth,
+    checkServerHealth,
+    refreshExecutionHistory,
+    refreshToolExecutionStats,
+    connectServer,
+  } = useMcpStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const fetchHealth = async () => {
-    setIsLoading(true);
+  const refreshRuntime = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      const health = await invoke<ServerHealth[]>('mcp_get_health');
-      setHealthData(health);
-    } catch (error) {
-      console.error('Failed to fetch health data:', error);
+      await Promise.all([
+        refreshServers(),
+        refreshHealth(),
+        refreshExecutionHistory(DEFAULT_HISTORY_LIMIT),
+        refreshToolExecutionStats(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
     }
-    setIsLoading(false);
-  };
+  }, [refreshExecutionHistory, refreshHealth, refreshServers, refreshToolExecutionStats]);
 
   useEffect(() => {
-    fetchHealth();
+    void refreshRuntime();
+  }, [refreshRuntime]);
 
-    if (!autoRefresh) {
-      return;
-    }
+  useEffect(() => {
+    if (!autoRefresh) return;
 
-    const interval = setInterval(fetchHealth, 5000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
+    const interval = window.setInterval(() => {
+      void refreshRuntime();
+    }, 5000);
 
-  const getStatusBadge = (status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown') => {
-    switch (status) {
-      case 'healthy':
-        return (
-          <Badge
-            variant="secondary"
-            className="flex items-center gap-1 bg-green-100 text-green-800"
-          >
-            <CheckCircle className="w-3 h-3" />
-            Healthy
-          </Badge>
-        );
-      case 'degraded':
-        return (
-          <Badge
-            variant="secondary"
-            className="flex items-center gap-1 bg-yellow-100 text-yellow-800"
-          >
-            <AlertTriangle className="w-3 h-3" />
-            Degraded
-          </Badge>
-        );
-      case 'unhealthy':
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1 bg-red-100 text-red-800">
-            <XCircle className="w-3 h-3" />
-            Unhealthy
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" />
-            Unknown
-          </Badge>
-        );
-    }
-  };
+    return () => window.clearInterval(interval);
+  }, [autoRefresh, refreshRuntime]);
 
-  const formatResponseTime = (ms: number | null) => {
-    if (ms === null) return 'N/A';
-    return `${ms}ms`;
-  };
-
-  const getResponseTimeColor = (ms: number | null) => {
-    if (ms === null) return 'text-gray-500';
-    if (ms < 100) return 'text-green-600';
-    if (ms < 500) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const healthyCount = healthData.filter((h) => h.status === 'healthy').length;
-  const unhealthyCount = healthData.filter(
-    (h) => h.status === 'unhealthy' || h.status === 'degraded',
-  ).length;
-  const totalTools = healthData.reduce((sum, h) => sum + h.tool_count, 0);
+  const healthyCount = useMemo(
+    () => health.filter((serverHealth) => serverHealth.status === 'healthy').length,
+    [health],
+  );
+  const unhealthyCount = useMemo(
+    () =>
+      health.filter(
+        (serverHealth) =>
+          serverHealth.status === 'unhealthy' || serverHealth.status === 'degraded',
+      ).length,
+    [health],
+  );
+  const totalTools = useMemo(
+    () => health.reduce((sum, serverHealth) => sum + serverHealth.tool_count, 0),
+    [health],
+  );
+  const totalExecutions = useMemo(
+    () => toolExecutionStats.reduce((sum, stat) => sum + stat.total_executions, 0),
+    [toolExecutionStats],
+  );
+  const totalFailures = useMemo(
+    () => toolExecutionStats.reduce((sum, stat) => sum + stat.failed_executions, 0),
+    [toolExecutionStats],
+  );
+  const slowestTools = useMemo(
+    () =>
+      [...toolExecutionStats]
+        .sort((left, right) => right.avg_duration_ms - left.avg_duration_ms)
+        .slice(0, 5),
+    [toolExecutionStats],
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Connection Status</h2>
-          <p className="text-sm text-gray-600">Real-time monitoring of tool connections</p>
+          <h2 className="text-xl font-semibold">Runtime Health</h2>
+          <p className="text-sm text-muted-foreground">
+            Live MCP server health, recent executions, and tool performance.
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -122,7 +214,7 @@ export function MCPConnectionStatus() {
             <input
               type="checkbox"
               checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
+              onChange={(event) => setAutoRefresh(event.target.checked)}
               className="rounded"
             />
             Auto-refresh
@@ -131,167 +223,258 @@ export function MCPConnectionStatus() {
           <Button
             size="sm"
             variant="outline"
-            onClick={fetchHealth}
-            disabled={isLoading}
+            onClick={() => void refreshRuntime()}
+            disabled={isRefreshing}
             className="flex items-center gap-1"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
       </div>
 
-      {}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="w-5 h-5 text-blue-500" />
-            <span className="text-sm text-gray-600">Total Servers</span>
+          <div className="mb-2 flex items-center gap-2">
+            <Activity className="h-5 w-5 text-blue-500" />
+            <span className="text-sm text-muted-foreground">Servers</span>
           </div>
-          <div className="text-2xl font-bold">{healthData.length}</div>
+          <div className="text-2xl font-bold">{health.length}</div>
         </Card>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <span className="text-sm text-gray-600">Healthy</span>
+          <div className="mb-2 flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            <span className="text-sm text-muted-foreground">Healthy</span>
           </div>
           <div className="text-2xl font-bold text-green-600">{healthyCount}</div>
         </Card>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <XCircle className="w-5 h-5 text-red-500" />
-            <span className="text-sm text-gray-600">Unhealthy</span>
+          <div className="mb-2 flex items-center gap-2">
+            <XCircle className="h-5 w-5 text-red-500" />
+            <span className="text-sm text-muted-foreground">Issues</span>
           </div>
           <div className="text-2xl font-bold text-red-600">{unhealthyCount}</div>
         </Card>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-5 h-5 text-purple-500" />
-            <span className="text-sm text-gray-600">Total Tools</span>
+          <div className="mb-2 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-purple-500" />
+            <span className="text-sm text-muted-foreground">Tools</span>
           </div>
-          <div className="text-2xl font-bold">{totalTools.toLocaleString()}</div>
+          <div className="text-2xl font-bold">{totalTools}</div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-orange-500" />
+            <span className="text-sm text-muted-foreground">Executions</span>
+          </div>
+          <div className="text-2xl font-bold">{totalExecutions}</div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <span className="text-sm text-muted-foreground">Failures</span>
+          </div>
+          <div className="text-2xl font-bold text-red-600">{totalFailures}</div>
         </Card>
       </div>
 
-      {}
-      <Card>
-        <div className="p-4 border-b">
-          <h3 className="font-semibold">Server Health Details</h3>
-        </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <div className="border-b p-4">
+            <h3 className="font-semibold">Server Health</h3>
+          </div>
 
-        <ScrollArea className="h-[400px]">
-          {healthData.length === 0 ? (
-            <div className="text-center py-12">
-              <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Servers Connected</h3>
-              <p className="text-gray-600">Enable integrations to see their health status</p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {healthData.map((health) => (
-                <div key={health.server_name} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold">{health.server_name}</h4>
-                        {getStatusBadge(health.status)}
+          <ScrollArea className="h-[360px]">
+            {health.length === 0 ? (
+              <div className="py-12 text-center">
+                <Activity className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-semibold">No connected MCP servers</h3>
+                <p className="text-sm text-muted-foreground">
+                  Enable and connect MCP servers to see live health.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {health.map((serverHealth) => (
+                  <div key={serverHealth.server_name} className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center gap-2">
+                          <h4 className="font-semibold">{serverHealth.server_name}</h4>
+                          {getStatusBadge(serverHealth.status)}
+                        </div>
+                        {serverHealth.error_message && (
+                          <div className="mt-2 flex items-start gap-1 text-sm text-red-600">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{serverHealth.error_message}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                      <div>
+                        <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                          <Zap className="h-3 w-3" />
+                          Response Time
+                        </div>
+                        <div
+                          className={`font-semibold ${getResponseTimeColor(serverHealth.response_time_ms)}`}
+                        >
+                          {formatResponseTime(serverHealth.response_time_ms)}
+                        </div>
                       </div>
 
-                      {health.error_message && (
-                        <div className="text-sm text-red-600 mt-2 flex items-start gap-1">
-                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                          <span>{health.error_message}</span>
+                      <div>
+                        <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                          <TrendingUp className="h-3 w-3" />
+                          Tools
                         </div>
+                        <div className="font-semibold">{serverHealth.tool_count}</div>
+                      </div>
+
+                      <div>
+                        <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                          <AlertTriangle className="h-3 w-3" />
+                          Failures
+                        </div>
+                        <div
+                          className={`font-semibold ${serverHealth.consecutive_failures > 0 ? 'text-red-600' : 'text-green-600'}`}
+                        >
+                          {serverHealth.consecutive_failures}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          Last Check
+                        </div>
+                        <div className="text-xs font-semibold">
+                          {new Date(serverHealth.last_check).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {(serverHealth.status === 'unhealthy' || serverHealth.status === 'degraded') && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void checkServerHealth(serverHealth.server_name)}
+                        >
+                          Test Connection
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void connectServer(serverHealth.server_name)}
+                        >
+                          Reconnect
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </Card>
+
+        <Card>
+          <div className="border-b p-4">
+            <h3 className="font-semibold">Recent Tool Executions</h3>
+          </div>
+
+          <ScrollArea className="h-[360px]">
+            {executionHistory.length === 0 ? (
+              <div className="py-12 text-center">
+                <Zap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-semibold">No MCP executions yet</h3>
+                <p className="text-sm text-muted-foreground">
+                  Tool execution history appears here after MCP tools run.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {executionHistory.map((entry, index) => {
+                  const preview = getResultPreview(entry);
+                  const toolName = getMcpToolDisplayName(entry.tool_id);
+
+                  return (
+                    <div
+                      key={`${entry.tool_id}-${entry.timestamp}-${index}`}
+                      className="space-y-3 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">{toolName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {entry.server_name} · {entry.tool_id}
+                          </div>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            entry.success
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }
+                        >
+                          {entry.success ? 'Success' : 'Failed'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <div className="text-muted-foreground">Duration</div>
+                          <div className="font-semibold">{entry.duration_ms}ms</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Executed</div>
+                          <div className="font-semibold">{formatExecutionTime(entry.timestamp)}</div>
+                        </div>
+                      </div>
+
+                      {preview && (
+                        <details className="rounded-md border bg-muted/20 p-3">
+                          <summary className="cursor-pointer text-sm font-medium">
+                            {entry.success ? 'Result' : 'Error'}
+                          </summary>
+                          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs">
+                            {preview}
+                          </pre>
+                        </details>
                       )}
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </Card>
+      </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-600 mb-1 flex items-center gap-1">
-                        <Zap className="w-3 h-3" />
-                        Response Time
-                      </div>
-                      <div
-                        className={`font-semibold ${getResponseTimeColor(health.response_time_ms)}`}
-                      >
-                        {formatResponseTime(health.response_time_ms)}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 mb-1 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        Tools
-                      </div>
-                      <div className="font-semibold">{health.tool_count}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 mb-1 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        Failures
-                      </div>
-                      <div
-                        className={`font-semibold ${health.consecutive_failures > 0 ? 'text-red-600' : 'text-green-600'}`}
-                      >
-                        {health.consecutive_failures}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 mb-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Last Check
-                      </div>
-                      <div className="font-semibold text-xs">
-                        {new Date(health.last_check).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {health.status === 'unhealthy' && (
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          invoke('mcp_check_server_health', {
-                            serverName: health.server_name,
-                          })
-                            .then(fetchHealth)
-                            .catch((error) => {
-                              console.error('Health check failed:', error);
-                            });
-                        }}
-                      >
-                        Test Connection
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          invoke('mcp_connect_server', {
-                            name: health.server_name,
-                          })
-                            .then(fetchHealth)
-                            .catch((error) => {
-                              console.error('Reconnect failed:', error);
-                            });
-                        }}
-                      >
-                        Reconnect
-                      </Button>
-                    </div>
-                  )}
-                </div>
+      <Card>
+        <div className="border-b p-4">
+          <h3 className="font-semibold">Tool Performance</h3>
+        </div>
+        <div className="p-4">
+          {slowestTools.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No MCP tool stats collected yet.</p>
+          ) : (
+            <div className="divide-y">
+              {slowestTools.map((stat) => (
+                <ToolStatRow key={stat.tool_id} stat={stat} />
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </Card>
     </div>
   );

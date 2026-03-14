@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '../../lib/tauri-mock';
+import { McpClient } from '../../api/mcp';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -21,21 +21,7 @@ import {
   CheckCircle,
   ExternalLink,
 } from 'lucide-react';
-
-interface ServerPackage {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  author: string;
-  category: 'automation' | 'data' | 'search' | 'productivity' | 'development' | 'integration';
-  npm_package?: string;
-  github?: string;
-  tools: string[];
-  rating: number;
-  downloads: number;
-  installed: boolean;
-}
+import type { McpRegistryPackage } from '../../types/mcp';
 
 const CATEGORIES = [
   { id: 'all', name: 'All Servers', icon: Package },
@@ -47,10 +33,10 @@ const CATEGORIES = [
 ];
 
 interface ServerDetailsDialogProps {
-  server: ServerPackage | null;
+  server: McpRegistryPackage | null;
   open: boolean;
   onClose: () => void;
-  onInstall: (server: ServerPackage) => void;
+  onInstall: (server: McpRegistryPackage) => void;
 }
 
 function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetailsDialogProps) {
@@ -137,9 +123,9 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
 }
 
 interface ServerPackageCardProps {
-  server: ServerPackage;
-  onViewDetails: (server: ServerPackage) => void;
-  onInstall: (server: ServerPackage) => void;
+  server: McpRegistryPackage;
+  onViewDetails: (server: McpRegistryPackage) => void;
+  onInstall: (server: McpRegistryPackage) => void;
 }
 
 function ServerPackageCard({ server, onViewDetails, onInstall }: ServerPackageCardProps) {
@@ -200,9 +186,9 @@ function ServerPackageCard({ server, onViewDetails, onInstall }: ServerPackageCa
 export function MCPServerBrowser() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedServer, setSelectedServer] = useState<ServerPackage | null>(null);
+  const [selectedServer, setSelectedServer] = useState<McpRegistryPackage | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [servers, setServers] = useState<ServerPackage[]>([]);
+  const [servers, setServers] = useState<McpRegistryPackage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,7 +197,7 @@ export function MCPServerBrowser() {
     const fetchServers = async () => {
       try {
         setIsLoading(true);
-        const data = await invoke<ServerPackage[]>('mcp_get_registry');
+        const data = await McpClient.getRegistry();
         setServers(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -236,24 +222,22 @@ export function MCPServerBrowser() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleViewDetails = (server: ServerPackage) => {
+  const handleViewDetails = (server: McpRegistryPackage) => {
     setSelectedServer(server);
     setDetailsOpen(true);
   };
 
-  const handleInstall = async (server: ServerPackage) => {
+  const handleInstall = async (server: McpRegistryPackage) => {
     try {
       toast({
         title: 'Installing tool',
         description: `Installing ${server.name}...`,
       });
 
-      await invoke('mcp_install_server', {
-        serverId: server.id,
-      });
+      await McpClient.installServer(server.id);
 
       // Refresh the server list to show the newly installed server
-      const updatedServers = await invoke<ServerPackage[]>('mcp_get_registry');
+      const updatedServers = await McpClient.getRegistry();
       setServers(updatedServers);
 
       toast({

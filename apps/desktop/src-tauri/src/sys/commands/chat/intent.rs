@@ -181,7 +181,11 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
         };
     }
 
-    if matches_clarification(&content_lower) {
+    let detected_actions = detect_action_verbs(&content_lower);
+    let action_score = calculate_action_score(&content_lower, &detected_actions);
+    let conversation_score = calculate_conversation_score(&content_lower);
+
+    if matches_clarification(&content_lower) && detected_actions.is_empty() {
         return IntentResult {
             intent: UserIntent::Clarification,
             confidence: 0.8,
@@ -189,10 +193,6 @@ pub fn detect_user_intent(content: &str) -> IntentResult {
             should_auto_execute: false,
         };
     }
-
-    let detected_actions = detect_action_verbs(&content_lower);
-    let action_score = calculate_action_score(&content_lower, &detected_actions);
-    let conversation_score = calculate_conversation_score(&content_lower);
 
     if action_score > conversation_score && action_score > 0.3 {
         IntentResult {
