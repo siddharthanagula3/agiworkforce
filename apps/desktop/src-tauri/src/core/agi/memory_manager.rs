@@ -2098,6 +2098,25 @@ mod tests {
     }
 
     #[test]
+    fn test_remember_updates_semantic_index_without_manual_rebuild() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        manager
+            .remember(
+                MemoryCategory::Fact,
+                "rust_lang_live",
+                "Rust is a systems programming language focused on memory safety",
+                Some(8),
+                None,
+            )
+            .unwrap();
+
+        let results = manager.semantic_search("programming language", 10).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].memory.topic, "rust_lang_live");
+    }
+
+    #[test]
     fn test_hybrid_search() {
         let (_temp_dir, manager) = setup_test_db();
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { invoke } from '@/lib/tauri-mock';
+import { McpClient } from '@/api/mcp';
 import { CONNECTORS } from '../components/Connectors/connectorDefinitions';
 
 /** Duration (ms) before a pending OAuth flow is treated as timed out */
@@ -56,7 +56,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
                 // Start OAuth flow — opens browser. Do NOT mark connected yet.
                 // The connector will be marked connected when completeOAuth() is
                 // called after the OAuth callback succeeds.
-                await invoke('mcp_oauth_start', { provider: id });
+                await McpClient.oauthStartRaw(id);
                 const now = Date.now();
                 // Schedule an automatic timeout to clean up stale OAuth flows
                 const timerId = setTimeout(() => {
@@ -71,10 +71,10 @@ export const useConnectorsStore = create<ConnectorsState>()(
                 return; // Early return — don't mark connected
               }
               case 'api_key':
-                await invoke('mcp_connect_connector', { connectorId: id });
+                await McpClient.connectConnector(id);
                 break;
               case 'mcp_remote':
-                await invoke('mcp_connect_connector', { connectorId: id });
+                await McpClient.connectConnector(id);
                 break;
               case 'none':
                 break;
@@ -100,8 +100,8 @@ export const useConnectorsStore = create<ConnectorsState>()(
             error: { ...state.error, [id]: null },
           }));
           try {
-            await invoke('save_api_key', { provider: id, key: apiKey });
-            await invoke('mcp_connect_connector', { connectorId: id });
+            await McpClient.saveApiKey(id, apiKey);
+            await McpClient.connectConnector(id);
             set((state) => ({
               connectedIds: [...new Set([...state.connectedIds, id])],
               loading: { ...state.loading, [id]: false },
@@ -122,7 +122,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
             error: { ...state.error, [id]: null },
           }));
           try {
-            await invoke('mcp_oauth_disconnect', { provider: id });
+            await McpClient.oauthDisconnectRaw(id);
             set((state) => ({
               connectedIds: state.connectedIds.filter((cid) => cid !== id),
               loading: { ...state.loading, [id]: false },
@@ -139,7 +139,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
 
         fetchConnected: async () => {
           try {
-            const providers = await invoke<string[]>('mcp_list_connected_providers');
+            const providers = await McpClient.listConnectedProviders();
             set({ connectedIds: providers });
           } catch {
             // Silently fail — the backend command may not exist yet
@@ -164,11 +164,9 @@ export const useConnectorsStore = create<ConnectorsState>()(
           try {
             // OAuth tokens are already stored by the callback handler.
             // Now activate the MCP server with those credentials.
-            await invoke('mcp_connect_connector', { connectorId: id });
+            await McpClient.connectConnector(id);
             // Verify the MCP server actually activated by checking connected providers
-            const providers = await invoke<string[]>('mcp_list_connected_providers').catch(
-              () => [] as string[],
-            );
+            const providers = await McpClient.listConnectedProviders().catch(() => [] as string[]);
             const mcpActive = providers.includes(id);
             if (!mcpActive) {
               console.warn(

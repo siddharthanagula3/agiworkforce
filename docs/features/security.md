@@ -16,14 +16,14 @@
 | Rate limiting | `sys/security/rate_limit.rs` |
 | Command validation | `sys/security/command_validator.rs` |
 | Prompt injection | `sys/security/prompt_injection.rs` |
-| Audit logging | `sys/security/audit_logger.rs`, `sys/security/audit.rs` |
+| Audit logging | `sys/security/audit_logger.rs` |
 | Approval workflow | `sys/security/approval_workflow.rs` |
 | Policy engine | `sys/security/policy/engine.rs`, `policy/actions.rs`, `policy/decisions.rs`, `policy/scope.rs` |
 | Policy integration | `sys/security/policy_integration.rs` |
 | Session sandboxing | `sys/security/sandbox.rs` |
 | Secure file storage | `sys/security/storage.rs` |
 | Log redaction | `sys/security/log_redaction.rs` |
-| Input validation | `sys/security/validator.rs` |
+| Input validation | `sys/security/command_validator.rs` |
 | Auth & OAuth | `sys/security/auth.rs`, `sys/security/auth_db.rs`, `sys/security/oauth.rs` |
 | API security | `sys/security/api.rs` |
 | DM protection | `sys/security/dm_protection.rs` |

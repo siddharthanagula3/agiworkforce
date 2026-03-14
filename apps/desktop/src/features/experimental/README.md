@@ -15,7 +15,7 @@ in the production component tree. They have been moved here rather than deleted 
 | KnowledgeBaseViewer | components/KnowledgeBaseViewer/ | Partial | KB browsing UI |
 | ModelComparisonView | components/ModelComparison/ | Partial | Side-by-side model compare |
 | MobileCompanionPanel | components/Mobile/ | Stub | Mobile companion UI |
-| LovableMigrationWizard | components/Migration/ | Partial | Lovable.dev migration tool |
+| LovableMigrationWizard | components/Migration/ | Honest stub | UI remains experimental, but live commands now return explicit not-implemented errors instead of fake Lovable data |
 | MessagingPanel | components/Messaging/ | In-Progress | Slack/WhatsApp/Discord — has invoke() calls |
 | TeamDashboard | components/Teams/ | Partial | Team management UI |
 | CodeWorkspace | components/Code/ | In-Progress | Code editor workspace |

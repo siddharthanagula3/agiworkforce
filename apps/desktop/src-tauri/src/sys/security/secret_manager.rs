@@ -155,6 +155,11 @@ impl SecretManager {
         Ok(())
     }
 
+    /// Store an arbitrary application secret in encrypted storage.
+    pub fn set_secret(&self, key: &str, secret: &str) -> Result<(), SecretError> {
+        self.store_secret_in_database(key, secret)
+    }
+
     /// Retrieve and decrypt secret from database
     fn get_secret_from_database(&self, key: &str) -> Result<String, SecretError> {
         let conn = self.db_conn.lock().map_err(|_| {
@@ -187,6 +192,23 @@ impl SecretManager {
         decrypt_secret(&encryption_key, &encrypted).map_err(SecretError::EncryptionError)
     }
 
+    /// Check whether an encrypted secret exists for the provided key.
+    pub fn has_secret(&self, key: &str) -> Result<bool, SecretError> {
+        let conn = self.db_conn.lock().map_err(|_| {
+            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+        })?;
+
+        let exists: i64 = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM settings WHERE key = ?1 AND encrypted = 1)",
+                rusqlite::params![key],
+                |row| row.get(0),
+            )
+            .map_err(SecretError::DatabaseRetrieveError)?;
+
+        Ok(exists == 1)
+    }
+
     /// Get the database encryption key derived from machine identifiers
     fn get_db_encryption_key(&self) -> Vec<u8> {
         machine_key::derive_key(KeyPurpose::DatabaseEncryption)
@@ -214,6 +236,21 @@ impl SecretManager {
 
         info!("Generated new secondary encryption key");
         Ok(key_bytes)
+    }
+
+    /// Delete a stored secret by key.
+    pub fn delete_secret(&self, key: &str) -> Result<(), SecretError> {
+        let conn = self.db_conn.lock().map_err(|_| {
+            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+        })?;
+
+        conn.execute(
+            "DELETE FROM settings WHERE key = ?1",
+            rusqlite::params![key],
+        )
+        .map_err(SecretError::DatabaseStoreError)?;
+
+        Ok(())
     }
 
     /// Delete secret from database
@@ -359,5 +396,20 @@ mod tests {
         // Should return the same key on second call
         let key2 = manager.get_or_create_secondary_key().unwrap();
         assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn test_generic_secret_lifecycle() {
+        let manager = create_test_manager();
+
+        assert!(!manager.has_secret("perplexity_api_key").unwrap());
+
+        manager
+            .set_secret("perplexity_api_key", "test-secret")
+            .unwrap();
+        assert!(manager.has_secret("perplexity_api_key").unwrap());
+
+        manager.delete_secret("perplexity_api_key").unwrap();
+        assert!(!manager.has_secret("perplexity_api_key").unwrap());
     }
 }

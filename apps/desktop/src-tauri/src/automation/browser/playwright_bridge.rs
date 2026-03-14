@@ -23,6 +23,12 @@ pub struct CdpTarget {
     pub ws_debugger_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct CdpVersionInfo {
+    #[serde(rename = "webSocketDebuggerUrl")]
+    web_socket_debugger_url: Option<String>,
+}
+
 /// Atomic counter for generating unique CDP command IDs.
 static CDP_COMMAND_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -80,6 +86,184 @@ pub struct BrowserHandle {
 }
 
 #[derive(Debug, Clone)]
+pub struct CdpEndpoint {
+    port: u16,
+}
+
+impl CdpEndpoint {
+    pub fn new(port: u16) -> Self {
+        Self { port }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn http_base_url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    pub fn direct_page_ws_url(&self, tab_id: &str) -> String {
+        format!("ws://127.0.0.1:{}/devtools/page/{}", self.port, tab_id)
+    }
+
+    fn http_client(&self) -> Result<reqwest::Client> {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create CDP HTTP client: {}", e)))
+    }
+
+    pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
+        let targets_url = format!("{}/json", self.http_base_url());
+
+        tracing::debug!("Fetching CDP targets from {}", targets_url);
+
+        let targets: Vec<CdpTarget> = self
+            .http_client()?
+            .get(&targets_url)
+            .send()
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to connect to Chrome DevTools at {}. Is Chrome running with --remote-debugging-port={}? Error: {}",
+                    targets_url, self.port, e
+                ))
+            })?
+            .json()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to parse CDP targets response: {}", e)))?;
+
+        tracing::debug!("Found {} CDP targets", targets.len());
+        Ok(targets)
+    }
+
+    pub async fn browser_ws_endpoint(&self) -> Result<String> {
+        let version_url = format!("{}/json/version", self.http_base_url());
+        let version: CdpVersionInfo = self
+            .http_client()?
+            .get(&version_url)
+            .send()
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to connect to Chrome DevTools version endpoint at {}: {}",
+                    version_url, e
+                ))
+            })?
+            .json()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to parse CDP version response: {}", e)))?;
+
+        version.web_socket_debugger_url.ok_or_else(|| {
+            Error::Other(format!(
+                "CDP version endpoint at {} did not return webSocketDebuggerUrl",
+                version_url
+            ))
+        })
+    }
+
+    pub async fn wait_for_browser_ws_endpoint(&self, timeout: Duration) -> Result<String> {
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        loop {
+            match self.browser_ws_endpoint().await {
+                Ok(endpoint) => return Ok(endpoint),
+                Err(error) => {
+                    if tokio::time::Instant::now() >= deadline {
+                        return Err(error);
+                    }
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    }
+
+    pub async fn create_target(&self, url: &str) -> Result<CdpTarget> {
+        let create_url = format!(
+            "{}/json/new?{}",
+            self.http_base_url(),
+            urlencoding::encode(url)
+        );
+        let client = self.http_client()?;
+
+        let response = match client.put(&create_url).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                tracing::warn!(
+                    "CDP target creation via PUT failed at {}: {}. Retrying with GET.",
+                    create_url,
+                    error
+                );
+                client
+                    .get(&create_url)
+                    .send()
+                    .await
+                    .map_err(|retry_error| {
+                        Error::Other(format!(
+                            "Failed to create browser target at {}: {}",
+                            create_url, retry_error
+                        ))
+                    })?
+            }
+        };
+
+        response
+            .error_for_status()
+            .map_err(|e| Error::Other(format!("CDP target creation failed: {}", e)))?
+            .json()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to parse CDP target response: {}", e)))
+    }
+
+    pub async fn close_target(&self, target_id: &str) -> Result<()> {
+        let close_url = format!(
+            "{}/json/close/{}",
+            self.http_base_url(),
+            urlencoding::encode(target_id)
+        );
+
+        self.http_client()?
+            .get(&close_url)
+            .send()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to close browser target: {}", e)))?
+            .error_for_status()
+            .map_err(|e| Error::Other(format!("CDP target close failed: {}", e)))?;
+
+        Ok(())
+    }
+
+    pub async fn resolve_page_ws_endpoint(&self, tab_id: &str) -> Result<String> {
+        let fallback = self.direct_page_ws_url(tab_id);
+
+        match self.list_targets().await {
+            Ok(targets) => {
+                if let Some(endpoint) = targets
+                    .into_iter()
+                    .find(|target| target.id == tab_id)
+                    .and_then(|target| target.ws_debugger_url)
+                {
+                    return Ok(endpoint);
+                }
+
+                Ok(fallback)
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to resolve CDP target metadata for tab {} on port {}: {}. Falling back to the direct websocket URL.",
+                    tab_id,
+                    self.port,
+                    error
+                );
+                Ok(fallback)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct PlaywrightConfig {
     pub node_path: String,
     pub playwright_path: String,
@@ -128,45 +312,26 @@ impl PlaywrightBridge {
         })
     }
 
-    pub async fn start_server(&self) -> Result<()> {
-        let mut process_guard = self.process.lock().await;
+    pub fn endpoint(&self) -> CdpEndpoint {
+        CdpEndpoint::new(self.config.ws_port)
+    }
 
-        if process_guard.is_some() {
-            tracing::info!("Playwright server already running");
+    pub fn cdp_port(&self) -> u16 {
+        self.config.ws_port
+    }
+
+    pub async fn start_server(&self) -> Result<()> {
+        if self.endpoint().browser_ws_endpoint().await.is_ok() {
+            tracing::info!(
+                "CDP endpoint already available on port {}; reusing running browser automation process",
+                self.config.ws_port
+            );
             return Ok(());
         }
 
-        tracing::info!("Starting Playwright server on port {}", self.config.ws_port);
-
-        // Platform-appropriate stub command until real Playwright integration
-        #[cfg(target_os = "windows")]
-        let child = Command::new("cmd")
-            .args(["/C", "echo", "Playwright server stub"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| Error::Other(format!("Failed to start Playwright server: {}", e)))?;
-
-        #[cfg(target_os = "macos")]
-        let child = Command::new("echo")
-            .arg("Playwright server stub")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| Error::Other(format!("Failed to start Playwright server: {}", e)))?;
-
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-        let child = Command::new("echo")
-            .arg("Playwright server stub")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| Error::Other(format!("Failed to start Playwright server: {}", e)))?;
-
-        *process_guard = Some(child);
-
-        tracing::info!("Playwright server started successfully");
-        Ok(())
+        Err(Error::Other(
+            "Embedded Playwright server startup is not implemented in the desktop runtime. Use launch_browser() to start a browser process with CDP enabled.".to_string(),
+        ))
     }
 
     pub async fn stop_server(&self) -> Result<()> {
@@ -197,17 +362,28 @@ impl PlaywrightBridge {
 
         let (exe, args) = self.build_browser_command(&browser_type, &options)?;
 
-        let child = Command::new(&exe)
+        let mut child = Command::new(&exe)
             .args(&args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| Error::Other(format!("Failed to launch browser: {}", e)))?;
 
-        let ws_endpoint = format!(
-            "ws://127.0.0.1:{}/devtools/browser/{}",
-            self.config.ws_port, browser_id
-        );
+        let ws_endpoint = match self
+            .endpoint()
+            .wait_for_browser_ws_endpoint(Duration::from_secs(10))
+            .await
+        {
+            Ok(endpoint) => endpoint,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(Error::Other(format!(
+                    "Browser process launched but Chrome DevTools never became reachable on port {}: {}",
+                    self.config.ws_port, error
+                )));
+            }
+        };
         let handle = BrowserHandle {
             id: browser_id.clone(),
             browser_type: browser_type.clone(),
@@ -399,37 +575,7 @@ impl PlaywrightBridge {
     // Used by: CDP browser automation API — navigate/click/type/screenshot/evaluate
     #[allow(dead_code)]
     pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
-        let port = self.config.ws_port;
-        let url = format!("http://127.0.0.1:{}/json", port);
-
-        tracing::debug!("Fetching CDP targets from {}", url);
-
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()
-            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
-
-        let targets: Vec<CdpTarget> = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                Error::Other(format!(
-                    "Failed to connect to Chrome DevTools at {}. Is Chrome running with --remote-debugging-port={}? Error: {}",
-                    url, port, e
-                ))
-            })?
-            .json()
-            .await
-            .map_err(|e| {
-                Error::Other(format!(
-                    "Failed to parse CDP targets response: {}",
-                    e
-                ))
-            })?;
-
-        tracing::debug!("Found {} CDP targets", targets.len());
-        Ok(targets)
+        self.endpoint().list_targets().await
     }
 
     /// Open a WebSocket to the given CDP target URL, send a single JSON-RPC
@@ -798,5 +944,16 @@ mod tests {
         let options = BrowserOptions::default();
         let result = bridge.build_browser_command(&BrowserType::Chromium, &options);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cdp_endpoint_uses_configured_port() {
+        let endpoint = CdpEndpoint::new(13377);
+        assert_eq!(endpoint.port(), 13377);
+        assert_eq!(endpoint.http_base_url(), "http://127.0.0.1:13377");
+        assert_eq!(
+            endpoint.direct_page_ws_url("tab-123"),
+            "ws://127.0.0.1:13377/devtools/page/tab-123"
+        );
     }
 }

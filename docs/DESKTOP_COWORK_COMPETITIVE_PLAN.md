@@ -36,6 +36,58 @@ Cowork validates several core AGI Workforce product decisions:
 4. `Visible planning and progress` are expected, not optional.
 5. `Plugins / skills / connectors / sub-agents` are part of the product, not implementation detail.
 
+## CLI Outer-Layer Architecture
+
+Cowork’s most important lesson is architectural, not cosmetic:
+
+- `Claude Desktop + Cowork` is not valuable because it renders terminal text nicely.
+- It is valuable because the desktop product exposes the same underlying agent loop as `Claude Code` through a better interaction surface.
+
+For AGI Workforce, that means the correct target architecture is:
+
+1. `Shared agent runtime core`
+2. `CLI` as one client of that core
+3. `Desktop GUI` as another client of that core
+
+The desktop app can absolutely be the outer layer of the CLI/runtime, but only under these rules:
+
+- the GUI must consume structured events, not scraped terminal output
+- approvals must be first-class runtime events, not inferred from stdout
+- reasoning / planning / tool starts / tool progress / tool completion must be emitted as typed events
+- sessions, artifacts, checkpoints, approvals, and memory must belong to the shared runtime, not to the GUI shell
+- the CLI should be replaceable as a client without breaking desktop state
+
+In practice, AGI Workforce should converge on:
+
+- `agent runtime service` — canonical session, tools, MCP, connectors, filesystem, terminal, memory
+- `CLI adapter` — developer/power-user surface over that runtime
+- `desktop adapter` — transcript, inline reasoning, approvals, artifacts, settings, monitoring
+
+This avoids the bad version of “GUI over CLI,” which is:
+
+- parsing human-readable stdout
+- duplicating state in the frontend
+- inventing sidecar-only status the runtime never emitted
+- losing resumability when the CLI process exits
+
+It enables the good version, which is:
+
+- one execution engine
+- one permission model
+- one session state
+- one tool/MCP contract
+- multiple surfaces
+
+## Immediate Architecture Implications
+
+To make AGI Workforce a credible outer layer over a CLI/runtime:
+
+1. the desktop transcript must remain the primary execution surface
+2. the CLI/runtime must emit typed events for plan / reasoning / tool / MCP / connector / approval / artifact / completion
+3. the desktop should subscribe to those events and render them inline
+4. the runtime must own resume/retry/cancel state
+5. the CLI and desktop must share the same command/tool registry rather than drift into parallel implementations
+
 ## Where AGI Workforce Must Beat Cowork
 
 Cowork is a strong benchmark, but AGI Workforce should not stop at feature parity.
@@ -245,3 +297,7 @@ Desktop is not Cowork-competitive until the answers below are all `yes`:
 - https://claude.com/blog/cowork-research-preview
 - https://support.claude.com/en/articles/13837440-use-plugins-in-cowork
 - https://claude.com/product/cowork
+- https://code.claude.com/docs/en/hooks
+- https://platform.claude.com/docs/en/agent-sdk/agent-loop
+- https://platform.claude.com/docs/en/agent-sdk/permissions
+- https://platform.claude.com/docs/en/agent-sdk/mcp

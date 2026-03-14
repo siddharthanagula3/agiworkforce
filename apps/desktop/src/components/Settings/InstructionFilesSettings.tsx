@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { Button } from '../ui/Button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Textarea } from '../ui/Textarea';
 
 interface InstructionFilePattern {
@@ -281,6 +281,9 @@ export function InstructionFilesSettings() {
               <FileText className="h-5 w-5" />
               {editState?.pattern ?? ''}
             </DialogTitle>
+            <DialogDescription>
+              Review or edit the instruction file content before saving it to your home directory.
+            </DialogDescription>
           </DialogHeader>
 
           {editState && (

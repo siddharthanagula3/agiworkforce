@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use crate::core::llm::{ChatMessage, Provider};
 use crate::data::db::models::CacheEntry;
 
+#[derive(Clone)]
 pub struct CacheManager {
     ttl: Duration,
     max_entries: usize,

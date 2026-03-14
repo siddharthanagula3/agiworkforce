@@ -245,13 +245,59 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     // MCP Connector/OAuth commands
     case 'mcp_list_connected_providers':
       return [] as T;
+    case 'mcp_get_registry':
+      return [] as T;
+    case 'mcp_install_server':
+      return 'installed' as T;
+    case 'mcp_get_server_logs':
+      return [] as T;
+    case 'mcp_get_execution_history':
+      return [] as T;
+    case 'mcp_get_tool_execution_stats':
+      return [] as T;
+    case 'mcp_get_health':
+      return [] as T;
+    case 'mcp_check_server_health':
+      return {
+        server_name: (args?.['serverName'] as string | undefined) ?? 'mock-server',
+        status: 'healthy',
+        last_check: new Date().toISOString(),
+        error_message: null,
+        response_time_ms: 10,
+        tool_count: 0,
+        consecutive_failures: 0,
+      } as T;
     case 'mcp_oauth_start':
+      return {
+        auth_url: 'https://example.com/oauth',
+        state: 'mock-oauth-state',
+      } as T;
+    case 'mcp_oauth_callback':
+      return {
+        provider: (args?.['provider'] as string | undefined) ?? 'mock-provider',
+        connected: true,
+        expires_at: null,
+      } as T;
     case 'mcp_oauth_disconnect':
+    case 'mcp_oauth_set_credentials':
       return undefined as T;
+    case 'mcp_oauth_credentials_status':
+      return { configured: false } as T;
     case 'mcp_connect_connector':
       return null as T;
     case 'save_api_key':
+    case 'mcp_server_start':
+    case 'mcp_server_stop':
+    case 'mcp_server_update_config':
+    case 'mcp_update_filesystem_directories':
       return undefined as T;
+    case 'mcp_server_get_config':
+      return {
+        port: 3001,
+        token: '********mock',
+        enabled_tools: [],
+        running: false,
+      } as T;
 
     // Model capabilities command
     case 'get_model_capabilities':

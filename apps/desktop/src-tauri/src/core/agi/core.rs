@@ -1,4 +1,3 @@
-#[allow(deprecated)] // AGIMemory is deprecated but still used for in-session caching
 use super::*;
 use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
@@ -33,6 +32,22 @@ fn lock_with_recovery<'a, T>(mutex: &'a Mutex<T>, context: &str) -> Result<Mutex
             Ok(poisoned.into_inner())
         }
     }
+}
+
+fn goal_iteration_limit(goal: &Goal) -> usize {
+    const DEFAULT_MAX_ITERATIONS: usize = 1000;
+
+    goal.constraints
+        .iter()
+        .find_map(|constraint| match &constraint.value {
+            ConstraintValue::Custom { key, value } if key == "max_steps" => value
+                .parse::<usize>()
+                .ok()
+                .filter(|limit| *limit > 0)
+                .map(|limit| limit.min(DEFAULT_MAX_ITERATIONS)),
+            _ => None,
+        })
+        .unwrap_or(DEFAULT_MAX_ITERATIONS)
 }
 
 // === MEDIUM-006 fix: Context memory limits ===
@@ -80,7 +95,6 @@ impl Default for PlanStepRuntimeState {
     }
 }
 
-#[allow(deprecated)]
 pub struct AGICore {
     config: AGIConfig,
     capabilities: AGICapabilities,
@@ -89,7 +103,6 @@ pub struct AGICore {
     resource_manager: Arc<ResourceManager>,
     planner: Arc<AGIPlanner>,
     executor: Arc<AGIExecutor>,
-    memory: Arc<AGIMemory>,
     learning: Arc<LearningSystem>,
     router: Arc<RwLock<LLMRouter>>,
     automation: Arc<AutomationService>,
@@ -154,7 +167,6 @@ impl AGICore {
             Some(reflection_engine.clone()),
             Some(change_tracker),
         )?);
-        let memory = Arc::new(AGIMemory::new()?);
         // Bug #35 fix: Removed duplicate LearningSystem::new() call.
         // The `learning` Arc created at line 121 is reused here; the second
         // instantiation leaked the first instance.
@@ -177,7 +189,6 @@ impl AGICore {
             resource_manager,
             planner,
             executor,
-            memory,
             learning,
             router,
             automation,
@@ -254,7 +265,6 @@ impl AGICore {
 
         let executor = Arc::new(encoder?);
 
-        let memory = Arc::new(AGIMemory::new()?);
         // learning already initialized above
 
         tool_registry.register_all_tools()?;
@@ -269,7 +279,6 @@ impl AGICore {
             resource_manager,
             planner,
             executor,
-            memory,
             learning,
             router,
             automation,
@@ -703,7 +712,7 @@ impl AGICore {
 
         tracing::info!("[AGI] Achieving goal: {}", context.goal.description);
 
-        let max_iterations = 1000;
+        let max_iterations = goal_iteration_limit(&context.goal);
         let max_duration = Duration::from_secs(300); // 5 minute absolute timeout
         let start_time = std::time::Instant::now();
         let mut iteration = 0;
@@ -1313,7 +1322,6 @@ impl AGICore {
             resource_manager: self.resource_manager.clone(),
             planner: self.planner.clone(),
             executor: self.executor.clone(),
-            memory: self.memory.clone(),
             learning: self.learning.clone(),
             router: self.router.clone(),
             automation: self.automation.clone(),
@@ -1425,5 +1433,44 @@ fn format_plan_result_snippet(value: &serde_json::Value) -> Option<String> {
             }
         }
         _ => serde_json::to_string(value).ok(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn goal_iteration_limit_defaults_to_global_cap() {
+        let goal = Goal {
+            id: "goal-1".to_string(),
+            description: "default".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![],
+            success_criteria: vec![],
+        };
+
+        assert_eq!(goal_iteration_limit(&goal), 1000);
+    }
+
+    #[test]
+    fn goal_iteration_limit_uses_max_steps_constraint() {
+        let goal = Goal {
+            id: "goal-2".to_string(),
+            description: "bounded".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![Constraint {
+                name: "max_steps".to_string(),
+                value: ConstraintValue::Custom {
+                    key: "max_steps".to_string(),
+                    value: "12".to_string(),
+                },
+            }],
+            success_criteria: vec![],
+        };
+
+        assert_eq!(goal_iteration_limit(&goal), 12);
     }
 }

@@ -1709,7 +1709,7 @@ The requirements in this section cover six functional categories:
 
 **FR-D513**: **60+ Custom Hooks**
 
-- **Description**: `useAgenticEvents` (95K line central event hub) bridges Tauri event emissions to React state. Domain hooks: `useBrowserAutomation`, `useCalendar`, `useEmail`, `useGit`, `useMCP`, `useMemory`, `useVoiceInput`, `useVoiceTranscription`, `useOCR`, `useCloudStorage`, and 50+ others.
+- **Description**: `useAgenticEvents` (95K line central event hub) bridges Tauri event emissions to React state. Domain hooks/stores include `useBrowserAutomation`, `useCalendar`, `useEmail`, `useGit`, MCP via `mcpStore` + `api/mcp.ts`, `useMemory`, `useVoiceInput`, `useVoiceTranscription`, `useOCR`, `useCloudStorage`, and 50+ others.
 - **Priority**: P0
 - **Status**: Implemented
 - **Components**: `src/hooks/`

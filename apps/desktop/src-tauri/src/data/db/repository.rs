@@ -162,7 +162,7 @@ pub fn list_messages_by_branch(
             "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
              FROM messages
              WHERE conversation_id = ?1 AND branch_id = ?2
-             ORDER BY created_at ASC",
+             ORDER BY created_at ASC, id ASC",
         )?;
         let messages = stmt
             .query_map(params![conversation_id, bid], map_message)?
@@ -173,7 +173,7 @@ pub fn list_messages_by_branch(
             "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
              FROM messages
              WHERE conversation_id = ?1
-             ORDER BY created_at ASC",
+             ORDER BY created_at ASC, id ASC",
         )?;
         let messages = stmt
             .query_map(params![conversation_id], map_message)?
