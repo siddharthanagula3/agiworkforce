@@ -216,6 +216,12 @@ pub fn get_pricing(provider: &Provider, model_id: &str) -> PricingEntry {
     if let Some(provider_cfg) = CONFIG.providers.get(provider.as_string()) {
         return provider_cfg.default_pricing.clone();
     }
+    tracing::warn!(
+        model_id = %model_id,
+        provider = %provider.as_string(),
+        "model not found in catalog and provider has no default pricing; \
+         falling back to 1.0/1.0 per-million — cost tracking will be inaccurate"
+    );
     PricingEntry {
         input_per_million: 1.0,
         output_per_million: 1.0,
