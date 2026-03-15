@@ -2021,12 +2021,22 @@ impl ProviderAdapter for GoogleAdapter {
         // Google response format: candidates array with content parts
         let mut content = String::new();
         let mut tool_calls_vec = Vec::new();
+        let mut reasoning_content: Option<String> = None;
 
         if let Some(candidates) = response["candidates"].as_array() {
             if let Some(candidate) = candidates.first() {
                 if let Some(parts) = candidate["content"]["parts"].as_array() {
                     for part in parts {
-                        if let Some(text) = part["text"].as_str() {
+                        // Gemini thinking blocks (returned by Pro models with thinking_config)
+                        if part.get("thought").and_then(Value::as_bool) == Some(true) {
+                            if let Some(thinking_text) = part["text"].as_str() {
+                                if reasoning_content.is_none() {
+                                    reasoning_content = Some(thinking_text.to_string());
+                                } else if let Some(ref mut rc) = reasoning_content {
+                                    rc.push_str(thinking_text);
+                                }
+                            }
+                        } else if let Some(text) = part["text"].as_str() {
                             content.push_str(text);
                         } else if let Some(function_call) = part.get("functionCall") {
                             if let (Some(name), Some(args)) =
@@ -2067,13 +2077,23 @@ impl ProviderAdapter for GoogleAdapter {
             .as_str()
             .map(|s| s.to_string());
 
+        // Extract thinking tokens if present
+        let reasoning_tokens = usage["thoughtsTokenCount"].as_u64().map(|v| v as u32);
+
         Ok(LLMResponse {
             content,
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
             cache_read_input_tokens,
-            model: response["modelVersion"].as_str().unwrap_or("").to_string(),
+            reasoning_tokens,
+            reasoning_content,
+            // Gemini uses "modelVersion" in some responses and "model" in others
+            model: response["modelVersion"]
+                .as_str()
+                .or_else(|| response["model"].as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_calls,
             finish_reason,
             ..LLMResponse::default()
