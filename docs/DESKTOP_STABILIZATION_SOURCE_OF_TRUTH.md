@@ -544,6 +544,7 @@ Owned commands/types:
 - `chat_compact_context`
 
 Compaction now persists locally by deleting the compacted older messages inside one transaction and inserting a replacement system summary message. Message listing order is stabilized by `created_at, id` in `apps/desktop/src-tauri/src/data/db/repository.rs`.
+
 - `ContextCompactionResponse`
 
 ### Rust Export Commands
@@ -757,3 +758,84 @@ For chat/runtime changes, prefer targeted validation first:
 For the current live listener split and the next consolidation target:
 
 - `docs/DESKTOP_EVENT_INGESTION_MAP.md`
+
+## Week 1 Updates (2026-03-15)
+
+### Audit Re-baseline
+
+The following FULL_AUDIT.md items were re-baselined against live code:
+
+| Item                    | Previous Status           | Current Status                | Notes                                                                   |
+| ----------------------- | ------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| #1 (RateLimitTracker)   | HIGH — not consulted      | **Stale** — already connected | Consulted at `llm_router.rs:1309-1319` in `route_with_retry()`          |
+| #27 (SSE tool index)    | HIGH — corrupts streaming | **Fixed**                     | Improved fallback logging; error-level for multi-tool, debug for single |
+| #28 (Responses API)     | HIGH — fragile detection  | **Fixed**                     | Now covers gpt-5*, gpt-4.1*, o3*, o4*, gpt-oss*, codex-*                |
+| #34 (streaming timeout) | MEDIUM — no idle timeout  | **Fixed**                     | Per-chunk 90s timeout in `SseStreamParser::poll_next()`                 |
+| #46 (Gemini multimodal) | HIGH — raw ChatMessage    | **Fixed**                     | `GoogleAdapter::convert_messages_to_gemini_format()` with proper parts  |
+
+### Runtime Normalization
+
+Tool event processing consolidated:
+
+- **Canonical path**: `tool:event` listener in `toolStore.ts` — handles timeline, action trail, stream state
+- **Legacy path**: `chat:tool-executing` / `chat:tool-result` in `useTauriStreamListeners.ts` — now defers to canonical path for timeline creation and action trail updates; retained for artifact handling, message metadata, and timeout scheduling
+
+### Authority Cross-Check
+
+| Domain   | Status              | Key Finding                                                                         |
+| -------- | ------------------- | ----------------------------------------------------------------------------------- |
+| MCP      | Canonical           | All paths verified live and registered                                              |
+| Browser  | Canonical with gaps | 51 browser commands missing test mocks; `extension_bridge.rs` hardcodes port 8787   |
+| Security | Clean               | All 24 submodules verified; `guardrails.rs` is empty/dead (1 byte) — safe to remove |
+
+## Week 2 Updates (2026-03-15)
+
+### Provider Fidelity & Cost Accounting
+
+| Fix                                              | Files                        | Impact                                                               |
+| ------------------------------------------------ | ---------------------------- | -------------------------------------------------------------------- |
+| Cache token extraction (Anthropic/OpenAI/Gemini) | `sse_parser.rs`, `mod.rs`    | Token usage now includes cache_read/cache_creation tokens            |
+| Cost undercounting fix                           | `send_message_execution.rs`  | Input tokens included in streaming cost calculation (was 0)          |
+| Cache-aware costing                              | `send_message_execution.rs`  | Uses `calculate_with_cache()` when cache tokens detected             |
+| OpenAI Responses API cache                       | `provider_adapter.rs`        | Extracts `input_tokens_details.cached_tokens`                        |
+| Gemini functionResponse.name                     | `provider_adapter.rs`        | Fixed: now resolves function name from tool-call ID via lookup table |
+| Frontend usage types                             | `useTauriStreamListeners.ts` | Updated to include cache token fields                                |
+
+### Assessment Results (No Changes Needed)
+
+- **Transcript trust**: Architecture already transcript-first — `MessageRuntimeDecorators`, `MessageRuntimeInlineActivity`
+- **MCP/browser visibility**: MCP tools first-class in transcript with Claude Code-style display names
+
+## Week 3 Updates (2026-03-15)
+
+### Shared Type Contracts
+
+New shared types in `packages/types/src/`:
+
+| File               | Types                                                        | Previously                       |
+| ------------------ | ------------------------------------------------------------ | -------------------------------- |
+| `workflow.ts`      | WorkflowDefinition, nodes, edges, triggers                   | Exact duplicate in desktop + web |
+| `model-catalog.ts` | Provider, ModelMetadata, ModelCapabilities, ProviderConfig   | Desktop-local types only         |
+| `conversation.ts`  | MessageRole, ArtifactType, ArtifactBase, ApprovalRequestBase | Surface-local definitions        |
+
+Desktop and web `workflow.ts` now re-export from shared package.
+
+### Cross-Surface Documentation
+
+- Created `docs/CROSS_SURFACE_CONTRACT_MAP.md` — capability ownership, bridge risks, data flow
+- Desktop and web typecheck clean after shared type adoption
+
+## Week 4 Updates (2026-03-15)
+
+### Provider Adapter Audit Fixes
+
+| Fix                     | File                  | Detail                                      |
+| ----------------------- | --------------------- | ------------------------------------------- |
+| Gemini thinking blocks  | `provider_adapter.rs` | `thought: true` parts → `reasoning_content` |
+| Gemini reasoning tokens | `provider_adapter.rs` | `thoughtsTokenCount` → `reasoning_tokens`   |
+| Gemini model field      | `provider_adapter.rs` | `modelVersion` fallback to `model`          |
+
+### Release Gate Reconciliation
+
+- Week 4 gate status added to `DESKTOP_RELEASE_GATE.md`
+- Remaining blockers documented (Bedrock stub, dual tool execution, MCP credentials, browser mocks)

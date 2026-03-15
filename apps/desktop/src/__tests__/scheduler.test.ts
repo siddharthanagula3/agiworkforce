@@ -17,11 +17,11 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(),
 }));
 
-// Types matching the Rust backend structures
+// Types matching the Rust backend structures (serde rename_all = "camelCase")
 type SchedulerActionType =
   | 'workflow'
-  | 'agi_task'
-  | 'shell_command'
+  | 'agiTask'
+  | 'shellCommand'
   | 'notification'
   | 'webhook'
   | 'script';
@@ -35,18 +35,18 @@ interface ScheduledJob {
   actionType: SchedulerActionType;
   actionData: Record<string, unknown>;
   status: JobStatus;
-  created_at: string;
-  updated_at: string;
-  last_run?: string;
-  next_run?: string;
-  run_count: number;
-  failure_count: number;
+  createdAt: string;
+  updatedAt: string;
+  lastRun?: string;
+  nextRun?: string;
+  runCount: number;
+  failureCount: number;
   description?: string;
 }
 
 interface NextRunEntry {
   jobId: string;
-  next_run: string;
+  nextRun: string;
 }
 
 describe('Scheduler Tauri Commands', () => {
@@ -65,14 +65,14 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Daily Backup',
         schedule: '0 0 9 * * *', // 9 AM daily
-        actionType: 'shell_command',
+        actionType: 'shellCommand',
         actionData: { command: 'backup.sh' },
       });
 
       expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
         name: 'Daily Backup',
         schedule: '0 0 9 * * *',
-        actionType: 'shell_command',
+        actionType: 'shellCommand',
         actionData: { command: 'backup.sh' },
       });
       expect(result).toBe(mockJobId);
@@ -85,7 +85,7 @@ describe('Scheduler Tauri Commands', () => {
       const result = await invoke('scheduler_add_job', {
         name: 'Morning Briefing',
         schedule: '0 0 8 * * 1-5', // 8 AM weekdays
-        actionType: 'agi_task',
+        actionType: 'agiTask',
         actionData: {
           prompt: 'Give me a summary of my emails and calendar for today',
         },
@@ -94,7 +94,7 @@ describe('Scheduler Tauri Commands', () => {
       expect(invoke).toHaveBeenCalledWith('scheduler_add_job', {
         name: 'Morning Briefing',
         schedule: '0 0 8 * * 1-5',
-        actionType: 'agi_task',
+        actionType: 'agiTask',
         actionData: {
           prompt: 'Give me a summary of my emails and calendar for today',
         },
@@ -182,7 +182,7 @@ describe('Scheduler Tauri Commands', () => {
     it('should reject invalid action type', async () => {
       vi.mocked(invoke).mockRejectedValueOnce(
         new Error(
-          'Invalid action type: invalid_type. Valid options: workflow, agi_task, shell_command, notification, webhook, script',
+          'Invalid action type: invalid_type. Valid options: workflow, agiTask, shellCommand, notification, webhook, script',
         ),
       );
 
@@ -207,28 +207,28 @@ describe('Scheduler Tauri Commands', () => {
           id: 'job-1',
           name: 'Daily Backup',
           schedule: '0 0 9 * * *',
-          actionType: 'shell_command',
+          actionType: 'shellCommand',
           actionData: { command: 'backup.sh' },
           status: 'active',
-          created_at: '2024-01-15T10:00:00Z',
-          updated_at: '2024-01-15T10:00:00Z',
-          next_run: '2024-01-16T09:00:00Z',
-          run_count: 5,
-          failure_count: 0,
+          createdAt: '2024-01-15T10:00:00Z',
+          updatedAt: '2024-01-15T10:00:00Z',
+          nextRun: '2024-01-16T09:00:00Z',
+          runCount: 5,
+          failureCount: 0,
         },
         {
           id: 'job-2',
           name: 'Morning Briefing',
           schedule: '0 0 8 * * 1-5',
-          actionType: 'agi_task',
+          actionType: 'agiTask',
           actionData: { prompt: 'Daily summary' },
           status: 'active',
-          created_at: '2024-01-10T08:00:00Z',
-          updated_at: '2024-01-15T08:00:00Z',
-          last_run: '2024-01-15T08:00:00Z',
-          next_run: '2024-01-16T08:00:00Z',
-          run_count: 10,
-          failure_count: 0,
+          createdAt: '2024-01-10T08:00:00Z',
+          updatedAt: '2024-01-15T08:00:00Z',
+          lastRun: '2024-01-15T08:00:00Z',
+          nextRun: '2024-01-16T08:00:00Z',
+          runCount: 10,
+          failureCount: 0,
         },
         {
           id: 'job-3',
@@ -237,10 +237,10 @@ describe('Scheduler Tauri Commands', () => {
           actionType: 'notification',
           actionData: { message: 'Test' },
           status: 'paused',
-          created_at: '2024-01-05T12:00:00Z',
-          updated_at: '2024-01-14T12:00:00Z',
-          run_count: 3,
-          failure_count: 0,
+          createdAt: '2024-01-05T12:00:00Z',
+          updatedAt: '2024-01-14T12:00:00Z',
+          runCount: 3,
+          failureCount: 0,
         },
       ];
 
@@ -269,10 +269,10 @@ describe('Scheduler Tauri Commands', () => {
           actionType: 'notification',
           actionData: {},
           status: 'active',
-          created_at: '2024-01-15T10:00:00Z',
-          updated_at: '2024-01-15T10:00:00Z',
-          run_count: 0,
-          failure_count: 0,
+          createdAt: '2024-01-15T10:00:00Z',
+          updatedAt: '2024-01-15T10:00:00Z',
+          runCount: 0,
+          failureCount: 0,
         },
         {
           id: 'job-paused',
@@ -281,10 +281,10 @@ describe('Scheduler Tauri Commands', () => {
           actionType: 'notification',
           actionData: {},
           status: 'paused',
-          created_at: '2024-01-14T10:00:00Z',
-          updated_at: '2024-01-14T10:00:00Z',
-          run_count: 5,
-          failure_count: 0,
+          createdAt: '2024-01-14T10:00:00Z',
+          updatedAt: '2024-01-14T10:00:00Z',
+          runCount: 5,
+          failureCount: 0,
         },
         {
           id: 'job-failed',
@@ -293,10 +293,10 @@ describe('Scheduler Tauri Commands', () => {
           actionType: 'webhook',
           actionData: { url: 'https://bad.url' },
           status: 'failed',
-          created_at: '2024-01-13T10:00:00Z',
-          updated_at: '2024-01-15T10:00:00Z',
-          run_count: 3,
-          failure_count: 3,
+          createdAt: '2024-01-13T10:00:00Z',
+          updatedAt: '2024-01-15T10:00:00Z',
+          runCount: 3,
+          failureCount: 3,
         },
       ];
 
@@ -473,15 +473,15 @@ describe('Scheduler Tauri Commands', () => {
       const mockNextRuns: NextRunEntry[] = [
         {
           jobId: 'job-1',
-          next_run: '2024-01-16T08:00:00Z',
+          nextRun: '2024-01-16T08:00:00Z',
         },
         {
           jobId: 'job-2',
-          next_run: '2024-01-16T09:00:00Z',
+          nextRun: '2024-01-16T09:00:00Z',
         },
         {
           jobId: 'job-3',
-          next_run: '2024-01-16T12:00:00Z',
+          nextRun: '2024-01-16T12:00:00Z',
         },
       ];
 
@@ -501,7 +501,7 @@ describe('Scheduler Tauri Commands', () => {
       const mockNextRuns: NextRunEntry[] = [
         {
           jobId: 'job-1',
-          next_run: '2024-01-16T08:00:00Z',
+          nextRun: '2024-01-16T08:00:00Z',
         },
       ];
 
@@ -520,15 +520,15 @@ describe('Scheduler Tauri Commands', () => {
       const mockNextRuns: NextRunEntry[] = [
         {
           jobId: 'job-early',
-          next_run: '2024-01-16T06:00:00Z',
+          nextRun: '2024-01-16T06:00:00Z',
         },
         {
           jobId: 'job-mid',
-          next_run: '2024-01-16T12:00:00Z',
+          nextRun: '2024-01-16T12:00:00Z',
         },
         {
           jobId: 'job-late',
-          next_run: '2024-01-16T18:00:00Z',
+          nextRun: '2024-01-16T18:00:00Z',
         },
       ];
 
@@ -540,8 +540,8 @@ describe('Scheduler Tauri Commands', () => {
 
       // Verify results are sorted chronologically
       for (let i = 0; i < result.length - 1; i++) {
-        const currentTime = new Date(result[i]!.next_run).getTime();
-        const nextTime = new Date(result[i + 1]!.next_run).getTime();
+        const currentTime = new Date(result[i]!.nextRun).getTime();
+        const nextTime = new Date(result[i + 1]!.nextRun).getTime();
         expect(currentTime).toBeLessThanOrEqual(nextTime);
       }
     });
@@ -561,11 +561,11 @@ describe('Scheduler Tauri Commands', () => {
       const mockNextRuns: NextRunEntry[] = [
         {
           jobId: 'active-job-1',
-          next_run: '2024-01-16T08:00:00Z',
+          nextRun: '2024-01-16T08:00:00Z',
         },
         {
           jobId: 'active-job-2',
-          next_run: '2024-01-16T09:00:00Z',
+          nextRun: '2024-01-16T09:00:00Z',
         },
       ];
 
@@ -594,11 +594,11 @@ describe('Scheduler Tauri Commands', () => {
         actionType: 'notification',
         actionData: { message: 'Hello' },
         status: 'active',
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-01-15T10:00:00Z',
-        next_run: '2024-01-16T09:00:00Z',
-        run_count: 0,
-        failure_count: 0,
+        createdAt: '2024-01-15T10:00:00Z',
+        updatedAt: '2024-01-15T10:00:00Z',
+        nextRun: '2024-01-16T09:00:00Z',
+        runCount: 0,
+        failureCount: 0,
         description: 'A test notification job',
       };
 
@@ -629,15 +629,15 @@ describe('Scheduler Tauri Commands', () => {
         id: 'job-with-stats',
         name: 'Stats Job',
         schedule: '0 0 * * * *',
-        actionType: 'shell_command',
+        actionType: 'shellCommand',
         actionData: { command: 'echo test' },
         status: 'active',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-15T10:00:00Z',
-        last_run: '2024-01-15T10:00:00Z',
-        next_run: '2024-01-15T11:00:00Z',
-        run_count: 350,
-        failure_count: 2,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-15T10:00:00Z',
+        lastRun: '2024-01-15T10:00:00Z',
+        nextRun: '2024-01-15T11:00:00Z',
+        runCount: 350,
+        failureCount: 2,
       };
 
       vi.mocked(invoke).mockResolvedValueOnce(mockJob);
@@ -646,9 +646,9 @@ describe('Scheduler Tauri Commands', () => {
         jobId: 'job-with-stats',
       })) as ScheduledJob;
 
-      expect(result.run_count).toBe(350);
-      expect(result.failure_count).toBe(2);
-      expect(result.last_run).toBeDefined();
+      expect(result.runCount).toBe(350);
+      expect(result.failureCount).toBe(2);
+      expect(result.lastRun).toBeDefined();
     });
   });
 
@@ -696,11 +696,11 @@ describe('Scheduler Tauri Commands', () => {
         actionType: 'webhook',
         actionData: { url: 'https://unreachable.url' },
         status: 'failed',
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-01-15T13:00:00Z',
-        last_run: '2024-01-15T13:00:00Z',
-        run_count: 3,
-        failure_count: 3,
+        createdAt: '2024-01-15T10:00:00Z',
+        updatedAt: '2024-01-15T13:00:00Z',
+        lastRun: '2024-01-15T13:00:00Z',
+        runCount: 3,
+        failureCount: 3,
       };
 
       vi.mocked(invoke).mockResolvedValueOnce(mockFailedJob);
@@ -710,7 +710,7 @@ describe('Scheduler Tauri Commands', () => {
       })) as ScheduledJob;
 
       expect(result.status).toBe('failed');
-      expect(result.failure_count).toBe(3);
+      expect(result.failureCount).toBe(3);
     });
   });
 
@@ -771,8 +771,8 @@ describe('Scheduler Tauri Commands', () => {
   describe('Action type support', () => {
     const actionTypes: Array<{ type: SchedulerActionType; data: Record<string, unknown> }> = [
       { type: 'workflow', data: { workflowId: 'wf-123' } },
-      { type: 'agi_task', data: { prompt: 'Do something' } },
-      { type: 'shell_command', data: { command: 'echo hello' } },
+      { type: 'agiTask', data: { prompt: 'Do something' } },
+      { type: 'shellCommand', data: { command: 'echo hello' } },
       { type: 'notification', data: { title: 'Test', message: 'Hello' } },
       { type: 'webhook', data: { url: 'https://api.example.com', method: 'POST' } },
       { type: 'script', data: { scriptPath: '/scripts/test.js' } },

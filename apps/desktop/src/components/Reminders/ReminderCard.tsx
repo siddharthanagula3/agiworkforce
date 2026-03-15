@@ -113,24 +113,24 @@ function getActionBadgeVariant(actionType: string): 'default' | 'secondary' | 'o
 export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: ReminderCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const ActionIcon = getActionIcon(job.action_type);
+  const ActionIcon = getActionIcon(job.actionType);
 
   const scheduleDescription = useMemo(() => getScheduleDescription(job), [job]);
 
   const nextRunDisplay = useMemo(() => {
-    if (!job.next_run) return null;
-    const nextRun = parseISO(job.next_run);
+    if (!job.nextRun) return null;
+    const nextRun = parseISO(job.nextRun);
     if (isPast(nextRun)) {
       return 'Pending...';
     }
     return formatDistanceToNow(nextRun, { addSuffix: true });
-  }, [job.next_run]);
+  }, [job.nextRun]);
 
   const lastRunDisplay = useMemo(() => {
-    if (!job.last_run) return null;
-    const lastRun = parseISO(job.last_run);
+    if (!job.lastRun) return null;
+    const lastRun = parseISO(job.lastRun);
     return formatDistanceToNow(lastRun, { addSuffix: true });
-  }, [job.last_run]);
+  }, [job.lastRun]);
 
   const handlePauseResume = async () => {
     setIsLoading(true);
@@ -155,7 +155,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
   };
 
   // Parse action data for display (now an object, not a JSON string)
-  const actionData = job.action_data;
+  const actionData = job.actionData;
   const actionMessage =
     (actionData?.['message'] as string) || (actionData?.['prompt'] as string) || '';
 
@@ -195,11 +195,8 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-medium text-sm truncate">{job.name}</h3>
-                <Badge
-                  variant={getActionBadgeVariant(job.action_type)}
-                  className="shrink-0 text-xs"
-                >
-                  {job.action_type.replace('_', ' ')}
+                <Badge variant={getActionBadgeVariant(job.actionType)} className="shrink-0 text-xs">
+                  {job.actionType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}
                 </Badge>
               </div>
 
@@ -228,7 +225,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {job.next_run && format(parseISO(job.next_run), 'PPpp')}
+                        {job.nextRun && format(parseISO(job.nextRun), 'PPpp')}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
