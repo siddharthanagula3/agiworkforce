@@ -264,8 +264,8 @@ export function JobCreationDialog({
       if (existingJob) {
         setName(existingJob.name);
         setDescription(existingJob.description || '');
-        setActionType(existingJob.action_type);
-        setActionData(existingJob.action_data);
+        setActionType(existingJob.actionType);
+        setActionData(existingJob.actionData);
 
         // Parse the schedule
         const cron = existingJob.schedule;
@@ -364,7 +364,7 @@ export function JobCreationDialog({
           </div>
         );
 
-      case 'agi_task':
+      case 'agiTask':
         return (
           <div className="space-y-2">
             <Label htmlFor="agiPrompt">Task Prompt</Label>
@@ -381,7 +381,7 @@ export function JobCreationDialog({
           </div>
         );
 
-      case 'shell_command':
+      case 'shellCommand':
         return (
           <div className="space-y-2">
             <Label htmlFor="shellCommand">Command</Label>
@@ -555,9 +555,9 @@ export function JobCreationDialog({
     switch (type) {
       case 'notification':
         return <Bell className="h-4 w-4" />;
-      case 'agi_task':
+      case 'agiTask':
         return <RefreshCw className="h-4 w-4" />;
-      case 'shell_command':
+      case 'shellCommand':
         return <Terminal className="h-4 w-4" />;
       case 'workflow':
         return <Workflow className="h-4 w-4" />;
@@ -623,13 +623,13 @@ export function JobCreationDialog({
                     Notification
                   </span>
                 </SelectItem>
-                <SelectItem value="agi_task">
+                <SelectItem value="agiTask">
                   <span className="flex items-center gap-2">
                     <RefreshCw className="h-4 w-4" />
                     AI Task
                   </span>
                 </SelectItem>
-                <SelectItem value="shell_command">
+                <SelectItem value="shellCommand">
                   <span className="flex items-center gap-2">
                     <Terminal className="h-4 w-4" />
                     Shell Command

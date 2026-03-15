@@ -1184,7 +1184,7 @@ export async function executeScheduleCommand(args: string): Promise<InlinePanel>
       response = await invoke<Record<string, unknown>>('scheduler_add_job', {
         name: args.trim(),
         schedule: '0 0 9 * * *', // default: daily at 9 AM
-        actionType: 'agi_task',
+        actionType: 'agiTask',
         prompt: args.trim(),
       });
     }
