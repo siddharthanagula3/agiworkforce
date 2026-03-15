@@ -32,8 +32,8 @@ mod tests {
                 prompt_tokens: Some(10),
                 completion_tokens: Some(20),
                 total_tokens: Some(30),
-                cache_read_tokens: None,
-                cache_creation_tokens: None,
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
             }),
             credits: None,
             tool_calls: None,
@@ -52,8 +52,8 @@ mod tests {
             prompt_tokens: Some(100),
             completion_tokens: Some(200),
             total_tokens: Some(300),
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
 
         assert_eq!(usage.prompt_tokens, Some(100));
@@ -88,8 +88,8 @@ mod tests {
             prompt_tokens: Some(50),
             completion_tokens: None,
             total_tokens: None,
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
 
         assert!(usage.prompt_tokens.is_some());

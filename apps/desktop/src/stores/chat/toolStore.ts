@@ -1057,6 +1057,7 @@ export async function initializeToolEventListener(): Promise<void> {
           parameters: {
             displayName,
             displayArgs,
+            rawToolName: payload.tool_name,
           },
         });
 

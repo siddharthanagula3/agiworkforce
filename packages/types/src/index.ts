@@ -44,3 +44,9 @@ export * from './workflow';
 
 // Model catalog types (metadata, capabilities, provider config)
 export * from './model-catalog';
+
+// Runtime activity and approval contracts
+export * from './runtime';
+
+// Artifact contracts (code, documents, images, data)
+export * from './artifacts';
