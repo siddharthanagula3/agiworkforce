@@ -247,3 +247,20 @@ If any answer is no, desktop is not release-ready.
 - CRITICAL: Extension bridge WebSocket URL hardcoded at 8787
 - HIGH: Mobile signaling server URL in env var
 - Recommended mitigations documented for next month
+
+## 11. Week 4 Gate Status (2026-03-15)
+
+### Provider Adapter Audit Fixes
+
+- Gemini thinking block extraction: **fixed** — `GoogleAdapter::adapt_response()` now detects `thought: true` parts and collects into `reasoning_content`
+- Gemini reasoning tokens: **fixed** — extracts `thoughtsTokenCount` from usage into `reasoning_tokens`
+- Gemini model field fallback: **fixed** — tries `modelVersion` then falls back to `model` field
+- OpenAI Responses API cache tokens: **verified** — `cache_read_input_tokens` extracted from `input_tokens_details.cached_tokens`
+
+### Remaining Known Issues (Deferred)
+
+- Bedrock provider stub (#25-26): still routes to OpenAI adapter — blocks AWS users
+- Two parallel tool execution paths (#19): `agi/executors/` AND `llm/tool_executor/`
+- MCP credential injection (#14-15): OAuth tokens unrecoverable
+- Browser command test mocks: 51 commands missing from `tauri-mock.ts`
+- Cargo check blocked in CI by missing `libgtk-3-dev` system dependency

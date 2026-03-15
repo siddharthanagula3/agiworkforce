@@ -824,3 +824,18 @@ Desktop and web `workflow.ts` now re-export from shared package.
 
 - Created `docs/CROSS_SURFACE_CONTRACT_MAP.md` — capability ownership, bridge risks, data flow
 - Desktop and web typecheck clean after shared type adoption
+
+## Week 4 Updates (2026-03-15)
+
+### Provider Adapter Audit Fixes
+
+| Fix                     | File                  | Detail                                      |
+| ----------------------- | --------------------- | ------------------------------------------- |
+| Gemini thinking blocks  | `provider_adapter.rs` | `thought: true` parts → `reasoning_content` |
+| Gemini reasoning tokens | `provider_adapter.rs` | `thoughtsTokenCount` → `reasoning_tokens`   |
+| Gemini model field      | `provider_adapter.rs` | `modelVersion` fallback to `model`          |
+
+### Release Gate Reconciliation
+
+- Week 4 gate status added to `DESKTOP_RELEASE_GATE.md`
+- Remaining blockers documented (Bedrock stub, dual tool execution, MCP credentials, browser mocks)
