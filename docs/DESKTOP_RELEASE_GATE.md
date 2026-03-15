@@ -175,3 +175,25 @@ All answers must be yes:
 - Can the user recover from errors without hunting across panels?
 
 If any answer is no, desktop is not release-ready.
+
+## 8. Week 1 Gate Status (2026-03-15)
+
+### Provider Fidelity Fixes Applied
+
+- SSE parser tool call index corruption: **fixed** — fallback now logs error/debug appropriately
+- Gemini multimodal format: **fixed** — `GoogleAdapter` now converts to native Gemini parts
+- OpenAI Responses API detection: **fixed** — covers all March 2026 model families
+- Streaming idle timeout: **fixed** — 90s per-chunk timeout in SSE parser
+
+### Runtime Normalization Progress
+
+- Tool event processing: canonical path consolidated in `toolStore.ts`
+- Duplicate action trail entries from `useTauriStreamListeners.ts`: eliminated
+- Legacy `chat:tool-executing`/`chat:tool-result` deferred to canonical `tool:event` for timeline/trail
+
+### Remaining Blockers (Unresolved from Audit)
+
+- Bedrock provider stub (#25-26): routes to OpenAI adapter — blocks AWS users
+- Two parallel tool execution paths (#19): `agi/executors/` AND `llm/tool_executor/`
+- MCP credential injection (#14-15): OAuth tokens unrecoverable
+- Browser command test mocks: 51 commands missing from `tauri-mock.ts`
