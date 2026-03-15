@@ -199,7 +199,7 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
         setName(existingJob.name);
 
         // Parse action data (now an object from Rust, not a JSON string)
-        const actionData = existingJob.action_data;
+        const actionData = existingJob.actionData;
         if (actionData && typeof actionData === 'object') {
           setMessage(
             ((actionData as Record<string, unknown>)['message'] as string) ||
@@ -210,16 +210,16 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
           setMessage(String(actionData ?? ''));
         }
 
-        // Map Rust action_type to UI-friendly type
+        // Map Rust actionType (camelCase) to UI-friendly type
         const rustToUiType: Record<string, ReminderActionType> = {
           notification: 'reminder',
-          agi_task: 'agent_task',
+          agiTask: 'agent_task',
           workflow: 'agent_task',
-          shell_command: 'custom',
+          shellCommand: 'custom',
           webhook: 'custom',
           script: 'custom',
         };
-        setActionType(rustToUiType[existingJob.action_type] ?? 'reminder');
+        setActionType(rustToUiType[existingJob.actionType] ?? 'reminder');
 
         // Parse cron schedule from `schedule` field (cron expression string)
         const cronParts = existingJob.schedule.split(' ');
@@ -269,7 +269,7 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
     try {
       const actionData = JSON.stringify({
         message: message.trim(),
-        action_type: actionType,
+        actionType: actionType,
       });
 
       // Format the schedule string based on type

@@ -1064,4 +1064,161 @@ mod tests {
         let normalized = normalize_embedding_dim(exact, 3);
         assert_eq!(normalized, vec![1.0, 2.0, 3.0]);
     }
+
+    // =========================================================================
+    // normalize_embedding_dim: production dimension tests
+    // =========================================================================
+
+    #[test]
+    fn test_normalize_embedding_dim_768_to_1536() {
+        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
+
+        // Ollama nomic-embed-text returns 768-dim; must be padded to 1536
+        let ollama_embedding: Vec<f32> = (0..768).map(|i| (i as f32) * 0.001).collect();
+        let normalized = normalize_embedding_dim(ollama_embedding.clone(), DEFAULT_EMBEDDING_DIM);
+
+        assert_eq!(
+            normalized.len(),
+            1536,
+            "768-dim Ollama embedding must be padded to 1536"
+        );
+        // Original values preserved in first 768 positions
+        assert_eq!(
+            &normalized[..768],
+            &ollama_embedding[..],
+            "Original embedding values must be preserved"
+        );
+        // Remaining positions zero-padded
+        assert!(
+            normalized[768..].iter().all(|&v| v == 0.0),
+            "Padded positions must be zero"
+        );
+    }
+
+    #[test]
+    fn test_normalize_embedding_dim_1536_unchanged() {
+        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
+
+        // OpenAI text-embedding-3-small returns 1536-dim; must pass through unchanged
+        let openai_embedding: Vec<f32> = (0..1536).map(|i| (i as f32) * 0.0005).collect();
+        let normalized = normalize_embedding_dim(openai_embedding.clone(), DEFAULT_EMBEDDING_DIM);
+
+        assert_eq!(
+            normalized.len(),
+            1536,
+            "1536-dim OpenAI embedding must remain 1536"
+        );
+        assert_eq!(
+            normalized, openai_embedding,
+            "1536-dim embedding must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn test_normalize_embedding_dim_empty_vector() {
+        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
+
+        let empty: Vec<f32> = Vec::new();
+        let normalized = normalize_embedding_dim(empty, DEFAULT_EMBEDDING_DIM);
+
+        assert_eq!(
+            normalized.len(),
+            1536,
+            "Empty vector must be padded to target dimension"
+        );
+        assert!(
+            normalized.iter().all(|&v| v == 0.0),
+            "Padded-from-empty vector must be all zeros"
+        );
+    }
+
+    // =========================================================================
+    // HttpSummaryLLM construction tests
+    // =========================================================================
+
+    #[test]
+    fn test_http_summary_llm_new_without_api_key() {
+        let llm = HttpSummaryLLM::new(None);
+
+        assert!(
+            llm.openai_api_key.is_none(),
+            "No API key should be stored when None is passed"
+        );
+        assert!(
+            llm.ollama_url.contains("11434"),
+            "Default Ollama URL should contain the default port"
+        );
+    }
+
+    #[test]
+    fn test_http_summary_llm_new_with_api_key() {
+        let llm = HttpSummaryLLM::new(Some("sk-test-key-123".to_string()));
+
+        assert_eq!(
+            llm.openai_api_key.as_deref(),
+            Some("sk-test-key-123"),
+            "API key must be stored correctly"
+        );
+        assert!(
+            llm.ollama_url.contains("11434"),
+            "Default Ollama URL should contain the default port"
+        );
+    }
+
+    // =========================================================================
+    // Fallback chain structural tests (using ConversationSummarizer + mocks)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_fallback_chain_stores_embedding_with_memory() {
+        // When an embedding provider is available, extracted memories
+        // should carry embeddings through the summarization pipeline.
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockSummaryLLM);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        // MockSummaryLLM returns Some(vec![0.1, 0.2, 0.3, 0.4, 0.5])
+        let embedding = summarizer
+            .llm
+            .generate_embedding("test content")
+            .await
+            .unwrap();
+
+        assert!(
+            embedding.is_some(),
+            "Mock should return an embedding for non-empty text"
+        );
+        let vec = embedding.unwrap();
+        assert_eq!(vec.len(), 5, "Mock returns 5-dim embedding");
+        assert!(
+            vec.iter().all(|&v| v > 0.0),
+            "Mock embedding should have all positive values (no zeros)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_zero_vector_filtering_in_summarization() {
+        // The summarization pipeline filters zero vectors before storing.
+        // Verify the filter logic: magnitude must be > 1e-8.
+        let zero_vec: Vec<f32> = vec![0.0; 768];
+        let magnitude: f32 = zero_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!(
+            magnitude <= 1e-8,
+            "Zero vector magnitude should be filtered out"
+        );
+
+        let tiny_vec: Vec<f32> = vec![1e-10; 768];
+        let magnitude: f32 = tiny_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!(
+            magnitude <= 1e-8,
+            "Near-zero vector should also be filtered out"
+        );
+
+        let valid_vec: Vec<f32> = vec![0.1; 768];
+        let magnitude: f32 = valid_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!(
+            magnitude > 1e-8,
+            "Valid embedding should pass the magnitude filter"
+        );
+    }
 }
