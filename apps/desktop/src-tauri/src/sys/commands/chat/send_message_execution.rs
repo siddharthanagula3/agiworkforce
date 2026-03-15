@@ -1818,8 +1818,29 @@ fn calculate_streaming_persistence_usage(
         token_count
     };
 
+    // Include prompt (input) tokens in cost when the provider reports them.
+    // Previously this passed 0 for input tokens, systematically under-counting
+    // cost for streaming responses.
+    let input_tokens = final_usage.and_then(|usage| usage.prompt_tokens).unwrap_or(0);
+
     let cost = provider_enum
-        .map(|provider| CostCalculator::new().calculate(provider, model, 0, output_tokens))
+        .map(|provider| {
+            let calculator = CostCalculator::new();
+            let cache_read = final_usage.and_then(|u| u.cache_read_tokens).unwrap_or(0);
+            let cache_creation = final_usage.and_then(|u| u.cache_creation_tokens).unwrap_or(0);
+            if cache_read > 0 || cache_creation > 0 {
+                calculator.calculate_with_cache(
+                    provider,
+                    model,
+                    input_tokens,
+                    output_tokens,
+                    cache_read,
+                    cache_creation,
+                )
+            } else {
+                calculator.calculate(provider, model, input_tokens, output_tokens)
+            }
+        })
         .unwrap_or(0.0);
 
     (output_tokens, cost)
