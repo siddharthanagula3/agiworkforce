@@ -765,11 +765,24 @@ fn read_oauth_client_credentials(
                 |row| row.get(0),
             );
             if let Ok(stored_value) = result {
-                return Ok(decrypt_oauth_token(&stored_value).unwrap_or(stored_value));
+                // Bug #18: decrypt_oauth_token returns None when decryption fails.
+                // Previously used unwrap_or(stored_value) which returned encrypted
+                // ciphertext bytes as if they were valid credentials, causing silent
+                // downstream failures. Now we skip the entry and log a warning instead.
+                match decrypt_oauth_token(&stored_value) {
+                    Some(decrypted) => return Ok(decrypted),
+                    None => {
+                        tracing::warn!(
+                            "Failed to decrypt OAuth {} for provider '{}' (key: {}); \
+                             skipping — credential is unavailable until re-authenticated",
+                            label, provider, key
+                        );
+                    }
+                }
             }
         }
         Err(format!(
-            "OAuth {} not found for provider: {}",
+            "OAuth {} not found or could not be decrypted for provider: {}",
             label, provider
         ))
     };

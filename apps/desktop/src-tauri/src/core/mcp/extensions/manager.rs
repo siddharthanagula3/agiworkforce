@@ -269,7 +269,26 @@ impl ExtensionManager {
             self.validate_config(&manifest, &config)?;
         }
 
-        // Store configuration (sensitive values are encrypted by the repository)
+        // SECURITY: Warn for any sensitive config fields stored without encryption.
+        // TODO: Wire SecretManager into ExtensionManager (add `secret_manager: Arc<SecretManager>`
+        // to the struct) and encrypt values where `property.sensitive == true` before calling
+        // `repository.update_config`. Until then, sensitive values (API keys, tokens, passwords)
+        // are stored as plaintext JSON in the SQLite `config_json` column — see repository.rs
+        // `update_config`. The warn log below makes this visible in production logs.
+        if let Some(ref schema) = manifest.config_schema {
+            for (key, property) in &schema.properties {
+                if property.sensitive && config.contains_key(key) {
+                    tracing::warn!(
+                        "SECURITY: extension API key stored unencrypted for extension {} (field: {}). \
+                         Wire SecretManager into ExtensionManager to fix.",
+                        id,
+                        key
+                    );
+                }
+            }
+        }
+
+        // Store configuration
         self.repository.update_config(id, &config)?;
 
         tracing::info!("Configuration updated for extension {}", id);

@@ -262,6 +262,11 @@ impl McpToolRegistry {
             return Ok(parsed);
         }
 
+        // TODO(bug#17): add HashMap<String, (server_name, tool_name)> index for O(1) lookup.
+        // Currently O(N) over all registered MCP tools — acceptable for small tool counts but
+        // becomes a hot-path bottleneck when many MCP servers are connected (e.g., 140+ tools).
+        // Fix: add `id_index: Arc<RwLock<HashMap<String, (String, String)>>>` to McpToolRegistry,
+        // populate on `register_server_tools`, and replace this scan with a single map lookup.
         for (server_name, tool) in self.mcp_client.list_all_tools() {
             if create_safe_tool_id(&server_name, &tool.name) == tool_id {
                 return Ok((server_name, tool.name));
