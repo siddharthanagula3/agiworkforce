@@ -35,3 +35,12 @@ export * from './auth';
 
 // Voice types (providers, config, transcription)
 export * from './voice';
+
+// Shared conversation and message contracts
+export * from './conversation';
+
+// Workflow engine types (nodes, edges, triggers, execution)
+export * from './workflow';
+
+// Model catalog types (metadata, capabilities, provider config)
+export * from './model-catalog';

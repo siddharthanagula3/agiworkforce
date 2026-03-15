@@ -37,6 +37,8 @@ mod sse_parser_tests {
                 total_tokens: Some(50),
                 prompt_tokens: None,
                 completion_tokens: None,
+                cache_read_tokens: None,
+                cache_creation_tokens: None,
             }),
             finish_reason: Some("stop".to_string()),
             model: None,

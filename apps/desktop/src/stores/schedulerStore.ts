@@ -25,38 +25,38 @@ import { toast } from 'sonner';
 // Types — Job-oriented (backend wire format)
 // ============================================================================
 
-/** Action types matching Rust SchedulerActionType (serde snake_case) */
+/** Action types matching Rust SchedulerActionType (serde rename_all = "camelCase") */
 export type SchedulerActionType =
   | 'workflow'
-  | 'agi_task'
-  | 'shell_command'
+  | 'agiTask'
+  | 'shellCommand'
   | 'notification'
   | 'webhook'
   | 'script';
 
-/** Job status matching Rust JobStatus (serde snake_case) */
+/** Job status matching Rust JobStatus (serde rename_all = "camelCase") */
 export type JobStatus = 'active' | 'paused' | 'completed' | 'failed';
 
-/** Matches Rust ScheduledJob struct wire format (no rename_all → snake_case fields) */
+/** Matches Rust ScheduledJob struct wire format (serde rename_all = "camelCase") */
 export interface ScheduledJob {
   id: string;
   name: string;
   schedule: string;
-  action_type: SchedulerActionType;
-  action_data: Record<string, unknown>;
+  actionType: SchedulerActionType;
+  actionData: Record<string, unknown>;
   status: JobStatus;
-  created_at: string;
-  updated_at: string;
-  last_run: string | null;
-  next_run: string | null;
-  run_count: number;
-  failure_count: number;
+  createdAt: string;
+  updatedAt: string;
+  lastRun: string | null;
+  nextRun: string | null;
+  runCount: number;
+  failureCount: number;
   description: string | null;
 }
 
 export interface NextRunInfo {
-  job_id: string;
-  next_run: string;
+  jobId: string;
+  nextRun: string;
 }
 
 // ============================================================================
@@ -664,17 +664,17 @@ export const useSchedulerStore = create<SchedulerState>()(
               id: job.id,
               name: job.name,
               description: job.description ?? '',
-              prompt: ((job.action_data as Record<string, unknown>)?.['prompt'] as string) ?? '',
+              prompt: ((job.actionData as Record<string, unknown>)?.['prompt'] as string) ?? '',
               schedule: {
                 type: 'recurring' as const,
                 cronExpression: job.schedule,
               },
               status: job.status as TaskStatus,
-              lastRunAt: job.last_run ? new Date(job.last_run).getTime() : null,
-              nextRunAt: job.next_run ? new Date(job.next_run).getTime() : null,
-              runCount: job.run_count,
+              lastRunAt: job.lastRun ? new Date(job.lastRun).getTime() : null,
+              nextRunAt: job.nextRun ? new Date(job.nextRun).getTime() : null,
+              runCount: job.runCount,
               lastOutput: null,
-              createdAt: new Date(job.created_at).getTime(),
+              createdAt: new Date(job.createdAt).getTime(),
             }));
             set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/success');
           } catch {
@@ -885,7 +885,7 @@ export const selectJobById = (jobId: string) => (state: SchedulerState) =>
   state.jobs.find((job) => job.id === jobId);
 export const selectJobsByActionType =
   (actionType: SchedulerActionType) => (state: SchedulerState) =>
-    state.jobs.filter((job) => job.action_type === actionType);
+    state.jobs.filter((job) => job.actionType === actionType);
 
 export const selectSchedulerLoading = (state: SchedulerState) => state.isLoading;
 export const selectSchedulerError = (state: SchedulerState) => state.error;
@@ -898,11 +898,11 @@ export const selectEnabledJobCount = (state: SchedulerState) =>
 // Derived selector for upcoming jobs sorted by next_run
 export const selectUpcomingJobs = (state: SchedulerState) =>
   [...state.jobs]
-    .filter((job) => job.status === 'active' && job.next_run)
+    .filter((job) => job.status === 'active' && job.nextRun)
     .sort((a, b) => {
-      if (!a.next_run) return 1;
-      if (!b.next_run) return -1;
-      return new Date(a.next_run).getTime() - new Date(b.next_run).getTime();
+      if (!a.nextRun) return 1;
+      if (!b.nextRun) return -1;
+      return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
     });
 
 // ============================================================================

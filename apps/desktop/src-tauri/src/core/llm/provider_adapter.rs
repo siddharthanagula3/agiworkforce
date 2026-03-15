@@ -1289,6 +1289,11 @@ impl OpenAIAdapter {
             .as_u64()
             .map(|v| v as u32);
 
+        // Extract cache tokens (Responses API reports these in input_tokens_details)
+        let cache_read_input_tokens = usage["input_tokens_details"]["cached_tokens"]
+            .as_u64()
+            .map(|v| v as u32);
+
         let finish_reason = response["status"].as_str().map(|s| s.to_string());
         let response_id = response["id"].as_str().map(|s| s.to_string());
 
@@ -1297,6 +1302,7 @@ impl OpenAIAdapter {
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
+            cache_read_input_tokens,
             reasoning_tokens,
             model: response["model"].as_str().unwrap_or("").to_string(),
             tool_calls: if tool_calls.is_empty() {
@@ -1865,9 +1871,13 @@ struct GoogleAdapter;
 
 impl ProviderAdapter for GoogleAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Google Gemini uses a different format
+        // Convert ChatMessage structs into Gemini-native format.
+        // Gemini expects { role, parts: [{ text }, { inlineData }, ...] }
+        // rather than the internal ChatMessage shape.  Passing raw
+        // ChatMessage (audit item #46) breaks multimodal requests.
+        let contents = Self::convert_messages_to_gemini_format(&request.messages);
         let mut google_request = serde_json::json!({
-            "contents": request.messages,
+            "contents": contents,
         });
 
         // Add generation config
@@ -2011,12 +2021,22 @@ impl ProviderAdapter for GoogleAdapter {
         // Google response format: candidates array with content parts
         let mut content = String::new();
         let mut tool_calls_vec = Vec::new();
+        let mut reasoning_content: Option<String> = None;
 
         if let Some(candidates) = response["candidates"].as_array() {
             if let Some(candidate) = candidates.first() {
                 if let Some(parts) = candidate["content"]["parts"].as_array() {
                     for part in parts {
-                        if let Some(text) = part["text"].as_str() {
+                        // Gemini thinking blocks (returned by Pro models with thinking_config)
+                        if part.get("thought").and_then(Value::as_bool) == Some(true) {
+                            if let Some(thinking_text) = part["text"].as_str() {
+                                if reasoning_content.is_none() {
+                                    reasoning_content = Some(thinking_text.to_string());
+                                } else if let Some(ref mut rc) = reasoning_content {
+                                    rc.push_str(thinking_text);
+                                }
+                            }
+                        } else if let Some(text) = part["text"].as_str() {
                             content.push_str(text);
                         } else if let Some(function_call) = part.get("functionCall") {
                             if let (Some(name), Some(args)) =
@@ -2057,13 +2077,23 @@ impl ProviderAdapter for GoogleAdapter {
             .as_str()
             .map(|s| s.to_string());
 
+        // Extract thinking tokens if present
+        let reasoning_tokens = usage["thoughtsTokenCount"].as_u64().map(|v| v as u32);
+
         Ok(LLMResponse {
             content,
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
             cache_read_input_tokens,
-            model: response["modelVersion"].as_str().unwrap_or("").to_string(),
+            reasoning_tokens,
+            reasoning_content,
+            // Gemini uses "modelVersion" in some responses and "model" in others
+            model: response["modelVersion"]
+                .as_str()
+                .or_else(|| response["model"].as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_calls,
             finish_reason,
             ..LLMResponse::default()
@@ -2076,6 +2106,219 @@ impl ProviderAdapter for GoogleAdapter {
 }
 
 impl GoogleAdapter {
+    /// Build a lookup from tool-call ID → function name by scanning all
+    /// messages for assistant-role tool calls.
+    fn build_tool_call_name_map(
+        messages: &[super::ChatMessage],
+    ) -> std::collections::HashMap<String, String> {
+        let mut map = std::collections::HashMap::new();
+        for msg in messages {
+            if let Some(tool_calls) = &msg.tool_calls {
+                for tc in tool_calls {
+                    map.insert(tc.id.clone(), tc.name.clone());
+                }
+            }
+            // Also check multimodal ToolUse parts
+            if let Some(parts) = &msg.multimodal_content {
+                for part in parts {
+                    if let super::ContentPart::ToolUse { tool_use } = part {
+                        map.insert(tool_use.id.clone(), tool_use.name.clone());
+                    }
+                }
+            }
+        }
+        map
+    }
+
+    /// Convert internal `ChatMessage` structs into Gemini-native content
+    /// format.  Gemini expects `{ role, parts: [{ text }, { inlineData },
+    /// { functionCall }, { functionResponse }, ...] }`.
+    fn convert_messages_to_gemini_format(messages: &[super::ChatMessage]) -> Vec<Value> {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        // Gemini requires functionResponse.name to be the function name, not
+        // the tool-call ID.  Build a lookup so tool-result messages can resolve
+        // the correct name.
+        let tc_name_map = Self::build_tool_call_name_map(messages);
+
+        let mut out = Vec::with_capacity(messages.len());
+        for msg in messages {
+            let mut parts: Vec<Value> = Vec::new();
+
+            // --- multimodal content takes priority when present ---
+            if let Some(multimodal) = &msg.multimodal_content {
+                for part in multimodal {
+                    match part {
+                        super::ContentPart::Text { text } => {
+                            parts.push(serde_json::json!({ "text": text }));
+                        }
+                        super::ContentPart::Image { image } => {
+                            let base64_data = STANDARD.encode(&image.data);
+                            let mime_type = image.format.mime_type();
+                            parts.push(serde_json::json!({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": base64_data
+                                }
+                            }));
+                        }
+                        super::ContentPart::Video { video } => match &video.data {
+                            super::VideoData::Bytes(bytes) => {
+                                let base64_data = STANDARD.encode(bytes);
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": video.format.mime_type(),
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                            super::VideoData::Uri(uri) => {
+                                parts.push(serde_json::json!({
+                                    "fileData": {
+                                        "mimeType": video.format.mime_type(),
+                                        "fileUri": uri
+                                    }
+                                }));
+                            }
+                        },
+                        super::ContentPart::Audio { audio } => match &audio.data {
+                            super::AudioData::Bytes(bytes) => {
+                                let base64_data = STANDARD.encode(bytes);
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                            super::AudioData::Base64(b64) => {
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "data": b64
+                                    }
+                                }));
+                            }
+                            super::AudioData::Uri(uri) => {
+                                parts.push(serde_json::json!({
+                                    "fileData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "fileUri": uri
+                                    }
+                                }));
+                            }
+                        },
+                        super::ContentPart::Document { document } => {
+                            let base64_data = STANDARD.encode(&document.data);
+                            let mime_type = match document.format {
+                                super::DocumentFormat::Pdf => "application/pdf",
+                                super::DocumentFormat::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                super::DocumentFormat::Html => "text/html",
+                                super::DocumentFormat::Md | super::DocumentFormat::Txt => "text/plain",
+                            };
+                            parts.push(serde_json::json!({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": base64_data
+                                }
+                            }));
+                        }
+                        super::ContentPart::ToolUse { tool_use } => {
+                            let args: Value = serde_json::from_str(
+                                &serde_json::to_string(&tool_use.input).unwrap_or_default(),
+                            )
+                            .unwrap_or(serde_json::json!({}));
+                            parts.push(serde_json::json!({
+                                "functionCall": {
+                                    "name": tool_use.name,
+                                    "args": args
+                                }
+                            }));
+                        }
+                        super::ContentPart::ToolResult { tool_result } => {
+                            // Resolve the function name from the tool-call ID.
+                            // Gemini requires functionResponse.name to be the
+                            // function name, not the call ID.
+                            let fn_name = tc_name_map
+                                .get(&tool_result.tool_use_id)
+                                .cloned()
+                                .unwrap_or_else(|| tool_result.tool_use_id.clone());
+                            parts.push(serde_json::json!({
+                                "functionResponse": {
+                                    "name": fn_name,
+                                    "response": {
+                                        "content": tool_result.content
+                                    }
+                                }
+                            }));
+                        }
+                    }
+                }
+                // If multimodal_content had no Text block but msg.content is
+                // non-empty, append it so nothing is lost.
+                if !msg.content.is_empty() && !parts.iter().any(|p| p.get("text").is_some()) {
+                    parts.push(serde_json::json!({ "text": &msg.content }));
+                }
+            } else {
+                // Plain text message
+                if !msg.content.is_empty() {
+                    parts.push(serde_json::json!({ "text": &msg.content }));
+                }
+
+                // tool_calls → functionCall parts
+                if let Some(tool_calls) = &msg.tool_calls {
+                    for tc in tool_calls {
+                        let args: Value =
+                            serde_json::from_str(&tc.arguments).unwrap_or(serde_json::json!({}));
+                        parts.push(serde_json::json!({
+                            "functionCall": {
+                                "name": &tc.name,
+                                "args": args
+                            }
+                        }));
+                    }
+                }
+
+                // tool_call_id → functionResponse for tool-result messages
+                if let Some(tool_call_id) = &msg.tool_call_id {
+                    // Resolve the function name from the tool-call ID.
+                    // Gemini requires functionResponse.name to be the function
+                    // name, not the call ID.
+                    let fn_name = tc_name_map
+                        .get(tool_call_id)
+                        .cloned()
+                        .unwrap_or_else(|| tool_call_id.clone());
+                    parts.push(serde_json::json!({
+                        "functionResponse": {
+                            "name": fn_name,
+                            "response": {
+                                "content": &msg.content
+                            }
+                        }
+                    }));
+                }
+            }
+
+            // Gemini uses "model" instead of "assistant"
+            let role = match msg.role.as_str() {
+                "assistant" => "model",
+                "system" => continue, // system handled via systemInstruction
+                other => other,
+            };
+
+            // Skip empty parts (can happen for system messages filtered above)
+            if parts.is_empty() {
+                continue;
+            }
+
+            out.push(serde_json::json!({
+                "role": role,
+                "parts": parts
+            }));
+        }
+        out
+    }
+
     fn normalize_google_tool_schema(schema: &Value) -> Value {
         let mut normalized = schema.clone();
         Self::normalize_google_tool_schema_mut(&mut normalized, true);
