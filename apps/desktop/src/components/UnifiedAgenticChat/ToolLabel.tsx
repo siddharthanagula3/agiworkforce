@@ -14,6 +14,12 @@ import {
   Check,
   X,
   Wrench,
+  MousePointerClick,
+  Code,
+  Box,
+  HelpCircle,
+  ListTodo,
+  Video,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
@@ -21,17 +27,54 @@ import type { ToolLabelEntry } from '@agiworkforce/types';
 export type { ToolLabelEntry };
 
 const ICON_MAP: Record<string, React.ElementType> = {
+  // Filesystem
   Read: FileText,
   Write: FileText,
   Edit: Edit3,
+  MultiEdit: Edit3,
+  ApplyPatch: Edit3,
   LS: FolderOpen,
+  // Search
   Search: Search,
+  CodeSearch: Code,
+  // Terminal
   Bash: Terminal,
+  // Web
   WebSearch: Globe,
   WebFetch: Globe,
+  // Data
   Memory: Database,
+  // Git
   Git: GitBranch,
+  // Media
   ImageGen: Image,
+  VideoGen: Video,
+  // Interactive
+  Question: HelpCircle,
+  TodoWrite: ListTodo,
+  // Browser / UI automation — display names from toolDisplayNames.ts
+  Click: MousePointerClick,
+  Clicking: MousePointerClick,
+  Browsing: Globe,
+  Typing: Edit3,
+  'Open website': Globe,
+  'Take screenshot': Image,
+  'Scroll page': Globe,
+  'Type text': Edit3,
+  // MCP fallback display names
+  'Run database query': Database,
+  'List tables': Database,
+  'Read file': FileText,
+  'Save file': FileText,
+  'List files': FolderOpen,
+  'List allowed folders': FolderOpen,
+  'Run command': Terminal,
+  'Run code': Code,
+  'Search the web': Globe,
+  'Create image': Image,
+  'Create video': Video,
+  // MCP source indicator
+  MCP: Box,
 };
 
 function formatDuration(ms: number): string {

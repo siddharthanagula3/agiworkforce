@@ -4,7 +4,7 @@
  */
 
 import type { PopupState, ConnectionStatusResponse, CaptureScreenshotResponse } from './types';
-import { logger, storageUtils, sleep as _sleep } from './utils';
+import { logger, storageUtils } from './utils';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
