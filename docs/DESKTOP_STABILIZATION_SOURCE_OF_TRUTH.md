@@ -787,3 +787,40 @@ Tool event processing consolidated:
 | MCP      | Canonical           | All paths verified live and registered                                              |
 | Browser  | Canonical with gaps | 51 browser commands missing test mocks; `extension_bridge.rs` hardcodes port 8787   |
 | Security | Clean               | All 24 submodules verified; `guardrails.rs` is empty/dead (1 byte) — safe to remove |
+
+## Week 2 Updates (2026-03-15)
+
+### Provider Fidelity & Cost Accounting
+
+| Fix                                              | Files                        | Impact                                                               |
+| ------------------------------------------------ | ---------------------------- | -------------------------------------------------------------------- |
+| Cache token extraction (Anthropic/OpenAI/Gemini) | `sse_parser.rs`, `mod.rs`    | Token usage now includes cache_read/cache_creation tokens            |
+| Cost undercounting fix                           | `send_message_execution.rs`  | Input tokens included in streaming cost calculation (was 0)          |
+| Cache-aware costing                              | `send_message_execution.rs`  | Uses `calculate_with_cache()` when cache tokens detected             |
+| OpenAI Responses API cache                       | `provider_adapter.rs`        | Extracts `input_tokens_details.cached_tokens`                        |
+| Gemini functionResponse.name                     | `provider_adapter.rs`        | Fixed: now resolves function name from tool-call ID via lookup table |
+| Frontend usage types                             | `useTauriStreamListeners.ts` | Updated to include cache token fields                                |
+
+### Assessment Results (No Changes Needed)
+
+- **Transcript trust**: Architecture already transcript-first — `MessageRuntimeDecorators`, `MessageRuntimeInlineActivity`
+- **MCP/browser visibility**: MCP tools first-class in transcript with Claude Code-style display names
+
+## Week 3 Updates (2026-03-15)
+
+### Shared Type Contracts
+
+New shared types in `packages/types/src/`:
+
+| File               | Types                                                        | Previously                       |
+| ------------------ | ------------------------------------------------------------ | -------------------------------- |
+| `workflow.ts`      | WorkflowDefinition, nodes, edges, triggers                   | Exact duplicate in desktop + web |
+| `model-catalog.ts` | Provider, ModelMetadata, ModelCapabilities, ProviderConfig   | Desktop-local types only         |
+| `conversation.ts`  | MessageRole, ArtifactType, ArtifactBase, ApprovalRequestBase | Surface-local definitions        |
+
+Desktop and web `workflow.ts` now re-export from shared package.
+
+### Cross-Surface Documentation
+
+- Created `docs/CROSS_SURFACE_CONTRACT_MAP.md` — capability ownership, bridge risks, data flow
+- Desktop and web typecheck clean after shared type adoption
