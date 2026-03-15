@@ -51,6 +51,12 @@ pub struct TokenUsage {
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
     pub total_tokens: Option<u32>,
+    /// Anthropic: tokens read from prompt cache (billed at 0.1x input rate)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read_tokens: Option<u32>,
+    /// Anthropic: tokens written to prompt cache (billed at 1.25x input rate)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_creation_tokens: Option<u32>,
 }
 
 /// Represents a streaming tool call that arrives in multiple chunks.
@@ -517,6 +523,16 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             .get("total_tokens")
                             .and_then(|t| t.as_u64())
                             .map(|t| t as u32),
+                        cache_read_tokens: u
+                            .get("cache_read_input_tokens")
+                            .or(u.get("prompt_tokens_details")
+                                .and_then(|d| d.get("cached_tokens")))
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        cache_creation_tokens: u
+                            .get("cache_creation_input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
                     });
                 }
                 if response.get("status").and_then(|s| s.as_str()) == Some("completed") {
@@ -542,6 +558,18 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         .map(|t| t as u32),
                     total_tokens: u
                         .get("total_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    // Anthropic: cache_read_input_tokens / cache_creation_input_tokens
+                    // OpenAI: prompt_tokens_details.cached_tokens
+                    cache_read_tokens: u
+                        .get("cache_read_input_tokens")
+                        .or(u.get("prompt_tokens_details")
+                            .and_then(|d| d.get("cached_tokens")))
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    cache_creation_tokens: u
+                        .get("cache_creation_input_tokens")
                         .and_then(|t| t.as_u64())
                         .map(|t| t as u32),
                 });
@@ -775,6 +803,14 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                         prompt_tokens: input,
                         completion_tokens: output,
                         total_tokens: total,
+                        cache_read_tokens: usage_data
+                            .get("cache_read_input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        cache_creation_tokens: usage_data
+                            .get("cache_creation_input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
                     });
                 }
             }
@@ -811,6 +847,14 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                             prompt_tokens: input,
                             completion_tokens: output,
                             total_tokens: total,
+                            cache_read_tokens: usage_data
+                                .get("cache_read_input_tokens")
+                                .and_then(|t| t.as_u64())
+                                .map(|t| t as u32),
+                            cache_creation_tokens: usage_data
+                                .get("cache_creation_input_tokens")
+                                .and_then(|t| t.as_u64())
+                                .map(|t| t as u32),
                         });
                     }
                 }
@@ -941,6 +985,12 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         .get("totalTokenCount")
                         .and_then(|t| t.as_u64())
                         .map(|t| t as u32),
+                    // Gemini doesn't report cache tokens in streaming usage
+                    cache_read_tokens: u
+                        .get("cachedContentTokenCount")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    cache_creation_tokens: None,
                 });
             }
 
@@ -1049,6 +1099,9 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
+                // Ollama/local LLMs don't report cache tokens
+                cache_read_tokens: None,
+                cache_creation_tokens: None,
             });
         }
     }
