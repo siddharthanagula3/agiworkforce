@@ -12,7 +12,7 @@
  * await createJob({
  *   name: 'Daily Backup',
  *   schedule: '0 0 9 * * *',
- *   actionType: 'shell_command',
+ *   actionType: 'shellCommand',
  *   actionData: { command: 'backup.sh' }
  * });
  *
@@ -43,46 +43,46 @@ import {
 // ============================================================================
 
 /**
- * Scheduler action types matching the Rust backend
+ * Scheduler action types matching the Rust backend (serde rename_all = "camelCase")
  */
 export type SchedulerActionType =
   | 'workflow'
-  | 'agi_task'
-  | 'shell_command'
+  | 'agiTask'
+  | 'shellCommand'
   | 'notification'
   | 'webhook'
   | 'script';
 
 /**
- * Job status types matching the Rust backend
+ * Job status types matching the Rust backend (serde rename_all = "camelCase")
  */
 export type JobStatus = 'active' | 'paused' | 'completed' | 'failed';
 
 /**
- * Scheduled job interface matching the Rust backend
+ * Scheduled job interface matching the Rust backend (serde rename_all = "camelCase")
  */
 export interface ScheduledJob {
   id: string;
   name: string;
   schedule: string;
-  action_type: SchedulerActionType;
-  action_data: Record<string, unknown>;
+  actionType: SchedulerActionType;
+  actionData: Record<string, unknown>;
   status: JobStatus;
-  created_at: string;
-  updated_at: string;
-  last_run?: string;
-  next_run?: string;
-  run_count: number;
-  failure_count: number;
+  createdAt: string;
+  updatedAt: string;
+  lastRun?: string;
+  nextRun?: string;
+  runCount: number;
+  failureCount: number;
   description?: string;
 }
 
 /**
- * Next run entry from the backend
+ * Next run entry from the backend (serde rename_all = "camelCase")
  */
 export interface NextRunEntry {
-  job_id: string;
-  next_run: string;
+  jobId: string;
+  nextRun: string;
 }
 
 /**
@@ -128,7 +128,7 @@ export interface UpdateJobParams {
 
 /**
  * Map a store job to the hook's ScheduledJob type.
- * Now that the store type matches the Rust wire format, this is a direct mapping
+ * Now that the store type matches the Rust wire format (camelCase), this is a direct mapping
  * with only null→undefined conversions for optional fields.
  */
 function mapStoreJobToScheduledJob(storeJob: StoreScheduledJob): ScheduledJob {
@@ -136,15 +136,15 @@ function mapStoreJobToScheduledJob(storeJob: StoreScheduledJob): ScheduledJob {
     id: storeJob.id,
     name: storeJob.name,
     schedule: storeJob.schedule,
-    action_type: storeJob.action_type as SchedulerActionType,
-    action_data: storeJob.action_data,
+    actionType: storeJob.actionType as SchedulerActionType,
+    actionData: storeJob.actionData,
     status: storeJob.status as JobStatus,
-    created_at: storeJob.created_at,
-    updated_at: storeJob.updated_at,
-    last_run: storeJob.last_run ?? undefined,
-    next_run: storeJob.next_run ?? undefined,
-    run_count: storeJob.run_count,
-    failure_count: storeJob.failure_count,
+    createdAt: storeJob.createdAt,
+    updatedAt: storeJob.updatedAt,
+    lastRun: storeJob.lastRun ?? undefined,
+    nextRun: storeJob.nextRun ?? undefined,
+    runCount: storeJob.runCount,
+    failureCount: storeJob.failureCount,
     description: storeJob.description ?? undefined,
   };
 }
@@ -224,8 +224,8 @@ export function useScheduler() {
       const updates: Record<string, unknown> = {};
       if (params.name !== undefined) updates['name'] = params.name;
       if (params.description !== undefined) updates['description'] = params.description;
-      if (params.schedule !== undefined) updates['schedule'] = { cron_expression: params.schedule };
-      if (params.actionType !== undefined) updates['action_type'] = params.actionType;
+      if (params.schedule !== undefined) updates['schedule'] = { cronExpression: params.schedule };
+      if (params.actionType !== undefined) updates['actionType'] = params.actionType;
 
       await storeUpdateJobOnBackend(jobId, updates);
       return jobId;
@@ -312,8 +312,8 @@ export function useScheduler() {
     async (limit?: number): Promise<NextRunEntry[]> => {
       const runs = await storeGetNextRuns(limit);
       return runs.map((r) => ({
-        job_id: r.job_id,
-        next_run: r.next_run,
+        jobId: r.jobId,
+        nextRun: r.nextRun,
       }));
     },
     [storeGetNextRuns],
@@ -348,7 +348,7 @@ export function useScheduler() {
   const nextScheduledRun = useMemo(() => {
     if (upcomingJobs.length === 0) return null;
     const firstJob = upcomingJobs[0];
-    return firstJob?.next_run ? new Date(firstJob.next_run) : null;
+    return firstJob?.nextRun ? new Date(firstJob.nextRun) : null;
   }, [upcomingJobs]);
 
   return {

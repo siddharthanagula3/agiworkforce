@@ -132,6 +132,9 @@ pub(super) async fn consume_llm_stream(
 
                 full_content.push_str(&chunk.content);
                 if !chunk.content.is_empty() {
+                    // Approximate output token count: count chunks as a rough
+                    // lower bound.  The authoritative count comes from the
+                    // provider's usage object (final_usage) when available.
                     token_count += 1;
                 }
 

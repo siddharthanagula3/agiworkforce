@@ -287,8 +287,23 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 }
 
 /// Whether a model uses the OpenAI Responses API (vs Chat Completions).
+///
+/// As of March 2026, the Responses API is used by:
+///   - GPT-5 series (gpt-5, gpt-5.1, gpt-5.2, gpt-5.3, gpt-5.4, gpt-5-mini, gpt-5.3-codex)
+///   - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
+///   - O-series reasoning (o3, o3-mini, o3-pro, o3-deep-research, o4-mini, o4-mini-deep-research)
+///   - GPT open-source (gpt-oss-120b, gpt-oss-20b)
+///   - Codex models (codex-mini-latest)
+///
+/// Chat Completions remains the default for older models (gpt-4o, gpt-4-turbo, gpt-3.5-turbo).
 pub fn model_uses_responses_api(model_id: &str) -> bool {
-    model_id.starts_with("gpt-5") || model_id.starts_with("o3") || model_id.starts_with("o4")
+    let id = model_id.to_lowercase();
+    id.starts_with("gpt-5")
+        || id.starts_with("gpt-4.1")
+        || id.starts_with("o3")
+        || id.starts_with("o4")
+        || id.starts_with("gpt-oss")
+        || id.starts_with("codex-")
 }
 
 /// Whether a model supports Gemini-style thinking_config.

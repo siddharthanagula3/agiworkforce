@@ -175,3 +175,92 @@ All answers must be yes:
 - Can the user recover from errors without hunting across panels?
 
 If any answer is no, desktop is not release-ready.
+
+## 8. Week 1 Gate Status (2026-03-15)
+
+### Provider Fidelity Fixes Applied
+
+- SSE parser tool call index corruption: **fixed** — fallback now logs error/debug appropriately
+- Gemini multimodal format: **fixed** — `GoogleAdapter` now converts to native Gemini parts
+- OpenAI Responses API detection: **fixed** — covers all March 2026 model families
+- Streaming idle timeout: **fixed** — 90s per-chunk timeout in SSE parser
+
+### Runtime Normalization Progress
+
+- Tool event processing: canonical path consolidated in `toolStore.ts`
+- Duplicate action trail entries from `useTauriStreamListeners.ts`: eliminated
+- Legacy `chat:tool-executing`/`chat:tool-result` deferred to canonical `tool:event` for timeline/trail
+
+### Remaining Blockers (Unresolved from Audit)
+
+- Bedrock provider stub (#25-26): routes to OpenAI adapter — blocks AWS users
+- Two parallel tool execution paths (#19): `agi/executors/` AND `llm/tool_executor/`
+- MCP credential injection (#14-15): OAuth tokens unrecoverable
+- Browser command test mocks: 51 commands missing from `tauri-mock.ts`
+
+## 9. Week 2 Gate Status (2026-03-15)
+
+### Provider Fidelity & Cache-Aware Costing
+
+- Cache token extraction: **fixed** — SSE parser extracts `cache_read_tokens` and `cache_creation_tokens` from Anthropic, OpenAI (Chat + Responses API), and Gemini
+- Cost calculation undercounting: **fixed** — streaming persistence now includes input tokens (was passing 0)
+- Cache-aware costing: **fixed** — `calculate_with_cache()` used when cache tokens present (Anthropic 0.1x/1.25x, OpenAI 0.5x)
+- OpenAI Responses API cache tokens: **fixed** — extracts `input_tokens_details.cached_tokens`
+- Gemini `functionResponse.name` bug: **fixed** — now uses actual function name instead of tool call ID via lookup table
+- Frontend usage type: **updated** — `chat:stream-end` listener includes `cache_read_tokens` and `cache_creation_tokens`
+
+### Transcript Trust (Assessed — No Changes Needed)
+
+- Architecture already transcript-first: `MessageRuntimeDecorators` renders tool timeline + thinking inline
+- `MessageRuntimeInlineActivity` renders status trail + action log + approvals
+- MCP tools are first-class in the transcript with Claude Code-style display names
+
+### Security Review
+
+- No new security boundaries crossed by month's changes
+- ToolGuard remains untouched and functional
+- Shared type exports contain no credentials or secrets
+- Cost and cache token changes are informational only
+
+## 10. Week 3 Gate Status (2026-03-15)
+
+### Shared Contracts Established
+
+- Workflow types consolidated: `packages/types/src/workflow.ts` eliminates exact desktop/web duplicate
+- Model catalog types defined: `packages/types/src/model-catalog.ts` with Provider, ModelMetadata, ModelCapabilities
+- Conversation contracts defined: `packages/types/src/conversation.ts` with MessageRole, ArtifactType, ApprovalRequestBase
+- Desktop and web `workflow.ts` re-export from shared package
+- TypeScript typecheck passes for both desktop and web
+
+### Cross-Surface Contract Map
+
+- Created `docs/CROSS_SURFACE_CONTRACT_MAP.md` documenting:
+  - Capability ownership for 11 categories
+  - Bridge contract risks (critical: hardcoded ports, native host names)
+  - Provider parity matrix across all 5 surfaces
+  - Shared vs. local contract boundaries
+  - Data flow diagrams
+
+### Bridge Alignment Risks Identified
+
+- CRITICAL: Extension native messaging host name hardcoded
+- CRITICAL: Extension bridge WebSocket URL hardcoded at 8787
+- HIGH: Mobile signaling server URL in env var
+- Recommended mitigations documented for next month
+
+## 11. Week 4 Gate Status (2026-03-15)
+
+### Provider Adapter Audit Fixes
+
+- Gemini thinking block extraction: **fixed** — `GoogleAdapter::adapt_response()` now detects `thought: true` parts and collects into `reasoning_content`
+- Gemini reasoning tokens: **fixed** — extracts `thoughtsTokenCount` from usage into `reasoning_tokens`
+- Gemini model field fallback: **fixed** — tries `modelVersion` then falls back to `model` field
+- OpenAI Responses API cache tokens: **verified** — `cache_read_input_tokens` extracted from `input_tokens_details.cached_tokens`
+
+### Remaining Known Issues (Deferred)
+
+- Bedrock provider stub (#25-26): still routes to OpenAI adapter — blocks AWS users
+- Two parallel tool execution paths (#19): `agi/executors/` AND `llm/tool_executor/`
+- MCP credential injection (#14-15): OAuth tokens unrecoverable
+- Browser command test mocks: 51 commands missing from `tauri-mock.ts`
+- Cargo check blocked in CI by missing `libgtk-3-dev` system dependency
