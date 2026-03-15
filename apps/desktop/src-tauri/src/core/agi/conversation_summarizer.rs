@@ -676,7 +676,7 @@ impl SummaryLLM for HttpSummaryLLM {
                             });
                         }
                         Err(e) => {
-                            tracing::warn!("OpenAI chat failed: {}", e);
+                            tracing::warn!("conversation summarizer LLM call failed: {:?}", e);
                             return Ok(ExtractionResult {
                                 memories: Vec::new(),
                                 summary: String::new(),

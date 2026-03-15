@@ -1,5 +1,22 @@
 use super::*;
 
+/// Returns `true` if the CSS selector string is safe to embed in a JS template.
+///
+/// Rejects selectors containing characters that are meaningless in valid CSS but
+/// enable JS injection when the selector is interpolated into a quoted JS string:
+/// `<`, `>`, backslash escapes, and the literal string `javascript:`.
+/// Single-quotes and double-quotes are also rejected because the selector is
+/// embedded inside a quoted JS string literal and a stray quote would break out
+/// of that literal.
+fn is_safe_css_selector(selector: &str) -> bool {
+    !selector.contains('<')
+        && !selector.contains('>')
+        && !selector.contains('\'')
+        && !selector.contains('"')
+        && !selector.contains('\\')
+        && !selector.to_lowercase().contains("javascript:")
+}
+
 impl ToolExecutor {
     pub(crate) async fn execute_browser_tool(
         &self,
@@ -185,6 +202,11 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                if !is_safe_css_selector(selector) {
+                    return Err(anyhow!(
+                        "Invalid CSS selector: contains disallowed characters"
+                    ));
+                }
                 let script = format!(
                     r#"
                     (function() {{
@@ -219,6 +241,11 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                if !is_safe_css_selector(selector) {
+                    return Err(anyhow!(
+                        "Invalid CSS selector: contains disallowed characters"
+                    ));
+                }
                 let timeout_ms = args
                     .get("timeout_ms")
                     .and_then(|v| v.as_u64())

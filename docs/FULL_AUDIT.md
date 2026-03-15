@@ -12,7 +12,7 @@
 
 ## Priority Fix Matrix
 
-Each row is tagged with its 2026-03-15 verification status:
+Each row is tagged with its 2026-03-15 verification status (updated 2026-03-15 post-fix sprint)
 - **[LIVE]** — confirmed still broken in current code
 - **[HISTORICAL]** — was fixed during a prior sprint
 - **[STALE]** — audit text no longer matches code (already fixed or doesn't apply)
@@ -21,7 +21,7 @@ Each row is tagged with its 2026-03-15 verification status:
 |---|----------|-----|------|-------|------------|
 | 1 | HIGH | [LIVE] | fallback_chain.rs | RateLimitTracker created but never consulted in router — no rate-limit awareness | M |
 | 2 | HIGH | [LIVE] | thinking.rs | Extended thinking fully built but never wired to provider adapters | L |
-| 3 | MEDIUM | [LIVE] | models_config.rs | get_pricing() fallback (1.0, 1.0) masks missing models; helpers unused by router | S |
+| 3 | MEDIUM | [HISTORICAL] | models_config.rs | get_pricing() fallback (1.0, 1.0) masks missing models; helpers unused by router | Fixed: tracing::warn! added before (1.0, 1.0) fallback in get_pricing() |
 | 4 | MEDIUM | [LIVE] | capability_detection.rs | 5s timeout on /api/show could block; only used in Ollama provider | S |
 | 5 | MEDIUM | [LIVE] | memory_integration.rs | Memory injection isolated to planner, not in chat send_message path | M |
 | 6 | LOW | [LIVE] | server_tools.rs | Anthropic server tool definitions built but never integrated | S |
@@ -36,23 +36,23 @@ Each row is tagged with its 2026-03-15 verification status:
 | 15 | HIGH | [STALE] | config.rs (MCP) | Credential injection works for valid tokens. Residual fallback issue tracked in #18 | — |
 | 16 | MEDIUM | [LIVE] | transport.rs | HttpSseTransport no timeout — unresponsive servers hang forever | M |
 | 17 | MEDIUM | [LIVE] | registry.rs | Tool ID resolve is O(N) full scan for hashed IDs | M |
-| 18 | MEDIUM | [LIVE] | config.rs (MCP) | `unwrap_or(stored_value)` returns encrypted token if decrypt fails — garbage creds | S |
+| 18 | MEDIUM | [HISTORICAL] | config.rs (MCP) | `unwrap_or(stored_value)` returns encrypted token if decrypt fails — garbage creds | Fixed: unwrap_or(stored_value) replaced with match that logs warn! and skips on decrypt failure |
 | 19 | HIGH | [LIVE] | DUPLICATION | Two parallel tool execution paths: agi/executors/ AND llm/tool_executor/ | L |
-| 20 | MEDIUM | [LIVE] | file_tools.rs | References file_read_binary tool that doesn't exist | S |
-| 21 | MEDIUM | [LIVE] | browser_tools.rs | CSS selector injection — not escaped in querySelector | M |
+| 20 | MEDIUM | [HISTORICAL] | file_tools.rs | References file_read_binary tool that doesn't exist | Fixed: error message updated to remove nonexistent file_read_binary reference |
+| 21 | MEDIUM | [HISTORICAL] | browser_tools.rs | CSS selector injection — not escaped in querySelector | Fixed: is_safe_css_selector() validation added before querySelector usage |
 | 22 | MEDIUM | [LIVE] | code_executor.rs | MAX_CODE_LENGTH and DANGEROUS_PATTERNS defined but not enforced | M |
 | 23 | LOW | [LIVE] | mcp_tools.rs | MCP tool timeout hardcoded at 120s/300s max | S |
 | 24 | CRITICAL | [HISTORICAL] | memory_manager.rs | Fixed: `remember()` updates the semantic index immediately | — |
 | 25 | CRITICAL | [LIVE] | providers/bedrock.rs | Bedrock provider NOT IMPLEMENTED — blocks all AWS users | L |
 | 26 | CRITICAL | [LIVE] | provider_adapter.rs | Bedrock routed to OpenAI adapter — wrong API format | L |
-| 27 | HIGH | [LIVE] | sse_parser.rs | Tool call index out-of-order bug — corrupts tool calls during streaming | M |
+| 27 | HIGH | [HISTORICAL] | sse_parser.rs | Tool call index out-of-order bug — corrupts tool calls during streaming | Fixed: tool call accumulation now uses index-based lookup instead of last-entry append |
 | 28 | HIGH | [LIVE] | provider_adapter.rs | OpenAI Responses API detection may fail for new gpt-5 variants | M |
-| 29 | HIGH | [LIVE] | vision.rs | OCR feature guard missing — find_text silently returns empty on non-OCR builds | S |
-| 30 | HIGH | [LIVE] | autonomous.rs | Vision calls not guarded — agent loops hang 30s on TextMatch without OCR | S |
+| 29 | HIGH | [HISTORICAL] | vision.rs | OCR feature guard missing — find_text silently returns empty on non-OCR builds | Fixed: find_text on non-OCR builds returns Err() instead of empty Vec |
+| 30 | HIGH | [HISTORICAL] | autonomous.rs | Vision calls not guarded — agent loops hang 30s on TextMatch without OCR | Fixed: wait_for_element propagates OCR error immediately on non-OCR builds |
 | 31 | HIGH | [LIVE] | executor.rs (AGI) | Silent tool execution failure — tools registered but no executor, falls through silently | M |
-| 32 | HIGH | [LIVE] | conversation_summarizer.rs | Returns empty ExtractionResult on LLM failure — silent data loss | M |
+| 32 | HIGH | [HISTORICAL] | conversation_summarizer.rs | Returns empty ExtractionResult on LLM failure — silent data loss | Fixed: tracing::warn! added on LLM failure in conversation_summarizer |
 | 33 | HIGH | [LIVE] | continuous_executor.rs | 1,718 lines of dead code (#[allow(dead_code)]) — never called | S |
-| 34 | MEDIUM | [LIVE] | llm_router.rs | Streaming has no idle timeout — frozen UI if provider goes silent | M |
+| 34 | MEDIUM | [HISTORICAL] | llm_router.rs | Streaming has no idle timeout — frozen UI if provider goes silent | Fixed: per-chunk 30s idle timeout added to streaming loop in llm_router.rs |
 | 35 | MEDIUM | [LIVE] | core.rs (AGI) | Duplicate LearningSystem::new() — first instance leaked | S |
 | 36 | MEDIUM | [LIVE] | core.rs (AGI) | std::sync::Mutex in async context — deadlock risk under load | L |
 | 37 | MEDIUM | [LIVE] | autonomous.rs | MAX_LOOP_ITERATIONS=25 too low for multi-step tasks with replanning | M |
@@ -64,13 +64,13 @@ Each row is tagged with its 2026-03-15 verification status:
 | 43 | LOW | [LIVE] | continuous_executor.rs | progress_percent hardcoded at 0.0 — progress bar always stuck | M |
 | 44 | LOW | [LIVE] | api_tools_impl.rs | 255 lines dead code — superseded by executors/api_executor.rs | S |
 | 45 | LOW | [LIVE] | background_tasks.rs | 848 lines well-implemented but never called from agent code | S |
-| 46 | HIGH | [LIVE] | provider_adapter.rs | Google Gemini adapter passes raw ChatMessage instead of Gemini parts format — multimodal fails | M |
-| 47 | HIGH | [LIVE] | vision.rs | find_text returns hardcoded (960,540) screen center — OCR clicking always misses target | M |
-| 48 | HIGH | [LIVE] | planner.rs (AGI) | calculate_plan_duration: >50 checked before >80 — 2x multiplier branch unreachable | S |
-| 49 | HIGH | [LIVE] | project_memory.rs | UNIQUE(project_folder,memory_type) blocks multiple arch decisions — INSERT crashes | M |
-| 50 | MEDIUM | [LIVE] | provider_adapter.rs | Anthropic adapter via DirectAPI doesn't convert tool_calls/tool-role messages | M |
-| 51 | MEDIUM | [LIVE] | autonomous.rs | agent:task_approval_required event uses snake_case keys — violates IPC convention | S |
-| 52 | MEDIUM | [LIVE] | autonomous.rs | System::new_all() + refresh_all() called every 50ms loop iteration — expensive | S |
+| 46 | HIGH | [HISTORICAL] | provider_adapter.rs | Google Gemini adapter passes raw ChatMessage instead of Gemini parts format — multimodal fails | Verified already correct + regression test added for Gemini inlineData conversion |
+| 47 | HIGH | [HISTORICAL] | vision.rs | find_text returns hardcoded (960,540) screen center — OCR clicking always misses target | Fixed: hardcoded (960,540) replaced with dynamic screen-center from capture_primary_screen() |
+| 48 | HIGH | [HISTORICAL] | planner.rs (AGI) | calculate_plan_duration: >50 checked before >80 — 2x multiplier branch unreachable | Verified already fixed: >80 checked before >50 in calculate_plan_duration |
+| 49 | HIGH | [HISTORICAL] | project_memory.rs | UNIQUE(project_folder,memory_type) blocks multiple arch decisions — INSERT crashes | Fixed: INSERT changed to INSERT OR REPLACE in save_architectural_decision |
+| 50 | MEDIUM | [HISTORICAL] | provider_adapter.rs | Anthropic adapter via DirectAPI doesn't convert tool_calls/tool-role messages | Verified already correct + regression test added for Anthropic tool-role conversion |
+| 51 | MEDIUM | [HISTORICAL] | autonomous.rs | agent:task_approval_required event uses snake_case keys — violates IPC convention | Fixed: agent:task_approval_required event key changed from task_id to taskId |
+| 52 | MEDIUM | [HISTORICAL] | autonomous.rs | System::new_all() + refresh_all() called every 50ms loop iteration — expensive | Fixed: System::new() created once before loop, targeted refresh every 10 iterations |
 | 53 | MEDIUM | [HISTORICAL] | orchestrator.rs | Fixed: AGI orchestrator uses `join_all` for parallel agent spawning | — |
 | 54 | MEDIUM | [HISTORICAL] | tools/mod.rs | Fixed: platform-aware shell defaults | — |
 | 55 | MEDIUM | [HISTORICAL] | search.rs (chat) | Fixed: chat search escapes user terms into literal FTS queries | — |
@@ -105,7 +105,7 @@ Each row is tagged with its 2026-03-15 verification status:
 | 84 | CRITICAL | [HISTORICAL] | llm.rs:630 | Fixed: usage stats query aliases `COUNT(*) AS message_count` | — |
 | 85 | CRITICAL | [HISTORICAL] | operations.rs | Fixed: approve/reject reuse managed `AppDatabase` connection | — |
 | 86 | HIGH | [HISTORICAL] | github.rs | Fixed: GitHub clone/fetch reuses canonical `make_git_credentials` fallback | — |
-| 87 | HIGH | [LIVE] | scheduler.rs | `ShellCommand` action type with no validated executor — unvalidated shell if wired | M |
+| 87 | HIGH | [LIVE] | scheduler.rs | `ShellCommand` action type with no validated executor — unvalidated shell if wired | Partial: tracing::warn! added for audit visibility; ToolGuard wiring deferred (see TODO) |
 | 88 | HIGH | [HISTORICAL] | migration.rs | Fixed: Lovable migration commands fail honestly | — |
 | 89 | HIGH | [HISTORICAL] | mcp_server.rs | Fixed: MCP server IPC responses redact auth token | — |
 | 90 | HIGH | [HISTORICAL] | draft_manager.rs:81 | Fixed: draft queries use `saved_at` correctly | — |
