@@ -67,7 +67,7 @@ export function ReminderList({
   const filteredJobs = useMemo(() => {
     switch (activeFilter) {
       case 'reminders':
-        return jobs.filter((job) => job.action_type === 'notification');
+        return jobs.filter((job) => job.actionType === 'notification');
 
       case 'recurring':
         // All cron-based jobs are recurring
@@ -82,7 +82,7 @@ export function ReminderList({
     }
   }, [jobs, activeFilter]);
 
-  // Sort jobs: enabled first, then by next_run
+  // Sort jobs: enabled first, then by nextRun
   const sortedJobs = useMemo(() => {
     return [...filteredJobs].sort((a, b) => {
       // Active jobs first
@@ -92,15 +92,15 @@ export function ReminderList({
         return aActive ? -1 : 1;
       }
 
-      // Then by next_run
-      if (a.next_run && b.next_run) {
-        return new Date(a.next_run).getTime() - new Date(b.next_run).getTime();
+      // Then by nextRun
+      if (a.nextRun && b.nextRun) {
+        return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
       }
-      if (a.next_run) return -1;
-      if (b.next_run) return 1;
+      if (a.nextRun) return -1;
+      if (b.nextRun) return 1;
 
-      // Then by created_at
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      // Then by createdAt
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [filteredJobs]);
 
@@ -163,7 +163,7 @@ export function ReminderList({
   const counts = useMemo(
     () => ({
       all: jobs.length,
-      reminders: jobs.filter((j) => j.action_type === 'notification').length,
+      reminders: jobs.filter((j) => j.actionType === 'notification').length,
       recurring: jobs.filter((j) => j.schedule).length,
       completed: jobs.filter((j) => j.status === 'completed' || j.status === 'failed').length,
     }),
