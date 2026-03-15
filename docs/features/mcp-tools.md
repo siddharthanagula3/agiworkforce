@@ -148,10 +148,10 @@ All commands in `sys/commands/mcp.rs` unless noted. TS callers must use camelCas
 | `mcp_oauth_set_credentials` | `provider: String`, `client_id: String`, `client_secret: String` | `Result<()>` | Store OAuth app credentials |
 | `mcp_server_start` | — | `Result<()>` | `mcp_server.rs`; starts embedded HTTP MCP server |
 | `mcp_server_stop` | — | `Result<()>` | Stops embedded HTTP MCP server |
-| `mcp_server_status` | — | `Result<bool>` | Returns `is_running()` |
+| `mcp_server_status` | — | `Result<bool>` | Returns `is_running()` — **NOT REGISTERED in lib.rs; unreachable from frontend** |
 | `mcp_server_get_config` | — | `Result<Value>` | Returns `{port, token, enabled_tools, running}` |
 | `mcp_server_update_config` | `port: Option<u16>`, `enabled_tools: Option<Vec<String>>` | `Result<()>` | Updates port and tool allowlist |
-| `mcp_server_list_tools` | — | `Result<Value>` | Tools exposed by embedded server |
+| `mcp_server_list_tools` | — | `Result<Value>` | Tools exposed by embedded server — **NOT REGISTERED in lib.rs; unreachable from frontend** |
 | `mcpb_fetch_registry` | — | `Result<Vec<McpBundle>>` | `mcpb.rs`; bundle catalog |
 | `mcpb_search_bundles` | `query: String` | `Result<Vec<McpBundle>>` | Bundle search |
 | `mcpb_install_bundle` | `bundle_id: String` | `Result<void>` | npm install |
@@ -383,6 +383,10 @@ When MCP tools return HTML or URL payloads, `McpAppRenderer` (`McpAppRenderer.ts
 9. **No circuit breaker state visible to frontend.** The CLAUDE.md documents an MCP circuit breaker (Closed/Open/HalfOpen with 30 s cooldown) implemented in Sprint S2, but `McpState` contains no circuit breaker field and no circuit breaker state is surfaced through any command or event for the UI to display.
 
 10. **Credential persistence still has two backend entrypoints.** Both `mcp_store_credential` and `mcp_set_credential` are registered and map to the same behavior. The live `api/mcp.ts` path is correct, but the backend surface can be simplified to one canonical credential-write command.
+
+11. **`mcp_server_status` and `mcp_server_list_tools` are NOT registered in `lib.rs`.** They are defined in `mcp_server.rs` but absent from the `generate_handler![]` macro. Frontend calls to these commands will silently fail. Either register them or remove the dead functions.
+
+12. **7 MCP extension commands are NOT registered in `lib.rs`.** `extension_get_config`, `extension_set_config`, `extension_validate`, `extension_list_by_status`, `extension_start_all`, `extension_stop_all`, and `extension_get_directory` are defined in `mcp_extensions.rs` but never wired. Only `extension_list`, `extension_get`, `extension_install`, `extension_uninstall`, `extension_enable`, `extension_disable`, and `extension_select_package` are registered.
 
 ---
 

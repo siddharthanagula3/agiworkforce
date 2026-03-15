@@ -135,19 +135,32 @@ Primary embedded MCP server runtime:
 - `apps/desktop/src-tauri/src/core/mcp/server/tools.rs`
 - `apps/desktop/src-tauri/src/sys/commands/mcp_server.rs`
 
+Note: `mcp_server_status` and `mcp_server_list_tools` are defined in `mcp_server.rs` but NOT registered in `lib.rs`. They are unreachable from the frontend.
+
 Primary desktop MCP frontend/runtime surface:
 
 - `apps/desktop/src/api/mcp.ts`
 - `apps/desktop/src/stores/mcpStore.ts`
-- `apps/desktop/src/stores/connectorsStore.ts`
+- `apps/desktop/src/stores/mcpbStore.ts`
 - `apps/desktop/src/stores/mcpServerStore.ts`
+- `apps/desktop/src/stores/mcpAppStore.ts`
+- `apps/desktop/src/stores/connectorsStore.ts`
 - `apps/desktop/src/stores/settingsStore.ts`
 - `apps/desktop/src/components/Settings/MCPToolsSettings.tsx`
 - `apps/desktop/src/components/MCP/MCPConnectionStatus.tsx`
 - `apps/desktop/src/hooks/useAgenticEvents.ts`
 - `apps/desktop/src-tauri/src/sys/commands/mcp.rs`
+- `apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs`
+- `apps/desktop/src-tauri/src/sys/commands/mcp_extensions.rs`
+- `apps/desktop/src-tauri/src/sys/commands/mcpb.rs`
 - `apps/desktop/src-tauri/src/core/mcp/tool_executor.rs`
 - `apps/desktop/src-tauri/src/core/mcp/health.rs`
+
+MCP extension commands NOT registered in lib.rs (defined in `mcp_extensions.rs` but unreachable):
+
+- `extension_get_config`, `extension_set_config`, `extension_validate`
+- `extension_list_by_status`, `extension_start_all`, `extension_stop_all`
+- `extension_get_directory`
 
 Primary SSE parser:
 
@@ -170,6 +183,8 @@ Primary desktop security event / command validation runtime:
 - canonical shell command validation: `apps/desktop/src-tauri/src/sys/security/command_validator.rs`
 - canonical public export boundary: `apps/desktop/src-tauri/src/sys/security/mod.rs`
 - frontend-facing secret storage commands (`secret_manager_has`, `secret_manager_set`, `secret_manager_delete`) are owned by `apps/desktop/src-tauri/src/sys/commands/security.rs` and backed by `apps/desktop/src-tauri/src/sys/security/secret_manager.rs`
+
+Dead module: `apps/desktop/src-tauri/src/sys/permissions/` (audit.rs, manager.rs, policy.rs) is NOT imported by any code in the codebase. It is a candidate for removal. The authoritative permissions system lives in `sys/security/` (tool_guard.rs, policy/, policy_integration.rs, rbac.rs, permissions.rs).
 
 Primary desktop managed service-state wiring in `apps/desktop/src-tauri/src/lib.rs`:
 
@@ -324,6 +339,7 @@ The canonical CDP endpoint contract is:
 - `apps/desktop/src-tauri/src/sys/commands/browser.rs` must route semantic browser commands through `automation/browser/semantic.rs` and live CDP evaluation, not hardcoded stub selectors or null payloads
 - `apps/desktop/src-tauri/src/sys/commands/browser.rs` must return structured tab records from `browser_list_tabs`; the desktop browser API contract is richer than a bare list of tab ids
 - `apps/desktop/src/lib/browserAutomation.ts` must mirror the live Tauri browser command payloads; wrapper helpers may not invent dead fields like `fullPage`, `timeoutMs`, or `sourceSelector`
+- `apps/desktop/src/lib/browserAutomation.ts` imports directly from `@tauri-apps/api/core` instead of the `tauri-mock` shim — this breaks web-mode safety and must be updated to use `../lib/tauri-mock`
 - `apps/desktop/src-tauri/src/automation/browser/mod.rs` must resolve per-tab websocket targets through the shared endpoint contract instead of constructing a hardcoded `ws://127.0.0.1:9222/devtools/page/{tab_id}` URL
 - `PlaywrightBridge.start_server()` must fail honestly or reuse an already reachable CDP endpoint; it must not report a fake started state
 - no live browser command, AGI executor, or tool-executor path may create an internal-only `TabManager.open_tab()` entry when it expects CDP control; no-tab flows must create a real CDP target or fail clearly
@@ -344,8 +360,8 @@ These browser surfaces were removed because they were not mounted by the live de
 - `apps/desktop/src/components/Browser/BrowserWorkspace.tsx`
 - `apps/desktop/src/components/Browser/BrowserDebugPanel.tsx`
 - `apps/desktop/src/components/Browser/BrowserRecorder.tsx`
-- `apps/desktop/src/lib/streamContentRuntime.ts`
-- `apps/desktop/src/lib/streamLifecycle.ts`
+
+**Note:** `apps/desktop/src/lib/streamContentRuntime.ts` and `apps/desktop/src/lib/streamLifecycle.ts` are LIVE and canonical — they are imported by `useTauriStreamListeners.ts` and listed in the Canonical Desktop Surface above. They were incorrectly included in this removal list previously.
 
 Reasoning UI is rendered in:
 

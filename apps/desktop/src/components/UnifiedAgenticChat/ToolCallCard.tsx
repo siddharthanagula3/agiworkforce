@@ -1,7 +1,7 @@
 // apps/desktop/src/components/UnifiedAgenticChat/ToolCallCard.tsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, CheckCircle2, XCircle, ChevronDown, Wrench } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, ChevronDown, Wrench, Box, Globe } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export type ToolCallStatus = 'pending' | 'running' | 'complete' | 'error';
@@ -15,6 +15,52 @@ interface ToolCallCardProps {
   status: ToolCallStatus;
   elapsedMs?: number;
   startedAt?: number; // timestamp for computing live elapsed
+}
+
+/** Browser-related display names that indicate browser automation actions. */
+const BROWSER_DISPLAY_NAMES = new Set([
+  'open website',
+  'click',
+  'clicking',
+  'type text',
+  'typing',
+  'take screenshot',
+  'scroll page',
+  'browsing',
+  'autofill application',
+  'get url',
+  'get page title',
+  'go back',
+  'go forward',
+  'reload page',
+  'run javascript',
+  'wait for element',
+  'select option',
+  'hover',
+  'fill input',
+]);
+
+/** Derive the source badge label from tool call context. */
+function getSourceBadge(
+  toolCallId: string,
+  toolName: string,
+): { label: string; BadgeIcon: React.ElementType } | null {
+  const id = toolCallId.toLowerCase();
+  const name = toolName.toLowerCase();
+  // Check raw IDs for MCP prefix (when available)
+  if (
+    id.startsWith('mcp__') ||
+    id.startsWith('mcp_') ||
+    name.startsWith('mcp__') ||
+    name.startsWith('mcp_')
+  ) {
+    return { label: 'MCP', BadgeIcon: Box };
+  }
+  // Check display names for browser tools
+  if (BROWSER_DISPLAY_NAMES.has(name)) {
+    return { label: 'Browser', BadgeIcon: Globe };
+  }
+  return null;
 }
 
 function formatDuration(ms: number): string {
@@ -168,6 +214,8 @@ export function ToolCallCard({
         ? formatDuration(elapsedMs)
         : null;
 
+  const sourceBadge = getSourceBadge(toolCallId, toolName);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -182,6 +230,12 @@ export function ToolCallCard({
         <span className="font-mono text-xs text-slate-200 font-medium truncate flex-1 min-w-0">
           {toolName}
         </span>
+        {sourceBadge && (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-700/60 text-slate-300 shrink-0">
+            <sourceBadge.BadgeIcon className="w-2.5 h-2.5" />
+            {sourceBadge.label}
+          </span>
+        )}
         {displayDuration && (
           <span
             className={cn(

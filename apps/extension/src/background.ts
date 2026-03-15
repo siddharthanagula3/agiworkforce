@@ -3,21 +3,8 @@
  * Handles communication between popup, content scripts, and desktop app
  */
 
-import type {
-  ExtensionMessage,
-  ExtensionResponse,
-  ConnectionStatus,
-  RateLimitState as _RateLimitState,
-  RunPageAction,
-} from './types';
-import {
-  logger,
-  RateLimiter,
-  retry as _retry,
-  withTimeout,
-  storageUtils,
-  sleep as _sleep,
-} from './utils';
+import type { ExtensionMessage, ExtensionResponse, ConnectionStatus, RunPageAction } from './types';
+import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 
 // Service worker state
 interface BackgroundState {
@@ -160,7 +147,7 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
     if (state.nativePort && state.isNativeConnected) {
       return true;
     }
-    await _sleep(NATIVE_CONNECT_POLL_INTERVAL_MS);
+    await sleep(NATIVE_CONNECT_POLL_INTERVAL_MS);
   }
   return false;
 }

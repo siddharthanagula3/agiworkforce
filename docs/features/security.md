@@ -600,13 +600,18 @@ pub struct SandboxPermissions {
 
 | Pattern | Replacement |
 |---------|-------------|
-| `sk-[a-zA-Z0-9_-]{20,}` | `[REDACTED_API_KEY]` |
 | `sk-ant-[a-zA-Z0-9_-]{20,}` | `[REDACTED_ANTHROPIC_KEY]` |
+| `sk-[a-zA-Z0-9_-]{20,}` | `[REDACTED_API_KEY]` |
+| `AIzaSy[a-zA-Z0-9_-]{33}` | `[REDACTED_GOOGLE_KEY]` |
+| `gsk_[a-zA-Z0-9]{48,}` | `[REDACTED_GROQ_KEY]` |
+| `(sk\|pk\|rk)_(test\|live)_[a-zA-Z0-9]{24,}` | `[REDACTED_STRIPE_KEY]` |
 | `Bearer [token]` | `Bearer [REDACTED_TOKEN]` |
 | `api_key=...`, `secret_key=...`, etc. | `$key=[REDACTED]` |
 | `AKIA[A-Z0-9]{16}` | `[REDACTED_AWS_KEY]` |
 | `gh[ps]_[a-zA-Z0-9]{36,}` | `[REDACTED_GITHUB_TOKEN]` |
+| `github_pat_[a-zA-Z0-9_]{22,}` | `[REDACTED_GITHUB_TOKEN]` |
 | `-p [password]`, `--password [pw]` | `-p [REDACTED]` |
+| `(postgres\|mysql\|mongodb\|redis)://user:pass@` | `$1://[CREDENTIALS_REDACTED]@` |
 
 ## Rust Commands (IPC)
 
@@ -745,7 +750,7 @@ For shell commands: `validate_command()` (command_validator.rs) blocks dangerous
 
 4. **ToolGuard allowed_paths symlink TOCTOU** -- `validate_file_path()` canonicalizes and validates, but there is a time-of-check-to-time-of-use gap between validation and actual file operation. An attacker could swap a symlink after validation passes.
 
-5. **`has_machine_only_secrets()` is a stub** -- Always returns `true` regardless of actual state. The comment says "placeholder."
+5. **~~`has_machine_only_secrets()` is a stub~~ RESOLVED** -- Returns `false`, correctly indicating no machine-only secrets exist when master password is not configured.
 
 6. **Rate limiter memory growth** -- While individual rate limit records are bounded (AUDIT-003-007), the outer `HashMap<String, RequestRecord>` grows unboundedly as new tool names are seen. Long-running sessions with many dynamic MCP tools could accumulate stale entries. No periodic cleanup of the records map.
 
@@ -756,3 +761,5 @@ For shell commands: `validate_command()` (command_validator.rs) blocks dangerous
 9. **Dual validator overlap** -- `CommandValidator` (validator.rs) and `validate_command()` (command_validator.rs) both validate shell commands with overlapping but non-identical pattern sets. This creates maintenance burden and potential inconsistency.
 
 10. **~~Blocked domain list is minimal~~ RESOLVED** -- Private IP ranges are now comprehensively blocked in `validate_url()`: RFC 1918 (`10.x`, `172.16-31.x`, `192.168.x`), loopback (`127.0.0.0/8`), link-local (`169.254.0.0/16`), IPv6 loopback (`::1`, `[::1]`), IPv6 link-local (`fe80::`), and `0.0.0.0`. The 4-domain blocklist (`localhost`, `127.0.0.1`, `0.0.0.0`, `169.254.169.254`) is augmented by explicit IP range checks at lines 1518-1568 of `tool_guard.rs`.
+
+11. **`sys/permissions/` module is dead code.** `apps/desktop/src-tauri/src/sys/permissions/` (audit.rs, manager.rs, policy.rs, mod.rs) is declared but never imported by any code in the codebase. The authoritative permissions system lives in `sys/security/` (tool_guard.rs, policy/, policy_integration.rs, rbac.rs, permissions.rs). The dead module should be removed to avoid confusion about which permissions system is canonical.
