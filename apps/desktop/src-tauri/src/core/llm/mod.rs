@@ -696,6 +696,8 @@ pub trait LLMProvider: Send + Sync {
                     prompt_tokens: response.prompt_tokens,
                     completion_tokens: response.completion_tokens,
                     total_tokens: response.tokens,
+                    cache_read_tokens: None,
+                    cache_creation_tokens: None,
                 }),
                 credits: None,
                 tool_calls: None,

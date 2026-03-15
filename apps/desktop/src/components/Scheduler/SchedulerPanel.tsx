@@ -67,9 +67,9 @@ function getActionIcon(actionType: SchedulerActionType) {
   switch (actionType) {
     case 'notification':
       return <Bell className="h-4 w-4" />;
-    case 'agi_task':
+    case 'agiTask':
       return <RefreshCw className="h-4 w-4" />;
-    case 'shell_command':
+    case 'shellCommand':
       return <Terminal className="h-4 w-4" />;
     case 'workflow':
       return <Workflow className="h-4 w-4" />;
@@ -89,9 +89,9 @@ function getActionLabel(actionType: SchedulerActionType): string {
   switch (actionType) {
     case 'notification':
       return 'Notification';
-    case 'agi_task':
+    case 'agiTask':
       return 'AI Task';
-    case 'shell_command':
+    case 'shellCommand':
       return 'Shell';
     case 'workflow':
       return 'Workflow';
@@ -202,7 +202,7 @@ function JobCard({ job, onEdit, onToggle, onDelete, onRunNow }: JobCardProps) {
             isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
           )}
         >
-          {getActionIcon(job.action_type)}
+          {getActionIcon(job.actionType)}
         </div>
 
         {/* Content */}
@@ -217,8 +217,8 @@ function JobCard({ job, onEdit, onToggle, onDelete, onRunNow }: JobCardProps) {
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
             <span className="flex items-center gap-1">
-              {getActionIcon(job.action_type)}
-              {getActionLabel(job.action_type)}
+              {getActionIcon(job.actionType)}
+              {getActionLabel(job.actionType)}
             </span>
             <span className="text-muted-foreground/50">|</span>
             <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{job.schedule}</span>
@@ -226,28 +226,28 @@ function JobCard({ job, onEdit, onToggle, onDelete, onRunNow }: JobCardProps) {
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            {job.next_run && isEnabled && (
+            {job.nextRun && isEnabled && (
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                Next: {formatDistanceToNow(new Date(job.next_run), { addSuffix: true })}
+                Next: {formatDistanceToNow(new Date(job.nextRun), { addSuffix: true })}
               </span>
             )}
-            {job.last_run && (
+            {job.lastRun && (
               <span className="flex items-center gap-1">
                 <CheckCircle className="h-3 w-3" />
-                Last: {formatDistanceToNow(new Date(job.last_run), { addSuffix: true })}
+                Last: {formatDistanceToNow(new Date(job.lastRun), { addSuffix: true })}
               </span>
             )}
-            {job.run_count > 0 && (
+            {job.runCount > 0 && (
               <span className="flex items-center gap-1">
                 <RefreshCw className="h-3 w-3" />
-                {job.run_count} runs
+                {job.runCount} runs
               </span>
             )}
-            {job.failure_count > 0 && (
+            {job.failureCount > 0 && (
               <span className="flex items-center gap-1 text-destructive">
                 <AlertCircle className="h-3 w-3" />
-                {job.failure_count} failures
+                {job.failureCount} failures
               </span>
             )}
           </div>
@@ -344,22 +344,22 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
     }
   }, [jobs, activeFilter]);
 
-  // Sort jobs: active first, then by next_run
+  // Sort jobs: active first, then by nextRun
   const sortedJobs = useMemo(() => {
     return [...filteredJobs].sort((a, b) => {
       // Active jobs first
       if (a.status === 'active' && b.status !== 'active') return -1;
       if (a.status !== 'active' && b.status === 'active') return 1;
 
-      // Then by next_run
-      if (a.next_run && b.next_run) {
-        return new Date(a.next_run).getTime() - new Date(b.next_run).getTime();
+      // Then by nextRun
+      if (a.nextRun && b.nextRun) {
+        return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
       }
-      if (a.next_run) return -1;
-      if (b.next_run) return 1;
+      if (a.nextRun) return -1;
+      if (b.nextRun) return 1;
 
-      // Then by created_at
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      // Then by createdAt
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [filteredJobs]);
 
