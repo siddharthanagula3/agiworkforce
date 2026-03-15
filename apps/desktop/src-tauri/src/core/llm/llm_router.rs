@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt as _};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
@@ -48,6 +48,11 @@ impl Default for RetryConfig {
 /// This constant guards direct `route_with_retry()` callers (chat commands, background tasks)
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
+
+/// Maximum time to wait for the next SSE chunk from a provider.
+/// If the provider goes silent without closing the connection, this timeout
+/// fires and surfaces an error rather than freezing the frontend indefinitely.
+const CHUNK_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Determines if an error is retryable (transient) or permanent
 fn is_retryable_error(error: &str) -> bool {
@@ -1021,6 +1026,23 @@ impl LLMRouter {
             }
         }
 
+        // Pre-flight session cost cap check (non-streaming path).
+        // Bail out BEFORE calling the provider so the user is never charged without receiving
+        // a response.  We check the current accumulated cost — if it already exceeds the cap
+        // we refuse the request immediately.  The post-call check below remains as defence-in-depth
+        // for the accumulated delta.
+        {
+            let current_cost = *self.cumulative_cost.lock();
+            if current_cost > SESSION_COST_SAFETY_CAP {
+                return Err(anyhow!(
+                    "Session cost safety cap exceeded: ${:.4} > ${:.2} limit. \
+                     Reset the router to continue.",
+                    current_cost,
+                    SESSION_COST_SAFETY_CAP
+                ));
+            }
+        }
+
         let provider = self
             .providers
             .get(&candidate.provider)
@@ -1300,7 +1322,7 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
-        let mut all_rate_limited = false;
+        let mut all_rate_limited = true;
         let mut any_attempted = false;
         let mut candidates_skipped_rate_limit: usize = 0;
 
@@ -1342,7 +1364,7 @@ impl LLMRouter {
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    all_rate_limited = is_rate_limit_error(&err_str);
+                    all_rate_limited &= is_rate_limit_error(&err_str);
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
@@ -1620,12 +1642,6 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-economy-xai",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
                                 model: "grok-3-mini".to_string(), // General purpose: $0.30/$0.50 per 1M
                                 reason: "auto-economy-xai-legacy",
                             },
@@ -1739,12 +1755,6 @@ impl LLMRouter {
                             },
                             RouteCandidate {
                                 strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-balanced-xai",
-                            },
-                            RouteCandidate {
-                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-balanced-deepseek",
@@ -1794,12 +1804,6 @@ impl LLMRouter {
                                 provider: Provider::XAI,
                                 model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
                                 reason: "auto-balanced-xai-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-balanced-xai",
                             },
                         ]
                     }
@@ -2296,7 +2300,7 @@ impl LLMRouter {
         };
 
         let mut last_error: Option<anyhow::Error> = None;
-        let mut all_rate_limited = false;
+        let mut all_rate_limited = true;
         let mut any_attempted = false;
         let mut candidates_skipped_rate_limit: usize = 0;
 
@@ -2337,11 +2341,29 @@ impl LLMRouter {
                             "Streaming request succeeded with fallback provider"
                         );
                     }
-                    return Ok(stream);
+                    // Wrap the raw stream with a per-chunk idle timeout so that if
+                    // the provider goes silent (stops sending chunks without closing
+                    // the connection) the frontend does not freeze indefinitely.
+                    let wrapped = futures_util::stream::unfold(stream, |mut s| async move {
+                        match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
+                            Ok(Some(item)) => Some((item, s)),
+                            Ok(None) => None, // stream ended normally
+                            Err(_elapsed) => {
+                                let err: Box<dyn std::error::Error + Send + Sync> =
+                                    format!(
+                                        "streaming idle timeout: provider went silent for {}s",
+                                        CHUNK_IDLE_TIMEOUT.as_secs()
+                                    )
+                                    .into();
+                                Some((Err(err), s))
+                            }
+                        }
+                    });
+                    return Ok(Box::pin(wrapped));
                 }
                 Err(e) => {
                     let err_str = e.to_string();
-                    all_rate_limited = is_rate_limit_error(&err_str);
+                    all_rate_limited &= is_rate_limit_error(&err_str);
                     tracing::warn!(
                         provider = %candidate.provider.as_string(),
                         model = %candidate.model,
