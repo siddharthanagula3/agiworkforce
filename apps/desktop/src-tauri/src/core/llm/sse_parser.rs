@@ -405,12 +405,30 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                     .unwrap_or("")
                                     .to_string();
 
-                                tool_calls.push(StreamingToolCall {
-                                    index,
-                                    id,
-                                    name,
-                                    arguments,
-                                });
+                                // Bug #27 fix: look up existing entry by index rather
+                                // than always appending. Multiple data: lines in the
+                                // same SSE event can carry deltas for the same tool
+                                // call index (e.g. first line sends id+name, second
+                                // sends arguments). Blindly pushing creates duplicate
+                                // entries, corrupting tool call assembly downstream.
+                                if let Some(existing) =
+                                    tool_calls.iter_mut().find(|t| t.index == index)
+                                {
+                                    if !id.is_empty() {
+                                        existing.id = id;
+                                    }
+                                    if !name.is_empty() {
+                                        existing.name = name;
+                                    }
+                                    existing.arguments.push_str(&arguments);
+                                } else {
+                                    tool_calls.push(StreamingToolCall {
+                                        index,
+                                        id,
+                                        name,
+                                        arguments,
+                                    });
+                                }
                             }
                         }
                     }

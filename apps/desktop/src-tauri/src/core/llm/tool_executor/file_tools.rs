@@ -182,7 +182,7 @@ impl ToolExecutor {
                     }
                 } else {
                     let error = format!(
-                        "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary for binary files.",
+                        "Failed to read file '{}': file is binary or not UTF-8 text (only UTF-8 text files are supported).",
                         validated_path_string
                     );
                     if let Some(app_handle) = &self.app_handle {

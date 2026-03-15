@@ -386,7 +386,7 @@ impl ProjectMemoryManager {
             .map_err(|e| Error::Generic(format!("Failed to serialize decision: {}", e)))?;
 
         conn.execute(
-            "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+            "INSERT OR REPLACE INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
             params![
                 project_folder,

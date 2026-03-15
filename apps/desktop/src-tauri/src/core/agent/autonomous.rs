@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
+use sysinfo::System;
 use tauri::Emitter;
 use tokio::sync::{oneshot, Mutex as TokioMutex, Notify, RwLock};
 use tokio::time::sleep;
@@ -129,6 +130,9 @@ impl AutonomousAgent {
 
         let mut iteration: usize = 0;
         let mut budget_warning_emitted = false;
+        // Reuse a single System instance across loop iterations to avoid
+        // the cost of re-scanning all processes via new_all() on every 50ms tick.
+        let mut sys = System::new();
 
         loop {
             if *self.stop_signal.lock() {
@@ -216,7 +220,9 @@ impl AutonomousAgent {
                 }
             }
 
-            if !self.check_resource_limits().await? {
+            // Only check system resource usage every 10 iterations (~500ms) to avoid
+            // the overhead of sysinfo refresh on every 50ms tick.
+            if iteration % 10 == 0 && !self.check_resource_limits(&mut sys).await? {
                 tracing::warn!("[Agent] Resource limits exceeded, pausing");
                 sleep(Duration::from_secs(5)).await;
                 continue;
@@ -380,7 +386,7 @@ impl AutonomousAgent {
                         if let Err(e) = handle.emit(
                             "agent:task_approval_required",
                             json!({
-                                "task_id": task_id,
+                                "taskId": task_id,
                                 "description": task.description,
                             }),
                         ) {
@@ -1133,11 +1139,15 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
         }
     }
 
-    async fn check_resource_limits(&self) -> Result<bool> {
-        use sysinfo::System;
+    async fn check_resource_limits(&self, sys: &mut System) -> Result<bool> {
+        // Refresh only CPU, memory, and the current process — avoids the full
+        // process/disk scan of new_all() + refresh_all() on every iteration.
+        sys.refresh_cpu();
+        sys.refresh_memory();
 
-        let mut sys = System::new_all();
-        sys.refresh_all();
+        let current_pid =
+            sysinfo::get_current_pid().map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
+        sys.refresh_process(current_pid);
 
         let cpu_usage = sys.global_cpu_info().cpu_usage() as f64;
         if cpu_usage > self.config.cpu_limit_percent {
@@ -1148,9 +1158,6 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
             );
             return Ok(false);
         }
-
-        let current_pid =
-            sysinfo::get_current_pid().map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
 
         if let Some(process) = sys.process(current_pid) {
             let memory_mb = process.memory() / (1024 * 1024);
