@@ -109,8 +109,8 @@ mod llm_tests {
                 prompt_tokens: Some(10),
                 completion_tokens: Some(20),
                 total_tokens: Some(30),
-                cache_read_tokens: None,
-                cache_creation_tokens: None,
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
             }),
             credits: None,
             tool_calls: None,
@@ -156,8 +156,8 @@ mod llm_tests {
             prompt_tokens: Some(100),
             completion_tokens: Some(200),
             total_tokens: Some(300),
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         assert_eq!(u.prompt_tokens, Some(100));
         assert_eq!(u.completion_tokens, Some(200));
@@ -170,8 +170,8 @@ mod llm_tests {
             prompt_tokens: Some(50),
             completion_tokens: None,
             total_tokens: None,
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         assert_eq!(u.prompt_tokens, Some(50));
         assert!(u.completion_tokens.is_none());
@@ -184,8 +184,8 @@ mod llm_tests {
             prompt_tokens: None,
             completion_tokens: None,
             total_tokens: None,
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         assert!(u.prompt_tokens.is_none());
         assert!(u.completion_tokens.is_none());
@@ -198,8 +198,8 @@ mod llm_tests {
             prompt_tokens: Some(42),
             completion_tokens: Some(58),
             total_tokens: Some(100),
-            cache_read_tokens: None,
-            cache_creation_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         let json = serde_json::to_string(&u).expect("serialize failed");
         let back: TokenUsage = serde_json::from_str(&json).expect("deserialize failed");
