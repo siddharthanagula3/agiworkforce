@@ -807,6 +807,21 @@ async fn dispatch_job_action(
                 return Err("Shell command is empty".to_string());
             }
 
+            // SECURITY: ShellCommand requires explicit ToolGuard approval before execution.
+            // TODO: Wire ToolGuard into dispatch_job_action (requires passing ToolGuard state
+            // through AppHandle::try_state or adding it to SchedulerState) and call:
+            //   tool_guard.validate_tool_call("shell_execute", &serde_json::json!({"command": command})).await
+            // Until ToolGuard is wired here, ShellCommand jobs must be treated as
+            // pre-approved by the user at job-creation time. All scheduled shell commands
+            // are therefore logged at WARN level so operators can audit them.
+            // See tool_guard.rs for the validation API.
+            tracing::warn!(
+                "[SECURITY][Scheduler] Executing scheduled shell command for job '{}' \
+                 without runtime ToolGuard approval — command: {}",
+                job_name,
+                command
+            );
+
             // SECURITY: Validate command against dangerous patterns
             validate_shell_command(command)?;
 

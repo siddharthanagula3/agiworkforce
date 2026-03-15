@@ -1879,4 +1879,202 @@ mod tests {
             .unwrap();
         assert_eq!(allowed[0], "get_weather");
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #46 — Gemini multimodal image conversion to inlineData format
+    // ────────────────────────────────────────────────────────────────
+
+    /// Verifies that a user message carrying an image is converted to the
+    /// Gemini `inlineData` parts format rather than being serialised as raw
+    /// ChatMessage fields (which Gemini would reject).
+    #[test]
+    fn test_google_adapter_image_converted_to_inline_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        // Small 1×1 white PNG generated at compile time to avoid CRC issues.
+        let png_data = {
+            use image::{ImageBuffer, Rgb};
+            let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                ImageBuffer::from_fn(1, 1, |_, _| Rgb([255u8, 255u8, 255u8]));
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+            buf.into_inner()
+        };
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Describe this image".to_string(),
+                    },
+                    ContentPart::Image {
+                        image: ImageInput {
+                            data: png_data,
+                            format: ImageFormat::Png,
+                            detail: ImageDetail::Auto,
+                        },
+                    },
+                ]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle multimodal message");
+
+        let contents = adapted["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0]["role"], "user");
+
+        let parts = contents[0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2, "should have text part and image part");
+
+        // First part: plain text
+        assert_eq!(parts[0]["text"], "Describe this image");
+
+        // Second part: must use Gemini inlineData format — NOT raw base64 string or ChatMessage fields
+        assert!(
+            parts[1].get("inlineData").is_some(),
+            "image must be converted to inlineData format, not passed as raw content"
+        );
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
+        let data_str = parts[1]["inlineData"]["data"].as_str().unwrap();
+        assert!(
+            !data_str.is_empty(),
+            "base64 data must be non-empty"
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #50 — Anthropic DirectAPI: tool_calls and tool-role messages
+    // ────────────────────────────────────────────────────────────────
+
+    /// Verifies that an assistant message carrying OpenAI-style `tool_calls`
+    /// is converted to Anthropic's `content` block array with `type: tool_use`
+    /// entries rather than being passed as plain text.
+    #[test]
+    fn test_anthropic_adapter_tool_calls_converted_to_tool_use_blocks() {
+        use crate::core::llm::ToolCall;
+
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "What is the weather in Paris?".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Assistant message with a tool_call — this is the OpenAI-style format
+                // that must be converted to Anthropic's tool_use content block.
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    tool_calls: Some(vec![ToolCall {
+                        id: "toolu_xyz".to_string(),
+                        name: "get_weather".to_string(),
+                        arguments: r#"{"city":"Paris"}"#.to_string(),
+                    }]),
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Tool result — role="tool" is OpenAI style and must become
+                // role="user" with type: tool_result in Anthropic format.
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "Sunny, 22°C".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_xyz".to_string()),
+                    multimodal_content: None,
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Anthropic adapter should handle tool_calls and tool role messages");
+
+        let messages = adapted["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 3);
+
+        // Message 0: plain user message
+        assert_eq!(messages[0]["role"], "user");
+        assert_eq!(messages[0]["content"], "What is the weather in Paris?");
+
+        // Message 1: assistant with tool_call converted to Anthropic tool_use content block
+        assert_eq!(messages[1]["role"], "assistant");
+        let assistant_content = messages[1]["content"].as_array().unwrap();
+        assert_eq!(
+            assistant_content.len(),
+            1,
+            "should have exactly one tool_use block"
+        );
+        assert_eq!(
+            assistant_content[0]["type"], "tool_use",
+            "assistant tool_calls must become type: tool_use blocks"
+        );
+        assert_eq!(assistant_content[0]["id"], "toolu_xyz");
+        assert_eq!(assistant_content[0]["name"], "get_weather");
+        assert_eq!(assistant_content[0]["input"]["city"], "Paris");
+
+        // Message 2: tool result converted from role=tool to Anthropic role=user with tool_result
+        assert_eq!(
+            messages[2]["role"], "user",
+            "tool result must use role=user in Anthropic format"
+        );
+        let tool_result_content = messages[2]["content"].as_array().unwrap();
+        assert_eq!(tool_result_content.len(), 1);
+        assert_eq!(
+            tool_result_content[0]["type"], "tool_result",
+            "tool result must use type: tool_result"
+        );
+        assert_eq!(tool_result_content[0]["tool_use_id"], "toolu_xyz");
+        assert_eq!(tool_result_content[0]["content"], "Sunny, 22°C");
+    }
 }

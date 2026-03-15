@@ -41,6 +41,20 @@ impl VisionAutomation {
     pub async fn find_text(&self, query: &str, fuzzy: bool) -> Result<Vec<(i32, i32, String)>> {
         #[cfg(feature = "ocr")]
         {
+            // Capture the screen so we can both save a screenshot for OCR and obtain
+            // the actual screen dimensions for a dynamic center-fallback coordinate.
+            // NOTE: perform_ocr returns only the recognised text string — no bounding
+            // box data is available from this OCR backend.  We therefore fall back to
+            // the centre of the primary screen.  When bounding-box support is added to
+            // perform_ocr, replace the dynamic-centre calculation below with the real
+            // pixel coordinates from the OCR result.
+            let captured = match capture_primary_screen() {
+                Ok(img) => img,
+                Err(_) => return Ok(Vec::new()),
+            };
+            let center_x = (captured.pixels.width() / 2) as i32;
+            let center_y = (captured.pixels.height() / 2) as i32;
+
             let screenshot_path = match self.capture_screenshot(None).await {
                 Ok(path) => path,
                 Err(_) => return Ok(Vec::new()),
@@ -58,10 +72,10 @@ impl VisionAutomation {
                     .to_lowercase()
                     .contains(&query.to_lowercase())
                 {
-                    matches.push((960, 540, ocr_result.text.clone()));
+                    matches.push((center_x, center_y, ocr_result.text.clone()));
                 }
             } else if ocr_result.text.contains(query) {
-                matches.push((960, 540, ocr_result.text.clone()));
+                matches.push((center_x, center_y, ocr_result.text.clone()));
             }
             Ok(matches)
         }
@@ -70,7 +84,12 @@ impl VisionAutomation {
         {
             let _ = query;
             let _ = fuzzy;
-            Ok(Vec::new())
+            // On non-OCR builds there is no way to search for text on screen.
+            // Return an error immediately so callers (e.g. wait_for_element) surface a
+            // useful diagnostic instead of silently spinning until their timeout.
+            Err(anyhow!(
+                "OCR feature not enabled — cannot search for text on screen"
+            ))
         }
     }
 
@@ -112,9 +131,16 @@ impl VisionAutomation {
 
             match target {
                 ClickTarget::TextMatch { text, fuzzy } => {
-                    if let Ok(matches) = self.find_text(text, *fuzzy).await {
-                        if !matches.is_empty() {
-                            return Ok(());
+                    match self.find_text(text, *fuzzy).await {
+                        Ok(matches) => {
+                            if !matches.is_empty() {
+                                return Ok(());
+                            }
+                        }
+                        Err(e) => {
+                            // Propagate capability errors (e.g. OCR not enabled) immediately
+                            // rather than silently looping until timeout.
+                            return Err(e);
                         }
                     }
                 }
