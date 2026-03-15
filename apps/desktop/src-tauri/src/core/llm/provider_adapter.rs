@@ -1289,6 +1289,11 @@ impl OpenAIAdapter {
             .as_u64()
             .map(|v| v as u32);
 
+        // Extract cache tokens (Responses API reports these in input_tokens_details)
+        let cache_read_input_tokens = usage["input_tokens_details"]["cached_tokens"]
+            .as_u64()
+            .map(|v| v as u32);
+
         let finish_reason = response["status"].as_str().map(|s| s.to_string());
         let response_id = response["id"].as_str().map(|s| s.to_string());
 
@@ -1297,6 +1302,7 @@ impl OpenAIAdapter {
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
+            cache_read_input_tokens,
             reasoning_tokens,
             model: response["model"].as_str().unwrap_or("").to_string(),
             tool_calls: if tool_calls.is_empty() {
@@ -2080,11 +2086,40 @@ impl ProviderAdapter for GoogleAdapter {
 }
 
 impl GoogleAdapter {
+    /// Build a lookup from tool-call ID → function name by scanning all
+    /// messages for assistant-role tool calls.
+    fn build_tool_call_name_map(
+        messages: &[super::ChatMessage],
+    ) -> std::collections::HashMap<String, String> {
+        let mut map = std::collections::HashMap::new();
+        for msg in messages {
+            if let Some(tool_calls) = &msg.tool_calls {
+                for tc in tool_calls {
+                    map.insert(tc.id.clone(), tc.name.clone());
+                }
+            }
+            // Also check multimodal ToolUse parts
+            if let Some(parts) = &msg.multimodal_content {
+                for part in parts {
+                    if let super::ContentPart::ToolUse { tool_use } = part {
+                        map.insert(tool_use.id.clone(), tool_use.name.clone());
+                    }
+                }
+            }
+        }
+        map
+    }
+
     /// Convert internal `ChatMessage` structs into Gemini-native content
     /// format.  Gemini expects `{ role, parts: [{ text }, { inlineData },
     /// { functionCall }, { functionResponse }, ...] }`.
     fn convert_messages_to_gemini_format(messages: &[super::ChatMessage]) -> Vec<Value> {
         use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        // Gemini requires functionResponse.name to be the function name, not
+        // the tool-call ID.  Build a lookup so tool-result messages can resolve
+        // the correct name.
+        let tc_name_map = Self::build_tool_call_name_map(messages);
 
         let mut out = Vec::with_capacity(messages.len());
         for msg in messages {
@@ -2181,9 +2216,16 @@ impl GoogleAdapter {
                             }));
                         }
                         super::ContentPart::ToolResult { tool_result } => {
+                            // Resolve the function name from the tool-call ID.
+                            // Gemini requires functionResponse.name to be the
+                            // function name, not the call ID.
+                            let fn_name = tc_name_map
+                                .get(&tool_result.tool_use_id)
+                                .cloned()
+                                .unwrap_or_else(|| tool_result.tool_use_id.clone());
                             parts.push(serde_json::json!({
                                 "functionResponse": {
-                                    "name": tool_result.tool_use_id,
+                                    "name": fn_name,
                                     "response": {
                                         "content": tool_result.content
                                     }
@@ -2219,9 +2261,16 @@ impl GoogleAdapter {
 
                 // tool_call_id → functionResponse for tool-result messages
                 if let Some(tool_call_id) = &msg.tool_call_id {
+                    // Resolve the function name from the tool-call ID.
+                    // Gemini requires functionResponse.name to be the function
+                    // name, not the call ID.
+                    let fn_name = tc_name_map
+                        .get(tool_call_id)
+                        .cloned()
+                        .unwrap_or_else(|| tool_call_id.clone());
                     parts.push(serde_json::json!({
                         "functionResponse": {
-                            "name": tool_call_id,
+                            "name": fn_name,
                             "response": {
                                 "content": &msg.content
                             }

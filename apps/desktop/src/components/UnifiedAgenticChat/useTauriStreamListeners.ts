@@ -552,7 +552,13 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           conversation_id: number;
           message_id: string | number;
           backend_message_id?: number;
-          usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+          usage?: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+            cache_read_tokens?: number;
+            cache_creation_tokens?: number;
+          };
           credits?: {
             cost_cents: number;
             remaining_cents: number;
