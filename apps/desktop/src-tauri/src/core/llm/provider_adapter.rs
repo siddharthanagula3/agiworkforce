@@ -1865,9 +1865,13 @@ struct GoogleAdapter;
 
 impl ProviderAdapter for GoogleAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Google Gemini uses a different format
+        // Convert ChatMessage structs into Gemini-native format.
+        // Gemini expects { role, parts: [{ text }, { inlineData }, ...] }
+        // rather than the internal ChatMessage shape.  Passing raw
+        // ChatMessage (audit item #46) breaks multimodal requests.
+        let contents = Self::convert_messages_to_gemini_format(&request.messages);
         let mut google_request = serde_json::json!({
-            "contents": request.messages,
+            "contents": contents,
         });
 
         // Add generation config
@@ -2076,6 +2080,176 @@ impl ProviderAdapter for GoogleAdapter {
 }
 
 impl GoogleAdapter {
+    /// Convert internal `ChatMessage` structs into Gemini-native content
+    /// format.  Gemini expects `{ role, parts: [{ text }, { inlineData },
+    /// { functionCall }, { functionResponse }, ...] }`.
+    fn convert_messages_to_gemini_format(messages: &[super::ChatMessage]) -> Vec<Value> {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        let mut out = Vec::with_capacity(messages.len());
+        for msg in messages {
+            let mut parts: Vec<Value> = Vec::new();
+
+            // --- multimodal content takes priority when present ---
+            if let Some(multimodal) = &msg.multimodal_content {
+                for part in multimodal {
+                    match part {
+                        super::ContentPart::Text { text } => {
+                            parts.push(serde_json::json!({ "text": text }));
+                        }
+                        super::ContentPart::Image { image } => {
+                            let base64_data = STANDARD.encode(&image.data);
+                            let mime_type = image.format.mime_type();
+                            parts.push(serde_json::json!({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": base64_data
+                                }
+                            }));
+                        }
+                        super::ContentPart::Video { video } => match &video.data {
+                            super::VideoData::Bytes(bytes) => {
+                                let base64_data = STANDARD.encode(bytes);
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": video.format.mime_type(),
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                            super::VideoData::Uri(uri) => {
+                                parts.push(serde_json::json!({
+                                    "fileData": {
+                                        "mimeType": video.format.mime_type(),
+                                        "fileUri": uri
+                                    }
+                                }));
+                            }
+                        },
+                        super::ContentPart::Audio { audio } => match &audio.data {
+                            super::AudioData::Bytes(bytes) => {
+                                let base64_data = STANDARD.encode(bytes);
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                            super::AudioData::Base64(b64) => {
+                                parts.push(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "data": b64
+                                    }
+                                }));
+                            }
+                            super::AudioData::Uri(uri) => {
+                                parts.push(serde_json::json!({
+                                    "fileData": {
+                                        "mimeType": audio.format.mime_type(),
+                                        "fileUri": uri
+                                    }
+                                }));
+                            }
+                        },
+                        super::ContentPart::Document { document } => {
+                            let base64_data = STANDARD.encode(&document.data);
+                            let mime_type = match document.format {
+                                super::DocumentFormat::Pdf => "application/pdf",
+                                super::DocumentFormat::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                super::DocumentFormat::Html => "text/html",
+                                super::DocumentFormat::Md | super::DocumentFormat::Txt => "text/plain",
+                            };
+                            parts.push(serde_json::json!({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": base64_data
+                                }
+                            }));
+                        }
+                        super::ContentPart::ToolUse { tool_use } => {
+                            let args: Value = serde_json::from_str(
+                                &serde_json::to_string(&tool_use.input).unwrap_or_default(),
+                            )
+                            .unwrap_or(serde_json::json!({}));
+                            parts.push(serde_json::json!({
+                                "functionCall": {
+                                    "name": tool_use.name,
+                                    "args": args
+                                }
+                            }));
+                        }
+                        super::ContentPart::ToolResult { tool_result } => {
+                            parts.push(serde_json::json!({
+                                "functionResponse": {
+                                    "name": tool_result.tool_use_id,
+                                    "response": {
+                                        "content": tool_result.content
+                                    }
+                                }
+                            }));
+                        }
+                    }
+                }
+                // If multimodal_content had no Text block but msg.content is
+                // non-empty, append it so nothing is lost.
+                if !msg.content.is_empty() && !parts.iter().any(|p| p.get("text").is_some()) {
+                    parts.push(serde_json::json!({ "text": &msg.content }));
+                }
+            } else {
+                // Plain text message
+                if !msg.content.is_empty() {
+                    parts.push(serde_json::json!({ "text": &msg.content }));
+                }
+
+                // tool_calls → functionCall parts
+                if let Some(tool_calls) = &msg.tool_calls {
+                    for tc in tool_calls {
+                        let args: Value =
+                            serde_json::from_str(&tc.arguments).unwrap_or(serde_json::json!({}));
+                        parts.push(serde_json::json!({
+                            "functionCall": {
+                                "name": &tc.name,
+                                "args": args
+                            }
+                        }));
+                    }
+                }
+
+                // tool_call_id → functionResponse for tool-result messages
+                if let Some(tool_call_id) = &msg.tool_call_id {
+                    parts.push(serde_json::json!({
+                        "functionResponse": {
+                            "name": tool_call_id,
+                            "response": {
+                                "content": &msg.content
+                            }
+                        }
+                    }));
+                }
+            }
+
+            // Gemini uses "model" instead of "assistant"
+            let role = match msg.role.as_str() {
+                "assistant" => "model",
+                "system" => continue, // system handled via systemInstruction
+                other => other,
+            };
+
+            // Skip empty parts (can happen for system messages filtered above)
+            if parts.is_empty() {
+                continue;
+            }
+
+            out.push(serde_json::json!({
+                "role": role,
+                "parts": parts
+            }));
+        }
+        out
+    }
+
     fn normalize_google_tool_schema(schema: &Value) -> Value {
         let mut normalized = schema.clone();
         Self::normalize_google_tool_schema_mut(&mut normalized, true);

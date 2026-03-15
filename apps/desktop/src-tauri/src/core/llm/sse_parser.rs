@@ -69,11 +69,20 @@ pub struct StreamingToolCall {
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024;
 
+/// Maximum time (seconds) to wait between consecutive bytes from the
+/// provider before treating the stream as frozen.  This catches TCP
+/// half-open / stalled connections that would otherwise hang the UI
+/// indefinitely (audit item #34).  The consumer-level idle timeout in
+/// stream_runtime.rs provides a second safety net.
+const STREAM_CHUNK_TIMEOUT_SECS: u64 = 90;
+
 struct SseStreamParser {
     inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
     buffer: Vec<u8>,
     provider: crate::core::llm::Provider,
     pending_chunks: std::collections::VecDeque<Result<StreamChunk, Box<dyn Error + Send + Sync>>>,
+    /// Instant of the last received bytes from the network layer.
+    last_byte_time: std::time::Instant,
 }
 
 impl Unpin for SseStreamParser {}
@@ -85,6 +94,7 @@ impl SseStreamParser {
             buffer: Vec::new(),
             provider,
             pending_chunks: std::collections::VecDeque::new(),
+            last_byte_time: std::time::Instant::now(),
         }
     }
 
@@ -206,8 +216,24 @@ impl Stream for SseStreamParser {
             ));
         }
 
+        // Per-chunk idle timeout: if no bytes have arrived for
+        // STREAM_CHUNK_TIMEOUT_SECS, treat the stream as frozen.
+        let elapsed = self.last_byte_time.elapsed();
+        if elapsed.as_secs() >= STREAM_CHUNK_TIMEOUT_SECS {
+            tracing::error!(
+                "[SSE] Per-chunk idle timeout: no bytes received for {}s — treating stream as frozen",
+                elapsed.as_secs()
+            );
+            return Poll::Ready(Some(Err(format!(
+                "SSE stream idle timeout: no data received from provider for {}s",
+                STREAM_CHUNK_TIMEOUT_SECS
+            )
+            .into())));
+        }
+
         match self.inner.as_mut().poll_next(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
+                self.last_byte_time = std::time::Instant::now();
                 if self.buffer.len() + bytes.len() > MAX_BUFFER_SIZE {
                     tracing::error!(
                         "SSE buffer exceeded max size of {}MB",
@@ -363,24 +389,37 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             delta.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             for (position, tool_call) in delta_tool_calls.iter().enumerate() {
-                                // Bug #27 fix: Prefer the explicit "index" field from the
-                                // provider. Falling back to array position is dangerous
-                                // because a single-element array with index=1 would be
-                                // misassigned to 0. Log a warning when falling back so
-                                // we can detect providers that omit the index.
+                                // Bug #27 fix: Always prefer the explicit "index" field
+                                // from the provider. Falling back to array position is
+                                // dangerous because a single-element array with index=1
+                                // would be misassigned to 0, corrupting tool call
+                                // accumulation downstream in stream_runtime.rs.
                                 let explicit_index = tool_call
                                     .get("index")
                                     .and_then(|i| i.as_u64())
                                     .map(|idx| idx as usize);
-                                if explicit_index.is_none() && delta_tool_calls.len() > 1 {
-                                    tracing::warn!(
-                                        "[SSE] Tool call delta at position {} missing 'index' field \
-                                        in multi-tool chunk — falling back to array position. \
-                                        This may corrupt tool call accumulation.",
-                                        position
-                                    );
-                                }
-                                let index = explicit_index.unwrap_or(position);
+                                let index = if let Some(idx) = explicit_index {
+                                    idx
+                                } else {
+                                    // No explicit index — log at appropriate level and
+                                    // fall back to array position.  This is only safe for
+                                    // the first tool call in a single-element chunk; in
+                                    // all other cases it can corrupt accumulation.
+                                    if delta_tool_calls.len() > 1 || position > 0 {
+                                        tracing::error!(
+                                            "[SSE] Tool call delta at position {} missing 'index' \
+                                            field — falling back to array position. Tool call \
+                                            accumulation may be corrupted.",
+                                            position
+                                        );
+                                    } else {
+                                        tracing::debug!(
+                                            "[SSE] Tool call delta missing 'index' field in \
+                                            single-element chunk — using position 0"
+                                        );
+                                    }
+                                    position
+                                };
                                 let id = tool_call
                                     .get("id")
                                     .and_then(|i| i.as_str())

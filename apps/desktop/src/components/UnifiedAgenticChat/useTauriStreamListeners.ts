@@ -192,7 +192,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
         state.updateMessage(
           targetMessageId,
-          buildMessageArtifactUpdate(targetMessage, upsertMessageArtifact(targetMessage, nextArtifact)),
+          buildMessageArtifactUpdate(
+            targetMessage,
+            upsertMessageArtifact(targetMessage, nextArtifact),
+          ),
         );
       };
 
@@ -642,7 +645,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             finalizedMessageId
           ) {
             chatPrefs.setLastInputWasVoice(false);
-            const assistantMsg = findMessageById(useUnifiedChatStore.getState(), finalizedMessageId);
+            const assistantMsg = findMessageById(
+              useUnifiedChatStore.getState(),
+              finalizedMessageId,
+            );
             if (assistantMsg?.content && assistantMsg.role === 'assistant') {
               const clean = assistantMsg.content
                 .replace(/```[\s\S]*?```/g, '')
@@ -927,7 +933,9 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const state = useUnifiedChatStore.getState();
           const activeStreamValues = [...activeStreamSessionsRef.current.values()];
           const fallbackSessionMessageId =
-            activeStreamValues.length > 0 ? activeStreamValues[activeStreamValues.length - 1]! : null;
+            activeStreamValues.length > 0
+              ? activeStreamValues[activeStreamValues.length - 1]!
+              : null;
           const targetMessageId = resolveActiveStreamMessageId(state, {
             conversationMessages: state.messages,
             sessionMessageId: fallbackSessionMessageId,
@@ -1036,6 +1044,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
+      // chat:tool-executing — legacy event, also emitted alongside `tool:event`.
+      // Timeline creation and action trail updates are handled by the canonical
+      // `tool:event` listener in toolStore.ts to avoid duplicate entries.
+      // We only retain the timeout scheduling and stream activity tracking here.
       registerListener(
         listen<{
           conversation_id: number;
@@ -1046,15 +1058,23 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
-          ensureToolTimelineEntry(
+          // Timeline entry is created by tool:event Started handler in toolStore.
+          // Only ensure it exists as a safety net if the tool:event was missed.
+          const targetMessageId = resolveStreamTargetMessageId(
             payload.conversation_id,
-            {
-              toolCallId: payload.tool_call_id,
-              rawName: payload.tool_name,
-              argumentsText: payload.arguments,
-            },
             payload.message_id,
           );
+          if (targetMessageId && !getToolTimelineEntry(targetMessageId, payload.tool_call_id)) {
+            ensureToolTimelineEntry(
+              payload.conversation_id,
+              {
+                toolCallId: payload.tool_call_id,
+                rawName: payload.tool_name,
+                argumentsText: payload.arguments,
+              },
+              payload.message_id,
+            );
+          }
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
             normalizedToolName,
@@ -1062,13 +1082,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             true,
             payload.message_id,
           );
-
-          // Update action trail with executing status
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'running',
-            message: `Executing ${normalizedToolName}...`,
-            metadata: { tool_call_id: payload.tool_call_id },
-          });
+          // Action trail entry is created by tool:event Started — skip duplicate.
         }),
       );
 
@@ -1151,20 +1165,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             );
             useUnifiedChatStore
               .getState()
-              .updateMessage(targetMessageId, buildToolResultStateMessageUpdate({ success: payload.success }));
+              .updateMessage(
+                targetMessageId,
+                buildToolResultStateMessageUpdate({ success: payload.success }),
+              );
           }
 
-          // Update action trail with result
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: payload.success ? 'completed' : 'error',
-            message: payload.success
-              ? `${normalizedToolName} completed`
-              : `${normalizedToolName} failed`,
-            metadata: { tool_call_id: payload.tool_call_id, result_preview: payload.result },
-            fadeAfter: 3000,
-          });
-
-          // Remove the old "running" entry for this tool_call_id to prevent "Running..." from staying
+          // Action trail update for completion is handled by tool:event Completed
+          // in toolStore.ts — skip duplicate.  Only clear stale "running" entries
+          // as a safety net if tool:event didn't already handle it.
           clearRunningToolTrailEntries(
             useUnifiedChatStore.getState(),
             payload.tool_call_id,

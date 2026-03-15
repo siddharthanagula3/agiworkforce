@@ -544,6 +544,7 @@ Owned commands/types:
 - `chat_compact_context`
 
 Compaction now persists locally by deleting the compacted older messages inside one transaction and inserting a replacement system summary message. Message listing order is stabilized by `created_at, id` in `apps/desktop/src-tauri/src/data/db/repository.rs`.
+
 - `ContextCompactionResponse`
 
 ### Rust Export Commands
@@ -757,3 +758,32 @@ For chat/runtime changes, prefer targeted validation first:
 For the current live listener split and the next consolidation target:
 
 - `docs/DESKTOP_EVENT_INGESTION_MAP.md`
+
+## Week 1 Updates (2026-03-15)
+
+### Audit Re-baseline
+
+The following FULL_AUDIT.md items were re-baselined against live code:
+
+| Item                    | Previous Status           | Current Status                | Notes                                                                   |
+| ----------------------- | ------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| #1 (RateLimitTracker)   | HIGH — not consulted      | **Stale** — already connected | Consulted at `llm_router.rs:1309-1319` in `route_with_retry()`          |
+| #27 (SSE tool index)    | HIGH — corrupts streaming | **Fixed**                     | Improved fallback logging; error-level for multi-tool, debug for single |
+| #28 (Responses API)     | HIGH — fragile detection  | **Fixed**                     | Now covers gpt-5*, gpt-4.1*, o3*, o4*, gpt-oss*, codex-*                |
+| #34 (streaming timeout) | MEDIUM — no idle timeout  | **Fixed**                     | Per-chunk 90s timeout in `SseStreamParser::poll_next()`                 |
+| #46 (Gemini multimodal) | HIGH — raw ChatMessage    | **Fixed**                     | `GoogleAdapter::convert_messages_to_gemini_format()` with proper parts  |
+
+### Runtime Normalization
+
+Tool event processing consolidated:
+
+- **Canonical path**: `tool:event` listener in `toolStore.ts` — handles timeline, action trail, stream state
+- **Legacy path**: `chat:tool-executing` / `chat:tool-result` in `useTauriStreamListeners.ts` — now defers to canonical path for timeline creation and action trail updates; retained for artifact handling, message metadata, and timeout scheduling
+
+### Authority Cross-Check
+
+| Domain   | Status              | Key Finding                                                                         |
+| -------- | ------------------- | ----------------------------------------------------------------------------------- |
+| MCP      | Canonical           | All paths verified live and registered                                              |
+| Browser  | Canonical with gaps | 51 browser commands missing test mocks; `extension_bridge.rs` hardcodes port 8787   |
+| Security | Clean               | All 24 submodules verified; `guardrails.rs` is empty/dead (1 byte) — safe to remove |
