@@ -8,17 +8,34 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 /// Patterns that match common secret formats. Each tuple is (regex, replacement label).
+/// Order matters: more specific patterns (e.g. sk-ant-) must appear before generic
+/// patterns (e.g. sk-) to avoid partial matches.
 static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
     vec![
+        // Anthropic API keys (before generic sk- pattern)
+        (
+            Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").expect("static regex"),
+            "[REDACTED_ANTHROPIC_KEY]",
+        ),
         // OpenAI API keys
         (
             Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").expect("static regex"),
             "[REDACTED_API_KEY]",
         ),
-        // Anthropic API keys
+        // Google AI / Firebase API keys (AIzaSy prefix)
         (
-            Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").expect("static regex"),
-            "[REDACTED_ANTHROPIC_KEY]",
+            Regex::new(r"AIzaSy[a-zA-Z0-9_-]{33}").expect("static regex"),
+            "[REDACTED_GOOGLE_KEY]",
+        ),
+        // Groq API keys
+        (
+            Regex::new(r"gsk_[a-zA-Z0-9]{48,}").expect("static regex"),
+            "[REDACTED_GROQ_KEY]",
+        ),
+        // Stripe API keys (secret, publishable, restricted)
+        (
+            Regex::new(r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}").expect("static regex"),
+            "[REDACTED_STRIPE_KEY]",
         ),
         // Generic bearer tokens
         (
@@ -35,15 +52,25 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"AKIA[A-Z0-9]{16}").expect("static regex"),
             "[REDACTED_AWS_KEY]",
         ),
-        // GitHub tokens
+        // GitHub tokens (classic)
         (
             Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").expect("static regex"),
+            "[REDACTED_GITHUB_TOKEN]",
+        ),
+        // GitHub fine-grained personal access tokens
+        (
+            Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").expect("static regex"),
             "[REDACTED_GITHUB_TOKEN]",
         ),
         // Password patterns in commands
         (
             Regex::new(r"(?i)(-p|--password[= ])\s*\S+").expect("static regex"),
             "$1 [REDACTED]",
+        ),
+        // Connection strings with embedded credentials (postgres, mysql, mongodb, redis)
+        (
+            Regex::new(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@").expect("static regex"),
+            "$1://[CREDENTIALS_REDACTED]@",
         ),
     ]
 });
@@ -84,5 +111,45 @@ mod tests {
         let input = "ls -la /home/user/projects";
         let result = redact_secrets(input);
         assert_eq!(input, result);
+    }
+
+    #[test]
+    fn test_redact_google_key() {
+        let input = "GOOGLE_API_KEY=AIzaSyA1234567890abcdefghijklmnopqrstuv";
+        let result = redact_secrets(input);
+        assert!(!result.contains("AIzaSy"));
+        assert!(result.contains("[REDACTED_GOOGLE_KEY]"));
+    }
+
+    #[test]
+    fn test_redact_stripe_key() {
+        let input = "sk_test_1234567890abcdefghijklmnop";
+        let result = redact_secrets(input);
+        assert!(!result.contains("sk_test_"));
+        assert!(result.contains("[REDACTED_STRIPE_KEY]"));
+    }
+
+    #[test]
+    fn test_redact_groq_key() {
+        let input = "export GROQ_API_KEY=gsk_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKL";
+        let result = redact_secrets(input);
+        assert!(!result.contains("gsk_"));
+        assert!(result.contains("[REDACTED_GROQ_KEY]"));
+    }
+
+    #[test]
+    fn test_redact_connection_string() {
+        let input = "DATABASE_URL=postgres://admin:s3cretP@ss@db.example.com:5432/mydb";
+        let result = redact_secrets(input);
+        assert!(!result.contains("s3cretP@ss"));
+        assert!(result.contains("[CREDENTIALS_REDACTED]"));
+    }
+
+    #[test]
+    fn test_redact_github_fine_grained_token() {
+        let input = "GITHUB_TOKEN=github_pat_abcdef1234567890ABCDEF";
+        let result = redact_secrets(input);
+        assert!(!result.contains("github_pat_"));
+        assert!(result.contains("[REDACTED_GITHUB_TOKEN]"));
     }
 }

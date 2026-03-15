@@ -571,6 +571,10 @@ const result = await invoke<ExecutionResult>('execute_automation_script', {
 });
 ```
 
+### `browserAutomation.ts` Direct Tauri Import
+
+`apps/desktop/src/lib/browserAutomation.ts` imports `invoke` directly from `@tauri-apps/api/core` instead of from the project's `tauri-mock` shim (`../lib/tauri-mock`). This breaks web-mode safety (the app crashes in non-Tauri environments like tests or the web build). All other browser-related stores (`browserStore.ts`) correctly use the shim.
+
 ### `BrowserViewer` Streaming Cleanup Race
 
 In `useEffect`, `startStreaming(currentTabId)` is called if `!isStreaming`. The cleanup returns `stopStreaming()` only if `isStreaming` is true at cleanup time. If the component unmounts before the first streaming tick completes, `isStreaming` may still be false at cleanup, and `stopStreaming()` is never called — but the interval was already started. The interval ID is stored in Zustand state, not in a ref, so the closure over `isStreaming` can be stale. The `streamIntervalId` in state should be cleaned up via `clearInterval` from within the cleanup function unconditionally.

@@ -1169,4 +1169,714 @@ mod tests {
             "4096x4096 scaled to 2048x2048 should be 16 tiles = 2805 tokens"
         );
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // Google Gemini message format tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_google_adapter_converts_messages_to_contents_format() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Hello Gemini".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: "Hello! How can I help?".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "What is 2+2?".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+            ],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok(), "Google adapter should adapt successfully");
+
+        let adapted = result.unwrap();
+        let contents = adapted["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 3);
+
+        // First message: role should be "user", content in parts
+        assert_eq!(contents[0]["role"], "user");
+        assert_eq!(contents[0]["parts"][0]["text"], "Hello Gemini");
+
+        // Second message: "assistant" should be mapped to "model"
+        assert_eq!(contents[1]["role"], "model");
+        assert_eq!(contents[1]["parts"][0]["text"], "Hello! How can I help?");
+
+        // Third message: user
+        assert_eq!(contents[2]["role"], "user");
+        assert_eq!(contents[2]["parts"][0]["text"], "What is 2+2?");
+    }
+
+    #[test]
+    fn test_google_adapter_system_as_instruction_not_content() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: "You are a math tutor.".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Help me".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+            ],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: Some("You are a math tutor.".to_string()),
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+
+        // System messages should be filtered from contents
+        let contents = adapted["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 1, "system message should be filtered from contents");
+        assert_eq!(contents[0]["role"], "user");
+
+        // System should be in systemInstruction
+        assert_eq!(
+            adapted["systemInstruction"]["parts"][0]["text"],
+            "You are a math tutor."
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Anthropic tool_choice tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_anthropic_adapter_tool_choice_auto() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Search the web".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "search".to_string(),
+                description: "Search".to_string(),
+                parameters: json!({"type": "object", "properties": {}}),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["tool_choice"]["type"], "auto");
+    }
+
+    #[test]
+    fn test_anthropic_adapter_tool_choice_required() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Do it".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "action".to_string(),
+                description: "Do action".to_string(),
+                parameters: json!({"type": "object", "properties": {}}),
+            }]),
+            tool_choice: Some(ToolChoice::Required),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["tool_choice"]["type"], "any");
+    }
+
+    #[test]
+    fn test_anthropic_adapter_tool_choice_specific() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Get weather".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: json!({"type": "object", "properties": {"city": {"type": "string"}}}),
+            }]),
+            tool_choice: Some(ToolChoice::Specific("get_weather".to_string())),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["tool_choice"]["type"], "tool");
+        assert_eq!(adapted["tool_choice"]["name"], "get_weather");
+    }
+
+    #[test]
+    fn test_anthropic_adapter_tool_choice_none_omitted() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "noop".to_string(),
+                description: "No-op".to_string(),
+                parameters: json!({"type": "object", "properties": {}}),
+            }]),
+            tool_choice: Some(ToolChoice::None),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert!(
+            adapted.get("tool_choice").is_none(),
+            "tool_choice should be omitted for None variant on Anthropic"
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Anthropic thinking parameter serialization tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_anthropic_adapter_thinking_enabled_true() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Think hard".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-opus-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(4096),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Enabled(true)),
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        // Anthropic requires {"type": "enabled", "budget_tokens": N}, NOT bare `true`
+        assert_eq!(adapted["thinking"]["type"], "enabled");
+        assert!(
+            adapted["thinking"]["budget_tokens"].as_u64().unwrap() > 0,
+            "budget_tokens must be positive"
+        );
+    }
+
+    #[test]
+    fn test_anthropic_adapter_thinking_enabled_false() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Quick answer".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Enabled(false)),
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["thinking"]["type"], "disabled");
+    }
+
+    #[test]
+    fn test_anthropic_adapter_thinking_budget() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Analyze this".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-opus-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(4096),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Budget {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: 16384,
+            }),
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["thinking"]["type"], "enabled");
+        assert_eq!(adapted["thinking"]["budget_tokens"], 16384);
+    }
+
+    #[test]
+    fn test_anthropic_adapter_thinking_level_maps_to_budget() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Deep analysis".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-opus-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(4096),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Level {
+                level: "high".to_string(),
+                max_thinking_tokens: None,
+            }),
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(adapted["thinking"]["type"], "enabled");
+        assert_eq!(
+            adapted["thinking"]["budget_tokens"], 16384,
+            "high level should map to 16384 budget tokens"
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Anthropic response parsing tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_anthropic_adapter_response_basic() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let api_response = json!({
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [
+                {"type": "text", "text": "Hello from Claude!"}
+            ],
+            "stop_reason": "end_turn",
+            "usage": {
+                "input_tokens": 15,
+                "output_tokens": 8,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "Hello from Claude!");
+        assert_eq!(response.prompt_tokens, Some(15));
+        assert_eq!(response.completion_tokens, Some(8));
+        assert_eq!(response.tokens, Some(23));
+        assert_eq!(response.model, "claude-sonnet-4-6");
+        assert_eq!(response.finish_reason, Some("end_turn".to_string()));
+    }
+
+    #[test]
+    fn test_anthropic_adapter_response_with_tool_use() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let api_response = json!({
+            "id": "msg_456",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [
+                {"type": "text", "text": "Let me check the weather."},
+                {
+                    "type": "tool_use",
+                    "id": "toolu_abc",
+                    "name": "get_weather",
+                    "input": {"location": "NYC"}
+                }
+            ],
+            "stop_reason": "tool_use",
+            "usage": {
+                "input_tokens": 20,
+                "output_tokens": 30
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "Let me check the weather.");
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "toolu_abc");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert!(tool_calls[0].arguments.contains("NYC"));
+    }
+
+    #[test]
+    fn test_anthropic_adapter_response_with_thinking() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let api_response = json!({
+            "id": "msg_789",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-opus-4-6",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "Let me reason through this step by step..."
+                },
+                {"type": "text", "text": "The answer is 42."}
+            ],
+            "stop_reason": "end_turn",
+            "usage": {
+                "input_tokens": 50,
+                "output_tokens": 100
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "The answer is 42.");
+        assert!(response.reasoning_content.is_some());
+        assert!(response
+            .reasoning_content
+            .unwrap()
+            .contains("step by step"));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Google Gemini response parsing tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_google_adapter_response_basic() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let api_response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "Hello from Gemini!"}],
+                    "role": "model"
+                },
+                "finishReason": "STOP"
+            }],
+            "usageMetadata": {
+                "promptTokenCount": 10,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 15
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "Hello from Gemini!");
+        assert_eq!(response.prompt_tokens, Some(10));
+        assert_eq!(response.completion_tokens, Some(5));
+        assert_eq!(response.tokens, Some(15));
+    }
+
+    #[test]
+    fn test_google_adapter_response_with_function_call() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let api_response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "get_weather",
+                            "args": {"city": "London"}
+                        }
+                    }],
+                    "role": "model"
+                },
+                "finishReason": "STOP"
+            }],
+            "usageMetadata": {
+                "promptTokenCount": 20,
+                "candidatesTokenCount": 10,
+                "totalTokenCount": 30
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert!(tool_calls[0].arguments.contains("London"));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Google Gemini tool_choice mapping tests
+    // ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_google_adapter_tool_choice_specific() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Get weather".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: json!({"type": "object", "properties": {"city": {"type": "string"}}}),
+            }]),
+            tool_choice: Some(ToolChoice::Specific("get_weather".to_string())),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert_eq!(
+            adapted["toolConfig"]["functionCallingConfig"]["mode"],
+            "ANY"
+        );
+        let allowed = adapted["toolConfig"]["functionCallingConfig"]["allowedFunctionNames"]
+            .as_array()
+            .unwrap();
+        assert_eq!(allowed[0], "get_weather");
+    }
 }
