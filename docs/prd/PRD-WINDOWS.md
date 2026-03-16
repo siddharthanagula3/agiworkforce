@@ -1,8 +1,8 @@
 # AGI Workforce — Windows Desktop Platform PRD
 
-> **Status**: Approved for implementation
-> **Version**: 1.0.0
-> **Last Updated**: 2026-03-09
+> **Status**: Public Alpha
+> **Version**: 1.1.0
+> **Last Updated**: 2026-03-15
 > **Owner**: Product Team
 > **Platform**: Windows 10 (21H2+) / Windows 11 — x64 (ARM64 roadmap)
 > **Companion Document**: See `PRD-MACOS.md` for features identical across both desktop platforms
@@ -96,7 +96,7 @@ Non-technical users who want AI assistance on their personal Windows PCs:
 
 | Differentiator                  | AGI Workforce    | Claude Desktop Windows | ChatGPT Windows  | Microsoft Copilot  |
 | ------------------------------- | ---------------- | ---------------------- | ---------------- | ------------------ |
-| Multi-LLM (9+ providers)        | Yes              | No (Anthropic only)    | No (OpenAI only) | No (GPT-4 only)    |
+| Multi-LLM (12+ providers)        | Yes              | No (Anthropic only)    | No (OpenAI only) | No (GPT-4 only)    |
 | Local models (Ollama/LM Studio) | Yes              | No                     | No               | No                 |
 | UI Automation element tree      | Full UIA COM     | None                   | None             | Partial (own apps) |
 | Background agents (24hr+)       | Yes              | No                     | No               | No                 |
@@ -108,7 +108,7 @@ Non-technical users who want AI assistance on their personal Windows PCs:
 | Authenticode signing            | Yes              | Yes                    | Yes              | Pre-signed         |
 | BYOK (bring your own key)       | Yes              | No                     | No               | No                 |
 | Offline-capable                 | Yes (local LLMs) | No                     | No               | No                 |
-| Non-coding AI skills (140+)     | Yes              | No                     | No               | No                 |
+| Non-coding AI skills (169+)     | Yes              | No                     | No               | No                 |
 
 ## 1.4 Non-Negotiable Requirements
 
@@ -418,7 +418,7 @@ All Rust feature flags from the master PRD apply to Windows builds. Windows-spec
 
 | ID      | Feature                                   | Priority | Windows Status | macOS Parity | Notes            |
 | ------- | ----------------------------------------- | -------- | -------------- | ------------ | ---------------- |
-| FR-D101 | Multi-provider LLM routing (9+ providers) | P0       | Implemented    | Identical    | Same Rust engine |
+| FR-D101 | Multi-provider LLM routing (12+ providers) | P0       | Implemented    | Identical    | Same Rust engine |
 | FR-D102 | Routing strategies (7 modes)              | P1       | Implemented    | Identical    |                  |
 | FR-D103 | Session cost cap ($50)                    | P1       | Implemented    | Identical    |                  |
 | FR-D104 | Dual HTTP client architecture             | P0       | Implemented    | Identical    |                  |
@@ -481,7 +481,7 @@ All Rust feature flags from the master PRD apply to Windows builds. Windows-spec
 | FR-D404 | Research mode                            | P1       | Implemented    | Identical    |       |
 | FR-D405 | Conversation summarization               | P2       | Implemented    | Identical    |       |
 | FR-D406 | Codebase indexing                        | P2       | Implemented    | Identical    |       |
-| FR-D407 | Skill registry (140+ skills)             | P1       | Implemented    | Identical    |       |
+| FR-D407 | Skill registry (169+ skills)             | P1       | Implemented    | Identical    |       |
 
 ### 3.1.5 UI & UX Features
 
@@ -1556,7 +1556,7 @@ Each API key row:
 
 ```
 +---+-------------------------------------------------------------+
-|   | AI Skills (140+)          [Search Skills...] [Grid] [List]  |
+|   | AI Skills (169+)          [Search Skills...] [Grid] [List]  |
 |   +-------------------------------------------------------------+
 |   | [Category Tabs: All | Business | Dev | Creative | ...]      |
 |   +-------------------------------------------------------------+
@@ -1574,7 +1574,7 @@ Each API key row:
 
 | Component     | Type         | Details                                                                                               |
 | ------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Page title    | h1           | "AI Skills (140+)"                                                                                    |
+| Page title    | h1           | "AI Skills (169+)"                                                                                    |
 | Search bar    | Text input   | "Search skills..."                                                                                    |
 | View toggle   | Button group | Grid view / List view                                                                                 |
 | Category tabs | Tab bar      | "All", "Business", "Development", "Creative", "Healthcare", "Legal", "Finance", "Education", "Trades" |
@@ -4015,7 +4015,7 @@ AGI Workforce runs entirely in standard user context:
 
 ### 11.7.1 Windows-Specific CVE Mitigations
 
-Three shell injection CVEs were patched in the Ground Truth Fixes sprint:
+Three shell injection CVEs were patched in the security hardening pass (2026-03-08):
 
 | CVE                            | Component         | Fix                                                                                    |
 | ------------------------------ | ----------------- | -------------------------------------------------------------------------------------- |
@@ -4243,7 +4243,7 @@ Claude Desktop launched on Windows on February 10, 2026. It provides a native Wi
 
 | Feature               | AGI Workforce                           | Claude Desktop Windows               | Advantage        |
 | --------------------- | --------------------------------------- | ------------------------------------ | ---------------- |
-| **Model support**     | 9+ cloud providers + local models       | Anthropic only                       | AGI Workforce    |
+| **Model support**     | 12+ cloud providers + local models       | Anthropic only                       | AGI Workforce    |
 | **Local LLMs**        | Ollama, LM Studio, vLLM, llama.cpp      | None                                 | AGI Workforce    |
 | **BYOK**              | Full (all providers)                    | None (subscription only)             | AGI Workforce    |
 | **MCP tools**         | Unlimited (stdio, SSE, HTTP)            | Yes (stdio primarily)                | AGI Workforce    |
@@ -4257,7 +4257,7 @@ Claude Desktop launched on Windows on February 10, 2026. It provides a native Wi
 | **Code editor**       | Monaco editor (full IDE)                | Artifacts (read-only)                | AGI Workforce    |
 | **Research mode**     | Multi-source agentic research           | Single-prompt (no orchestration)     | AGI Workforce    |
 | **Analytics**         | Usage dashboard with cost tracking      | None                                 | AGI Workforce    |
-| **Skills**            | 140+ non-coding skills                  | None (general chat only)             | AGI Workforce    |
+| **Skills**            | 169+ non-coding skills                  | None (general chat only)             | AGI Workforce    |
 | **Artifacts**         | Full (code, images, canvas)             | Yes (code blocks)                    | Parity           |
 | **Markdown**          | Full (KaTeX, Mermaid, syntax highlight) | Full                                 | Parity           |
 | **Chat quality**      | Depends on model choice                 | Claude-specific optimization         | Claude Desktop   |
@@ -4294,7 +4294,7 @@ OpenAI offers a Windows desktop application for ChatGPT. It provides a native Wi
 
 | Feature                | AGI Workforce          | ChatGPT Windows          | Advantage               |
 | ---------------------- | ---------------------- | ------------------------ | ----------------------- |
-| **Model support**      | 9+ providers + local   | OpenAI only              | AGI Workforce           |
+| **Model support**      | 12+ providers + local   | OpenAI only              | AGI Workforce           |
 | **Desktop automation** | Full (UIA + vision)    | None                     | AGI Workforce           |
 | **MCP tools**          | Yes                    | No                       | AGI Workforce           |
 | **Background agents**  | Yes (24hr+)            | No                       | AGI Workforce           |
@@ -4333,7 +4333,7 @@ Microsoft Copilot is pre-installed on Windows 11 and deeply integrated into the 
 
 | Feature                | AGI Workforce                       | Microsoft Copilot         | Advantage            |
 | ---------------------- | ----------------------------------- | ------------------------- | -------------------- |
-| **Model choice**       | 9+ providers + local                | GPT-4 only                | AGI Workforce        |
+| **Model choice**       | 12+ providers + local                | GPT-4 only                | AGI Workforce        |
 | **OS integration**     | Deep (UIA, Win32)                   | Deepest (OS-level)        | Copilot              |
 | **Settings control**   | Copilot can change Windows settings | Cannot change OS settings | Copilot              |
 | **Office integration** | Via UIA (any app)                   | Native (M365 Copilot)     | Copilot (for Office) |
@@ -4341,7 +4341,7 @@ Microsoft Copilot is pre-installed on Windows 11 and deeply integrated into the 
 | **MCP tools**          | Yes                                 | No                        | AGI Workforce        |
 | **Background agents**  | Yes                                 | No                        | AGI Workforce        |
 | **Terminal**           | Full (PowerShell, CMD, WSL)         | No                        | AGI Workforce        |
-| **Custom AI skills**   | 140+                                | None (general chat)       | AGI Workforce        |
+| **Custom AI skills**   | 169+                                | None (general chat)       | AGI Workforce        |
 | **Privacy**            | Local-first, BYOK                   | Cloud-only (Microsoft)    | AGI Workforce        |
 | **Pricing**            | BYOK                                | Free (basic), $20/mo Pro  | Copilot (basic)      |
 | **Enterprise**         | MSI deployment                      | Pre-installed             | Copilot              |
@@ -4396,13 +4396,13 @@ AGI Workforce and PowerToys are complementary, not competitive. Users can use bo
 
 ### 13.5.1 Where AGI Workforce Leads
 
-1. **Model agnosticism**: Only product with 9+ providers + local models
+1. **Model agnosticism**: Only product with 12+ providers + local models
 2. **Desktop automation**: Full UIA + vision + input simulation
 3. **Agent autonomy**: Background agents, multi-agent swarms, 24hr+ operation
 4. **MCP ecosystem**: Unlimited tools, no caps
 5. **Privacy**: Local-first, BYOK, offline-capable
 6. **Enterprise deployment**: MSI, silent install, GPO-compatible
-7. **Non-coding skills**: 140+ skills across 9 categories
+7. **Non-coding skills**: 169+ skills across 23 categories
 
 ### 13.5.2 Where Parity is Needed
 
@@ -4419,7 +4419,7 @@ AGI Workforce and PowerToys are complementary, not competitive. Users can use bo
 3. **Windows-native agent**: Leverage UIA for structured app interaction (competitors use only vision)
 4. **Offline AI workforce**: Full functionality without internet via local models
 5. **Mobile companion**: QR-pair with desktop, live agent dashboard from phone (unique in market)
-6. **AI skill marketplace**: 140+ non-coding skills (healthcare, legal, finance, education) - every competitor is code-focused
+6. **AI skill marketplace**: 169+ non-coding skills (healthcare, legal, finance, education) - every competitor is code-focused
 
 ### 13.5.4 Competitive Roadmap
 
@@ -6083,5 +6083,5 @@ System State at Crash:
 ---
 
 _End of document. This PRD covers the complete Windows Desktop platform specification for AGI Workforce._
+_Document version 1.1.0 — Last updated 2026-03-15_
 _For features identical across both desktop platforms, see `PRD-MACOS.md`._
-_For questions or clarifications, contact the Product Team._

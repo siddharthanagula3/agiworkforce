@@ -125,6 +125,113 @@ pub(super) fn build_project_context_message(folder: &str) -> String {
     project_context_content
 }
 
+/// Maximum character length for project instruction content.
+const MAX_PROJECT_INSTRUCTIONS_LEN: usize = 16_000;
+
+/// Load project-specific instructions from well-known files in the project root.
+///
+/// Checks the following files in order and returns the first one found:
+/// 1. `.agi/instructions.md`
+/// 2. `CLAUDE.md`
+/// 3. `.cursor/rules`
+///
+/// Content is truncated to 16,000 characters to fit within context budgets.
+pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
+    let candidates = [
+        folder.join(".agi/instructions.md"),
+        folder.join("CLAUDE.md"),
+        folder.join(".cursor/rules"),
+    ];
+
+    for path in &candidates {
+        if path.is_file() {
+            match std::fs::read_to_string(path) {
+                Ok(content) if !content.trim().is_empty() => {
+                    let truncated: String =
+                        content.chars().take(MAX_PROJECT_INSTRUCTIONS_LEN).collect();
+                    debug!(
+                        "[PromptContext] Loaded project instructions from {:?} ({} chars{})",
+                        path,
+                        truncated.len(),
+                        if truncated.len() < content.len() {
+                            ", truncated"
+                        } else {
+                            ""
+                        }
+                    );
+                    return Some(truncated);
+                }
+                Ok(_) => {
+                    // File exists but is empty — continue to next candidate
+                }
+                Err(e) => {
+                    debug!(
+                        "[PromptContext] Could not read {:?}: {}",
+                        path, e
+                    );
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Detect the primary project type by probing for language-specific manifest files.
+///
+/// Returns one of: "Rust", "Node/TypeScript", "Go", "Python", "Mixed", or "Unknown".
+pub fn detect_project_type(folder: &std::path::Path) -> String {
+    let markers = [
+        ("Cargo.toml", "Rust"),
+        ("package.json", "Node/TypeScript"),
+        ("go.mod", "Go"),
+        ("pyproject.toml", "Python"),
+    ];
+
+    let mut found: Vec<&str> = Vec::new();
+    for (file, lang) in &markers {
+        if folder.join(file).exists() {
+            found.push(lang);
+        }
+    }
+
+    match found.len() {
+        0 => "Unknown".to_string(),
+        1 => found[0].to_string(),
+        _ => "Mixed".to_string(),
+    }
+}
+
+/// Build a concise coding system prompt (under 2K tokens) with:
+/// - Project type detection
+/// - Working directory path
+/// - Tool usage instructions
+/// - Project instructions (if found via `load_project_instructions`)
+pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
+    let project_type = detect_project_type(folder);
+    let folder_display = folder.to_string_lossy();
+
+    let mut prompt = format!(
+        "## Coding Context\n\n\
+         - **Project type:** {}\n\
+         - **Working directory:** {}\n\n\
+         ### Tool usage guidelines\n\n\
+         - Use `grep_search` instead of running grep via terminal.\n\
+         - Use `glob_search` instead of running find via terminal.\n\
+         - Use `edit_exact_replace` instead of sed for file edits.\n\
+         - Always read a file before editing it.\n",
+        project_type, folder_display
+    );
+
+    if let Some(instructions) = load_project_instructions(folder) {
+        prompt.push_str("\n### Project Instructions\n\n");
+        prompt.push_str(&instructions);
+        prompt.push('\n');
+    }
+
+    prompt
+}
+
 /// Escape XML special characters to prevent injection into XML-like prompt tags.
 pub(super) fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")

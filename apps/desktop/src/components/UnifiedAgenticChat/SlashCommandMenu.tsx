@@ -37,23 +37,22 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.15 }}
-          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-white dark:bg-charcoal-800 border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden z-50"
+          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-[hsl(var(--popover))] border border-[hsl(var(--border))] shadow-lg overflow-hidden z-50"
           role="listbox"
           aria-label="Slash command suggestions"
         >
           <div className="max-h-72 overflow-y-auto">
             {suggestions.map((suggestion, index) => (
-              <button type="button"
+              <button
+                type="button"
                 key={suggestion.command}
                 onClick={() => onSelect(suggestion)}
                 onMouseEnter={() => onHover(index)}
                 role="option"
                 aria-selected={index === selectedIndex}
                 className={cn(
-                  'w-full text-left px-4 py-3 transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0',
-                  index === selectedIndex
-                    ? 'bg-primary/10 dark:bg-primary/10'
-                    : 'hover:bg-gray-50 dark:hover:bg-charcoal-700',
+                  'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0',
+                  index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -65,11 +64,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       <code className="text-sm font-semibold text-primary">
                         {suggestion.command}
                       </code>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
                         {suggestion.description}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
                       {suggestion.example}
                     </div>
                   </div>
@@ -77,7 +76,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
               </button>
             ))}
           </div>
-          <div className="px-4 py-2 bg-gray-50 dark:bg-charcoal-700/50 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+          <div className="px-4 py-2 bg-[hsl(var(--muted))] border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
             Use arrow keys to navigate, Enter to select, Esc to close
           </div>
         </motion.div>

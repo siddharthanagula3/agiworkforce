@@ -1,9 +1,23 @@
 # AGI Workforce — Platform PRDs
 
-> Written: 2026-03-09
+> Written: 2026-03-09 | Last updated: 2026-03-15
 > Total: ~34,300 lines across 8 platform-specific PRDs
+> Product status: **Public Alpha**
 
 Each PRD follows a 13-section template (Executive Summary, Platform Requirements, Feature Matrix, Screen-by-Screen UI Spec, Component Architecture, Data Flow & API Connections, Platform-Specific Capabilities, Build/Deploy/Distribution, Testing Strategy, Performance Requirements, Security, Accessibility, Competitive Analysis).
+
+## Current Codebase Metrics (as of 2026-03-15)
+
+| Metric | Value |
+| --- | --- |
+| Total LOC | ~973K (345K Rust, 379K TS, 249K TSX) |
+| Build status | cargo check PASS, cargo clippy PASS (0 warnings), tsc --noEmit PASS, pnpm lint 0 errors |
+| Vitest tests (desktop) | 1,460 tests passing |
+| Rust tests | 3,267 tests passing |
+| Tauri commands registered | 1,042 |
+| LLM provider adapters | 12+ (Bedrock not yet implemented) |
+| AI Skills | 169 across 23 categories |
+| MCP transports | stdio, SSE, streamable HTTP |
 
 ## PRD Index
 

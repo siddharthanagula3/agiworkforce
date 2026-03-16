@@ -295,21 +295,51 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 /// Whether a model uses the OpenAI Responses API (vs Chat Completions).
 ///
 /// As of March 2026, the Responses API is used by:
-///   - GPT-5 series (gpt-5, gpt-5.1, gpt-5.2, gpt-5.3, gpt-5.4, gpt-5-mini, gpt-5.3-codex)
+///   - GPT-5+ series (gpt-5, gpt-5.1, gpt-5-turbo, gpt-6, gpt-7, ...)
 ///   - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
-///   - O-series reasoning (o3, o3-mini, o3-pro, o3-deep-research, o4-mini, o4-mini-deep-research)
+///   - O-series reasoning (o3+, o4+, ...)
 ///   - GPT open-source (gpt-oss-120b, gpt-oss-20b)
 ///   - Codex models (codex-mini-latest)
 ///
 /// Chat Completions remains the default for older models (gpt-4o, gpt-4-turbo, gpt-3.5-turbo).
+///
+/// Uses version-aware detection: any GPT major version >= 5 (and 4.1+) uses the Responses API.
+/// This future-proofs for gpt-5-turbo, gpt-6, gpt-7, etc. without code changes.
 pub fn model_uses_responses_api(model_id: &str) -> bool {
     let id = model_id.to_lowercase();
-    id.starts_with("gpt-5")
-        || id.starts_with("gpt-4.1")
-        || id.starts_with("o3")
+
+    // O-series reasoning models and codex always use Responses API
+    if id.starts_with("o3")
         || id.starts_with("o4")
         || id.starts_with("gpt-oss")
         || id.starts_with("codex-")
+    {
+        return true;
+    }
+
+    // For GPT models, parse the major version after "gpt-" to future-proof
+    // for gpt-5-turbo, gpt-6, gpt-7, etc. without requiring code changes.
+    // gpt-4.1+ and gpt-5+ use Responses API; gpt-4o, gpt-4-turbo, gpt-3.5 do not.
+    if let Some(rest) = id.strip_prefix("gpt-") {
+        let version_str: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(major) = version_str.parse::<u32>() {
+            if major >= 5 {
+                return true;
+            }
+            if major == 4 {
+                let after_major = &rest[version_str.len()..];
+                if let Some(minor_str) = after_major.strip_prefix('.') {
+                    let minor_digits: String =
+                        minor_str.chars().take_while(|c| c.is_ascii_digit()).collect();
+                    if let Ok(minor) = minor_digits.parse::<u32>() {
+                        return minor >= 1;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Whether a model supports Gemini-style thinking_config.
@@ -429,8 +459,25 @@ mod tests {
 
     #[test]
     fn model_uses_responses_api_for_gpt5_models() {
+        // GPT-5 series
         assert!(model_uses_responses_api("gpt-5.2"));
         assert!(model_uses_responses_api("gpt-5-nano"));
+        assert!(model_uses_responses_api("gpt-5-turbo"));
+        assert!(model_uses_responses_api("gpt-5"));
+        // Future GPT versions
+        assert!(model_uses_responses_api("gpt-6"));
+        assert!(model_uses_responses_api("gpt-7-turbo"));
+        // GPT-4.1 series
+        assert!(model_uses_responses_api("gpt-4.1"));
+        assert!(model_uses_responses_api("gpt-4.1-mini"));
+        // O-series and codex
+        assert!(model_uses_responses_api("o3-mini"));
+        assert!(model_uses_responses_api("o4-mini"));
+        assert!(model_uses_responses_api("codex-mini-latest"));
+        // NOT Responses API (legacy Chat Completions)
+        assert!(!model_uses_responses_api("gpt-4o"));
+        assert!(!model_uses_responses_api("gpt-4-turbo"));
+        assert!(!model_uses_responses_api("gpt-3.5-turbo"));
         assert!(!model_uses_responses_api("claude-opus-4-6"));
         assert!(!model_uses_responses_api("gemini-2.5-pro"));
     }

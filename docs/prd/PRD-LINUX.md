@@ -1,8 +1,8 @@
 # AGI Workforce — Linux Desktop Platform PRD
 
-> **Document version**: 1.0.0
-> **Last updated**: 2026-03-09
-> **Status**: Approved for implementation
+> **Document version**: 1.1.0
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha
 > **Owner**: Product Team
 > **Platform**: Linux Desktop (x86_64, aarch64 roadmap)
 
@@ -126,7 +126,7 @@ No competitor offers a native desktop GUI AI agent on Linux:
 AGI Workforce is the only product that combines:
 
 1. Native Linux desktop application with full GUI
-2. Multi-model support (9+ cloud providers + unlimited local models)
+2. Multi-model support (12+ cloud providers + unlimited local models)
 3. Full desktop autonomy (file system, terminal, browser, clipboard, screen capture)
 4. MCP tool ecosystem (stdio, SSE, streamable HTTP)
 5. Multi-agent swarm orchestration (up to 100 concurrent agents)
@@ -161,7 +161,7 @@ These requirements are inherited from the platform-wide PRD and apply to the Lin
 | NN-01 | Zero user-visible raw error messages                 | All errors translated to friendly messages; no Rust panics surface to WebKitGTK      |
 | NN-02 | `stream_watchdog_timeout` must never surface to user | Streaming client on Linux uses identical timeout-disabled configuration              |
 | NN-03 | Auto-approve mode must have zero friction            | ToolGuard validation active but no confirmation dialogs in auto-approve mode         |
-| NN-04 | Multi-LLM routing must work across all 9+ providers  | Circuit breaker, retry, and fallback logic identical to macOS/Windows                |
+| NN-04 | Multi-LLM routing must work across all 12+ providers  | Circuit breaker, retry, and fallback logic identical to macOS/Windows                |
 | NN-05 | Full desktop autonomy must be complete               | X11 and Wayland display server support for screen capture and input simulation       |
 | NN-06 | API keys and secrets must never appear in plaintext  | SecretManager uses machine-derived keys; libsecret/GNOME Keyring as optional backend |
 | NN-07 | Proprietary license must be enforced                 | No copyleft dependencies; AppImage signed with Ed25519                               |
@@ -406,7 +406,7 @@ The following Cargo feature flags are relevant to the Linux build:
 
 | #   | Feature                                                | Priority | Status      | Linux-Specific Notes                       |
 | --- | ------------------------------------------------------ | -------- | ----------- | ------------------------------------------ |
-| 1   | Multi-LLM chat (9+ cloud providers)                    | P0       | Implemented | Identical to macOS/Windows                 |
+| 1   | Multi-LLM chat (12+ cloud providers)                    | P0       | Implemented | Identical to macOS/Windows                 |
 | 2   | Local LLM support (Ollama, LM Studio, vLLM, llama.cpp) | P0       | Implemented | Primary differentiator for Linux users     |
 | 3   | SSE streaming responses                                | P0       | Implemented | reqwest + rustls (no OpenSSL)              |
 | 4   | Tool use (function calling)                            | P0       | Implemented | Identical across platforms                 |
@@ -429,7 +429,7 @@ The following Cargo feature flags are relevant to the Linux build:
 | 16  | Autonomous agent mode           | P0       | Implemented | Full autonomy with ToolGuard                |
 | 17  | Background agents (24hr+)       | P0       | Implemented | Runs as Tokio tasks; survives desktop sleep |
 | 18  | Multi-agent swarm (up to 100)   | P1       | Implemented | Task decomposition + parallel execution     |
-| 19  | Agent skills (140+ non-coding)  | P1       | Implemented | `.agi/employees/` skill files               |
+| 19  | Agent skills (169+ non-coding)  | P1       | Implemented | `.agi/employees/` skill files               |
 | 20  | Auto-approve mode               | P0       | Implemented | ToolGuard remains active                    |
 | 21  | Tool confirmation dialogs       | P0       | Implemented | WebKitGTK modal rendering                   |
 | 22  | Risk assessment for tool calls  | P1       | Implemented | Identical risk scoring                      |
@@ -546,7 +546,7 @@ The following Cargo feature flags are relevant to the Linux build:
 
 | #   | Feature                    | Priority | Status      | Linux-Specific Notes                                 |
 | --- | -------------------------- | -------- | ----------- | ---------------------------------------------------- |
-| 91  | Skill Marketplace          | P2       | Implemented | Grid/list view, 9 categories, search                 |
+| 91  | Skill Marketplace          | P2       | Implemented | Grid/list view, 23 categories, search                 |
 | 92  | MCP server management      | P1       | Implemented | stdio, SSE, HTTP transports                          |
 | 93  | Custom model configuration | P1       | Implemented | Any OpenAI-compatible endpoint                       |
 | 94  | Plugin system              | P3       | Roadmap     | Extension points for third-party integrations        |
@@ -3463,7 +3463,7 @@ GET https://agiworkforce.com/api/releases/linux-x86_64/1.1.5
 
 | Suite          | Files                | Tests       | Pass Rate        |
 | -------------- | -------------------- | ----------- | ---------------- |
-| Desktop Vitest | 82 files             | 1,358 tests | 100%             |
+| Desktop Vitest | All files            | 1,460 tests | 100%             |
 | Cargo test     | Workspace-wide       | 3,267 tests | 100%             |
 | Playwright E2E | Smoke + Self-healing | Variable    | Project-specific |
 
@@ -4291,7 +4291,7 @@ The disproportionate representation of Linux in the developer and technical prof
 | Feature                  | AGI Workforce                        | Claude Code          | Aider           | Open Interpreter |
 | ------------------------ | ------------------------------------ | -------------------- | --------------- | ---------------- |
 | **Interface**            | Native GUI                           | CLI                  | CLI             | CLI              |
-| **Multi-model**          | 9+ providers + local                 | Claude only          | Multi-model     | Multi-model      |
+| **Multi-model**          | 12+ providers + local                 | Claude only          | Multi-model     | Multi-model      |
 | **Local models**         | Full (Ollama, LM Studio, vLLM)       | None                 | Partial         | Partial          |
 | **Desktop autonomy**     | Full (screen, keyboard, mouse, apps) | Full (terminal only) | None            | Partial          |
 | **Background agents**    | Yes (24hr+)                          | No                   | No              | No               |
@@ -4316,7 +4316,7 @@ The disproportionate representation of Linux in the developer and technical prof
 | ------------------------ | ------------------------ | ----------- | ----------- | ------------------ |
 | **Primary purpose**      | General-purpose AI agent | Code editor | Code editor | Code editor        |
 | **Linux format**         | AppImage                 | AppImage    | AppImage    | .deb / .rpm / snap |
-| **Non-coding tasks**     | 140+ AI skills           | None        | None        | None               |
+| **Non-coding tasks**     | 169+ AI skills           | None        | None        | None               |
 | **Desktop automation**   | Full                     | None        | None        | None               |
 | **Email integration**    | IMAP/SMTP                | None        | None        | None               |
 | **Calendar integration** | Google/Outlook           | None        | None        | None               |
@@ -4357,7 +4357,7 @@ The disproportionate representation of Linux in the developer and technical prof
 
 1. **Only native GUI AI agent on Linux** -- No competitor offers this combination
 2. **Multi-model + local models + native GUI** -- The trifecta that no competitor matches
-3. **140+ non-coding AI skills** -- Healthcare, legal, finance, education, creative, trades, e-commerce skills that no code-focused tool offers
+3. **169+ non-coding AI skills** -- Healthcare, legal, finance, education, creative, trades, e-commerce skills that no code-focused tool offers
 4. **Full BYOK + local LLMs** -- Users own their API relationships and can run fully offline
 5. **Unlimited MCP tools** -- No artificial caps (Cursor caps at 40)
 6. **Background agents on Linux** -- No other tool offers 24hr+ autonomous agents on Linux
@@ -4649,6 +4649,6 @@ sudo pacman -S --needed \
 
 ---
 
-_Document version 1.0.0 -- Last updated 2026-03-09_
-_AGI Workforce v1.1.5 -- Proprietary (commercial)_
+_Document version 1.1.0 -- Last updated 2026-03-15_
+_AGI Workforce -- Proprietary (commercial)_
 _AGI Automation LLC_

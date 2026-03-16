@@ -27,11 +27,15 @@ pub struct GrepMatch {
     /// Absolute path to the file.
     pub path: String,
     /// 1-indexed line number of the match.
+    /// In `"count"` mode this field stores the per-file match count instead.
     pub line_number: usize,
     /// The raw line text that matched.
     pub line: String,
     /// Column offset of the first match (0-indexed).
     pub column: usize,
+    /// Surrounding context lines (populated when `context_lines > 0` in `"content"` mode).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<Vec<String>>,
 }
 
 /// Response from `grep_search`.
@@ -171,15 +175,29 @@ fn is_likely_binary(path: &Path) -> bool {
 /// * `root`            — Optional root directory. Defaults to project folder / cwd.
 /// * `include_pattern` — Optional glob pattern to restrict file types (e.g. `"*.rs"`).
 /// * `case_insensitive`— If true, search is case-insensitive.
+/// * `output_mode`     — `"content"` (default), `"files_with_matches"`, or `"count"`.
+/// * `context_lines`   — Number of lines to include before and after each match (content mode only).
 #[tauri::command]
 pub async fn grep_search(
     pattern: String,
     root: Option<String>,
     include_pattern: Option<String>,
     case_insensitive: Option<bool>,
+    output_mode: Option<String>,
+    context_lines: Option<u32>,
 ) -> Result<GrepSearchResult, String> {
     let root = resolve_root(root);
     let ci = case_insensitive.unwrap_or(false);
+    let mode = output_mode.unwrap_or_else(|| "content".to_string());
+    let ctx = context_lines.unwrap_or(0);
+
+    // Validate output_mode upfront.
+    if !matches!(mode.as_str(), "content" | "files_with_matches" | "count") {
+        return Err(format!(
+            "Invalid output_mode '{}'. Must be 'content', 'files_with_matches', or 'count'.",
+            mode
+        ));
+    }
 
     let re = {
         let mut builder = regex::RegexBuilder::new(&pattern);
@@ -196,13 +214,15 @@ pub async fn grep_search(
     };
 
     info!(
-        "[grep_search] pattern={:?} root={:?} include={:?} ci={}",
-        pattern, root, include_pattern, ci
+        "[grep_search] pattern={:?} root={:?} include={:?} ci={} mode={} ctx={}",
+        pattern, root, include_pattern, ci, mode, ctx
     );
 
-    let result = tokio::task::spawn_blocking(move || grep_blocking(&root, &re, file_glob.as_ref()))
-        .await
-        .map_err(|e| format!("grep_search task panicked: {}", e))?;
+    let result = tokio::task::spawn_blocking(move || {
+        grep_blocking(&root, &re, file_glob.as_ref(), &mode, ctx)
+    })
+    .await
+    .map_err(|e| format!("grep_search task panicked: {}", e))?;
 
     result
 }
@@ -211,10 +231,17 @@ fn grep_blocking(
     root: &Path,
     re: &Regex,
     file_glob: Option<&Pattern>,
+    output_mode: &str,
+    context_lines: u32,
 ) -> Result<GrepSearchResult, String> {
     let mut matches = Vec::new();
     let mut total_files_searched = 0usize;
     let mut truncated = false;
+
+    // For "count" mode we accumulate per-file counts.
+    // For "files_with_matches" we track which files had at least one match.
+    let mut file_counts: Vec<(String, usize)> = Vec::new();
+    let mut seen_files: Vec<String> = Vec::new();
 
     'outer: for entry in WalkDir::new(root)
         .follow_links(false)
@@ -265,20 +292,97 @@ fn grep_blocking(
             Err(_) => continue,
         };
 
-        for (line_idx, line) in content.lines().enumerate() {
-            if let Some(m) = re.find(line) {
-                if matches.len() >= MAX_GREP_MATCHES {
-                    truncated = true;
-                    break 'outer;
+        let path_str = path.to_string_lossy().to_string();
+
+        match output_mode {
+            "files_with_matches" => {
+                // Only need to know if there is at least one match in the file.
+                if re.is_match(&content) {
+                    if seen_files.len() >= MAX_GREP_MATCHES {
+                        truncated = true;
+                        break 'outer;
+                    }
+                    seen_files.push(path_str);
                 }
-                matches.push(GrepMatch {
-                    path: path.to_string_lossy().to_string(),
-                    line_number: line_idx + 1,
-                    line: line.to_string(),
-                    column: m.start(),
-                });
+            }
+            "count" => {
+                let count = content.lines().filter(|line| re.is_match(line)).count();
+                if count > 0 {
+                    if file_counts.len() >= MAX_GREP_MATCHES {
+                        truncated = true;
+                        break 'outer;
+                    }
+                    file_counts.push((path_str, count));
+                }
+            }
+            // "content" (default)
+            _ => {
+                let lines_vec: Vec<&str> = content.lines().collect();
+                let total_lines = lines_vec.len();
+
+                for (line_idx, line) in lines_vec.iter().enumerate() {
+                    if let Some(m) = re.find(line) {
+                        if matches.len() >= MAX_GREP_MATCHES {
+                            truncated = true;
+                            break 'outer;
+                        }
+
+                        let context = if context_lines > 0 {
+                            let ctx = context_lines as usize;
+                            let start = line_idx.saturating_sub(ctx);
+                            let end = (line_idx + ctx + 1).min(total_lines);
+                            let mut ctx_lines = Vec::new();
+                            for (i, item) in lines_vec.iter().enumerate().take(end).skip(start) {
+                                if i == line_idx {
+                                    continue; // skip the match line itself
+                                }
+                                ctx_lines.push(format!("{}:{}", i + 1, item));
+                            }
+                            Some(ctx_lines)
+                        } else {
+                            None
+                        };
+
+                        matches.push(GrepMatch {
+                            path: path_str.clone(),
+                            line_number: line_idx + 1,
+                            line: line.to_string(),
+                            column: m.start(),
+                            context,
+                        });
+                    }
+                }
             }
         }
+    }
+
+    // Convert mode-specific accumulators into GrepMatch entries.
+    match output_mode {
+        "files_with_matches" => {
+            matches = seen_files
+                .into_iter()
+                .map(|path| GrepMatch {
+                    path,
+                    line_number: 0,
+                    line: String::new(),
+                    column: 0,
+                    context: None,
+                })
+                .collect();
+        }
+        "count" => {
+            matches = file_counts
+                .into_iter()
+                .map(|(path, count)| GrepMatch {
+                    path,
+                    line_number: count,
+                    line: String::new(),
+                    column: 0,
+                    context: None,
+                })
+                .collect();
+        }
+        _ => {} // "content" — matches already populated
     }
 
     Ok(GrepSearchResult {

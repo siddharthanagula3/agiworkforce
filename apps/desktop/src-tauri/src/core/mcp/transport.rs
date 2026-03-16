@@ -827,6 +827,10 @@ impl Default for HttpSseConfig {
     }
 }
 
+/// Connect timeout for SSE long-lived connections (seconds).
+/// Separate from request timeout because SSE streams are open-ended.
+const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
+
 /// HTTP/SSE transport for remote MCP servers
 ///
 /// This transport uses:
@@ -837,12 +841,17 @@ impl Default for HttpSseConfig {
 /// - Requests are sent via POST to the server's endpoint
 /// - The server can respond with either a direct JSON response or initiate an SSE stream
 /// - SSE is used for long-running operations and server-initiated notifications
+
 pub struct HttpSseTransport {
     /// Server name for logging
     server_name: String,
 
-    /// HTTP client for making requests
+    /// HTTP client for JSON-RPC requests (has overall request timeout)
     client: reqwest::Client,
+
+    /// HTTP client for SSE streams (connect timeout only, no overall request
+    /// timeout so long-lived SSE connections are not killed prematurely)
+    sse_client: reqwest::Client,
 
     /// Configuration for the transport
     config: HttpSseConfig,
@@ -888,10 +897,15 @@ impl HttpSseTransport {
             config.url
         );
 
-        // Build HTTP client with appropriate settings
+        // Build HTTP client for JSON-RPC requests (with overall request timeout)
         let mut client_builder = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .connect_timeout(std::time::Duration::from_secs(10));
+            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
+
+        // Build a separate SSE client with connect timeout only (no overall request
+        // timeout) so that long-lived SSE streams are not killed prematurely.
+        let mut sse_client_builder = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
 
         if !config.verify_ssl {
             // SECURITY: Only allow disabling SSL verification for localhost connections.
@@ -925,10 +939,15 @@ impl HttpSseTransport {
                 server_name
             );
             client_builder = client_builder.danger_accept_invalid_certs(true);
+            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
         }
 
         let client = client_builder.build().map_err(|e| {
             McpError::ConnectionError(format!("Failed to create HTTP client: {}", e))
+        })?;
+
+        let sse_client = sse_client_builder.build().map_err(|e| {
+            McpError::ConnectionError(format!("Failed to create SSE HTTP client: {}", e))
         })?;
 
         let (sse_tx, mut sse_rx) = mpsc::unbounded_channel::<SseEvent>();
@@ -1004,6 +1023,7 @@ impl HttpSseTransport {
         let transport = Self {
             server_name,
             client,
+            sse_client,
             config,
             request_id: Arc::new(AtomicU64::new(1)),
             pending,
@@ -1032,7 +1052,7 @@ impl HttpSseTransport {
             url
         );
 
-        let client = self.client.clone();
+        let sse_client = self.sse_client.clone();
         let sse_tx = self.sse_tx.clone();
         let is_shutdown = self.is_shutdown.clone();
         let sse_connected = self.sse_connected.clone();
@@ -1045,7 +1065,7 @@ impl HttpSseTransport {
             while !is_shutdown.load(Ordering::SeqCst)
                 && reconnect_attempts < SSE_MAX_RECONNECT_ATTEMPTS
             {
-                match Self::connect_sse(&client, &url, &headers).await {
+                match Self::connect_sse(&sse_client, &url, &headers).await {
                     Ok(response) => {
                         sse_connected.store(true, Ordering::SeqCst);
                         reconnect_attempts = 0;

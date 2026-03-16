@@ -195,16 +195,47 @@ export default function AboutPage() {
                   everyone.
                 </p>
               </div>
-              <div className="max-w-md mx-auto">
+              <div className="max-w-xl mx-auto">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 mx-auto mb-6 flex items-center justify-center">
                     <span className="text-3xl font-bold text-white">SN</span>
                   </div>
                   <h3 className="text-xl font-semibold mb-1">Siddhartha Nagula</h3>
                   <p className="text-blue-400 mb-4">Founder & CEO</p>
+                  <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+                    Software engineer and AI researcher focused on making autonomous AI tools safe
+                    and accessible. Built AGI Workforce from the ground up as a native Tauri desktop
+                    app with a privacy-first architecture.
+                  </p>
+                  <div className="flex justify-center gap-4">
+                    <a
+                      href="https://www.linkedin.com/company/agi-automation-llc"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-zinc-500 hover:text-white transition-colors border border-zinc-700 rounded-full px-3 py-1"
+                    >
+                      LinkedIn
+                    </a>
+                    <a
+                      href="https://twitter.com/agiworkforce"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-zinc-500 hover:text-white transition-colors border border-zinc-700 rounded-full px-3 py-1"
+                    >
+                      Twitter / X
+                    </a>
+                  </div>
+                </div>
+
+                {/* Why we built this */}
+                <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8">
+                  <h4 className="text-lg font-semibold mb-3 text-white">Why we built this</h4>
                   <p className="text-zinc-400 text-sm leading-relaxed">
-                    Passionate about building tools that empower people to do more with less.
-                    Leading the vision to make AI automation accessible to everyone.
+                    Every powerful AI tool we tried was either locked to one model, cloud-only, or
+                    required engineering expertise to set up. We built AGI Workforce to fix that — a
+                    native desktop app where you bring your own API keys, run models locally, and
+                    stay in full control of your data. No subscriptions to 5 different tools. One
+                    app, any model, full autonomy.
                   </p>
                 </div>
               </div>
@@ -224,8 +255,8 @@ export default function AboutPage() {
                   <div className="text-zinc-400">Headquarters</div>
                 </div>
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-blue-500 mb-2">Global</div>
-                  <div className="text-zinc-400">Customer Reach</div>
+                  <div className="text-2xl font-bold text-blue-500 mb-2">Tauri + Rust + React</div>
+                  <div className="text-zinc-400">Open Source Tools</div>
                 </div>
               </div>
             </div>

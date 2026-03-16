@@ -14,6 +14,7 @@ import {
   FileText,
   FolderOpen,
   HelpCircle,
+  History,
   Layers,
   Link2,
   MessageSquare,
@@ -80,6 +81,7 @@ interface SidebarProps {
   width?: number;
   onResize?: (width: number) => void;
   onOpenResearch?: () => void;
+  onOpenRewind?: () => void;
   onToggleMediaLab?: () => void;
   canAccessMediaLab?: boolean;
 }
@@ -144,7 +146,7 @@ const ConversationItem = memo<ConversationItemProps>(
       <div
         className={cn(
           'group relative rounded-lg transition-all mb-1',
-          isActive ? 'bg-teal-100 dark:bg-teal-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+          isActive ? 'bg-teal-100 dark:bg-teal-900/30' : 'hover:bg-[hsl(var(--accent))]',
           isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
         )}
       >
@@ -162,14 +164,15 @@ const ConversationItem = memo<ConversationItemProps>(
           />
         ) : (
           <div className="flex items-center">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => onSelect(conv.id)}
               onDoubleClick={() => onStartEdit(conv)}
               className="flex-1 text-left px-3 py-2 overflow-hidden"
             >
               <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
               {conv.lastMessage && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                <div className="text-xs text-[hsl(var(--muted-foreground))] truncate">
                   {conv.lastMessage}
                 </div>
               )}
@@ -188,7 +191,7 @@ const ConversationItem = memo<ConversationItemProps>(
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      'h-6 w-6 text-gray-400 hover:text-amber-500',
+                      'h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-amber-500',
                       conv.customInstructions && 'text-amber-500',
                     )}
                     title={
@@ -206,7 +209,7 @@ const ConversationItem = memo<ConversationItemProps>(
                     }}
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-teal-500"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-teal-500"
                     title={conv.pinned ? 'Unpin' : 'Pin'}
                   >
                     {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
@@ -218,7 +221,7 @@ const ConversationItem = memo<ConversationItemProps>(
                     }}
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-teal-500"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-teal-500"
                     title="Share conversation"
                   >
                     <Link2 className="h-3 w-3" />
@@ -230,7 +233,7 @@ const ConversationItem = memo<ConversationItemProps>(
                     }}
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-blue-500"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-blue-500"
                     title="Export to Markdown"
                   >
                     <Download className="h-3 w-3" />
@@ -242,7 +245,7 @@ const ConversationItem = memo<ConversationItemProps>(
                     }}
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-red-500"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-red-500"
                     title="Export as PDF"
                   >
                     <FileText className="h-3 w-3" />
@@ -255,7 +258,7 @@ const ConversationItem = memo<ConversationItemProps>(
                       }}
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-gray-400 hover:text-emerald-500"
+                      className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-emerald-500"
                       title="Restore from archive"
                     >
                       <ArchiveRestore className="h-3 w-3" />
@@ -268,7 +271,7 @@ const ConversationItem = memo<ConversationItemProps>(
                       }}
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-gray-400 hover:text-amber-500"
+                      className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-amber-500"
                       title="Archive"
                     >
                       <Archive className="h-3 w-3" />
@@ -283,7 +286,7 @@ const ConversationItem = memo<ConversationItemProps>(
                 }}
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-red-500"
+                className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-red-500"
                 title="Delete"
               >
                 <Trash2 className="h-3 w-3" />
@@ -347,6 +350,7 @@ export function Sidebar({
   width = 260,
   onResize,
   onOpenResearch,
+  onOpenRewind,
   onToggleMediaLab,
   canAccessMediaLab,
 }: SidebarProps) {
@@ -757,13 +761,13 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <div className="w-16 flex flex-col bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-border transition-all duration-300 ease-in-out">
+      <div className="w-16 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] transition-all duration-300 ease-in-out">
         <div className="p-3 flex flex-col items-center gap-4">
           <Button
             onClick={onToggleCollapse}
             variant="ghost"
             size="icon"
-            className="text-gray-600 dark:text-gray-400"
+            className="text-[hsl(var(--muted-foreground))]"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -771,7 +775,7 @@ export function Sidebar({
             onClick={handleNewChat}
             variant="ghost"
             size="icon"
-            className="text-gray-600 dark:text-gray-400"
+            className="text-[hsl(var(--muted-foreground))]"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -782,7 +786,7 @@ export function Sidebar({
             }}
             variant="ghost"
             size="icon"
-            className="text-gray-600 dark:text-gray-400"
+            className="text-[hsl(var(--muted-foreground))]"
           >
             <Search className="h-4 w-4" />
           </Button>
@@ -843,9 +847,9 @@ export function Sidebar({
               className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-white dark:bg-charcoal-800 rounded-xl shadow-2xl overflow-hidden">
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <Search className="h-5 w-5 text-gray-500" />
+              <div className="bg-[hsl(var(--card))] rounded-xl shadow-2xl overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-[hsl(var(--border))]">
+                  <Search className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
                   <Input
                     autoFocus
                     placeholder="Search conversations..."
@@ -853,12 +857,15 @@ export function Sidebar({
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1 border-0 bg-transparent focus:ring-0"
                   />
-                  <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded">ESC</kbd>
+                  <kbd className="px-2 py-1 text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded">
+                    ESC
+                  </kbd>
                 </div>
                 <ScrollArea className="max-h-96">
                   <div className="p-2">
                     {filtered.slice(0, 10).map((conv) => (
-                      <button type="button"
+                      <button
+                        type="button"
                         key={conv.id}
                         onClick={() => {
                           selectConversationFn(conv.id);
@@ -869,13 +876,13 @@ export function Sidebar({
                         className={cn(
                           'w-full text-left px-3 py-2 rounded-lg transition-colors',
                           conv.id === activeConversationId
-                            ? 'bg-primary/10 dark:bg-primary/20'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                            ? 'bg-primary/10'
+                            : 'hover:bg-[hsl(var(--accent))]',
                         )}
                       >
                         <div className="font-medium text-sm">{conv.title}</div>
                         {conv.lastMessage && (
-                          <div className="text-xs text-gray-600 dark:text-gray-300 truncate mt-1">
+                          <div className="text-xs text-[hsl(var(--muted-foreground))] truncate mt-1">
                             {conv.lastMessage}
                           </div>
                         )}
@@ -891,7 +898,7 @@ export function Sidebar({
 
       <div
         className={cn(
-          'flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out relative',
+          'flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] transition-all duration-300 ease-in-out relative',
           className,
         )}
         style={{ width: width }}
@@ -906,43 +913,45 @@ export function Sidebar({
           />
         )}
         {}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="p-4 border-b border-[hsl(var(--border))]">
           <div className="flex items-center justify-between mb-3">
             <Button
               onClick={onToggleCollapse}
               variant="ghost"
               size="icon"
-              className="text-gray-600 dark:text-gray-400"
+              className="text-[hsl(var(--muted-foreground))]"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
               onClick={handleNewChat}
-              className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 transition-colors"
+              className="flex items-center gap-2 bg-[hsl(var(--muted))] hover:bg-[hsl(var(--accent))] text-[hsl(var(--foreground))] transition-colors"
             >
               <Plus className="h-4 w-4" />
               New Chat
             </Button>
           </div>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setShowSearch(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
           >
             <Search className="h-4 w-4" />
             <span>Search</span>
             <div className="ml-auto flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">
+              <kbd className="px-1.5 py-0.5 text-xs bg-[hsl(var(--card))] rounded">
                 {modKeySymbol}
               </kbd>
-              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-[hsl(var(--card))] rounded">K</kbd>
             </div>
           </button>
         </div>
 
         {/* Navigation - hide projects section in simple mode */}
         {!collapsed && !isSimpleMode && (
-          <div className="px-3 py-2 space-y-1 overflow-y-auto max-h-[40vh] scrollbar-thin scrollbar-thumb-zinc-700">
-            <button type="button"
+          <div className="px-3 py-2 space-y-1 overflow-y-auto max-h-[40vh] scrollbar-thin">
+            <button
+              type="button"
               onClick={() => onOpenResearch?.()}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
             >
@@ -952,8 +961,20 @@ export function Sidebar({
               Deep Research
             </button>
 
+            <button
+              type="button"
+              onClick={() => onOpenRewind?.()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
+                <History className="w-3.5 h-3.5" />
+              </span>
+              Rewind Timeline
+            </button>
+
             {canAccessMediaLab && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => onToggleMediaLab?.()}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
               >
@@ -964,7 +985,8 @@ export function Sidebar({
               </button>
             )}
 
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setActiveView('projects')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -979,7 +1001,8 @@ export function Sidebar({
               Projects
             </button>
 
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setActiveView('help')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -988,7 +1011,7 @@ export function Sidebar({
                   : 'text-muted-foreground hover:bg-surface-hover',
               )}
             >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-gray-400/20 text-gray-400">
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
                 <HelpCircle className="w-3.5 h-3.5" />
               </span>
               Help
@@ -998,11 +1021,12 @@ export function Sidebar({
             {projects.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button"
+                  <button
+                    type="button"
                     className={cn(
                       'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                       selectedProjectFilter
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         : 'text-muted-foreground hover:bg-surface-hover',
                     )}
                   >
@@ -1011,7 +1035,7 @@ export function Sidebar({
                         'w-5 h-5 flex items-center justify-center rounded',
                         selectedProjectFilter
                           ? 'text-blue-500'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-500',
+                          : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
                       )}
                       style={
                         selectedProject?.color
@@ -1027,25 +1051,31 @@ export function Sidebar({
                     <span className="flex-1 text-left truncate">
                       {selectedProject?.name || 'Filter by Project'}
                     </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 bg-zinc-900 border-zinc-700">
+                <DropdownMenuContent
+                  align="start"
+                  className="w-56 bg-[hsl(var(--popover))] border-[hsl(var(--border))]"
+                >
                   <DropdownMenuItem
                     onClick={() => setSelectedProjectFilter(null)}
-                    className={cn('text-zinc-300', !selectedProjectFilter && 'bg-zinc-800')}
+                    className={cn(
+                      'text-[hsl(var(--popover-foreground))]',
+                      !selectedProjectFilter && 'bg-[hsl(var(--accent))]',
+                    )}
                   >
                     <MessageSquare className="w-4 h-4 mr-2" />
                     All Conversations
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-zinc-700" />
+                  <DropdownMenuSeparator className="bg-[hsl(var(--border))]" />
                   {projects.map((project) => (
                     <DropdownMenuItem
                       key={project.id}
                       onClick={() => setSelectedProjectFilter(project.id)}
                       className={cn(
-                        'text-zinc-300',
-                        selectedProjectFilter === project.id && 'bg-zinc-800',
+                        'text-[hsl(var(--popover-foreground))]',
+                        selectedProjectFilter === project.id && 'bg-[hsl(var(--accent))]',
                       )}
                     >
                       <span
@@ -1055,7 +1085,7 @@ export function Sidebar({
                         <Layers className="w-2.5 h-2.5 text-white" />
                       </span>
                       <span className="truncate">{project.name}</span>
-                      <span className="ml-auto text-xs text-zinc-500">
+                      <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">
                         {conversations.filter((c) => c.projectId === project.id).length}
                       </span>
                     </DropdownMenuItem>
@@ -1066,9 +1096,10 @@ export function Sidebar({
 
             {/* Clear project filter indicator */}
             {selectedProjectFilter && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setSelectedProjectFilter(null)}
-                className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+                className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
               >
                 <X className="w-3 h-3" />
                 Clear filter
@@ -1080,12 +1111,13 @@ export function Sidebar({
         {/* Archive toggle - hidden in simple mode */}
         {!collapsed && !isSimpleMode && archivedConversations.length > 0 && (
           <div className="px-3 py-1">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setShowArchived(!showArchived)}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                 showArchived
-                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                   : 'text-muted-foreground hover:bg-surface-hover',
               )}
             >
@@ -1094,13 +1126,13 @@ export function Sidebar({
                   'w-5 h-5 flex items-center justify-center rounded',
                   showArchived
                     ? 'bg-amber-400/20 text-amber-500'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500',
+                    : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
                 )}
               >
                 <Archive className="w-3.5 h-3.5" />
               </span>
               <span>Archived</span>
-              <span className="ml-auto text-xs bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+              <span className="ml-auto text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] px-1.5 py-0.5 rounded-full">
                 {archivedConversations.length}
               </span>
             </button>
@@ -1113,7 +1145,7 @@ export function Sidebar({
             {}
             {pinnedConversations.length > 0 && (
               <div className="mb-6">
-                <div className="px-3 mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                <div className="px-3 mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider flex items-center gap-1">
                   <Pin className="w-3 h-3" /> Pinned
                 </div>
                 {pinnedConversations.map((conv) => {
@@ -1126,11 +1158,12 @@ export function Sidebar({
             {}
             {Array.from(groupedConversations.entries()).map(([group, convs]) => (
               <div key={group} className="mb-4">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => toggleGroup(group)}
                   aria-expanded={expandedGroups.has(group)}
                   aria-controls={`conversation-group-${group}`}
-                  className="w-full flex items-center gap-2 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                 >
                   <ChevronRight
                     className={cn(
@@ -1143,7 +1176,9 @@ export function Sidebar({
                     {group === 'yesterday' && <Clock className="h-3 w-3" />}
                     {TEMPORAL_LABELS[group]}
                   </span>
-                  <span className="ml-auto text-gray-400">({convs.length})</span>
+                  <span className="ml-auto text-[hsl(var(--muted-foreground))]">
+                    ({convs.length})
+                  </span>
                 </button>
 
                 <AnimatePresence>
@@ -1170,26 +1205,26 @@ export function Sidebar({
 
         {/* Conversation Stats - hidden in simple mode */}
         {!collapsed && !isSimpleMode && stats && stats.messageCount > 0 && (
-          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+          <div className="border-t border-[hsl(var(--border))] px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
-              <BarChart3 className="h-3.5 w-3.5 text-zinc-400" />
-              <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+              <BarChart3 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+              <span className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
                 Stats
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-1.5 text-zinc-500">
+              <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))]">
                 <MessageSquare className="h-3 w-3" />
                 <span>{stats.messageCount} messages</span>
               </div>
               {stats.totalTokens > 0 && (
-                <div className="flex items-center gap-1.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))]">
                   <Zap className="h-3 w-3" />
                   <span>{(stats.totalTokens / 1000).toFixed(1)}k tokens</span>
                 </div>
               )}
               {stats.totalCost > 0 && (
-                <div className="flex items-center gap-1.5 text-zinc-500 col-span-2">
+                <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))] col-span-2">
                   <Coins className="h-3 w-3" />
                   <span>${stats.totalCost.toFixed(4)}</span>
                 </div>
@@ -1200,13 +1235,13 @@ export function Sidebar({
 
         {/* Simple Mode Toggle - shown at the bottom */}
         {!collapsed && (
-          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+          <div className="border-t border-[hsl(var(--border))] px-4 py-3">
             <SimpleModeToggle />
           </div>
         )}
 
         {}
-        <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
+        <div className="mt-auto border-t border-[hsl(var(--border))] p-4">
           <UserProfile collapsed={collapsed} />
         </div>
       </div>

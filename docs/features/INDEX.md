@@ -3,7 +3,7 @@
 > Single source of truth for how every feature works end-to-end in AGI Workforce.
 > Each feature has a dedicated blueprint file in this directory.
 
-_Last updated: 2026-03-10 | 34 blueprints fact-checked and corrected by 22 parallel agents_
+_Last updated: 2026-03-15_
 
 ---
 
@@ -38,7 +38,7 @@ Detailed blueprints for specialized subsystems within the main features.
 | S2 | [Swarm](./swarm.md) | `swarm.md` | Agentic Mode | `agentTaskStore` | `core/swarm/` |
 | S3 | [Research](./research.md) | `research.md` | Chat | `researchStore` | `core/research/` |
 | S4 | [Canvas](./canvas.md) | `canvas.md` | Chat | `artifactStore`, `canvasStore` | `sys/commands/canvas.rs` |
-| S5 | [Security](./security.md) | `security.md` | Settings | `securityPreferencesStore` | `sys/security/` |
+| S5 | [Security](./security.md) | `security.md` | Settings | `settingsStore` (security prefs merged in) | `sys/security/` |
 | S6 | [Skills](./skills.md) | `skills.md` | Chat | `skillMarketplaceStore` | `core/skills/` |
 | S7 | [Computer Use](./computer-use.md) | `computer-use.md` | Vision | `computerUseStore` | `automation/computer_use/`, `sys/commands/computer_use.rs` |
 | S8 | [Media Generation](./media-generation.md) | `media-generation.md` | Chat | `mediaGenerationStore` | `sys/commands/media.rs` |
@@ -59,7 +59,7 @@ Detailed blueprints for specialized subsystems within the main features.
 
 ## Store-to-Feature Map
 
-All 60 Zustand stores mapped to the feature they primarily serve.
+Zustand stores mapped to the feature they primarily serve.
 
 ### Chat & Agentic (Features 1-2)
 | Store | Feature | Purpose |
@@ -129,7 +129,7 @@ All 60 Zustand stores mapped to the feature they primarily serve.
 | `appPreferencesStore.ts` | Settings | App-level preferences |
 | `chatPreferencesStore.ts` | Settings | Chat-specific preferences |
 | `executionPreferencesStore.ts` | Settings | Execution-specific preferences |
-| `securityPreferencesStore.ts` | Settings | Security preferences |
+| ~~`securityPreferencesStore.ts`~~ | Settings | Removed; merged into `settingsStore.ts` |
 
 ### Billing & Subscription (Feature 13)
 | Store | Feature | Purpose |
@@ -447,63 +447,45 @@ All Tauri events emitted from Rust → listened in TypeScript frontend.
 
 ## Hook-to-Feature Map
 
-54 React hooks in `apps/desktop/src/hooks/`, mapped to features.
+35 React hooks in `apps/desktop/src/hooks/`, mapped to features. Several hooks were consolidated or removed during the stabilization sprint (useAgentLoopEvents, useToolEvents, useBrowserAutomation, useAutomationEvents, useFileTerminalEvents, useMemoryIntegration, useGlobalVoicePTT were removed; their logic was consolidated into useAgenticEvents or moved into stores).
 
 | Hook | Feature | Purpose |
 |------|---------|---------|
-| `useAgenticEvents.ts` | Agentic | Listens to 39+ Tauri agentic events |
-| `useAgentLoopEvents.ts` | Agentic | Agent loop lifecycle events |
+| `useAgenticEvents.ts` | Agentic | Consolidated master hook for all agentic/tool/file/terminal events |
 | `useApprovalActions.ts` | Agentic | Tool approval accept/reject |
-| `useToolEvents.ts` | Agentic | Tool execution event handling |
 | `useBackgroundTasks.ts` | Agentic | Background agent task tracking |
 | `useCheckpoints.ts` | Agentic | Checkpoint/undo management |
-| `useOrchestratorActions.ts` | Agentic | AGI orchestrator controls |
-| `useBrowserAutomation.ts` | Browser | Browser automation controls |
-| `useAutomationEvents.ts` | Browser | Automation event listeners |
+| `agenticEventUtils.ts` | Agentic | Utility functions for event handling |
 | `useTerminal.ts` | Terminal | PTY session management |
 | `useVoiceInput.ts` | Voice | Voice recording + transcription |
 | `useVoiceHotkey.ts` | Voice | Push-to-talk hotkey binding |
 | `useVoiceTranscription.ts` | Voice | Transcription result handling |
-| `useGlobalVoicePTT.ts` | Voice | Global push-to-talk |
 | `useTTS.ts` | Voice | Text-to-speech playback |
 | `useScreenCapture.ts` | Vision | Screen capture |
 | `useOCR.ts` | Vision | OCR text extraction |
 | `mcpStore.ts` + `api/mcp.ts` | MCP | MCP server management, health, and runtime telemetry |
-| `useFileOperations.ts` | Files | File CRUD operations |
-| `useFileTerminalEvents.ts` | Files/Terminal | File + terminal event bridge |
-| `useDocuments.ts` | Files | Document processing |
-| `useMemory.ts` | Memory | Memory CRUD |
-| `useMemoryIntegration.ts` | Memory | Memory ↔ chat integration |
+| `useMemory.ts` | Memory | Memory CRUD + knowledge base |
 | `useScheduler.ts` | Scheduling | Scheduler CRUD |
 | `useCalendar.ts` | Scheduling | Calendar integration |
-| `useEmail.ts` | Connectors | Email integration |
-| `useCloudStorage.ts` | Connectors | Cloud storage operations |
 | `useGit.ts` | Connectors | Git operations |
 | `useLSP.ts` | Files | LSP protocol integration |
 | `useWorkflows.ts` | Scheduling | Workflow builder |
 | `useExtensionEvents.ts` | Browser | Chrome extension events |
-| `useExtensionBridgeEvents.ts` | Browser | Extension bridge events |
 | `useTeam.ts` | Settings | Team management |
 | `useModelCapabilities.ts` | Settings | Model capability detection |
 | `useUpdater.ts` | Settings | App update management |
 | `useNotifications.ts` | Layout | Notification system |
-| `useNotificationEvents.ts` | Layout | Notification event listeners |
 | `useKeyboardShortcuts.ts` | Layout | Keyboard shortcut bindings |
 | `useWindowManager.ts` | Layout | Window management |
 | `useTrayQuickActions.ts` | Layout | System tray actions |
 | `useDeepLink.ts` | Auth | Deep link handling |
 | `useCreditRefresh.ts` | Billing | Credit balance refresh |
-| `useAnalytics.ts` | Settings | Analytics tracking |
 | `useSlashCommands.ts` | Chat | Slash command handling |
 | `useSlashCommandAutocomplete.ts` | Chat | Slash command autocomplete |
-| `useCommandAutocomplete.ts` | Chat | Command autocomplete |
 | `usePromptSuggestions.ts` | Chat | Prompt suggestions |
 | `useApiPromptCompletion.ts` | Chat | API-based prompt completion |
-| `useAutoCorrection.ts` | Chat | Auto-correction |
 | `useReducedMotion.ts` | Layout | Accessibility: reduced motion |
-| `useTimeout.ts` | Utility | Timeout management |
 | `useToast.ts` | Utility | Toast notifications |
-| `agenticEventUtils.ts` | Agentic | Utility functions for event handling |
 
 ---
 
@@ -558,7 +540,7 @@ Auth ──────────────┐
 
 | Feature | Command Files | Key Commands |
 |---------|--------------|-------------|
-| **Chat** | `chat/` (directory), `thinking.rs` | `send_message`, `get_conversations`, `delete_conversation` |
+| **Chat** | `chat/` (31 files incl. `send_message.rs`, `send_message_execution.rs`, `send_message_setup.rs`, `tools.rs`, `tool_events.rs`, `tool_execution.rs`), `thinking.rs` | `chat_send_message`, `chat_get_conversations` |
 | **Agentic** | `agent.rs`, `background_agents.rs`, `agi.rs`, `agi_checkpoint.rs` | `agi_start_goal`, `agi_cancel_goal`, `background_agent_*` |
 | **MCP** | `mcp.rs`, `mcp_server.rs`, `mcp_extensions.rs`, `mcp_oauth.rs`, `mcpb.rs` | `mcp_list_tools`, `mcp_call_tool`, `mcp_server_start` |
 | **Voice** | `voice.rs`, `voice_global.rs` | `speech_start_recording`, `speech_stop_and_transcribe`, `voice_transcribe_blob` |

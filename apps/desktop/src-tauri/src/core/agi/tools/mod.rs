@@ -2756,9 +2756,14 @@ impl ToolRegistry {
             name: "Grep (Content Search)".to_string(),
             description: "Search file contents using a regular expression. Skips binary files, \
                 node_modules, and other noise. Use `include_pattern` to filter by file type \
-                (e.g. \"*.ts\"). Returns file path, line number, and the matching line."
+                (e.g. \"*.ts\"). Supports output modes: 'content' (matching lines with context), \
+                'files_with_matches' (paths only), 'count' (match counts per file)."
                 .to_string(),
-            capabilities: vec![ToolCapability::FileRead, ToolCapability::CodeAnalysis],
+            capabilities: vec![
+                ToolCapability::FileRead,
+                ToolCapability::CodeAnalysis,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "pattern".to_string(),
@@ -2789,6 +2794,22 @@ impl ToolRegistry {
                     required: false,
                     description: "Case-insensitive search (default false)".to_string(),
                     default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "output_mode".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description:
+                        "Output mode: 'content' (default), 'files_with_matches', or 'count'"
+                            .to_string(),
+                    default: Some(serde_json::json!("content")),
+                },
+                ToolParameter {
+                    name: "context_lines".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Lines of context before and after each match".to_string(),
+                    default: None,
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -3092,6 +3113,55 @@ impl ToolRegistry {
             estimated_resources: ResourceUsage {
                 cpu_percent: 5.0,
                 memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── EditExactReplace ────────────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "edit_exact_replace".to_string(),
+            name: "Edit File (Exact Replace)".to_string(),
+            description: "Perform exact string replacement in a file. Finds old_text in \
+                the file and replaces it with new_text. If old_text appears multiple \
+                times, returns an error with line numbers unless replace_all is true. \
+                Creates a checkpoint before editing for undo capability. Returns a \
+                unified diff of the changes."
+                .to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path to the file to edit".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "old_text".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The exact text to find and replace".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "new_text".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The text to replace old_text with".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "replace_all".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "If true, replace all occurrences (default: false)".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 20,
                 network_mb: 0.0,
             },
             dependencies: vec![],

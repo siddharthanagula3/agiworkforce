@@ -91,9 +91,25 @@ pub struct GitSnapshot {
     pub changed_files: Vec<PathBuf>,
 }
 
+/// A named file checkpoint that stores snapshots of file contents at a point in time.
+///
+/// Used for "rewind to checkpoint" functionality, allowing users to restore files
+/// to a known-good state. Each checkpoint captures the contents of one or more files
+/// and can be rewound to later.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedFileCheckpoint {
+    pub id: String,
+    pub name: String,
+    pub timestamp: DateTime<Utc>,
+    pub file_snapshots: HashMap<PathBuf, String>,
+    pub change_index: usize,
+}
+
 struct ChangeTrackerState {
     changes: Vec<Change>,
     snapshots: HashMap<String, GitSnapshot>,
+    named_checkpoints: Vec<NamedFileCheckpoint>,
 }
 
 pub struct ChangeTracker {
@@ -106,6 +122,7 @@ impl ChangeTracker {
             state: RwLock::new(ChangeTrackerState {
                 changes: Vec::new(),
                 snapshots: HashMap::new(),
+                named_checkpoints: Vec::new(),
             }),
         }
     }
@@ -584,6 +601,92 @@ impl ChangeTracker {
         let mut state = self.state.write().await;
         state.changes.push(change);
         id
+    }
+
+    // ── Named File Checkpoints ──────────────────────────────────────────
+
+    /// Maximum number of named checkpoints to retain.
+    const MAX_NAMED_CHECKPOINTS: usize = 50;
+
+    /// Create a named checkpoint by reading the current on-disk contents of the
+    /// given paths. Returns the checkpoint ID on success.
+    ///
+    /// If the checkpoint list exceeds [`Self::MAX_NAMED_CHECKPOINTS`], the
+    /// oldest checkpoint is evicted.
+    pub async fn create_named_checkpoint(
+        &self,
+        name: String,
+        paths: Vec<PathBuf>,
+    ) -> Result<String, String> {
+        if paths.is_empty() {
+            return Err("No paths provided for checkpoint".to_string());
+        }
+
+        let mut file_snapshots: HashMap<PathBuf, String> = HashMap::new();
+        for path in &paths {
+            let content = tokio::fs::read_to_string(path)
+                .await
+                .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
+            file_snapshots.insert(path.clone(), content);
+        }
+
+        let mut state = self.state.write().await;
+        let change_index = state.changes.len();
+        let checkpoint_id = Uuid::new_v4().to_string();
+
+        let checkpoint = NamedFileCheckpoint {
+            id: checkpoint_id.clone(),
+            name,
+            timestamp: Utc::now(),
+            file_snapshots,
+            change_index,
+        };
+
+        state.named_checkpoints.push(checkpoint);
+
+        // Evict oldest checkpoints if over limit
+        while state.named_checkpoints.len() > Self::MAX_NAMED_CHECKPOINTS {
+            state.named_checkpoints.remove(0);
+        }
+
+        Ok(checkpoint_id)
+    }
+
+    /// List all named checkpoints in chronological order.
+    pub async fn list_named_checkpoints(&self) -> Vec<NamedFileCheckpoint> {
+        let state = self.state.read().await;
+        state.named_checkpoints.clone()
+    }
+
+    /// Rewind files to a named checkpoint by restoring their snapshotted contents.
+    ///
+    /// Writes each file back to its checkpoint state, removes all checkpoints
+    /// that were created after the target checkpoint, and returns the list of
+    /// restored file paths.
+    pub async fn rewind_to_checkpoint(&self, id: &str) -> Result<Vec<PathBuf>, String> {
+        let mut state = self.state.write().await;
+
+        let checkpoint_idx = state
+            .named_checkpoints
+            .iter()
+            .position(|cp| cp.id == id)
+            .ok_or_else(|| format!("Checkpoint not found: {}", id))?;
+
+        let checkpoint = state.named_checkpoints[checkpoint_idx].clone();
+
+        // Restore each file from the snapshot
+        let mut restored_paths: Vec<PathBuf> = Vec::new();
+        for (path, content) in &checkpoint.file_snapshots {
+            tokio::fs::write(path, content)
+                .await
+                .map_err(|e| format!("Failed to restore '{}': {}", path.display(), e))?;
+            restored_paths.push(path.clone());
+        }
+
+        // Remove all checkpoints created after the target (keep the rewound checkpoint)
+        state.named_checkpoints.truncate(checkpoint_idx + 1);
+
+        Ok(restored_paths)
     }
 }
 
