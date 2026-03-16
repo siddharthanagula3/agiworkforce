@@ -761,3 +761,408 @@ mod is_retryable_error_tests {
         );
     }
 }
+
+// =========================================================================
+// #34 — Streaming idle timeout tests
+//
+// These tests exercise the `futures_util::stream::unfold` wrapper that
+// `send_message_streaming_with_retry` applies around the raw provider stream.
+// We replicate the exact same `unfold` pattern against mock streams with
+// configurable timing so we can verify:
+//   - idle timeout fires when no data arrives
+//   - idle timeout does NOT fire when data arrives within the threshold
+//   - the stream terminates (returns None) after the idle timeout error
+//   - events near the timeout boundary succeed
+//   - keepalive chunks reset the idle timer
+//   - a single event followed by silence triggers idle timeout
+// =========================================================================
+#[cfg(test)]
+mod streaming_idle_timeout_tests {
+    use crate::core::llm::sse_parser::StreamChunk;
+    use futures_util::stream::{self, StreamExt};
+    use std::time::Duration;
+
+    /// Short idle timeout for tests (200 ms) so tests complete quickly.
+    const TEST_IDLE_TIMEOUT: Duration = Duration::from_millis(200);
+
+    /// Helper: build a minimal `StreamChunk` with just text content.
+    fn text_chunk(content: &str) -> StreamChunk {
+        StreamChunk {
+            content: content.to_string(),
+            done: false,
+            finish_reason: None,
+            model: None,
+            usage: None,
+            credits: None,
+            tool_calls: None,
+            reasoning: None,
+            keepalive: false,
+        }
+    }
+
+    /// Helper: build a keepalive `StreamChunk`.
+    fn keepalive_chunk() -> StreamChunk {
+        StreamChunk {
+            content: String::new(),
+            done: false,
+            finish_reason: None,
+            model: None,
+            usage: None,
+            credits: None,
+            tool_calls: None,
+            reasoning: None,
+            keepalive: true,
+        }
+    }
+
+    /// Helper: build a final `StreamChunk` (done = true).
+    fn done_chunk() -> StreamChunk {
+        StreamChunk {
+            content: String::new(),
+            done: true,
+            finish_reason: Some("stop".to_string()),
+            model: None,
+            usage: None,
+            credits: None,
+            tool_calls: None,
+            reasoning: None,
+            keepalive: false,
+        }
+    }
+
+    type ChunkResult = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Apply the same idle-timeout `unfold` wrapper used in production.
+    /// Returns a boxed stream with the wrapper applied.
+    fn wrap_with_idle_timeout(
+        inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>>,
+        idle_timeout: Duration,
+    ) -> std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> {
+        let wrapped = stream::unfold(Some(inner), move |state| async move {
+            let mut s = state?;
+            match tokio::time::timeout(idle_timeout, s.next()).await {
+                Ok(Some(item)) => Some((item, Some(s))),
+                Ok(None) => None,
+                Err(_elapsed) => {
+                    let timeout_secs_f = idle_timeout.as_secs_f64();
+                    let err: Box<dyn std::error::Error + Send + Sync> = format!(
+                        "StreamingError::IdleTimeout — no data received \
+                         for {timeout_secs_f:.1}s (test provider). \
+                         The connection has been closed."
+                    )
+                    .into();
+                    Some((Err(err), None))
+                }
+            }
+        });
+        Box::pin(wrapped)
+    }
+
+    // -----------------------------------------------------------------
+    // Test 1: No data at all => idle timeout fires
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_idle_timeout_fires_when_no_data() {
+        // A stream that never yields any items (hangs forever).
+        let hanging_stream: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(stream::pending());
+
+        let mut wrapped = wrap_with_idle_timeout(hanging_stream, TEST_IDLE_TIMEOUT);
+
+        // First poll should return the idle timeout error after ~200ms.
+        let item = wrapped.next().await;
+        assert!(item.is_some(), "should yield an error item, not None");
+        let result = item.expect("just checked is_some");
+        assert!(result.is_err(), "should be an Err");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("StreamingError::IdleTimeout"),
+            "error message should contain StreamingError::IdleTimeout, got: {err_msg}"
+        );
+
+        // Second poll should return None (stream terminated).
+        let next = wrapped.next().await;
+        assert!(
+            next.is_none(),
+            "stream should terminate after idle timeout error"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Test 2: Data arriving within threshold => no timeout
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_no_timeout_when_data_arrives_within_threshold() {
+        // A stream that yields 3 chunks immediately, then completes.
+        let chunks: Vec<ChunkResult> = vec![
+            Ok(text_chunk("Hello")),
+            Ok(text_chunk(" world")),
+            Ok(done_chunk()),
+        ];
+        let inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(stream::iter(chunks));
+
+        let mut wrapped = wrap_with_idle_timeout(inner, TEST_IDLE_TIMEOUT);
+
+        let mut collected = Vec::new();
+        while let Some(item) = wrapped.next().await {
+            collected.push(item);
+        }
+
+        assert_eq!(collected.len(), 3, "should receive all 3 chunks");
+        assert!(collected[0].is_ok());
+        assert_eq!(
+            collected[0].as_ref().expect("checked is_ok").content,
+            "Hello"
+        );
+        assert!(collected[1].is_ok());
+        assert_eq!(
+            collected[1].as_ref().expect("checked is_ok").content,
+            " world"
+        );
+        assert!(collected[2].is_ok());
+        assert!(
+            collected[2]
+                .as_ref()
+                .expect("checked is_ok")
+                .done,
+            "last chunk should have done=true"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Test 3: Single event then idle => timeout after the event
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_single_event_then_idle_triggers_timeout() {
+        // A stream that yields one chunk, then hangs forever.
+        let (tx, rx) = tokio::sync::mpsc::channel::<ChunkResult>(4);
+        let rx_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(rx_stream);
+
+        // Send one chunk, then drop the sender to simulate no more data
+        // BUT don't drop tx — keep it alive so the stream hangs (doesn't end).
+        tx.send(Ok(text_chunk("first"))).await.expect("send ok");
+
+        let mut wrapped = wrap_with_idle_timeout(inner, TEST_IDLE_TIMEOUT);
+
+        // First poll: should get the chunk.
+        let first = wrapped.next().await;
+        assert!(first.is_some());
+        let first_result = first.expect("just checked");
+        assert!(first_result.is_ok());
+        assert_eq!(first_result.expect("checked is_ok").content, "first");
+
+        // Don't send anything else. Keep `tx` alive so the channel doesn't close.
+        // Second poll: should hit idle timeout after ~200ms.
+        let second = wrapped.next().await;
+        assert!(second.is_some(), "should yield idle timeout error");
+        let second_result = second.expect("just checked");
+        assert!(second_result.is_err(), "should be idle timeout error");
+        let err_msg = second_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("StreamingError::IdleTimeout"),
+            "error should mention IdleTimeout: {err_msg}"
+        );
+
+        // Third poll: should return None (stream terminated).
+        let third = wrapped.next().await;
+        assert!(third.is_none(), "stream should be terminated after idle timeout");
+
+        // Drop tx to clean up.
+        drop(tx);
+    }
+
+    // -----------------------------------------------------------------
+    // Test 4: Events near timeout boundary => succeeds
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_events_near_boundary_succeed() {
+        // Send events at 50% of the idle timeout interval.
+        // With TEST_IDLE_TIMEOUT = 200ms, we send every 100ms.
+        let (tx, rx) = tokio::sync::mpsc::channel::<ChunkResult>(16);
+        let rx_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(rx_stream);
+
+        let send_handle = tokio::spawn(async move {
+            for i in 0..5 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if tx
+                    .send(Ok(text_chunk(&format!("chunk_{i}"))))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            // Send done chunk and close.
+            let _ = tx.send(Ok(done_chunk())).await;
+            // Drop tx so the stream ends.
+        });
+
+        let mut wrapped = wrap_with_idle_timeout(inner, TEST_IDLE_TIMEOUT);
+
+        let mut content_chunks = Vec::new();
+        let mut saw_done = false;
+        while let Some(item) = wrapped.next().await {
+            match item {
+                Ok(chunk) => {
+                    if chunk.done {
+                        saw_done = true;
+                    } else {
+                        content_chunks.push(chunk.content);
+                    }
+                }
+                Err(e) => {
+                    panic!("unexpected error: {e}");
+                }
+            }
+        }
+
+        send_handle.await.expect("sender task should complete");
+
+        assert_eq!(content_chunks.len(), 5, "should receive all 5 content chunks");
+        assert!(saw_done, "should receive the done chunk");
+        for (i, content) in content_chunks.iter().enumerate() {
+            assert_eq!(content, &format!("chunk_{i}"));
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Test 5: Keepalive chunks reset the idle timer
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_keepalive_resets_idle_timer() {
+        // Send keepalive chunks to keep the stream alive, then send real data.
+        let (tx, rx) = tokio::sync::mpsc::channel::<ChunkResult>(16);
+        let rx_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(rx_stream);
+
+        let send_handle = tokio::spawn(async move {
+            // Send keepalives every 100ms for 500ms (well past the 200ms timeout).
+            for _ in 0..5 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if tx.send(Ok(keepalive_chunk())).await.is_err() {
+                    return;
+                }
+            }
+            // Then send actual content.
+            let _ = tx.send(Ok(text_chunk("after keepalives"))).await;
+            let _ = tx.send(Ok(done_chunk())).await;
+        });
+
+        let mut wrapped = wrap_with_idle_timeout(inner, TEST_IDLE_TIMEOUT);
+
+        let mut received_content = Vec::new();
+        let mut keepalive_count = 0usize;
+        let mut saw_done = false;
+        while let Some(item) = wrapped.next().await {
+            match item {
+                Ok(chunk) => {
+                    if chunk.keepalive {
+                        keepalive_count += 1;
+                    } else if chunk.done {
+                        saw_done = true;
+                    } else {
+                        received_content.push(chunk.content);
+                    }
+                }
+                Err(e) => {
+                    panic!("unexpected idle timeout — keepalives should have prevented it: {e}");
+                }
+            }
+        }
+
+        send_handle.await.expect("sender task should complete");
+
+        assert_eq!(keepalive_count, 5, "should have received 5 keepalive chunks");
+        assert_eq!(received_content.len(), 1, "should have 1 content chunk");
+        assert_eq!(received_content[0], "after keepalives");
+        assert!(saw_done, "should receive done chunk");
+    }
+
+    // -----------------------------------------------------------------
+    // Test 6: Idle timeout error includes duration information
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_idle_timeout_error_includes_duration() {
+        let hanging: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(stream::pending());
+
+        let mut wrapped = wrap_with_idle_timeout(hanging, TEST_IDLE_TIMEOUT);
+
+        let item = wrapped.next().await.expect("should yield error item");
+        let err_msg = item.unwrap_err().to_string();
+
+        // The error should mention the timeout duration.
+        assert!(
+            err_msg.contains("0.2s") || err_msg.contains("200"),
+            "error message should include duration info, got: {err_msg}"
+        );
+        // The error should identify itself as IdleTimeout.
+        assert!(
+            err_msg.contains("IdleTimeout"),
+            "error message should contain 'IdleTimeout', got: {err_msg}"
+        );
+        // The error should distinguish this from a network/connection timeout.
+        // Production message says: "This is distinct from a network/connection timeout"
+        assert!(
+            err_msg.contains("distinct from") || err_msg.contains("connection"),
+            "error message should distinguish from connection timeout, got: {err_msg}"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Test 7: Stream terminates cleanly (None after error)
+    // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn test_stream_terminates_after_idle_timeout() {
+        let hanging: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
+            Box::pin(stream::pending());
+
+        // Fuse the wrapped stream so that subsequent polls after None are safe
+        // (returns None without panicking).
+        let mut wrapped = wrap_with_idle_timeout(hanging, TEST_IDLE_TIMEOUT).fuse();
+
+        // Consume the error.
+        let err_item = wrapped.next().await;
+        assert!(err_item.is_some(), "should yield idle timeout error");
+        assert!(
+            err_item.expect("just checked").is_err(),
+            "first item should be an Err"
+        );
+
+        // Next poll should return None (stream terminated).
+        let next = wrapped.next().await;
+        assert!(
+            next.is_none(),
+            "stream must terminate after idle timeout error"
+        );
+
+        // Subsequent polls on the fused stream should also be None.
+        let again = wrapped.next().await;
+        assert!(
+            again.is_none(),
+            "fused stream must remain terminated after idle timeout"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Test 8: CHUNK_IDLE_TIMEOUT constant is 30 seconds
+    // -----------------------------------------------------------------
+    #[test]
+    fn test_chunk_idle_timeout_is_thirty_seconds() {
+        // The production constant lives in llm_router.rs.  We import it
+        // indirectly via the public re-export.  If the constant changes,
+        // this test alerts the team.
+        use crate::core::llm::llm_router::CHUNK_IDLE_TIMEOUT;
+        assert_eq!(
+            CHUNK_IDLE_TIMEOUT,
+            Duration::from_secs(30),
+            "CHUNK_IDLE_TIMEOUT must be 30 seconds"
+        );
+    }
+}

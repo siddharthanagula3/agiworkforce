@@ -1,5 +1,11 @@
 use super::*;
 
+/// Maximum code length allowed for execution (1MB) — mirrors core/agi/executors/code_executor.rs.
+const MAX_CODE_LENGTH: usize = 1024 * 1024;
+
+/// Maximum code length allowed for analysis (500KB) — mirrors core/agi/executors/code_executor.rs.
+const MAX_ANALYSIS_CODE_LENGTH: usize = 512 * 1024;
+
 impl ToolExecutor {
     pub(crate) async fn execute_terminal_tool(
         &self,
@@ -455,6 +461,20 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing code parameter"))?;
 
+        // Validate code length before any processing (bytes for UTF-8 safety)
+        if code.len() > MAX_CODE_LENGTH {
+            tracing::info!(
+                "[ToolExecutor] Code length violation: submitted {} bytes (max {})",
+                code.len(),
+                MAX_CODE_LENGTH
+            );
+            return Err(anyhow!(
+                "Code submission exceeds maximum length: {} > {} bytes",
+                code.len(),
+                MAX_CODE_LENGTH
+            ));
+        }
+
         if let Some(ref app) = self.app_handle {
             use crate::features::terminal::{SessionManager, ShellType};
             use tauri::Manager;
@@ -647,6 +667,21 @@ impl ToolExecutor {
             .get("code")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing code parameter"))?;
+
+        // Validate code length before any processing (bytes for UTF-8 safety)
+        if code.len() > MAX_ANALYSIS_CODE_LENGTH {
+            tracing::info!(
+                "[ToolExecutor] Code length violation for analysis: submitted {} bytes (max {})",
+                code.len(),
+                MAX_ANALYSIS_CODE_LENGTH
+            );
+            return Err(anyhow!(
+                "Code submission exceeds maximum length for analysis: {} > {} bytes",
+                code.len(),
+                MAX_ANALYSIS_CODE_LENGTH
+            ));
+        }
+
         let language = args
             .get("language")
             .and_then(|v| v.as_str())

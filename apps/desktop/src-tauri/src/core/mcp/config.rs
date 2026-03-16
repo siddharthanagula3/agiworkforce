@@ -3,9 +3,91 @@ use crate::data::db::encryption::open_encrypted_connection;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
+
+/// Error type for config decryption failures.
+///
+/// Provides detailed, actionable error messages so callers can distinguish
+/// between corruption, key mismatch, encoding issues, and validation failures
+/// instead of receiving garbage credentials.
+#[derive(Debug)]
+pub enum ConfigDecryptionError {
+    /// The AES-256-GCM cipher could not be initialized from the derived key.
+    CipherInit,
+    /// The stored value is not valid base64.
+    InvalidBase64(base64::DecodeError),
+    /// The decoded ciphertext is too short to contain a 12-byte nonce.
+    CiphertextTooShort { len: usize },
+    /// AES-GCM decryption failed (wrong key, tampered ciphertext, or corrupt nonce).
+    DecryptionFailed,
+    /// The decrypted bytes are not valid UTF-8.
+    InvalidUtf8(std::string::FromUtf8Error),
+    /// The decrypted plaintext failed post-decryption validation.
+    ValidationFailed(String),
+}
+
+impl fmt::Display for ConfigDecryptionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfigDecryptionError::CipherInit => {
+                write!(f, "cipher initialization failed from derived key")
+            }
+            ConfigDecryptionError::InvalidBase64(e) => {
+                write!(f, "stored value is not valid base64: {}", e)
+            }
+            ConfigDecryptionError::CiphertextTooShort { len } => {
+                write!(
+                    f,
+                    "ciphertext too short ({} bytes, need at least 12 for nonce)",
+                    len
+                )
+            }
+            ConfigDecryptionError::DecryptionFailed => {
+                write!(
+                    f,
+                    "AES-GCM decryption failed (wrong key or tampered ciphertext)"
+                )
+            }
+            ConfigDecryptionError::InvalidUtf8(e) => {
+                write!(f, "decrypted bytes are not valid UTF-8: {}", e)
+            }
+            ConfigDecryptionError::ValidationFailed(reason) => {
+                write!(f, "decrypted credential validation failed: {}", reason)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigDecryptionError {}
+
+/// Validate that a decrypted credential is well-formed.
+///
+/// Rejects empty strings and strings that contain non-printable control
+/// characters (excluding common whitespace), which would indicate
+/// partial decryption or data corruption.
+fn validate_decrypted_credential(plaintext: &str) -> Result<(), ConfigDecryptionError> {
+    if plaintext.is_empty() {
+        return Err(ConfigDecryptionError::ValidationFailed(
+            "decrypted value is empty".to_string(),
+        ));
+    }
+    // Check for non-printable control characters (allow \t, \n, \r for
+    // multiline tokens like PEM keys)
+    if plaintext
+        .chars()
+        .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r')
+    {
+        return Err(ConfigDecryptionError::ValidationFailed(
+            "decrypted value contains non-printable control characters, \
+             likely corrupted"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
 
 const DEFAULT_CONFIG_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -370,17 +452,22 @@ impl McpServersConfig {
                             |row| row.get::<_, String>(0),
                         ) {
                             Ok(stored_value) => {
-                                if let Some(decrypted) = decrypt_oauth_token(&stored_value) {
-                                    plan.push((
-                                        server_name.clone(),
-                                        key.clone(),
-                                        Resolved::Done(decrypted),
-                                    ));
-                                } else {
-                                    tracing::warn!(
-                                        "Failed to decrypt API key for provider: {}",
-                                        provider
-                                    );
+                                match decrypt_oauth_token(&stored_value) {
+                                    Ok(decrypted) => {
+                                        plan.push((
+                                            server_name.clone(),
+                                            key.clone(),
+                                            Resolved::Done(decrypted),
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "Config decryption failed for API key provider '{}': {}, \
+                                             consider re-entering credentials",
+                                            provider,
+                                            e
+                                        );
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -395,18 +482,23 @@ impl McpServersConfig {
                             |row| row.get::<_, String>(0),
                         ) {
                             Ok(stored_value) => {
-                                if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                    plan.push((
-                                        server_name.clone(),
-                                        key.clone(),
-                                        Resolved::Done(decrypted),
-                                    ));
-                                } else {
-                                    tracing::warn!(
-                                        "Failed to decrypt credential for {} / {}",
-                                        server_name,
-                                        key
-                                    );
+                                match decrypt_mcp_credential(&stored_value) {
+                                    Ok(decrypted) => {
+                                        plan.push((
+                                            server_name.clone(),
+                                            key.clone(),
+                                            Resolved::Done(decrypted),
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "Config decryption failed for credential {} / {}: {}, \
+                                             consider re-entering credentials",
+                                            server_name,
+                                            key,
+                                            e
+                                        );
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -470,17 +562,29 @@ impl McpServersConfig {
                                     rusqlite::params![cred_key],
                                     |row| row.get::<_, String>(0),
                                 ) {
-                                    if let Some(decrypted) = decrypt_mcp_credential(&stored_value) {
-                                        if let Some(config) = self.mcp_servers.get_mut(&server_name)
-                                        {
-                                            if let Some(entry) = config.env.get_mut(&key) {
-                                                *entry = decrypted;
-                                                tracing::debug!(
-                                                    "Injected legacy credential for {} / {}",
-                                                    server_name,
-                                                    key
-                                                );
+                                    match decrypt_mcp_credential(&stored_value) {
+                                        Ok(decrypted) => {
+                                            if let Some(config) =
+                                                self.mcp_servers.get_mut(&server_name)
+                                            {
+                                                if let Some(entry) = config.env.get_mut(&key) {
+                                                    *entry = decrypted;
+                                                    tracing::debug!(
+                                                        "Injected legacy credential for {} / {}",
+                                                        server_name,
+                                                        key
+                                                    );
+                                                }
                                             }
+                                        }
+                                        Err(decrypt_err) => {
+                                            tracing::warn!(
+                                                "Config decryption failed for legacy credential \
+                                                 {} / {}: {}, consider re-entering credentials",
+                                                server_name,
+                                                key,
+                                                decrypt_err
+                                            );
                                         }
                                     }
                                 }
@@ -568,7 +672,18 @@ fn read_oauth_token_data(provider: &str) -> Result<OAuthTokenData, String> {
             |row| row.get::<_, String>(0),
         )
         .ok()
-        .and_then(|enc| decrypt_oauth_token(&enc));
+        .and_then(|enc| match decrypt_oauth_token(&enc) {
+            Ok(token) => Some(token),
+            Err(e) => {
+                tracing::warn!(
+                    "Config decryption failed for refresh token (provider: {}): {}, \
+                     consider re-entering credentials",
+                    provider,
+                    e
+                );
+                None
+            }
+        });
 
     // conn is dropped here — no !Send value crosses an await point
     Ok(OAuthTokenData {
@@ -675,8 +790,13 @@ async fn get_oauth_token(provider: &str) -> Result<String, String> {
     }
 
     // Decrypt and return the access token
-    decrypt_oauth_token(&data.encrypted_access)
-        .ok_or_else(|| format!("Failed to decrypt OAuth token for provider: {}", provider))
+    decrypt_oauth_token(&data.encrypted_access).map_err(|e| {
+        format!(
+            "Config decryption failed for OAuth token (provider: {}): {}, \
+             consider re-entering credentials",
+            provider, e
+        )
+    })
 }
 
 /// OAuth provider configuration for token refresh
@@ -765,17 +885,13 @@ fn read_oauth_client_credentials(
                 |row| row.get(0),
             );
             if let Ok(stored_value) = result {
-                // Bug #18: decrypt_oauth_token returns None when decryption fails.
-                // Previously used unwrap_or(stored_value) which returned encrypted
-                // ciphertext bytes as if they were valid credentials, causing silent
-                // downstream failures. Now we skip the entry and log a warning instead.
                 match decrypt_oauth_token(&stored_value) {
-                    Some(decrypted) => return Ok(decrypted),
-                    None => {
+                    Ok(decrypted) => return Ok(decrypted),
+                    Err(e) => {
                         tracing::warn!(
-                            "Failed to decrypt OAuth {} for provider '{}' (key: {}); \
-                             skipping — credential is unavailable until re-authenticated",
-                            label, provider, key
+                            "Config decryption failed for OAuth {} (provider: '{}', key: {}): {}, \
+                             consider re-entering credentials",
+                            label, provider, key, e
                         );
                     }
                 }
@@ -913,23 +1029,28 @@ async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(Str
     Ok((access_token, expires_at))
 }
 
-/// Decrypt an OAuth token using machine-derived keys
+/// Decrypt an OAuth token using machine-derived keys.
 ///
 /// Uses the same encryption scheme as MCP credentials (AES-256-GCM with
 /// machine-derived keys via KeyPurpose::McpCredentials).
-fn decrypt_oauth_token(encrypted: &str) -> Option<String> {
+///
+/// Returns a detailed [`ConfigDecryptionError`] on failure so callers can
+/// log actionable diagnostics instead of silently returning garbage data.
+fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecryptionError> {
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use base64::{engine::general_purpose, Engine as _};
 
     let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ConfigDecryptionError::CipherInit)?;
 
     // Decode from base64
-    let combined = general_purpose::STANDARD.decode(encrypted).ok()?;
+    let combined = general_purpose::STANDARD
+        .decode(encrypted)
+        .map_err(ConfigDecryptionError::InvalidBase64)?;
 
     if combined.len() < 12 {
-        return None;
+        return Err(ConfigDecryptionError::CiphertextTooShort { len: combined.len() });
     }
 
     // Split nonce and ciphertext
@@ -937,8 +1058,16 @@ fn decrypt_oauth_token(encrypted: &str) -> Option<String> {
     let nonce = Nonce::from_slice(nonce_bytes);
 
     // Decrypt
-    let plaintext = cipher.decrypt(nonce, ciphertext).ok()?;
-    String::from_utf8(plaintext).ok()
+    let plaintext_bytes = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| ConfigDecryptionError::DecryptionFailed)?;
+    let plaintext =
+        String::from_utf8(plaintext_bytes).map_err(ConfigDecryptionError::InvalidUtf8)?;
+
+    // Post-decryption validation: reject empty or corrupt-looking output
+    validate_decrypted_credential(&plaintext)?;
+
+    Ok(plaintext)
 }
 
 /// Encrypt an OAuth token using machine-derived keys
@@ -972,20 +1101,25 @@ pub fn encrypt_oauth_token(plaintext: &str) -> Option<String> {
     Some(general_purpose::STANDARD.encode(combined))
 }
 
-/// Decrypt an MCP credential using machine-derived keys
-pub fn decrypt_mcp_credential(encrypted: &str) -> Option<String> {
+/// Decrypt an MCP credential using machine-derived keys.
+///
+/// Returns a detailed [`ConfigDecryptionError`] on failure so callers can
+/// log actionable diagnostics instead of silently returning garbage data.
+pub fn decrypt_mcp_credential(encrypted: &str) -> Result<String, ConfigDecryptionError> {
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use base64::{engine::general_purpose, Engine as _};
 
     let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ConfigDecryptionError::CipherInit)?;
 
     // Decode from base64
-    let combined = general_purpose::STANDARD.decode(encrypted).ok()?;
+    let combined = general_purpose::STANDARD
+        .decode(encrypted)
+        .map_err(ConfigDecryptionError::InvalidBase64)?;
 
     if combined.len() < 12 {
-        return None;
+        return Err(ConfigDecryptionError::CiphertextTooShort { len: combined.len() });
     }
 
     // Split nonce and ciphertext
@@ -993,8 +1127,16 @@ pub fn decrypt_mcp_credential(encrypted: &str) -> Option<String> {
     let nonce = Nonce::from_slice(nonce_bytes);
 
     // Decrypt
-    let plaintext = cipher.decrypt(nonce, ciphertext).ok()?;
-    String::from_utf8(plaintext).ok()
+    let plaintext_bytes = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| ConfigDecryptionError::DecryptionFailed)?;
+    let plaintext =
+        String::from_utf8(plaintext_bytes).map_err(ConfigDecryptionError::InvalidUtf8)?;
+
+    // Post-decryption validation: reject empty or corrupt-looking output
+    validate_decrypted_credential(&plaintext)?;
+
+    Ok(plaintext)
 }
 
 /// Encrypt an MCP credential using machine-derived keys
@@ -1045,5 +1187,201 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: McpServersConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config.mcp_servers.len(), deserialized.mcp_servers.len());
+    }
+
+    // ── Bug #18: Config decryption tests ─────────────────────────────────
+
+    #[test]
+    fn test_encrypt_decrypt_oauth_token_roundtrip() {
+        let original = "ghp_abc123DEF456_test_token";
+        let encrypted = encrypt_oauth_token(original)
+            .expect("encryption should succeed for a valid plaintext");
+        let decrypted = decrypt_oauth_token(&encrypted)
+            .expect("decryption should succeed for validly-encrypted data");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_mcp_credential_roundtrip() {
+        let original = "sk-test-credential-value-123";
+        let encrypted = encrypt_mcp_credential(original)
+            .expect("encryption should succeed for a valid plaintext");
+        let decrypted = decrypt_mcp_credential(&encrypted)
+            .expect("decryption should succeed for validly-encrypted data");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn test_decrypt_oauth_token_invalid_base64() {
+        let result = decrypt_oauth_token("not!valid!base64!@#$%");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not valid base64"),
+            "error should mention base64, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_decrypt_mcp_credential_invalid_base64() {
+        let result = decrypt_mcp_credential("~~~invalid~~~");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not valid base64"),
+            "error should mention base64, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_decrypt_oauth_token_ciphertext_too_short() {
+        use base64::{engine::general_purpose, Engine as _};
+        // Encode only 5 bytes -- well below the 12-byte nonce requirement
+        let short_payload = general_purpose::STANDARD.encode([0u8; 5]);
+        let result = decrypt_oauth_token(&short_payload);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("too short"),
+            "error should mention 'too short', got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_decrypt_mcp_credential_ciphertext_too_short() {
+        use base64::{engine::general_purpose, Engine as _};
+        let short_payload = general_purpose::STANDARD.encode([0u8; 8]);
+        let result = decrypt_mcp_credential(&short_payload);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("too short"),
+            "error should mention 'too short', got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_decrypt_oauth_token_tampered_ciphertext() {
+        let original = "valid_token_value";
+        let encrypted = encrypt_oauth_token(original)
+            .expect("encryption should succeed");
+
+        // Tamper with the encrypted payload by flipping bits in the ciphertext portion
+        use base64::{engine::general_purpose, Engine as _};
+        let mut raw = general_purpose::STANDARD
+            .decode(&encrypted)
+            .expect("should be valid base64");
+        // Flip a byte in the ciphertext (past the 12-byte nonce)
+        if raw.len() > 14 {
+            raw[14] ^= 0xFF;
+        }
+        let tampered = general_purpose::STANDARD.encode(&raw);
+
+        let result = decrypt_oauth_token(&tampered);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("decryption failed") || msg.contains("tampered"),
+            "error should mention decryption failure, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_decrypt_mcp_credential_tampered_ciphertext() {
+        let original = "my-secret-credential";
+        let encrypted = encrypt_mcp_credential(original)
+            .expect("encryption should succeed");
+
+        use base64::{engine::general_purpose, Engine as _};
+        let mut raw = general_purpose::STANDARD
+            .decode(&encrypted)
+            .expect("should be valid base64");
+        if raw.len() > 14 {
+            raw[14] ^= 0xFF;
+        }
+        let tampered = general_purpose::STANDARD.encode(&raw);
+
+        let result = decrypt_mcp_credential(&tampered);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("decryption failed") || msg.contains("tampered"),
+            "error should mention decryption failure, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_validate_decrypted_credential_empty_string() {
+        let result = validate_decrypted_credential("");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("empty"),
+            "error should mention empty, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_validate_decrypted_credential_control_characters() {
+        // NUL byte indicates corrupted output
+        let result = validate_decrypted_credential("token\x00value");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("control characters"),
+            "error should mention control characters, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_validate_decrypted_credential_allows_whitespace() {
+        // Tabs and newlines are allowed (e.g., for PEM keys)
+        assert!(validate_decrypted_credential("line1\nline2\ttab").is_ok());
+        assert!(validate_decrypted_credential("value\r\n").is_ok());
+    }
+
+    #[test]
+    fn test_validate_decrypted_credential_normal_token() {
+        assert!(validate_decrypted_credential("ghp_abcDEF123456789").is_ok());
+        assert!(validate_decrypted_credential("sk-proj-abc123").is_ok());
+        assert!(validate_decrypted_credential("Bearer eyJhbGciOi...").is_ok());
+    }
+
+    #[test]
+    fn test_config_decryption_error_display() {
+        // Ensure all variants produce non-empty, distinct messages
+        let errors = vec![
+            ConfigDecryptionError::CipherInit,
+            ConfigDecryptionError::CiphertextTooShort { len: 3 },
+            ConfigDecryptionError::DecryptionFailed,
+            ConfigDecryptionError::ValidationFailed("test reason".to_string()),
+        ];
+        let messages: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+        for msg in &messages {
+            assert!(!msg.is_empty(), "error display should not be empty");
+        }
+        // All messages should be distinct
+        for i in 0..messages.len() {
+            for j in (i + 1)..messages.len() {
+                assert_ne!(
+                    messages[i], messages[j],
+                    "error messages should be distinct"
+                );
+            }
+        }
     }
 }

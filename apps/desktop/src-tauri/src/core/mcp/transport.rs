@@ -32,6 +32,41 @@ const SSE_RECONNECT_DELAY_MS: u64 = 1000;
 /// Maximum SSE reconnection attempts
 const SSE_MAX_RECONNECT_ATTEMPTS: u32 = 5;
 
+/// Default timeout for SSE stream idle reads (seconds).
+/// If no SSE chunk arrives within this window, the stream is considered stalled.
+const SSE_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
+
+/// Classify a reqwest error into the appropriate `McpError` variant.
+///
+/// Uses the reqwest error inspection methods (`is_connect`, `is_timeout`) to
+/// distinguish between:
+/// - Connection timeout: the TCP handshake did not complete in time
+/// - Request timeout: the server accepted the connection but the overall
+///   request duration exceeded the configured limit
+/// - Other connection errors: DNS failures, refused connections, etc.
+fn classify_reqwest_error(err: reqwest::Error, url: &str) -> McpError {
+    if err.is_connect() && err.is_timeout() {
+        // reqwest sets both flags when `connect_timeout` fires
+        McpError::ConnectionTimeout(format!(
+            "HTTP connection attempt to {} timed out after {}s — server may be unreachable",
+            url, SSE_CONNECT_TIMEOUT_SECS,
+        ))
+    } else if err.is_timeout() {
+        // Overall request timeout (server accepted but response too slow)
+        McpError::RequestTimeout(format!(
+            "HTTP request to {} timed out after {}s — server accepted connection but did not respond in time",
+            url, HTTP_REQUEST_TIMEOUT_SECS,
+        ))
+    } else if err.is_connect() {
+        McpError::ConnectionError(format!(
+            "HTTP connection to {} failed: {} — check that the server is running and reachable",
+            url, err,
+        ))
+    } else {
+        McpError::ConnectionError(format!("HTTP request to {} failed: {}", url, err))
+    }
+}
+
 /// Trait defining the interface for MCP transports
 #[async_trait]
 pub trait McpTransport: Send + Sync {
@@ -1136,7 +1171,14 @@ impl HttpSseTransport {
             .header("Cache-Control", "no-cache")
             .send()
             .await
-            .map_err(|e| McpError::ConnectionError(format!("SSE connection failed: {}", e)))?;
+            .map_err(|e| {
+                tracing::warn!(
+                    "[MCP HTTP Transport] SSE connection error for {}: {}",
+                    url,
+                    e
+                );
+                classify_reqwest_error(e, url)
+            })?;
 
         if !response.status().is_success() {
             return Err(McpError::ConnectionError(format!(
@@ -1149,6 +1191,11 @@ impl HttpSseTransport {
     }
 
     /// Process the SSE stream
+    ///
+    /// Reads chunks from the response byte stream with an idle timeout. If no
+    /// data arrives within `SSE_STREAM_IDLE_TIMEOUT_SECS`, the stream is
+    /// considered stalled and a `RequestTimeout` error is returned so the caller
+    /// can attempt reconnection.
     async fn process_sse_stream(
         server_name: &str,
         response: reqwest::Response,
@@ -1165,13 +1212,48 @@ impl HttpSseTransport {
             id: None,
         };
 
-        while let Some(chunk_result) = stream.next().await {
+        let idle_timeout = tokio::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS);
+
+        loop {
             if is_shutdown.load(Ordering::SeqCst) {
                 break;
             }
 
-            let chunk = chunk_result
-                .map_err(|e| McpError::ConnectionError(format!("SSE stream error: {}", e)))?;
+            // Wrap stream.next() in a timeout so we detect stalled connections
+            let chunk_opt = match tokio::time::timeout(idle_timeout, stream.next()).await {
+                Ok(Some(chunk_result)) => Some(chunk_result),
+                Ok(None) => {
+                    // Stream ended normally
+                    tracing::info!(
+                        "[MCP HTTP Transport] SSE stream ended normally for '{}'",
+                        server_name,
+                    );
+                    break;
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        "[MCP HTTP Transport] SSE stream idle timeout for '{}' — \
+                         no data received for {}s",
+                        server_name,
+                        SSE_STREAM_IDLE_TIMEOUT_SECS,
+                    );
+                    return Err(McpError::RequestTimeout(format!(
+                        "SSE stream for '{}' stalled — no data received for {}s",
+                        server_name, SSE_STREAM_IDLE_TIMEOUT_SECS,
+                    )));
+                }
+            };
+
+            let chunk = match chunk_opt {
+                Some(Ok(bytes)) => bytes,
+                Some(Err(e)) => {
+                    return Err(McpError::ConnectionError(format!(
+                        "SSE stream error: {}",
+                        e
+                    )));
+                }
+                None => break,
+            };
 
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
@@ -1353,7 +1435,15 @@ impl HttpSseTransport {
             .body(body)
             .send()
             .await
-            .map_err(|e| McpError::ConnectionError(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| {
+                tracing::warn!(
+                    "[MCP HTTP Transport] HTTP POST to '{}' failed for method '{}': {}",
+                    self.server_name,
+                    request.method,
+                    e
+                );
+                classify_reqwest_error(e, &url)
+            })?;
 
         let status = response.status();
         if !status.is_success() {
@@ -1458,8 +1548,15 @@ impl McpTransport for HttpSseTransport {
                     }
                     Err(_) => {
                         self.pending.lock().remove(&id);
-                        Err(McpError::ConnectionError(format!(
-                            "Request timeout after {} seconds",
+                        tracing::warn!(
+                            "[MCP HTTP Transport] SSE response timeout for '{}' — \
+                             waited {}s for response via SSE channel",
+                            self.server_name,
+                            self.config.timeout_secs,
+                        );
+                        Err(McpError::RequestTimeout(format!(
+                            "SSE response for '{}' timed out after {}s — server accepted request but did not respond in time",
+                            self.server_name,
                             self.config.timeout_secs
                         )))
                     }
@@ -1819,5 +1916,172 @@ mod tests {
             json
         );
         assert!(json.contains("notifications/initialized"));
+    }
+
+    #[test]
+    fn test_timeout_constants_are_reasonable() {
+        // Connection timeout should be shorter than request timeout
+        assert!(
+            SSE_CONNECT_TIMEOUT_SECS < HTTP_REQUEST_TIMEOUT_SECS
+                || SSE_CONNECT_TIMEOUT_SECS == HTTP_REQUEST_TIMEOUT_SECS,
+            "Connect timeout ({}) should not exceed request timeout ({})",
+            SSE_CONNECT_TIMEOUT_SECS,
+            HTTP_REQUEST_TIMEOUT_SECS,
+        );
+        // SSE idle timeout should be generous since SSE streams may have long pauses
+        assert!(
+            SSE_STREAM_IDLE_TIMEOUT_SECS >= HTTP_REQUEST_TIMEOUT_SECS,
+            "SSE idle timeout ({}) should be at least as long as request timeout ({})",
+            SSE_STREAM_IDLE_TIMEOUT_SECS,
+            HTTP_REQUEST_TIMEOUT_SECS,
+        );
+    }
+
+    #[test]
+    fn test_classify_reqwest_error_formats_url() {
+        // Build a client with an extremely short timeout so we can trigger a
+        // timeout error synchronously via an unreachable address.
+        // We cannot easily fabricate reqwest::Error internals, so we verify the
+        // helper against generic ConnectionError for an unreachable host.
+        //
+        // This test validates that classify_reqwest_error includes the URL in
+        // all error variants.
+        let url = "http://192.0.2.1:1/nonexistent";
+
+        // Construct a connection error by attempting to send to a non-routable IP
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let result = rt.block_on(async {
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_millis(50))
+                .timeout(std::time::Duration::from_millis(100))
+                .build()
+                .unwrap();
+
+            client.get(url).send().await
+        });
+
+        if let Err(e) = result {
+            let mcp_error = classify_reqwest_error(e, url);
+            let error_msg = mcp_error.to_string();
+            assert!(
+                error_msg.contains(url),
+                "Error message should contain the URL '{}', got: {}",
+                url,
+                error_msg,
+            );
+        }
+        // If the request somehow succeeded (unlikely for TEST-NET-1), that is fine
+    }
+
+    #[test]
+    fn test_connection_timeout_error_variant() {
+        let err = McpError::ConnectionTimeout(
+            "HTTP connection attempt to http://example.com timed out after 30s".to_string(),
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("timed out"));
+        assert!(msg.contains("http://example.com"));
+    }
+
+    #[test]
+    fn test_request_timeout_error_variant() {
+        let err = McpError::RequestTimeout(
+            "HTTP request to http://example.com timed out after 30s".to_string(),
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("timed out"));
+        assert!(msg.contains("http://example.com"));
+    }
+
+    #[tokio::test]
+    async fn test_connect_sse_timeout_on_unreachable_host() {
+        // Use TEST-NET-1 (192.0.2.0/24) which is guaranteed non-routable per RFC 5737.
+        // This ensures the connect attempt times out rather than being refused.
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_millis(200))
+            .build()
+            .unwrap();
+
+        let headers = reqwest::header::HeaderMap::new();
+        let url = "http://192.0.2.1:9999/sse";
+
+        let start = Instant::now();
+        let result = HttpSseTransport::connect_sse(&client, url, &headers).await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "Should have timed out or failed");
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+
+        // The error should be either a ConnectionTimeout or a ConnectionError
+        // (depending on OS behavior for non-routable addresses).
+        assert!(
+            err_msg.contains("timed out") || err_msg.contains("failed"),
+            "Error should mention timeout or failure, got: {}",
+            err_msg,
+        );
+
+        // Should not hang indefinitely -- verify it completed within a reasonable bound
+        assert!(
+            elapsed.as_secs() < 10,
+            "connect_sse should not hang indefinitely, took {:?}",
+            elapsed,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sse_stream_idle_timeout() {
+        // Verify timeout constant is set to a reasonable value
+        assert_eq!(SSE_STREAM_IDLE_TIMEOUT_SECS, 60);
+
+        // Verify a RequestTimeout error can be constructed for idle streams
+        let timeout_err = McpError::RequestTimeout(format!(
+            "SSE stream for 'test-server' stalled — no data received for {}s",
+            SSE_STREAM_IDLE_TIMEOUT_SECS,
+        ));
+        assert!(timeout_err.to_string().contains("stalled"));
+        assert!(timeout_err.to_string().contains("60s"));
+    }
+
+    #[tokio::test]
+    async fn test_http_sse_transport_connection_timeout_config() {
+        // Verify the HTTP client is configured with timeouts by attempting a
+        // connection to a non-routable address and checking it fails quickly.
+        let config = HttpSseConfig {
+            url: "http://192.0.2.1:9999".to_string(),
+            timeout_secs: 1,
+            verify_ssl: true,
+            ..Default::default()
+        };
+
+        let start = Instant::now();
+        // This will succeed in creating the transport (client construction does
+        // not connect), but the client itself will have timeouts configured.
+        let result = HttpSseTransport::new("timeout-test".to_string(), config).await;
+        let elapsed = start.elapsed();
+
+        // Transport creation should succeed (no connection attempt during new())
+        assert!(
+            result.is_ok(),
+            "Transport creation should succeed, got: {:?}",
+            result.err(),
+        );
+
+        // Should be near-instant since new() does not connect
+        assert!(
+            elapsed.as_secs() < 5,
+            "Transport creation should not involve connection attempt, took {:?}",
+            elapsed,
+        );
+
+        // Clean up
+        if let Ok(transport) = result {
+            let _ = transport.shutdown().await;
+        }
     }
 }

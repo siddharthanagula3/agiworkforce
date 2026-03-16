@@ -114,6 +114,26 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "file_read_binary".to_string(),
+            name: "Read Binary File".to_string(),
+            description: "Read a binary file (images, PDFs, archives, etc.) and return its contents as base64-encoded data. Use this instead of file_read when the file is not UTF-8 text.".to_string(),
+            capabilities: vec![ToolCapability::FileRead],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: true,
+                description: "Path to the binary file to read".to_string(),
+                default: None,
+            }],
+            estimated_resources: crate::core::agi::ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 100,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "file_write".to_string(),
             name: "Write File".to_string(),
             description: "Write content to a file".to_string(),

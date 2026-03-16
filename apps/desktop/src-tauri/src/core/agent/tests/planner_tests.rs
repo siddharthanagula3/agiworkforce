@@ -423,6 +423,209 @@ I need to take a screenshot first.
     }
 
     // ------------------------------------------------------------------
+    // Bug #51 — camelCase IPC: parser accepts both camelCase and snake_case
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_parse_plan_response_camel_case_keys() {
+        // The parser must accept camelCase keys (produced by serde serialization
+        // and the updated LLM prompt).
+        let planner = make_planner();
+        let json = r#"[
+            {
+                "id": "step_1",
+                "action": {"type": "Screenshot", "region": null},
+                "description": "Take a screenshot",
+                "expectedResult": "Screenshot captured",
+                "timeout": 5,
+                "retryOnFailure": false
+            }
+        ]"#;
+
+        let steps = planner.parse_plan_response(json).unwrap();
+        assert_eq!(steps.len(), 1);
+        assert_eq!(
+            steps[0].expected_result.as_deref(),
+            Some("Screenshot captured")
+        );
+        assert!(!steps[0].retry_on_failure);
+    }
+
+    #[test]
+    fn test_parse_plan_response_snake_case_keys_still_accepted() {
+        // Legacy LLM responses may still produce snake_case keys.
+        // The parser must accept both conventions.
+        let planner = make_planner();
+        let json = r#"[
+            {
+                "id": "step_1",
+                "action": {"type": "Screenshot", "region": null},
+                "description": "Take a screenshot",
+                "expected_result": "Screenshot captured",
+                "timeout": 5,
+                "retry_on_failure": true
+            }
+        ]"#;
+
+        let steps = planner.parse_plan_response(json).unwrap();
+        assert_eq!(steps.len(), 1);
+        assert_eq!(
+            steps[0].expected_result.as_deref(),
+            Some("Screenshot captured")
+        );
+        assert!(steps[0].retry_on_failure);
+    }
+
+    #[test]
+    fn test_parse_click_target_camel_case_element_id() {
+        // UIAElement target with camelCase `elementId` must parse correctly.
+        let planner = make_planner();
+        let json = r#"[
+            {
+                "id": "step_1",
+                "action": {
+                    "type": "Click",
+                    "target": {
+                        "type": "UIAElement",
+                        "elementId": "btn-submit"
+                    }
+                },
+                "description": "Click submit",
+                "timeout": 5,
+                "retryOnFailure": false
+            }
+        ]"#;
+
+        let steps = planner.parse_plan_response(json).unwrap();
+        if let Action::Click { target } = &steps[0].action {
+            if let ClickTarget::UIAElement { element_id } = target {
+                assert_eq!(element_id, "btn-submit");
+            } else {
+                panic!("Expected UIAElement target");
+            }
+        } else {
+            panic!("Expected Click action");
+        }
+    }
+
+    #[test]
+    fn test_parse_click_target_snake_case_element_id_still_accepted() {
+        // Legacy snake_case `element_id` must still parse.
+        let planner = make_planner();
+        let json = r#"[
+            {
+                "id": "step_1",
+                "action": {
+                    "type": "Click",
+                    "target": {
+                        "type": "UIAElement",
+                        "element_id": "btn-cancel"
+                    }
+                },
+                "description": "Click cancel",
+                "timeout": 5,
+                "retry_on_failure": false
+            }
+        ]"#;
+
+        let steps = planner.parse_plan_response(json).unwrap();
+        if let Action::Click { target } = &steps[0].action {
+            if let ClickTarget::UIAElement { element_id } = target {
+                assert_eq!(element_id, "btn-cancel");
+            } else {
+                panic!("Expected UIAElement target");
+            }
+        } else {
+            panic!("Expected Click action");
+        }
+    }
+
+    #[test]
+    fn test_parse_click_target_camel_case_image_path() {
+        // ImageMatch target with camelCase `imagePath` must parse correctly.
+        let planner = make_planner();
+        let json = r#"[
+            {
+                "id": "step_1",
+                "action": {
+                    "type": "Click",
+                    "target": {
+                        "type": "ImageMatch",
+                        "imagePath": "/tmp/btn.png",
+                        "threshold": 0.85
+                    }
+                },
+                "description": "Click image match",
+                "timeout": 5,
+                "retryOnFailure": false
+            }
+        ]"#;
+
+        let steps = planner.parse_plan_response(json).unwrap();
+        if let Action::Click { target } = &steps[0].action {
+            if let ClickTarget::ImageMatch {
+                image_path,
+                threshold,
+            } = target
+            {
+                assert_eq!(image_path, "/tmp/btn.png");
+                assert!((threshold - 0.85).abs() < f64::EPSILON);
+            } else {
+                panic!("Expected ImageMatch target");
+            }
+        } else {
+            panic!("Expected Click action");
+        }
+    }
+
+    #[test]
+    fn test_serde_round_trip_through_parser() {
+        // Bug #51 core test: serialize a TaskStep to JSON (produces camelCase),
+        // then feed it back through the planner's parser. This simulates the
+        // checkpoint save/restore path where serde output must parse correctly.
+        use crate::core::agent::TaskStep;
+        use std::time::Duration;
+
+        let step = TaskStep {
+            id: "step_rt".to_string(),
+            action: Action::Click {
+                target: ClickTarget::UIAElement {
+                    element_id: "my-btn".to_string(),
+                },
+            },
+            description: "Round-trip click".to_string(),
+            expected_result: Some("Button clicked".to_string()),
+            timeout: Duration::from_secs(10),
+            retry_on_failure: true,
+        };
+
+        // Serialize (produces camelCase via serde)
+        let json_str = serde_json::to_string(&vec![step]).unwrap();
+
+        // Parse back through the planner
+        let planner = make_planner();
+        let parsed = planner.parse_plan_response(&json_str).unwrap();
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].id, "step_rt");
+        assert_eq!(
+            parsed[0].expected_result.as_deref(),
+            Some("Button clicked")
+        );
+        assert!(parsed[0].retry_on_failure);
+
+        if let Action::Click { target } = &parsed[0].action {
+            if let ClickTarget::UIAElement { element_id } = target {
+                assert_eq!(element_id, "my-btn");
+            } else {
+                panic!("Expected UIAElement after round-trip");
+            }
+        } else {
+            panic!("Expected Click after round-trip");
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Live LLM tests — marked #[ignore]
     // ------------------------------------------------------------------
 

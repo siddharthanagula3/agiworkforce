@@ -5,6 +5,12 @@ pub enum McpError {
     #[error("Failed to connect to MCP server: {0}")]
     ConnectionError(String),
 
+    #[error("Connection timed out: {0}")]
+    ConnectionTimeout(String),
+
+    #[error("Request timed out: {0}")]
+    RequestTimeout(String),
+
     #[error("MCP server not found: {0}")]
     ServerNotFound(String),
 
