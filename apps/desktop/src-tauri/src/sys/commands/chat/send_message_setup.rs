@@ -304,6 +304,7 @@ pub(super) async fn prepare_send_message(
             request.thinking_mode,
             request.thinking_budget,
             chat_tools.is_some(),
+            &request.content,
         ),
         effort: request.reasoning_effort.clone(),
         ..Default::default()
@@ -352,30 +353,67 @@ fn resolve_thinking_parameter(
     thinking_mode: Option<bool>,
     thinking_budget: Option<u32>,
     has_tools: bool,
+    user_message: &str,
 ) -> Option<ThinkingParameter> {
+    use crate::core::llm::thinking::ThinkingConfig;
+
     let is_claude_model = model.to_lowercase().contains("claude");
 
+    // 1. Explicit thinking_mode=true from frontend takes highest priority.
     if thinking_mode == Some(true) {
         let budget = thinking_budget.unwrap_or(0);
-        if budget > 0 {
-            Some(ThinkingParameter::Budget {
+        let param = if budget > 0 {
+            ThinkingParameter::Budget {
                 thinking_type: "enabled".to_string(),
                 budget_tokens: budget,
-            })
+            }
         } else if is_claude_model && model.contains("opus-4") {
-            Some(ThinkingParameter::Adaptive {
+            ThinkingParameter::Adaptive {
                 thinking_type: "adaptive".to_string(),
-            })
+            }
         } else {
-            Some(ThinkingParameter::Enabled(true))
-        }
-    } else if is_claude_model && model.contains("opus-4") && has_tools && thinking_mode.is_none() {
-        Some(ThinkingParameter::Adaptive {
-            thinking_type: "adaptive".to_string(),
-        })
-    } else {
-        None
+            ThinkingParameter::Enabled(true)
+        };
+        tracing::info!(
+            model = %model,
+            "Extended thinking enabled explicitly by frontend"
+        );
+        return Some(param);
     }
+
+    // 2. Explicit thinking_mode=false means the user turned it off -- respect that.
+    if thinking_mode == Some(false) {
+        tracing::debug!(
+            model = %model,
+            "Extended thinking explicitly disabled by frontend"
+        );
+        return None;
+    }
+
+    // 3. thinking_mode is None (frontend did not specify) -- auto-detect from
+    //    message content using ThinkingConfig trigger phrases.
+    let detected = ThinkingConfig::from_user_message(user_message);
+    if detected.enabled && ThinkingConfig::model_supports_thinking(model) {
+        tracing::info!(
+            model = %model,
+            budget = %detected.budget.tokens(),
+            "Extended thinking auto-detected from user message"
+        );
+        return detected.to_thinking_parameter();
+    }
+
+    // 4. Default: Claude Opus 4.x with tools gets adaptive thinking.
+    if is_claude_model && model.contains("opus-4") && has_tools {
+        tracing::debug!(
+            model = %model,
+            "Defaulting to adaptive thinking for Opus 4.x with tools"
+        );
+        return Some(ThinkingParameter::Adaptive {
+            thinking_type: "adaptive".to_string(),
+        });
+    }
+
+    None
 }
 
 fn load_or_create_conversation(
@@ -653,7 +691,143 @@ mod tests {
 
     #[test]
     fn opus_tool_workflows_default_to_adaptive_thinking() {
-        let thinking = resolve_thinking_parameter("claude-opus-4.6", None, None, true);
+        let thinking =
+            resolve_thinking_parameter("claude-opus-4.6", None, None, true, "hello world");
         assert!(matches!(thinking, Some(ThinkingParameter::Adaptive { .. })));
+    }
+
+    #[test]
+    fn explicit_thinking_mode_true_returns_enabled() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            Some(true),
+            None,
+            false,
+            "write code",
+        );
+        assert!(matches!(thinking, Some(ThinkingParameter::Enabled(true))));
+    }
+
+    #[test]
+    fn explicit_thinking_mode_true_with_budget_returns_budget() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            Some(true),
+            Some(32_000),
+            false,
+            "write code",
+        );
+        match thinking {
+            Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
+                assert_eq!(budget_tokens, 32_000);
+            }
+            other => panic!("Expected Budget, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn explicit_thinking_mode_false_disables_even_with_trigger() {
+        // User explicitly turned off thinking in UI, message has "ultrathink"
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            Some(false),
+            None,
+            false,
+            "ultrathink about this",
+        );
+        assert!(thinking.is_none());
+    }
+
+    #[test]
+    fn auto_detect_ultrathink_on_supported_model() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            None,
+            None,
+            false,
+            "Can you ultrathink about this problem?",
+        );
+        match thinking {
+            Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
+                assert_eq!(budget_tokens, 128_000);
+            }
+            other => panic!("Expected Budget with 128K tokens, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn auto_detect_think_hard_on_supported_model() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            None,
+            None,
+            false,
+            "Please think hard about the architecture",
+        );
+        match thinking {
+            Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
+                assert_eq!(budget_tokens, 32_000);
+            }
+            other => panic!("Expected Budget with 32K tokens, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn auto_detect_think_on_supported_model() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            None,
+            None,
+            false,
+            "Think about this question carefully",
+        );
+        match thinking {
+            Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
+                assert_eq!(budget_tokens, 10_000);
+            }
+            other => panic!("Expected Budget with 10K tokens, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn auto_detect_skipped_for_unsupported_model() {
+        // GPT-4 does not support thinking
+        let thinking = resolve_thinking_parameter(
+            "gpt-4",
+            None,
+            None,
+            false,
+            "ultrathink about this",
+        );
+        assert!(thinking.is_none());
+    }
+
+    #[test]
+    fn no_trigger_no_thinking_on_non_opus_model() {
+        let thinking = resolve_thinking_parameter(
+            "claude-sonnet-4-5",
+            None,
+            None,
+            false,
+            "Write me a poem about cats",
+        );
+        assert!(thinking.is_none());
+    }
+
+    #[test]
+    fn auto_detect_works_on_openai_o3_model() {
+        let thinking = resolve_thinking_parameter(
+            "o3-mini",
+            None,
+            None,
+            false,
+            "Think about how to solve this",
+        );
+        match thinking {
+            Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
+                assert_eq!(budget_tokens, 10_000);
+            }
+            other => panic!("Expected Budget with 10K tokens, got {:?}", other),
+        }
     }
 }
