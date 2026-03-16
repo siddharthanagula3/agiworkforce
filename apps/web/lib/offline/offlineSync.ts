@@ -11,39 +11,20 @@
  * - Global sync state management
  */
 
-import {
-  syncOfflineQueue,
-  getQueuedItemCount,
-  subscribeToQueueChanges,
-  SyncSummary,
-} from './offlineQueue';
+import { syncOfflineQueue, getQueuedItemCount, subscribeToQueueChanges } from './offlineQueue';
+import type { SyncManagerState, SyncSummary } from '@agiworkforce/types';
+import { SyncState } from '@agiworkforce/types';
 
-/**
- * Offline sync state
- */
-export enum SyncState {
-  IDLE = 'idle',
-  SYNCING = 'syncing',
-  ONLINE = 'online',
-  OFFLINE = 'offline',
-  ERROR = 'error',
-}
+// Re-export for backward compatibility
+export { SyncState };
+export type { SyncManagerState, SyncSummary };
 
-/**
- * Global sync manager state
- */
-interface SyncManagerState {
-  state: SyncState;
-  isOnline: boolean;
-  queuedCount: number;
-  lastSyncTime?: Date;
-  lastSyncSummary?: SyncSummary;
-  error?: Error;
-}
+// Use the imported enum internally
+const SyncStateEnum = SyncState;
 
 // Global state
 const managerState: SyncManagerState = {
-  state: SyncState.OFFLINE,
+  state: SyncStateEnum.OFFLINE,
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : false,
   queuedCount: 0,
 };
@@ -114,7 +95,7 @@ export function cleanupSyncManager(): void {
  */
 function updateIsOnline(isOnline: boolean): void {
   managerState.isOnline = isOnline;
-  managerState.state = isOnline ? SyncState.ONLINE : SyncState.OFFLINE;
+  managerState.state = isOnline ? SyncStateEnum.ONLINE : SyncStateEnum.OFFLINE;
   notifyStateChange();
 }
 
@@ -160,7 +141,7 @@ export async function triggerSync(): Promise<void> {
   }
 
   // If already syncing, skip
-  if (managerState.state === SyncState.SYNCING) {
+  if (managerState.state === SyncStateEnum.SYNCING) {
     return;
   }
 
@@ -179,7 +160,7 @@ async function performSync(): Promise<void> {
   }
 
   // Update state to syncing
-  managerState.state = SyncState.SYNCING;
+  managerState.state = SyncStateEnum.SYNCING;
   notifyStateChange();
 
   try {
@@ -195,11 +176,11 @@ async function performSync(): Promise<void> {
 
     // Update state based on sync result
     updateQueuedCount();
-    managerState.state = managerState.queuedCount > 0 ? SyncState.ONLINE : SyncState.ONLINE;
+    managerState.state = managerState.queuedCount > 0 ? SyncStateEnum.ONLINE : SyncStateEnum.ONLINE;
   } catch (error) {
     console.error('[SyncManager] Sync failed:', error);
 
-    managerState.state = SyncState.ERROR;
+    managerState.state = SyncStateEnum.ERROR;
     managerState.error = error instanceof Error ? error : new Error(String(error));
 
     // Schedule retry
@@ -258,15 +239,15 @@ export function subscribeSyncState(callback: StateChangeCallback): () => void {
  */
 export function getStatusMessage(): string {
   switch (managerState.state) {
-    case SyncState.ONLINE:
+    case SyncStateEnum.ONLINE:
       return managerState.queuedCount > 0 ? `${managerState.queuedCount} item(s) synced` : 'Online';
-    case SyncState.OFFLINE:
+    case SyncStateEnum.OFFLINE:
       return managerState.queuedCount > 0
         ? `Offline - ${managerState.queuedCount} pending`
         : 'Offline';
-    case SyncState.SYNCING:
+    case SyncStateEnum.SYNCING:
       return 'Syncing...';
-    case SyncState.ERROR:
+    case SyncStateEnum.ERROR:
       return 'Sync failed - will retry';
     default:
       return 'Unknown';
@@ -278,13 +259,13 @@ export function getStatusMessage(): string {
  */
 export function getStatusSeverity(): 'success' | 'warning' | 'error' | 'info' {
   switch (managerState.state) {
-    case SyncState.ONLINE:
+    case SyncStateEnum.ONLINE:
       return managerState.queuedCount > 0 ? 'info' : 'success';
-    case SyncState.OFFLINE:
+    case SyncStateEnum.OFFLINE:
       return managerState.queuedCount > 0 ? 'warning' : 'info';
-    case SyncState.SYNCING:
+    case SyncStateEnum.SYNCING:
       return 'info';
-    case SyncState.ERROR:
+    case SyncStateEnum.ERROR:
       return 'error';
     default:
       return 'info';
