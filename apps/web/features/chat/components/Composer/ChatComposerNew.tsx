@@ -203,6 +203,10 @@ export function ChatComposerNew({
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
 
+  const handleStop = useCallback(() => {
+    ChatAIService.stopGeneration();
+  }, []);
+
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
@@ -481,7 +485,7 @@ export function ChatComposerNew({
           {/* 3-State Send Button */}
           <SendButton
             mode={isLoading ? 'stop' : 'send'}
-            onClick={isLoading ? () => {} : handleSubmit}
+            onClick={isLoading ? handleStop : handleSubmit}
             disabled={!canSend && !isLoading}
           />
         </div>

@@ -275,7 +275,7 @@ const UserProfileArea = React.memo(function UserProfileArea() {
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="border-t border-black/[0.08] dark:border-white/[0.07]">
+    <div className="border-t border-[var(--chat-border-strong)]">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none">
@@ -322,7 +322,7 @@ function CollapsedSidebar({
   onToggleSidebar?: () => void;
 }) {
   return (
-    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07] py-3">
+    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)] py-3">
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
@@ -392,7 +392,7 @@ function ChatSidebarContent({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07]">
+    <div className="flex h-full flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         {onToggleSidebar && (

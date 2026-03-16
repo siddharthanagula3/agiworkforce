@@ -14,6 +14,11 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  ChevronDown,
+  Pin,
+  PinOff,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -35,6 +40,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@shared/ui/context-menu';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import type { ChatSession } from '../../stores/chat-store';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +61,10 @@ interface ChatSidebarProps {
   onSelectSession: (id: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, title: string) => void;
+  onPinSession: (sessionId: string) => void;
+  onUnpinSession: (sessionId: string) => void;
+  onArchiveSession: (sessionId: string) => void;
+  onUnarchiveSession: (sessionId: string) => void;
   onToggleSidebar?: () => void;
   collapsed?: boolean;
 }
@@ -99,19 +116,29 @@ function groupSessions(sessions: ChatSession[]): Map<string, ChatSession[]> {
 // Session Item
 // ---------------------------------------------------------------------------
 
+interface SessionItemProps {
+  session: ChatSession;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onPin: (id: string) => void;
+  onUnpin: (id: string) => void;
+  onArchive: (id: string) => void;
+  onUnarchive: (id: string) => void;
+}
+
 function SessionItem({
   session,
   isActive,
   onSelect,
   onDelete,
   onRename,
-}: {
-  session: ChatSession;
-  isActive: boolean;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, title: string) => void;
-}) {
+  onPin,
+  onUnpin,
+  onArchive,
+  onUnarchive,
+}: SessionItemProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -147,78 +174,155 @@ function SessionItem({
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }, [session.updatedAt]);
 
+  const itemRow = (
+    <div
+      className={cn(
+        'group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1 cursor-pointer transition-colors',
+        isActive
+          ? 'bg-black/[0.06] dark:bg-white/[0.08]'
+          : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
+      )}
+      onClick={() => !isRenaming && onSelect(session.id)}
+    >
+      {session.isPinned && (
+        <Pin className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 rotate-45" />
+      )}
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRenameSubmit();
+            if (e.key === 'Escape') setIsRenaming(false);
+          }}
+          onBlur={handleRenameSubmit}
+          className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+          {session.title || 'Untitled'}
+        </span>
+      )}
+
+      {!isRenaming && (
+        <>
+          <span className="shrink-0 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+            {timestamp}
+          </span>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground"
+                aria-label="Session actions"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsRenaming(true);
+                }}
+              >
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (session.isPinned) onUnpin(session.id);
+                  else onPin(session.id);
+                }}
+              >
+                {session.isPinned ? (
+                  <PinOff className="mr-2 h-3.5 w-3.5" />
+                ) : (
+                  <Pin className="mr-2 h-3.5 w-3.5" />
+                )}
+                {session.isPinned ? 'Unpin' : 'Pin'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (session.isArchived) onUnarchive(session.id);
+                  else onArchive(session.id);
+                }}
+              >
+                {session.isArchived ? (
+                  <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
+                ) : (
+                  <Archive className="mr-2 h-3.5 w-3.5" />
+                )}
+                {session.isArchived ? 'Unarchive' : 'Archive'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteOpen(true);
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div
-        className={cn(
-          'group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1 cursor-pointer transition-colors',
-          isActive
-            ? 'bg-black/[0.06] dark:bg-white/[0.08]'
-            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
-        )}
-        onClick={() => !isRenaming && onSelect(session.id)}
-      >
-        {isRenaming ? (
-          <input
-            ref={inputRef}
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRenameSubmit();
-              if (e.key === 'Escape') setIsRenaming(false);
+      <ContextMenu>
+        <ContextMenuTrigger asChild>{itemRow}</ContextMenuTrigger>
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem onSelect={() => setIsRenaming(true)}>
+            <Pencil className="mr-2 h-3.5 w-3.5" />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              if (session.isPinned) onUnpin(session.id);
+              else onPin(session.id);
             }}
-            onBlur={handleRenameSubmit}
-            className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-            {session.title || 'Untitled'}
-          </span>
-        )}
-
-        {!isRenaming && (
-          <>
-            <span className="shrink-0 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-              {timestamp}
-            </span>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground"
-                  aria-label="Session actions"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsRenaming(true);
-                  }}
-                >
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteOpen(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
-      </div>
+          >
+            {session.isPinned ? (
+              <PinOff className="mr-2 h-3.5 w-3.5" />
+            ) : (
+              <Pin className="mr-2 h-3.5 w-3.5" />
+            )}
+            {session.isPinned ? 'Unpin' : 'Pin'}
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              if (session.isArchived) onUnarchive(session.id);
+              else onArchive(session.id);
+            }}
+          >
+            {session.isArchived ? (
+              <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
+            ) : (
+              <Archive className="mr-2 h-3.5 w-3.5" />
+            )}
+            {session.isArchived ? 'Unarchive' : 'Archive'}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            onSelect={() => setDeleteOpen(true)}
+            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
@@ -264,7 +368,7 @@ function UserProfileArea() {
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="border-t border-black/[0.08] dark:border-white/[0.07]">
+    <div className="border-t border-[var(--chat-border-strong)]">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none">
@@ -311,7 +415,7 @@ function CollapsedSidebar({
   onToggleSidebar?: () => void;
 }) {
   return (
-    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07] py-3">
+    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)] py-3">
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
@@ -352,10 +456,15 @@ export function ChatSidebarNew({
   onSelectSession,
   onDeleteSession,
   onRenameSession,
+  onPinSession,
+  onUnpinSession,
+  onArchiveSession,
+  onUnarchiveSession,
   onToggleSidebar,
   collapsed = false,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -374,14 +483,44 @@ export function ChatSidebarNew({
     );
   }, [sessions, searchQuery]);
 
-  const grouped = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
+  const pinnedSessions = useMemo(
+    () => filteredSessions.filter((s) => s.isPinned && !s.isArchived),
+    [filteredSessions],
+  );
+
+  const activeSessions = useMemo(
+    () => filteredSessions.filter((s) => !s.isPinned && !s.isArchived),
+    [filteredSessions],
+  );
+
+  const archivedSessions = useMemo(
+    () => filteredSessions.filter((s) => s.isArchived),
+    [filteredSessions],
+  );
+
+  const grouped = useMemo(() => groupSessions(activeSessions), [activeSessions]);
 
   if (collapsed) {
     return <CollapsedSidebar onNewChat={onNewChat} onToggleSidebar={onToggleSidebar} />;
   }
 
+  const renderItem = (session: ChatSession) => (
+    <SessionItem
+      key={session.id}
+      session={session}
+      isActive={session.id === activeSessionId}
+      onSelect={onSelectSession}
+      onDelete={onDeleteSession}
+      onRename={onRenameSession}
+      onPin={onPinSession}
+      onUnpin={onUnpinSession}
+      onArchive={onArchiveSession}
+      onUnarchive={onUnarchiveSession}
+    />
+  );
+
   return (
-    <div className="flex h-full flex-col bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07]">
+    <div className="flex h-full flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         {onToggleSidebar && (
@@ -443,23 +582,47 @@ export function ChatSidebarNew({
             )}
           </div>
         ) : (
-          Array.from(grouped.entries()).map(([group, groupSessions]) => (
-            <div key={group}>
-              <div className="px-3 py-1 mt-3 mb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
-                {group}
+          <>
+            {/* Pinned section */}
+            {pinnedSessions.length > 0 && (
+              <div>
+                <div className="px-3 py-1 mt-3 mb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+                  <Pin className="h-2.5 w-2.5" />
+                  Pinned
+                </div>
+                {pinnedSessions.map(renderItem)}
               </div>
-              {groupSessions.map((session) => (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  isActive={session.id === activeSessionId}
-                  onSelect={onSelectSession}
-                  onDelete={onDeleteSession}
-                  onRename={onRenameSession}
-                />
-              ))}
-            </div>
-          ))
+            )}
+
+            {/* Time-grouped active sessions */}
+            {Array.from(grouped.entries()).map(([group, groupSessions]) => (
+              <div key={group}>
+                <div className="px-3 py-1 mt-3 mb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                  {group}
+                </div>
+                {groupSessions.map(renderItem)}
+              </div>
+            ))}
+
+            {/* Archived section — collapsible */}
+            {archivedSessions.length > 0 && (
+              <Collapsible open={archiveOpen} onOpenChange={setArchiveOpen}>
+                <CollapsibleTrigger asChild>
+                  <button className="flex w-full items-center gap-1 px-3 py-1 mt-3 mb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider hover:text-muted-foreground transition-colors">
+                    <Archive className="h-2.5 w-2.5" />
+                    Archived ({archivedSessions.length})
+                    <ChevronDown
+                      className={cn(
+                        'ml-auto h-3 w-3 transition-transform',
+                        archiveOpen && 'rotate-180',
+                      )}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>{archivedSessions.map(renderItem)}</CollapsibleContent>
+              </Collapsible>
+            )}
+          </>
         )}
       </ScrollArea>
 

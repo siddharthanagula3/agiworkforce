@@ -34,3 +34,17 @@ export {
   branchQueryKeys,
 } from './use-conversation-branches';
 export * from './use-search-history';
+export {
+  useAdaptedMessages,
+  useAdaptedSessions,
+  useAdaptedSession,
+  useAdaptedToolEvents,
+  useAdaptedModelState,
+} from './use-unified-adapter';
+export type {
+  AdaptedMessage,
+  AdaptedToolCall,
+  AdaptedToolEvent,
+  ConversationSummary,
+  AdaptedModelState,
+} from './use-unified-adapter';

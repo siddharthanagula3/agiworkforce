@@ -1,13 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { Menu, ChevronDown, Check } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
+import { useParams } from 'next/navigation';
 import { useChatStore, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
-import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { MessageListNew } from '@features/chat/components/messages/MessageListNew';
 import {
   ArtifactsPanel,
@@ -17,85 +14,9 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useModelStore, AVAILABLE_MODELS } from '@shared/stores/model-store';
 import { ChatAIService } from '@features/chat/services/chat-ai-service';
 import { logger } from '@shared/lib/logger';
-
-const POPULAR_MODEL_IDS = [
-  'claude-sonnet-4-6',
-  'gpt-4o',
-  'gpt-4o-mini',
-  'gemini-2.0-flash',
-  'claude-haiku-4-5-20251001',
-  'deepseek-chat',
-  'mistral-large-latest',
-];
-
-function ModelSelectorButton({
-  selectedModelId,
-  onSelect,
-}: {
-  selectedModelId: string;
-  onSelect: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const popularModels = AVAILABLE_MODELS.filter((m) => POPULAR_MODEL_IDS.includes(m.id));
-  const currentModel = AVAILABLE_MODELS.find((m) => m.id === selectedModelId);
-  const displayName = currentModel?.name ?? selectedModelId;
-  const truncated = displayName.length > 20 ? displayName.slice(0, 20) + '…' : displayName;
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return undefined;
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 hover:border-border transition-colors"
-        aria-label="Select model"
-      >
-        <span>{truncated}</span>
-        <ChevronDown className="h-3 w-3 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-          {popularModels.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => {
-                onSelect(model.id);
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs hover:bg-muted/60 transition-colors"
-            >
-              <Check
-                className={cn(
-                  'h-3 w-3 shrink-0',
-                  model.id === selectedModelId ? 'text-primary' : 'opacity-0',
-                )}
-              />
-              <div className="min-w-0 text-left">
-                <div className="truncate font-medium text-foreground">{model.name}</div>
-                <div className="truncate text-[10px] text-muted-foreground">{model.provider}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { ModelSelectorButton } from '@/components/UnifiedAgenticChat/ModelSelectorButton';
 
 export default function ChatSessionPage() {
-  const router = useRouter();
   const params = useParams();
   const rawSessionId = params?.['sessionId'];
   const sessionId: string | undefined =
@@ -105,14 +26,11 @@ export default function ChatSessionPage() {
         ? rawSessionId[0]
         : undefined;
   const { user } = useAuthStore();
-  const { selectedModelId } = useModelStore();
+  const { selectedModelId, thinkingEnabled } = useModelStore();
 
   const {
     sessions,
     messages: allMessages,
-    createSession,
-    deleteSession,
-    renameSession,
     addMessage,
     deleteMessage,
     setLoading,
@@ -126,31 +44,10 @@ export default function ChatSessionPage() {
   const { extractArtifactsFromContent, clearArtifacts } = useArtifactsStore();
 
   const [mounted, setMounted] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('chat-sidebar-collapsed') === 'true';
-  });
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
-  }, []);
-
-  // Persist collapse state
-  useEffect(() => {
-    localStorage.setItem('chat-sidebar-collapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
-
-  // Keyboard shortcut Cmd/Ctrl+Shift+S
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   const messages = useMemo(
@@ -295,26 +192,6 @@ export default function ChatSessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, sessionId, user?.id]);
 
-  const handleNewChat = useCallback(() => {
-    const id = createSession(user?.id);
-    router.push(`/chat/${id}`);
-  }, [createSession, router, user?.id]);
-
-  const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteSession(id);
-      if (id === sessionId) {
-        const remaining = useChatStore.getState().sessions;
-        if (remaining.length > 0) {
-          router.push(`/chat/${remaining[0]!.id}`);
-        } else {
-          router.push('/chat');
-        }
-      }
-    },
-    [deleteSession, sessionId, router],
-  );
-
   const processAIResponseRef = useRef(processAIResponse);
   useEffect(() => {
     processAIResponseRef.current = processAIResponse;
@@ -351,112 +228,53 @@ export default function ChatSessionPage() {
   }
 
   const hasMessages = messages.length > 0;
-
   const currentSession = sessions.find((s) => s.id === sessionId);
   const sessionTitle = currentSession?.title || 'New Chat';
+  const currentModel = AVAILABLE_MODELS.find((m) => m.id === selectedModelId);
+  const modelDisplayName = currentModel?.name ?? selectedModelId;
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#faf9f7] dark:bg-[#0f0f13]">
-      {/* Mobile sidebar overlay */}
-      {mobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
-        />
-      )}
-
-      {/* Mobile sidebar */}
-      <div
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col lg:hidden w-[280px] shadow-2xl bg-[#f5f4f1] dark:bg-[#0b0c14] border-r border-black/[0.08] dark:border-white/[0.07] transform transition-transform duration-200 ease-in-out',
-          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <ChatSidebarNew
-          sessions={sessions}
-          activeSessionId={sessionId}
-          onNewChat={() => {
-            setMobileSidebarOpen(false);
-            handleNewChat();
-          }}
-          onSelectSession={(id) => {
-            setMobileSidebarOpen(false);
-            router.push(`/chat/${id}`);
-          }}
-          onDeleteSession={handleDeleteSession}
-          onRenameSession={renameSession}
-          onToggleSidebar={() => setMobileSidebarOpen(false)}
-          collapsed={false}
-        />
-      </div>
-
-      {/* Desktop sidebar */}
-      <aside
-        className={cn(
-          'hidden lg:flex lg:flex-col shrink-0 transition-[width] duration-200 ease-in-out',
-          sidebarCollapsed ? 'w-16' : 'w-[280px]',
-        )}
-      >
-        <ChatSidebarNew
-          sessions={sessions}
-          activeSessionId={sessionId}
-          onNewChat={handleNewChat}
-          onSelectSession={(id) => router.push(`/chat/${id}`)}
-          onDeleteSession={handleDeleteSession}
-          onRenameSession={renameSession}
-          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
-          collapsed={sidebarCollapsed}
-        />
-      </aside>
-
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Artifacts toggle (always visible, top right) */}
       <div className="absolute right-3 top-3 z-20">
         <ArtifactsToggleButton />
       </div>
 
-      {/* Main chat area */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Sticky header bar — mobile hamburger + session title + model selector */}
-        <div className="flex items-center gap-2 border-b border-black/[0.06] dark:border-white/[0.06] px-3 py-2 sticky top-0 z-10 bg-[#faf9f7] dark:bg-[#0f0f13]">
-          <button
-            onClick={() => setMobileSidebarOpen(true)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors lg:hidden"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
-          <ModelSelectorButton
-            selectedModelId={selectedModelId}
-            onSelect={(id) => useModelStore.getState().setSelectedModelId(id)}
-          />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-            {sessionTitle}
-          </span>
-        </div>
+      {/* Sticky header bar — model selector + session title */}
+      <div className="flex items-center gap-2 border-b border-[var(--chat-border-subtle)] px-3 py-2 sticky top-0 z-10 bg-[var(--chat-bg)]">
+        <ModelSelectorButton
+          modelDisplayName={modelDisplayName}
+          thinkingModeEnabled={thinkingEnabled}
+          isOpen={modelSelectorOpen}
+          onOpenChange={setModelSelectorOpen}
+        />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {sessionTitle}
+        </span>
+      </div>
 
-        {hasMessages ? (
-          <>
-            {/* Message list */}
-            <div className="relative flex-1 overflow-hidden">
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[#faf9f7] dark:from-[#0f0f13] to-transparent" />
-              <MessageListNew
-                messages={messages}
-                isLoading={isLoading}
-                onDelete={handleDeleteMessage}
-              />
-            </div>
+      {hasMessages ? (
+        <>
+          {/* Message list */}
+          <div className="relative flex-1 overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[var(--chat-bg)] to-transparent" />
+            <MessageListNew
+              messages={messages}
+              isLoading={isLoading}
+              onDelete={handleDeleteMessage}
+            />
+          </div>
 
-            {/* Composer */}
-            <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
-          </>
-        ) : (
-          <>
-            {/* Empty session — space above composer */}
-            <div className="flex-1 min-h-[40vh]" />
-            <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
-          </>
-        )}
-      </main>
+          {/* Composer */}
+          <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
+        </>
+      ) : (
+        <>
+          {/* Empty session — space above composer */}
+          <div className="flex-1 min-h-[40vh]" />
+          <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
+        </>
+      )}
 
       {/* Artifacts panel (slides in from right) */}
       <ArtifactsPanel />
