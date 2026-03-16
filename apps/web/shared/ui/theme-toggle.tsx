@@ -1,32 +1,19 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useTheme } from 'next-themes';
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from './button';
-import { useUIStore } from '@shared/stores/layout-store';
 
+/**
+ * ThemeToggle cycles through light → dark → system on each click.
+ * Uses next-themes' useTheme() hook directly so the DOM class is applied
+ * SSR-safely without flash. The change is also reflected in ThemeContext
+ * (via ThemeContextBridge inside ThemeProvider) and in the persisted
+ * localStorage key used by both next-themes and ThemeConstants.
+ */
 export const ThemeToggle: React.FC = () => {
-  const { theme, setTheme } = useUIStore();
+  const { theme, setTheme } = useTheme();
 
-  useEffect(() => {
-    const root = document.documentElement;
-
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else if (theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      // System theme
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-      if (systemTheme === 'dark') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    }
-  }, [theme]);
-
-  const toggleTheme = () => {
+  const cycleTheme = () => {
     if (theme === 'light') {
       setTheme('dark');
     } else if (theme === 'dark') {
@@ -36,27 +23,20 @@ export const ThemeToggle: React.FC = () => {
     }
   };
 
-  const getIcon = () => {
-    if (theme === 'light') return <Sun className="h-4 w-4" />;
-    if (theme === 'dark') return <Moon className="h-4 w-4" />;
-    return <Monitor className="h-4 w-4" />; // System
-  };
+  const label = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
 
-  const getLabel = () => {
-    if (theme === 'light') return 'Light';
-    if (theme === 'dark') return 'Dark';
-    return 'System';
-  };
+  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
 
   return (
     <Button
       variant="ghost"
       size="sm"
-      onClick={toggleTheme}
+      onClick={cycleTheme}
       className="gap-2"
-      title={`Current theme: ${getLabel()}. Click to cycle through themes.`}
+      title={`Current theme: ${label}. Click to cycle through themes.`}
+      aria-label={`Switch theme (currently ${label})`}
     >
-      {getIcon()}
+      <Icon className="h-4 w-4" />
     </Button>
   );
 };
