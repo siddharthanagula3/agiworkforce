@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminToolsPanel } from '../AdminToolsPanel';
 
@@ -181,7 +181,7 @@ describe('AdminToolsPanel', () => {
       const replayButtons = screen.getAllByRole('button', { name: /replay/i });
       expect(replayButtons.length).toBeGreaterThan(0);
 
-      await user.click(replayButtons[0]);
+      await user.click(replayButtons[0]!);
       // Verification of replay behavior happens in integration tests
     });
 
