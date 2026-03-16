@@ -6,6 +6,7 @@
  */
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUnifiedChatStore } from '@/stores/unified/unifiedChatStore';
@@ -724,7 +725,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         canEdit={!!(onEdit || onEditSave)}
       />
 
-      <div
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
         className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors ${
           isUser ? 'flex-row-reverse' : ''
         }`}
@@ -827,7 +831,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             />
           )}
         </div>
-      </div>
+      </motion.div>
     </>
   );
 };
