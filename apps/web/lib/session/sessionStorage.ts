@@ -44,19 +44,6 @@ function messageToStored(msg: EnhancedMessage): StoredMessage {
 }
 
 /**
- * Convert a StoredMessage back to EnhancedMessage
- */
-function storedToMessage(stored: StoredMessage): EnhancedMessage {
-  return {
-    id: stored.id,
-    role: stored.role,
-    content: stored.content,
-    timestamp: typeof stored.timestamp === 'string' ? new Date(stored.timestamp) : stored.timestamp,
-    metadata: stored.metadata,
-  };
-}
-
-/**
  * Save a chat session to localStorage
  *
  * @param session - Session with messages, metadata, model selection

@@ -147,7 +147,7 @@ const ToolItem = memo(ToolItemComponent, (prev, next) => {
 
 ToolItem.displayName = 'ToolItem';
 
-export function ToolTimeline({ tools, className }: ToolTimelineProps) {
+function ToolTimeline({ tools, className }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Memoize expensive computations
@@ -260,6 +260,8 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
     const p = prev.tools[i];
     const n = next.tools[i];
     if (
+      !p ||
+      !n ||
       p.name !== n.name ||
       p.status !== n.status ||
       p.durationMs !== n.durationMs ||
