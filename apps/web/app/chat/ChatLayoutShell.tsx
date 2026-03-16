@@ -156,9 +156,7 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
           'hidden lg:flex lg:flex-col relative shrink-0',
           'bg-[var(--chat-sidebar-bg)]',
           'border-r border-[var(--chat-border-strong)]',
-          sidebarCollapsed
-            ? 'w-16 transition-[width] duration-200 ease-in-out'
-            : 'transition-none',
+          sidebarCollapsed ? 'w-16 transition-[width] duration-200 ease-in-out' : 'transition-none',
         )}
         style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
         aria-label="Conversation list"
