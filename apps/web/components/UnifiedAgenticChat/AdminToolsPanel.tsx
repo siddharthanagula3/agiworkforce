@@ -11,7 +11,7 @@
  * - Request History: recent requests with timestamps, sortable by time or cost
  */
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { useModelStore } from '@/stores/unified/modelStore';
 import { useBillingUsageStore } from '@/stores/unified/billingUsage';
@@ -120,7 +120,7 @@ function ModelInfoSection() {
  * TokenUsageSection: Displays current session token count and estimated cost
  */
 function TokenUsageSection() {
-  const { totalTokens, inputTokens, outputTokens, requestHistory } = useTokenUsage();
+  const { totalTokens, inputTokens, outputTokens } = useTokenUsage();
   const { sessionCost_cents: sessionCost } = useBillingUsageStore((state: any) => ({
     sessionCost_cents: state.sessionCost_cents,
   }));
