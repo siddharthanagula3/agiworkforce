@@ -196,18 +196,27 @@ impl CostCalculator {
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
-            .cloned()
-            .unwrap_or(Pricing {
-                input_per_million: 1.0,
-                output_per_million: 1.0,
-            });
+            .cloned();
 
-        pricing.cost(input_tokens, output_tokens)
+        match pricing {
+            Some(p) => p.cost(input_tokens, output_tokens),
+            None => {
+                tracing::warn!(
+                    model = %model,
+                    provider = ?provider,
+                    input_tokens,
+                    output_tokens,
+                    "no pricing found for model or provider; returning 0.0 cost — \
+                     add model pricing to models.json to enable accurate cost tracking"
+                );
+                0.0
+            }
+        }
     }
 
     /// Calculate cost with cache discount applied.
-    /// - Anthropic: cache_creation tokens billed at 1.25× input rate, cache_read at 0.1× input rate
-    /// - OpenAI: cached_prompt tokens billed at 0.5× input rate
+    /// - Anthropic: cache_creation tokens billed at 1.25x input rate, cache_read at 0.1x input rate
+    /// - OpenAI: cached_prompt tokens billed at 0.5x input rate
     pub fn calculate_with_cache(
         &self,
         provider: Provider,
@@ -235,18 +244,31 @@ impl CostCalculator {
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
-            .cloned()
-            .unwrap_or(Pricing {
-                input_per_million: 1.0,
-                output_per_million: 1.0,
-            });
+            .cloned();
+
+        let pricing = match pricing {
+            Some(p) => p,
+            None => {
+                tracing::warn!(
+                    model = %model,
+                    provider = ?provider,
+                    prompt_tokens,
+                    completion_tokens,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                    "no pricing found for model or provider; returning 0.0 cost — \
+                     add model pricing to models.json to enable accurate cost tracking"
+                );
+                return 0.0;
+            }
+        };
 
         let input_rate = pricing.input_per_million / 1_000_000.0;
         let output_rate = pricing.output_per_million / 1_000_000.0;
 
         match provider {
             Provider::Anthropic => {
-                // cache_read at 0.1×, cache_creation at 1.25×, rest at 1.0×
+                // cache_read at 0.1x, cache_creation at 1.25x, rest at 1.0x
                 let regular_input =
                     prompt_tokens.saturating_sub(cache_read_tokens + cache_creation_tokens);
                 let input_cost = (regular_input as f64 * input_rate)
@@ -256,7 +278,7 @@ impl CostCalculator {
                 input_cost + output_cost
             }
             Provider::OpenAI | Provider::ManagedCloud => {
-                // cached tokens at 0.5× input rate
+                // cached tokens at 0.5x input rate
                 let regular_input = prompt_tokens.saturating_sub(cache_read_tokens);
                 let input_cost = (regular_input as f64 * input_rate)
                     + (cache_read_tokens as f64 * input_rate * 0.5);
@@ -306,5 +328,138 @@ impl CostCalculator {
                 default_cost * units as f64
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculate_returns_positive_for_known_model() {
+        let calc = CostCalculator::new();
+        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 1000, 500);
+        assert!(
+            cost > 0.0,
+            "known model cost must be positive, got {}",
+            cost
+        );
+    }
+
+    #[test]
+    fn calculate_returns_zero_for_zero_tokens() {
+        let calc = CostCalculator::new();
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5-nano", 0, 0);
+        assert!(
+            (cost - 0.0).abs() < f64::EPSILON,
+            "zero tokens must produce zero cost"
+        );
+    }
+
+    #[test]
+    fn calculate_uses_provider_default_for_unknown_model() {
+        let calc = CostCalculator::new();
+        // Unknown model under a known provider should use provider default,
+        // which should produce a non-zero cost (not the old silent 1.0/1.0).
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            "totally-unknown-model-xyz-99",
+            1_000_000,
+            1_000_000,
+        );
+        assert!(
+            cost > 0.0,
+            "provider default pricing must produce positive cost, got {}",
+            cost
+        );
+    }
+
+    #[test]
+    fn calculate_returns_zero_for_unknown_model_without_provider_pricing() {
+        // Build a calculator, then try a provider/model combo that cannot
+        // possibly be in the pricing map. Since all Provider enum variants
+        // do have entries in models.json, we construct a minimal calculator
+        // to test the None path.
+        let calc = CostCalculator {
+            pricing: HashMap::new(),
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        };
+        let cost = calc.calculate(Provider::Bedrock, "no-such-model", 1000, 500);
+        assert!(
+            (cost - 0.0).abs() < f64::EPSILON,
+            "missing pricing must return 0.0, not a fabricated cost; got {}",
+            cost
+        );
+    }
+
+    #[test]
+    fn calculate_with_cache_returns_zero_for_missing_pricing() {
+        let calc = CostCalculator {
+            pricing: HashMap::new(),
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        };
+        let cost =
+            calc.calculate_with_cache(Provider::Anthropic, "no-such-model", 1000, 500, 200, 100);
+        assert!(
+            (cost - 0.0).abs() < f64::EPSILON,
+            "missing pricing must return 0.0 for cached calculation; got {}",
+            cost
+        );
+    }
+
+    #[test]
+    fn calculate_with_cache_anthropic_applies_cache_discount() {
+        let calc = CostCalculator::new();
+        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 1000, 500);
+        // With cache: 500 cache_read tokens billed at 0.1x should be cheaper
+        let cost_cached = calc.calculate_with_cache(
+            Provider::Anthropic,
+            "claude-opus-4-6",
+            1000,
+            500,
+            500, // cache_read_tokens
+            0,   // cache_creation_tokens
+        );
+        assert!(
+            cost_cached < cost_no_cache,
+            "cached cost ({}) must be less than non-cached ({})",
+            cost_cached,
+            cost_no_cache
+        );
+    }
+
+    #[test]
+    fn managed_cloud_looks_up_origin_provider_pricing() {
+        let calc = CostCalculator::new();
+        // ManagedCloud should find gpt-5-nano pricing via OpenAI origin
+        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5-nano", 1_000_000, 1_000_000);
+        let direct_cost =
+            calc.calculate(Provider::OpenAI, "gpt-5-nano", 1_000_000, 1_000_000);
+        assert!(
+            (cost - direct_cost).abs() < f64::EPSILON,
+            "ManagedCloud cost ({}) must equal direct provider cost ({})",
+            cost,
+            direct_cost
+        );
+    }
+
+    #[test]
+    fn never_produces_silent_one_dollar_fallback() {
+        // Regression test: verify the old (1.0, 1.0) fallback is gone.
+        // With an empty calculator, 1M input + 1M output tokens should
+        // return 0.0, not the old $2.00 (1.0 + 1.0).
+        let calc = CostCalculator {
+            pricing: HashMap::new(),
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        };
+        let cost = calc.calculate(Provider::OpenAI, "any-model", 1_000_000, 1_000_000);
+        assert!(
+            (cost - 0.0).abs() < f64::EPSILON,
+            "must not silently produce a cost from fabricated pricing; got {}",
+            cost
+        );
     }
 }
