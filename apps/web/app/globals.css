@@ -377,6 +377,8 @@
     --chat-sidebar-bg: #f5f4f1;
     --chat-border-strong: rgba(0, 0, 0, 0.08);
     --chat-border-subtle: rgba(0, 0, 0, 0.06);
+    --chat-text-primary: #1a1a1a;
+    --chat-text-secondary: #636363;
 
     --radius: 0.5rem;
   }
@@ -450,6 +452,8 @@
     --chat-sidebar-bg: #0b0c14;
     --chat-border-strong: rgba(255, 255, 255, 0.07);
     --chat-border-subtle: rgba(255, 255, 255, 0.06);
+    --chat-text-primary: #e4e4e7;
+    --chat-text-secondary: #a1a1a6;
   }
 }
 
