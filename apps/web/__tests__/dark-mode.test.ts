@@ -82,9 +82,39 @@ describe('Dark Mode CSS Variables', () => {
   });
 
   it('contrast ratios meet WCAG AA standards for text', () => {
-    // Light text primary (#1a1a1a) on light bg (#faf9f7) = ~20:1 contrast ratio (AA+)
-    // Light text secondary (#636363) on light bg (#faf9f7) = ~4.5:1 contrast ratio (AA)
-    // Border colors (#d1ccc5, #e5e1d8) provide 3:1+ contrast for graphics
-    expect(true).toBe(true); // Contrast ratios verified in design spec
+    // WCAG relative luminance calculation
+    const getLuminance = (hex: string): number => {
+      const rgb = parseInt(hex.slice(1), 16);
+      const r = (rgb >> 16) & 0xff;
+      const g = (rgb >> 8) & 0xff;
+      const b = (rgb >> 0) & 0xff;
+      const [rs, gs, bs] = [r, g, b].map((c) => {
+        c = c / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    };
+
+    const getContrast = (hex1: string, hex2: string): number => {
+      const l1 = getLuminance(hex1);
+      const l2 = getLuminance(hex2);
+      const lighter = Math.max(l1, l2);
+      const darker = Math.min(l1, l2);
+      return (lighter + 0.05) / (darker + 0.05);
+    };
+
+    // Light mode text on light background
+    const lightPrimaryContrast = getContrast('#1a1a1a', '#faf9f7');
+    const lightSecondaryContrast = getContrast('#636363', '#faf9f7');
+
+    // Dark mode text on dark background
+    const darkPrimaryContrast = getContrast('#e4e4e7', '#0f0f13');
+    const darkSecondaryContrast = getContrast('#a1a1a6', '#0f0f13');
+
+    // WCAG AA requires 4.5:1 for text
+    expect(lightPrimaryContrast).toBeGreaterThanOrEqual(4.5);
+    expect(lightSecondaryContrast).toBeGreaterThanOrEqual(4.5);
+    expect(darkPrimaryContrast).toBeGreaterThanOrEqual(4.5);
+    expect(darkSecondaryContrast).toBeGreaterThanOrEqual(4.5);
   });
 });
