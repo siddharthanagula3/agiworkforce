@@ -50,3 +50,9 @@ export * from './runtime';
 
 // Artifact contracts (code, documents, images, data)
 export * from './artifacts';
+
+// Web app offline and session management types
+export * from './web-offline';
+
+// Web app custom hook types
+export * from './web-hooks';

@@ -13,60 +13,16 @@
  */
 
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
+import type {
+  QueuedMessage,
+  QueuedToolExecution,
+  OfflineQueueState,
+  SyncCallbacks,
+  SyncSummary,
+} from '@agiworkforce/types';
 
-/**
- * Queued message sent while offline
- */
-interface QueuedMessage {
-  id: string;
-  sessionId: string;
-  content: string;
-  timestamp: string; // ISO string
-  retryCount: number;
-  addedAt: string; // ISO string
-}
-
-/**
- * Queued tool execution request
- */
-interface QueuedToolExecution {
-  id: string;
-  sessionId: string;
-  toolName: string;
-  toolInput: Record<string, unknown>;
-  timestamp: string; // ISO string
-  retryCount: number;
-  addedAt: string; // ISO string
-}
-
-/**
- * Offline queue state
- */
-interface OfflineQueueState {
-  messages: QueuedMessage[];
-  toolExecutions: QueuedToolExecution[];
-  lastSyncTime?: string; // ISO string
-}
-
-/**
- * Callback for sync operations
- */
-interface SyncCallbacks {
-  onMessageSync?: (message: QueuedMessage) => Promise<void>;
-  onToolSync?: (tool: QueuedToolExecution) => Promise<void>;
-  onSyncComplete?: (success: boolean, summary: SyncSummary) => void;
-}
-
-/**
- * Summary of sync operation results
- */
-export interface SyncSummary {
-  messagesSynced: number;
-  messagesFailed: number;
-  toolsSynced: number;
-  toolsFailed: number;
-  totalTime: number; // milliseconds
-}
+// Re-export for backward compatibility
+export type { QueuedMessage, QueuedToolExecution, OfflineQueueState, SyncCallbacks, SyncSummary };
 
 // Storage key
 const OFFLINE_QUEUE_KEY = 'agi_offline_queue';
