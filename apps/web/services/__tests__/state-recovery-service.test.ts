@@ -136,7 +136,9 @@ describe('StateRecoveryService', () => {
 
       const log = StateRecoveryService.getRecoveryLog();
       expect(log.length).toBeGreaterThan(0);
-      expect(log[log.length - 1].action).toBe('snapshot_restore');
+      if (log.length > 0) {
+        expect(log[log.length - 1]?.action).toBe('snapshot_restore');
+      }
     });
 
     it('should clear recovery log', () => {
