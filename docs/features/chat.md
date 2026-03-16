@@ -7,9 +7,9 @@
 |-------|----------|
 | Frontend Components | `components/UnifiedAgenticChat/index.tsx` (root orchestrator), `ChatInputArea.tsx` (composer), `ChatStream.tsx` (message list), `MessageBubble.tsx` (single message), `ChatMessageList.tsx` (scroll container), `FloatingChat/index.tsx` (overlay variant) |
 | Stores | `stores/chat/chatStore.ts` — conversations, messages, streaming state, tool timeline, agentic loop status; `stores/unifiedChatStore.ts` — deprecated wrapper re-exporting sub-stores; `stores/chat/toolStore.ts` — tool executions, approvals, file ops, action log; `stores/chat/agentStore.ts` — agent status, background tasks, action trail |
-| Hooks | `hooks/useAgenticEvents.ts` — master event orchestrator (fans to 3 sub-hooks); `hooks/useAgentLoopEvents.ts` — agent loop lifecycle; `hooks/useToolEvents.ts` — tool execution events; `hooks/useFileTerminalEvents.ts` — file/terminal events; `components/UnifiedAgenticChat/useSendMessage.ts` — handleSendMessage logic |
+| Hooks | `hooks/useAgenticEvents.ts` — master event orchestrator (consolidated, handles all agentic/tool/file/terminal events directly); `hooks/useApprovalActions.ts` — tool approval accept/reject |
 | Lib Utilities | `lib/chatToolUtils.ts` — pure utility functions for tool name normalization and inline data transformations |
-| Rust Commands | `sys/commands/chat/send_message.rs` — `chat_send_message` (main); `conversation.rs` — CRUD; `messages.rs` — message CRUD; `control.rs` — stop generation; `search.rs` — FTS search; `export.rs` — export; `cost.rs` — cost tracking; `compaction.rs` — context compaction; `branching.rs` — branch management; `pending.rs` — pending message queue; `attachments.rs` — file/image processing |
+| Rust Commands | `sys/commands/chat/` (31 files): `send_message.rs` — entry point, delegates to `send_message_setup.rs` (request prep) + `send_message_execution.rs` (1862 lines, streaming + tool loop); `conversation.rs` — CRUD; `control.rs` — stop generation; `search.rs` — FTS search; `export.rs` — export; `cost.rs` — cost tracking; `compaction.rs` — context compaction; `branching.rs` — branch management; `pending.rs` — pending message queue; `attachments.rs` — file/image processing; `tools.rs` — tool definitions; `tool_execution.rs` — tool dispatch; `tool_events.rs` — structured tool events; `stream_runtime.rs` — stream consumer |
 | Rust Core | `core/llm/llm_router.rs` — `LLMRouter::send_message_streaming()`, candidate selection, retry; `core/llm/sse_parser.rs` — `SseStreamParser` (provider-specific SSE → `StreamChunk`); `core/llm/provider_adapter.rs` — per-provider request/response mapping |
 | Event Channels | `chat:stream-start`, `chat:stream-chunk`, `chat:stream-end`, `chat:stream-error` (streaming lifecycle); `chat:tool-executing`, `chat:tool-result`, `chat:tool-calls` (tool loop); `chat:agent-progress` (iteration counter); `agentic:loop-started/status/ended/message-consumed` (loop lifecycle); `tool:event` (structured Started/Progress/Completed); `chat:skills-injected` (skill names); `automation:permission_required` (accessibility toast) |
 | Web API Routes | `apps/web/app/api/chat/conversations/route.ts` — GET/POST; `[id]/route.ts` — GET/PATCH/DELETE; `[id]/messages/route.ts` — GET/POST |
@@ -17,7 +17,7 @@
 
 ## Data Flow
 
-1. **User types message** — `ChatInputArea.tsx` captures text and calls `handleSendMessage(content, options)` from `useSendMessage.ts`.
+1. **User types message** — `ChatInputArea.tsx` captures text and calls `handleSendMessage(content, options)` in `index.tsx`.
 
 2. **Slash command check** — `parseSlashCommand(content)` is called first. Built-in commands (`/terminal`, `/browser`, etc.) dispatch to `slashCommandHandlers.ts` and return early.
 
@@ -31,7 +31,7 @@
 
 7. **IPC invoke** — `invoke('chat_send_message', { request: { content, userId, conversationId, attachments, modelOverride, focusMode, stream: true, enableTools: true, frontendMessageId, customInstructions, thinkingMode, temperature, maxOutputTokens, enableAgentMode, projectFolder, modelCapabilities, incognito } })`. Returns immediately; content arrives via events.
 
-8. **Rust `chat_send_message`** (`send_message.rs:118`):
+8. **Rust `chat_send_message`** (`send_message.rs` entry, delegates to `send_message_setup.rs` + `send_message_execution.rs`):
    - Validates request, checks billing/budget limits
    - Creates or loads `Conversation` from SQLite (auto-creates with 50-char title if no `conversation_id`)
    - Dual-writes new conversation to Supabase via `spawn_sync_conversation()`
@@ -132,7 +132,7 @@ AppLayout
 
 - `unifiedChatStore.ts` is marked `DEPRECATED` at line 5 but is still widely imported — migration to direct sub-store imports is incomplete
 - `agenticLoopStatus` lives in `chatStore` (not `agentStore`) despite being agent lifecycle data — architectural mismatch
-- `useSendMessage.ts` was extracted from `index.tsx` but `index.tsx` still contains duplicate slash command dispatch code
+- Send message logic lives directly in `index.tsx` (no separate `useSendMessage.ts` hook)
 - Deep research path returns `Message::default()` as `assistant_message` in the synchronous response — actual content only arrives via events. Code reading `response.assistant_message.content` directly gets empty string
 - `chat:pending-context-available` event is emitted but no frontend listener consumes it
 - `chat_update_conversation` and `chat_delete_conversation` exist as Rust functions in `conversation.rs` but are NOT registered in `lib.rs` `generate_handler![]` — any frontend `invoke()` call to them will fail silently
@@ -140,7 +140,7 @@ AppLayout
 
 ## Design Decisions
 
-- **Return-immediately pattern**: `chat_send_message` spawns `tauri::async_runtime::spawn` and returns a sentinel response immediately. Prevents IPC timeout on long streaming sessions. All content arrives via Tauri events.
+- **Return-immediately pattern**: `chat_send_message` (entry in `send_message.rs`) delegates to `send_message_setup.rs` for request preparation and `send_message_execution.rs` (1862 lines) for the streaming + tool loop. Spawns `tauri::async_runtime::spawn` and returns a sentinel response immediately. Prevents IPC timeout on long streaming sessions. All content arrives via Tauri events.
 - **rAF stream batching**: `processStreamBuffer` coalesces multiple `chat:stream-chunk` events per animation frame to avoid React state update saturation during rapid token emission.
 - **Dual-write to Supabase**: All conversations/messages fire-and-forget synced to Supabase. SQLite is always authoritative; Supabase is best-effort for cross-device sync.
 - **Frontend UUID / backend integer ID mapping**: Frontend generates UUIDs for React keys; `dbIdToUuid()`/`uuidToDbId()` maintain bidirectional cache in localStorage (1000 entries cap). `linkConversationId()` called on stream-end.

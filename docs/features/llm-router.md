@@ -6,7 +6,7 @@
 
 | Layer | Path(s) |
 |-------|---------|
-| Rust router core | `apps/desktop/src-tauri/src/core/llm/llm_router.rs` (2463 lines) |
+| Rust router core | `apps/desktop/src-tauri/src/core/llm/llm_router.rs` (2626 lines) |
 | Rust LLM types & trait | `apps/desktop/src-tauri/src/core/llm/mod.rs` |
 | Provider adapter | `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs` |
 | SSE parser | `apps/desktop/src-tauri/src/core/llm/sse_parser.rs` |
@@ -29,7 +29,7 @@
 | TS LLM config store | `apps/desktop/src/stores/llmConfigStore.ts` |
 | TS model catalog shim | `apps/desktop/src/constants/llm.ts` |
 | TS model router | `apps/desktop/src/lib/modelRouter.ts` |
-| JSON model catalog (source of truth) | `apps/desktop/src/constants/models.json` (2602 lines) |
+| JSON model catalog (source of truth) | `apps/desktop/src/constants/models.json` (2649 lines) |
 | Web model catalog API | `apps/web/app/api/models/route.ts` |
 | Web LLM proxy API | `apps/web/app/api/llm/v1/chat/completions/route.ts` |
 | Tool executor modules | `apps/desktop/src-tauri/src/core/llm/tool_executor/*.rs` (15 sub-modules) |
@@ -154,7 +154,7 @@ Translates between AGI Workforce's unified `LLMRequest`/`LLMResponse` format and
 
 ### Single Source of Truth: `models.json`
 
-The entire model catalog lives in one JSON file at `apps/desktop/src/constants/models.json` (2602 lines). It is consumed by three layers:
+The entire model catalog lives in one JSON file at `apps/desktop/src/constants/models.json` (2649 lines). It is consumed by three layers:
 
 ```
 models.json (single source)
@@ -719,12 +719,10 @@ Auto model tier mappings:
 
 4. **ManagedCloud as proxy bottleneck**: All cloud providers route through the web backend proxy. If the proxy is down, no cloud models are available. Direct-to-provider routing with BYOK would be more resilient.
 
-5. **`HttpSummaryLLM::extract_memories` returns empty**: The embedding-based memory extraction layer (used by `conversation_summarizer.rs`) has real embeddings wired but `extract_memories` always returns `Vec::new()`. Full LLM wiring is needed for memory extraction.
+5. **Hardcoded media pricing**: While token-based pricing loads from `models.json`, media generation pricing (images, video) remains hardcoded in `cost_calculator.rs`.
 
-6. **Hardcoded media pricing**: While token-based pricing loads from `models.json`, media generation pricing (images, video) remains hardcoded in `cost_calculator.rs`.
+6. **Provider adapter tests**: `provider_adapter_tests.rs` exists but coverage of all 12 providers' format translations is incomplete.
 
-7. **Provider adapter tests**: `provider_adapter_tests.rs` exists but coverage of all 12 providers' format translations is incomplete.
+7. **Unregistered IPC commands**: `llm_list_ollama_models` and `clear_model_capability_cache` are defined in `sys/commands/llm.rs` with `#[tauri::command]` but are not listed in `generate_handler!()` in `lib.rs`, making them unreachable from the frontend. `llm_get_ollama_models` (which is registered) wraps the same internal function as `llm_list_ollama_models`.
 
-8. **Unregistered IPC commands**: `llm_list_ollama_models` and `clear_model_capability_cache` are defined in `sys/commands/llm.rs` with `#[tauri::command]` but are not listed in `generate_handler!()` in `lib.rs`, making them unreachable from the frontend. `llm_get_ollama_models` (which is registered) wraps the same internal function as `llm_list_ollama_models`.
-
-9. **BYOK not implemented**: Despite CLAUDE.md listing "Full BYOK + Local LLMs" as a differentiator, `llm_configure_provider` explicitly rejects direct API key configuration for all cloud providers (returns error: "Local key storage is disabled for security"). The `apiKey` parameter is prefixed with `_` and unused. All cloud providers route through ManagedCloud proxy only.
+8. **BYOK not implemented**: Despite CLAUDE.md listing "Full BYOK + Local LLMs" as a differentiator, `llm_configure_provider` explicitly rejects direct API key configuration for all cloud providers (returns error: "Local key storage is disabled for security"). The `apiKey` parameter is prefixed with `_` and unused. All cloud providers route through ManagedCloud proxy only.

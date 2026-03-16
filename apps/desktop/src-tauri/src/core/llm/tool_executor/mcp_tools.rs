@@ -1,6 +1,13 @@
 use super::*;
 
-pub(super) const MCP_TOOL_TIMEOUT_MS: u64 = 120_000; // 120s: MCP tool calls may involve remote APIs, I/O, and browser/runtime startup
+/// Default timeout for MCP tool calls (120s).
+/// MCP tool calls may involve remote APIs, I/O, and browser/runtime startup.
+/// Override per-call by passing `timeout_ms` in the tool arguments.
+pub(super) const MCP_TOOL_TIMEOUT_MS: u64 = 120_000;
+
+/// Maximum allowed timeout for any MCP tool call (300s / 5 minutes).
+/// Even if a higher value is requested via `timeout_ms`, it is clamped to this ceiling.
+pub(super) const MCP_TOOL_MAX_TIMEOUT_MS: u64 = 300_000;
 
 impl ToolExecutor {
     /// Expand tilde (~) to home directory in path strings.
@@ -49,7 +56,7 @@ impl ToolExecutor {
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(MCP_TOOL_TIMEOUT_MS)
-            .min(300_000);
+            .min(MCP_TOOL_MAX_TIMEOUT_MS);
         let started = Instant::now();
 
         tracing::info!(

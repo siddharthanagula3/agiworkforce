@@ -700,6 +700,48 @@ impl ToolExecutionGuard {
             },
         );
 
+        // Grep search — read-only content search
+        allowed_tools.insert(
+            "grep_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "pattern".to_string(),
+                    "path".to_string(),
+                    "glob".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // Glob search — read-only file pattern matching
+        allowed_tools.insert(
+            "glob_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["pattern".to_string(), "path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // Exact string replacement edit — modifies files
+        allowed_tools.insert(
+            "edit_exact_replace".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 15,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "file_path".to_string(),
+                    "old_string".to_string(),
+                    "new_string".to_string(),
+                    "replace_all".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
         // Image analysis via AI vision
         allowed_tools.insert(
             "image_analyze".to_string(),

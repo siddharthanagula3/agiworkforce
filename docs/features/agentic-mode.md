@@ -7,8 +7,8 @@
 |-------|----------|
 | Frontend Components | `components/UnifiedAgenticChat/index.tsx` — AgenticLoopStatusBar, PendingMessagesBubbles; `ToolLabel.tsx` — single tool entry; `ToolTimeline.tsx` — collapsible timeline per message; `Cards/ToolExecutionCard.tsx`, `Cards/ApprovalRequestCard.tsx` |
 | Stores | `stores/chat/chatStore.ts` — `toolTimelineByMessage`, `agenticLoopStatus`; `stores/chat/toolStore.ts` — `activeToolStreams`, `actionLog`, `pendingApprovals`, `plan`, `trustedWorkflows`; `stores/chat/agentStore.ts` — `actionTrail`, `isAutonomousMode`, `backgroundTasks`, `agents` |
-| Hooks | `hooks/useAgenticEvents.ts` — master hook (fans to 3 sub-hooks); `hooks/useAgentLoopEvents.ts` — plan/action/permission/metrics events; `hooks/useToolEvents.ts` — MCP tool/stream/approval events; `hooks/useFileTerminalEvents.ts` — file/terminal events |
-| Rust Commands | `sys/commands/chat/send_message.rs` — inline streaming tool loop (lines 1350-1850); `sys/commands/agent.rs` — `agent_init`, `agent_stop`, `agent_submit_task`, `agent_resolve_approval`; `sys/commands/background_agents.rs` — background agent CRUD |
+| Hooks | `hooks/useAgenticEvents.ts` — consolidated master hook (handles all plan/action/permission/metrics/tool/file/terminal events directly); `hooks/useApprovalActions.ts` — tool approval accept/reject |
+| Rust Commands | `sys/commands/chat/send_message_execution.rs` (1862 lines) — streaming tool loop; `sys/commands/agent.rs` — `agent_init`, `agent_stop`, `agent_submit_task`, `agent_resolve_approval`; `sys/commands/background_agents.rs` — background agent CRUD |
 | Rust Core | `core/agent/autonomous.rs` — `AutonomousAgent::run_autonomous_loop()`; `core/agent/planner.rs` — `TaskPlanner::plan_task()` (LLM-driven step decomposition); `core/agent/executor.rs` — `TaskExecutor::execute_step()` for all `Action` variants; `core/agent/approval.rs` — `ApprovalManager`; `core/agent/background_agent.rs` — `BackgroundAgent` |
 | Tool Events | `sys/commands/chat/tool_events.rs` — `ToolEvent` enum (Started/Progress/Completed), `get_tool_display_info()` (MCP name → Claude Code-style labels), rate-limited `should_emit_progress()` (100ms gap) |
 | Event Channels | `tool:event` (Started/Progress/Completed); `agentic:loop-started/status/ended/message-consumed`; `chat:agent-progress`; `agent:thinking`, `agent:finished`; `agent:plan_update`, `agent:action_update`, `agent:permission_required`; `agent:budget-warning`, `agent:budget-exceeded`, `agent:loop-iteration-limit` |
@@ -17,7 +17,7 @@
 
 ### Path A: Streaming Tool Loop (primary — most users experience this)
 
-Triggered when LLM returns `tool_calls` during `chat_send_message`. Runs inside `send_message.rs`.
+Triggered when LLM returns `tool_calls` during `chat_send_message`. Runs inside `send_message_execution.rs`.
 
 1. **Tool loop entry** — `has_tool_calls=true && !was_stopped`: emits `agentic:loop-started` with `max_iterations` (25 standard, 8 fast-metadata)
 
@@ -103,7 +103,7 @@ UnifiedAgenticChat (index.tsx)
 ## Known Gaps
 
 - **Two parallel agentic paths**: Path A (streaming tool loop in `send_message.rs`) and Path B (`AutonomousAgent`/`AgentOrchestrator`) are largely independent codebases. Most "agentic" behavior (MCP tool calls) uses Path A; desktop automation uses Path B.
-- **`agent:plan_update`/`agent:action_update` events** are listened for in `useAgentLoopEvents.ts` but only Path B emits them. Path A (the primary path) never emits plan/action updates. UI elements depending on these (`AgentTaskPanel`, action log plan entries) only activate during desktop automation.
+- **`agent:plan_update`/`agent:action_update` events** are listened for in `useAgenticEvents.ts` but only Path B emits them. Path A (the primary path) never emits plan/action updates. UI elements depending on these (`AgentTaskPanel`, action log plan entries) only activate during desktop automation.
 - **`ToolEvent::Progress`** is defined and rate-limited but nothing in current MCP execution calls `emit_tool_event(Progress{...})`. The progress channel is wired but never driven.
 - **`parallel_group`** field in `ToolEvent::Started` is always `None` in `execute_tool_calls_batch()`. `ToolTimeline.tsx` has grouping logic for parallel tools but Rust never populates it. All tools appear sequential.
 - **Path B final synthesis** uses non-streaming mode — users see nothing until the entire agent task completes (no progressive output).
@@ -111,9 +111,9 @@ UnifiedAgenticChat (index.tsx)
 
 ## Design Decisions
 
-- **Streaming tool loop inside `chat_send_message`** — rather than a separate agent command, the primary agentic loop runs as a continuation of the initial LLM stream. Gives seamless UX (tokens stream per iteration) and keeps all state in a single async task. Downside: ~1500-line `send_message.rs`.
+- **Streaming tool loop inside `chat_send_message`** — rather than a separate agent command, the primary agentic loop runs as a continuation of the initial LLM stream. Gives seamless UX (tokens stream per iteration) and keeps all state in a single async task. The implementation was decomposed from a monolithic `send_message.rs` into `send_message.rs` (entry, 112 lines) + `send_message_setup.rs` (prep) + `send_message_execution.rs` (1862 lines, streaming + tool loop).
 - **Tool display name mapping in Rust** (`tool_events.rs:78`) — MCP tool name + JSON args mapped to Claude Code-style labels (`Read(src/main.rs)`) entirely in Rust. Ensures consistency across streaming and non-streaming contexts.
 - **Rate-limited progress events** — `should_emit_progress()` enforces 100ms minimum between progress events per tool ID. Global `LazyLock<Mutex<HashMap<String, Instant>>>` as rate-limit map, cleared when >500 entries.
 - **Approval timeout** — autonomous tasks use 300s (`APPROVAL_TIMEOUT_SECS`) oneshot channel. Auto-fails if user doesn't approve within 5 minutes.
 - **ToolTimeline auto-collapse** — `ToolTimeline.tsx` auto-expands while tools running (`hasRunning`). Collapses on loop end to save space.
-- **Message queuing during active loop** — `useSendMessage.ts` detects `agenticLoopStatus?.active` and calls `chat_add_pending_message` instead of starting new `chat_send_message`. Rust atomically dequeues and injects as user messages between tool iterations.
+- **Message queuing during active loop** — The chat UI detects `agenticLoopStatus?.active` and calls `chat_add_pending_message` instead of starting new `chat_send_message`. Rust atomically dequeues and injects as user messages between tool iterations.

@@ -1922,6 +1922,7 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::get_agent_mode,
             crate::sys::commands::tool_confirmation::set_tool_approval_policy,
             crate::sys::commands::tool_confirmation::get_tool_approval_policy,
+            crate::sys::commands::tool_confirmation::clear_session_tool_approvals,
 
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,
@@ -1993,6 +1994,11 @@ pub fn run() {
             crate::sys::commands::undo_last,
             crate::sys::commands::undo_task,
             crate::sys::commands::undo_can_undo,
+
+            // Coding checkpoints (named file snapshots for rewind)
+            crate::sys::commands::coding_checkpoint_create,
+            crate::sys::commands::coding_checkpoint_list,
+            crate::sys::commands::coding_checkpoint_rewind,
 
             // Artifacts (live previews and versioned documents)
             crate::sys::commands::artifacts::artifact_create,

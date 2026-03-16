@@ -103,27 +103,32 @@ async fn detect_uncached(
 ) -> ModelCapabilities {
     let url = format!("{}/api/show", base_url.trim_end_matches('/'));
 
-    let response = match client
-        .post(&url)
-        .json(&serde_json::json!({"name": model}))
-        .timeout(std::time::Duration::from_secs(5))
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!("[CapDetect] Failed to query /api/show for {model}: {e}");
-            return default_capabilities(model);
-        }
+    // Wrap the entire HTTP exchange in tokio::time::timeout so a stalled
+    // connection can never block the tokio runtime beyond 5 seconds.
+    let http_future = async {
+        let response = client
+            .post(&url)
+            .json(&serde_json::json!({"name": model}))
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await?;
+        response.json::<OllamaShowResponse>().await
     };
 
-    let show: OllamaShowResponse = match response.json().await {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!("[CapDetect] Failed to parse /api/show response for {model}: {e}");
-            return default_capabilities(model);
-        }
-    };
+    let show: OllamaShowResponse =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), http_future).await {
+            Ok(Ok(s)) => s,
+            Ok(Err(e)) => {
+                tracing::warn!("[CapDetect] Failed to query /api/show for {model}: {e}");
+                return default_capabilities(model);
+            }
+            Err(_elapsed) => {
+                tracing::warn!(
+                    "[CapDetect] Timeout querying /api/show for {model} (5s elapsed)"
+                );
+                return default_capabilities(model);
+            }
+        };
 
     // Check if the template contains tool-related tokens
     let template_has_tools = show

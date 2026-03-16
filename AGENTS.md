@@ -25,7 +25,6 @@
 | Agent                      | File                          | Zone   | Responsibilities                                                |
 | -------------------------- | ----------------------------- | ------ | --------------------------------------------------------------- |
 | frontend-engineer          | frontend-engineer.md          | A      | React components, pages, styles, UI state                       |
-| backend-engineer           | (infer)                       | B      | API endpoints, services, middleware                             |
 | database-engineer          | database-engineer.md          | C      | Schema, migrations, ORM models, queries                         |
 | billing-stripe-engineer    | billing-stripe-engineer.md    | D      | Stripe integration, payments, subscriptions, invoicing          |
 | browser-extension-engineer | browser-extension-engineer.md | D      | Browser automation, extension, web scraping                     |
@@ -80,27 +79,16 @@
 
 ## Skills
 
-A skill is a set of local instructions to follow that is stored in a `SKILL.md` file.
+Project skills are in `.claude/skills/` — each has a `SKILL.md` with instructions. Available skills:
 
-### Available skills
-
-- `skill-creator`: Guide for creating effective skills. Use when creating or updating a skill that extends Codex capabilities. (file: `/Users/siddhartha/.codex/skills/.system/skill-creator/SKILL.md`)
-- `skill-installer`: Installs Codex skills into `$CODEX_HOME/skills` from curated list or GitHub repo path. (file: `/Users/siddhartha/.codex/skills/.system/skill-installer/SKILL.md`)
-
-### How to use skills
-
-- Discovery: The list above is the skills available in this session (name + description + file path).
-- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a listed skill description, use that skill for that turn.
-- Missing/blocked: If a named skill is unavailable or its path cannot be read, say so briefly and continue with the best fallback.
-- Progressive disclosure:
-  1. Open the skill `SKILL.md` and read only enough to follow the workflow.
-  2. Resolve relative paths in skill docs relative to the skill directory first.
-  3. Load only specific reference files needed; avoid bulk-loading.
-  4. Prefer using existing skill scripts/templates/assets rather than recreating.
-- Coordination:
-  1. If multiple skills apply, use the minimal set and state order.
-  2. Announce which skills are used and why in one short line.
-- Context hygiene:
-  1. Keep context small: summarize long content instead of pasting.
-  2. Avoid deep reference chasing unless blocked.
-- Safety and fallback: If a skill cannot be applied cleanly, state the issue, pick next-best approach, and continue.
+| Skill | Directory | Purpose |
+|-------|-----------|---------|
+| build-and-check | `.claude/skills/build-and-check/` | Full build + compile check |
+| db-migrate | `.claude/skills/db-migrate/` | Supabase migration creation |
+| deploy-check | `.claude/skills/deploy-check/` | Pre-deployment readiness |
+| dev-status | `.claude/skills/dev-status/` | Developer status snapshot |
+| fix-rust | `.claude/skills/fix-rust/` | Cargo clippy auto-fix |
+| fix-scheduler | `.claude/skills/fix-scheduler/` | Scheduler subsystem fix |
+| wire-command | `.claude/skills/wire-command/` | Wire Rust commands to frontend |
+| market-scan | `.claude/skills/market-scan/` | Competitive research |
+| content-script | `.claude/skills/content-script/` | Short-form video scripts |

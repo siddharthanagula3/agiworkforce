@@ -44,7 +44,7 @@ export const ModelSelectorButton: React.FC<ModelSelectorButtonProps> = ({
   // Simple mode: show simplified static display
   if (isSimpleMode) {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 dark:text-gray-500">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
         <Sparkles size={12} className="text-green-500" />
         <span>Auto</span>
       </div>
@@ -66,11 +66,11 @@ export const ModelSelectorButton: React.FC<ModelSelectorButtonProps> = ({
             type="button"
             className={cn(
               'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
-              'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+              'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
               'transition-colors duration-150',
             )}
           >
-            <span className="truncate max-w-[100px]">{modelDisplayName}</span>
+            <span className="truncate max-w-[80px]">{modelDisplayName}</span>
             {thinkingModeEnabled && <Brain size={12} className="text-amber-500" />}
             {showNoVision && (
               <span title="No vision support" className="shrink-0">

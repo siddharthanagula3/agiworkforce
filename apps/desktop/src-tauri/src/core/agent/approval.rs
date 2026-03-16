@@ -9,6 +9,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::{oneshot, Mutex as TokioMutex, RwLock};
 
+/// Synchronous, rule-based approval checker used **inside** `AutonomousAgent`.
+///
+/// Evaluates a `Task` against `ApprovalRule`s and returns a boolean decision
+/// (approve / reject) without user interaction. This is the first gate: if
+/// `should_approve()` returns `false`, the caller should escalate to
+/// `ApprovalController` for an interactive frontend approval prompt.
+///
+/// **Canonical usage**: `AutonomousAgent::approval` field.
+/// See also: `ApprovalController` -- the async, frontend-facing approval system.
 pub struct ApprovalManager {
     config: AgentConfig,
     approval_rules: Vec<ApprovalRule>,
@@ -231,6 +240,19 @@ struct PendingApproval {
     resolved: AtomicBool,
 }
 
+/// Async, frontend-facing approval controller managed as Tauri state.
+///
+/// Handles the interactive approval flow: emits `agent:permission_required`
+/// to the frontend, waits for user approve/reject via a `oneshot` channel,
+/// and optionally records trust in `TrustedWorkflowStore` for auto-approval.
+///
+/// **Canonical usage**: registered via `app.manage()` in `lib.rs`, accessed
+/// in Tauri commands (`resolve_agent_approval`, `list_trusted_workflows`).
+///
+/// Both systems are intentionally separate and complementary:
+/// - `ApprovalManager` = synchronous rule engine (auto-approve / auto-reject)
+/// - `ApprovalController` = async user-interaction bridge (emit -> wait -> resolve)
+///   Do NOT remove either.
 pub struct ApprovalController {
     pending: TokioMutex<HashMap<String, PendingApproval>>,
 

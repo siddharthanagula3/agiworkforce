@@ -277,8 +277,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       <div
         className={cn(
           'absolute bottom-full left-0 z-50 mb-2 w-80',
-          'rounded-xl border border-gray-200/70 bg-white/95 shadow-2xl backdrop-blur-xl',
-          'dark:border-gray-700 dark:bg-charcoal-900/95',
+          'rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl',
+          '',
           'px-4 py-3',
         )}
       >
@@ -297,15 +297,15 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       ref={listRef}
       className={cn(
         'absolute bottom-full left-0 z-50 mb-2 w-80 max-h-72 overflow-y-auto',
-        'rounded-xl border border-gray-200/70 bg-white/95 shadow-2xl backdrop-blur-xl',
-        'dark:border-gray-700 dark:bg-charcoal-900/95',
+        'rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl',
+        '',
       )}
       role="listbox"
       aria-label="File mentions"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
-        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-3 py-2">
+        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
           {isSearchMode ? (
             <>
               <Search size={10} />
@@ -338,7 +338,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         </div>
       ) : (
         displayEntries.map((entry, i) => (
-          <button type="button"
+          <button
+            type="button"
             key={entry.path}
             data-mention-item
             role="option"
@@ -347,7 +348,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
               'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
               i === selectedIndex
                 ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-charcoal-800',
+                : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]',
             )}
             onClick={() => handleEntryActivate(entry)}
             onMouseEnter={() => setSelectedIndex(i)}

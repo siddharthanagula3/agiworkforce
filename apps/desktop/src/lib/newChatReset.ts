@@ -1,6 +1,7 @@
 import { useAgentStore } from '../stores/chat/agentStore';
 import { useChatStore } from '../stores/chat/chatStore';
 import { useToolStore } from '../stores/chat/toolStore';
+import { useProjectStore } from '../stores/projectStore';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 
@@ -26,6 +27,9 @@ export async function resetInFlightChatState(): Promise<void> {
   agentStore.setAgentStatus(null);
   agentStore.clearActionTrail();
   agentStore.clearBackgroundTasks();
+
+  // Clear project folder so new chats start without a pre-selected path.
+  useProjectStore.getState().setCurrentFolder(null);
 
   // AUDIT-STREAM-022 fix: Cancel active tool streams via backend first,
   // then update local state. This ensures both channels (backend + activeToolStreams) are unified.

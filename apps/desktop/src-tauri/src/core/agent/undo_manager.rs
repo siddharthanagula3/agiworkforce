@@ -301,29 +301,25 @@ impl UndoManager {
             .as_ref()
             .ok_or_else(|| "No path for file creation".to_string())?;
 
-        // Check if file still exists
-        if !path.exists() {
-            return Ok(UndoResult {
+        // Try to delete directly -- handle NotFound as success (already gone).
+        // Avoids TOCTOU race between exists() and remove_file().
+        match fs::remove_file(path).await {
+            Ok(()) => Ok(UndoResult {
+                success: true,
+                change_id: change.id.clone(),
+                change_type: "FileCreated".to_string(),
+                path: Some(path.display().to_string()),
+                message: format!("Deleted created file: {}", path.display()),
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(UndoResult {
                 success: true,
                 change_id: change.id.clone(),
                 change_type: "FileCreated".to_string(),
                 path: Some(path.display().to_string()),
                 message: "File already deleted".to_string(),
-            });
+            }),
+            Err(e) => Err(format!("Failed to delete file: {}", e)),
         }
-
-        // Delete the created file
-        fs::remove_file(path)
-            .await
-            .map_err(|e| format!("Failed to delete file: {}", e))?;
-
-        Ok(UndoResult {
-            success: true,
-            change_id: change.id.clone(),
-            change_type: "FileCreated".to_string(),
-            path: Some(path.display().to_string()),
-            message: format!("Deleted created file: {}", path.display()),
-        })
     }
 
     async fn undo_file_modified(&self, change: &Change) -> Result<UndoResult, String> {
@@ -362,14 +358,6 @@ impl UndoManager {
             .as_ref()
             .ok_or_else(|| "No content stored for deleted file".to_string())?;
 
-        // Check if file already exists
-        if path.exists() {
-            return Err(format!(
-                "Cannot restore deleted file - path already exists: {}",
-                path.display()
-            ));
-        }
-
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
@@ -377,18 +365,34 @@ impl UndoManager {
                 .map_err(|e| format!("Failed to create parent directory: {}", e))?;
         }
 
-        // Restore the file
-        fs::write(path, content)
+        // Use create_new (O_CREAT | O_EXCL) to atomically detect whether the
+        // file already exists, avoiding a TOCTOU race between exists() and write().
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
             .await
-            .map_err(|e| format!("Failed to restore file: {}", e))?;
+        {
+            Ok(_file) => {
+                // File was created exclusively; now write the restored content.
+                fs::write(path, content)
+                    .await
+                    .map_err(|e| format!("Failed to write restored file: {}", e))?;
 
-        Ok(UndoResult {
-            success: true,
-            change_id: change.id.clone(),
-            change_type: "FileDeleted".to_string(),
-            path: Some(path.display().to_string()),
-            message: format!("Restored deleted file: {}", path.display()),
-        })
+                Ok(UndoResult {
+                    success: true,
+                    change_id: change.id.clone(),
+                    change_type: "FileDeleted".to_string(),
+                    path: Some(path.display().to_string()),
+                    message: format!("Restored deleted file: {}", path.display()),
+                })
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(format!(
+                "Cannot restore deleted file - path already exists: {}",
+                path.display()
+            )),
+            Err(e) => Err(format!("Failed to restore file: {}", e)),
+        }
     }
 
     async fn undo_file_renamed(
@@ -442,43 +446,35 @@ impl UndoManager {
             .as_ref()
             .ok_or_else(|| "No path for directory creation".to_string())?;
 
-        if !path.exists() {
-            return Ok(UndoResult {
+        // Try to remove directly -- remove_dir only succeeds on empty dirs.
+        // Avoids TOCTOU race between exists()/read_dir() and remove_dir().
+        match fs::remove_dir(path).await {
+            Ok(()) => Ok(UndoResult {
+                success: true,
+                change_id: change.id.clone(),
+                change_type: "DirectoryCreated".to_string(),
+                path: Some(path.display().to_string()),
+                message: format!("Removed created directory: {}", path.display()),
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(UndoResult {
                 success: true,
                 change_id: change.id.clone(),
                 change_type: "DirectoryCreated".to_string(),
                 path: Some(path.display().to_string()),
                 message: "Directory already removed".to_string(),
-            });
+            }),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("not empty") || err_str.contains("Directory not empty") {
+                    Err(format!(
+                        "Cannot remove directory - not empty: {}",
+                        path.display()
+                    ))
+                } else {
+                    Err(format!("Failed to remove directory: {}", e))
+                }
+            }
         }
-
-        // Only remove if empty
-        let is_empty = fs::read_dir(path)
-            .await
-            .map_err(|e| format!("Failed to read directory: {}", e))?
-            .next_entry()
-            .await
-            .map_err(|e| format!("Failed to check directory: {}", e))?
-            .is_none();
-
-        if !is_empty {
-            return Err(format!(
-                "Cannot remove directory - not empty: {}",
-                path.display()
-            ));
-        }
-
-        fs::remove_dir(path)
-            .await
-            .map_err(|e| format!("Failed to remove directory: {}", e))?;
-
-        Ok(UndoResult {
-            success: true,
-            change_id: change.id.clone(),
-            change_type: "DirectoryCreated".to_string(),
-            path: Some(path.display().to_string()),
-            message: format!("Removed created directory: {}", path.display()),
-        })
     }
 
     /// Undo a git push operation.

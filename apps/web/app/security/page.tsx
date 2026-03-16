@@ -78,7 +78,7 @@ const securityFeatures = [
       'API keys encrypted at rest with Argon2id key derivation + AES-256-GCM',
       'Keys stored in OS keychain or encrypted SQLCipher database — never plaintext',
     ],
-    tagline: 'Military-grade encryption for every credential',
+    tagline: 'Industry-standard encryption for every credential',
   },
   {
     icon: Shield,
@@ -140,10 +140,10 @@ const securityFeatures = [
     iconColor: 'text-pink-400',
     bgGlow: 'bg-pink-500/10',
     features: [
-      'Hosted on Vercel + Supabase — SOC 2 Type II compliant infrastructure',
-      'TLS 1.3 in transit, DDoS protection, regular security audits',
+      'Web services hosted on Vercel + Supabase (both SOC 2 Type II certified)',
+      'TLS 1.3 encryption in transit, DDoS protection, automated security scanning',
     ],
-    tagline: 'Enterprise-grade infrastructure under the hood',
+    tagline: 'Built on trusted, audited infrastructure',
   },
 ];
 
@@ -167,7 +167,7 @@ const complianceItems = [
   {
     icon: CheckCircle2,
     name: 'SOC 2 Type II',
-    status: 'Infrastructure',
+    status: 'Infrastructure (Vercel + Supabase)',
     color: 'text-blue-400',
     border: 'border-blue-500/30',
     bg: 'bg-blue-500/10',
@@ -175,11 +175,11 @@ const complianceItems = [
 ];
 
 const practices = [
-  'Regular security audits and penetration testing',
-  'Automated vulnerability scanning on every deploy',
+  'Internal security audits and code reviews',
+  'Automated vulnerability scanning via CI/CD pipeline',
   'Secure code reviews with strict lint rules (no unsafe_code)',
   'Least privilege access controls throughout the stack',
-  'Incident response plan with defined SLA',
+  'Incident response procedures in place',
   'Data backup and disaster recovery procedures',
   'Multi-factor authentication supported',
   'Deep linking secured via allowlist and token redaction',

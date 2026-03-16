@@ -6,9 +6,9 @@
 
 | Layer | Path(s) |
 |-------|---------|
-| Security core (Rust) | `apps/desktop/src-tauri/src/sys/security/` (26 files + `policy/` sub-directory with 5 files) |
+| Security core (Rust) | `apps/desktop/src-tauri/src/sys/security/` (25 files + `policy/` sub-directory with 5 files) |
 | Security mod barrel | `sys/security/mod.rs` — re-exports all public types |
-| Tool execution guard | `sys/security/tool_guard.rs` (2205 lines) |
+| Tool execution guard | `sys/security/tool_guard.rs` (2258 lines) |
 | Secret management | `sys/security/secret_manager.rs`, `sys/security/encryption.rs` |
 | Master password | `sys/security/master_password.rs` |
 | Machine key derivation | `sys/security/machine_key.rs` |
@@ -31,7 +31,7 @@
 | Permissions | `sys/security/permissions.rs` |
 | Guardrails | `sys/security/guardrails.rs` (currently empty) |
 | IPC commands | `sys/commands/master_password.rs`, `sys/commands/capabilities.rs` |
-| Frontend store (security prefs) | `apps/desktop/src/stores/securityPreferencesStore.ts` |
+| Frontend store (security prefs) | Security preferences merged into `apps/desktop/src/stores/settingsStore.ts` (allowedDirectories, features) |
 | Frontend store (governance) | `apps/desktop/src/stores/governanceStore.ts` |
 | Frontend UI (master password) | `apps/desktop/src/components/Settings/MasterPasswordSettings.tsx` |
 | Frontend UI (allowed dirs) | `apps/desktop/src/components/Settings/AllowedDirectoriesSettings.tsx` |
@@ -45,7 +45,7 @@ Security is a cross-cutting concern organized into seven cooperating layers:
 User Action
     |
     v
-[1. Frontend Guards] -- securityPreferencesStore, governanceStore
+[1. Frontend Guards] -- settingsStore (security prefs), governanceStore
     |
     v
 [2. Tauri IPC] -- master_password_*, sync_capabilities, check_capability
@@ -663,16 +663,9 @@ pub struct SandboxPermissions {
 
 ## Store Schemas
 
-### `securityPreferencesStore` (persisted to localStorage)
+### Security Preferences (merged into `settingsStore`)
 
-```typescript
-interface SecurityPreferencesState {
-  allowedDirectories: string[];        // User-configured paths for file operations
-  features: Record<string, boolean>;   // Feature capability toggles
-}
-```
-
-Persistence key: `agiworkforce-security-preferences`, version 1.
+`securityPreferencesStore.ts` was removed; its fields (`allowedDirectories`, `features`) are now part of `settingsStore.ts`. Security preferences are persisted as part of the main settings store.
 
 ### `governanceStore` (runtime only, not persisted)
 
@@ -750,16 +743,12 @@ For shell commands: `validate_command()` (command_validator.rs) blocks dangerous
 
 4. **ToolGuard allowed_paths symlink TOCTOU** -- `validate_file_path()` canonicalizes and validates, but there is a time-of-check-to-time-of-use gap between validation and actual file operation. An attacker could swap a symlink after validation passes.
 
-5. **~~`has_machine_only_secrets()` is a stub~~ RESOLVED** -- Returns `false`, correctly indicating no machine-only secrets exist when master password is not configured.
+5. **Rate limiter memory growth** -- While individual rate limit records are bounded (AUDIT-003-007), the outer `HashMap<String, RequestRecord>` grows unboundedly as new tool names are seen. Long-running sessions with many dynamic MCP tools could accumulate stale entries. No periodic cleanup of the records map.
 
-6. **Rate limiter memory growth** -- While individual rate limit records are bounded (AUDIT-003-007), the outer `HashMap<String, RequestRecord>` grows unboundedly as new tool names are seen. Long-running sessions with many dynamic MCP tools could accumulate stale entries. No periodic cleanup of the records map.
+6. **Policy engine safe domains hardcoded** -- `evaluate_network_request()` has a hardcoded `safe_domains` list that includes `supabase.co` and `github.com`. These should be configurable.
 
-7. **Policy engine safe domains hardcoded** -- `evaluate_network_request()` has a hardcoded `safe_domains` list that includes `supabase.co` and `github.com`. These should be configurable.
+7. **No capability enforcement in ToolGuard** -- `CapabilityState` and `tool_to_capability()` exist, but `ToolExecutionGuard::validate_tool_call()` does not check capabilities directly. The check happens in the agent pipeline but is not enforced at the ToolGuard layer, creating a bypass risk if tools are called directly.
 
-8. **No capability enforcement in ToolGuard** -- `CapabilityState` and `tool_to_capability()` exist, but `ToolExecutionGuard::validate_tool_call()` does not check capabilities directly. The check happens in the agent pipeline but is not enforced at the ToolGuard layer, creating a bypass risk if tools are called directly.
+8. **Dual validator overlap** -- `CommandValidator` (validator.rs) and `validate_command()` (command_validator.rs) both validate shell commands with overlapping but non-identical pattern sets. This creates maintenance burden and potential inconsistency.
 
-9. **Dual validator overlap** -- `CommandValidator` (validator.rs) and `validate_command()` (command_validator.rs) both validate shell commands with overlapping but non-identical pattern sets. This creates maintenance burden and potential inconsistency.
-
-10. **~~Blocked domain list is minimal~~ RESOLVED** -- Private IP ranges are now comprehensively blocked in `validate_url()`: RFC 1918 (`10.x`, `172.16-31.x`, `192.168.x`), loopback (`127.0.0.0/8`), link-local (`169.254.0.0/16`), IPv6 loopback (`::1`, `[::1]`), IPv6 link-local (`fe80::`), and `0.0.0.0`. The 4-domain blocklist (`localhost`, `127.0.0.1`, `0.0.0.0`, `169.254.169.254`) is augmented by explicit IP range checks at lines 1518-1568 of `tool_guard.rs`.
-
-11. **`sys/permissions/` module is dead code.** `apps/desktop/src-tauri/src/sys/permissions/` (audit.rs, manager.rs, policy.rs, mod.rs) is declared but never imported by any code in the codebase. The authoritative permissions system lives in `sys/security/` (tool_guard.rs, policy/, policy_integration.rs, rbac.rs, permissions.rs). The dead module should be removed to avoid confusion about which permissions system is canonical.
+9. **`sys/permissions/` module is dead code.** `apps/desktop/src-tauri/src/sys/permissions/` (audit.rs, manager.rs, policy.rs, mod.rs) is declared but never imported by any code in the codebase. The authoritative permissions system lives in `sys/security/` (tool_guard.rs, policy/, policy_integration.rs, rbac.rs, permissions.rs). The dead module should be removed to avoid confusion about which permissions system is canonical.
