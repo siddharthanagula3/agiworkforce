@@ -334,6 +334,10 @@ describe('OfflineSyncManager', () => {
         value: true,
       });
 
+      // Reinitialize to pick up the online state
+      cleanupSyncManager();
+      initializeSyncManager();
+
       const severity = getStatusSeverity();
       expect(severity).toBe('success');
     });
