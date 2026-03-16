@@ -20,12 +20,33 @@ import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
 import { InputFooter } from './InputFooter';
 import { DragDropOverlay } from './DragDropOverlay';
+import { GhostTextOverlay } from './GhostTextOverlay';
+import { AgentModeSwitcher } from './AgentModeSwitcher';
+import { FolderContextSelector } from './FolderContextSelector';
+import { VoiceInputButton } from '@features/chat/components/VoiceInputButton';
+import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
+import type { ChatMode } from '@features/chat/types';
 
 interface ChatComposerProps {
-  onSend: (content: string, attachments?: File[], skillId?: string) => void;
+  onSend: (
+    content: string,
+    attachments?: File[],
+    skillId?: string,
+    meta?: { agentMode: ChatMode; folderId: string | null },
+  ) => void;
   isLoading?: boolean;
+  /**
+   * True while an SSE stream is actively generating output.
+   * When isGenerating=true and the user has typed a message, the SendButton
+   * shows the amber "queue" state instead of the terra-cotta "send" state.
+   */
+  isGenerating?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  /** Initial agent mode (defaults to 'solo') */
+  initialAgentMode?: ChatMode;
+  /** Whether to enable ghost-text prompt completion (default: true) */
+  promptCompletionEnabled?: boolean;
 }
 
 const TOOLS = [
@@ -53,8 +74,11 @@ const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
 const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
+  isGenerating = false,
   placeholder = 'Message AI...',
   disabled = false,
+  initialAgentMode = 'solo',
+  promptCompletionEnabled = true,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -72,12 +96,24 @@ const ChatComposerNewComponent = ({
   const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
+  const [agentMode, setAgentMode] = useState<ChatMode>(initialAgentMode);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
+
+  // Ghost-text prompt completion
+  const {
+    suggestion,
+    isLoading: isSuggestionLoading,
+    accept: acceptSuggestion,
+    clear: clearSuggestion,
+  } = useApiPromptCompletion(message, {
+    enabled: promptCompletionEnabled && !showSlashMenu && !showMentions,
+  });
 
   // Load real skills data on mount
   useEffect(() => {
@@ -133,35 +169,43 @@ const ChatComposerNewComponent = ({
     setActiveTags((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Handle input change: detect @mention and /command
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
-    setMessage(value);
+  // Handle input change: detect @mention and /command; clear stale ghost-text
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      setMessage(value);
 
-    // Slash command detection: only when message starts with /
-    if (value.startsWith('/') && !value.includes(' ')) {
-      setShowSlashMenu(true);
-      setSlashQuery(value.slice(1));
-      setShowMentions(false);
-      return;
-    }
-    setShowSlashMenu(false);
+      // Clear ghost-text suggestion on new input
+      if (suggestion) {
+        clearSuggestion();
+      }
 
-    // @mention detection
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setShowMentions(true);
-        setMentionQuery(textAfterAt);
-        setMentionStartIndex(lastAtIndex);
+      // Slash command detection: only when message starts with /
+      if (value.startsWith('/') && !value.includes(' ')) {
+        setShowSlashMenu(true);
+        setSlashQuery(value.slice(1));
+        setShowMentions(false);
         return;
       }
-    }
-    setShowMentions(false);
-  }, []);
+      setShowSlashMenu(false);
+
+      // @mention detection
+      const textBeforeCursor = value.substring(0, cursorPos);
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+      if (lastAtIndex !== -1) {
+        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+        if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+          setShowMentions(true);
+          setMentionQuery(textAfterAt);
+          setMentionStartIndex(lastAtIndex);
+          return;
+        }
+      }
+      setShowMentions(false);
+    },
+    [suggestion, clearSuggestion],
+  );
 
   const filteredSkills = availableSkills
     .filter(
@@ -190,7 +234,6 @@ const ChatComposerNewComponent = ({
   const handleSlashSelect = useCallback((commandId: string) => {
     setMessage('');
     setShowSlashMenu(false);
-    // Append command prefix as a tool tag
     const toolMap: Record<string, string> = {
       search: 'search',
       image: 'image',
@@ -219,16 +262,32 @@ const ChatComposerNewComponent = ({
     };
     const prefix = selectedTools.map((t) => toolPrefixes[t] || '').join('');
 
-    onSend(prefix + message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id);
+    onSend(prefix + message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
+      agentMode,
+      folderId: selectedFolderId,
+    });
+
     setMessage('');
     setAttachments([]);
     setSelectedTools([]);
     setSelectedSkill(null);
+    clearSuggestion();
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [message, attachments, selectedTools, selectedSkill, isLoading, disabled, onSend]);
+  }, [
+    message,
+    attachments,
+    selectedTools,
+    selectedSkill,
+    isLoading,
+    disabled,
+    agentMode,
+    selectedFolderId,
+    onSend,
+    clearSuggestion,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -240,33 +299,60 @@ const ChatComposerNewComponent = ({
           return;
         }
       }
+
+      // Tab or ArrowRight at end of input accepts ghost-text suggestion
+      if ((e.key === 'Tab' || e.key === 'ArrowRight') && suggestion) {
+        const textarea = textareaRef.current;
+        const atEnd = textarea ? textarea.selectionStart === textarea.value.length : true;
+        if (atEnd) {
+          e.preventDefault();
+          const accepted = acceptSuggestion();
+          setMessage((prev) => prev + accepted);
+          return;
+        }
+      }
+
       if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
         e.preventDefault();
         handleSubmit();
       }
+
       if (e.key === 'Escape') {
         setShowMentions(false);
         setShowTools(false);
         setShowSlashMenu(false);
+        clearSuggestion();
       }
     },
-    [handleSubmit, showMentions, showSlashMenu],
+    [handleSubmit, showMentions, showSlashMenu, suggestion, acceptSuggestion, clearSuggestion],
   );
 
-  const toggleTool = (toolId: string) => {
+  const toggleTool = useCallback((toolId: string) => {
     setSelectedTools((prev) =>
       prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId],
     );
-  };
+  }, []);
 
-  const removeAttachment = (index: number) => {
+  const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
-  const canSend = (message.trim() || attachments.length > 0) && !isLoading && !disabled;
+  const hasContent = Boolean(message.trim() || attachments.length > 0);
+  const canSend = hasContent && !isLoading && !disabled;
+
+  /**
+   * Derive the 3-state mode for SendButton:
+   * - 'stop'  — AI is loading (actively streaming); clicking aborts the stream
+   * - 'queue' — AI is generating but user has typed a message to queue
+   * - 'send'  — idle; button submits the current message
+   */
+  const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
+
   const footerHint = showSlashMenu
     ? 'Tab to accept · Esc to dismiss'
-    : 'Enter to send · Shift+Enter for newline';
+    : suggestion
+      ? 'Tab to accept suggestion · Enter to send'
+      : 'Enter to send · Shift+Enter for newline';
 
   const handleFileDrop = useCallback((files: File[]) => {
     setAttachments((prev) => [...prev, ...files]);
@@ -275,6 +361,7 @@ const ChatComposerNewComponent = ({
   return (
     <div className="relative mx-auto w-full max-w-3xl px-2 sm:px-4 pb-4">
       <DragDropOverlay onDrop={handleFileDrop} />
+
       {/* Focus Mode Pills */}
       <FocusModeButtons activeMode={focusMode} onChange={handleFocusModeChange} />
 
@@ -467,26 +554,57 @@ const ChatComposerNewComponent = ({
             <Paperclip className="h-5 w-5" />
           </button>
 
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            placeholder={placeholder}
+          {/* Textarea + Ghost-text overlay wrapper */}
+          <div className="relative min-h-[52px] flex-1">
+            {/* Ghost-text overlay positioned behind the textarea */}
+            <GhostTextOverlay
+              inputText={message}
+              suggestion={suggestion}
+              isLoading={isSuggestionLoading}
+            />
+
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={placeholder}
+              disabled={isLoading || disabled}
+              // bg-transparent so the ghost-text overlay behind shows through
+              className="relative z-10 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-3 text-xs sm:text-sm md:text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+              rows={1}
+              aria-label="Message input"
+              aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
+            />
+
+            {/* Screen-reader announcement for ghost-text suggestion */}
+            {suggestion && (
+              <span id="ghost-text-hint" className="sr-only">
+                Suggestion available: {suggestion}. Press Tab to accept.
+              </span>
+            )}
+          </div>
+
+          {/* Voice Input Button */}
+          <VoiceInputButton
+            onTranscript={(text) => {
+              setMessage((prev) => {
+                const separator = prev.trim() ? ' ' : '';
+                return prev + separator + text;
+              });
+              setTimeout(() => textareaRef.current?.focus(), 50);
+            }}
             disabled={isLoading || disabled}
-            className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-2 py-3 text-xs sm:text-sm md:text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
-            rows={1}
-            aria-label="Message input"
           />
 
           {/* 3-State Send Button */}
           <SendButton
-            mode={isLoading ? 'stop' : 'send'}
-            onClick={isLoading ? handleStop : handleSubmit}
-            disabled={!canSend && !isLoading}
+            mode={sendButtonMode}
+            hasContent={hasContent}
+            disabled={disabled}
+            onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
           />
         </div>
 
@@ -508,8 +626,25 @@ const ChatComposerNewComponent = ({
       {/* Footer row 1: keyboard hint + credit usage bar */}
       <InputFooter hint={footerHint} />
 
-      {/* Footer row 2: model selector */}
-      <ComposerFooter showModelSelector />
+      {/* Footer row 2: agent mode + folder context (left) + model selector (right) */}
+      <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
+        {/* Left cluster: agent mode switcher + folder/project context */}
+        <div className="flex items-center gap-1">
+          <AgentModeSwitcher
+            mode={agentMode}
+            onChange={setAgentMode}
+            disabled={isLoading || disabled}
+          />
+          <FolderContextSelector
+            selectedFolderId={selectedFolderId}
+            onChange={setSelectedFolderId}
+            disabled={isLoading || disabled}
+          />
+        </div>
+
+        {/* Right cluster: model selector */}
+        <ComposerFooter showModelSelector />
+      </div>
     </div>
   );
 };
@@ -517,17 +652,21 @@ const ChatComposerNewComponent = ({
 /**
  * ChatComposerNew with memoization optimization.
  *
- * - All event handlers memoized with useCallback
- * - Component wrapped with React.memo to prevent re-renders from parent changes
- * - Filtered skills computed with useMemo
+ * Enhancements over the original version:
+ * - Ghost-text prompt completion via useApiPromptCompletion (Tab/ArrowRight to accept)
+ * - Agent mode switcher (solo / engineer / research / team / race)
+ * - Folder/project context selector
+ * - Existing slash commands, @mentions, and voice input preserved
  */
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
-  // Return true if props are equal (skip re-render)
   return (
     prev.onSend === next.onSend &&
     prev.isLoading === next.isLoading &&
+    prev.isGenerating === next.isGenerating &&
     prev.placeholder === next.placeholder &&
-    prev.disabled === next.disabled
+    prev.disabled === next.disabled &&
+    prev.initialAgentMode === next.initialAgentMode &&
+    prev.promptCompletionEnabled === next.promptCompletionEnabled
   );
 });
 
