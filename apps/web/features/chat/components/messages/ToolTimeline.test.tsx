@@ -1,28 +1,47 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ToolTimeline } from './ToolTimeline';
 
+// Mock framer-motion to avoid animation timing issues in tests
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
 describe('ToolTimeline Animations', () => {
-  it('animates height when toggling expansion', async () => {
+  it('animates and toggles visibility of tool content on header click', async () => {
     const tools = [
       { name: 'tool1', status: 'completed' as const, durationMs: 100 },
       { name: 'tool2', status: 'completed' as const, durationMs: 200 },
     ];
 
-    const { container } = render(<ToolTimeline tools={tools} />);
+    render(<ToolTimeline tools={tools} />);
 
-    // Verify motion div with animation wrapper exists
-    const motionDiv = container.querySelector('.overflow-hidden');
-    expect(motionDiv).toBeDefined();
-  });
+    // Initially, tool content should not be visible (collapsed state)
+    expect(screen.queryByText('tool1')).not.toBeInTheDocument();
+    expect(screen.queryByText('tool2')).not.toBeInTheDocument();
 
-  it('has initial state collapsed and animated state expanded', () => {
-    const tools = [{ name: 'tool1', status: 'completed' as const, durationMs: 100 }];
-    const { container } = render(<ToolTimeline tools={tools} />);
+    // Click header to expand
+    const button = screen.getByRole('button');
+    fireEvent.click(button);
 
-    // Verify overflow-hidden wrapper exists for animation
-    const overflowWrapper = container.querySelector('.overflow-hidden');
-    expect(overflowWrapper).toBeInTheDocument();
+    // After click, tool content becomes visible
+    await waitFor(() => {
+      expect(screen.getByText('tool1')).toBeInTheDocument();
+      expect(screen.getByText('tool2')).toBeInTheDocument();
+    });
+
+    // Click header again to collapse
+    fireEvent.click(button);
+
+    // Tool content disappears from DOM
+    await waitFor(() => {
+      expect(screen.queryByText('tool1')).not.toBeInTheDocument();
+      expect(screen.queryByText('tool2')).not.toBeInTheDocument();
+    });
   });
 
   it('toggles expansion on header click', async () => {
@@ -51,16 +70,37 @@ describe('ToolTimeline Animations', () => {
     expect(screen.getByText('Running tools...')).toBeInTheDocument();
   });
 
-  it('displays total duration and error count in header', () => {
+  it('displays header with tool count, duration, and error count', async () => {
     const tools = [
-      { name: 'tool1', status: 'completed' as const, durationMs: 500 },
-      { name: 'tool2', status: 'failed' as const, durationMs: 300 },
+      { name: 'tool1', status: 'completed' as const, durationMs: 1500 },
+      { name: 'tool2', status: 'failed' as const, durationMs: 500 },
     ];
 
     render(<ToolTimeline tools={tools} />);
 
-    // Check for tool count and error indication
+    // Verify all three metrics are displayed in header
     expect(screen.getByText(/2 tools/)).toBeInTheDocument();
+    expect(screen.getByText(/2\.0s total/)).toBeInTheDocument();
+    expect(screen.getByText(/1 failed/)).toBeInTheDocument();
+  });
+
+  it('auto-expands when tools are running and overrides manual collapse', async () => {
+    const tools = [{ name: 'running-tool', status: 'running' as const }];
+    render(<ToolTimeline tools={tools} />);
+
+    // Tool should be visible due to running status (auto-expanded)
+    await waitFor(() => {
+      expect(screen.getByText('running-tool')).toBeInTheDocument();
+    });
+
+    // Try to collapse by clicking header
+    const button = screen.getByRole('button');
+    fireEvent.click(button);
+
+    // Should STILL be visible because running tools force expansion
+    await waitFor(() => {
+      expect(screen.getByText('running-tool')).toBeInTheDocument();
+    });
   });
 
   it('returns null when no tools provided', () => {
