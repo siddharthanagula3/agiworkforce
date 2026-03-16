@@ -189,6 +189,29 @@ impl ThinkingConfig {
         }
     }
 
+    /// Convert this thinking config into a `ThinkingParameter` suitable for `LLMRequest`.
+    ///
+    /// Returns `None` when thinking is disabled.  For Anthropic Claude Opus 4.x models
+    /// with tool use the caller should prefer `ThinkingParameter::Adaptive` — this
+    /// method produces `Budget` or `Enabled` variants which are correct for all other
+    /// thinking-capable models.
+    #[must_use]
+    pub fn to_thinking_parameter(&self) -> Option<super::ThinkingParameter> {
+        if !self.enabled {
+            return None;
+        }
+
+        let tokens = self.budget.tokens();
+        if tokens > 0 {
+            Some(super::ThinkingParameter::Budget {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: tokens,
+            })
+        } else {
+            Some(super::ThinkingParameter::Enabled(true))
+        }
+    }
+
     /// Check if a model supports extended thinking.
     #[must_use]
     pub fn model_supports_thinking(model: &str) -> bool {
@@ -429,6 +452,62 @@ mod tests {
         assert!(!ThinkingConfig::model_supports_thinking("gpt-4"));
         assert!(!ThinkingConfig::model_supports_thinking("gpt-5-nano"));
         assert!(!ThinkingConfig::model_supports_thinking("gemini-pro"));
+    }
+
+    #[test]
+    fn test_to_thinking_parameter_disabled() {
+        let config = ThinkingConfig::disabled();
+        assert!(config.to_thinking_parameter().is_none());
+    }
+
+    #[test]
+    fn test_to_thinking_parameter_low() {
+        let config = ThinkingConfig::new(ThinkingBudget::Low);
+        let param = config.to_thinking_parameter().expect("should be Some");
+        match param {
+            super::super::ThinkingParameter::Budget { budget_tokens, .. } => {
+                assert_eq!(budget_tokens, 10_000);
+            }
+            other => panic!("Expected Budget, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_to_thinking_parameter_medium() {
+        let config = ThinkingConfig::new(ThinkingBudget::Medium);
+        let param = config.to_thinking_parameter().expect("should be Some");
+        match param {
+            super::super::ThinkingParameter::Budget { budget_tokens, .. } => {
+                assert_eq!(budget_tokens, 32_000);
+            }
+            other => panic!("Expected Budget, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_to_thinking_parameter_high() {
+        let config = ThinkingConfig::new(ThinkingBudget::High);
+        let param = config.to_thinking_parameter().expect("should be Some");
+        match param {
+            super::super::ThinkingParameter::Budget { budget_tokens, .. } => {
+                assert_eq!(budget_tokens, 128_000);
+            }
+            other => panic!("Expected Budget, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_from_user_message_returns_convertible_config() {
+        // "ultrathink" should produce a config that converts to Budget with 128K tokens
+        let config = ThinkingConfig::from_user_message("ultrathink about this");
+        assert!(config.enabled);
+        let param = config.to_thinking_parameter().expect("should be Some");
+        match param {
+            super::super::ThinkingParameter::Budget { budget_tokens, .. } => {
+                assert_eq!(budget_tokens, 128_000);
+            }
+            other => panic!("Expected Budget, got {:?}", other),
+        }
     }
 
     #[test]
