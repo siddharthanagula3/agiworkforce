@@ -229,27 +229,44 @@ impl CodeGenerator {
                 if let (Some(start), Some(end)) = (json_start, json_end) {
                     if start < end {
                         let json_str = &response[start..=end];
-                        serde_json::from_str(json_str).unwrap_or_else(|e| {
-                            tracing::warn!(
-                                "Failed to parse extracted JSON from LLM response: {}",
-                                e
-                            );
-                            Vec::new()
-                        })
+                        match serde_json::from_str(json_str) {
+                            Ok(parsed) => parsed,
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to parse extracted JSON from LLM response: {}. \
+                                     Extracted slice ({} chars): {}",
+                                    e,
+                                    json_str.len(),
+                                    json_str.chars().take(300).collect::<String>()
+                                );
+                                return Err(anyhow::anyhow!(
+                                    "LLM returned malformed JSON for code generation: {}", e
+                                ));
+                            }
+                        }
                     } else {
                         tracing::warn!(
-                            "Invalid JSON markers in LLM response (start={}, end={})",
+                            "Invalid JSON markers in LLM response (start={}, end={}). \
+                             Response length: {} chars",
                             start,
-                            end
+                            end,
+                            response.len()
                         );
-                        Vec::new()
+                        return Err(anyhow::anyhow!(
+                            "LLM response contained malformed JSON structure \
+                             (array markers in wrong order)"
+                        ));
                     }
                 } else {
                     tracing::warn!(
-                        "No JSON array found in LLM response. First 200 chars: {}",
+                        "No JSON array found in LLM response ({} chars). First 200 chars: {}",
+                        response.len(),
                         response.chars().take(200).collect::<String>()
                     );
-                    Vec::new()
+                    return Err(anyhow::anyhow!(
+                        "LLM response did not contain a JSON array. \
+                         Code generation expects a JSON array of file objects."
+                    ));
                 }
             }
         };
