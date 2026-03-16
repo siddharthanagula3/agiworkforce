@@ -1226,8 +1226,9 @@ mod tests {
         // The raw DB value must be encrypted, not plaintext
         assert!(
             raw_api_key.starts_with(ENCRYPTED_VALUE_PREFIX),
-            "API key in database must be encrypted, got: {}",
-            &raw_api_key[..raw_api_key.len().min(30)]
+            "API key in database must be encrypted (starts_with '{}'), got len={}",
+            ENCRYPTED_VALUE_PREFIX,
+            raw_api_key.len()
         );
         assert!(
             !raw_api_key.contains("sk-my-secret-key-12345"),

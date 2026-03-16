@@ -10,6 +10,28 @@ import {
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+/**
+ * SECURITY: Validate GitHub API path segments to prevent SSRF and path traversal.
+ * Only allows alphanumeric, hyphen, underscore, and dot — the valid characters
+ * for GitHub owner/repo names.
+ */
+const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
+
+function validateGitHubPathSegment(value: string, label: string): string {
+  if (!SAFE_PATH_SEGMENT.test(value)) {
+    throw new Error(`Invalid ${label}: contains disallowed characters`);
+  }
+  return value;
+}
+
+function buildGitHubApiUrl(path: string): string {
+  const url = new URL(path, 'https://api.github.com');
+  if (url.origin !== 'https://api.github.com') {
+    throw new Error('SSRF blocked: URL does not target api.github.com');
+  }
+  return url.toString();
+}
+
 const GITHUB_APP_ID = process.env['GITHUB_APP_ID'];
 const GITHUB_APP_PRIVATE_KEY_BASE64 = process.env['GITHUB_APP_PRIVATE_KEY_BASE64'];
 const GITHUB_WEBHOOK_SECRET = process.env['GITHUB_WEBHOOK_SECRET'];
@@ -130,7 +152,9 @@ export async function getInstallationAccessToken(installationId: number): Promis
   // Fetch new installation token
   const jwt = await getGitHubAppJwt();
   const res = await fetch(
-    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    buildGitHubApiUrl(
+      `/app/installations/${encodeURIComponent(String(installationId))}/access_tokens`,
+    ),
     {
       method: 'POST',
       headers: {
@@ -165,13 +189,20 @@ export async function getPrDiff(
   repo: string,
   prNumber: number,
 ): Promise<string> {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.diff',
-      'X-GitHub-Api-Version': '2022-11-28',
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const res = await fetch(
+    buildGitHubApiUrl(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodeURIComponent(String(prNumber))}`,
+    ),
+    {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.diff',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
     },
-  });
+  );
 
   if (!res.ok) throw new Error(`Failed to fetch PR diff: ${res.status}`);
 
@@ -191,8 +222,12 @@ export async function postPrReview(
   body: string,
   event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES' = 'COMMENT',
 ): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
   const res = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+    buildGitHubApiUrl(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodeURIComponent(String(prNumber))}/reviews`,
+    ),
     {
       method: 'POST',
       headers: {
@@ -214,8 +249,12 @@ export async function postIssueComment(
   issueNumber: number,
   body: string,
 ): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
   const res = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    buildGitHubApiUrl(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/comments`,
+    ),
     {
       method: 'POST',
       headers: {
