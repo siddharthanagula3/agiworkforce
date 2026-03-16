@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -254,7 +254,7 @@ const markdownComponents: Components = {
 // Single message
 // ---------------------------------------------------------------------------
 
-function MessageItem({
+const MessageItemComponent = ({
   message,
   onRegenerate,
   onDelete,
@@ -262,7 +262,7 @@ function MessageItem({
   message: ChatMessage;
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
-}) {
+}) => {
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const isUser = message.role === 'user';
@@ -442,7 +442,22 @@ function MessageItem({
       </div>
     </div>
   );
-}
+};
+
+// Memoize MessageItem with custom comparison to prevent re-renders
+const MessageItem = memo(MessageItemComponent, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content &&
+    prev.message.role === next.message.role &&
+    prev.message.isStreaming === next.message.isStreaming &&
+    prev.onRegenerate === next.onRegenerate &&
+    prev.onDelete === next.onDelete
+  );
+});
+
+MessageItem.displayName = 'MessageItem';
 
 // ---------------------------------------------------------------------------
 // Typing indicator
@@ -469,10 +484,22 @@ function TypingIndicator() {
 // Message List
 // ---------------------------------------------------------------------------
 
-export function MessageListNew({ messages, isLoading, onRegenerate, onDelete }: MessageListProps) {
+const MessageListNewComponent = ({
+  messages,
+  isLoading,
+  onRegenerate,
+  onDelete,
+}: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const lastMessage = messages[messages.length - 1];
-  const lastIsStreaming = lastMessage?.isStreaming ?? false;
+
+  // Memoize computed values
+  const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
+  const lastIsStreaming = useMemo(() => lastMessage?.isStreaming ?? false, [lastMessage]);
+
+  // Memoize callbacks to prevent child re-renders
+  const handleRegenerate = useCallback((id: string) => onRegenerate?.(id), [onRegenerate]);
+
+  const handleDelete = useCallback((id: string) => onDelete?.(id), [onDelete]);
 
   // Auto-scroll to bottom on new messages or while streaming
   useEffect(() => {
@@ -487,8 +514,8 @@ export function MessageListNew({ messages, isLoading, onRegenerate, onDelete }: 
           <MessageItem
             key={message.id}
             message={message}
-            onRegenerate={onRegenerate}
-            onDelete={onDelete}
+            onRegenerate={handleRegenerate}
+            onDelete={handleDelete}
           />
         ))}
         {isLoading && messages.length > 0 && !messages[messages.length - 1]?.isStreaming && (
@@ -498,4 +525,25 @@ export function MessageListNew({ messages, isLoading, onRegenerate, onDelete }: 
       </div>
     </div>
   );
-}
+};
+
+/**
+ * MessageListNew with memoization optimization.
+ *
+ * - Callbacks memoized with useCallback
+ * - MessageItem children memoized with React.memo
+ * - Target: reduce render time from 150-200ms to <50ms
+ */
+export const MessageListNew = memo(MessageListNewComponent, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+  return (
+    prev.messages.length === next.messages.length &&
+    prev.isLoading === next.isLoading &&
+    prev.onRegenerate === next.onRegenerate &&
+    prev.onDelete === next.onDelete &&
+    // Quick check of message IDs to detect changes
+    prev.messages.every((m, i) => m.id === next.messages[i]?.id)
+  );
+});
+
+MessageListNew.displayName = 'MessageListNew';

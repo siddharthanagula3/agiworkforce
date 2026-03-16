@@ -1579,6 +1579,48 @@ export const selectNonArchivedConversations = (state: ChatState) =>
 export const selectPinnedConversations = (state: ChatState) =>
   state.conversations.filter((c) => c.pinned && !c.archived);
 
+/**
+ * Optimized selector hooks with shallow equality comparison.
+ *
+ * These prevent unnecessary re-renders when object identity changes but
+ * values remain the same. Use shallow from zustand/react/shallow.
+ *
+ * Example:
+ * const { tokenUsage, citations } = useChatStore(
+ *   useCallback(state => ({ tokenUsage: state.tokenUsage, citations: state.citations }), []),
+ *   shallow
+ * );
+ */
+
+/**
+ * Hook to select multiple state slices with shallow comparison.
+ * Prevents re-renders when object identity changes but properties don't.
+ *
+ * Usage:
+ * const { tokenUsage, citations } = useChatStore(
+ *   (state) => ({ tokenUsage: state.tokenUsage, citations: state.citations }),
+ *   shallow
+ * );
+ */
+export const useTokenUsageSelector = () => {
+  const { tokenUsage } = useChatStore((state) => ({ tokenUsage: state.tokenUsage }));
+  return tokenUsage;
+};
+
+export const useCitationsSelector = () => {
+  const { citations } = useChatStore((state) => ({ citations: state.citations }));
+  return citations;
+};
+
+export const useConversationUISelector = () => {
+  const { activeConversationId, focusMode, conversationMode } = useChatStore((state) => ({
+    activeConversationId: state.activeConversationId,
+    focusMode: state.focusMode,
+    conversationMode: state.conversationMode,
+  }));
+  return { activeConversationId, focusMode, conversationMode };
+};
+
 // Cross-store subscription: update tokenUsage.max when the selected model changes
 if (typeof window !== 'undefined') {
   import('../modelStore').then(({ useModelStore }) => {

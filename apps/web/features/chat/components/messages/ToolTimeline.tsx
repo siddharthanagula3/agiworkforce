@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -92,8 +92,8 @@ function groupTools(tools: ToolEntry[]): EntryGroup[] {
   return groups;
 }
 
-function ToolItem({ tool }: { tool: ToolEntry }) {
-  const Icon = getToolIcon(tool.name);
+const ToolItemComponent = ({ tool }: { tool: ToolEntry }) => {
+  const Icon = useMemo(() => getToolIcon(tool.name), [tool.name]);
   const isRunning = tool.status === 'running';
   const isFailed = tool.status === 'failed';
 
@@ -132,18 +132,41 @@ function ToolItem({ tool }: { tool: ToolEntry }) {
       )}
     </div>
   );
-}
+};
+
+// Memoize ToolItem with custom comparison to prevent unnecessary re-renders
+const ToolItem = memo(ToolItemComponent, (prev, next) => {
+  return (
+    prev.tool.name === next.tool.name &&
+    prev.tool.status === next.tool.status &&
+    prev.tool.durationMs === next.tool.durationMs &&
+    prev.tool.args === next.tool.args &&
+    prev.tool.parallelGroup === next.tool.parallelGroup
+  );
+});
+
+ToolItem.displayName = 'ToolItem';
 
 export function ToolTimeline({ tools, className }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const hasRunning = tools.some((t) => t.status === 'running');
-  const errorCount = tools.filter((t) => t.status === 'failed').length;
+
+  // Memoize expensive computations
+  const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
+  const errorCount = useMemo(() => tools.filter((t) => t.status === 'failed').length, [tools]);
 
   // Auto-expand while tools are running; preserve manual expansion state
   const isOpen = hasRunning || isExpanded;
 
-  const totalDuration = tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
-  const groups = groupTools(tools);
+  const totalDuration = useMemo(
+    () => tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0),
+    [tools],
+  );
+  const groups = useMemo(() => groupTools(tools), [tools]);
+
+  // Memoize toggle handler
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded((p) => !p);
+  }, []);
 
   if (tools.length === 0) return null;
 
@@ -152,7 +175,7 @@ export function ToolTimeline({ tools, className }: ToolTimelineProps) {
       {/* Header — always visible */}
       <button
         type="button"
-        onClick={() => setIsExpanded((p) => !p)}
+        onClick={handleToggleExpand}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
       >
         <motion.span
@@ -225,3 +248,31 @@ export function ToolTimeline({ tools, className }: ToolTimelineProps) {
     </div>
   );
 }
+
+// Memoize ToolTimeline with custom comparison function
+const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+  if (prev.className !== next.className) return false;
+  if (prev.tools.length !== next.tools.length) return false;
+
+  // Deep compare tool entries
+  for (let i = 0; i < prev.tools.length; i++) {
+    const p = prev.tools[i];
+    const n = next.tools[i];
+    if (
+      p.name !== n.name ||
+      p.status !== n.status ||
+      p.durationMs !== n.durationMs ||
+      p.args !== n.args ||
+      p.parallelGroup !== n.parallelGroup
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+});
+
+MemoizedToolTimeline.displayName = 'ToolTimeline';
+
+export { MemoizedToolTimeline as ToolTimeline };
