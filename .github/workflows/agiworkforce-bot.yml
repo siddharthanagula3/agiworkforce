@@ -25,9 +25,10 @@ jobs:
 
       - name: Parse command
         id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          COMMENT="${{ github.event.comment.body }}"
-          COMMAND=$(echo "$COMMENT" | sed 's|^/agi *||' | head -1)
+          COMMAND=$(echo "$COMMENT_BODY" | sed 's|^/agi *||' | head -1)
           if [ -z "$COMMAND" ]; then
             COMMAND="help"
           fi
