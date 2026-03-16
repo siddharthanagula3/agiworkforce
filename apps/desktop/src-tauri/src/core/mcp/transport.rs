@@ -980,8 +980,11 @@ impl HttpSseTransport {
                  This is acceptable for local development with self-signed certificates.",
                 server_name
             );
-            client_builder = client_builder.danger_accept_invalid_certs(true);
-            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
+            // SECURITY: Certificate verification bypass is ONLY reached after the
+            // localhost guard above (lines 960-975) confirms the target is 127.0.0.1/::1.
+            // Remote servers are rejected before reaching this point.
+            client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
+            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
         }
 
         let client = client_builder.build().map_err(|e| {
@@ -1165,12 +1168,31 @@ impl HttpSseTransport {
         Ok(())
     }
 
-    /// Connect to SSE endpoint
+    /// Connect to SSE endpoint.
+    ///
+    /// SECURITY: HTTP (non-TLS) is allowed only for localhost MCP servers.
+    /// Remote servers MUST use HTTPS to prevent credential interception.
     async fn connect_sse(
         client: &reqwest::Client,
         url: &str,
         headers: &reqwest::header::HeaderMap,
     ) -> McpResult<reqwest::Response> {
+        // Enforce HTTPS for non-localhost URLs to prevent cleartext credential transmission
+        if url.starts_with("http://") {
+            if let Ok(parsed) = url::Url::parse(url) {
+                let host = parsed.host_str().unwrap_or("");
+                let is_localhost =
+                    host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]";
+                if !is_localhost {
+                    return Err(McpError::ConnectionError(format!(
+                        "Refusing to connect to non-localhost HTTP URL '{}'. \
+                         Remote MCP servers must use HTTPS.",
+                        parsed.host_str().unwrap_or("unknown")
+                    )));
+                }
+            }
+        }
+
         let response = client
             .get(url)
             .headers(headers.clone())
