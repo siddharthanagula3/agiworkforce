@@ -2,12 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@features/chat/stores/chat-store';
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { CommandPalette } from '@/components/UnifiedAgenticChat/CommandPalette';
 import { KeyboardShortcutsDialog } from '@/components/UnifiedAgenticChat/KeyboardShortcutsDialog';
+import { BudgetTracker } from '@/components/UnifiedAgenticChat/BudgetTracker';
+import { HelpTour } from '@features/chat/components/HelpTour';
+import { useKeyboardShortcuts } from '@features/chat/hooks/use-keyboard-shortcuts';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
 
@@ -24,6 +28,7 @@ export interface ChatLayoutShellProps {
 export default function ChatLayoutShell({ children, className }: ChatLayoutShellProps) {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { theme, setTheme } = useTheme();
   const {
     sessions,
     activeSessionId,
@@ -74,21 +79,52 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
     return undefined;
   }, [mobileSidebarOpen]);
 
-  // Keyboard shortcuts: Cmd+K → command palette, Cmd+/ → shortcuts, Cmd+Shift+S → sidebar
+  const handleNewChat = useCallback(() => {
+    closeMobileSidebar();
+    const id = createSession(user?.id);
+    router.push(`/chat/${id}`);
+  }, [closeMobileSidebar, createSession, router, user?.id]);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  const handleToggleDarkMode = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [theme, setTheme]);
+
+  const handleFocusComposer = useCallback(() => {
+    const composer = document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Message input"]',
+    );
+    composer?.focus();
+  }, []);
+
+  // Wire all global keyboard shortcuts via the shared hook.
+  // The hook handles Cmd+K (search/command palette), Cmd+/ (shortcuts dialog),
+  // Cmd+N (new chat), Cmd+B (toggle sidebar), Escape (focus composer).
+  // Cmd+D (dark mode toggle) is handled separately via a raw listener because
+  // use-keyboard-shortcuts does not yet expose that binding.
+  useKeyboardShortcuts({
+    onSearch: () => setCommandPaletteOpen((prev) => !prev),
+    onShowShortcuts: () => setShortcutsOpen((prev) => !prev),
+    onNewChat: handleNewChat,
+    onToggleSidebar: handleToggleSidebar,
+    onFocusComposer: handleFocusComposer,
+  });
+
+  // Cmd+D → toggle dark mode (not covered by use-keyboard-shortcuts)
+  // Cmd+Shift+S → sidebar (legacy shortcut kept for muscle-memory compat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
-      if (isMeta && e.key === 'k') {
+      if (isMeta && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-      if (isMeta && e.key === '/') {
-        e.preventDefault();
-        setShortcutsOpen((prev) => !prev);
+        handleToggleDarkMode();
       }
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
+        handleToggleSidebar();
       }
       if (e.key === 'Escape' && mobileSidebarOpen) {
         closeMobileSidebar();
@@ -96,13 +132,7 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileSidebarOpen, closeMobileSidebar]);
-
-  const handleNewChat = useCallback(() => {
-    closeMobileSidebar();
-    const id = createSession(user?.id);
-    router.push(`/chat/${id}`);
-  }, [closeMobileSidebar, createSession, router, user?.id]);
+  }, [mobileSidebarOpen, closeMobileSidebar, handleToggleDarkMode, handleToggleSidebar]);
 
   const handleSelectSession = useCallback(
     (id: string) => {
@@ -236,9 +266,15 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
       {/* Bottom gradient fade */}
       <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/80 to-transparent pointer-events-none z-10" />
 
-      {/* Global dialogs */}
+      {/* Global dialogs — rendered at root so they overlay all content */}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       <KeyboardShortcutsDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Help tour overlay — self-managing; renders nothing when inactive */}
+      <HelpTour />
+
+      {/* Budget tracker — side-effect-only component; tracks token usage */}
+      <BudgetTracker />
     </div>
   );
 }
