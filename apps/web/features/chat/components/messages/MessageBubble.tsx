@@ -308,7 +308,12 @@ const MessageBubbleComponent = function MessageBubble({
       )}
 
       {/* Content */}
-      <div className={cn(isUser ? 'max-w-[60%] ml-auto' : 'flex-1 min-w-0')}>
+      <div
+        className={cn(
+          'message-bubble-content',
+          isUser ? 'max-w-[85%] md:max-w-[60%] ml-auto' : 'flex-1 min-w-0',
+        )}
+      >
         {/* Header: Name + Time */}
         <div className="mb-1 flex items-center gap-2 text-sm">
           <span className="font-medium">
@@ -340,7 +345,14 @@ const MessageBubbleComponent = function MessageBubble({
         )}
 
         {/* Message Content */}
-        <div className={cn('prose prose-sm dark:prose-invert max-w-none', isUser && 'text-right')}>
+        <div
+          className={cn(
+            'prose prose-sm dark:prose-invert max-w-none',
+            'text-xs sm:text-sm', // Responsive text size
+            'word-wrap break-word overflow-wrap', // Proper word wrapping
+            isUser && 'text-right',
+          )}
+        >
           {message.isStreaming && !cleanedContent.trim() ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
