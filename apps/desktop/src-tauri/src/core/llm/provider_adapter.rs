@@ -1998,9 +1998,11 @@ impl AnthropicAdapter {
                         )
                         .into());
                     }
+                } else {
+                    tracing::warn!(
+                        "[Anthropic] Tool message with role='tool' has no tool_call_id; using fallback 'unknown'"
+                    );
                 }
-                // tool_call_id == None with role="tool" uses "unknown" as fallback;
-                // we allow this to avoid breaking existing callers that rely on it.
             }
 
             // Validate tool results inside multimodal content parts

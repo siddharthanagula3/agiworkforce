@@ -61,8 +61,9 @@ const ALLOWED_SHELL_COMMANDS: &[&str] = &[
     "pwd", "cd", "export", "set",
     // macOS specific (safe subset — docker, osascript removed for security)
     "open", "pbcopy", "pbpaste", "say", "sw_vers",
-    // Script runners (for Script action type; the script content itself is validated)
-    "bash", "sh", "zsh",
+    // Note: bash, sh, zsh intentionally excluded from ShellCommand allowlist.
+    // Shell interpreters bypass the allowlist via -c flag (e.g., bash -c "nmap ...").
+    // Scripts use the dedicated Script action type with separate validation.
 ];
 
 /// The type of action a scheduled job should perform
