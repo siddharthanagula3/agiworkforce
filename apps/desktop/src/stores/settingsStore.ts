@@ -316,7 +316,8 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v15: Added chatStorageMode to chatPreferences (local | cloud)
 // v16: Added customKeybindings for user-defined keyboard shortcuts
 // v17: Added selectedTheme to windowPreferences (named theme registry ID)
-const SETTINGS_STORE_VERSION = 17;
+// v18: Coding tools parity (no schema changes, version bump to invalidate stale caches)
+const SETTINGS_STORE_VERSION = 18;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -651,6 +652,17 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setSelectedTheme',
           );
+          // Apply theme immediately so the entire app updates
+          if (themeId) {
+            import('../themes/index').then(({ getThemeById, applyTheme }) => {
+              const theme = getThemeById(themeId);
+              if (theme) applyTheme(theme);
+            });
+          } else {
+            import('../themes/index').then(({ clearAppliedTheme }) => {
+              clearAppliedTheme();
+            });
+          }
         },
 
         setLanguage: (language: Language) => {
@@ -739,6 +751,10 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setAgentMode: async (mode: AgentMode) => {
+          const previousMode = get().chatPreferences.agentMode;
+          const previousAutoApprove = get().chatPreferences.autoApproveTools;
+          const previousAlwaysAgent = get().chatPreferences.alwaysUseAgentMode;
+
           set(
             (state) => ({
               chatPreferences: {
@@ -759,6 +775,20 @@ export const useSettingsStore = create<SettingsState>()(
             await invoke('set_auto_approve_all', { enabled: mode === 'autopilot' });
           } catch (error) {
             console.error('Failed to sync agent mode to backend:', error);
+            // Rollback frontend state to match backend
+            set(
+              (state) => ({
+                chatPreferences: {
+                  ...state.chatPreferences,
+                  agentMode: previousMode,
+                  autoApproveTools: previousAutoApprove,
+                  alwaysUseAgentMode: previousAlwaysAgent,
+                },
+              }),
+              undefined,
+              'settings/setAgentMode/rollback',
+            );
+            throw error;
           }
         },
 
@@ -1360,6 +1390,11 @@ export const useSettingsStore = create<SettingsState>()(
                 };
               }
             }
+          }
+
+          // Migration from v17 to v18: Coding tools parity — no schema changes needed
+          if (version < 18) {
+            // No-op: version bump only to signal coding tools parity release
           }
 
           return state as SettingsState;

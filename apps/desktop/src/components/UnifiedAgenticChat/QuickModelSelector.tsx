@@ -2,6 +2,7 @@ import {
   Brain,
   Check,
   Loader2,
+  Lock,
   Search,
   Sparkles,
   Wand2,
@@ -151,11 +152,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         }
 
         if (metadata) {
-          // Filter by subscription tier - only show models the user has access to
-          // Ollama models are always allowed (local, no subscription needed)
-          if (model.provider !== 'ollama' && !isModelAllowedForTier(model.id, tier)) {
-            return;
-          }
+          // Mark models that require a higher tier (but still show them)
+          const isAllowed = model.provider === 'ollama' || isModelAllowedForTier(model.id, tier);
+          (metadata as ModelMetadata & { locked?: boolean }).locked = !isAllowed;
 
           // Filter by search query
           if (query) {
@@ -263,8 +262,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   return (
     <div
       className={cn(
-        'w-72 rounded-xl border border-gray-200/70 bg-white/95 p-3 text-left shadow-2xl backdrop-blur-xl',
-        'dark:border-gray-700 dark:bg-charcoal-900/95',
+        'w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] p-3 text-left shadow-2xl backdrop-blur-xl',
+        '',
         className,
       )}
     >
@@ -296,13 +295,14 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           placeholder="Search models..."
           className={cn(
             'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
-            'bg-gray-50 dark:bg-charcoal-800 border-gray-200 dark:border-gray-700',
+            'bg-[hsl(var(--muted))] border-[hsl(var(--border))]',
             'placeholder:text-gray-400 dark:placeholder:text-gray-500',
             'focus:outline-hidden focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
           )}
         />
         {searchQuery && (
-          <button type="button"
+          <button
+            type="button"
             onClick={() => {
               setSearchQuery('');
               searchInputRef.current?.focus();
@@ -324,14 +324,15 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           const isSelected = selectedModel === modeId;
           const IconComponent = config?.icon ?? Wand2;
           return (
-            <button type="button"
+            <button
+              type="button"
               key={modeId}
               onClick={() => handleModelChange(modeId)}
               className={cn(
                 'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
                 isSelected
                   ? 'border-amber-500 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-xs dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
-                  : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
+                  : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-primary/50 hover:bg-[hsl(var(--accent))]',
               )}
             >
               <div className="flex items-center gap-2">
@@ -353,7 +354,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
         {/* Show last routing decision if in auto mode */}
         {isAutoMode && lastRoutingDecision?.wasRouted && (
-          <div className="ml-6 mt-1 rounded-md bg-gray-50 px-3 py-1.5 text-[10px] dark:bg-charcoal-800">
+          <div className="ml-6 mt-1 rounded-md bg-[hsl(var(--muted))] px-3 py-1.5 text-[10px]">
             <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
               <Sparkles size={10} className="text-amber-500" />
               <span>
@@ -369,7 +370,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         )}
       </div>
 
-      <hr className="my-2 border-gray-200 dark:border-gray-700" />
+      <hr className="my-2 border-[hsl(var(--border))]" />
 
       {/* Plan info removed */}
 
@@ -408,7 +409,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             <p className="text-xs text-gray-500 dark:text-gray-400">
               No models found for "{searchQuery}"
             </p>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setSearchQuery('')}
               className="mt-2 text-[10px] text-primary hover:underline"
             >
@@ -428,20 +430,32 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <div className="flex flex-col gap-1">
                 {models.map((model) => {
                   const isActive = model.id === selectedModel;
+                  const isLocked = (model as ModelMetadata & { locked?: boolean }).locked;
 
                   return (
-                    <button type="button"
+                    <button
+                      type="button"
                       key={model.id}
-                      onClick={() => handleModelChange(model.id)}
+                      onClick={() => {
+                        if (isLocked) {
+                          // Don't select, show upgrade hint
+                          return;
+                        }
+                        handleModelChange(model.id);
+                      }}
+                      title={isLocked ? `Requires PRO subscription or higher` : model.name}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors',
-                        isActive
-                          ? 'border-primary bg-primary/10 text-primary shadow-xs dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
-                          : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
+                        isLocked
+                          ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] opacity-60 cursor-not-allowed'
+                          : isActive
+                            ? 'border-primary bg-primary/10 text-primary shadow-xs dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
+                            : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-primary/50 hover:bg-[hsl(var(--accent))]',
                       )}
                     >
                       <span className="flex items-center gap-1 truncate">
                         <span className="truncate">{model.name}</span>
+                        {isLocked && <Lock size={10} className="text-amber-500 shrink-0" />}
                         {/* Capability badges */}
                         <span className="flex items-center gap-0.5 shrink-0">
                           {model.capabilities.tools && (
@@ -487,7 +501,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         })}
       </div>
 
-      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-2 pt-2 border-t border-[hsl(var(--border))]">
         {(() => {
           const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
           const supportsThinking = currentMetadata?.capabilities.thinking ?? false;
@@ -545,7 +559,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               </div>
               <div className="flex items-center gap-1">
                 {budgetOptions.map((opt) => (
-                  <button type="button"
+                  <button
+                    type="button"
                     key={opt.value}
                     onClick={() => handleBudgetSelect(opt.value)}
                     disabled={isDisabled}
@@ -553,7 +568,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                       'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
                       thinkingBudget === opt.value
                         ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/40'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-800',
+                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]',
                       isDisabled && 'cursor-not-allowed',
                     )}
                   >

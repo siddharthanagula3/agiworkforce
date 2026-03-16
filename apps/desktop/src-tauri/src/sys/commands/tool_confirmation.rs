@@ -8,7 +8,7 @@ use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, To
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -47,6 +47,9 @@ pub struct ToolConfirmationState {
     auto_approve_all: Arc<AtomicBool>,
     /// Current agent execution mode (Safe / Build / Autopilot)
     agent_mode: Arc<Mutex<AgentMode>>,
+    /// Session-scoped tool approvals — tools approved for the current session only.
+    /// Cleared when session ends or user explicitly resets.
+    pub session_approved_tools: Arc<Mutex<HashSet<String>>>,
 }
 
 impl ToolConfirmationState {
@@ -57,6 +60,7 @@ impl ToolConfirmationState {
             tool_guard: Arc::new(ToolExecutionGuard::new()),
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::default())),
+            session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -103,6 +107,9 @@ impl ToolConfirmationState {
         "document_read",
         "document_search",
         "code_analyze",
+        "code_search",
+        "grep_search",
+        "glob_search",
         "git_status",
         "llm_reason",
         "list_scheduled_tasks",
@@ -152,6 +159,28 @@ impl ToolConfirmationState {
             }
             AgentMode::Build | AgentMode::Autopilot => true,
         }
+    }
+
+    /// Check if a tool has been approved for this session
+    pub fn is_session_approved(&self, tool_name: &str) -> bool {
+        self.session_approved_tools.lock().contains(tool_name)
+    }
+
+    /// Add a tool to the session-approved set
+    pub fn approve_for_session(&self, tool_name: &str) {
+        self.session_approved_tools
+            .lock()
+            .insert(tool_name.to_string());
+        info!(
+            "[ToolConfirmation] Tool '{}' approved for session",
+            tool_name
+        );
+    }
+
+    /// Clear all session-scoped tool approvals
+    pub fn clear_session_approvals(&self) {
+        self.session_approved_tools.lock().clear();
+        info!("[ToolConfirmation] Cleared all session-scoped tool approvals");
     }
 
     /// Check if user has a remembered choice for this tool
@@ -310,24 +339,47 @@ impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
 
 /// Respond to a tool confirmation request.
 /// Called by the frontend when user approves or denies a tool execution.
+///
+/// `remember_for_session` — when `true` and approved, the tool is added to the
+/// session-scoped approval set so future invocations in this session skip the
+/// confirmation dialog. Requires `tool_name` to be provided.
+///
+/// `tool_name` — optional tool name for session-scoped approval. The frontend
+/// receives this in the `ToolConfirmationSummary` and can pass it back here.
 #[tauri::command]
 pub async fn respond_tool_confirmation(
     request_id: String,
     approved: bool,
     remember_choice: bool,
+    remember_for_session: Option<bool>,
+    tool_name: Option<String>,
     reason: Option<String>,
     state: State<'_, ToolConfirmationState>,
 ) -> Result<(), String> {
     info!(
-        "[ToolConfirmation] User {} tool execution for request {}{}",
+        "[ToolConfirmation] User {} tool execution for request {}{}{}",
         if approved { "approved" } else { "denied" },
         request_id,
         if remember_choice {
             " (remembering choice)"
         } else {
             ""
+        },
+        if remember_for_session == Some(true) {
+            " (session-scoped)"
+        } else {
+            ""
         }
     );
+
+    // If the user approved and requested session-scoped approval, store it
+    if approved && remember_for_session == Some(true) {
+        if let Some(ref name) = tool_name {
+            if !name.trim().is_empty() {
+                state.approve_for_session(name);
+            }
+        }
+    }
 
     let response = ToolConfirmationResponse {
         request_id: request_id.clone(),
@@ -388,6 +440,17 @@ pub fn clear_remembered_tool_choice(
         "[ToolConfirmation] Cleared remembered choice for tool: {}",
         tool_name
     );
+    Ok(())
+}
+
+/// Clear all session-scoped tool approvals.
+/// Call this when starting a new session or when the user wants to revoke
+/// all session-level auto-approvals.
+#[tauri::command]
+pub fn clear_session_tool_approvals(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.clear_session_approvals();
     Ok(())
 }
 
@@ -647,6 +710,15 @@ pub async fn request_tool_confirmation(
         return Ok(remembered);
     }
 
+    // Check for session-scoped approval
+    if state.is_session_approved(&tool_name) {
+        debug!(
+            "[ToolConfirmation] Tool '{}' is session-approved, auto-approving",
+            tool_name
+        );
+        return Ok(true);
+    }
+
     // Register the pending confirmation
     let rx = state.register_pending(request_id.clone());
 
@@ -744,6 +816,15 @@ pub async fn request_tool_confirmation_no_mode_gate(
             tool_name, remembered
         );
         return Ok(remembered);
+    }
+
+    // Check for session-scoped approval
+    if state.is_session_approved(&tool_name) {
+        debug!(
+            "[ToolConfirmation] Tool '{}' is session-approved, auto-approving (no mode gate)",
+            tool_name
+        );
+        return Ok(true);
     }
 
     // Register the pending confirmation
@@ -1091,5 +1172,56 @@ mod tests {
         assert_eq!(mode, AgentMode::Plan);
         let serialized = serde_json::to_string(&mode).expect("serialize plan");
         assert_eq!(serialized, r#""plan""#);
+    }
+
+    #[test]
+    fn test_session_approved_tools() {
+        let state = ToolConfirmationState::new();
+
+        // Initially no session approvals
+        assert!(!state.is_session_approved("file_write"));
+
+        // Approve for session
+        state.approve_for_session("file_write");
+        assert!(state.is_session_approved("file_write"));
+
+        // Other tools still not approved
+        assert!(!state.is_session_approved("code_execute"));
+
+        // Clear session approvals
+        state.clear_session_approvals();
+        assert!(!state.is_session_approved("file_write"));
+    }
+
+    #[test]
+    fn test_new_read_only_tools_in_safe_mode() {
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_search",
+            AgentMode::Safe
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "grep_search",
+            AgentMode::Safe
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "glob_search",
+            AgentMode::Safe
+        ));
+    }
+
+    #[test]
+    fn test_new_read_only_tools_in_plan_mode() {
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "code_search",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "grep_search",
+            AgentMode::Plan
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "glob_search",
+            AgentMode::Plan
+        ));
     }
 }

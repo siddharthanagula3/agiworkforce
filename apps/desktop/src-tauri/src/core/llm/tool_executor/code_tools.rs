@@ -124,6 +124,168 @@ impl ToolExecutor {
             ]),
         })
     }
+
+    /// Execute a regex content search across files using the pure-Rust grep engine.
+    ///
+    /// Delegates to `crate::sys::commands::code_search::grep_search` which walks
+    /// the file tree with walkdir, respects `.gitignore`-style exclusions, and
+    /// supports three output modes (`content`, `files_with_matches`, `count`).
+    ///
+    /// # Parameters
+    /// - `pattern` (required) — Regex pattern to search for.
+    /// - `root` (optional) — Root directory. Falls back to project folder or cwd.
+    /// - `include_pattern` (optional) — Glob to restrict searched files (e.g. `"*.rs"`).
+    /// - `case_insensitive` (optional) — Case-insensitive search when true.
+    /// - `output_mode` (optional) — `"content"` (default), `"files_with_matches"`, or `"count"`.
+    /// - `context_lines` (optional) — Lines of context around each match (content mode only).
+    pub(crate) async fn execute_grep_search_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let pattern = args
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing 'pattern' parameter"))?
+            .to_string();
+
+        let raw_root = args
+            .get("root")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| self.project_folder.clone());
+
+        let root = raw_root.map(|r| self.resolve_path(&r));
+
+        let include_pattern = args
+            .get("include_pattern")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let case_insensitive = args
+            .get("case_insensitive")
+            .and_then(|v| v.as_bool());
+
+        let output_mode = args
+            .get("output_mode")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let context_lines = args
+            .get("context_lines")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as u32);
+
+        match crate::sys::commands::code_search::grep_search(
+            pattern.clone(),
+            root.clone(),
+            include_pattern,
+            case_insensitive,
+            output_mode.clone(),
+            context_lines,
+        )
+        .await
+        {
+            Ok(result) => {
+                let match_count = result.matches.len();
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "success": true,
+                        "matches": serde_json::to_value(&result.matches)
+                            .unwrap_or_else(|_| json!([])),
+                        "total_files_searched": result.total_files_searched,
+                        "truncated": result.truncated,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                        ("match_count".to_string(), json!(match_count)),
+                        ("output_mode".to_string(), json!(output_mode.unwrap_or_else(|| "content".to_string()))),
+                    ]),
+                })
+            }
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e, "success": false }),
+                error: Some(e),
+                metadata: HashMap::from([
+                    ("pattern".to_string(), json!(pattern)),
+                    ("root".to_string(), json!(root)),
+                ]),
+            }),
+        }
+    }
+
+    /// Execute a glob-pattern file search using the pure-Rust glob engine.
+    ///
+    /// Delegates to `crate::sys::commands::code_search::glob_search` which walks
+    /// the file tree with walkdir, skips excluded directories, and returns results
+    /// sorted by modification time (most recent first).
+    ///
+    /// # Parameters
+    /// - `pattern` (required) — Glob pattern (e.g. `"**/*.ts"`, `"src/**/*.rs"`).
+    /// - `root` (optional) — Root directory. Falls back to project folder or cwd.
+    /// - `limit` (optional) — Maximum number of results (default 200, max 1000).
+    pub(crate) async fn execute_glob_search_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let pattern = args
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing 'pattern' parameter"))?
+            .to_string();
+
+        let raw_root = args
+            .get("root")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| self.project_folder.clone());
+
+        let root = raw_root.map(|r| self.resolve_path(&r));
+
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+
+        match crate::sys::commands::code_search::glob_search(
+            pattern.clone(),
+            root.clone(),
+            limit,
+        )
+        .await
+        {
+            Ok(result) => {
+                let match_count = result.matches.len();
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "success": true,
+                        "matches": serde_json::to_value(&result.matches)
+                            .unwrap_or_else(|_| json!([])),
+                        "truncated": result.truncated,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                        ("match_count".to_string(), json!(match_count)),
+                    ]),
+                })
+            }
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e, "success": false }),
+                error: Some(e),
+                metadata: HashMap::from([
+                    ("pattern".to_string(), json!(pattern)),
+                    ("root".to_string(), json!(root)),
+                ]),
+            }),
+        }
+    }
 }
 
 /// Build a regex search pattern specialized for a given symbol type and language.

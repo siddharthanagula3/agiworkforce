@@ -12,12 +12,17 @@ use super::{
     TransportType,
 };
 use crate::core::mcp::{McpClient, McpServerConfig};
+use crate::sys::security::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
+use crate::sys::security::machine_key::{self, KeyPurpose};
 use chrono::Utc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+/// Prefix added to encrypted config values to distinguish them from plaintext.
+const ENCRYPTED_VALUE_PREFIX: &str = "enc:v1:";
 
 /// Information about an installed extension
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +102,7 @@ pub struct ExtensionManager {
 #[derive(Debug, Clone)]
 struct ExtensionServerInfo {
     /// Extension ID
-    // Used by: extension lifecycle — logging, identification, and stop operations
+    // Used by: extension lifecycle -- logging, identification, and stop operations
     #[allow(dead_code)]
     extension_id: String,
 
@@ -165,9 +170,9 @@ impl ExtensionManager {
         // Parse manifest
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
 
-        // Check configuration
+        // Check configuration (uses decrypted values for completeness check)
         if manifest.config_schema.is_some() {
-            let config = self.repository.get_config(id)?;
+            let config = self.get_config(id)?;
             if !self.is_config_complete(&manifest, &config) {
                 return Err(ExtensionError::InvalidConfiguration(
                     "Required configuration values are missing".to_string(),
@@ -269,27 +274,14 @@ impl ExtensionManager {
             self.validate_config(&manifest, &config)?;
         }
 
-        // SECURITY: Warn for any sensitive config fields stored without encryption.
-        // TODO: Wire SecretManager into ExtensionManager (add `secret_manager: Arc<SecretManager>`
-        // to the struct) and encrypt values where `property.sensitive == true` before calling
-        // `repository.update_config`. Until then, sensitive values (API keys, tokens, passwords)
-        // are stored as plaintext JSON in the SQLite `config_json` column — see repository.rs
-        // `update_config`. The warn log below makes this visible in production logs.
-        if let Some(ref schema) = manifest.config_schema {
-            for (key, property) in &schema.properties {
-                if property.sensitive && config.contains_key(key) {
-                    tracing::warn!(
-                        "SECURITY: extension API key stored unencrypted for extension {} (field: {}). \
-                         Wire SecretManager into ExtensionManager to fix.",
-                        id,
-                        key
-                    );
-                }
-            }
-        }
+        // SECURITY: Encrypt sensitive config values before storing.
+        // Values marked as `sensitive: true` in the manifest config schema (API keys,
+        // tokens, passwords) are encrypted using AES-256-GCM with a machine-derived key
+        // before being persisted to the SQLite `config_json` column.
+        let config_to_store = Self::encrypt_sensitive_values(&manifest, config);
 
         // Store configuration
-        self.repository.update_config(id, &config)?;
+        self.repository.update_config(id, &config_to_store)?;
 
         tracing::info!("Configuration updated for extension {}", id);
 
@@ -297,8 +289,25 @@ impl ExtensionManager {
     }
 
     /// Get extension configuration
+    ///
+    /// Sensitive values are decrypted transparently before being returned.
     pub fn get_config(&self, id: &str) -> ExtensionResult<HashMap<String, serde_json::Value>> {
-        self.repository.get_config(id)
+        let record = self
+            .repository
+            .get(id)?
+            .ok_or_else(|| ExtensionError::NotFound(id.to_string()))?;
+
+        let raw_config = match record.config_json {
+            Some(json) => {
+                let config: HashMap<String, serde_json::Value> = serde_json::from_str(&json)?;
+                config
+            }
+            None => return Ok(HashMap::new()),
+        };
+
+        // Parse manifest to identify sensitive fields
+        let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
+        Ok(Self::decrypt_sensitive_values(&manifest, raw_config))
     }
 
     /// Uninstall an extension
@@ -339,7 +348,7 @@ impl ExtensionManager {
     /// Convert a database record to extension info
     fn record_to_info(&self, record: ExtensionRecord) -> ExtensionResult<ExtensionInfo> {
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
-        let config = self.repository.get_config(&record.id).unwrap_or_default();
+        let config = self.get_config(&record.id).unwrap_or_default();
 
         let requires_config = manifest.config_schema.is_some();
         let config_complete = self.is_config_complete(&manifest, &config);
@@ -381,7 +390,10 @@ impl ExtensionManager {
         manifest: &ExtensionManifest,
         record: &ExtensionRecord,
     ) -> ExtensionResult<McpServerConfig> {
-        let config = self.repository.get_config(&record.id)?;
+        // Use self.get_config() instead of repository.get_config() so that
+        // encrypted sensitive values are decrypted before being injected into
+        // environment variables for the extension process.
+        let config = self.get_config(&record.id)?;
 
         // Build environment variables from configuration
         let mut env = manifest.env.clone();
@@ -522,6 +534,134 @@ impl ExtensionManager {
         }
 
         true
+    }
+
+    /// Derive the encryption key used for extension config secrets.
+    fn config_encryption_key() -> Vec<u8> {
+        machine_key::derive_key(KeyPurpose::ApiKeys)
+    }
+
+    /// Returns the set of config keys marked as `sensitive` in the manifest.
+    fn sensitive_keys(manifest: &ExtensionManifest) -> std::collections::HashSet<String> {
+        let mut keys = std::collections::HashSet::new();
+        if let Some(ref schema) = manifest.config_schema {
+            for (key, property) in &schema.properties {
+                if property.sensitive {
+                    keys.insert(key.clone());
+                }
+            }
+        }
+        keys
+    }
+
+    /// Returns true if a plaintext string value looks like an API key.
+    fn looks_like_api_key(value: &str) -> bool {
+        let prefixes = [
+            "sk-", "pk-", "sk_", "pk_", "api-", "api_", "token-", "token_", "secret-", "secret_",
+            "key-", "key_", "bearer ", "ghp_", "gho_", "ghs_", "ghr_", "glpat-", "xoxb-",
+            "xoxp-", "xapp-", "sl.", "eyJ",
+        ];
+        let lower = value.to_lowercase();
+        prefixes.iter().any(|p| lower.starts_with(p))
+    }
+
+    /// Encrypt sensitive config values before persistence.
+    ///
+    /// Values for keys marked `sensitive: true` in the manifest schema (or whose
+    /// plaintext value matches common API-key prefixes) are encrypted with
+    /// AES-256-GCM and stored as `"enc:v1:<base64-json>"`.
+    fn encrypt_sensitive_values(
+        manifest: &ExtensionManifest,
+        config: HashMap<String, serde_json::Value>,
+    ) -> HashMap<String, serde_json::Value> {
+        let sensitive_keys = Self::sensitive_keys(manifest);
+        let enc_key = Self::config_encryption_key();
+
+        config
+            .into_iter()
+            .map(|(key, value)| {
+                // Determine whether this value should be encrypted
+                let should_encrypt = sensitive_keys.contains(&key)
+                    || value
+                        .as_str()
+                        .map(Self::looks_like_api_key)
+                        .unwrap_or(false);
+
+                if should_encrypt {
+                    if let Some(plaintext) = value.as_str() {
+                        // Skip if already encrypted
+                        if plaintext.starts_with(ENCRYPTED_VALUE_PREFIX) {
+                            return (key, value);
+                        }
+                        match encrypt_secret(&enc_key, plaintext) {
+                            Ok(encrypted) => {
+                                if let Ok(enc_json) = serde_json::to_string(&encrypted) {
+                                    let stored =
+                                        format!("{}{}", ENCRYPTED_VALUE_PREFIX, enc_json);
+                                    tracing::debug!(
+                                        "Encrypted sensitive config field '{}' for extension",
+                                        key
+                                    );
+                                    return (key, serde_json::Value::String(stored));
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to encrypt config field '{}': {}. \
+                                     Storing as plaintext.",
+                                    key,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+                (key, value)
+            })
+            .collect()
+    }
+
+    /// Decrypt sensitive config values after retrieval.
+    ///
+    /// Values prefixed with `"enc:v1:"` are decrypted transparently.
+    fn decrypt_sensitive_values(
+        _manifest: &ExtensionManifest,
+        config: HashMap<String, serde_json::Value>,
+    ) -> HashMap<String, serde_json::Value> {
+        let enc_key = Self::config_encryption_key();
+
+        config
+            .into_iter()
+            .map(|(key, value)| {
+                if let Some(s) = value.as_str() {
+                    if let Some(enc_json) = s.strip_prefix(ENCRYPTED_VALUE_PREFIX) {
+                        match serde_json::from_str::<EncryptedSecret>(enc_json) {
+                            Ok(encrypted) => match decrypt_secret(&enc_key, &encrypted) {
+                                Ok(plaintext) => {
+                                    return (key, serde_json::Value::String(plaintext));
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to decrypt config field '{}': {}. \
+                                         Returning encrypted value.",
+                                        key,
+                                        e
+                                    );
+                                }
+                            },
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to parse encrypted config field '{}': {}",
+                                    key,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+                (key, value)
+            })
+            .collect()
     }
 
     /// Validate configuration against schema

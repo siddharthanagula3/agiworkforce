@@ -1,8 +1,8 @@
 # PRD-IOS: AGI Workforce iOS Mobile Application
 
-> **Document version**: 1.0.0
-> **Last updated**: 2026-03-09
-> **Status**: Approved for implementation
+> **Document version**: 1.1.0
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha
 > **Owner**: Product Team
 > **Platform**: iOS (iPhone + iPad)
 > **Framework**: React Native 0.76 + Expo SDK 52
@@ -39,7 +39,7 @@ The app serves three distinct use cases:
 
 1. **Companion Mode** -- Pair with a desktop running AGI Workforce via QR code scan. Monitor live agent activity, approve/deny tool calls remotely, pause/resume/cancel agents, and receive push notifications when agents need human input.
 
-2. **Standalone Chat** -- Full-featured AI chat interface with model selection across 9+ providers (Claude, GPT-4o, Gemini, Mistral, etc.), streaming responses with thinking/reasoning display, voice input via push-to-talk, image attachments, and conversation history synced across surfaces via Supabase Realtime.
+2. **Standalone Chat** -- Full-featured AI chat interface with model selection across 12+ providers (Claude, GPT-4o, Gemini, Mistral, etc.), streaming responses with thinking/reasoning display, voice input via push-to-talk, image attachments, and conversation history synced across surfaces via Supabase Realtime.
 
 3. **Workforce Management** -- Schedule recurring agent tasks, manage agent memory, view execution history, and configure messaging platform integrations (WhatsApp, Telegram, Slack).
 
@@ -64,7 +64,7 @@ Team leads and managers who need to monitor agent activity across their organiza
 | Desktop agent pairing via QR         | Yes (free)                      | No (Remote Control $100-200/mo) | No           | No           |
 | Live agent dashboard on phone        | Yes                             | No                              | No           | No           |
 | Remote tool approval/denial          | Yes                             | No                              | No           | No           |
-| Multi-model chat (9+ providers)      | Yes                             | Claude only                     | GPT only     | Gemini only  |
+| Multi-model chat (12+ providers)      | Yes                             | Claude only                     | GPT only     | Gemini only  |
 | Push notifications for agent actions | Yes                             | No                              | No           | No           |
 | Voice input with STT                 | Yes (Whisper + Deepgram)        | Yes (native)                    | Yes (native) | Yes (native) |
 | Background agent status polling      | Yes                             | No                              | No           | No           |
@@ -216,7 +216,7 @@ iOS 17+ features that gracefully degrade on iOS 16:
 
 | Feature                     | Priority | Status      | Description                                                             |
 | --------------------------- | -------- | ----------- | ----------------------------------------------------------------------- |
-| Multi-model chat            | P0       | Implemented | Chat with any of 9+ LLM providers                                       |
+| Multi-model chat            | P0       | Implemented | Chat with any of 12+ LLM providers                                       |
 | Streaming responses         | P0       | Implemented | Token-by-token SSE streaming display                                    |
 | Thinking/reasoning display  | P0       | Implemented | Show Claude/model thinking content                                      |
 | Conversation management     | P0       | Implemented | Create, rename, delete conversations                                    |
@@ -391,7 +391,7 @@ These features are exclusive to the mobile app and have no equivalent on desktop
 | ----------------------- | ----------------------- | ---------------------------- | ---------------------- | ---------------- |
 | Chat with text          | Yes                     | Yes                          | Yes                    | Yes              |
 | Streaming responses     | Yes                     | Yes                          | Yes                    | Yes              |
-| Multi-model support     | Yes (9+ providers)      | No (Claude only)             | No (GPT only)          | No (Gemini only) |
+| Multi-model support     | Yes (12+ providers)      | No (Claude only)             | No (GPT only)          | No (Gemini only) |
 | Thinking/reasoning      | Yes                     | Yes (Artifacts)              | Limited (o1)           | No               |
 | Image input             | Yes                     | Yes                          | Yes                    | Yes              |
 | Image generation        | Yes                     | No                           | Yes (DALL-E)           | Yes (Imagen)     |
@@ -3438,7 +3438,7 @@ All text meets **WCAG AA** contrast requirements (4.5:1 for normal text, 3:1 for
 | Feature                    | AGI Workforce iOS        | Claude iOS                | ChatGPT iOS            | Gemini iOS    |
 | -------------------------- | ------------------------ | ------------------------- | ---------------------- | ------------- |
 | **Chat**                   |                          |                           |                        |               |
-| Multi-model chat           | 9+ providers             | Claude only               | GPT only               | Gemini only   |
+| Multi-model chat           | 12+ providers             | Claude only               | GPT only               | Gemini only   |
 | Model switching            | In-chat, any time        | N/A                       | GPT-4/4o/o1 only       | N/A           |
 | Streaming responses        | Yes                      | Yes                       | Yes                    | Yes           |
 | Thinking/reasoning         | Yes (collapsible)        | Yes (Artifacts)           | Limited (o1 summary)   | No            |
@@ -3752,4 +3752,4 @@ Both tables have Row Level Security (RLS) policies that filter by `user_id = aut
 
 _End of PRD-IOS.md_
 
-_Document version 1.0.0 -- Generated 2026-03-09_
+_Document version 1.1.0 -- Last updated 2026-03-15_

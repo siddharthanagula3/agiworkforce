@@ -55,14 +55,15 @@ export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
       className="mb-3 flex items-center justify-center gap-2 flex-wrap"
     >
       {FOCUS_MODES.map((mode) => (
-        <button type="button"
+        <button
+          type="button"
           key={mode.value || 'all'}
           onClick={() => onFocusModeChange(mode.value)}
           className={cn(
             'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
             focusMode === mode.value
-              ? 'bg-primary text-white shadow-md shadow-primary/25'
-              : 'bg-white/80 dark:bg-charcoal-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-700 border border-gray-200 dark:border-gray-700',
+              ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
+              : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]',
           )}
           aria-pressed={focusMode === mode.value}
         >

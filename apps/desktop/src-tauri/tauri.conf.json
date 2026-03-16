@@ -25,7 +25,7 @@
         "shadow": true,
         "visible": true,
         "center": true,
-        "dragDropEnabled": true,
+        "dragDropEnabled": false,
         "fullscreen": false,
         "skipTaskbar": false,
         "acceptFirstMouse": true

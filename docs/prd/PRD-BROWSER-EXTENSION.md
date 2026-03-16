@@ -1,8 +1,8 @@
 # AGI Workforce — Browser Extension Platform PRD
 
-> **Document version**: 1.0.0
-> **Last updated**: 2026-03-09
-> **Status**: Approved — comprehensive build blueprint
+> **Document version**: 1.1.0
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha
 > **Owner**: Product Team
 > **Platform**: Chrome Browser Extension (Manifest V3)
 > **Package**: `@agiworkforce/extension` (`apps/extension/`)
@@ -41,7 +41,7 @@ The AGI Workforce Browser Extension occupies a unique position in the market:
 
 | Dimension                | AGI Workforce Extension             | Claude Browser Extension | ChatGPT Extension | Gemini Extension |
 | ------------------------ | ----------------------------------- | ------------------------ | ----------------- | ---------------- |
-| Model agnostic           | Yes (9+ providers via desktop)      | No (Anthropic only)      | No (OpenAI only)  | No (Google only) |
+| Model agnostic           | Yes (12+ providers via desktop)      | No (Anthropic only)      | No (OpenAI only)  | No (Google only) |
 | Desktop app bridge       | Native messaging to Tauri           | No desktop app           | No desktop app    | No desktop app   |
 | DOM automation           | Full (click, type, scroll, forms)   | Limited (page reading)   | No automation     | No automation    |
 | Job application autofill | Yes (LinkedIn, Lever, Greenhouse)   | No                       | No                | No               |
@@ -2917,7 +2917,7 @@ The AI browser extension market is rapidly growing, with most major AI companies
 | ------------------------ | ------------------------------ | ----------------------------------------------------------- |
 | **Chat interface**       | Popup with text input          | Full side panel with streaming, markdown, code highlighting |
 | **Page reading**         | Text extraction (visible text) | Full DOM access (HTML, text, attributes, forms)             |
-| **Model support**        | Anthropic only                 | 9+ providers via desktop bridge                             |
+| **Model support**        | Anthropic only                 | 12+ providers via desktop bridge                             |
 | **DOM automation**       | None                           | Full (click, type, scroll, hover, drag-drop, etc.)          |
 | **Form autofill**        | None                           | AI-driven, platform-aware (LinkedIn, Lever)                 |
 | **Job autofill**         | None                           | Dedicated system with profile storage                       |
@@ -2956,7 +2956,7 @@ There is no official ChatGPT browser extension. Third-party extensions exist but
 | ------------------- | ------------------------- | --------------------------- |
 | Chat interface      | Popup                     | Full side panel             |
 | Page reading        | Text extraction           | Full DOM access             |
-| Model support       | OpenAI only               | 9+ providers                |
+| Model support       | OpenAI only               | 12+ providers                |
 | DOM automation      | None                      | Full                        |
 | Form autofill       | None                      | Platform-aware              |
 | Desktop integration | None                      | Native messaging            |
@@ -2968,7 +2968,7 @@ There is no official ChatGPT browser extension. Third-party extensions exist but
 | ------------------- | ------------------------ | -------------------------------- |
 | Chat interface      | Side panel + popup       | Side panel + popup               |
 | Page reading        | Text + image             | Full DOM access                  |
-| Model support       | Multiple (GPT-4, Claude) | 9+ providers + local LLMs        |
+| Model support       | Multiple (GPT-4, Claude) | 12+ providers + local LLMs        |
 | DOM automation      | Limited                  | Full                             |
 | Form autofill       | Basic                    | Platform-aware (LinkedIn, Lever) |
 | Desktop integration | None                     | Native messaging bridge          |
@@ -2996,7 +2996,7 @@ While primarily a writing assistant, Grammarly is relevant as a successful brows
 | Page reading        | Text + search integration | Full DOM access         |
 | DOM automation      | None                      | Full                    |
 | Search integration  | Deep web search           | Via desktop agent       |
-| Model support       | Own models                | 9+ providers            |
+| Model support       | Own models                | 12+ providers            |
 | Desktop integration | None                      | Native messaging bridge |
 
 ## 13.3 Competitive Positioning Matrix
@@ -3023,7 +3023,7 @@ While primarily a writing assistant, Grammarly is relevant as a successful brows
 | Desktop bridge           | Native messaging to Tauri desktop app with full agent runtime    | No competitor has this                    |
 | Full DOM automation      | 30+ DOM operation types (click, type, scroll, hover, drag, etc.) | No competitor matches depth               |
 | Job application autofill | Platform-specific autofill for LinkedIn, Lever, Greenhouse       | No competitor offers this                 |
-| Model agnostic           | 9+ cloud providers + local LLMs via desktop bridge               | Claude (Anthropic only), Monica (limited) |
+| Model agnostic           | 12+ cloud providers + local LLMs via desktop bridge               | Claude (Anthropic only), Monica (limited) |
 | Action recording         | Record and replay user interactions                              | No competitor has this                    |
 | Accessibility tree       | Full page accessibility tree extraction                          | No competitor has this                    |
 | Security model           | Closed shadow DOM + allowlists + session-only API storage        | Most competitors use cloud storage        |
@@ -3056,7 +3056,7 @@ The native messaging bridge creates a unique capability: an AI agent that can op
 
 ### 13.6.4 Unrestricted Model Choice (AGI Workforce Lead)
 
-No competing browser extension offers true model agnosticism. Claude's extension is Anthropic-only. ChatGPT extensions are OpenAI-only. AGI Workforce connects to 9+ cloud providers plus local LLMs, giving users the freedom to choose the best model for each task.
+No competing browser extension offers true model agnosticism. Claude's extension is Anthropic-only. ChatGPT extensions are OpenAI-only. AGI Workforce connects to 12+ cloud providers plus local LLMs, giving users the freedom to choose the best model for each task.
 
 ### 13.6.5 Privacy-First Local Operation (AGI Workforce Lead)
 
@@ -3435,5 +3435,5 @@ All log messages are prefixed with `[AGI Workforce]`:
 ---
 
 _End of PRD-BROWSER-EXTENSION.md_
-_Document version 1.0.0 — 2026-03-09_
+_Document version 1.1.0 — Last updated 2026-03-15_
 _Generated from codebase analysis of `apps/extension/` and `apps/desktop/src-tauri/src/integrations/native_messaging/`_

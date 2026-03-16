@@ -2,8 +2,8 @@
 
 > **Platform**: Android Mobile (phones and tablets)
 > **Version**: 0.1.0 (initial release)
-> **Status**: SDLC-grade specification — approved for implementation
-> **Last updated**: 2026-03-09
+> **Status**: Public Alpha
+> **Last updated**: 2026-03-15
 > **Owner**: Product Team
 > **Framework**: React Native 0.76.9 + Expo SDK 52 (shared codebase with iOS)
 > **Companion PRD**: See `PRD-IOS.md` for shared feature specifications
@@ -40,7 +40,7 @@ The Android app is not a simplified chat client. It is a full mobile agent contr
 
 1. **QR pairing with the desktop app** -- scan a code displayed in the Tauri desktop app to establish a WebRTC data channel for real-time agent oversight
 2. **Live agent dashboard** -- monitor running agents, view tool execution timelines, approve or deny sensitive operations from your phone
-3. **Multi-model chat** -- converse with 9+ cloud LLM providers (OpenAI, Anthropic, Google, xAI, DeepSeek, Moonshot, Qwen, ZhipuAI, Perplexity) directly from your Android device
+3. **Multi-model chat** -- converse with 12+ cloud LLM providers (OpenAI, Anthropic, Google, xAI, DeepSeek, Moonshot, Qwen, ZhipuAI, Perplexity) directly from your Android device
 4. **Voice I/O** -- hold-to-record speech input with Whisper or Deepgram transcription, system TTS for spoken responses
 5. **Push notification control** -- FCM-powered notifications with Android notification channels, actionable approve/deny buttons on the lock screen
 6. **Background agent polling** -- periodic background fetch checks for pending agent approvals even when the app is closed
@@ -70,7 +70,7 @@ Android tablet users (Samsung Galaxy Tab, Pixel Tablet, Lenovo Tab) who want a p
 | ------------------------ | -------------------------------------- | -------------- | ------------------------ |
 | Desktop QR pairing       | Yes -- real-time WebRTC control        | No             | No                       |
 | Live agent dashboard     | Yes -- approve/deny from phone         | No             | No                       |
-| Multi-model support      | 9+ providers, 30+ models               | Anthropic only | OpenAI only              |
+| Multi-model support      | 12+ providers, 30+ models               | Anthropic only | OpenAI only              |
 | Lock screen actions      | Yes -- approve/deny notifications      | No             | No                       |
 | Background agent polling | Yes -- expo-background-fetch           | No             | No                       |
 | Notification channels    | 3 channels (default, approvals, tasks) | Single channel | Single channel           |
@@ -346,7 +346,7 @@ The Android app reads environment variables at build time via Expo's `process.en
 | ------------------------ | ------------------------ | ---------------------------- | ---------------- | ---------------- |
 | Text chat                | Yes                      | Yes                          | Yes              | Yes              |
 | Streaming responses      | Yes (SSE)                | Yes                          | Yes              | Yes              |
-| Model selection          | 30+ models, 9+ providers | Claude 4.5 Sonnet/Haiku only | GPT-4o/o3 only   | Gemini 3 only    |
+| Model selection          | 30+ models, 12+ providers | Claude 4.5 Sonnet/Haiku only | GPT-4o/o3 only   | Gemini 3 only    |
 | Voice input              | PTT + Whisper + Deepgram | No                           | Voice mode       | Voice mode       |
 | Voice output (TTS)       | System TTS               | No                           | OpenAI TTS       | Google TTS       |
 | Image attachment         | Camera + gallery         | Camera + gallery             | Camera + gallery | Camera + gallery |
@@ -3502,7 +3502,7 @@ While Android primarily uses touch input, external keyboard support (Bluetooth k
 
 | Feature                  | AGI Workforce Android     | Claude Android                                  |
 | ------------------------ | ------------------------- | ----------------------------------------------- |
-| AI Models                | 30+ models, 9+ providers  | Claude 4.5 Sonnet, Haiku, Opus (Anthropic only) |
+| AI Models                | 30+ models, 12+ providers  | Claude 4.5 Sonnet, Haiku, Opus (Anthropic only) |
 | Voice input              | PTT + Whisper + Deepgram  | No                                              |
 | Voice output             | System TTS                | No                                              |
 | Desktop companion        | QR pairing + WebRTC       | No                                              |
@@ -3540,7 +3540,7 @@ While Android primarily uses touch input, external keyboard support (Bluetooth k
 
 | Feature            | AGI Workforce Android          | ChatGPT Android                       |
 | ------------------ | ------------------------------ | ------------------------------------- |
-| AI Models          | 30+ models, 9+ providers       | GPT-4o, o3, GPT-4o mini (OpenAI only) |
+| AI Models          | 30+ models, 12+ providers       | GPT-4o, o3, GPT-4o mini (OpenAI only) |
 | Voice mode         | PTT + Whisper + TTS            | Advanced Voice Mode (real-time)       |
 | Desktop companion  | QR pairing + WebRTC            | No                                    |
 | Agent monitoring   | Real-time dashboard            | No                                    |
@@ -3577,7 +3577,7 @@ While Android primarily uses touch input, external keyboard support (Bluetooth k
 
 | Feature             | AGI Workforce Android    | Gemini Android                                 |
 | ------------------- | ------------------------ | ---------------------------------------------- |
-| AI Models           | 30+ models, 9+ providers | Gemini 2.0 Flash, Pro, Ultra (Google only)     |
+| AI Models           | 30+ models, 12+ providers | Gemini 2.0 Flash, Pro, Ultra (Google only)     |
 | System integration  | App-level                | Deep Android OS integration                    |
 | Voice mode          | PTT + Whisper + TTS      | Google Assistant-style voice                   |
 | Desktop companion   | QR pairing + WebRTC      | Cross-device via Google account                |
@@ -3636,7 +3636,7 @@ While Android primarily uses touch input, external keyboard support (Bluetooth k
 
 1. **Mobile-to-Desktop Agent Control**: No competitor allows controlling desktop AI agents from a mobile phone. This is the killer differentiator.
 
-2. **Multi-Model Mobile Chat**: All competitors are single-provider. AGI Workforce is the only mobile app offering 9+ providers.
+2. **Multi-Model Mobile Chat**: All competitors are single-provider. AGI Workforce is the only mobile app offering 12+ providers.
 
 3. **Enterprise Android Deployment**: Side-loading, MDM compatibility, Quick Settings tile, and lock screen actions make AGI Workforce uniquely positioned for enterprise Android deployments.
 
@@ -3838,6 +3838,6 @@ The following features are shared with the iOS app and are documented in detail 
 
 _End of PRD-ANDROID.md_
 
-_Document version: 1.0.0_
+_Document version: 1.1.0_
 _Total sections: 13 (+ 5 appendices)_
-_Generated: 2026-03-09_
+_Last updated: 2026-03-15_

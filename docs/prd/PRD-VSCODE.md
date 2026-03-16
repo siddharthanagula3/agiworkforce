@@ -1,8 +1,8 @@
 # PRD-VSCODE: AGI Workforce VS Code Extension
 
-> **Document version**: 1.0.0
-> **Last updated**: 2026-03-09
-> **Status**: Approved for implementation
+> **Document version**: 1.1.0
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha
 > **Owner**: Product Team
 > **Platform**: Visual Studio Code Extension (Marketplace)
 > **Competitor baseline**: Claude Code VS Code Extension, GitHub Copilot Chat, Cline/Roo Code, Continue
@@ -31,9 +31,9 @@
 
 ## 1.1 Platform Vision
 
-The AGI Workforce VS Code Extension brings the full power of the AGI Workforce multi-model AI platform into Visual Studio Code, the world's most popular code editor with over 35 million monthly active users (as of early 2026). Rather than being locked to a single AI provider -- as GitHub Copilot is locked to OpenAI, or the Claude Code extension is locked to Anthropic -- AGI Workforce lets developers use any LLM from nine or more cloud providers, plus locally hosted models, all through a single unified interface embedded in the editor they already use.
+The AGI Workforce VS Code Extension brings the full power of the AGI Workforce multi-model AI platform into Visual Studio Code, the world's most popular code editor with over 35 million monthly active users (as of early 2026). Rather than being locked to a single AI provider -- as GitHub Copilot is locked to OpenAI, or the Claude Code extension is locked to Anthropic -- AGI Workforce lets developers use any LLM from twelve or more cloud providers, plus locally hosted models, all through a single unified interface embedded in the editor they already use.
 
-The extension is not a standalone product. It is a first-class companion to the AGI Workforce desktop application, connected via a local WebSocket/HTTP bridge. When the desktop app is running, the VS Code extension gains access to the full agent runtime: MCP tools, autonomous multi-file editing, background scheduling, computer use, and 140+ AI skills. When the desktop app is not running, the extension operates independently via the AGI Workforce cloud API, providing chat, inline completions, code actions, and basic agent capabilities.
+The extension is not a standalone product. It is a first-class companion to the AGI Workforce desktop application, connected via a local WebSocket/HTTP bridge. When the desktop app is running, the VS Code extension gains access to the full agent runtime: MCP tools, autonomous multi-file editing, background scheduling, computer use, and 169+ AI skills. When the desktop app is not running, the extension operates independently via the AGI Workforce cloud API, providing chat, inline completions, code actions, and basic agent capabilities.
 
 This dual-mode architecture -- cloud-independent + desktop-enhanced -- is unique in the marketplace and positions the extension as the only VS Code AI assistant that:
 
@@ -82,7 +82,7 @@ Organizations deploying AI tools across development teams, who need vendor neutr
 
 | Differentiator            | AGI Workforce                      | GitHub Copilot | Claude Code    | Cline           |
 | ------------------------- | ---------------------------------- | -------------- | -------------- | --------------- |
-| Model providers           | 9+ cloud + local                   | OpenAI only    | Anthropic only | BYOK but manual |
+| Model providers           | 12+ cloud + local                   | OpenAI only    | Anthropic only | BYOK but manual |
 | Desktop agent integration | Native bridge                      | None           | None           | None            |
 | MCP tools in VS Code      | Yes (via bridge)                   | No             | Limited        | Yes             |
 | Inline completions        | Any model                          | GPT-4o only    | No             | No              |
@@ -3031,7 +3031,7 @@ The sidebar and agent mode webviews:
 
 | Feature                  | AGI Workforce  | Copilot    | Claude Code | Cline | Continue | Cursor     |
 | ------------------------ | -------------- | ---------- | ----------- | ----- | -------- | ---------- |
-| **Multi-model**          | 9+ providers   | 1          | 1           | BYOK  | BYOK     | 3          |
+| **Multi-model**          | 12+ providers   | 1          | 1           | BYOK  | BYOK     | 3          |
 | **Auto-routing**         | 3 modes        | No         | No          | No    | No       | Limited    |
 | **Inline completions**   | Yes            | Yes (best) | No          | No    | Yes      | Yes (best) |
 | **@mention participant** | @agi           | @github    | @claude     | No    | No       | N/A        |
@@ -3324,7 +3324,9 @@ npx vsce publish                       # Publish to Marketplace
 | Version | Date       | Author       | Changes                   |
 | ------- | ---------- | ------------ | ------------------------- |
 | 1.0.0   | 2026-03-09 | Product Team | Initial comprehensive PRD |
+| 1.1.0   | 2026-03-15 | Product Team | Update metrics: 12+ providers, 169+ skills |
 
 ---
 
 _End of PRD-VSCODE.md_
+_Document version 1.1.0 -- Last updated 2026-03-15_

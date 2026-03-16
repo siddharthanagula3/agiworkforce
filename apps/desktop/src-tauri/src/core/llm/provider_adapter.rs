@@ -1745,10 +1745,11 @@ impl ProviderAdapter for AnthropicAdapter {
             anthropic_request["effort"] = serde_json::json!(effort);
         }
 
-        // ── Structured outputs (response_format) ─────────────────────
-        if let Some(response_format) = &request.response_format {
-            anthropic_request["response_format"] = serde_json::to_value(response_format)?;
-        }
+        // ── Structured outputs ─────────────────────────────────────────
+        // Anthropic does NOT support OpenAI's `response_format`. It uses
+        // a prefill technique or tool_use with json schema instead.
+        // Sending `response_format` would be silently ignored.
+        // Skip this parameter for Anthropic.
 
         // ── Metadata ─────────────────────────────────────────────────
         if let Some(metadata) = &request.metadata {
@@ -2105,8 +2106,8 @@ impl ProviderAdapter for GoogleAdapter {
         }
 
         // ── Thinking config (Gemini Pro models only) ─────────────────
-        // gemini-3-pro-preview and gemini-2.5-pro support thinking_config
-        // in generationConfig. Flash models do not support thinking.
+        // Gemini REST API requires camelCase: thinkingConfig / thinkingBudget
+        // (snake_case is silently ignored by Google's API)
         if super::models_config::model_supports_gemini_thinking(&request.model) {
             if let Some(thinking) = &request.thinking {
                 use super::ThinkingParameter;
@@ -2124,8 +2125,8 @@ impl ProviderAdapter for GoogleAdapter {
                 };
                 if budget > 0 {
                     if let Some(gen_config) = google_request.get_mut("generationConfig") {
-                        gen_config["thinking_config"] = serde_json::json!({
-                            "thinking_budget": budget
+                        gen_config["thinkingConfig"] = serde_json::json!({
+                            "thinkingBudget": budget
                         });
                     }
                 }
@@ -2140,8 +2141,8 @@ impl ProviderAdapter for GoogleAdapter {
                 };
                 if budget > 0 {
                     if let Some(gen_config) = google_request.get_mut("generationConfig") {
-                        gen_config["thinking_config"] = serde_json::json!({
-                            "thinking_budget": budget
+                        gen_config["thinkingConfig"] = serde_json::json!({
+                            "thinkingBudget": budget
                         });
                     }
                 }
@@ -2597,7 +2598,46 @@ struct ZhipuAdapter;
 impl ProviderAdapter for ZhipuAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let adapter = OpenAIAdapter;
-        adapter.adapt_request(request)
+        let mut payload = adapter.adapt_request(request)?;
+
+        // Zhipu API is OpenAI-compatible but rejects unsupported parameters (error 1210).
+        // Only keep the fields Zhipu actually accepts.
+        if let Some(obj) = payload.as_object_mut() {
+            // Whitelist: only these keys are accepted by Zhipu's /chat/completions
+            let allowed_keys: std::collections::HashSet<&str> = [
+                "model", "messages", "stream", "temperature", "top_p",
+                "max_tokens", "stop", "tools", "tool_choice",
+            ].into_iter().collect();
+
+            let keys_to_remove: Vec<String> = obj.keys()
+                .filter(|k| !allowed_keys.contains(k.as_str()))
+                .cloned()
+                .collect();
+
+            for key in keys_to_remove {
+                obj.remove(&key);
+            }
+
+            // Zhipu only supports tool_choice "auto" or "none"
+            if let Some(tc) = obj.get("tool_choice") {
+                if tc.is_string() {
+                    let val = tc.as_str().unwrap_or("");
+                    if val != "auto" && val != "none" {
+                        obj.remove("tool_choice");
+                    }
+                }
+            }
+
+            // If tools array is empty, remove it entirely
+            if let Some(tools) = obj.get("tools") {
+                if tools.as_array().is_some_and(|a| a.is_empty()) {
+                    obj.remove("tools");
+                    obj.remove("tool_choice");
+                }
+            }
+        }
+
+        Ok(payload)
     }
 
     fn adapt_response(

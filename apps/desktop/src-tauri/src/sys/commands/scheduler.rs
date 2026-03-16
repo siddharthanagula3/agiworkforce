@@ -766,6 +766,55 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
         }
     }
 
+    // Block command chaining operators that could bypass the pattern checks above.
+    // These allow an attacker to append arbitrary commands after an innocuous-looking prefix.
+    let chaining_patterns: &[(&str, &str)] = &[
+        (";", "command chaining with semicolon"),
+        ("&&", "command chaining with AND operator"),
+        ("||", "command chaining with OR operator"),
+        ("`", "command substitution with backticks"),
+        ("$(", "command substitution with $()"),
+    ];
+
+    for (pattern, description) in chaining_patterns {
+        if command.contains(pattern) {
+            tracing::warn!(
+                "[SECURITY][Scheduler] Blocked command with chaining operator '{}': {}",
+                pattern,
+                description
+            );
+            return Err(format!(
+                "Command blocked: contains command chaining operator '{}' ({}). \
+                 Scheduled commands must be single, simple commands without chaining. \
+                 If you need to run multiple commands, create separate scheduled jobs.",
+                pattern, description
+            ));
+        }
+    }
+
+    // Block pipe operator (|) but avoid false positives with || (already caught above)
+    {
+        let chars: Vec<char> = command.chars().collect();
+        for (i, &ch) in chars.iter().enumerate() {
+            if ch == '|' {
+                let next = chars.get(i + 1).copied().unwrap_or('\0');
+                let prev = if i > 0 { chars[i - 1] } else { '\0' };
+                // Skip if this is part of || (already blocked above)
+                if next != '|' && prev != '|' {
+                    tracing::warn!(
+                        "[SECURITY][Scheduler] Blocked command with pipe operator"
+                    );
+                    return Err(
+                        "Command blocked: contains pipe operator '|'. \
+                         Scheduled commands must be single, simple commands without piping. \
+                         If you need to pipe output, create a script file and schedule that instead."
+                            .to_string(),
+                    );
+                }
+            }
+        }
+    }
+
     // Block command chaining that could bypass checks via encoded/obfuscated patterns
     if cmd_lower.contains("\\x") || cmd_lower.contains("$'\\") || cmd_lower.contains("$(printf") {
         tracing::warn!("[SECURITY][Scheduler] Blocked command with encoded/obfuscated characters");

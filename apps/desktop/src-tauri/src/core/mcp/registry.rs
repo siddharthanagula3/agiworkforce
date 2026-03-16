@@ -67,11 +67,31 @@ fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
 
 pub struct McpToolRegistry {
     mcp_client: Arc<McpClient>,
+    /// Index mapping tool IDs (including hashed IDs) to (server_name, tool_name)
+    /// for O(1) lookup. Rebuilt when tools are refreshed via `rebuild_id_index()`.
+    id_index: parking_lot::RwLock<HashMap<String, (String, String)>>,
 }
 
 impl McpToolRegistry {
     pub fn new(mcp_client: Arc<McpClient>) -> Self {
-        Self { mcp_client }
+        let registry = Self {
+            mcp_client,
+            id_index: parking_lot::RwLock::new(HashMap::new()),
+        };
+        registry.rebuild_id_index();
+        registry
+    }
+
+    /// Rebuild the tool ID index from all currently registered MCP tools.
+    /// Call this after servers are connected/disconnected or tools change.
+    pub fn rebuild_id_index(&self) {
+        let tools = self.mcp_client.list_all_tools();
+        let mut index = HashMap::with_capacity(tools.len());
+        for (server_name, tool) in &tools {
+            let tool_id = create_safe_tool_id(server_name, &tool.name);
+            index.insert(tool_id, (server_name.clone(), tool.name.clone()));
+        }
+        *self.id_index.write() = index;
     }
 
     pub fn get_all_tool_schemas(&self) -> Vec<Tool> {
@@ -257,18 +277,26 @@ impl McpToolRegistry {
     }
 
     /// Resolve tool IDs, including hashed IDs used for OpenAI name-length compliance.
+    /// Uses the pre-built `id_index` for O(1) lookup of hashed/encoded tool IDs.
     fn resolve_tool_id(&self, tool_id: &str) -> McpResult<(String, String)> {
+        // Fast path: decode the tool ID directly from its encoded components
         if let Ok(parsed) = Self::parse_tool_id(tool_id) {
             return Ok(parsed);
         }
 
-        // TODO(bug#17): add HashMap<String, (server_name, tool_name)> index for O(1) lookup.
-        // Currently O(N) over all registered MCP tools — acceptable for small tool counts but
-        // becomes a hot-path bottleneck when many MCP servers are connected (e.g., 140+ tools).
-        // Fix: add `id_index: Arc<RwLock<HashMap<String, (String, String)>>>` to McpToolRegistry,
-        // populate on `register_server_tools`, and replace this scan with a single map lookup.
+        // O(1) lookup via the pre-built index (covers hashed IDs and any format
+        // that parse_tool_id cannot decode directly)
+        if let Some(entry) = self.id_index.read().get(tool_id) {
+            return Ok(entry.clone());
+        }
+
+        // Index miss: tool may have been registered after the last index rebuild.
+        // Do a one-time full scan and update the index if found.
         for (server_name, tool) in self.mcp_client.list_all_tools() {
             if create_safe_tool_id(&server_name, &tool.name) == tool_id {
+                self.id_index
+                    .write()
+                    .insert(tool_id.to_string(), (server_name.clone(), tool.name.clone()));
                 return Ok((server_name, tool.name));
             }
         }

@@ -67,10 +67,9 @@ export function PlusMenu({
           disabled={disabled}
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-full',
-            'bg-charcoal-800 text-white/70 hover:text-white hover:bg-charcoal-700',
+            'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]',
             'transition-colors duration-150',
             'disabled:opacity-40 disabled:cursor-not-allowed',
-            'dark:bg-charcoal-800 dark:hover:bg-charcoal-700',
           )}
           aria-label="Attach or toggle modes"
         >
@@ -83,9 +82,8 @@ export function PlusMenu({
         align="start"
         sideOffset={8}
         className={cn(
-          'w-56 rounded-xl border border-white/10 p-1.5',
-          'bg-charcoal-800 shadow-xl',
-          'dark:bg-charcoal-800',
+          'w-56 rounded-xl border border-[hsl(var(--border))] p-1.5',
+          'bg-[hsl(var(--popover))] shadow-xl',
         )}
       >
         {/* Attach files */}
@@ -96,9 +94,14 @@ export function PlusMenu({
             setIsOpen(false);
           }}
           title={!visionSupported ? 'Images will not be processed by the current model' : undefined}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
         >
-          <Paperclip className={cn('h-4 w-4 shrink-0', !visionSupported && 'text-white/40')} />
+          <Paperclip
+            className={cn(
+              'h-4 w-4 shrink-0',
+              !visionSupported && 'text-[hsl(var(--muted-foreground))]',
+            )}
+          />
           <span>{visionSupported ? 'Add files or photos' : 'Add files'}</span>
           {!visionSupported && <span className="ml-auto text-xs text-amber-400/80">No vision</span>}
         </button>
@@ -116,7 +119,7 @@ export function PlusMenu({
             mode="quick"
             suppressToasts
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors justify-start h-auto font-normal',
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors justify-start h-auto font-normal',
               !visionSupported && 'opacity-40 pointer-events-none',
             )}
           />
@@ -126,7 +129,7 @@ export function PlusMenu({
         <button
           type="button"
           onClick={handleSelectFolder}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
         >
           {currentFolder ? (
             <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
@@ -136,7 +139,9 @@ export function PlusMenu({
           <div className="flex-1 text-left min-w-0">
             {currentFolder ? (
               <>
-                <div className="text-xs text-white/40 leading-tight">Project folder</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">
+                  Project folder
+                </div>
                 <div className="truncate leading-tight">{folderDisplayName}</div>
               </>
             ) : (
@@ -147,7 +152,7 @@ export function PlusMenu({
             <button
               type="button"
               onClick={handleClearFolder}
-              className="shrink-0 rounded p-0.5 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+              className="shrink-0 rounded p-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
               aria-label="Clear project folder"
             >
               <X className="h-3 w-3" />
@@ -156,7 +161,7 @@ export function PlusMenu({
         </button>
 
         {/* Separator */}
-        <div className="my-1.5 h-px bg-white/10" />
+        <div className="my-1.5 h-px bg-[hsl(var(--border))]" />
 
         {/* Connectors */}
         <button
@@ -165,7 +170,7 @@ export function PlusMenu({
             setIsOpen(false);
             openSettings('connectors');
           }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
         >
           <Link className="h-4 w-4 shrink-0" />
           <span>Connectors</span>
@@ -178,14 +183,14 @@ export function PlusMenu({
             setIsOpen(false);
             openSettings('mcp');
           }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
         >
           <Brain className="h-4 w-4 shrink-0" />
           <span>Skills</span>
         </button>
 
         {/* Separator */}
-        <div className="my-1.5 h-px bg-white/10" />
+        <div className="my-1.5 h-px bg-[hsl(var(--border))]" />
 
         {/* Web search toggle */}
         <button
@@ -193,7 +198,7 @@ export function PlusMenu({
           onClick={() => {
             onToggleWebSearch();
           }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
         >
           <Globe className="h-4 w-4 shrink-0" />
           <span className="flex-1 text-left">Web search</span>

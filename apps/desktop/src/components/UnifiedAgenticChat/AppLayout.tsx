@@ -17,6 +17,7 @@ import { AgentTaskPanel } from '../AGI/AgentTaskPanel';
 import { CanvasContainer } from '../Canvas/CanvasContainer';
 import { McpAppGallery } from '../MCP/McpAppGallery';
 import { ResearchPanel } from '../Research/ResearchPanel';
+import RewindTimeline from './RewindTimeline';
 import { toast } from 'sonner';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
@@ -48,7 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   // Unified right panel: only one can be open at a time (besides artifacts)
-  type RightPanel = 'memory' | 'tasks' | 'canvas' | 'mcp-apps' | 'research' | null;
+  type RightPanel = 'memory' | 'tasks' | 'canvas' | 'mcp-apps' | 'research' | 'rewind' | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
 
@@ -225,7 +226,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div
-      className="relative flex h-full w-full overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased"
+      className="relative flex h-full w-full overflow-hidden bg-[hsl(var(--background))] font-sans text-[hsl(var(--foreground))] antialiased"
       style={{ '--agi-right-panel-offset': `${rightPanelOffset}px` } as React.CSSProperties}
     >
       {}
@@ -243,6 +244,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         onOpenCustomInstructions={handleOpenCustomInstructions}
         onToggleMediaLab={handleToggleMediaLab}
         onOpenResearch={() => openRightPanel('research')}
+        onOpenRewind={() => openRightPanel('rewind')}
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
@@ -371,7 +373,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 ? 'MCP Apps'
                 : activeRightPanel === 'research'
                   ? 'Deep Research'
-                  : activeRightPanel}
+                  : activeRightPanel === 'rewind'
+                    ? 'Rewind Timeline'
+                    : activeRightPanel}
             </h2>
             <button
               type="button"
@@ -403,6 +407,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <McpAppGallery onClose={() => setActiveRightPanel(null)} />
             )}
             {activeRightPanel === 'research' && <ResearchPanel className="h-full" />}
+            {activeRightPanel === 'rewind' && <RewindTimeline />}
           </div>
         </div>
       )}
@@ -423,7 +428,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {}
-      <div className="fixed bottom-0 left-0 right-0 h-32 bg-linear-to-t from-cream-50 via-cream-50/80 to-transparent dark:from-charcoal-900 dark:via-charcoal-900/80 pointer-events-none z-10" />
     </div>
   );
 }

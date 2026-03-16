@@ -66,7 +66,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
         <button
           type="button"
           className={cn(
-            'flex w-full items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2.5 text-left transition-all hover:bg-zinc-800 hover:border-white/20',
+            'flex w-full items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left transition-all hover:bg-[hsl(var(--accent))] hover:border-[hsl(var(--border))]',
             collapsed && 'justify-center px-2',
           )}
         >
@@ -84,10 +84,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
 
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <div className="truncate text-sm font-medium text-zinc-100">{name}</div>
+              <div className="truncate text-sm font-medium text-[hsl(var(--foreground))]">
+                {name}
+              </div>
               <div
                 className={cn(
-                  'mt-0.5 inline-flex items-center rounded-xs bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300',
+                  'mt-0.5 inline-flex items-center rounded-xs bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]',
                   isTierLoading && 'animate-pulse',
                 )}
               >
@@ -103,14 +105,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-72 rounded-xl border border-white/10 bg-zinc-900/95 shadow-2xl backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className="z-50 w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         >
           {/* Header: email + plan */}
-          <div className="border-b border-white/10 px-4 py-3">
-            <div className="text-sm font-medium text-zinc-100 truncate">{email}</div>
+          <div className="border-b border-[hsl(var(--border))] px-4 py-3">
+            <div className="text-sm font-medium text-[hsl(var(--popover-foreground))] truncate">
+              {email}
+            </div>
             <div
               className={cn(
-                'mt-1 inline-flex items-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-300',
+                'mt-1 inline-flex items-center rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]',
                 isTierLoading && 'animate-pulse',
               )}
             >
@@ -119,19 +123,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           </div>
 
           {/* Quick settings: Appearance + Language */}
-          <div className="border-b border-white/10 py-2">
+          <div className="border-b border-[hsl(var(--border))] py-2">
             {/* Appearance toggle */}
             <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-xs text-zinc-400">Appearance</span>
-              <div className="flex rounded-lg bg-white/10 p-0.5">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Appearance</span>
+              <div className="flex rounded-lg bg-[hsl(var(--muted))] p-0.5">
                 <button
                   type="button"
                   onClick={() => handleThemeChange('light')}
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
                     theme === 'light'
-                      ? 'bg-white/20 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200',
+                      ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="Light"
                 >
@@ -143,8 +147,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
                     theme === 'dark'
-                      ? 'bg-white/20 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200',
+                      ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="Dark"
                 >
@@ -156,8 +160,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
                     theme === 'system'
-                      ? 'bg-white/20 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200',
+                      ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="System"
                 >
@@ -168,14 +172,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
 
             {/* Language selector */}
             <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-xs text-zinc-400">Language</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Language</span>
               <select
                 value={language}
                 onChange={(e) => handleLanguageChange(e.target.value)}
-                className="bg-white/10 border-none rounded-md px-2 py-1 text-xs text-zinc-200 outline-none cursor-pointer hover:bg-white/20 transition-colors"
+                className="bg-[hsl(var(--muted))] border-none rounded-md px-2 py-1 text-xs text-[hsl(var(--popover-foreground))] outline-none cursor-pointer hover:bg-[hsl(var(--accent))] transition-colors"
               >
                 {SUPPORTED_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code} className="bg-zinc-900 text-zinc-200">
+                  <option
+                    key={lang.code}
+                    value={lang.code}
+                    className="bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]"
+                  >
                     {lang.nativeName}
                   </option>
                 ))}
@@ -188,61 +196,61 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
             <button
               type="button"
               onClick={() => handleAction(() => openSettings('account'))}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <User className="h-4 w-4 text-zinc-400" />
+              <User className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Account</span>
             </button>
             <button
               type="button"
               onClick={() => handleAction(() => openSettings('general'))}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <Settings className="h-4 w-4 text-zinc-400" />
+              <Settings className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Preferences</span>
             </button>
             <button
               type="button"
               onClick={() => handleAction(() => openSettings('personalization'))}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <Sparkles className="h-4 w-4 text-zinc-400" />
+              <Sparkles className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Personalization</span>
             </button>
             <button
               type="button"
               onClick={() => handleAction(() => openShortcuts())}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <Keyboard className="h-4 w-4 text-zinc-400" />
+              <Keyboard className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Shortcuts</span>
             </button>
             <button
               type="button"
               onClick={() => handleAction(() => openSettings('connectors'))}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <Plug className="h-4 w-4 text-zinc-400" />
+              <Plug className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Connectors</span>
             </button>
           </div>
 
           {/* Footer: Help + Log out */}
-          <div className="border-t border-white/10 py-1">
+          <div className="border-t border-[hsl(var(--border))] py-1">
             <button
               type="button"
               onClick={() =>
                 handleAction(() => window.open('https://docs.agiworkforce.com', '_blank'))
               }
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <HelpCircle className="h-4 w-4 text-zinc-400" />
+              <HelpCircle className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <span>Help</span>
             </button>
             <button
               type="button"
               onClick={() => handleAction(() => void useAuthStore.getState().signOut())}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-400 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-400 transition-colors hover:bg-[hsl(var(--accent))]"
             >
               <LogOut className="h-4 w-4 text-red-400" />
               <span>Log Out</span>
