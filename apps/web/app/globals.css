@@ -582,6 +582,148 @@
   }
 
   /* =====================================================
+     Responsive Design Utilities (Mobile-First)
+     ===================================================== */
+
+  /* Message bubble responsive widths */
+  .message-bubble-content {
+    @apply flex-1 min-w-0; /* Prevent content overflow */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Mobile: max-width constraints for message bubbles */
+  @media (max-width: 375px) {
+    .chat-content-width {
+      @apply px-2; /* Tighter padding on extreme mobile */
+    }
+
+    .message-bubble-content {
+      max-width: 100%;
+    }
+
+    .prose {
+      font-size: 14px; /* Smaller text on tiny screens */
+    }
+  }
+
+  /* Tablet (768px): adjust message widths */
+  @media (min-width: 768px) {
+    .chat-content-width {
+      @apply px-6; /* Increase padding on tablet */
+    }
+  }
+
+  /* Desktop (1024px+): full-width with max constraint */
+  @media (min-width: 1024px) {
+    .chat-content-width {
+      @apply max-w-5xl; /* Constrain to readable width */
+    }
+  }
+
+  /* Touch target sizes (WCAG 2.1 Level AAA: 48x48px minimum) */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* Responsive button sizing */
+  button,
+  [role='button'] {
+    @apply transition-all;
+  }
+
+  @media (max-width: 640px) {
+    button,
+    [role='button'] {
+      min-height: 40px; /* Touch-friendly on mobile */
+    }
+  }
+
+  /* Responsive input sizing */
+  textarea,
+  input[type='text'],
+  input[type='search'] {
+    @apply w-full transition-all;
+  }
+
+  @media (max-width: 375px) {
+    textarea,
+    input[type='text'],
+    input[type='search'] {
+      min-height: 40px;
+      font-size: 16px; /* Prevent zoom-on-focus on iOS */
+    }
+  }
+
+  /* Sidebar collapse on mobile */
+  @media (max-width: 767px) {
+    [class*='sidebar'] {
+      position: absolute;
+      left: -100%;
+      transition: left 0.3s ease;
+    }
+
+    [class*='sidebar'][data-state='open'],
+    [class*='sidebar'].open {
+      left: 0;
+    }
+  }
+
+  /* Composer responsive layout */
+  @media (max-width: 640px) {
+    [class*='composer'] {
+      @apply flex-col gap-2;
+    }
+
+    [class*='send-button'] {
+      @apply w-full;
+    }
+  }
+
+  @media (min-width: 641px) {
+    [class*='composer'] {
+      @apply flex-row gap-2;
+    }
+
+    [class*='send-button'] {
+      @apply w-auto;
+    }
+  }
+
+  /* Dropdown positioning for mobile */
+  @media (max-width: 640px) {
+    [class*='dropdown-content'],
+    [role='listbox'],
+    [role='menu'] {
+      max-width: calc(100vw - 16px); /* Prevent overflow with padding */
+      left: 8px !important;
+      right: 8px !important;
+    }
+  }
+
+  /* Image and media responsiveness */
+  img {
+    @apply max-w-full h-auto;
+  }
+
+  video {
+    @apply max-w-full h-auto;
+  }
+
+  /* Code block responsive */
+  @media (max-width: 375px) {
+    .code-block-wrapper,
+    .code-block-container {
+      @apply text-xs;
+    }
+
+    pre {
+      @apply text-xs overflow-x-auto;
+    }
+  }
+
+  /* =====================================================
      Glassmorphism & Effects (from agiagentautomation)
      ===================================================== */
   .glass {
