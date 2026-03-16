@@ -56,12 +56,11 @@ const ALLOWED_SHELL_COMMANDS: &[&str] = &[
     // Development
     "git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3",
     "pip", "pip3", "cargo", "rustc", "go", "java", "javac", "make", "cmake",
-    "docker", "docker-compose",
     // Shell utilities
     "test", "true", "false", "sleep", "basename", "dirname", "realpath",
     "pwd", "cd", "export", "set",
-    // macOS specific
-    "open", "pbcopy", "pbpaste", "say", "defaults", "osascript", "sw_vers",
+    // macOS specific (safe subset — docker, osascript removed for security)
+    "open", "pbcopy", "pbpaste", "say", "sw_vers",
     // Script runners (for Script action type; the script content itself is validated)
     "bash", "sh", "zsh",
 ];
@@ -1109,20 +1108,23 @@ async fn dispatch_job_action(
                         ));
                     }
                 } else {
-                    tracing::warn!(
+                    tracing::error!(
                         "[SECURITY][Scheduler] ToolConfirmationState not available — \
-                         shell command for job '{}' proceeding without ToolGuard validation. \
-                         Command: {}",
+                         rejecting shell command for job '{}'. \
+                         Ensure ToolConfirmationState is properly initialized.",
                         job_name,
-                        command
+                    );
+                    return Err(
+                        "Shell command execution blocked: ToolGuard not available. \
+                         Please ensure the application is properly initialized.".to_string()
                     );
                 }
             }
 
             tracing::info!(
-                "[Scheduler] Executing shell command for job '{}': {}",
+                "[Scheduler] Executing shell command for job '{}': <{} chars>",
                 job_name,
-                command
+                command.len()
             );
 
             // Execute with a timeout to prevent runaway commands
@@ -1368,12 +1370,16 @@ async fn dispatch_job_action(
                         ));
                     }
                 } else {
-                    tracing::warn!(
+                    tracing::error!(
                         "[SECURITY][Scheduler] ToolConfirmationState not available — \
-                         script for job '{}' proceeding without ToolGuard validation. \
-                         Script length: {} chars",
+                         rejecting script for job '{}'. Script length: {} chars. \
+                         Ensure ToolConfirmationState is properly initialized.",
                         job_name,
                         script.len()
+                    );
+                    return Err(
+                        "Script execution blocked: ToolGuard not available. \
+                         Please ensure the application is properly initialized.".to_string()
                     );
                 }
             }
@@ -1769,21 +1775,21 @@ mod tests {
 
     #[test]
     fn test_validate_blocks_command_chaining_semicolon() {
-        let result = validate_shell_command("echo hi; rm -rf /");
+        let result = validate_shell_command("echo hi; echo bye");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("semicolon"));
     }
 
     #[test]
     fn test_validate_blocks_command_chaining_and() {
-        let result = validate_shell_command("echo hi && rm -rf /");
+        let result = validate_shell_command("echo hi && echo bye");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("AND operator"));
     }
 
     #[test]
     fn test_validate_blocks_command_chaining_or() {
-        let result = validate_shell_command("echo hi || rm -rf /");
+        let result = validate_shell_command("echo hi || echo bye");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("OR operator"));
     }
