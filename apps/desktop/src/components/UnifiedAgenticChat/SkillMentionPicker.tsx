@@ -135,19 +135,20 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
       ref={listRef}
       className={cn(
         'absolute bottom-full left-0 z-50 mb-2 w-72 max-h-72 overflow-y-auto',
-        'rounded-xl border border-gray-200/70 bg-white/95 shadow-2xl backdrop-blur-xl',
-        'dark:border-gray-700 dark:bg-charcoal-900/95',
+        'rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl',
+        '',
       )}
       role="listbox"
       aria-label="Skill mentions"
     >
-      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <div className="px-3 py-2 border-b border-[hsl(var(--border))]">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
           AI Skills — type to filter
         </span>
       </div>
       {filtered.map((skill, i) => (
-        <button type="button"
+        <button
+          type="button"
           key={skill.id}
           role="option"
           aria-selected={i === selectedIndex}
@@ -155,7 +156,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
             'w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors text-sm',
             i === selectedIndex
               ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-charcoal-800',
+              : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]',
           )}
           onClick={() => onSelect(skill)}
           onMouseEnter={() => setSelectedIndex(i)}

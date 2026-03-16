@@ -85,6 +85,11 @@ pub struct ExtensionInstaller {
 
     /// Optional progress callback
     progress_callback: Option<ProgressCallback>,
+
+    /// Optional Tauri app handle for emitting progress events directly.
+    /// When set, `emit_progress` sends `extension:install-progress` events
+    /// to the frontend in addition to calling `progress_callback`.
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl ExtensionInstaller {
@@ -94,6 +99,7 @@ impl ExtensionInstaller {
         Ok(Self {
             extensions_dir,
             progress_callback: None,
+            app_handle: None,
         })
     }
 
@@ -102,12 +108,19 @@ impl ExtensionInstaller {
         Self {
             extensions_dir,
             progress_callback: None,
+            app_handle: None,
         }
     }
 
     /// Set a progress callback
     pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
         self.progress_callback = Some(callback);
+        self
+    }
+
+    /// Set a Tauri app handle so progress events are emitted to the frontend.
+    pub fn with_app_handle(mut self, handle: tauri::AppHandle) -> Self {
+        self.app_handle = Some(handle);
         self
     }
 
@@ -468,7 +481,7 @@ impl ExtensionInstaller {
         Ok(())
     }
 
-    /// Emit a progress update
+    /// Emit a progress update via Tauri event and/or callback.
     fn emit_progress(&self, progress: InstallProgress) {
         tracing::debug!(
             "Install progress: {} - {:?} {}%",
@@ -476,6 +489,17 @@ impl ExtensionInstaller {
             progress.phase,
             progress.progress
         );
+
+        // Emit Tauri event to frontend when app_handle is available
+        if let Some(ref app_handle) = self.app_handle {
+            use tauri::Emitter;
+            if let Err(e) = app_handle.emit("extension:install-progress", &progress) {
+                tracing::warn!(
+                    "Failed to emit extension:install-progress event: {}",
+                    e
+                );
+            }
+        }
 
         if let Some(ref callback) = self.progress_callback {
             callback(progress);
@@ -536,6 +560,7 @@ impl Default for ExtensionInstaller {
             Self {
                 extensions_dir: fallback,
                 progress_callback: None,
+                app_handle: None,
             }
         })
     }

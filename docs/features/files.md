@@ -7,7 +7,7 @@
 |-------|----------|
 | Frontend Components | `apps/desktop/src/components/Document/DocumentWorkspace.tsx` (viewer/search UI), `apps/desktop/src/components/Documents/DocumentGenerator.tsx` (AI-assisted creation UI) |
 | Stores | `apps/desktop/src/stores/filesystemStore.ts` (directory navigation, file CRUD, history stack), `apps/desktop/src/stores/documentStore.ts` (rich document read/create/search) |
-| Hooks | `apps/desktop/src/hooks/useFileOperations.ts` (full IPC wrapper with watch support), `apps/desktop/src/hooks/useFileTerminalEvents.ts` (Tauri event listener) |
+| Hooks | File operation hooks (`useFileOperations.ts`, `useFileTerminalEvents.ts`) were removed during stabilization. File operations are now driven directly via `filesystemStore.ts` and `documentStore.ts` actions. |
 | Rust Commands — File I/O | `apps/desktop/src-tauri/src/sys/commands/file_ops.rs` (all raw file and directory commands) |
 | Rust Commands — Watch | `apps/desktop/src-tauri/src/sys/commands/file_watcher.rs` (start/stop/list watchers) |
 | Rust Commands — Documents | `apps/desktop/src-tauri/src/sys/commands/document.rs` (document read/search/generate thin layer) |
@@ -19,7 +19,7 @@
 
 ### Raw File Operations (read/write/copy/move/delete)
 
-1. User or agent calls `useFileOperations.read(path)` or `filesystemStore.readFile(path)`, which calls `invoke('file_read', { path })`.
+1. User or agent calls `filesystemStore.readFile(path)`, which calls `invoke('file_read', { path })`.
 
 2. The Rust `file_read` command in `file_ops.rs` runs three guards in sequence:
    - `validate_path_security(path)` — null-byte check, length limit (4096 chars), path canonicalization (resolves symlinks before checking), directory traversal detection on the canonical path, and blacklist check (`.ssh`, `.aws`, `/etc/passwd`, system32, etc.).
@@ -46,13 +46,13 @@
 
 ### File Watching
 
-1. `useFileOperations.watch(path, recursive)` calls `invoke('file_watch_start', { path, recursive })`.
+1. `filesystemStore.watchPath(path, recursive)` calls `invoke('file_watch_start', { path, recursive })`.
 
 2. `file_watcher.rs` locks the `FileWatcherState` Mutex and lazily creates a `FileWatcher` backed by the `notify` crate's `RecommendedWatcher`. The path is registered for OS-level change notifications.
 
 3. When the OS fires a file event (create/modify/remove), the notify callback maps it to a `FileEvent` enum and calls `app_handle.emit("file-event", &file_event)`.
 
-4. **Event name mismatch**: The `useFileOperations` hook listens via `@tauri-apps/api/event.listen("file:change", ...)`, but Rust emits `"file-event"` (not `"file:change"`). This means `useFileOperations.watch()` will never receive file change notifications. The `FileTree.tsx` component correctly listens on `"file-event"` and does receive events. See Known Issues below.
+4. The `FileTree.tsx` component listens on `"file-event"` to receive file change notifications.
 
 ### Document Processing (read rich documents)
 
@@ -119,7 +119,7 @@
 | `file_watch_list` | `file_watch_list` | — | `Result<Vec<String>, String>` |
 | `file_watch_stop_all` | `file_watch_stop_all` | — | `Result<(), String>` |
 
-Watcher emits `"file-event"` Tauri event with payload `FileEvent` (Created / Modified / Deleted / Renamed). **Note:** `useFileOperations.ts` incorrectly listens on `"file:change"` instead of `"file-event"` — see Known Issues.
+Watcher emits `"file-event"` Tauri event with payload `FileEvent` (Created / Modified / Deleted / Renamed).
 
 ### Document Commands (`document.rs`)
 
@@ -161,6 +161,6 @@ Not persisted. Pure in-memory navigation state.
 
 ## Known Issues
 
-### File Watcher Event Name Mismatch
+### File Watcher Events
 
-The Rust `FileWatcher` in `watcher.rs` emits events on channel `"file-event"`, but `useFileOperations.ts` listens on `"file:change"`. This means any code using `useFileOperations.watch()` will never receive file change callbacks. The `FileTree.tsx` component correctly listens on `"file-event"` and works as expected. Either the Rust emission or the hook listener needs to be updated to use a consistent event name.
+The Rust `FileWatcher` in `watcher.rs` emits events on channel `"file-event"`. The `FileTree.tsx` component correctly listens on this channel. The former `useFileOperations.ts` hook (which had a mismatched event name) was removed during stabilization.

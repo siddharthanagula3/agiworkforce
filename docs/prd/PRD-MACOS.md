@@ -1,8 +1,9 @@
 # AGI Workforce — macOS Desktop Platform PRD
 
-> **Document version**: 1.0.0
+> **Document version**: 1.1.0
 > **Created**: 2026-03-09
-> **Status**: Approved for implementation
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha
 > **Owner**: Product Team
 > **Platform**: macOS (Apple Silicon + Intel Universal Binary)
 > **Framework**: Tauri v2 + Rust 1.90.0 + React 19 + Vite 7 + Tailwind CSS 4
@@ -89,14 +90,14 @@ Key needs:
 
 | Differentiator            | AGI Workforce macOS                    | Claude Desktop            | ChatGPT Desktop      | Cursor              |
 | ------------------------- | -------------------------------------- | ------------------------- | -------------------- | ------------------- |
-| Model agnostic (any LLM)  | 9+ cloud providers + local models      | Anthropic only            | OpenAI only          | Limited multi-model |
+| Model agnostic (any LLM)  | 12+ cloud providers + local models     | Anthropic only            | OpenAI only          | Limited multi-model |
 | Full desktop autonomy     | FS, terminal, apps, mouse, keyboard    | Limited (artifacts)       | None                 | Code-focused only   |
 | Background agents (24hr+) | Yes — persistent, checkpoint-resumable | No                        | No                   | No                  |
 | Multi-agent swarm (100)   | Yes — parallel task decomposition      | No                        | No                   | No                  |
 | MCP tools (unlimited)     | Full (stdio, SSE, HTTP) — no caps      | Yes (limited)             | No                   | 40-tool cap         |
 | Voice I/O                 | Whisper + Piper + Deepgram + macOS TTS | No                        | Voice mode (limited) | No                  |
 | Computer use (vision)     | Full OPA loop + AXUIElement + OCR      | Beta (limited)            | No                   | No                  |
-| 140+ non-coding AI skills | Healthcare, legal, finance, education  | No                        | No                   | No                  |
+| 169+ non-coding AI skills | Healthcare, legal, finance, education  | No                        | No                   | No                  |
 | Mobile companion          | QR-pair, live agent dashboard          | No (Max tier remote only) | No                   | No                  |
 | Local model support       | Ollama, LM Studio, vLLM, llama.cpp     | No                        | No                   | Some                |
 | Universal binary          | Apple Silicon + Intel native           | Apple Silicon only        | Apple Silicon only   | Electron (Rosetta)  |
@@ -108,7 +109,7 @@ Key needs:
 | NN-01 | Zero user-visible raw error messages                     | Users must never see stack traces, provider error codes, or internal exception text. All errors must be translated to friendly messages via the FriendlyError system. |
 | NN-02 | `stream_watchdog_timeout` must never surface to the user | The watchdog is an internal Rust safety mechanism. If it fires, the session must recover gracefully and silently.                                                     |
 | NN-03 | Auto-approve mode must have zero friction                | In trusted mode, agents execute tools without confirmation dialogs. Any latency introduced by permission prompts in auto-approve mode is a regression.                |
-| NN-04 | Multi-LLM routing must work across all 9+ providers      | A failure in one provider must not prevent routing to another. Circuit breaker, retry, and fallback logic are required.                                               |
+| NN-04 | Multi-LLM routing must work across all 12+ providers      | A failure in one provider must not prevent routing to another. Circuit breaker, retry, and fallback logic are required.                                               |
 | NN-05 | Full desktop autonomy must be complete                   | The platform must perform any action a human can perform at a keyboard and mouse, including actions in third-party applications via AXUIElement.                      |
 | NN-06 | API keys and secrets must never appear in plaintext      | All secrets go through SecretManager (Argon2id + AES-GCM + SQLCipher + macOS Keychain fallback).                                                                      |
 | NN-07 | Proprietary license must be enforced                     | All source code remains proprietary. No copyleft dependency (GPL, AGPL, SSPL) may be added without licensing review.                                                  |
@@ -442,7 +443,7 @@ These features are available exclusively on macOS and have no Windows/Linux equi
 
 | Feature           | AGI Workforce macOS              | Claude Desktop (macOS) | ChatGPT Desktop (macOS) | Cursor (macOS)  |
 | ----------------- | -------------------------------- | ---------------------- | ----------------------- | --------------- |
-| **Models**        | 9+ cloud + unlimited local       | Claude only            | GPT only                | Multi (limited) |
+| **Models**        | 12+ cloud + unlimited local      | Claude only            | GPT only                | Multi (limited) |
 | **Chat**          | Full streaming + branching       | Full streaming         | Full streaming          | Inline only     |
 | **Agents**        | Autonomous + background          | No autonomous          | No autonomous           | No autonomous   |
 | **Swarm**         | 100 concurrent agents            | None                   | None                    | None            |
@@ -457,7 +458,7 @@ These features are available exclusively on macOS and have no Windows/Linux equi
 | **Cloud Storage** | Drive/Dropbox/OneDrive E2E       | None                   | None                    | None            |
 | **Memory**        | Persistent + semantic            | Project memory         | Conversation memory     | Project context |
 | **Research**      | Multi-source + citations         | None                   | Web browsing            | None            |
-| **Skills**        | 140+ non-coding                  | None                   | None                    | None            |
+| **Skills**        | 169+ non-coding                  | None                   | None                    | None            |
 | **Canvas**        | Visual spatial canvas            | None                   | Canvas (limited)        | None            |
 | **Scheduling**    | Cron + interval + one-time       | None                   | None                    | None            |
 | **Analytics**     | ROI + usage + cost               | None                   | None                    | None            |
@@ -1009,7 +1010,7 @@ Main Content Area (flex-1):
 - **Heading**: "Welcome to AGI Workforce"
 - **Subheading**: "The open, model-agnostic AI desktop platform. Connect any LLM, automate anything."
 - **Feature highlights** (3 cards, horizontal):
-  - Card 1: Robot icon + "Any Model" + "Connect 9+ cloud providers or run local models"
+  - Card 1: Robot icon + "Any Model" + "Connect 12+ cloud providers or run local models"
   - Card 2: Shield icon + "Secure by Default" + "Encrypted storage, sandboxed execution, audit logging"
   - Card 3: Zap icon + "Full Autonomy" + "Agents that can see, click, type, and navigate your Mac"
 - **Primary button**: "Get Started" (blue, full-width within card)
@@ -4408,10 +4409,10 @@ Pre-release checklist executed before every release:
 | Step                    | Command                                     | Pass Criteria                   |
 | ----------------------- | ------------------------------------------- | ------------------------------- |
 | 1. Rust lint            | `cargo clippy -- -D warnings`               | 0 warnings                      |
-| 2. Rust test            | `cargo test`                                | All tests pass (3,267+)         |
+| 2. Rust test            | `cargo test`                                | All 3,267 tests pass            |
 | 3. TypeScript typecheck | `cd apps/desktop && pnpm typecheck`         | 0 errors                        |
 | 4. TypeScript lint      | `pnpm lint`                                 | 0 errors, 0 warnings            |
-| 5. Frontend test        | `cd apps/desktop && pnpm test`              | All tests pass (1,358+)         |
+| 5. Frontend test        | `cd apps/desktop && pnpm test`              | All 1,460 tests pass            |
 | 6. Build frontend       | `cd apps/desktop && pnpm build:web`         | Build succeeds                  |
 | 7. Build Rust + DMG     | `cd apps/desktop && pnpm build`             | DMG produced                    |
 | 8. Smoke test           | Manual: launch, chat, settings              | 10-point checklist passes       |
@@ -4504,7 +4505,7 @@ Auto-updater rollback:
 
 **Framework**: Vitest 4.0
 **Location**: `apps/desktop/src/__tests__/` and co-located `*.test.ts` files
-**Current count**: 1,358 tests across 82 files (all passing)
+**Current count**: 1,460 tests (all passing)
 
 **Key test areas**:
 | Area | Files | Tests | Coverage Target |
@@ -4719,7 +4720,7 @@ These tests verify that all `invoke()` calls use camelCase parameter keys (Tauri
 
 ### 9.8.2 Shell Injection Regression Tests
 
-Tests verifying that all shell command construction properly escapes user input. These address CVEs fixed in the Ground Truth Fixes sprint.
+Tests verifying that all shell command construction properly escapes user input. These address CVEs patched in the security hardening pass (2026-03-08).
 
 | Test ID     | Description                         | File Under Test            | Attack Vector                                   | Expected                                                |
 | ----------- | ----------------------------------- | -------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
@@ -5319,7 +5320,7 @@ Note: Touch Bar support is implemented via Tauri's native window integration. Si
 
 | Missing Feature        | AGI Workforce Advantage                                    |
 | ---------------------- | ---------------------------------------------------------- |
-| Multi-model            | AGI Workforce: 9+ cloud providers + unlimited local models |
+| Multi-model            | AGI Workforce: 12+ cloud providers + unlimited local models |
 | Background agents      | No persistent background execution in Claude Desktop       |
 | Multi-agent swarm      | No parallel agent orchestration                            |
 | Voice I/O              | No voice input or text-to-speech                           |
@@ -5373,7 +5374,7 @@ Claude Desktop is the closest competitor in the macOS AI desktop space. Its MCP 
 
 | Feature  | ChatGPT Desktop                 | AGI Workforce                        |
 | -------- | ------------------------------- | ------------------------------------ |
-| Models   | OpenAI only                     | 9+ providers + local                 |
+| Models   | OpenAI only                     | 12+ providers + local                |
 | Chat     | Full streaming                  | Full streaming + branching           |
 | Voice    | Voice mode (limited)            | Full STT/TTS/VAD/wake word           |
 | Vision   | Screenshot + camera             | Screenshot + AXUIElement + OPA loop  |
@@ -5405,7 +5406,7 @@ ChatGPT Desktop is a simple chat client with limited tool support. It has no age
 | Computer use      | None                          | Full OPA + AXUIElement               |
 | Terminal          | Integrated                    | Full PTY + AI assist                 |
 | Code editing      | Full IDE                      | Diff-based (not IDE-level)           |
-| Non-code tasks    | None                          | 140+ skills across 9 domains         |
+| Non-code tasks    | None                          | 169+ skills across 23 categories     |
 | Voice             | None                          | Full STT/TTS                         |
 | Background agents | None                          | Persistent background execution      |
 | Research          | None                          | Multi-source with citations          |
@@ -5426,7 +5427,7 @@ Cursor is the best code-focused AI tool but is limited to software development. 
 | --------------- | --------------------------------------- | -------------------------------------------- |
 | Search/Research | Core competency — deep web search       | Strong: multi-source research with citations |
 | Connectors      | Growing ecosystem (Google, Slack, etc.) | MCP: extensible protocol, unlimited servers  |
-| Models          | Perplexity models + some routing        | 9+ providers + local                         |
+| Models          | Perplexity models + some routing        | 12+ providers + local                        |
 | Desktop control | Limited computer use                    | Full AXUIElement + OPA loop                  |
 | Privacy         | Cloud-only                              | Local-first, offline-capable                 |
 | Voice           | None                                    | Full STT/TTS                                 |
@@ -5440,7 +5441,7 @@ Perplexity Computer's connector ecosystem is inspiring but proprietary. AGI Work
 
 | Capability           | AGI Workforce    | Claude Desktop | Claude Cowork | ChatGPT | Cursor   | Perplexity |
 | -------------------- | ---------------- | -------------- | ------------- | ------- | -------- | ---------- |
-| Multi-model          | **9+ providers** | No             | No            | No      | Limited  | No         |
+| Multi-model          | **12+ providers** | No             | No            | No      | Limited  | No         |
 | Local models         | **Full**         | No             | No            | No      | Some     | No         |
 | Desktop autonomy     | **Full**         | Limited        | VM only       | No      | No       | Limited    |
 | Background agents    | **Yes**          | No             | Yes (VM)      | No      | No       | No         |
@@ -5450,7 +5451,7 @@ Perplexity Computer's connector ecosystem is inspiring but proprietary. AGI Work
 | Computer use         | **Full**         | Beta           | VM            | No      | No       | Limited    |
 | Research             | **Deep**         | No             | No            | Browse  | No       | **Best**   |
 | Code editing         | Good             | No             | VM            | No      | **Best** | No         |
-| 140+ non-code skills | **Yes**          | No             | No            | No      | No       | No         |
+| 169+ non-code skills | **Yes**          | No             | No            | No      | No       | No         |
 | Mobile companion     | **Yes**          | Max only       | No            | No      | No       | No         |
 | Offline              | **Full**         | No             | No            | No      | Partial  | No         |
 | Universal binary     | **Yes**          | No             | N/A           | No      | No       | Unknown    |
@@ -5496,9 +5497,9 @@ Perplexity Computer's connector ecosystem is inspiring but proprietary. AGI Work
 
 | Gap                         | Current Advantage                                    | Defense Strategy                                            |
 | --------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
-| Multi-model with native GUI | Only product combining 9+ providers + native desktop | Continue adding providers day-one; local model parity       |
+| Multi-model with native GUI | Only product combining 12+ providers + native desktop | Continue adding providers day-one; local model parity       |
 | Mobile companion            | QR-pair with live dashboard                          | Ship iOS/Android apps before competitors add mobile         |
-| Non-code AI skills          | 140+ skills across 9 domains                         | Rapidly expand skill library; community skill contributions |
+| Non-code AI skills          | 169+ skills across 23 categories                     | Rapidly expand skill library; community skill contributions |
 | MCP without limits          | Unlimited tools, 3 transports                        | Stay ahead of MCP spec evolution; contribute to protocol    |
 | Local-first privacy         | Full offline mode with local models                  | Deepen local model support; on-device embeddings            |
 
@@ -5527,7 +5528,7 @@ AGI Workforce for macOS occupies a unique position at the intersection of three 
 
 1. **Native desktop application** with full macOS integration (Keychain, AXUIElement, global shortcuts, system tray, notifications, universal binary)
 2. **Model-agnostic AI agent platform** supporting every major LLM provider plus local models, with autonomous execution, background agents, and swarm orchestration
-3. **140+ non-coding AI skills** across healthcare, legal, finance, education, creative, trades, and e-commerce — targeting knowledge workers, not just developers
+3. **169+ non-coding AI skills** across 23 categories including healthcare, legal, finance, education, creative, trades, and e-commerce — targeting knowledge workers, not just developers
 
 The closest competitor combination that matches this breadth would require using Claude Desktop (MCP tools, chat) + Cursor (multi-model code editing) + a separate automation tool (Keyboard Maestro, BetterTouchTool) + separate scheduling (cron, Shortcuts) — four separate products versus one unified platform.
 
@@ -6223,4 +6224,4 @@ Stores communicate via Zustand's `subscribe` and `getState()`:
 
 _End of macOS Desktop Platform PRD._
 
-_Document version 1.0.0 — 2026-03-09_
+_Document version 1.1.0 — Last updated 2026-03-15_

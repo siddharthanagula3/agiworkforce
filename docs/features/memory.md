@@ -19,8 +19,7 @@
 | Rust Core -- Search | `core/agi/semantic_search.rs` -- `TfIdfIndex` for in-memory semantic similarity (cosine similarity over sparse TF-IDF vectors) |
 | Rust Core -- Tool Executor | `core/llm/tool_executor/memory_tools.rs` -- LLM tool implementations for `memory_remember`, `memory_recall`, `memory_search`, `memory_forget` |
 | Store | `stores/memoryStore.ts` -- Zustand + Persist v2; `memories[]`, all CRUD actions, `buildMemoryContext()`, derived selectors, `pruneMemories()` |
-| Hooks | `hooks/useMemory.ts` -- full CRUD + knowledge base + stats; auto-load on mount |
-| Hooks | `hooks/useMemoryIntegration.ts` -- chat-focused: `saveChatMemory`, `saveArchitecturalDecision`, `getContextMemories`, `formatMemoriesForPrompt` |
+| Hooks | `hooks/useMemory.ts` -- full CRUD + knowledge base + stats; auto-load on mount (the former `useMemoryIntegration.ts` hook was removed; chat-focused memory operations are handled directly in the chat UI components) |
 | Components | `components/Memory/MemoryPanel.tsx` (Settings tab: enable/disable, auto-inject, token budget) |
 | Components | `components/Memory/MemoryManager.tsx` (full CRUD list with search/sort/tabs) |
 | Components | `components/Memory/MemoryCard.tsx` (single entry with inline importance editing) |
@@ -81,7 +80,7 @@ Two parallel injection paths exist. The frontend path is active; the Rust path i
 
 **Path A -- Frontend (`buildMemoryContext`) [ACTIVE]:**
 
-1. Before sending a chat message, `useSendMessage.ts` reads `readMemoryPanelSettings()` from `localStorage["agi-memory-panel-settings"]` (synchronous, no Zustand dependency).
+1. Before sending a chat message, the chat UI reads `readMemoryPanelSettings()` from `localStorage["agi-memory-panel-settings"]` (synchronous, no Zustand dependency).
 
 2. If `isEnabled && autoInject`, `buildMemoryContext(memories, maxTokens)` is called:
    - Filters to `importance >= 5`
@@ -601,7 +600,7 @@ The `persistent_memory` system extends this with two additional categories:
 
 5. **`AGIMemory` is now legacy, not active runtime state**: `core/agi/memory.rs` still exists as a deprecated in-memory `VecDeque<MemoryEntry>` helper for legacy callers, but the active `AGICore` runtime no longer allocates or depends on it. Persistent/searchable memory lives in `MemoryManager` / `MemoryStore`.
 
-6. **Frontend-only context injection**: The active memory injection path is JavaScript-only (`buildMemoryContext` in `useSendMessage.ts`). The Rust `MemoryInjector` and `PlannerMemoryIntegration` are implemented but not wired into the default chat send pipeline.
+6. **Frontend-only context injection**: The active memory injection path is JavaScript-only (`buildMemoryContext` in the chat UI). The Rust `MemoryInjector` and `PlannerMemoryIntegration` are implemented but not wired into the default chat send pipeline.
 
 7. **`useMemory` hook `recall` method has signature mismatch**: The hook's `recall` expects `{ query, category?, limit? }` but the Rust `memory_recall` command expects `category + topic`. The hook invocation would fail for the `recall` path as written (it passes `query` where `category` is expected).
 

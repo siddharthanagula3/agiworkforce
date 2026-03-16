@@ -1,10 +1,10 @@
 {
   "info": {
     "name": "AGI Workforce API",
-    "_postman_id": "agi-workforce-api-v1",
-    "description": "Complete API collection for AGI Workforce platform including authentication, LLM operations, subscriptions, and device management.",
+    "_postman_id": "agi-workforce-api-v2",
+    "description": "Complete API collection for AGI Workforce platform including authentication, LLM operations, chat, agents, memory, subscriptions, device management, media generation, scheduling, and more.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "1.1.2"
+    "version": "2.0.0"
   },
   "auth": {
     "type": "bearer",
@@ -41,9 +41,151 @@
       "key": "link_code",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversation_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Auto-fetch CSRF token if not set",
+          "if (!pm.collectionVariables.get('csrf_token')) {",
+          "  pm.sendRequest({",
+          "    url: pm.collectionVariables.get('base_url') + '/csrf',",
+          "    method: 'GET'",
+          "  }, function (err, res) {",
+          "    if (!err && res.code === 200) {",
+          "      var body = res.json();",
+          "      pm.collectionVariables.set('csrf_token', body.token);",
+          "    }",
+          "  });",
+          "}"
+        ],
+        "type": "text/javascript"
+      }
     }
   ],
   "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Health check endpoint. No authentication required.\n\nChecks database, Stripe, and environment status.\n\nRate Limit: 30 requests/minute"
+          }
+        },
+        {
+          "name": "Voice Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/voice/health",
+              "host": ["{{base_url}}"],
+              "path": ["voice", "health"]
+            },
+            "description": "Voice transcription service health check."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth & CSRF",
+      "item": [
+        {
+          "name": "Get CSRF Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('csrf_token', response.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/csrf",
+              "host": ["{{base_url}}"],
+              "path": ["csrf"]
+            },
+            "description": "Get a CSRF token for state-changing requests.\n\nToken must be included in the x-csrf-token header for POST/PUT/DELETE requests.\n\nExpires in 1 hour."
+          }
+        },
+        {
+          "name": "Desktop Token Exchange",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/desktop-token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "desktop-token"]
+            },
+            "description": "Exchange credentials for a desktop authentication token."
+          }
+        },
+        {
+          "name": "SSO Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/sso-check?email=user@example.com",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "sso-check"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "user@example.com"
+                }
+              ]
+            },
+            "description": "Check if SSO is available for an email domain."
+          }
+        }
+      ]
+    },
     {
       "name": "User",
       "item": [
@@ -57,7 +199,7 @@
               "host": ["{{base_url}}"],
               "path": ["me"]
             },
-            "description": "Get the authenticated user's profile, subscription, and credit balance.\n\nRate Limit: 60 requests/minute"
+            "description": "Get the authenticated user's profile, subscription, feature flags, and credit balance.\n\nRate Limit: 60 requests/minute"
           },
           "response": [
             {
@@ -79,15 +221,85 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"id\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"email\": \"user@example.com\",\n  \"name\": \"John Doe\",\n  \"avatar_url\": null,\n  \"plan\": {\n    \"tier\": \"pro\",\n    \"status\": \"active\"\n  },\n  \"credits\": {\n    \"credits_remaining_cents\": 150000,\n    \"daily_remaining_cents\": 7500\n  }\n}"
+              "body": "{\n  \"id\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"email\": \"user@example.com\",\n  \"name\": \"John Doe\",\n  \"avatar_url\": null,\n  \"created_at\": 1710000000,\n  \"updated_at\": 1710100000,\n  \"plan\": {\n    \"tier\": \"pro\",\n    \"display_name\": \"Pro\",\n    \"status\": \"active\",\n    \"current_period_end\": 1712678400\n  },\n  \"feature_flags\": {\n    \"beta_features\": true,\n    \"advanced_model_access\": true\n  },\n  \"credits\": {\n    \"credits_remaining_cents\": 150000,\n    \"daily_remaining_cents\": 7500\n  }\n}"
             }
           ]
+        },
+        {
+          "name": "Export User Data (GDPR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/export",
+              "host": ["{{base_url}}"],
+              "path": ["user", "export"]
+            },
+            "description": "GDPR Article 20: Export all user data as JSON.\n\nAdd ?download=true to download as file.\n\nRate Limit: 5 requests/hour"
+          }
+        },
+        {
+          "name": "Delete User Data (GDPR)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/data",
+              "host": ["{{base_url}}"],
+              "path": ["user", "data"]
+            },
+            "description": "GDPR Article 17: Permanently delete all user data (Right to Erasure).\n\nThis is irreversible.\n\nRate Limit: 3 requests/hour"
+          }
+        },
+        {
+          "name": "Get Waitlist Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/waitlist",
+              "host": ["{{base_url}}"],
+              "path": ["waitlist"]
+            },
+            "description": "Get which plans the user has joined the waitlist for."
+          }
+        },
+        {
+          "name": "Join Waitlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"pro\",\n  \"billingInterval\": \"annual\",\n  \"source\": \"pricing\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/waitlist",
+              "host": ["{{base_url}}"],
+              "path": ["waitlist"]
+            },
+            "description": "Join the waitlist for a plan."
+          }
         }
       ],
-      "description": "User profile and account management endpoints"
+      "description": "User profile, data export/deletion, and waitlist endpoints"
     },
     {
-      "name": "Subscription",
+      "name": "Billing & Credits",
       "item": [
         {
           "name": "Create Checkout Session",
@@ -97,6 +309,10 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
               }
             ],
             "body": {
@@ -108,14 +324,19 @@
               "host": ["{{base_url}}"],
               "path": ["checkout"]
             },
-            "description": "Create a Stripe Checkout session for subscription purchase.\n\nRate Limit: 5 requests/minute (security-sensitive)"
+            "description": "Create a Stripe Checkout session for subscription purchase.\n\nIf user already has an active subscription, returns billing portal URL instead.\n\nRate Limit: 10 requests/minute"
           }
         },
         {
           "name": "Create Portal Session",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/portal",
               "host": ["{{base_url}}"],
@@ -138,7 +359,86 @@
           }
         },
         {
-          "name": "Create Credit Top-up",
+          "name": "Credit Top-Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": 10000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/credit-topup",
+              "host": ["{{base_url}}"],
+              "path": ["credit-topup"]
+            },
+            "description": "Create a Stripe Checkout session for credit top-up.\n\nAmount in cents ($10 min = 1000, $1000 max = 100000). Default: $100 (10000).\n\nRate Limit: 5 requests/minute"
+          }
+        },
+        {
+          "name": "Get Credit Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/llm/v1/credits/balance",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "v1", "credits", "balance"]
+            },
+            "description": "Get current credit balance with monthly and daily limits.\n\nRate Limit: 60 requests/minute"
+          }
+        },
+        {
+          "name": "Get Usage",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/usage",
+              "host": ["{{base_url}}"],
+              "path": ["usage"]
+            },
+            "description": "Get credit usage, balance, and subscription info.\n\nUsed by TokenBalanceDisplay and UsageWarningBanner."
+          }
+        },
+        {
+          "name": "Claim Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/claim-offer",
+              "host": ["{{base_url}}"],
+              "path": ["claim-offer"]
+            },
+            "description": "Claim a promotional offer."
+          }
+        }
+      ]
+    },
+    {
+      "name": "LLM API",
+      "item": [
+        {
+          "name": "Chat Completions",
           "request": {
             "method": "POST",
             "header": [
@@ -149,14 +449,512 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amount\": 2000\n}"
+              "raw": "{\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"What is the capital of France?\"\n    }\n  ],\n  \"temperature\": 0.7,\n  \"max_tokens\": 150\n}"
             },
             "url": {
-              "raw": "{{base_url}}/credit-topup",
+              "raw": "{{base_url}}/llm/v1/chat/completions",
               "host": ["{{base_url}}"],
-              "path": ["credit-topup"]
+              "path": ["llm", "v1", "chat", "completions"]
             },
-            "description": "Create a Stripe Checkout session for credit top-up.\n\nAmount is in cents (e.g., 2000 = $20).\n\nRate Limit: 5 requests/minute"
+            "description": "OpenAI-compatible chat completions endpoint.\n\nSupports multiple providers and models.\n\nRate Limit: 100 requests/minute"
+          }
+        },
+        {
+          "name": "Chat Completions (Streaming)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a short haiku about coding.\"\n    }\n  ],\n  \"stream\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/llm/v1/chat/completions",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "v1", "chat", "completions"]
+            },
+            "description": "Streaming chat completions (Server-Sent Events).\n\nRate Limit: 100 requests/minute"
+          }
+        },
+        {
+          "name": "List Models (LLM v1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/llm/v1/models",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "v1", "models"]
+            },
+            "description": "List available LLM models based on subscription tier.\n\nRate Limit: 100 requests/minute"
+          }
+        },
+        {
+          "name": "Prompt Completion (Ghost Text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"How do I\",\n  \"context\": \"User is writing code in Python\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/completion",
+              "host": ["{{base_url}}"],
+              "path": ["completion"]
+            },
+            "description": "Ghost-text prompt completion using claude-haiku-4.5.\n\nReturns a suggestion to complete the user's partial input."
+          }
+        },
+        {
+          "name": "LLM Completion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/llm/completion",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "completion"]
+            },
+            "description": "Direct LLM completion endpoint."
+          }
+        },
+        {
+          "name": "Chat v2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/llm/v2/chat",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "v2", "chat"]
+            },
+            "description": "Enhanced v2 chat completion endpoint."
+          }
+        },
+        {
+          "name": "Audio Transcription",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/llm/v1/audio/transcriptions",
+              "host": ["{{base_url}}"],
+              "path": ["llm", "v1", "audio", "transcriptions"]
+            },
+            "description": "Transcribe audio file to text."
+          }
+        },
+        {
+          "name": "Test Provider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/test-provider",
+              "host": ["{{base_url}}"],
+              "path": ["settings", "test-provider"]
+            },
+            "description": "Test an LLM provider connection."
+          }
+        },
+        {
+          "name": "LLM Status (Debug)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/debug/llm-status",
+              "host": ["{{base_url}}"],
+              "path": ["debug", "llm-status"]
+            },
+            "description": "Debug: Get LLM provider status."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Catalog",
+      "item": [
+        {
+          "name": "Get Model Catalog",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/models",
+              "host": ["{{base_url}}"],
+              "path": ["models"]
+            },
+            "description": "Get the canonical model catalog (public, cached 5 min).\n\nReturns all models with capabilities, pricing, and metadata."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat Conversations",
+      "item": [
+        {
+          "name": "List Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations"]
+            },
+            "description": "List user's conversations, ordered by most recently updated."
+          }
+        },
+        {
+          "name": "Create Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.conversation && response.conversation.id) {",
+                  "  pm.collectionVariables.set('conversation_id', response.conversation.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Conversation\",\n  \"model\": \"gpt-4o\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chat/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations"]
+            },
+            "description": "Create a new chat conversation."
+          }
+        },
+        {
+          "name": "Get Conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations/{{conversation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations", "{{conversation_id}}"]
+            },
+            "description": "Get a conversation with all its messages."
+          }
+        },
+        {
+          "name": "Update Conversation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chat/conversations/{{conversation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations", "{{conversation_id}}"]
+            },
+            "description": "Rename or update a conversation."
+          }
+        },
+        {
+          "name": "Delete Conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations/{{conversation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations", "{{conversation_id}}"]
+            },
+            "description": "Soft-delete a conversation."
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Hello, how are you?\",\n  \"model\": \"gpt-4o\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chat/conversations/{{conversation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "conversations", "{{conversation_id}}", "messages"]
+            },
+            "description": "Send a message to a conversation and get an AI response.\n\nSet skipLlm: true to save message without calling the LLM."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agents",
+      "item": [
+        {
+          "name": "Execute Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"software-engineer\",\n  \"message\": \"Write a Python function to sort a list\",\n  \"model\": \"claude-haiku-4.5\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/agents/execute",
+              "host": ["{{base_url}}"],
+              "path": ["agents", "execute"]
+            },
+            "description": "Execute an AI agent with streaming SSE response.\n\nCredits are checked before execution and deducted after completion."
+          }
+        },
+        {
+          "name": "Manage Agent Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"create\",\n  \"employeeId\": \"software-engineer\",\n  \"title\": \"Code Review Session\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/agents/session",
+              "host": ["{{base_url}}"],
+              "path": ["agents", "session"]
+            },
+            "description": "Create, list, get, or delete agent chat sessions.\n\nActions: create, list, get, delete"
+          }
+        },
+        {
+          "name": "Agent Collaboration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agents/collaboration",
+              "host": ["{{base_url}}"],
+              "path": ["agents", "collaboration"]
+            },
+            "description": "Multi-agent collaboration endpoint."
+          }
+        },
+        {
+          "name": "Get Agent Communication",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/agents/communication",
+              "host": ["{{base_url}}"],
+              "path": ["agents", "communication"]
+            },
+            "description": "Get agent communication messages."
+          }
+        },
+        {
+          "name": "Mission Control",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mission",
+              "host": ["{{base_url}}"],
+              "path": ["mission"]
+            },
+            "description": "Mission control operations for agent orchestration."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memory",
+      "item": [
+        {
+          "name": "List Memories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memory?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["memory"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List all memories for the authenticated user.\n\nPagination: limit (1-100), offset (0-10000)"
+          }
+        },
+        {
+          "name": "Create Memory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"User prefers dark mode and Python\",\n  \"category\": \"preferences\",\n  \"source\": \"web\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/memory",
+              "host": ["{{base_url}}"],
+              "path": ["memory"]
+            },
+            "description": "Create a new memory entry.\n\nMax content length: 10,000 characters.\nSources: mobile, desktop, web, auto"
+          }
+        },
+        {
+          "name": "Search Memories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memory/search?q=preferences",
+              "host": ["{{base_url}}"],
+              "path": ["memory", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "preferences"
+                }
+              ]
+            },
+            "description": "Search memories by content (case-insensitive text search).\n\nMax query length: 500 characters."
+          }
+        },
+        {
+          "name": "Get Memory Sync Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memory/sync",
+              "host": ["{{base_url}}"],
+              "path": ["memory", "sync"]
+            },
+            "description": "Get memory sync status including last sync time and entry counts by source."
+          }
+        },
+        {
+          "name": "Trigger Memory Sync",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memory/sync",
+              "host": ["{{base_url}}"],
+              "path": ["memory", "sync"]
+            },
+            "description": "Trigger a memory sync across devices."
           }
         }
       ]
@@ -180,26 +978,27 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"{{$guid}}\",\n  \"device_name\": \"Postman Test Device\",\n  \"device_type\": \"desktop\"\n}"
+              "raw": "{\n  \"device_id\": \"{{$guid}}\",\n  \"device_name\": \"Postman Test Device\",\n  \"device_type\": \"desktop\",\n  \"device_fingerprint\": \"{{$guid}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/device/link",
               "host": ["{{base_url}}"],
               "path": ["device", "link"]
             },
-            "description": "Generate a secure device linking code.\n\nNo authentication required.\n\nRate Limit: 10 requests/minute"
+            "description": "Generate a device linking code with QR code.\n\nRequires authentication. Code expires in 15 minutes.\n\nRate Limit: 10 requests/minute"
           }
         },
         {
@@ -217,14 +1016,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"{{device_id}}\"\n}"
+              "raw": "{\n  \"device_id\": \"{{device_id}}\",\n  \"device_fingerprint\": \"{{$guid}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/device/poll",
               "host": ["{{base_url}}"],
               "path": ["device", "poll"]
             },
-            "description": "Poll device authorization status.\n\nRecommended: Poll every 2-3 seconds.\n\nRate Limit: 10 requests/second"
+            "description": "Poll device authorization status.\n\ndevice_fingerprint is required for new sessions.\n\nRecommended: Poll every 2-3 seconds.\n\nRate Limit: 10 requests/second"
           }
         },
         {
@@ -252,98 +1051,297 @@
       ]
     },
     {
-      "name": "LLM API",
+      "name": "Share",
       "item": [
         {
-          "name": "Chat Completions",
+          "name": "Create Share",
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"model\": \"gpt-4\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"What is the capital of France?\"\n    }\n  ],\n  \"temperature\": 0.7,\n  \"max_tokens\": 150\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/llm/v1/chat/completions",
-              "host": ["{{base_url}}"],
-              "path": ["llm", "v1", "chat", "completions"]
-            },
-            "description": "OpenAI-compatible chat completions endpoint.\n\nSupports multiple providers and models.\n\nRate Limit: 100 requests/minute"
-          }
-        },
-        {
-          "name": "Chat Completions (Streaming)",
-          "request": {
-            "method": "POST",
-            "header": [
+              },
               {
-                "key": "Content-Type",
-                "value": "application/json"
+                "key": "x-csrf-token",
+                "value": "{{csrf_token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"model\": \"gpt-4\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a short haiku about coding.\"\n    }\n  ],\n  \"stream\": true\n}"
+              "raw": "{\n  \"title\": \"My Shared Chat\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"Hello!\"},\n    {\"role\": \"assistant\", \"content\": \"Hi there!\"}\n  ]\n}"
             },
             "url": {
-              "raw": "{{base_url}}/llm/v1/chat/completions",
+              "raw": "{{base_url}}/share",
               "host": ["{{base_url}}"],
-              "path": ["llm", "v1", "chat", "completions"]
+              "path": ["share"]
             },
-            "description": "Streaming chat completions (Server-Sent Events).\n\nRate Limit: 100 requests/minute"
+            "description": "Create a shareable link for a conversation. Expires in 7 days."
           }
         },
         {
-          "name": "Chat Completions (Prompt Cache)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"model\": \"claude-sonnet-4\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful coding assistant with expertise in Python, JavaScript, and Rust.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"How do I read a CSV file in Python?\"\n    }\n  ],\n  \"use_prompt_cache\": true\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/llm/v1/chat/completions",
-              "host": ["{{base_url}}"],
-              "path": ["llm", "v1", "chat", "completions"]
-            },
-            "description": "Chat completions with prompt caching enabled.\n\n90% cost savings on cached prompts.\n\nRate Limit: 100 requests/minute"
-          }
-        },
-        {
-          "name": "List Models",
+          "name": "List Shared Sessions",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/llm/v1/models",
+              "raw": "{{base_url}}/shared",
               "host": ["{{base_url}}"],
-              "path": ["llm", "v1", "models"]
+              "path": ["shared"]
             },
-            "description": "List available models based on subscription tier.\n\nRate Limit: 100 requests/minute"
+            "description": "List user's shared sessions."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "Generate Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/media/image/generate",
+              "host": ["{{base_url}}"],
+              "path": ["media", "image", "generate"]
+            },
+            "description": "Generate an image using an AI model."
           }
         },
         {
-          "name": "Get Credit Balance",
+          "name": "Generate Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/media/video/generate",
+              "host": ["{{base_url}}"],
+              "path": ["media", "video", "generate"]
+            },
+            "description": "Start video generation."
+          }
+        },
+        {
+          "name": "Video Generation Status",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/llm/v1/credits/balance",
+              "raw": "{{base_url}}/media/video/status",
               "host": ["{{base_url}}"],
-              "path": ["llm", "v1", "credits", "balance"]
+              "path": ["media", "video", "status"]
             },
-            "description": "Get current credit balance and usage.\n\nRate Limit: 60 requests/minute"
+            "description": "Check video generation status."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schedules",
+      "item": [
+        {
+          "name": "List Schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["schedules"]
+            },
+            "description": "List all scheduled tasks."
+          }
+        },
+        {
+          "name": "Create Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["schedules"]
+            },
+            "description": "Create a new scheduled task."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Downloads & Releases",
+      "item": [
+        {
+          "name": "Download Desktop (Public)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/download?platform=mac",
+              "host": ["{{base_url}}"],
+              "path": ["download"],
+              "query": [
+                {
+                  "key": "platform",
+                  "value": "mac"
+                }
+              ]
+            },
+            "description": "Download desktop app installer. No auth required.\n\nPlatforms: mac, windows, linux"
+          }
+        },
+        {
+          "name": "Download Beta",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/download-beta?platform=mac",
+              "host": ["{{base_url}}"],
+              "path": ["download-beta"],
+              "query": [
+                {
+                  "key": "platform",
+                  "value": "mac"
+                }
+              ]
+            },
+            "description": "Download beta desktop app. Requires active subscription."
+          }
+        },
+        {
+          "name": "Check for Updates",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/releases/check",
+              "host": ["{{base_url}}"],
+              "path": ["releases", "check"]
+            },
+            "description": "Check for app updates."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connectors & Marketplace",
+      "item": [
+        {
+          "name": "List Connectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/connectors",
+              "host": ["{{base_url}}"],
+              "path": ["connectors"]
+            },
+            "description": "List configured connectors."
+          }
+        },
+        {
+          "name": "Get Marketplace",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/marketplace",
+              "host": ["{{base_url}}"],
+              "path": ["marketplace"]
+            },
+            "description": "Get marketplace listings."
+          }
+        },
+        {
+          "name": "Get Workforce Skills",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/workforce",
+              "host": ["{{base_url}}"],
+              "path": ["workforce"]
+            },
+            "description": "Get AI workforce skill listings (140+ non-coding skills)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Security Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/security?action=dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "security"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "dashboard"
+                }
+              ]
+            },
+            "description": "Get security dashboard (admin only).\n\nActions: dashboard, metrics, alerts, events, user, ips"
+          }
+        },
+        {
+          "name": "SSO Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/sso",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "sso"]
+            },
+            "description": "Get SSO configuration (admin only)."
+          }
+        },
+        {
+          "name": "Directory Sync Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/directory-sync",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "directory-sync"]
+            },
+            "description": "Get directory sync status (admin only)."
           }
         }
       ]
@@ -363,14 +1361,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"MacBook Pro\",\n  \"platform\": \"macos\",\n  \"version\": \"1.1.2\"\n}"
+              "raw": "{\n  \"name\": \"MacBook Pro\",\n  \"platform\": \"macos\",\n  \"version\": \"2.0.0\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/desktop/register",
               "host": ["{{gateway_url}}"],
               "path": ["api", "desktop", "register"]
             },
-            "description": "Register a new desktop device.\n\nRate Limit: 10 requests/minute"
+            "description": "Register a new desktop device with the API gateway.\n\nRate Limit: 10 requests/minute"
           }
         },
         {
@@ -389,7 +1387,7 @@
                 }
               ]
             },
-            "description": "Get desktop device status.\n\nRate Limit: 60 requests/minute"
+            "description": "Get desktop device status from the API gateway.\n\nRate Limit: 60 requests/minute"
           }
         },
         {
@@ -404,7 +1402,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"chat\",\n  \"payload\": {\n    \"message\": \"Hello, world!\",\n    \"model\": \"gpt-4\"\n  }\n}"
+              "raw": "{\n  \"type\": \"chat\",\n  \"payload\": {\n    \"message\": \"Hello, world!\",\n    \"model\": \"gpt-4o\"\n  }\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/desktop/:desktopId/command",
@@ -418,34 +1416,6 @@
               ]
             },
             "description": "Send chat command to desktop via WebSocket.\n\nRate Limit: 30 requests/minute"
-          }
-        },
-        {
-          "name": "Send Command - Automation",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"automation\",\n  \"payload\": {\n    \"action\": \"run\",\n    \"workflowId\": \"workflow-123\",\n    \"parameters\": {\n      \"input\": \"test data\"\n    }\n  }\n}"
-            },
-            "url": {
-              "raw": "{{gateway_url}}/api/desktop/:desktopId/command",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "desktop", ":desktopId", "command"],
-              "variable": [
-                {
-                  "key": "desktopId",
-                  "value": "{{device_id}}"
-                }
-              ]
-            },
-            "description": "Send automation command to desktop.\n\nRate Limit: 30 requests/minute"
           }
         },
         {
@@ -477,7 +1447,7 @@
                 }
               ]
             },
-            "description": "Update device heartbeat (last seen).\n\nRate Limit: 600 requests/minute (10/second)"
+            "description": "Update device heartbeat.\n\nRate Limit: 600 requests/minute"
           }
         },
         {
@@ -496,28 +1466,7 @@
                 }
               ]
             },
-            "description": "Unregister (delete) a desktop device.\n\nRate Limit: 10 requests/minute"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Health",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/health",
-              "host": ["{{base_url}}"],
-              "path": ["health"]
-            },
-            "description": "Health check endpoint.\n\nNo authentication required.\n\nRate Limit: 30 requests/minute"
+            "description": "Unregister a desktop device.\n\nRate Limit: 10 requests/minute"
           }
         }
       ]

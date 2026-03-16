@@ -17,9 +17,9 @@ import { CtaSection } from '../components/marketing/CtaSection';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce | AI Agent for Desktop',
+  title: 'AGI Workforce | AI Desktop Assistant',
   description:
-    'AGI Workforce is a privacy-first native desktop AI agent. All processing happens locally — conversations, files, and API keys never leave your machine. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
+    'AGI Workforce is a privacy-first native desktop AI assistant. Chat with AI, automate your browser, manage files, and run code — all locally. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
   keywords: [
     'AI agent',
     'AI automation',
@@ -38,9 +38,9 @@ export const metadata: Metadata = {
     'data privacy',
   ],
   openGraph: {
-    title: 'AGI Workforce | AI Agent for Desktop',
+    title: 'AGI Workforce | AI Desktop Assistant',
     description:
-      'A native AI agent desktop app with chat, browser automation, and multi-provider model support. Now in Public ALPHA.',
+      'Chat with AI, automate your browser, manage files, and run code — all from one native desktop app. Free to try.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [
@@ -48,15 +48,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce — AI agent desktop app',
+        alt: 'AGI Workforce — AI desktop assistant',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce | AI Agent for Desktop',
+    title: 'AGI Workforce | AI Desktop Assistant',
     description:
-      'Native AI agent desktop app with chat, browser automation, and multi-provider LLM support. Now in Public ALPHA.',
+      'Chat with AI, automate your browser, manage files, and run code — all from one native desktop app. Free to try.',
     images: ['/app-preview.png'],
   },
 };
@@ -66,7 +66,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AGI Workforce',
   description:
-    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — now in public ALPHA.',
+    'AGI Workforce is a native desktop AI assistant with chat, browser automation, multi-provider LLM support, and tool execution.',
   url: 'https://agiworkforce.com',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -75,7 +75,7 @@ const jsonLd = {
     operatingSystem: 'macOS, Windows, Linux',
     featureList: [
       '140+ AI skills across 9 industries',
-      'Unlimited MCP tools and plugins',
+      '50+ built-in tools',
       'Desktop automation and computer use',
       'Parallel AI agent orchestration',
       '9+ LLM providers including local models',
@@ -91,37 +91,37 @@ const features = [
   {
     icon: Users,
     title: '140+ AI Skills',
-    desc: 'Pre-built AI specialists across healthcare, legal, finance, creative, education, and more — ready to handle real work in every industry.',
+    desc: 'Pre-built AI specialists for healthcare, legal, finance, creative, education, and more. Start working in seconds — no setup, no prompt engineering.',
     href: '/features/ai-skills',
   },
   {
     icon: Plug,
     title: 'Unlimited MCP Plugins',
-    desc: 'Connect any MCP tool — file systems, databases, APIs, browsers, and cloud services. No artificial tool caps.',
+    desc: 'Connect any MCP tool — file systems, databases, APIs, browsers, and cloud services. No artificial tool limits, ever.',
     href: '/features/plugins',
   },
   {
     icon: Wrench,
     title: 'Desktop Automation',
-    desc: 'Native computer use: browser control, terminal commands, file management, screen capture, and OCR — all with safety controls.',
+    desc: 'Control your browser, run terminal commands, read and write files, and capture your screen — with approval controls so you stay in charge.',
     href: '/features/tools',
   },
   {
     icon: Bot,
     title: 'Parallel AI Agents',
-    desc: 'Swarm orchestration decomposes tasks, spawns parallel agents, and aggregates results — autonomous AI that scales.',
+    desc: 'Break big tasks into parallel workstreams. Multiple agents work simultaneously and combine results — faster than any single AI conversation.',
     href: '/features/agents',
   },
   {
     icon: MessageSquare,
     title: 'Agentic Chat',
-    desc: 'Chat interface with real-time tool execution, inline results, reasoning traces, and Claude Code-style status labels.',
+    desc: 'A chat interface that shows exactly what AI is doing: tool calls, file edits, web searches, and code execution — all visible in real time.',
     href: '/features/ai-chat',
   },
   {
     icon: Lock,
-    title: 'Privacy-First Design',
-    desc: 'All processing happens locally on your machine. Conversations, files, and API keys never pass through our servers. BYOK means you own every token.',
+    title: 'You Stay in Control',
+    desc: 'Every action is reversible. Every tool call is visible before it runs. Your files and API keys never leave your machine.',
     href: '/security',
   },
 ];
@@ -137,28 +137,35 @@ export default function Home() {
         <Header />
 
         <main className="flex-1 pt-24">
+          {/* Hero */}
           <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
             <div className="container relative mx-auto px-4 text-center">
               <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
                 <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500" />
-                Now in Public ALPHA
+                Early Access — Free to try
               </div>
-              <h1 className="mx-auto max-w-5xl whitespace-nowrap text-5xl font-bold tracking-tight md:text-7xl lg:text-8xl">
+
+              <h1 className="mx-auto max-w-4xl text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl">
                 <span className="bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent">
-                  AGI WORKFORCE
+                  Your AI desktop assistant that actually does the work
                 </span>
               </h1>
+
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                A native desktop AI agent with chat, browser automation, multi-provider model
-                support, and tool execution — available on macOS, Windows, and Linux.
+                Chat with AI, automate your browser, manage files, and run code — all from one
+                native desktop app.{' '}
+                <span className="text-zinc-300">
+                  Everything runs locally. Every action is reversible.
+                </span>
               </p>
+
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
                   href="/download"
                   className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
                 >
-                  Download Desktop App
+                  Download Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
                 <Link
@@ -172,19 +179,19 @@ export default function Home() {
               <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:flex-wrap md:justify-center">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Available on macOS, Windows, and Linux</span>
+                  <span>Your data stays on your machine</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>OpenAI, Anthropic, Google, xAI, DeepSeek, and Ollama</span>
+                  <span>Every action is reversible with one click</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Browser automation, file management, and terminal tools</span>
+                  <span>Works with OpenAI, Anthropic, Google, and local models</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Your data never leaves your machine</span>
+                  <span>macOS, Windows, and Linux</span>
                 </div>
               </div>
 
@@ -192,14 +199,16 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Features */}
           <section id="features" className="bg-zinc-950 py-24">
             <div className="container mx-auto px-4">
               <div className="mb-16 text-center">
                 <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Everything You Need
+                  What you can do
                 </h2>
                 <p className="mx-auto max-w-2xl text-zinc-400">
-                  AGI Workforce ships a complete set of AI automation tools out of the box.
+                  One app that handles the full range of AI-assisted work — from quick questions to
+                  long-running automations.
                 </p>
               </div>
               <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -228,6 +237,7 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Stats */}
           <section className="bg-black py-24">
             <div className="container mx-auto px-4">
               <div className="grid gap-8 text-center md:grid-cols-4">
@@ -246,10 +256,10 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="p-8">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">∞</div>
-                  <div className="text-lg text-zinc-400">MCP Tools</div>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">50+</div>
+                  <div className="text-lg text-zinc-400">Built-in Tools</div>
                   <p className="mt-2 text-sm text-zinc-600">
-                    Unlimited plugins via Model Context Protocol
+                    Browser, terminal, files, search, and more
                   </p>
                 </div>
                 <div className="p-8">
@@ -263,6 +273,7 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Security */}
           <section id="security" className="bg-zinc-950 py-24">
             <div className="container mx-auto px-4">
               <div className="flex flex-col items-center gap-16 md:flex-row">
@@ -344,24 +355,12 @@ export default function Home() {
           </section>
 
           <CtaSection
-            headline="Start automating today"
-            body="Download the desktop app and connect your preferred AI provider in minutes. No infrastructure required."
+            headline="Try it free — no credit card needed"
+            body="Download in under a minute. Connect your preferred AI provider and start working. Uninstall anytime."
           />
         </main>
 
-        <MarketingFooter
-          links={[
-            { label: 'AI Skills', href: '/features/ai-skills' },
-            { label: 'Plugins', href: '/features/plugins' },
-            { label: 'Tools', href: '/features/tools' },
-            { label: 'Agents', href: '/features/agents' },
-            { label: 'Pricing', href: '/pricing' },
-            { label: 'Docs', href: '/docs' },
-            { label: 'About', href: '/about' },
-            { label: 'Privacy', href: '/privacy' },
-            { label: 'Terms', href: '/terms' },
-          ]}
-        />
+        <MarketingFooter />
       </div>
     </>
   );

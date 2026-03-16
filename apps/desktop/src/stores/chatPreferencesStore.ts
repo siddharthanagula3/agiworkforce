@@ -145,25 +145,11 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
         },
 
         setAgentMode: async (mode: AgentMode) => {
-          set(
-            (state) => ({
-              chatPreferences: {
-                ...state.chatPreferences,
-                agentMode: mode,
-                autoApproveTools: mode === 'autopilot',
-                alwaysUseAgentMode:
-                  mode === 'plan' ? true : state.chatPreferences.alwaysUseAgentMode,
-              },
-            }),
-            undefined,
-            'chatPreferences/setAgentMode',
+          // Delegate to settingsStore which has rollback on sync failure
+          const { setAgentMode: setMode } = await import('./settingsStore').then((m) =>
+            m.useSettingsStore.getState(),
           );
-          try {
-            await invoke('set_agent_mode', { mode });
-            await invoke('set_auto_approve_all', { enabled: mode === 'autopilot' });
-          } catch (error) {
-            console.error('Failed to sync agent mode to backend:', error);
-          }
+          await setMode(mode);
         },
 
         setAutoTTS: (enabled: boolean) => {

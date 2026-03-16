@@ -155,6 +155,12 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
             query.unwrap_or_default()
         };
         ("CodeSearch", display)
+    } else if lower == "grep_search" {
+        ("Grep", query.or(path).unwrap_or_default())
+    } else if lower == "glob_search" {
+        ("Glob", query.or(path).unwrap_or_default())
+    } else if lower == "edit_exact_replace" {
+        ("Edit", path.unwrap_or_default())
     } else if contains_any(&lower, &["search_files", "grep", "find_files", "glob"]) {
         ("Search", query.unwrap_or_default())
     } else if contains_any(
@@ -352,6 +358,48 @@ mod tests {
         let info = get_tool_display_info("mcp__filesystem__glob", r#"{"pattern": "**/*.rs"}"#);
         assert_eq!(info.display_name, "Search");
         assert_eq!(info.display_args, "**/*.rs");
+    }
+
+    // --- get_tool_display_info: Claude Code-style tools ---
+
+    #[test]
+    fn test_grep_search_display() {
+        let info = get_tool_display_info("grep_search", r#"{"pattern": "fn main"}"#);
+        assert_eq!(info.display_name, "Grep");
+        assert_eq!(info.display_args, "fn main");
+    }
+
+    #[test]
+    fn test_grep_search_with_path_display() {
+        let info =
+            get_tool_display_info("grep_search", r#"{"pattern": "error", "path": "src/lib.rs"}"#);
+        assert_eq!(info.display_name, "Grep");
+        // query (pattern) is preferred over path
+        assert_eq!(info.display_args, "error");
+    }
+
+    #[test]
+    fn test_glob_search_display() {
+        let info = get_tool_display_info("glob_search", r#"{"pattern": "**/*.ts"}"#);
+        assert_eq!(info.display_name, "Glob");
+        assert_eq!(info.display_args, "**/*.ts");
+    }
+
+    #[test]
+    fn test_glob_search_path_fallback_display() {
+        let info = get_tool_display_info("glob_search", r#"{"path": "src"}"#);
+        assert_eq!(info.display_name, "Glob");
+        assert_eq!(info.display_args, "src");
+    }
+
+    #[test]
+    fn test_edit_exact_replace_display() {
+        let info = get_tool_display_info(
+            "edit_exact_replace",
+            r#"{"file_path": "src/main.rs", "old_string": "foo", "new_string": "bar"}"#,
+        );
+        assert_eq!(info.display_name, "Edit");
+        assert_eq!(info.display_args, "src/main.rs");
     }
 
     // --- get_tool_display_info: web search / fetch ---
