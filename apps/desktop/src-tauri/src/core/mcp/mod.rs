@@ -17,7 +17,7 @@ pub mod transport;
 mod tests;
 
 pub use client::{McpClient, McpTool};
-pub use config::{McpServerConfig, McpServersConfig};
+pub use config::{ConfigDecryptionError, McpServerConfig, McpServersConfig};
 pub use error::{McpError, McpResult};
 pub use events::{emit_mcp_event, McpEvent};
 pub use extensions::{
