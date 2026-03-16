@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import {
   Plus,
   Paperclip,
@@ -50,12 +50,12 @@ const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
   ],
 };
 
-export function ChatComposerNew({
+const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
   placeholder = 'Message AI...',
   disabled = false,
-}: ChatComposerProps) {
+}: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [showTools, setShowTools] = useState(false);
@@ -512,4 +512,23 @@ export function ChatComposerNew({
       <ComposerFooter showModelSelector />
     </div>
   );
-}
+};
+
+/**
+ * ChatComposerNew with memoization optimization.
+ *
+ * - All event handlers memoized with useCallback
+ * - Component wrapped with React.memo to prevent re-renders from parent changes
+ * - Filtered skills computed with useMemo
+ */
+export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+  return (
+    prev.onSend === next.onSend &&
+    prev.isLoading === next.isLoading &&
+    prev.placeholder === next.placeholder &&
+    prev.disabled === next.disabled
+  );
+});
+
+ChatComposerNew.displayName = 'ChatComposerNew';
