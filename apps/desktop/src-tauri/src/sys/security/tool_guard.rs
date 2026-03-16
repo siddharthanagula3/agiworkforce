@@ -147,6 +147,16 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
+            "file_read_binary".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
             "file_write".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 10,
@@ -1222,7 +1232,7 @@ impl ToolExecutionGuard {
         }
 
         match tool_name {
-            "file_read" | "file_write" | "file_delete" | "file_list" => {
+            "file_read" | "file_read_binary" | "file_write" | "file_delete" | "file_list" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
                     self.validate_file_path(path)?;
                 } else {

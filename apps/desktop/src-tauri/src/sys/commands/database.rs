@@ -1182,8 +1182,14 @@ pub async fn db_get_stored_password(
 
     match encrypted {
         Some(enc_value) => {
-            let decrypted = decrypt_mcp_credential(&enc_value);
-            Ok(decrypted)
+            let decrypted = decrypt_mcp_credential(&enc_value).map_err(|e| {
+                format!(
+                    "Config decryption failed for stored password (connection: {}): {}, \
+                     consider re-entering credentials",
+                    connection_id, e
+                )
+            })?;
+            Ok(Some(decrypted))
         }
         None => Ok(None),
     }

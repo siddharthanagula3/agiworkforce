@@ -94,6 +94,7 @@ impl ToolTimeoutConfig {
 
             // Medium tools (60s)
             "file_read"
+            | "file_read_binary"
             | "file_write"
             | "file_delete"
             | "file_list"
@@ -1010,7 +1011,7 @@ impl ToolExecutor {
                         } else {
                             // Binary file but not a PDF
                             let error = format!(
-                                "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read for binary-aware reading.",
+                                "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary to read binary files as base64.",
                                 path
                             );
                             if let Some(app_handle) = &self.app_handle {
@@ -1520,6 +1521,7 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         match tool.id.as_str() {
             "file_read" => self.execute_file_read_tool(&args).await,
+            "file_read_binary" => self.execute_file_read_binary_tool(&args).await,
             "file_write" => self.execute_file_write_tool(&args).await,
             "file_delete" => self.execute_file_delete_tool(&args).await,
             "ui_screenshot" => self.execute_ui_screenshot_tool(&args).await,
