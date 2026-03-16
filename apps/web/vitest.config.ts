@@ -25,6 +25,9 @@ export default defineConfig({
         'postcss.config.*',
       ],
     },
+    // Disable CSS parsing in jsdom to prevent motion-dom CSS rendering errors
+    // (CSS parsing errors occur when framer-motion tries to set animation transforms)
+    mockReset: true,
   },
   resolve: {
     alias: {
