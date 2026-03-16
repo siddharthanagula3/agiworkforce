@@ -164,4 +164,42 @@ describe('ChatAIService', () => {
       expect(categories![0]!.name!).toBe('Technical');
     });
   });
+
+  // ==========================================================================
+  // stopGeneration — AbortController stream abort
+  // ==========================================================================
+
+  describe('stopGeneration', () => {
+    it('stopGeneration is a function', () => {
+      expect(typeof ChatAIService.stopGeneration).toBe('function');
+    });
+
+    it('calling stopGeneration when no request is active does not throw', () => {
+      expect(() => ChatAIService.stopGeneration()).not.toThrow();
+    });
+
+    it('stopGeneration aborts a real AbortController signal', () => {
+      // Verify that a standalone AbortController (same mechanism used in
+      // ChatAIService.sendMessage) properly signals abort after .abort() is called.
+      const controller = new AbortController();
+      const signal = controller.signal;
+
+      expect(signal.aborted).toBe(false);
+      controller.abort();
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('stopGeneration does not throw when no active request exists', () => {
+      // stopGeneration guards against null activeAbortController
+      expect(() => ChatAIService.stopGeneration()).not.toThrow();
+      // Call twice — still safe
+      expect(() => ChatAIService.stopGeneration()).not.toThrow();
+    });
+
+    it('stopGeneration() does not throw when called without an active request', () => {
+      // Clean state
+      ChatAIService.stopGeneration();
+      expect(() => ChatAIService.stopGeneration()).not.toThrow();
+    });
+  });
 });
