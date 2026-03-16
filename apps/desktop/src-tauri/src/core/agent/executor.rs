@@ -71,6 +71,19 @@ impl TaskExecutor {
             step.description
         );
 
+        // Pre-flight: check vision capabilities before executing, so we fail
+        // fast with a clear error instead of entering a polling loop that hangs.
+        if let Err(e) = VisionAutomation::check_vision_capability(&step.action) {
+            return Ok(StepResult {
+                step_id: step.id.clone(),
+                success: false,
+                result: None,
+                error: Some(e.to_string()),
+                screenshot_path: None,
+                duration: start.elapsed(),
+            });
+        }
+
         let result = timeout(step.timeout, self.execute_action(&step.action, vision)).await;
 
         match result {
