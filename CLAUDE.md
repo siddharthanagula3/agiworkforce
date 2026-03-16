@@ -236,6 +236,191 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - Rust: follow Tauri v2 patterns, `#[tauri::command]` for invoke handlers, snake_case
 - **ALWAYS use parallel sub-agents or agent teams** — never do sequential work when tasks can be parallelized. Launch multiple Task tool calls in a single message. Use `TeamCreate` + `TaskCreate` for cross-cutting multi-agent work. Assign tasks, communicate via `SendMessage`, and properly shut down teams with `shutdown_request` when done. This is a hard requirement for all non-trivial tasks.
 
+## Workflow Orchestration
+
+The development workflow prioritizes planning, verification, and autonomous execution.
+
+### 1. Plan Mode Default
+
+Always enter plan mode before implementation:
+
+- Read requirements/spec carefully
+- Check for existing patterns in codebase
+- Design the approach (identify files, data flow, edge cases)
+- Get user approval before coding
+
+Plan mode prevents wasted work on incorrect approaches.
+
+### 2. Subagent Strategy
+
+Dispatch fresh specialized subagents for each independent task:
+
+- One subagent per task (no context pollution)
+- Subagent asks clarifying questions **before** starting work
+- Never inherit session history — provide exactly what's needed
+- Two-stage review: spec compliance first, then code quality
+
+This isolation ensures high-quality, focused work on complex problems.
+
+### 3. Self-Improvement Loop
+
+After completing work, capture learnings:
+
+- Extract reusable patterns from the session
+- Identify repeated mistakes
+- Document decision-making that succeeded
+- Store patterns for future reference
+
+Learnings compound — each session makes the next one faster and better.
+
+### 4. Verification Before Done
+
+Never claim work is complete without verification:
+
+- Tests must run (not just be written)
+- Builds must compile
+- Type checking must pass
+- All assertions must pass on first run
+- Accessibility/security checks completed
+
+Verification catches 80% of issues before they reach users.
+
+### 5. Demand Elegance
+
+Code quality matters as much as functionality:
+
+- Eliminate tautological assertions (no `|| true` fallbacks)
+- Remove dead code and unreachable branches
+- Extract magic numbers to constants
+- Keep functions under 50 lines
+- Keep files under 800 lines
+
+Elegant code is easier to debug, refactor, and scale.
+
+### 6. Autonomous Bug Fixing
+
+When tests fail, fix the code immediately:
+
+- Don't skip failing tests or mark as flaky
+- Diagnose root cause
+- Implement fix
+- Verify tests pass
+- Document the issue
+
+Self-healing prevents technical debt from accumulating.
+
+## Task Management
+
+### 1. Plan First
+
+Before any implementation:
+
+- Write a detailed plan with file structure
+- Identify all files that will be created/modified
+- Break work into bite-sized tasks (2-5 minutes each)
+- Define success criteria for each task
+- Get approval before starting
+
+Clear planning prevents rework and clarifies requirements early.
+
+### 2. Verify Plan
+
+After writing the plan but before executing:
+
+- Review plan for logical completeness
+- Check for missing edge cases
+- Verify file boundaries (one responsibility per file)
+- Ensure tasks are ordered correctly
+- Validate against requirements
+
+Plan review catches gaps early when they're cheap to fix.
+
+### 3. Track Progress
+
+During implementation:
+
+- Use TodoWrite for multi-step tasks
+- Mark each step as in_progress, then completed
+- Note blockers or questions immediately
+- Update human if plan needs adjustment
+- Don't skip steps just because they seem simple
+
+Progress tracking prevents burnout and reveals hidden issues.
+
+### 4. Explain Changes
+
+After each task completion:
+
+- Document why changes were made (not just what)
+- Note any trade-offs chosen
+- List assumptions made
+- Mention any related issues discovered
+- Cross-reference related files
+
+Explanations make code understandable for future maintainers.
+
+### 5. Document Results
+
+After all tasks complete:
+
+- Update CLAUDE.md if patterns changed
+- Add examples for new patterns
+- Update type definitions if interfaces changed
+- Add tests if test infrastructure evolved
+- Commit documentation alongside code
+
+Documentation decays if not kept current with code.
+
+### 6. Capture Lessons
+
+At end of session:
+
+- What worked well in this session?
+- What could be faster next time?
+- What patterns emerged?
+- Were there repeated mistakes to avoid?
+- Store in memory for future reference
+
+Explicit lesson capture turns experience into reusable patterns.
+
+## Core Principles
+
+### Simplicity First
+
+The simplest solution that works is the best solution:
+
+- Don't over-engineer
+- Don't add features that aren't needed
+- Don't abstract before seeing the pattern
+- One obvious way is better than multiple clever ways
+- YAGNI ruthlessly — You Aren't Gonna Need It
+
+Simple code is faster to write, easier to debug, and simpler to maintain.
+
+### No Laziness
+
+Cut corners that will haunt you later:
+
+- Don't skip test coverage to "ship faster"
+- Don't ignore compiler warnings
+- Don't use TODO comments as permanent placeholders
+- Don't assume "it works in my environment"
+- Don't rely on manual verification
+
+Laziness now means doubled effort later.
+
+### Minimal Impact
+
+Keep changes focused and scoped:
+
+- One feature per commit
+- One responsibility per function
+- One responsibility per file
+- Don't refactor unrelated code while fixing a bug
+- Don't add new features while fixing issues
+
+Minimal changes are easier to review, test, and revert if needed.
+
 ## Zone-Based File Ownership (Multi-Agent)
 
 When parallel agents work, each writes only to its assigned zone:
