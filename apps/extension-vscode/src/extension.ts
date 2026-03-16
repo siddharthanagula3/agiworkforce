@@ -523,7 +523,10 @@ export function activate(context: vscode.ExtensionContext): void {
       terminal.show();
       // Use `git add -u` (tracks modified/deleted only) instead of `git add -A`
       // to avoid accidentally staging untracked sensitive or large binary files.
-      terminal.sendText(`git add -u && git commit -m "${msg.replace(/"/g, '\\"')}"`);
+      // SECURITY: Use single quotes and escape embedded single quotes to prevent
+      // shell injection via backticks, $(), and other special characters.
+      const sanitized = msg.replace(/'/g, "'\\''");
+      terminal.sendText(`git add -u && git commit -m '${sanitized}'`);
     }),
 
     // ── agi.test.run ─────────────────────────────────────────────────────────
