@@ -335,7 +335,8 @@
     --secondary-foreground: 222.2 47.4% 11.2%;
 
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* 44% lightness → ~4.96:1 contrast on light bg — WCAG AA pass for normal text */
+    --muted-foreground: 215.4 16.3% 44%;
 
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
@@ -394,8 +395,8 @@
   .dark {
     color-scheme: dark;
 
-    /* #0f0f13 ≈ hsl(240 12% 7%) — dark background matches desktop */
-    --background: 240 12% 7%;
+    /* #0f0f13 — exact: hsl(240 14% 6.7%) matches desktop dark main bg */
+    --background: 240 14% 6.7%;
     --foreground: 210 40% 98%;
 
     /* Slightly elevated surface above background — ~hsl(240 12% 9%) = #14141a */
@@ -423,7 +424,8 @@
 
     --border: 240 10% 15%;
     --input: 240 10% 15%;
-    --ring: 224.3 76.3% 48%;
+    /* 52% lightness → 3.24:1 on dark bg — WCAG AA for focus indicators */
+    --ring: 224.3 76.3% 52%;
 
     /* Brand colors */
     --primary-glow: 217 91% 75%;
@@ -527,6 +529,117 @@
     @apply text-xs text-muted-foreground;
   }
 
+  /* =====================================================
+     Message Layout — Desktop parity (Phase 7.1)
+     ===================================================== */
+
+  /* Message row container — py-6 px-4 matches desktop .message-container */
+  .message-row {
+    @apply relative py-6 px-4;
+  }
+
+  /* Separator between consecutive messages */
+  .message-row + .message-row {
+    @apply border-t border-gray-100 dark:border-gray-800/50;
+  }
+
+  /* Assistant message row — subtle tinted background (desktop .message-assistant) */
+  .message-row-assistant {
+    @apply bg-gray-50/80 dark:bg-gray-900/30;
+  }
+
+  /* User message row — plain white / transparent (desktop .message-user) */
+  .message-row-user {
+    @apply bg-white dark:bg-transparent;
+  }
+
+  /* Inner content column constrained to readable width — desktop max-w-3xl centred */
+  .message-inner {
+    @apply max-w-3xl mx-auto flex gap-3;
+  }
+
+  /* Avatar — 32 × 32 circle matching desktop .message-avatar */
+  .message-avatar {
+    @apply shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium;
+  }
+
+  /* Assistant avatar gradient (teal-400 → cyan-500) — desktop .message-avatar-assistant */
+  .message-avatar-assistant {
+    @apply bg-gradient-to-br from-teal-400 to-cyan-500 text-white;
+  }
+
+  /* User avatar gradient (blue-500 → indigo-600) — desktop .message-avatar-user */
+  .message-avatar-user {
+    @apply bg-gradient-to-br from-blue-500 to-indigo-600 text-white;
+  }
+
+  /* Body — fills remaining width, prevents overflow */
+  .message-body {
+    @apply flex-1 min-w-0;
+  }
+
+  /*
+   * Message text — 15 px / 1.6 lh matching desktop .message-text.
+   * 'text-[15px]' is an arbitrary-value Tailwind v4 class.
+   */
+  .message-text {
+    @apply text-[15px] leading-relaxed text-gray-800 dark:text-gray-200;
+  }
+
+  .message-text p {
+    @apply my-3 first:mt-0 last:mb-0;
+  }
+
+  .message-text ul,
+  .message-text ol {
+    @apply my-3 pl-6;
+  }
+
+  .message-text li {
+    @apply my-1.5;
+  }
+
+  /* Inline code — desktop .message-text code:not(pre code) */
+  .message-text code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[13px] font-mono;
+  }
+
+  /* Timestamp / meta text — 12 px (desktop .message-meta: 11 px, kept at 12 px for web readability) */
+  .message-timestamp {
+    @apply text-[12px] text-muted-foreground;
+  }
+
+  /* User bubble max-width — 100% mobile, 640 px tablet, 720 px desktop */
+  .user-bubble {
+    @apply w-full;
+    max-width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .user-bubble {
+      max-width: 640px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .user-bubble {
+      max-width: 720px;
+    }
+  }
+
+  /* =====================================================
+     Bottom gradient fade — chat scroll area overlay
+     ===================================================== */
+
+  /*
+   * Sits at the bottom of the message list scroll area to create a soft
+   * fade towards the composer, matching the desktop pattern.
+   */
+  .chat-bottom-fade {
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent 0%, hsl(var(--background) / 0.85) 100%);
+  }
+
   /* Chat message max-width matches desktop max-w-5xl */
   .chat-content-width {
     @apply mx-auto w-full max-w-5xl px-4;
@@ -543,16 +656,34 @@
 
   /* Code block styling — matches desktop oneDark theme */
   .code-block-container {
-    @apply my-3 rounded-md overflow-hidden border border-border/50;
+    @apply my-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50;
+    background-color: #111827; /* gray-900 — dark code bg */
   }
 
   .code-block-header-bar {
-    @apply flex items-center justify-between px-4 py-2 bg-zinc-800 dark:bg-zinc-900 border-b border-zinc-700/50;
+    @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
+  }
+
+  /* Language label — desktop .code-block-language */
+  .code-block-lang-label {
+    @apply text-xs font-medium text-gray-400 uppercase tracking-wide;
   }
 
   .code-block-body {
-    @apply bg-zinc-950 font-mono text-sm;
+    @apply bg-gray-900 dark:bg-gray-950 font-mono;
+    font-size: 13px; /* desktop .code-block-content code: text-[13px] */
     line-height: 1.5;
+  }
+
+  .code-block-body pre {
+    @apply m-0 p-4 overflow-x-auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .code-block-body code {
+    @apply font-mono;
+    font-size: 13px;
   }
 
   @media (prefers-reduced-motion: reduce) {

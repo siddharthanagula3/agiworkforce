@@ -64,20 +64,71 @@ vi.mock('@/lib/csrf', async () => {
   };
 });
 
-// Mock framer-motion to prevent CSS parsing errors in jsdom
-// motion-dom tries to parse CSS transforms which fails in jsdom's cssstyle parser
-// This mock provides no-op motion components that render normally without animation
+// Mock framer-motion to prevent CSS parsing errors in jsdom.
+// motion-dom tries to parse CSS transforms which fails in jsdom's cssstyle parser.
+// This mock provides no-op motion components that render normally without animation.
+// Covers all element types used across the codebase (div, span, button, section,
+// article, header, p, li, img, circle, path).
+function makeMotionComponent(tag: string) {
+  return React.forwardRef(({ children, ...props }: any, ref: any) => {
+    // Strip framer-motion-specific props that are invalid on native DOM elements
+    const {
+      initial: _initial,
+      animate: _animate,
+      exit: _exit,
+      variants: _variants,
+      transition: _transition,
+      whileHover: _whileHover,
+      whileTap: _whileTap,
+      whileFocus: _whileFocus,
+      whileInView: _whileInView,
+      viewport: _viewport,
+      layout: _layout,
+      layoutId: _layoutId,
+      drag: _drag,
+      dragConstraints: _dragConstraints,
+      onDragStart: _onDragStart,
+      onDragEnd: _onDragEnd,
+      ...domProps
+    } = props;
+    return React.createElement(tag, { ref, ...domProps }, children);
+  });
+}
+
 vi.mock('framer-motion', () => ({
   motion: {
-    div: React.forwardRef(({ children, ...props }: any, ref: any) =>
-      React.createElement('div', { ref, ...props }, children),
-    ),
-    span: React.forwardRef(({ children, ...props }: any, ref: any) =>
-      React.createElement('span', { ref, ...props }, children),
-    ),
-    button: React.forwardRef(({ children, ...props }: any, ref: any) =>
-      React.createElement('button', { ref, ...props }, children),
-    ),
+    div: makeMotionComponent('div'),
+    span: makeMotionComponent('span'),
+    button: makeMotionComponent('button'),
+    section: makeMotionComponent('section'),
+    article: makeMotionComponent('article'),
+    header: makeMotionComponent('header'),
+    p: makeMotionComponent('p'),
+    li: makeMotionComponent('li'),
+    ul: makeMotionComponent('ul'),
+    h1: makeMotionComponent('h1'),
+    h2: makeMotionComponent('h2'),
+    h3: makeMotionComponent('h3'),
+    img: makeMotionComponent('img'),
+    svg: makeMotionComponent('svg'),
+    circle: makeMotionComponent('circle'),
+    path: makeMotionComponent('path'),
   },
   AnimatePresence: ({ children }: any) => children,
+  useAnimation: () => ({
+    start: vi.fn(),
+    stop: vi.fn(),
+    set: vi.fn(),
+  }),
+  useInView: () => false,
+  useMotionValue: (initial: any) => ({
+    get: () => initial,
+    set: vi.fn(),
+    onChange: vi.fn(),
+  }),
+  useSpring: (value: any) => value,
+  useTransform: (_value: any, _input: any, output: any) =>
+    Array.isArray(output) ? output[0] : output,
+  useDragControls: () => ({ start: vi.fn() }),
+  useReducedMotion: () => false,
 }));

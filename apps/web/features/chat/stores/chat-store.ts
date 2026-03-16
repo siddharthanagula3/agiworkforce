@@ -44,6 +44,8 @@ interface ChatState {
   messages: Record<string, ChatMessage[]>;
   activeSessionId: string | null;
   isLoading: boolean;
+  /** True while the SSE stream for the active response is in-flight. */
+  isGenerating: boolean;
   sidebarOpen: boolean;
   dbLoaded: boolean;
 }
@@ -66,6 +68,8 @@ interface ChatActions {
   setStreaming: (sessionId: string, messageId: string, streaming: boolean) => void;
   appendToMessage: (sessionId: string, messageId: string, chunk: string) => void;
   setLoading: (loading: boolean) => void;
+  /** Set whether an SSE stream is actively generating output. */
+  setGenerating: (generating: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
   getSessionMessages: (sessionId: string) => ChatMessage[];
   clearSession: (sessionId: string) => void;
@@ -107,6 +111,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       messages: {},
       activeSessionId: null,
       isLoading: false,
+      isGenerating: false,
       sidebarOpen: true,
       dbLoaded: false,
 
@@ -287,6 +292,12 @@ export const useChatStore = create<ChatState & ChatActions>()(
         });
       },
 
+      setGenerating: (generating) => {
+        set((state) => {
+          state.isGenerating = generating;
+        });
+      },
+
       setSidebarOpen: (open) => {
         set((state) => {
           state.sidebarOpen = open;
@@ -314,6 +325,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           state.messages = {};
           state.activeSessionId = null;
           state.isLoading = false;
+          state.isGenerating = false;
           state.sidebarOpen = true;
           state.dbLoaded = false;
         });
