@@ -27,7 +27,7 @@ export function getLuminance(color: string): number {
     const normalized = c / 255;
     // WCAG formula for linearized RGB
     return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
-  });
+  }) as [number, number, number];
 
   // Return relative luminance
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
