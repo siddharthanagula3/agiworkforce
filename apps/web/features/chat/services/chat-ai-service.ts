@@ -25,6 +25,12 @@ export interface SkillInfo {
 }
 
 /**
+ * Active AbortController for the current streaming request.
+ * Replaced on each new sendMessage call; nulled out on completion or stop.
+ */
+let activeAbortController: AbortController | null = null;
+
+/**
  * Singleton router instance used for skill detection
  */
 let routerInstance: IntelligentAgentRouter | null = null;
@@ -135,6 +141,13 @@ export class ChatAIService {
   }): Promise<string> {
     const { content, skillId, conversationHistory, onChunk } = params;
 
+    // Cancel any in-progress request before starting a new one
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    activeAbortController = new AbortController();
+    const { signal } = activeAbortController;
+
     try {
       const token = await getAuthToken();
       const modelId = useModelStore.getState().selectedModelId;
@@ -171,6 +184,7 @@ export class ChatAIService {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
+        signal,
       });
 
       if (!response.ok) {
@@ -244,11 +258,26 @@ export class ChatAIService {
         throw new Error('No response received from AI');
       }
 
+      activeAbortController = null;
       return fullResponse;
     } catch (error) {
+      activeAbortController = null;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Generation stopped.');
+      }
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       logger.error('[ChatAIService] sendMessage error:', error);
       throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Abort the currently active streaming request, if any.
+   */
+  static stopGeneration(): void {
+    if (activeAbortController) {
+      activeAbortController.abort();
+      activeAbortController = null;
     }
   }
 

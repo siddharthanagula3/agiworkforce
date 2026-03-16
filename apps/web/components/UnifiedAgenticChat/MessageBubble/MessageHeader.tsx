@@ -44,7 +44,7 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
     <div className="flex items-center gap-2 mb-1 flex-wrap">
       <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{roleName}</span>
 
-      {showTimestamp && <span className="message-meta text-zinc-500">{formattedTime}</span>}
+      {showTimestamp && <span className="message-meta">{formattedTime}</span>}
 
       {/* Edited indicator */}
       {message.metadata?.edited && (
