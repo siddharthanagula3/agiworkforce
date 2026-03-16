@@ -26,6 +26,10 @@ const router: Router = Router();
 // All MCP routes require authentication
 router.use(authenticateToken);
 
+// SECURITY: Baseline rate limit on all MCP routes to prevent abuse.
+// Individual routes apply stricter per-endpoint limits below.
+router.use(createRateLimiter('mcp-list'));
+
 // =============================================================================
 // VALIDATION SCHEMAS
 // =============================================================================
