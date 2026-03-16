@@ -1,11 +1,12 @@
 import React, { memo, useCallback, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Bot } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
-import { MessageBubble } from '../messages/MessageBubble';
+import { MessageBubble, messageListVariants } from '../messages/MessageBubble';
 import { EmployeeThinkingIndicator } from '../agents/EmployeeThinkingIndicator';
 import { useChatStore } from '@shared/stores/chat-store';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
@@ -234,77 +235,85 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       )}
       <ScrollArea className="flex-1">
-        <div className="space-y-0">
-          {messages.map((message) => {
-            // Ensure createdAt is a Date object
-            // Use a stable fallback (epoch start) to avoid impure Date.now() during render
-            const timestamp =
-              message.createdAt instanceof Date
-                ? message.createdAt
-                : new Date(message.createdAt || 0);
+        <motion.div
+          className="space-y-0"
+          variants={messageListVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <AnimatePresence initial={false}>
+            {messages.map((message, messageIndex) => {
+              // Ensure createdAt is a Date object
+              // Use a stable fallback (epoch start) to avoid impure Date.now() during render
+              const timestamp =
+                message.createdAt instanceof Date
+                  ? message.createdAt
+                  : new Date(message.createdAt || 0);
 
-            // Get validated metadata using type guard
-            const meta = getValidatedMetadata(message.metadata);
+              // Get validated metadata using type guard
+              const meta = getValidatedMetadata(message.metadata);
 
-            // Check if this is a thinking/processing indicator message
-            if (meta.isThinking || meta.isSearching || meta.isToolProcessing) {
+              // Check if this is a thinking/processing indicator message
+              if (meta.isThinking || meta.isSearching || meta.isToolProcessing) {
+                return (
+                  <EmployeeThinkingIndicator
+                    key={message.id}
+                    employeeName={meta.employeeName}
+                    employeeAvatar={meta.employeeAvatar}
+                    message={message.content}
+                  />
+                );
+              }
+
               return (
-                <EmployeeThinkingIndicator
+                <MessageBubble
                   key={message.id}
-                  employeeName={meta.employeeName}
-                  employeeAvatar={meta.employeeAvatar}
-                  message={message.content}
+                  animationIndex={messageIndex}
+                  message={{
+                    id: message.id,
+                    content: message.content,
+                    role: message.role === 'user' ? 'user' : 'assistant',
+                    timestamp,
+                    employeeId: meta.employeeId,
+                    employeeName: meta.employeeName,
+                    employeeAvatar: meta.employeeAvatar,
+                    reactions: [],
+                    metadata: {
+                      tokensUsed: meta.tokens ?? meta.tokensUsed,
+                      inputTokens: meta.inputTokens,
+                      outputTokens: meta.outputTokens,
+                      model: meta.model,
+                      cost: meta.cost,
+                      isPinned: meta.isPinned,
+                      selectionReason: meta.selectionReason,
+                      thinkingSteps: meta.thinkingSteps,
+                      // Tool execution result fields - cast to expected types
+                      toolType: meta.toolType,
+                      toolResult: meta.toolResult as boolean | undefined,
+                      imageUrl: meta.imageUrl,
+                      imageData: meta.imageData as MediaGenerationResult | undefined,
+                      videoUrl: meta.videoUrl,
+                      thumbnailUrl: meta.thumbnailUrl,
+                      videoData: meta.videoData as MediaGenerationResult | undefined,
+                      searchResults: meta.searchResults as unknown as SearchResponse | undefined,
+                      documentData: meta.documentData as GeneratedDocument | undefined,
+                    },
+                  }}
+                  onEdit={handleEdit}
+                  onRegenerate={onRegenerate}
+                  onDelete={onDelete}
+                  onPin={handlePin}
+                  onReact={handleReact}
                 />
               );
-            }
-
-            return (
-              <MessageBubble
-                key={message.id}
-                message={{
-                  id: message.id,
-                  content: message.content,
-                  role: message.role === 'user' ? 'user' : 'assistant',
-                  timestamp,
-                  employeeId: meta.employeeId,
-                  employeeName: meta.employeeName,
-                  employeeAvatar: meta.employeeAvatar,
-                  reactions: [],
-                  metadata: {
-                    tokensUsed: meta.tokens ?? meta.tokensUsed,
-                    inputTokens: meta.inputTokens,
-                    outputTokens: meta.outputTokens,
-                    model: meta.model,
-                    cost: meta.cost,
-                    isPinned: meta.isPinned,
-                    selectionReason: meta.selectionReason,
-                    thinkingSteps: meta.thinkingSteps,
-                    // Tool execution result fields - cast to expected types
-                    toolType: meta.toolType,
-                    toolResult: meta.toolResult as boolean | undefined,
-                    imageUrl: meta.imageUrl,
-                    imageData: meta.imageData as MediaGenerationResult | undefined,
-                    videoUrl: meta.videoUrl,
-                    thumbnailUrl: meta.thumbnailUrl,
-                    videoData: meta.videoData as MediaGenerationResult | undefined,
-                    searchResults: meta.searchResults as unknown as SearchResponse | undefined,
-                    documentData: meta.documentData as GeneratedDocument | undefined,
-                  },
-                }}
-                onEdit={handleEdit}
-                onRegenerate={onRegenerate}
-                onDelete={onDelete}
-                onPin={handlePin}
-                onReact={handleReact}
-              />
-            );
-          })}
+            })}
+          </AnimatePresence>
 
           {/* Loading indicator - fallback if not using thinking indicator */}
           {isLoading && messages.every((m) => !getValidatedMetadata(m.metadata).isThinking) && (
             <EmployeeThinkingIndicator message="Processing your request..." />
           )}
-        </div>
+        </motion.div>
       </ScrollArea>
 
       {/* Edit Message Dialog */}
