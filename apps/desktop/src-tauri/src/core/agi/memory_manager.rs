@@ -1399,9 +1399,29 @@ Format your response as JSON with this structure:
         Ok(())
     }
 
-    /// Perform semantic search using TF-IDF similarity
-    /// Returns memories ranked by semantic similarity to the query
+    /// Perform semantic search using TF-IDF similarity, automatically blending
+    /// dense embeddings when they are available in the index.
+    ///
+    /// Delegates to `semantic_search_with_embedding(query, None, limit)` so that
+    /// if any document embeddings have been stored via `set_dense_embedding`,
+    /// the hybrid scoring path (60% dense + 40% TF-IDF) activates. When no dense
+    /// embeddings exist, this is equivalent to pure TF-IDF search.
     pub fn semantic_search(&self, query: &str, limit: usize) -> Result<Vec<SemanticSearchResult>> {
+        self.semantic_search_with_embedding(query, None, limit)
+    }
+
+    /// Perform semantic search with an optional dense query embedding.
+    ///
+    /// When `query_embedding` is `Some` and documents in the index have dense
+    /// embeddings, the index blends 60% dense cosine similarity with 40% TF-IDF.
+    /// When `query_embedding` is `None` or no document embeddings exist, this
+    /// falls back to TF-IDF-only scoring.
+    pub fn semantic_search_with_embedding(
+        &self,
+        query: &str,
+        query_embedding: Option<&[f32]>,
+        limit: usize,
+    ) -> Result<Vec<SemanticSearchResult>> {
         let config = self.get_semantic_config()?;
 
         if !config.enabled {
@@ -1413,7 +1433,20 @@ Format your response as JSON with this structure:
             .read()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
-        let semantic_results = index.search(query, limit);
+        let dense_count = index.dense_embedding_count();
+        if dense_count > 0 && query_embedding.is_some() {
+            tracing::debug!(
+                "Semantic search using hybrid scoring: {} documents have dense embeddings",
+                dense_count
+            );
+        } else if dense_count > 0 {
+            tracing::debug!(
+                "Semantic search: {} documents have dense embeddings but no query embedding provided; using TF-IDF only",
+                dense_count
+            );
+        }
+
+        let semantic_results = index.search_with_embedding(query, query_embedding, limit);
 
         if semantic_results.is_empty() {
             return Ok(Vec::new());
@@ -1463,6 +1496,20 @@ Format your response as JSON with this structure:
         }
 
         Ok(results)
+    }
+
+    /// Store a dense embedding for a memory document.
+    ///
+    /// When embeddings are stored, subsequent `semantic_search()` and
+    /// `semantic_search_with_embedding()` calls will use hybrid scoring
+    /// (60% dense cosine + 40% TF-IDF) for improved retrieval quality.
+    pub fn set_dense_embedding(&self, memory_id: i64, embedding: Vec<f32>) -> Result<()> {
+        let mut index = self
+            .tfidf_index
+            .write()
+            .map_err(|e| Error::Generic(e.to_string()))?;
+        index.set_dense_embedding(memory_id, embedding);
+        Ok(())
     }
 
     /// Perform hybrid search combining keyword and semantic results
