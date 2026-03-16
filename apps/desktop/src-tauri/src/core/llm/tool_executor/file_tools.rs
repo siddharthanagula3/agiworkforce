@@ -1,4 +1,5 @@
 use super::*;
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 
 pub(super) const FILE_LIST_TIMEOUT_MS: u64 = 30_000; // Increased from 10s: large dirs and network filesystems
 pub(super) const FILE_LIST_MAX_LIMIT: usize = 2_000;
@@ -6,6 +7,10 @@ pub(super) const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 pub(super) const FILE_LIST_MAX_OFFSET: usize = 100_000;
 pub(super) const FILE_READ_MAX_CHARS: usize = 200_000;
 pub(super) const FILE_READ_MAX_BYTES: u64 = 50 * 1024 * 1024;
+/// Maximum size for binary file reads (50 MB). Binary files are base64-encoded
+/// in the response, so the actual JSON payload will be ~33% larger than the
+/// raw file. Keeping the same limit as text reads avoids surprise OOMs.
+pub(super) const FILE_READ_BINARY_MAX_BYTES: u64 = 50 * 1024 * 1024;
 pub(super) const FILE_WRITE_MAX_BYTES: usize = 10 * 1024 * 1024;
 pub(super) const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
@@ -182,7 +187,7 @@ impl ToolExecutor {
                     }
                 } else {
                     let error = format!(
-                        "Failed to read file '{}': file is binary or not UTF-8 text (only UTF-8 text files are supported).",
+                        "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary to read binary files as base64.",
                         validated_path_string
                     );
                     if let Some(app_handle) = &self.app_handle {
@@ -626,6 +631,194 @@ impl ToolExecutor {
                 })
             }
         }
+    }
+
+    /// Read a file as raw bytes and return the content as a base64-encoded string.
+    ///
+    /// This is the tool-executor counterpart of the `file_read_binary` Tauri
+    /// command (`sys/commands/file_ops.rs`). It allows the LLM to read binary
+    /// files (images, PDFs, archives, compiled artifacts, etc.) that cannot be
+    /// read via `file_read` (which requires valid UTF-8).
+    ///
+    /// The response includes:
+    /// - `base64_content`: the standard base64-encoded raw bytes
+    /// - `size_bytes`: original file size before encoding
+    /// - `path`: the validated, canonical file path
+    /// - `mime_type`: best-effort MIME type inferred from the file extension
+    pub(crate) async fn execute_file_read_binary_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        let path = self.resolve_path(&raw_path);
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let validated_path = match self.canonicalize_validated_path(&path).await {
+            Ok(validated_path) => validated_path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                });
+            }
+        };
+        let validated_path_string = validated_path.to_string_lossy().to_string();
+
+        // Check file size before reading to prevent OOM on huge files.
+        let file_size = match fs::metadata(&validated_path).await {
+            Ok(metadata) => metadata.len(),
+            Err(e) => {
+                let error = format!("Failed to stat file '{}': {}", validated_path_string, e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&validated_path_string)),
+                    ]),
+                });
+            }
+        };
+
+        if file_size > FILE_READ_BINARY_MAX_BYTES {
+            let error = format!(
+                "File too large to read: {} bytes (max {} bytes).",
+                file_size, FILE_READ_BINARY_MAX_BYTES
+            );
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
+                metadata: HashMap::from([
+                    ("path".to_string(), json!(&validated_path_string)),
+                ]),
+            });
+        }
+
+        // Infer MIME type from file extension (best-effort).
+        let mime_type = validated_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(infer_mime_type)
+            .unwrap_or("application/octet-stream");
+
+        match fs::read(&validated_path).await {
+            Ok(data) => {
+                let encoded = BASE64_STANDARD.encode(&data);
+
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_read_event(
+                        &validated_path_string,
+                        &format!("[binary: {} bytes, base64-encoded]", data.len()),
+                        true,
+                        None,
+                        session_id.clone(),
+                    );
+                    emit_file_operation(app_handle, file_op);
+                }
+
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "base64_content": encoded,
+                        "size_bytes": data.len(),
+                        "path": &validated_path_string,
+                        "mime_type": mime_type,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&validated_path_string)),
+                        ("size_bytes".to_string(), json!(data.len())),
+                    ]),
+                })
+            }
+            Err(e) => {
+                let error = format!("Failed to read binary file '{}': {}", validated_path_string, e);
+
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_read_event(
+                        &validated_path_string,
+                        "",
+                        false,
+                        Some(error.clone()),
+                        session_id.clone(),
+                    );
+                    emit_file_operation(app_handle, file_op);
+                }
+
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&validated_path_string)),
+                    ]),
+                })
+            }
+        }
+    }
+}
+
+/// Infer a MIME type from a file extension. Returns a static string for common
+/// binary formats, falling back to `"application/octet-stream"` for unknowns.
+pub(super) fn infer_mime_type(ext: &str) -> &'static str {
+    match ext.to_ascii_lowercase().as_str() {
+        // Images
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "tiff" | "tif" => "image/tiff",
+        // Documents
+        "pdf" => "application/pdf",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        // Archives
+        "zip" => "application/zip",
+        "gz" | "gzip" => "application/gzip",
+        "tar" => "application/x-tar",
+        "7z" => "application/x-7z-compressed",
+        "rar" => "application/vnd.rar",
+        // Audio
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "aac" => "audio/aac",
+        // Video
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "avi" => "video/x-msvideo",
+        "mov" => "video/quicktime",
+        "mkv" => "video/x-matroska",
+        // Fonts
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        // Compiled / binary
+        "wasm" => "application/wasm",
+        "exe" => "application/vnd.microsoft.portable-executable",
+        "dll" => "application/vnd.microsoft.portable-executable",
+        "so" => "application/x-sharedlib",
+        "dylib" => "application/x-sharedlib",
+        _ => "application/octet-stream",
     }
 }
 

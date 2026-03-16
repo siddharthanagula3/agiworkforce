@@ -1,4 +1,5 @@
 use super::*;
+use base64::Engine as _;
 use crate::core::agi::tools::{ParameterType, ToolCapability, ToolParameter};
 use crate::core::agi::ResourceUsage;
 use std::sync::Arc;
@@ -697,6 +698,206 @@ async fn test_registry_tools_are_routable_in_executor() {
             );
         }
     }
+}
+
+fn create_registry_with_file_read_binary() -> Arc<ToolRegistry> {
+    let registry = Arc::new(ToolRegistry::new().expect("registry"));
+    registry
+        .register_tool(crate::core::agi::tools::Tool {
+            id: "file_read_binary".to_string(),
+            name: "Read Binary File".to_string(),
+            description: "Read a binary file as base64".to_string(),
+            capabilities: vec![ToolCapability::FileRead],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: true,
+                description: "Path to the binary file".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 0.0,
+                memory_mb: 0,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })
+        .expect("register file_read_binary");
+    registry
+}
+
+#[tokio::test]
+async fn test_file_read_binary_returns_base64() {
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test.bin");
+    // Write known binary bytes (not valid UTF-8)
+    let binary_data: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFE];
+    std::fs::write(&file_path, &binary_data).unwrap();
+
+    let tool_call = ToolCall {
+        id: "test_file_read_binary".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        })
+        .to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(result.success, "file_read_binary should succeed, error: {:?}", result.error);
+
+    // Decode the base64 and verify it matches the original binary data
+    let encoded = result.data["base64_content"]
+        .as_str()
+        .expect("base64_content should be a string");
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .expect("should be valid base64");
+    assert_eq!(decoded, binary_data, "decoded bytes should match original");
+    assert_eq!(result.data["size_bytes"].as_u64(), Some(binary_data.len() as u64));
+    assert_eq!(result.data["mime_type"].as_str(), Some("application/octet-stream"));
+}
+
+#[tokio::test]
+async fn test_file_read_binary_png_mime_type() {
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("image.png");
+    let binary_data: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    std::fs::write(&file_path, &binary_data).unwrap();
+
+    let tool_call = ToolCall {
+        id: "test_file_read_binary_png".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        })
+        .to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(result.success);
+    assert_eq!(result.data["mime_type"].as_str(), Some("image/png"));
+}
+
+#[tokio::test]
+async fn test_file_read_binary_pdf_mime_type() {
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("document.pdf");
+    std::fs::write(&file_path, b"%PDF-1.4 fake").unwrap();
+
+    let tool_call = ToolCall {
+        id: "test_file_read_binary_pdf".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        })
+        .to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(result.success);
+    assert_eq!(result.data["mime_type"].as_str(), Some("application/pdf"));
+}
+
+#[tokio::test]
+async fn test_file_read_binary_missing_file() {
+    let tool_call = ToolCall {
+        id: "test_file_read_binary_missing".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({
+            "path": "/tmp/definitely_nonexistent_file_abc123.bin"
+        })
+        .to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(!result.success, "should fail for missing file");
+    assert!(
+        result.error.unwrap_or_default().contains("Failed"),
+        "error should describe the failure"
+    );
+}
+
+#[tokio::test]
+async fn test_file_read_binary_missing_path_param() {
+    let tool_call = ToolCall {
+        id: "test_file_read_binary_no_path".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({}).to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(!result.success, "should fail without path");
+    assert!(
+        result
+            .error
+            .unwrap_or_default()
+            .contains("Missing required parameter: path"),
+        "error should mention missing path"
+    );
+}
+
+#[tokio::test]
+async fn test_file_read_binary_preserves_data_unchanged() {
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test_all_bytes.bin");
+
+    // Write all 256 possible byte values
+    let all_bytes: Vec<u8> = (0..=255u8).collect();
+    std::fs::write(&file_path, &all_bytes).unwrap();
+
+    let tool_call = ToolCall {
+        id: "test_file_read_binary_all_bytes".to_string(),
+        name: "file_read_binary".to_string(),
+        arguments: serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        })
+        .to_string(),
+    };
+
+    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(result.success);
+    let encoded = result.data["base64_content"].as_str().unwrap();
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .unwrap();
+    assert_eq!(decoded, all_bytes, "all 256 byte values should round-trip through base64");
+    assert_eq!(result.data["size_bytes"].as_u64(), Some(256));
+}
+
+#[test]
+fn test_infer_mime_type_known_extensions() {
+    use super::file_tools::infer_mime_type;
+
+    assert_eq!(infer_mime_type("png"), "image/png");
+    assert_eq!(infer_mime_type("PNG"), "image/png");
+    assert_eq!(infer_mime_type("jpg"), "image/jpeg");
+    assert_eq!(infer_mime_type("jpeg"), "image/jpeg");
+    assert_eq!(infer_mime_type("pdf"), "application/pdf");
+    assert_eq!(infer_mime_type("zip"), "application/zip");
+    assert_eq!(infer_mime_type("mp4"), "video/mp4");
+    assert_eq!(infer_mime_type("wasm"), "application/wasm");
+    assert_eq!(infer_mime_type("unknown_ext"), "application/octet-stream");
 }
 
 #[test]

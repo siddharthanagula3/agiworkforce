@@ -49,10 +49,22 @@ impl Default for RetryConfig {
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
-/// Maximum time to wait for the next SSE chunk from a provider.
-/// If the provider goes silent without closing the connection, this timeout
-/// fires and surfaces an error rather than freezing the frontend indefinitely.
-const CHUNK_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Maximum idle time (no data received) before a streaming SSE connection is
+/// closed with a `StreamingError::IdleTimeout`.
+///
+/// This guards against providers that stop sending data without closing the
+/// connection.  It is distinct from the *connection* timeout (90 s) used in
+/// `invoke_streaming_with_retry`, which covers the initial HTTP handshake.
+///
+/// When fired the wrapper stream:
+/// 1. Logs at `error!` level with provider/model context.
+/// 2. Yields a single `Err(StreamingError::IdleTimeout ...)` item.
+/// 3. Terminates the stream (drops the inner stream, closing the HTTP
+///    connection) so resources are not leaked.
+///
+/// Keepalive/heartbeat chunks (`StreamChunk::keepalive == true`) reset this
+/// timer because they are normal `Ok(chunk)` items from the inner stream.
+pub(crate) const CHUNK_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Determines if an error is retryable (transient) or permanent
 fn is_retryable_error(error: &str) -> bool {
@@ -2344,21 +2356,52 @@ impl LLMRouter {
                     // Wrap the raw stream with a per-chunk idle timeout so that if
                     // the provider goes silent (stops sending chunks without closing
                     // the connection) the frontend does not freeze indefinitely.
-                    let wrapped = futures_util::stream::unfold(stream, |mut s| async move {
-                        match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
-                            Ok(Some(item)) => Some((item, s)),
-                            Ok(None) => None, // stream ended normally
-                            Err(_elapsed) => {
-                                let err: Box<dyn std::error::Error + Send + Sync> =
-                                    format!(
-                                        "streaming idle timeout: provider went silent for {}s",
-                                        CHUNK_IDLE_TIMEOUT.as_secs()
-                                    )
-                                    .into();
-                                Some((Err(err), s))
+                    //
+                    // The state is `Option<Stream>`: `Some(stream)` while active,
+                    // `None` after an idle timeout has been emitted.  This ensures
+                    // the underlying connection is dropped (via the inner stream)
+                    // immediately after the timeout error is surfaced, rather than
+                    // keeping a silent connection alive until the consumer task ends.
+                    let provider_name = candidate.provider.as_string().to_string();
+                    let model_name = candidate.model.clone();
+                    let wrapped = futures_util::stream::unfold(
+                        Some(stream),
+                        move |state| {
+                            let provider_name = provider_name.clone();
+                            let model_name = model_name.clone();
+                            async move {
+                                let mut s = state?; // None => stream already terminated
+                                match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
+                                    Ok(Some(item)) => Some((item, Some(s))),
+                                    Ok(None) => None, // stream ended normally
+                                    Err(_elapsed) => {
+                                        let timeout_secs = CHUNK_IDLE_TIMEOUT.as_secs();
+                                        tracing::error!(
+                                            provider = %provider_name,
+                                            model = %model_name,
+                                            idle_timeout_secs = timeout_secs,
+                                            "Streaming idle timeout: provider went silent \
+                                             for {timeout_secs}s with no data — closing connection"
+                                        );
+                                        let err: Box<dyn std::error::Error + Send + Sync> =
+                                            format!(
+                                                "StreamingError::IdleTimeout — no data received \
+                                                 for {timeout_secs}s (provider: {provider_name}, \
+                                                 model: {model_name}). The connection has been \
+                                                 closed. This is distinct from a network/connection \
+                                                 timeout; the connection was open but the provider \
+                                                 stopped sending data."
+                                            )
+                                            .into();
+                                        // Yield the error and set state to None so the
+                                        // next poll terminates the stream (and drops the
+                                        // inner stream, closing the HTTP connection).
+                                        Some((Err(err), None))
+                                    }
+                                }
                             }
-                        }
-                    });
+                        },
+                    );
                     return Ok(Box::pin(wrapped));
                 }
                 Err(e) => {

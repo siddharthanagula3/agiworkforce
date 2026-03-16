@@ -348,10 +348,15 @@ impl CodeExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing required 'code' parameter"))?;
 
-        // Validate code length
+        // Validate code length (bytes, not chars — safe for UTF-8 and prevents resource abuse)
         if code.len() > MAX_CODE_LENGTH {
+            tracing::info!(
+                "[CodeExecutor] Code length violation: submitted {} bytes (max {})",
+                code.len(),
+                MAX_CODE_LENGTH
+            );
             return Err(anyhow!(
-                "Code too long: {} bytes exceeds maximum of {} bytes",
+                "Code submission exceeds maximum length: {} > {} bytes",
                 code.len(),
                 MAX_CODE_LENGTH
             ));
@@ -576,10 +581,15 @@ impl CodeExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing required 'code' parameter"))?;
 
-        // Validate code length
+        // Validate code length (bytes, not chars — safe for UTF-8)
         if code.len() > MAX_ANALYSIS_CODE_LENGTH {
+            tracing::info!(
+                "[CodeExecutor] Code length violation for analysis: submitted {} bytes (max {})",
+                code.len(),
+                MAX_ANALYSIS_CODE_LENGTH
+            );
             return Err(anyhow!(
-                "Code too long for analysis: {} bytes exceeds maximum of {} bytes",
+                "Code submission exceeds maximum length for analysis: {} > {} bytes",
                 code.len(),
                 MAX_ANALYSIS_CODE_LENGTH
             ));
@@ -1261,12 +1271,12 @@ hello()
     }
 
     #[tokio::test]
-    async fn test_code_too_long() {
+    async fn test_code_one_byte_over_limit_rejected() {
         let context = create_test_context();
         let executor = CodeExecutor::new();
         let exec_context = create_test_execution_context();
 
-        // Create code that exceeds MAX_CODE_LENGTH
+        // Create code that exceeds MAX_CODE_LENGTH by exactly 1 byte
         let long_code = "x".repeat(MAX_CODE_LENGTH + 1);
         let mut params = HashMap::new();
         params.insert("language".to_string(), Value::String("python".to_string()));
@@ -1277,6 +1287,72 @@ hello()
             .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("too long"));
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceeds maximum length"),
+            "Error should mention 'exceeds maximum length', got: {}",
+            err_msg
+        );
+        // Verify both submitted and max length are in the error for debugging
+        assert!(
+            err_msg.contains(&(MAX_CODE_LENGTH + 1).to_string()),
+            "Error should include submitted length, got: {}",
+            err_msg
+        );
+        assert!(
+            err_msg.contains(&MAX_CODE_LENGTH.to_string()),
+            "Error should include max length, got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_code_analysis_over_limit_rejected() {
+        let context = create_test_context();
+        let executor = CodeExecutor::new();
+        let exec_context = create_test_execution_context();
+
+        // Create code that exceeds MAX_ANALYSIS_CODE_LENGTH by 1 byte
+        let long_code = "x".repeat(MAX_ANALYSIS_CODE_LENGTH + 1);
+        let mut params = HashMap::new();
+        params.insert("code".to_string(), Value::String(long_code));
+        params.insert("language".to_string(), Value::String("python".to_string()));
+
+        let result = executor
+            .execute("code_analyze", &params, &context, &exec_context)
+            .await;
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceeds maximum length"),
+            "Error should mention 'exceeds maximum length', got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_empty_code_accepted_for_execution() {
+        let context = create_test_context();
+        let executor = CodeExecutor::new();
+        let exec_context = create_test_execution_context();
+
+        let mut params = HashMap::new();
+        params.insert("language".to_string(), Value::String("python".to_string()));
+        params.insert("code".to_string(), Value::String(String::new()));
+
+        // Empty code should pass the length check (may fail later during execution,
+        // but the length validation itself should not reject it)
+        let result = executor
+            .execute("code_execute", &params, &context, &exec_context)
+            .await;
+
+        // If it errors, the error should NOT be about length
+        if let Err(ref e) = result {
+            assert!(
+                !e.to_string().contains("exceeds maximum length"),
+                "Empty code should not be rejected for length"
+            );
+        }
     }
 }
