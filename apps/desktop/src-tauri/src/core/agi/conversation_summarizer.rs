@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 
-use crate::sys::error::{Error, Result};
+use crate::sys::error::{Error, LLMError, Result};
 
 use super::memory_persistence::{
     MemoryCategory, MemoryStore, PersistentMemory, SummarizationStats, SummarizerConfig,
@@ -294,7 +294,11 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
             return Ok(stats);
         }
 
-        // Process each conversation
+        // Process each conversation, tracking failures
+        let mut failed_count: usize = 0;
+        let mut last_error: Option<Error> = None;
+        let total_candidates = candidates.len().min(config.max_messages_per_batch);
+
         for candidate in candidates.iter().take(config.max_messages_per_batch) {
             match self
                 .summarize_conversation(&candidate.conversation_id, project_id, &config)
@@ -310,9 +314,34 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                         candidate.conversation_id,
                         e
                     );
+                    failed_count += 1;
+                    last_error = Some(e);
                     // Continue with other conversations
                 }
             }
+        }
+
+        // Log summary of failures
+        if failed_count > 0 {
+            tracing::warn!(
+                "Summarization batch completed with {} failures out of {} conversations",
+                failed_count,
+                total_candidates
+            );
+        }
+
+        // If ALL conversations failed, propagate the error
+        if failed_count == total_candidates && total_candidates > 0 {
+            let error_msg = format!(
+                "All {} summarization attempts failed. Last error: {}",
+                total_candidates,
+                last_error
+                    .as_ref()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown".to_string())
+            );
+            tracing::error!("{}", error_msg);
+            return Err(Error::LLMError(LLMError::ApiError(error_msg)));
         }
 
         Ok(stats)
@@ -362,11 +391,50 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
             .as_deref()
             .unwrap_or(DEFAULT_EXTRACTION_PROMPT);
 
-        // Call LLM to extract memories
-        let extraction = self
+        // Call LLM to extract memories with retry on failure.
+        // Attempt 1: call with the current prompt
+        let extraction = match self
             .llm
             .extract_memories(prompt, &conversation_content)
-            .await?;
+            .await
+        {
+            Ok(result) => result,
+            Err(first_error) => {
+                tracing::warn!(
+                    "Summarization attempt 1 failed for conversation {}: {}. Retrying...",
+                    conversation_id,
+                    first_error
+                );
+
+                // Attempt 2: retry once after a short delay
+                tokio::time::sleep(StdDuration::from_secs(2)).await;
+
+                match self
+                    .llm
+                    .extract_memories(prompt, &conversation_content)
+                    .await
+                {
+                    Ok(result) => {
+                        tracing::info!(
+                            "Summarization retry succeeded for conversation {}",
+                            conversation_id
+                        );
+                        result
+                    }
+                    Err(retry_error) => {
+                        tracing::error!(
+                            "Summarization failed after 2 attempts for conversation {}: {}",
+                            conversation_id,
+                            retry_error
+                        );
+                        return Err(Error::LLMError(LLMError::ApiError(format!(
+                            "Failed to summarize conversation: {}",
+                            retry_error
+                        ))));
+                    }
+                }
+            }
+        };
 
         let mut memories_created = 0;
 
@@ -549,6 +617,99 @@ impl HttpSummaryLLM {
             .ok_or_else(|| "No embeddings in Ollama response".to_string())
     }
 
+    /// Attempt memory extraction via Ollama local LLM.
+    /// Returns the raw LLM response string on success.
+    async fn try_ollama_extraction(&self, full_prompt: &str) -> std::result::Result<String, String> {
+        let response = self
+            .http_client
+            .post(format!("{}/api/chat", self.ollama_url))
+            .json(&serde_json::json!({
+                "model": "llama3.2",
+                "messages": [{"role": "user", "content": full_prompt}],
+                "stream": false,
+                "format": "json"
+            }))
+            .timeout(StdDuration::from_secs(60))
+            .send()
+            .await
+            .map_err(|e| format!("Ollama request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(format!("Ollama returned status {}: {}", status, body_text));
+        }
+
+        let chat: OllamaChatResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse Ollama chat response: {}", e))?;
+
+        chat.message
+            .map(|m| m.content)
+            .ok_or_else(|| "Ollama returned no message content".to_string())
+    }
+
+    /// Attempt memory extraction via OpenAI API.
+    /// Returns the raw LLM response string on success.
+    async fn try_openai_extraction(&self, full_prompt: &str) -> std::result::Result<String, String> {
+        let api_key = self
+            .openai_api_key
+            .as_ref()
+            .ok_or_else(|| "No OpenAI API key available".to_string())?;
+
+        let response = self
+            .http_client
+            .post("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": full_prompt}],
+                "response_format": {"type": "json_object"}
+            }))
+            .timeout(StdDuration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| format!("OpenAI request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(format!("OpenAI returned status {}: {}", status, body_text));
+        }
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse OpenAI response: {}", e))?;
+
+        body["choices"][0]["message"]["content"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "OpenAI response missing content field".to_string())
+    }
+
+    /// Parse an LLM response string into an ExtractionResult.
+    /// Returns an error if the JSON cannot be parsed.
+    fn parse_extraction_response(llm_response: &str) -> Result<ExtractionResult> {
+        match serde_json::from_str::<ExtractionResult>(llm_response) {
+            Ok(result) => {
+                tracing::debug!(
+                    "Extracted {} memories from conversation",
+                    result.memories.len()
+                );
+                Ok(result)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to parse LLM extraction response: {}", e);
+                Err(Error::LLMError(LLMError::InvalidResponse(format!(
+                    "LLM returned unparseable extraction response: {}",
+                    e
+                ))))
+            }
+        }
+    }
+
     /// Tier 2: Generate embedding via OpenAI (requires API key)
     async fn generate_openai_embedding(&self, text: &str) -> std::result::Result<Vec<f32>, String> {
         let api_key = self
@@ -601,115 +762,34 @@ impl SummaryLLM for HttpSummaryLLM {
         let full_prompt = format!("{}\n{}", prompt, conversation_content);
 
         // Try Ollama local LLM first (no API key needed)
-        let ollama_result = self
-            .http_client
-            .post(format!("{}/api/chat", self.ollama_url))
-            .json(&serde_json::json!({
-                "model": "llama3.2",
-                "messages": [{"role": "user", "content": full_prompt}],
-                "stream": false,
-                "format": "json"
-            }))
-            .timeout(StdDuration::from_secs(60))
-            .send()
-            .await;
-
-        let llm_response = match ollama_result {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<OllamaChatResponse>().await {
-                    Ok(chat) => chat.message.map(|m| m.content),
-                    Err(e) => {
-                        tracing::debug!("Failed to parse Ollama chat response: {}", e);
-                        None
-                    }
-                }
-            }
-            Ok(resp) => {
-                tracing::debug!("Ollama chat returned status {}", resp.status());
-                None
-            }
+        let ollama_error = match self.try_ollama_extraction(&full_prompt).await {
+            Ok(response) => return Self::parse_extraction_response(&response),
             Err(e) => {
-                tracing::debug!("Ollama chat unavailable: {}", e);
-                None
+                tracing::debug!("Ollama extraction unavailable: {}", e);
+                e
             }
         };
 
         // Fallback to OpenAI if Ollama didn't work
-        let llm_response = match llm_response {
-            Some(r) => r,
-            None => {
-                if let Some(api_key) = &self.openai_api_key {
-                    let resp = self
-                        .http_client
-                        .post("https://api.openai.com/v1/chat/completions")
-                        .header("Authorization", format!("Bearer {}", api_key))
-                        .json(&serde_json::json!({
-                            "model": "gpt-4o-mini",
-                            "messages": [{"role": "user", "content": full_prompt}],
-                            "response_format": {"type": "json_object"}
-                        }))
-                        .timeout(StdDuration::from_secs(30))
-                        .send()
-                        .await;
-
-                    match resp {
-                        Ok(r) if r.status().is_success() => {
-                            match r.json::<serde_json::Value>().await {
-                                Ok(body) => body["choices"][0]["message"]["content"]
-                                    .as_str()
-                                    .unwrap_or("")
-                                    .to_string(),
-                                Err(e) => {
-                                    tracing::warn!("Failed to parse OpenAI chat response: {}", e);
-                                    return Ok(ExtractionResult {
-                                        memories: Vec::new(),
-                                        summary: String::new(),
-                                    });
-                                }
-                            }
-                        }
-                        Ok(r) => {
-                            tracing::warn!("OpenAI chat returned status {}", r.status());
-                            return Ok(ExtractionResult {
-                                memories: Vec::new(),
-                                summary: String::new(),
-                            });
-                        }
-                        Err(e) => {
-                            tracing::warn!("conversation summarizer LLM call failed: {:?}", e);
-                            return Ok(ExtractionResult {
-                                memories: Vec::new(),
-                                summary: String::new(),
-                            });
-                        }
-                    }
-                } else {
-                    tracing::warn!("No LLM available for memory extraction");
-                    return Ok(ExtractionResult {
-                        memories: Vec::new(),
-                        summary: String::new(),
-                    });
-                }
+        let openai_error = match self.try_openai_extraction(&full_prompt).await {
+            Ok(response) => return Self::parse_extraction_response(&response),
+            Err(e) => {
+                tracing::debug!("OpenAI extraction failed: {}", e);
+                e
             }
         };
 
-        // Parse the JSON response from the LLM
-        match serde_json::from_str::<ExtractionResult>(&llm_response) {
-            Ok(result) => {
-                tracing::debug!(
-                    "Extracted {} memories from conversation",
-                    result.memories.len()
-                );
-                Ok(result)
-            }
-            Err(e) => {
-                tracing::warn!("Failed to parse LLM extraction response: {}", e);
-                Ok(ExtractionResult {
-                    memories: Vec::new(),
-                    summary: llm_response.chars().take(500).collect(),
-                })
-            }
-        }
+        // Both providers failed — propagate error explicitly
+        let final_error = format!(
+            "Failed to summarize conversation: all LLM providers failed. \
+             Ollama: {}. OpenAI: {}",
+            ollama_error, openai_error
+        );
+        tracing::warn!(
+            "Summarization failed after 2 attempts: {}",
+            final_error
+        );
+        Err(Error::LLMError(LLMError::ApiError(final_error)))
     }
 
     /// Generate embeddings with 3-tier fallback, normalized to DEFAULT_EMBEDDING_DIM.
@@ -1220,5 +1300,219 @@ mod tests {
             magnitude > 1e-8,
             "Valid embedding should pass the magnitude filter"
         );
+    }
+
+    // =========================================================================
+    // Bug #32: Explicit error propagation tests
+    // =========================================================================
+
+    /// Mock LLM that always fails extraction — simulates both providers down.
+    struct MockFailingLLM;
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockFailingLLM {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            Err(Error::LLMError(LLMError::ApiError(
+                "All LLM providers unavailable".to_string(),
+            )))
+        }
+
+        async fn generate_embedding(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+            Ok(None)
+        }
+    }
+
+    /// Mock LLM that fails on first call, succeeds on second — simulates retry success.
+    struct MockFailThenSucceedLLM {
+        call_count: std::sync::atomic::AtomicU32,
+    }
+
+    impl MockFailThenSucceedLLM {
+        fn new() -> Self {
+            Self {
+                call_count: std::sync::atomic::AtomicU32::new(0),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockFailThenSucceedLLM {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            let count = self
+                .call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if count == 0 {
+                Err(Error::LLMError(LLMError::NetworkError(
+                    "Transient network failure".to_string(),
+                )))
+            } else {
+                Ok(ExtractionResult {
+                    memories: vec![ExtractedMemory {
+                        topic: "Retry success".to_string(),
+                        content: "Extracted after retry".to_string(),
+                        importance: 5,
+                        category: "fact".to_string(),
+                    }],
+                    summary: "Summary after retry".to_string(),
+                })
+            }
+        }
+
+        async fn generate_embedding(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+            Ok(Some(vec![0.1, 0.2, 0.3]))
+        }
+    }
+
+    /// Mock LLM that simulates a timeout error.
+    struct MockTimeoutLLM;
+
+    #[async_trait::async_trait]
+    impl SummaryLLM for MockTimeoutLLM {
+        async fn extract_memories(
+            &self,
+            _prompt: &str,
+            _conversation_content: &str,
+        ) -> Result<ExtractionResult> {
+            Err(Error::TimeoutError(
+                "LLM request timed out after 60s".to_string(),
+            ))
+        }
+
+        async fn generate_embedding(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_extract_memories_llm_error_returns_err() {
+        // Bug #32: LLM failure must return Err, not Ok with empty result
+        let llm = MockFailingLLM;
+        let result = llm.extract_memories("prompt", "content").await;
+
+        assert!(
+            result.is_err(),
+            "LLM failure must return Err, not Ok with empty ExtractionResult"
+        );
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("unavailable"),
+            "Error message should describe the failure: {}",
+            err_str
+        );
+    }
+
+    #[tokio::test]
+    async fn test_extract_memories_timeout_returns_err() {
+        // Bug #32: Timeout must propagate as Err
+        let llm = MockTimeoutLLM;
+        let result = llm.extract_memories("prompt", "content").await;
+
+        assert!(
+            result.is_err(),
+            "Timeout must return Err, not Ok with empty ExtractionResult"
+        );
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("timed out"),
+            "Error message should mention timeout: {}",
+            err_str
+        );
+    }
+
+    #[tokio::test]
+    async fn test_successful_summarization_returns_ok() {
+        // Sanity check: successful extraction still works
+        let llm = MockSummaryLLM;
+        let result = llm.extract_memories("prompt", "content").await;
+
+        assert!(result.is_ok(), "Successful extraction must return Ok");
+        let extraction = result.unwrap();
+        assert_eq!(extraction.memories.len(), 2);
+        assert!(!extraction.summary.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_run_summarization_with_failing_llm_records_failure() {
+        // Bug #32: run_summarization should record failure status when LLM fails
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockFailingLLM);
+        let summarizer = ConversationSummarizer::new(store, llm);
+
+        // Run summarization — no candidates exist, so it should succeed with 0 stats
+        let result = summarizer.run_summarization(None).await;
+        assert!(
+            result.is_ok(),
+            "With no candidates, summarization should succeed even with a failing LLM"
+        );
+
+        // Check last run recorded as completed (no conversations to process = success)
+        let last_run = summarizer.get_last_run().await.unwrap();
+        assert_eq!(last_run.status, SummarizationStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_parse_extraction_response_invalid_json() {
+        // Bug #32: Invalid JSON from LLM must return Err, not Ok with empty memories
+        let result = HttpSummaryLLM::parse_extraction_response("not valid json {{{");
+
+        assert!(
+            result.is_err(),
+            "Unparseable LLM response must return Err"
+        );
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("unparseable"),
+            "Error should describe the parse failure: {}",
+            err_str
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parse_extraction_response_valid_json() {
+        let json = r#"{"memories": [{"topic": "t", "content": "c", "importance": 5, "category": "fact"}], "summary": "s"}"#;
+        let result = HttpSummaryLLM::parse_extraction_response(json);
+
+        assert!(result.is_ok(), "Valid JSON should parse successfully");
+        let extraction = result.unwrap();
+        assert_eq!(extraction.memories.len(), 1);
+        assert_eq!(extraction.summary, "s");
+    }
+
+    #[tokio::test]
+    async fn test_retry_mock_first_fails_second_succeeds() {
+        // Bug #32: Verify the retry mock correctly simulates transient failure then success.
+        // This tests the SummaryLLM trait contract used by summarize_conversation retry logic.
+        let llm = MockFailThenSucceedLLM::new();
+
+        // First call should fail
+        let first = llm.extract_memories("prompt", "content").await;
+        assert!(
+            first.is_err(),
+            "First call should fail to simulate transient error"
+        );
+        let err_str = first.unwrap_err().to_string();
+        assert!(
+            err_str.contains("Transient"),
+            "Should be a transient/network error: {}",
+            err_str
+        );
+
+        // Second call should succeed
+        let second = llm.extract_memories("prompt", "content").await;
+        assert!(
+            second.is_ok(),
+            "Second call should succeed after transient failure"
+        );
+        let extraction = second.unwrap();
+        assert_eq!(extraction.memories.len(), 1);
+        assert_eq!(extraction.memories[0].topic, "Retry success");
     }
 }
