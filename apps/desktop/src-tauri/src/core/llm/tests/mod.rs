@@ -2,6 +2,7 @@ pub mod audit_regression_tests;
 pub mod cache_manager_tests;
 pub mod coderabbit_fix_tests;
 pub mod cost_calculator_tests;
+pub mod fallback_chain_tests;
 pub mod llm_router_tests;
 pub mod provider_tests;
 pub mod routing_logic_tests;

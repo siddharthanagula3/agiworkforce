@@ -350,6 +350,7 @@ mod tests {
         assert_eq!(result.successful_candidate.provider, Provider::Anthropic);
         assert_eq!(result.attempts, 1);
         assert!(result.failed_attempts.is_empty());
+        assert!(result.skipped_due_to_rate_limit.is_empty());
     }
 
     #[tokio::test]
@@ -379,6 +380,7 @@ mod tests {
         assert_eq!(result.attempts, 2);
         assert_eq!(result.failed_attempts.len(), 1);
         assert_eq!(result.failed_attempts[0].provider, Provider::Anthropic);
+        assert!(result.skipped_due_to_rate_limit.is_empty());
     }
 
     #[tokio::test]
@@ -415,6 +417,13 @@ mod tests {
         assert_eq!(result.value, "openai:gpt-5");
         assert_eq!(result.successful_candidate.provider, Provider::OpenAI);
         assert_eq!(result.attempts, 1); // Only attempted OpenAI
+
+        // Verify the skipped list tracks the rate-limited provider
+        assert_eq!(result.skipped_due_to_rate_limit.len(), 1);
+        assert_eq!(
+            result.skipped_due_to_rate_limit[0],
+            "anthropic:claude-sonnet"
+        );
     }
 
     #[tokio::test]
