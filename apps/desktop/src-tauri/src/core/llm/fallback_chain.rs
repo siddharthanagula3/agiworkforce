@@ -583,6 +583,8 @@ pub struct FallbackResult<T> {
     pub attempts: usize,
     /// Errors from failed attempts (if any)
     pub failed_attempts: Vec<ProviderError>,
+    /// Provider identifiers (format "provider:model") skipped because they were rate-limited
+    pub skipped_due_to_rate_limit: Vec<String>,
 }
 
 /// The fallback chain executor
@@ -641,6 +643,7 @@ impl FallbackChain {
         let mut errors: Vec<ProviderError> = Vec::new();
         let mut candidates_attempted = 0;
         let mut candidates_skipped = 0;
+        let mut skipped_due_to_rate_limit: Vec<String> = Vec::new();
 
         // Sort candidates by priority
         let mut sorted_candidates: Vec<_> = candidates.iter().collect();
@@ -658,13 +661,21 @@ impl FallbackChain {
                     .rate_limit_tracker
                     .cooldown_remaining(candidate.provider, Some(&candidate.model));
 
+                let provider_id = format!(
+                    "{}:{}",
+                    candidate.provider.as_string(),
+                    candidate.model
+                );
+
                 tracing::debug!(
                     provider = %candidate.provider.as_string(),
                     model = %candidate.model,
                     cooldown_remaining_secs = remaining.as_secs(),
-                    "Skipping rate-limited candidate"
+                    "Provider {} rate-limited, trying next provider",
+                    candidate.provider.as_string()
                 );
 
+                skipped_due_to_rate_limit.push(provider_id);
                 candidates_skipped += 1;
                 continue;
             }
@@ -686,6 +697,7 @@ impl FallbackChain {
                         successful_candidate: candidate_clone,
                         attempts: candidates_attempted,
                         failed_attempts: errors,
+                        skipped_due_to_rate_limit,
                     });
                 }
                 Err(err) => {
@@ -1280,5 +1292,333 @@ mod tests {
         assert!(chain
             .rate_limit_tracker()
             .is_rate_limited(Provider::Anthropic, Some("claude-sonnet")));
+    }
+
+    // ====================================================================
+    // Bug #1: RateLimitTracker consulted in fallback chain
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_rate_limited_provider_is_skipped_not_called() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Pre-rate-limit Anthropic
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            Some(Duration::from_secs(300)),
+        );
+
+        let call_log = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+        ];
+
+        let log_clone = call_log.clone();
+        let result = chain
+            .run_with_fallback(&candidates, move |candidate| {
+                let log = log_clone.clone();
+                async move {
+                    log.lock().unwrap().push(candidate.provider);
+                    Ok::<_, Box<dyn std::error::Error + Send + Sync>>("ok".to_string())
+                }
+            })
+            .await
+            .unwrap();
+
+        // The rate-limited provider must NOT appear in the call log
+        let calls = call_log.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], Provider::OpenAI);
+
+        // The result should reflect the non-rate-limited provider
+        assert_eq!(result.successful_candidate.provider, Provider::OpenAI);
+        assert_eq!(result.attempts, 1);
+    }
+
+    #[tokio::test]
+    async fn test_non_rate_limited_provider_called_after_rate_limited() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Rate-limit the first TWO providers
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::OpenAI,
+            Some("gpt-5"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Google, "gemini-pro"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    candidate.provider.as_string().to_string(),
+                )
+            })
+            .await
+            .unwrap();
+
+        // Google should be the one that succeeds (first non-rate-limited)
+        assert_eq!(result.value, "google");
+        assert_eq!(result.successful_candidate.provider, Provider::Google);
+        assert_eq!(result.attempts, 1);
+    }
+
+    #[tokio::test]
+    async fn test_skipped_due_to_rate_limit_tracked_in_result() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Rate-limit Anthropic
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    candidate.provider.as_string().to_string(),
+                )
+            })
+            .await
+            .unwrap();
+
+        // The skipped list should contain the rate-limited provider
+        assert_eq!(result.skipped_due_to_rate_limit.len(), 1);
+        assert_eq!(
+            result.skipped_due_to_rate_limit[0],
+            "anthropic:claude-sonnet"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multiple_rate_limited_providers_all_tracked() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Rate-limit two providers
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::OpenAI,
+            Some("gpt-5"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Google, "gemini-pro"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    candidate.provider.as_string().to_string(),
+                )
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.skipped_due_to_rate_limit.len(), 2);
+        assert!(result
+            .skipped_due_to_rate_limit
+            .contains(&"anthropic:claude-sonnet".to_string()));
+        assert!(result
+            .skipped_due_to_rate_limit
+            .contains(&"openai:gpt-5".to_string()));
+        assert_eq!(result.value, "google");
+    }
+
+    #[tokio::test]
+    async fn test_all_rate_limited_returns_aggregate_error() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Rate-limit ALL providers
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::OpenAI,
+            Some("gpt-5"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |_candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>("should not be called".to_string())
+            })
+            .await;
+
+        // All skipped => AggregateError
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.candidates_attempted, 0);
+        assert_eq!(err.candidates_skipped_rate_limit, 2);
+        assert!(err.errors.is_empty());
+        assert!(err.user_message().contains("temporarily busy"));
+    }
+
+    #[tokio::test]
+    async fn test_rate_limit_check_skips_then_records_new_limit() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Pre-rate-limit Anthropic
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Google, "gemini-pro"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                if candidate.provider == Provider::OpenAI {
+                    // OpenAI also hits a rate limit during this call
+                    Err::<String, _>("429 rate limit exceeded".into())
+                } else {
+                    Ok("google-success".to_string())
+                }
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.value, "google-success");
+
+        // Anthropic was pre-skipped
+        assert_eq!(result.skipped_due_to_rate_limit.len(), 1);
+        assert_eq!(
+            result.skipped_due_to_rate_limit[0],
+            "anthropic:claude-sonnet"
+        );
+
+        // OpenAI should now also be recorded as rate-limited for future calls
+        assert!(chain
+            .rate_limit_tracker()
+            .is_rate_limited(Provider::OpenAI, Some("gpt-5")));
+
+        // Anthropic was already rate-limited and should remain so
+        assert!(chain
+            .rate_limit_tracker()
+            .is_rate_limited(Provider::Anthropic, Some("claude-sonnet")));
+    }
+
+    #[tokio::test]
+    async fn test_non_skippable_candidate_ignores_rate_limit_check() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            ..Default::default()
+        });
+
+        // Rate-limit the provider
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+
+        let candidates = vec![
+            // non_skippable means the rate limit check is bypassed
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet").non_skippable(),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    candidate.provider.as_string().to_string(),
+                )
+            })
+            .await
+            .unwrap();
+
+        // Should have called Anthropic despite rate limit (non-skippable)
+        assert_eq!(result.value, "anthropic");
+        assert_eq!(result.successful_candidate.provider, Provider::Anthropic);
+        // It should NOT appear in the skipped list
+        assert!(result.skipped_due_to_rate_limit.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_skip_rate_limited_disabled_in_config() {
+        let chain = FallbackChain::new(FallbackConfig {
+            max_retries_per_candidate: 0,
+            skip_rate_limited: false, // Disable rate-limit skipping
+            ..Default::default()
+        });
+
+        // Rate-limit the provider
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::Anthropic,
+            Some("claude-sonnet"),
+            None,
+        );
+
+        let candidates = vec![
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+        ];
+
+        let result = chain
+            .run_with_fallback(&candidates, |candidate| async move {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    candidate.provider.as_string().to_string(),
+                )
+            })
+            .await
+            .unwrap();
+
+        // Should still call Anthropic because skip_rate_limited is false
+        assert_eq!(result.value, "anthropic");
+        assert!(result.skipped_due_to_rate_limit.is_empty());
     }
 }
