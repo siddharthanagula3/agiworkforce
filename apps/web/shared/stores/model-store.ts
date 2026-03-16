@@ -144,8 +144,12 @@ export const AVAILABLE_MODELS: AIModel[] = [
 interface ModelState {
   selectedModelId: string;
   thinkingEnabled: boolean;
+  /** Token budget for extended thinking (0 = off). Mirrors desktop thinkingBudget. */
+  thinkingBudget: number;
   setSelectedModelId: (id: string) => void;
   setThinkingEnabled: (enabled: boolean) => void;
+  /** Set thinking budget in tokens (0 = disabled). Auto-enables thinkingEnabled when > 0. */
+  setThinkingBudget: (budget: number) => void;
   getSelectedModel: () => AIModel;
 }
 
@@ -154,6 +158,7 @@ export const useModelStore = create<ModelState>()(
     (set, get) => ({
       selectedModelId: 'claude-sonnet-4-6',
       thinkingEnabled: false,
+      thinkingBudget: 0,
 
       setSelectedModelId: (id: string) => {
         set({ selectedModelId: id });
@@ -163,6 +168,10 @@ export const useModelStore = create<ModelState>()(
         set({ thinkingEnabled: enabled });
       },
 
+      setThinkingBudget: (budget: number) => {
+        set({ thinkingBudget: budget, thinkingEnabled: budget > 0 });
+      },
+
       getSelectedModel: () => {
         const { selectedModelId } = get();
         return AVAILABLE_MODELS.find((m) => m.id === selectedModelId) || AVAILABLE_MODELS[0]!;
@@ -170,7 +179,15 @@ export const useModelStore = create<ModelState>()(
     }),
     {
       name: 'agi-model-store',
-      version: 1,
+      version: 2,
+      migrate: (persistedState: unknown, version: number) => {
+        // v1 -> v2: add thinkingBudget field
+        if (version < 2) {
+          const state = persistedState as Partial<ModelState>;
+          return { ...state, thinkingBudget: 0 };
+        }
+        return persistedState as ModelState;
+      },
     },
   ),
 );
