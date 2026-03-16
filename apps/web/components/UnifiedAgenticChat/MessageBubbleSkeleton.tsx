@@ -15,6 +15,8 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
+import SkeletonLoader from '@shared/ui/skeleton-loader';
+import { SkeletonAvatar } from '@shared/ui/skeleton-loader';
 
 interface MessageBubbleSkeletonProps {
   /**
@@ -35,18 +37,20 @@ export const MessageBubbleSkeleton: React.FC<MessageBubbleSkeletonProps> = ({ cl
   return (
     <div className={cn('flex gap-3 py-3 px-4', className)} data-testid="message-bubble-skeleton">
       {/* Avatar skeleton */}
-      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700" />
+      <div className="flex-shrink-0">
+        <SkeletonAvatar size="md" />
+      </div>
 
       {/* Content area */}
       <div className="flex-1 space-y-2">
         {/* Header/username skeleton */}
-        <div className="h-4 w-2/5 rounded bg-gray-200 dark:bg-gray-700" />
+        <SkeletonLoader variant="text" width="40%" animation="wave" />
 
         {/* Message content skeleton - 3 lines */}
         <div className="space-y-2 pt-1">
-          <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="h-4 w-3/5 rounded bg-gray-200 dark:bg-gray-700" />
+          <SkeletonLoader variant="text" width="100%" animation="wave" />
+          <SkeletonLoader variant="text" width="100%" animation="wave" />
+          <SkeletonLoader variant="text" width="60%" animation="wave" />
         </div>
       </div>
     </div>
