@@ -884,8 +884,8 @@ pub struct HttpSseTransport {
     /// HTTP client for JSON-RPC requests (has overall request timeout)
     client: reqwest::Client,
 
-    /// HTTP client for SSE streams (connect timeout only, no overall request
-    /// timeout so long-lived SSE connections are not killed prematurely)
+    /// HTTP client for SSE streams (connect + per-read timeout, no overall
+    /// request timeout so long-lived SSE connections are not killed prematurely)
     sse_client: reqwest::Client,
 
     /// Configuration for the transport
@@ -937,10 +937,17 @@ impl HttpSseTransport {
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
             .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
 
-        // Build a separate SSE client with connect timeout only (no overall request
-        // timeout) so that long-lived SSE streams are not killed prematurely.
+        // Build a separate SSE client with connect + read timeouts but no overall
+        // request timeout, so long-lived SSE streams are not killed prematurely.
+        //
+        // - `connect_timeout`: caps TCP handshake at 30s for unreachable hosts.
+        // - `read_timeout`: caps each individual socket read at 60s, catching servers
+        //   that accept TCP but never send headers or go silent between chunks.
+        //   This does NOT kill healthy SSE streams because each SSE chunk (including
+        //   server heartbeats) counts as a read and resets the timer.
         let mut sse_client_builder = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
+            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
+            .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
 
         if !config.verify_ssl {
             // SECURITY: Only allow disabling SSL verification for localhost connections.

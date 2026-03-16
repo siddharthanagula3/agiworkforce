@@ -169,10 +169,11 @@ pub async fn extension_install(
         }),
     );
 
-    // Create installer with progress callback
+    // Create installer with progress callback and app handle for Tauri event emission
     let app_clone = app.clone();
     let installer_with_progress = ExtensionInstaller::new()
         .map_err(|e| format!("Failed to create installer: {}", e))?
+        .with_app_handle(app.clone())
         .with_progress_callback(Box::new(move |progress| {
             emit_extension_event(&app_clone, "install_progress", &progress);
         }));
