@@ -142,7 +142,12 @@ impl ProjectMemoryManager {
     // PROJECT CONTEXT METHODS
     // =========================================================================
 
-    /// Save or update project context
+    /// Save or update project context.
+    ///
+    /// Uses an atomic upsert: first attempts UPDATE on an existing row for this
+    /// project folder + context type, then falls back to INSERT only when no row
+    /// was touched. This avoids UNIQUE-constraint crashes on pre-v58 databases
+    /// and prevents duplicate rows on post-v58 databases.
     pub fn save_project_context(
         &self,
         project_folder: &str,
@@ -173,34 +178,53 @@ impl ProjectMemoryManager {
         })
         .map_err(|e| Error::Generic(format!("Failed to serialize project context: {}", e)))?;
 
-        // Application-level upsert: update existing row or insert new one.
-        // Context should be unique per (project_folder, memory_type).
-        let existing_id: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
-                params![project_folder, ProjectMemoryType::Context.as_str()],
-                |row| row.get(0),
+        // Atomic upsert: try UPDATE first, INSERT only if nothing was updated.
+        // One context row per project folder -- UPDATE the oldest matching row.
+        let updated = conn
+            .execute(
+                "UPDATE project_memories
+                 SET content = ?1, importance = ?2, updated_at = datetime('now')
+                 WHERE id = (
+                     SELECT id FROM project_memories
+                     WHERE project_folder = ?3 AND memory_type = ?4
+                     ORDER BY created_at ASC LIMIT 1
+                 )",
+                params![
+                    content_json,
+                    importance,
+                    project_folder,
+                    ProjectMemoryType::Context.as_str()
+                ],
             )
-            .ok();
+            .map_err(|e| {
+                Error::Database(format!("Failed to update project context: {}", e))
+            })?;
 
-        if let Some(eid) = existing_id {
-            conn.execute(
-                "UPDATE project_memories SET content = ?1, importance = ?2, updated_at = datetime('now') WHERE id = ?3",
-                params![content_json, importance, eid],
-            )
-            .map_err(|e| Error::Database(format!("Failed to update project context: {}", e)))?;
-        } else {
+        if updated == 0 {
             conn.execute(
                 "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
-                params![project_folder, ProjectMemoryType::Context.as_str(), content_json, importance],
+                params![
+                    project_folder,
+                    ProjectMemoryType::Context.as_str(),
+                    content_json,
+                    importance
+                ],
             )
-            .map_err(|e| Error::Database(format!("Failed to save project context: {}", e)))?;
+            .map_err(|e| {
+                Error::Database(format!(
+                    "Failed to save project context for '{}': {}",
+                    project_folder, e
+                ))
+            })?;
         }
 
+        // Return the id of the upserted row.
         let id: i64 = conn
             .query_row(
-                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
+                "SELECT id FROM project_memories
+                 WHERE project_folder = ?1 AND memory_type = ?2
+                 ORDER BY updated_at DESC LIMIT 1",
                 params![project_folder, ProjectMemoryType::Context.as_str()],
                 |row| row.get(0),
             )
@@ -248,7 +272,15 @@ impl ProjectMemoryManager {
     // CODING STYLE METHODS
     // =========================================================================
 
-    /// Save or update coding style
+    /// Save or update a coding style entry.
+    ///
+    /// Deduplicates on `(project_folder, memory_type, style_key)` via a
+    /// content-aware lookup: if an existing coding_style row for the same
+    /// project contains a matching `style_key` inside its JSON content, we
+    /// UPDATE that row. Otherwise we INSERT a new row. This allows multiple
+    /// coding styles per project (different keys) while preventing duplicates
+    /// for the same key, and avoids UNIQUE-constraint crashes on pre-v58
+    /// databases.
     pub fn save_coding_style(
         &self,
         project_folder: &str,
@@ -278,34 +310,65 @@ impl ProjectMemoryManager {
         let content = serde_json::to_string(&style)
             .map_err(|e| Error::Generic(format!("Failed to serialize style: {}", e)))?;
 
-        // Application-level upsert: coding style is unique per (project_folder, memory_type).
-        let existing_id: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
-                params![project_folder, ProjectMemoryType::CodingStyle.as_str()],
-                |row| row.get(0),
-            )
-            .ok();
+        // Build a JSON key pattern to match existing rows with the same style_key.
+        // The style_key is embedded in the JSON content as "style_key":"<value>".
+        let key_pattern = format!(
+            "%\"style_key\":\"{}\"%",
+            style_key.replace('\\', "\\\\").replace('"', "\\\"")
+        );
 
-        if let Some(eid) = existing_id {
-            conn.execute(
-                "UPDATE project_memories SET content = ?1, importance = ?2, updated_at = datetime('now') WHERE id = ?3",
-                params![content, importance, eid],
+        // Atomic upsert: try UPDATE on the existing row with the same style_key.
+        let updated = conn
+            .execute(
+                "UPDATE project_memories
+                 SET content = ?1, importance = ?2, updated_at = datetime('now')
+                 WHERE id = (
+                     SELECT id FROM project_memories
+                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5
+                     ORDER BY created_at ASC LIMIT 1
+                 )",
+                params![
+                    content,
+                    importance,
+                    project_folder,
+                    ProjectMemoryType::CodingStyle.as_str(),
+                    key_pattern
+                ],
             )
-            .map_err(|e| Error::Database(format!("Failed to update coding style: {}", e)))?;
-        } else {
+            .map_err(|e| {
+                Error::Database(format!("Failed to update coding style: {}", e))
+            })?;
+
+        if updated == 0 {
             conn.execute(
                 "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
-                params![project_folder, ProjectMemoryType::CodingStyle.as_str(), content, importance],
+                params![
+                    project_folder,
+                    ProjectMemoryType::CodingStyle.as_str(),
+                    content,
+                    importance
+                ],
             )
-            .map_err(|e| Error::Database(format!("Failed to save coding style: {}", e)))?;
+            .map_err(|e| {
+                Error::Database(format!(
+                    "Failed to save coding style '{}' for '{}': {}",
+                    style_key, project_folder, e
+                ))
+            })?;
         }
 
+        // Return the id of the upserted row.
         let id: i64 = conn
             .query_row(
-                "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
-                params![project_folder, ProjectMemoryType::CodingStyle.as_str()],
+                "SELECT id FROM project_memories
+                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3
+                 ORDER BY updated_at DESC LIMIT 1",
+                params![
+                    project_folder,
+                    ProjectMemoryType::CodingStyle.as_str(),
+                    key_pattern
+                ],
                 |row| row.get(0),
             )
             .map_err(|e| Error::Database(format!("Failed to get memory id: {}", e)))?;
@@ -354,7 +417,14 @@ impl ProjectMemoryManager {
     // ARCHITECTURAL DECISION METHODS
     // =========================================================================
 
-    /// Save or record architectural decision
+    /// Save or update an architectural decision.
+    ///
+    /// Deduplicates on `(project_folder, decision)`: if an existing
+    /// architectural_decision row for the same project contains the same
+    /// decision text, we UPDATE it (preserving the original id and created_at).
+    /// Otherwise we INSERT a new row. This allows multiple distinct decisions
+    /// per project while preventing duplicates, and avoids UNIQUE-constraint
+    /// crashes on pre-v58 databases.
     pub fn save_architectural_decision(
         &self,
         project_folder: &str,
@@ -385,19 +455,71 @@ impl ProjectMemoryManager {
         let content = serde_json::to_string(&arch_decision)
             .map_err(|e| Error::Generic(format!("Failed to serialize decision: {}", e)))?;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
-            params![
-                project_folder,
-                ProjectMemoryType::ArchitecturalDecision.as_str(),
-                content,
-                importance
-            ],
-        )
-        .map_err(|e| Error::Database(format!("Failed to save architectural decision: {}", e)))?;
+        // Build a pattern to match existing rows with the same decision text.
+        let decision_pattern = format!(
+            "%\"decision\":\"{}\"%",
+            decision.replace('\\', "\\\\").replace('"', "\\\"")
+        );
 
-        let id = conn.last_insert_rowid();
+        // Atomic upsert: try UPDATE on an existing row with the same decision text.
+        let updated = conn
+            .execute(
+                "UPDATE project_memories
+                 SET content = ?1, importance = ?2, updated_at = datetime('now')
+                 WHERE id = (
+                     SELECT id FROM project_memories
+                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5
+                     ORDER BY created_at ASC LIMIT 1
+                 )",
+                params![
+                    content,
+                    importance,
+                    project_folder,
+                    ProjectMemoryType::ArchitecturalDecision.as_str(),
+                    decision_pattern
+                ],
+            )
+            .map_err(|e| {
+                Error::Database(format!(
+                    "Failed to update architectural decision: {}",
+                    e
+                ))
+            })?;
+
+        if updated == 0 {
+            conn.execute(
+                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
+                params![
+                    project_folder,
+                    ProjectMemoryType::ArchitecturalDecision.as_str(),
+                    content,
+                    importance
+                ],
+            )
+            .map_err(|e| {
+                Error::Database(format!(
+                    "Failed to save architectural decision for '{}': {}",
+                    project_folder, e
+                ))
+            })?;
+        }
+
+        // Return the id of the upserted row.
+        let id: i64 = conn
+            .query_row(
+                "SELECT id FROM project_memories
+                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3
+                 ORDER BY updated_at DESC LIMIT 1",
+                params![
+                    project_folder,
+                    ProjectMemoryType::ArchitecturalDecision.as_str(),
+                    decision_pattern
+                ],
+                |row| row.get(0),
+            )
+            .map_err(|e| Error::Database(format!("Failed to get memory id: {}", e)))?;
+
         Ok(id)
     }
 
@@ -656,6 +778,7 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Set up a test database WITHOUT a UNIQUE constraint (post-v58 schema).
     fn setup_test_db() -> (TempDir, ProjectMemoryManager) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
@@ -671,6 +794,34 @@ mod tests {
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 last_accessed TEXT
+            )",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let manager = ProjectMemoryManager::from_path(&db_path).unwrap();
+        (temp_dir, manager)
+    }
+
+    /// Set up a test database WITH a UNIQUE constraint (pre-v58 schema).
+    /// This reproduces the original bug #49 crash scenario.
+    fn setup_test_db_with_unique_constraint() -> (TempDir, ProjectMemoryManager) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE project_memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_folder TEXT NOT NULL,
+                memory_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                importance INTEGER NOT NULL DEFAULT 5,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_accessed TEXT,
+                UNIQUE(project_folder, memory_type)
             )",
             [],
         )
@@ -794,5 +945,371 @@ mod tests {
             .get_project_memory_stats("/path/to/project")
             .unwrap();
         assert_eq!(stats["total_memories"], 1);
+    }
+
+    // =========================================================================
+    // BUG #49 REGRESSION TESTS: duplicate insertion scenarios
+    // =========================================================================
+
+    #[test]
+    fn test_duplicate_project_context_updates_instead_of_crashing() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        // First save
+        let id1 = manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Rust".to_string()],
+                Some("Rust"),
+                None,
+                vec![],
+                Some(5),
+            )
+            .unwrap();
+
+        // Second save for same project should update, not crash or duplicate
+        let id2 = manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Rust".to_string(), "TypeScript".to_string()],
+                Some("TypeScript"),
+                Some("New conventions"),
+                vec!["React".to_string()],
+                Some(8),
+            )
+            .unwrap();
+
+        // Should return the same row id (update, not insert)
+        assert_eq!(id1, id2);
+
+        // Should only have one context row
+        let memories = manager.get_project_memories("/path/to/project").unwrap();
+        assert_eq!(memories.len(), 1);
+
+        // Verify the content was updated
+        let context = manager
+            .get_project_context("/path/to/project")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            context.main_language,
+            Some("TypeScript".to_string())
+        );
+        assert_eq!(context.tech_stack.len(), 2);
+        assert_eq!(context.importance, 8);
+    }
+
+    #[test]
+    fn test_duplicate_project_context_with_unique_constraint() {
+        let (_temp_dir, manager) = setup_test_db_with_unique_constraint();
+
+        // First save on pre-v58 schema (has UNIQUE constraint)
+        let id1 = manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Rust".to_string()],
+                Some("Rust"),
+                None,
+                vec![],
+                Some(5),
+            )
+            .unwrap();
+
+        // Second save must not crash with UNIQUE constraint violation
+        let id2 = manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Python".to_string()],
+                Some("Python"),
+                None,
+                vec![],
+                Some(7),
+            )
+            .unwrap();
+
+        assert_eq!(id1, id2);
+
+        let context = manager
+            .get_project_context("/path/to/project")
+            .unwrap()
+            .unwrap();
+        assert_eq!(context.main_language, Some("Python".to_string()));
+    }
+
+    #[test]
+    fn test_duplicate_coding_style_same_key_updates() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        // First save
+        let id1 = manager
+            .save_coding_style(
+                "/path/to/project",
+                "variable_naming",
+                "use snake_case",
+                "naming",
+                Some(5),
+            )
+            .unwrap();
+
+        // Second save with same style_key should update
+        let id2 = manager
+            .save_coding_style(
+                "/path/to/project",
+                "variable_naming",
+                "use camelCase",
+                "naming",
+                Some(8),
+            )
+            .unwrap();
+
+        assert_eq!(id1, id2);
+
+        let styles = manager.get_coding_styles("/path/to/project").unwrap();
+        assert_eq!(styles.len(), 1);
+        assert_eq!(styles[0].style_value, "use camelCase");
+        assert_eq!(styles[0].importance, 8);
+    }
+
+    #[test]
+    fn test_coding_style_different_keys_create_separate_rows() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        manager
+            .save_coding_style(
+                "/path/to/project",
+                "variable_naming",
+                "use snake_case",
+                "naming",
+                Some(5),
+            )
+            .unwrap();
+
+        manager
+            .save_coding_style(
+                "/path/to/project",
+                "function_naming",
+                "use camelCase",
+                "naming",
+                Some(6),
+            )
+            .unwrap();
+
+        let styles = manager.get_coding_styles("/path/to/project").unwrap();
+        assert_eq!(styles.len(), 2);
+    }
+
+    #[test]
+    fn test_coding_style_with_unique_constraint() {
+        let (_temp_dir, manager) = setup_test_db_with_unique_constraint();
+
+        // First save on pre-v58 schema
+        let id1 = manager
+            .save_coding_style(
+                "/path/to/project",
+                "variable_naming",
+                "use snake_case",
+                "naming",
+                Some(5),
+            )
+            .unwrap();
+
+        // Second save must not crash with UNIQUE constraint violation
+        let id2 = manager
+            .save_coding_style(
+                "/path/to/project",
+                "variable_naming",
+                "use camelCase",
+                "naming",
+                Some(8),
+            )
+            .unwrap();
+
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn test_duplicate_architectural_decision_updates() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        // First save
+        let id1 = manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use event-driven architecture",
+                "Better scalability",
+                Some("proposed"),
+                Some(7),
+            )
+            .unwrap();
+
+        // Second save with same decision text should update
+        let id2 = manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use event-driven architecture",
+                "Better scalability and real-time updates",
+                Some("accepted"),
+                Some(9),
+            )
+            .unwrap();
+
+        assert_eq!(id1, id2);
+
+        let decisions = manager
+            .get_architectural_decisions("/path/to/project", None)
+            .unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].status, "accepted");
+        assert_eq!(decisions[0].importance, 9);
+    }
+
+    #[test]
+    fn test_different_architectural_decisions_create_separate_rows() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use event-driven architecture",
+                "Better scalability",
+                Some("accepted"),
+                Some(8),
+            )
+            .unwrap();
+
+        manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use microservices",
+                "Independent deployment",
+                Some("proposed"),
+                Some(6),
+            )
+            .unwrap();
+
+        let decisions = manager
+            .get_architectural_decisions("/path/to/project", None)
+            .unwrap();
+        assert_eq!(decisions.len(), 2);
+    }
+
+    #[test]
+    fn test_architectural_decision_with_unique_constraint() {
+        let (_temp_dir, manager) = setup_test_db_with_unique_constraint();
+
+        // First save on pre-v58 schema
+        let id1 = manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use event-driven architecture",
+                "Better scalability",
+                Some("accepted"),
+                Some(8),
+            )
+            .unwrap();
+
+        // Second save must not crash with UNIQUE constraint violation
+        let id2 = manager
+            .save_architectural_decision(
+                "/path/to/project",
+                "Use event-driven architecture",
+                "Updated rationale",
+                Some("accepted"),
+                Some(9),
+            )
+            .unwrap();
+
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn test_different_projects_independent_contexts() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        let id1 = manager
+            .save_project_context(
+                "/project/alpha",
+                vec!["Rust".to_string()],
+                Some("Rust"),
+                None,
+                vec![],
+                Some(5),
+            )
+            .unwrap();
+
+        let id2 = manager
+            .save_project_context(
+                "/project/beta",
+                vec!["Python".to_string()],
+                Some("Python"),
+                None,
+                vec![],
+                Some(7),
+            )
+            .unwrap();
+
+        // Different projects should have separate rows
+        assert_ne!(id1, id2);
+
+        let ctx_alpha = manager
+            .get_project_context("/project/alpha")
+            .unwrap()
+            .unwrap();
+        assert_eq!(ctx_alpha.main_language, Some("Rust".to_string()));
+
+        let ctx_beta = manager
+            .get_project_context("/project/beta")
+            .unwrap()
+            .unwrap();
+        assert_eq!(ctx_beta.main_language, Some("Python".to_string()));
+    }
+
+    #[test]
+    fn test_triple_context_save_produces_single_row() {
+        let (_temp_dir, manager) = setup_test_db();
+
+        manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Rust".to_string()],
+                Some("Rust"),
+                None,
+                vec![],
+                Some(5),
+            )
+            .unwrap();
+
+        manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Python".to_string()],
+                Some("Python"),
+                None,
+                vec![],
+                Some(6),
+            )
+            .unwrap();
+
+        manager
+            .save_project_context(
+                "/path/to/project",
+                vec!["Go".to_string()],
+                Some("Go"),
+                None,
+                vec![],
+                Some(9),
+            )
+            .unwrap();
+
+        // Still only one row after three saves
+        let memories = manager.get_project_memories("/path/to/project").unwrap();
+        assert_eq!(memories.len(), 1);
+
+        let context = manager
+            .get_project_context("/path/to/project")
+            .unwrap()
+            .unwrap();
+        assert_eq!(context.main_language, Some("Go".to_string()));
+        assert_eq!(context.importance, 9);
     }
 }
