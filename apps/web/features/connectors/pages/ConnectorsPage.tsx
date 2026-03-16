@@ -16,6 +16,8 @@ import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
+import Image from 'next/image';
 
 // ─── Connector Data ────────────────────────────────────────────────────────────
 
@@ -464,6 +466,48 @@ const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
   { label: '⭐ AGI Exclusive', value: 'Exclusive' },
 ];
 
+// ─── ConnectorLogo ─────────────────────────────────────────────────────────────
+
+interface ConnectorLogoProps {
+  connector: Connector;
+}
+
+const ConnectorLogo: React.FC<ConnectorLogoProps> = ({ connector }) => {
+  const logoInfo = getConnectorLogo(connector.id);
+  const [imageError, setImageError] = React.useState(false);
+
+  if (logoInfo && !imageError && hasOfficialLogo(connector.id)) {
+    return (
+      <div
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 shadow-lg overflow-hidden"
+        style={logoInfo.bgColor ? { backgroundColor: logoInfo.bgColor } : {}}
+      >
+        <Image
+          src={logoInfo.url}
+          alt={connector.name}
+          width={logoInfo.width || 28}
+          height={logoInfo.height || 28}
+          className="object-contain"
+          onError={() => setImageError(true)}
+          unoptimized={logoInfo.url.startsWith('http')}
+        />
+      </div>
+    );
+  }
+
+  // Fallback to gradient background with emoji/text
+  return (
+    <div
+      className={cn(
+        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-lg',
+        connector.iconBg,
+      )}
+    >
+      {connector.iconEmoji ?? connector.iconText}
+    </div>
+  );
+};
+
 // ─── ConnectorCard ─────────────────────────────────────────────────────────────
 
 interface ConnectorCardProps {
@@ -516,14 +560,7 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
 
       {/* Icon + Name */}
       <div className="mb-3 flex items-start gap-3">
-        <div
-          className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-lg',
-            connector.iconBg,
-          )}
-        >
-          {connector.iconEmoji ?? connector.iconText}
-        </div>
+        <ConnectorLogo connector={connector} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground">{connector.name}</h3>
           <p className="text-xs text-muted-foreground">{connector.actionCount} actions</p>
@@ -727,181 +764,182 @@ export function ConnectorsPage() {
 
   return (
     <ErrorBoundary componentName="ConnectorsPage" compact>
-    <div className="min-h-full bg-background">
-      {/* Page Header */}
-      <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Connectors</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Connect your tools and give your AI agents access to the apps you use every day.
-              </p>
+      <div className="min-h-full bg-background">
+        {/* Page Header */}
+        <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
+          <div className="mx-auto max-w-6xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Connectors</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Connect your tools and give your AI agents access to the apps you use every day.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
+                  {connectedIds.size} connected
+                </Badge>
+                <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
+                  {CONNECTORS.length} total
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
-                {connectedIds.size} connected
-              </Badge>
-              <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
-                {CONNECTORS.length} total
-              </Badge>
+
+            {/* Search */}
+            <div className="relative mt-5 max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search connectors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
+              />
             </div>
-          </div>
 
-          {/* Search */}
-          <div className="relative mt-5 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search connectors..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
-            />
-          </div>
-
-          {/* Category Tabs */}
-          <div className="scrollbar-hide mt-4 flex gap-1 overflow-x-auto">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                onClick={() => setActiveCategory(cat.value)}
-                className={cn(
-                  'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150',
-                  activeCategory === cat.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground',
-                )}
-              >
-                {cat.label}
-              </button>
-            ))}
+            {/* Category Tabs */}
+            <div className="scrollbar-hide mt-4 flex gap-1 overflow-x-auto">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.value}
+                  onClick={() => setActiveCategory(cat.value)}
+                  className={cn(
+                    'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150',
+                    activeCategory === cat.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground',
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-6xl px-6 py-6">
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
+        {/* Content */}
+        <div className="mx-auto max-w-6xl px-6 py-6">
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
 
-        {/* Connected Section */}
-        {connectedConnectors.length > 0 && (
-          <section className="mb-8">
-            <div className="mb-3 flex items-center gap-2">
-              <Check className="h-4 w-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold text-foreground">
-                Connected ({connectedConnectors.length})
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {connectedConnectors.map((connector) => (
-                <ConnectorCard
-                  key={connector.id}
-                  connector={connector}
-                  connected={true}
-                  mutating={mutatingIds.has(connector.id)}
-                  onConnect={() => void handleConnect(connector.id)}
-                  onDisconnect={() => void handleDisconnect(connector.id)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Available Section */}
-        {availableConnectors.length > 0 && (
-          <section className="mb-8">
-            <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-foreground">
-                Available
-                {activeCategory === 'All' || activeCategory === 'Exclusive'
-                  ? ''
-                  : ` — ${activeCategory}`}
-                <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                  ({availableConnectors.length})
-                </span>
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {availableConnectors.map((connector) => (
-                <ConnectorCard
-                  key={connector.id}
-                  connector={connector}
-                  connected={false}
-                  mutating={mutatingIds.has(connector.id)}
-                  onConnect={() => void handleConnect(connector.id)}
-                  onDisconnect={() => void handleDisconnect(connector.id)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Empty state */}
-        {filteredConnectors.length === 0 && (
-          <div className="py-20 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-              <Search className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h3 className="text-base font-medium text-foreground">No connectors found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Try a different search term or category.
-            </p>
-          </div>
-        )}
-
-        {/* Roadmap Callout */}
-        {(activeCategory === 'All' || activeCategory !== 'Exclusive') && (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Zap className="h-5 w-5 text-primary" />
+          {/* Connected Section */}
+          {connectedConnectors.length > 0 && (
+            <section className="mb-8">
+              <div className="mb-3 flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-400" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Connected ({connectedConnectors.length})
+                </h2>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-foreground">105+ Connectors Planned</h3>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  We&apos;re rolling out connectors in phases — from core productivity tools to AI
-                  models, marketing platforms, and enterprise apps. Phase 1 (10 core connectors)
-                  ships first, followed by CRM, marketing, finance, and social in subsequent phases.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {[
-                    'Airtable',
-                    'Trello',
-                    'ClickUp',
-                    'Pipedrive',
-                    'Twilio',
-                    'SendGrid',
-                    'Ahrefs',
-                    'QuickBooks',
-                    'Dropbox',
-                    'Figma',
-                  ].map((name) => (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {connectedConnectors.map((connector) => (
+                  <ConnectorCard
+                    key={connector.id}
+                    connector={connector}
+                    connected={true}
+                    mutating={mutatingIds.has(connector.id)}
+                    onConnect={() => void handleConnect(connector.id)}
+                    onDisconnect={() => void handleDisconnect(connector.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Available Section */}
+          {availableConnectors.length > 0 && (
+            <section className="mb-8">
+              <div className="mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Available
+                  {activeCategory === 'All' || activeCategory === 'Exclusive'
+                    ? ''
+                    : ` — ${activeCategory}`}
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                    ({availableConnectors.length})
+                  </span>
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {availableConnectors.map((connector) => (
+                  <ConnectorCard
+                    key={connector.id}
+                    connector={connector}
+                    connected={false}
+                    mutating={mutatingIds.has(connector.id)}
+                    onConnect={() => void handleConnect(connector.id)}
+                    onDisconnect={() => void handleDisconnect(connector.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Empty state */}
+          {filteredConnectors.length === 0 && (
+            <div className="py-20 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
+                <Search className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="text-base font-medium text-foreground">No connectors found</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try a different search term or category.
+              </p>
+            </div>
+          )}
+
+          {/* Roadmap Callout */}
+          {(activeCategory === 'All' || activeCategory !== 'Exclusive') && (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Zap className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">105+ Connectors Planned</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    We&apos;re rolling out connectors in phases — from core productivity tools to AI
+                    models, marketing platforms, and enterprise apps. Phase 1 (10 core connectors)
+                    ships first, followed by CRM, marketing, finance, and social in subsequent
+                    phases.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {[
+                      'Airtable',
+                      'Trello',
+                      'ClickUp',
+                      'Pipedrive',
+                      'Twilio',
+                      'SendGrid',
+                      'Ahrefs',
+                      'QuickBooks',
+                      'Dropbox',
+                      'Figma',
+                    ].map((name) => (
+                      <Badge
+                        key={name}
+                        variant="outline"
+                        className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
+                      >
+                        {name}
+                      </Badge>
+                    ))}
                     <Badge
-                      key={name}
                       variant="outline"
                       className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
                     >
-                      {name}
+                      +95 more
                     </Badge>
-                  ))}
-                  <Badge
-                    variant="outline"
-                    className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
-                  >
-                    +95 more
-                  </Badge>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
     </ErrorBoundary>
   );
 }
