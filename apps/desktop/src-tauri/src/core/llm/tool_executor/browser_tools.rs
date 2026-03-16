@@ -1,20 +1,244 @@
 use super::*;
 
-/// Returns `true` if the CSS selector string is safe to embed in a JS template.
+/// Pseudo-classes that are safe for DOM querying (no side effects, no code execution).
+const SAFE_PSEUDO_CLASSES: &[&str] = &[
+    ":first-child",
+    ":last-child",
+    ":first-of-type",
+    ":last-of-type",
+    ":only-child",
+    ":only-of-type",
+    ":nth-child",
+    ":nth-last-child",
+    ":nth-of-type",
+    ":nth-last-of-type",
+    ":checked",
+    ":disabled",
+    ":enabled",
+    ":required",
+    ":optional",
+    ":read-only",
+    ":read-write",
+    ":empty",
+    ":hover",
+    ":focus",
+    ":active",
+    ":visited",
+    ":link",
+    ":target",
+    ":root",
+    ":placeholder-shown",
+    ":default",
+    ":valid",
+    ":invalid",
+    ":in-range",
+    ":out-of-range",
+    ":indeterminate",
+    ":first-line",
+    ":first-letter",
+    ":before",
+    ":after",
+    "::first-line",
+    "::first-letter",
+    "::before",
+    "::after",
+    "::placeholder",
+    "::selection",
+    "::marker",
+];
+
+/// Validates a CSS selector for safety before it reaches the browser DOM query API.
 ///
-/// Rejects selectors containing characters that are meaningless in valid CSS but
-/// enable JS injection when the selector is interpolated into a quoted JS string:
-/// `<`, `>`, backslash escapes, and the literal string `javascript:`.
-/// Single-quotes and double-quotes are also rejected because the selector is
-/// embedded inside a quoted JS string literal and a stray quote would break out
-/// of that literal.
-fn is_safe_css_selector(selector: &str) -> bool {
-    !selector.contains('<')
-        && !selector.contains('>')
-        && !selector.contains('\'')
-        && !selector.contains('"')
-        && !selector.contains('\\')
-        && !selector.to_lowercase().contains("javascript:")
+/// Uses a layered defense:
+/// 1. Reject empty / excessively long selectors
+/// 2. Reject characters that enable JS string breakout (`<`, `>`, `'`, `"`, `\`)
+/// 3. Blocklist dangerous CSS/JS patterns (`@import`, `javascript:`, `expression(`)
+/// 4. Allowlist pseudo-classes — only known-safe ones are permitted
+/// 5. Reject nested `:not()` / `:has()` abuse
+///
+/// Returns `Ok(())` when the selector is safe, or `Err(reason)` with a
+/// human-readable rejection reason.
+fn validate_css_selector(selector: &str) -> Result<(), String> {
+    // 1. Length / emptiness guards
+    let trimmed = selector.trim();
+    if trimmed.is_empty() {
+        return Err("selector is empty".to_string());
+    }
+    // 2 KiB is far beyond any real-world selector; reject to prevent ReDoS-style abuse.
+    if trimmed.len() > 2048 {
+        return Err(format!(
+            "selector exceeds maximum length ({}  > 2048)",
+            trimmed.len()
+        ));
+    }
+
+    let lower = trimmed.to_lowercase();
+
+    // 2. Characters that break out of a JS string literal when interpolated.
+    //    These are never valid in a CSS selector token anyway.
+    for ch in ['<', '>', '\'', '"', '\\'] {
+        if trimmed.contains(ch) {
+            return Err(format!(
+                "contains disallowed character '{}'",
+                ch
+            ));
+        }
+    }
+
+    // Null bytes
+    if trimmed.contains('\0') {
+        return Err("contains null byte".to_string());
+    }
+
+    // 3. Blocklist — dangerous patterns
+    if lower.contains("@import") {
+        return Err("contains @import (code injection risk)".to_string());
+    }
+    if lower.contains("javascript:") {
+        return Err("contains javascript: protocol handler".to_string());
+    }
+    if lower.contains("expression(") || lower.contains("expression:") {
+        return Err("contains CSS expression (IE legacy code execution risk)".to_string());
+    }
+    if lower.contains("-moz-binding") {
+        return Err("contains -moz-binding (XBL injection risk)".to_string());
+    }
+    if lower.contains("behavior:") || lower.contains("behaviour:") {
+        return Err("contains behavior/behaviour (HTC injection risk)".to_string());
+    }
+    if lower.contains("url(") {
+        return Err("contains url() (external resource loading risk)".to_string());
+    }
+
+    // 4. Validate pseudo-classes against the safe allowlist.
+    //    Walk the selector and extract every `:name` or `::name` token.
+    validate_pseudo_classes(trimmed)?;
+
+    // 5. Reject nested :not() — `:not(:not(...))` is a known abuse vector.
+    validate_not_nesting(trimmed)?;
+
+    // 6. Reject :has() — it allows parent/ancestor selection which can have
+    //    side effects in some engines and is a known attack surface.
+    if lower.contains(":has(") {
+        return Err("contains :has() (parent selection with potential side effects)".to_string());
+    }
+
+    Ok(())
+}
+
+/// Extract pseudo-class tokens from the selector and verify each one appears
+/// in [`SAFE_PSEUDO_CLASSES`].
+fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
+    let bytes = selector.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    while i < len {
+        // Skip past attribute selectors `[...]` entirely — colons inside
+        // attribute values (e.g. `[href="http://x"]`) are not pseudo-classes.
+        if bytes[i] == b'[' {
+            let mut depth = 1u32;
+            i += 1;
+            while i < len && depth > 0 {
+                if bytes[i] == b'[' {
+                    depth = depth.saturating_add(1);
+                } else if bytes[i] == b']' {
+                    depth = depth.saturating_sub(1);
+                }
+                i += 1;
+            }
+            continue;
+        }
+
+        if bytes[i] == b':' {
+            let start = i;
+            // Consume `::` (pseudo-elements) or `:` (pseudo-classes).
+            i += 1;
+            if i < len && bytes[i] == b':' {
+                i += 1;
+            }
+            // Consume the name: [a-zA-Z0-9_-]
+            let name_start = i;
+            while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-' || bytes[i] == b'_') {
+                i += 1;
+            }
+            if i == name_start {
+                // Bare `:` at end or followed by non-alpha — skip.
+                continue;
+            }
+            // For functional pseudo-classes like `:nth-child(2n)`, we compare
+            // just the name portion (up to the `(`).
+            let pseudo_name = &selector[start..i];
+            let pseudo_lower = pseudo_name.to_lowercase();
+
+            let is_safe = SAFE_PSEUDO_CLASSES.iter().any(|safe| {
+                pseudo_lower == *safe
+            });
+            // Also allow `:not(` — we validate nesting depth separately.
+            let is_not = pseudo_lower == ":not";
+
+            if !is_safe && !is_not {
+                return Err(format!(
+                    "contains unsupported pseudo-class/element '{}'",
+                    pseudo_name
+                ));
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    Ok(())
+}
+
+/// Reject selectors that contain nested `:not()` — e.g. `:not(:not(div))`.
+/// Single-level `:not(.foo)` is permitted.
+fn validate_not_nesting(selector: &str) -> Result<(), String> {
+    let lower = selector.to_lowercase();
+    let bytes = lower.as_bytes();
+    let len = bytes.len();
+    let not_pattern = b":not(";
+
+    let mut i = 0;
+    while i + not_pattern.len() <= len {
+        if &bytes[i..i + not_pattern.len()] == not_pattern {
+            // Found `:not(` — scan inside its parenthesised argument for
+            // another `:not(`.
+            let inner_start = i + not_pattern.len();
+            let mut depth = 1u32;
+            let mut j = inner_start;
+            while j < len && depth > 0 {
+                if bytes[j] == b'(' {
+                    depth = depth.saturating_add(1);
+                } else if bytes[j] == b')' {
+                    depth = depth.saturating_sub(1);
+                }
+                if depth > 0 && j + not_pattern.len() <= len && &bytes[j..j + not_pattern.len()] == not_pattern {
+                    return Err(
+                        "contains nested :not() (negation abuse)".to_string(),
+                    );
+                }
+                j += 1;
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate the selector and return a user-facing `anyhow::Error` on failure.
+/// Also emits a `warn!` log so rejected selectors appear in telemetry.
+fn require_safe_selector(selector: &str) -> Result<()> {
+    if let Err(reason) = validate_css_selector(selector) {
+        tracing::warn!("Invalid selector pattern: {reason}");
+        return Err(anyhow!(
+            "Invalid CSS selector: {reason}"
+        ));
+    }
+    Ok(())
 }
 
 impl ToolExecutor {
@@ -202,11 +426,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                if !is_safe_css_selector(selector) {
-                    return Err(anyhow!(
-                        "Invalid CSS selector: contains disallowed characters"
-                    ));
-                }
+                require_safe_selector(selector)?;
                 let script = format!(
                     r#"
                     (function() {{
@@ -241,11 +461,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                if !is_safe_css_selector(selector) {
-                    return Err(anyhow!(
-                        "Invalid CSS selector: contains disallowed characters"
-                    ));
-                }
+                require_safe_selector(selector)?;
                 let timeout_ms = args
                     .get("timeout_ms")
                     .and_then(|v| v.as_u64())
@@ -306,6 +522,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::click(&client, selector, ClickOptions::default())
                     .await
@@ -320,6 +537,7 @@ impl ToolExecutor {
             "browser_extract" => {
                 let (client, tab_id) = get_client().await?;
                 let text = if let Some(selector) = args.get("selector").and_then(|v| v.as_str()) {
+                    require_safe_selector(selector)?;
                     DomOperations::get_text(&client, selector)
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -340,6 +558,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let text = args
                     .get("text")
                     .and_then(|v| v.as_str())
@@ -360,6 +579,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let timeout_ms = args
                     .get("timeout")
                     .and_then(|v| v.as_u64())
@@ -380,6 +600,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 let text = DomOperations::get_text(&client, selector)
                     .await
@@ -416,6 +637,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let attribute = args
                     .get("attribute")
                     .and_then(|v| v.as_str())
@@ -455,6 +677,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::hover(&client, selector)
                     .await
@@ -471,6 +694,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::focus(&client, selector)
                     .await
@@ -487,6 +711,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::scroll_into_view(&client, selector)
                     .await
@@ -503,6 +728,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 let elements = DomOperations::query_all(&client, selector)
                     .await
@@ -520,6 +746,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let value = args
                     .get("value")
                     .and_then(|v| v.as_str())
@@ -540,6 +767,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::check(&client, selector)
                     .await
@@ -556,6 +784,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
                 DomOperations::uncheck(&client, selector)
                     .await
@@ -927,5 +1156,311 @@ impl ToolExecutor {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------------------------------------------------------------
+    // Safe selectors — must all pass
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_safe_id_selector() {
+        assert!(validate_css_selector("#myid").is_ok());
+    }
+
+    #[test]
+    fn test_safe_class_selector() {
+        assert!(validate_css_selector(".myclass").is_ok());
+    }
+
+    #[test]
+    fn test_safe_tag_selector() {
+        assert!(validate_css_selector("div").is_ok());
+    }
+
+    #[test]
+    fn test_safe_child_combinator() {
+        assert!(validate_css_selector("div > p").is_ok());
+    }
+
+    #[test]
+    fn test_safe_adjacent_sibling_combinator() {
+        assert!(validate_css_selector("h1 + p").is_ok());
+    }
+
+    #[test]
+    fn test_safe_general_sibling_combinator() {
+        assert!(validate_css_selector("h1 ~ p").is_ok());
+    }
+
+    #[test]
+    fn test_safe_descendant_combinator() {
+        assert!(validate_css_selector("div span").is_ok());
+    }
+
+    #[test]
+    fn test_safe_attribute_selector() {
+        assert!(validate_css_selector("input[type=text]").is_ok());
+    }
+
+    #[test]
+    fn test_safe_data_testid_attribute() {
+        assert!(validate_css_selector("input[data-testid=foo]").is_ok());
+    }
+
+    #[test]
+    fn test_safe_nth_child() {
+        assert!(validate_css_selector("li:nth-child(2n+1)").is_ok());
+    }
+
+    #[test]
+    fn test_safe_first_child() {
+        assert!(validate_css_selector("p:first-child").is_ok());
+    }
+
+    #[test]
+    fn test_safe_last_child() {
+        assert!(validate_css_selector("p:last-child").is_ok());
+    }
+
+    #[test]
+    fn test_safe_checked_pseudo() {
+        assert!(validate_css_selector("input:checked").is_ok());
+    }
+
+    #[test]
+    fn test_safe_disabled_pseudo() {
+        assert!(validate_css_selector("button:disabled").is_ok());
+    }
+
+    #[test]
+    fn test_safe_hover_pseudo() {
+        assert!(validate_css_selector("a:hover").is_ok());
+    }
+
+    #[test]
+    fn test_safe_focus_pseudo() {
+        assert!(validate_css_selector("input:focus").is_ok());
+    }
+
+    #[test]
+    fn test_safe_not_simple() {
+        assert!(validate_css_selector("div:not(.hidden)").is_ok());
+    }
+
+    #[test]
+    fn test_safe_pseudo_element_before() {
+        assert!(validate_css_selector("p::before").is_ok());
+    }
+
+    #[test]
+    fn test_safe_pseudo_element_after() {
+        assert!(validate_css_selector("p::after").is_ok());
+    }
+
+    #[test]
+    fn test_safe_complex_real_world_selector() {
+        assert!(validate_css_selector(
+            "div.container > ul.list > li:first-child"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_safe_multiple_classes() {
+        assert!(validate_css_selector(".btn.btn-primary.active").is_ok());
+    }
+
+    #[test]
+    fn test_safe_universal_selector() {
+        assert!(validate_css_selector("*").is_ok());
+    }
+
+    #[test]
+    fn test_safe_placeholder_pseudo() {
+        assert!(validate_css_selector("input::placeholder").is_ok());
+    }
+
+    // ---------------------------------------------------------------
+    // Dangerous selectors — must all be rejected
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_reject_empty_selector() {
+        let err = validate_css_selector("").unwrap_err();
+        assert!(err.contains("empty"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_whitespace_only() {
+        let err = validate_css_selector("   ").unwrap_err();
+        assert!(err.contains("empty"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_at_import() {
+        let err = validate_css_selector("@import url(evil.css)").unwrap_err();
+        assert!(err.contains("@import"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_at_import_case_insensitive() {
+        let err = validate_css_selector("@IMPORT url(evil.css)").unwrap_err();
+        assert!(err.contains("@import"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_javascript_protocol() {
+        let err = validate_css_selector("a[href=javascript:alert(1)]").unwrap_err();
+        assert!(err.contains("javascript:"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_javascript_protocol_case_insensitive() {
+        let err = validate_css_selector("a[href=JAVASCRIPT:void(0)]").unwrap_err();
+        assert!(err.contains("javascript:"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_expression_parenthesis() {
+        let err = validate_css_selector("div[style=expression(alert(1))]").unwrap_err();
+        assert!(err.contains("expression"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_expression_colon() {
+        let err = validate_css_selector("div[style=expression:alert]").unwrap_err();
+        assert!(err.contains("expression"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_moz_binding() {
+        let err = validate_css_selector("div[-moz-binding:url(x)]").unwrap_err();
+        assert!(err.contains("-moz-binding"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_behavior() {
+        let err = validate_css_selector("div[style=behavior:url(x)]").unwrap_err();
+        assert!(err.contains("behavior"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_url_function() {
+        let err = validate_css_selector("div[style=url(http://evil.com)]").unwrap_err();
+        assert!(err.contains("url()"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_angle_bracket_open() {
+        let err = validate_css_selector("<script>alert(1)</script>").unwrap_err();
+        assert!(err.contains("disallowed character"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_single_quote() {
+        let err = validate_css_selector("div'); alert('xss").unwrap_err();
+        assert!(err.contains("disallowed character"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_double_quote() {
+        let err = validate_css_selector(r#"div"); alert("xss"#).unwrap_err();
+        assert!(err.contains("disallowed character"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_backslash() {
+        let err = validate_css_selector(r"div\").unwrap_err();
+        assert!(err.contains("disallowed character"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_null_byte() {
+        let err = validate_css_selector("div\0.class").unwrap_err();
+        assert!(err.contains("null byte"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_nested_not() {
+        let err = validate_css_selector(":not(:not(div))").unwrap_err();
+        assert!(err.contains("nested :not()"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_nested_not_deep() {
+        let err = validate_css_selector("#id:not(:not(.x))").unwrap_err();
+        assert!(err.contains("nested :not()"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_has_pseudo() {
+        let err = validate_css_selector("div:has(> .child)").unwrap_err();
+        assert!(err.contains(":has()"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_unknown_pseudo_class() {
+        let err = validate_css_selector("div:matches(.foo)").unwrap_err();
+        assert!(err.contains("unsupported pseudo"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_is_pseudo() {
+        let err = validate_css_selector("div:is(.a, .b)").unwrap_err();
+        assert!(err.contains("unsupported pseudo"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_where_pseudo() {
+        let err = validate_css_selector("div:where(.foo)").unwrap_err();
+        assert!(err.contains("unsupported pseudo"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn test_reject_oversized_selector() {
+        let long = "a".repeat(2049);
+        let err = validate_css_selector(&long).unwrap_err();
+        assert!(err.contains("maximum length"), "unexpected: {err}");
+    }
+
+    // ---------------------------------------------------------------
+    // Edge cases — make sure colon inside attribute values is not
+    // misidentified as a pseudo-class.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_colon_inside_attribute_brackets_is_safe() {
+        // Attribute selectors like [data-url=http://x.com] contain colons
+        // but those are not pseudo-classes.
+        assert!(validate_css_selector("a[data-url=http://x.com]").is_ok());
+    }
+
+    #[test]
+    fn test_multiple_safe_pseudos_combined() {
+        assert!(
+            validate_css_selector("input:enabled:checked:first-child").is_ok()
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // require_safe_selector wrapper
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_require_safe_selector_ok() {
+        assert!(require_safe_selector("#safe").is_ok());
+    }
+
+    #[test]
+    fn test_require_safe_selector_err() {
+        let result = require_safe_selector("@import url(x)");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("@import"), "unexpected: {msg}");
     }
 }

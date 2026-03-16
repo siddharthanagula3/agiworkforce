@@ -139,7 +139,7 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         ("MultiEdit", edits_count.unwrap_or_default())
     } else if contains_any(&lower, &["apply_patch"]) {
         ("ApplyPatch", path.clone().unwrap_or_default())
-    } else if contains_any(&lower, &["read_file", "read_text", "read_media"]) {
+    } else if contains_any(&lower, &["read_file", "read_text", "read_media", "read_binary"]) {
         ("Read", path.unwrap_or_default())
     } else if contains_any(&lower, &["write_file", "write_text"]) {
         ("Write", path.unwrap_or_default())
