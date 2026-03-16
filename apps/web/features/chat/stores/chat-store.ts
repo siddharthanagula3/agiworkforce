@@ -35,6 +35,8 @@ export interface ChatSession {
   preview: string;
   messageCount: number;
   userId?: string;
+  isPinned?: boolean;
+  isArchived?: boolean;
 }
 
 interface ChatState {
@@ -50,6 +52,10 @@ interface ChatActions {
   createSession: (userId?: string) => string;
   deleteSession: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => void;
+  pinSession: (sessionId: string) => void;
+  unpinSession: (sessionId: string) => void;
+  archiveSession: (sessionId: string) => void;
+  unarchiveSession: (sessionId: string) => void;
   setActiveSession: (sessionId: string | null) => void;
   addMessage: (
     sessionId: string,
@@ -161,6 +167,37 @@ export const useChatStore = create<ChatState & ChatActions>()(
             session.title = title;
             session.updatedAt = new Date();
           }
+        });
+      },
+
+      pinSession: (sessionId) => {
+        set((state) => {
+          const session = state.sessions.find((s) => s.id === sessionId);
+          if (session) session.isPinned = true;
+        });
+      },
+
+      unpinSession: (sessionId) => {
+        set((state) => {
+          const session = state.sessions.find((s) => s.id === sessionId);
+          if (session) session.isPinned = false;
+        });
+      },
+
+      archiveSession: (sessionId) => {
+        set((state) => {
+          const session = state.sessions.find((s) => s.id === sessionId);
+          if (session) {
+            session.isArchived = true;
+            session.isPinned = false;
+          }
+        });
+      },
+
+      unarchiveSession: (sessionId) => {
+        set((state) => {
+          const session = state.sessions.find((s) => s.id === sessionId);
+          if (session) session.isArchived = false;
         });
       },
 
@@ -308,6 +345,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
               preview: (row['preview'] as string) || '',
               messageCount: (row['message_count'] as number) || 0,
               userId: row['user_id'] as string,
+              isPinned: (row['is_pinned'] as boolean) || false,
+              isArchived: (row['is_archived'] as boolean) || false,
             }));
 
             set((state) => {
@@ -402,6 +441,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
             message_count: session.messageCount,
             created_at: session.createdAt.toISOString(),
             updated_at: session.updatedAt.toISOString(),
+            is_pinned: session.isPinned ?? false,
+            is_archived: session.isArchived ?? false,
           });
         } catch (err) {
           console.error('[ChatStore] Failed to save session to DB:', err);

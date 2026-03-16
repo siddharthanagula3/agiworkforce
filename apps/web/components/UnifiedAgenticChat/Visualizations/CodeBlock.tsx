@@ -109,10 +109,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
   return (
     <div
-      className={`code-block relative rounded-lg overflow-hidden border border-gray-700 ${className}`}
+      className={`code-block relative rounded-md overflow-hidden border border-zinc-700/60 dark:border-zinc-700/40 ${className}`}
     >
-      {}
-      <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-xs px-3 py-2 text-sm border-b border-gray-700">
+      {/* Header bar — matches desktop code block style */}
+      <div className="flex items-center justify-between bg-zinc-800 dark:bg-zinc-900 px-3 py-2 text-sm border-b border-zinc-700/50">
         <div className="flex items-center gap-2">
           {/* Language badge with color indicator */}
           <div
@@ -124,14 +124,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           </div>
           {fileName && (
             <span
-              className="text-gray-400 font-mono text-xs truncate max-w-[150px]"
+              className="text-zinc-400 font-mono text-xs truncate max-w-[150px]"
               title={fileName}
             >
               {fileName}
             </span>
           )}
           {/* Line count */}
-          <span className="text-gray-500 text-[10px]">
+          <span className="text-zinc-500 text-[10px]">
             {lineCount} {lineCount === 1 ? 'line' : 'lines'}
           </span>
         </div>
@@ -139,7 +139,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           {/* Word wrap toggle */}
           <button
             onClick={() => setWordWrap(!wordWrap)}
-            className={`p-1.5 rounded transition-colors ${wordWrap ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+            className={`p-1.5 rounded transition-colors ${wordWrap ? 'bg-zinc-600 text-white' : 'hover:bg-zinc-700 text-zinc-400'}`}
             title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
           >
             <WrapText size={14} />
@@ -147,7 +147,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           {enableRun && onRun && (
             <button
               onClick={handleRun}
-              className="p-1.5 hover:bg-green-600/20 rounded transition-colors text-green-400"
+              className="p-1.5 hover:bg-green-600/20 rounded transition-colors text-emerald-400"
               title="Run code"
             >
               <Terminal size={14} />
@@ -156,7 +156,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           {enableDownload && (
             <button
               onClick={handleDownload}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-200"
+              className="p-1.5 hover:bg-zinc-700 rounded transition-colors text-zinc-400 hover:text-zinc-200"
               title="Download"
             >
               <Download size={14} />
@@ -164,7 +164,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           )}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className={`p-1.5 rounded transition-colors ${isExpanded ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'}`}
+            className={`p-1.5 rounded transition-colors ${isExpanded ? 'bg-zinc-600 text-white' : 'hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200'}`}
             title={isExpanded ? 'Collapse' : 'Expand'}
           >
             <Maximize2 size={14} />
@@ -172,13 +172,13 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           {enableCopy && (
             <button
               onClick={handleCopy}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-zinc-700 rounded transition-colors"
               title="Copy code"
             >
               {copied ? (
-                <Check size={14} className="text-green-400" />
+                <Check size={14} className="text-emerald-400" />
               ) : (
-                <Copy size={14} className="text-gray-400 hover:text-gray-200" />
+                <Copy size={14} className="text-zinc-400 hover:text-zinc-200" />
               )}
             </button>
           )}
@@ -213,10 +213,11 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           customStyle={{
             margin: 0,
             padding: '1rem',
-            fontSize: '0.875rem',
+            fontSize: '0.8125rem',
             lineHeight: '1.5',
-            background: theme === 'dark' ? '#0d1117' : '#ffffff',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            background: theme === 'dark' ? '#0d1117' : '#1e1e1e',
+            fontFamily:
+              '"Berkeley Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           }}
         >
           {code}

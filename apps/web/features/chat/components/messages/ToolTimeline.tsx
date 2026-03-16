@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
   FileText,
@@ -14,7 +15,6 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import { cn } from '@shared/lib/utils';
 
 interface ToolEntry {
@@ -148,71 +148,80 @@ export function ToolTimeline({ tools, className }: ToolTimelineProps) {
   if (tools.length === 0) return null;
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsExpanded}>
-      <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
-        {/* Header — always visible */}
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+    <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
+      {/* Header — always visible */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded((p) => !p)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+      >
+        <motion.span
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0"
+        >
+          <ChevronDown className="w-3 h-3" />
+        </motion.span>
+        <Wrench className="w-3 h-3 shrink-0" />
+        <span>
+          {hasRunning ? (
+            <span className="text-violet-400">Running tools...</span>
+          ) : (
+            <>
+              {tools.length} tool{tools.length !== 1 ? 's' : ''}
+              {totalDuration > 0 && (
+                <span className="text-muted-foreground/60 ml-1">
+                  · {formatDuration(totalDuration)} total
+                </span>
+              )}
+              {errorCount > 0 && <span className="text-rose-400 ml-1">· {errorCount} failed</span>}
+            </>
+          )}
+        </span>
+      </button>
+
+      {/* Expandable tool list — framer-motion animation matching desktop */}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{
+              height: { duration: 0.2, ease: 'easeInOut' },
+              opacity: { duration: 0.15 },
+            }}
+            className="overflow-hidden"
           >
-            <ChevronDown
-              className={cn(
-                'w-3 h-3 shrink-0 transition-transform duration-200',
-                isOpen && 'rotate-180',
-              )}
-            />
-            <Wrench className="w-3 h-3 shrink-0" />
-            <span>
-              {hasRunning ? (
-                <span className="text-violet-400">Running tools...</span>
-              ) : (
-                <>
-                  {tools.length} tool{tools.length !== 1 ? 's' : ''}
-                  {totalDuration > 0 && (
-                    <span className="text-muted-foreground/60 ml-1">
-                      · {formatDuration(totalDuration)} total
-                    </span>
-                  )}
-                  {errorCount > 0 && (
-                    <span className="text-rose-400 ml-1">· {errorCount} failed</span>
-                  )}
-                </>
-              )}
-            </span>
-          </button>
-        </CollapsibleTrigger>
+            <div className="pb-2 space-y-0.5 border-t border-border/20">
+              {groups.map((group, gi) => {
+                const isParallel = group.parallelGroup != null && group.entries.length > 1;
 
-        {/* Expandable tool list */}
-        <CollapsibleContent>
-          <div className="pb-2 space-y-0.5 border-t border-border/20">
-            {groups.map((group, gi) => {
-              const isParallel = group.parallelGroup != null && group.entries.length > 1;
-
-              if (isParallel) {
-                return (
-                  <div
-                    key={group.parallelGroup ?? gi}
-                    className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-0.5 mx-3"
-                  >
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                      <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                if (isParallel) {
+                  return (
+                    <div
+                      key={group.parallelGroup ?? gi}
+                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-0.5 mx-3"
+                    >
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
+                        <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                      </div>
+                      {group.entries.map((tool, ti) => (
+                        <ToolItem key={`${tool.name}-${ti}`} tool={tool} />
+                      ))}
                     </div>
-                    {group.entries.map((tool, ti) => (
-                      <ToolItem key={`${tool.name}-${ti}`} tool={tool} />
-                    ))}
-                  </div>
-                );
-              }
+                  );
+                }
 
-              return group.entries.map((tool, ti) => (
-                <ToolItem key={`${tool.name}-${gi}-${ti}`} tool={tool} />
-              ));
-            })}
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
+                return group.entries.map((tool, ti) => (
+                  <ToolItem key={`${tool.name}-${gi}-${ti}`} tool={tool} />
+                ));
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

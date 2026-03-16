@@ -143,7 +143,9 @@ export const AVAILABLE_MODELS: AIModel[] = [
 
 interface ModelState {
   selectedModelId: string;
+  thinkingEnabled: boolean;
   setSelectedModelId: (id: string) => void;
+  setThinkingEnabled: (enabled: boolean) => void;
   getSelectedModel: () => AIModel;
 }
 
@@ -151,9 +153,14 @@ export const useModelStore = create<ModelState>()(
   persist(
     (set, get) => ({
       selectedModelId: 'claude-sonnet-4-6',
+      thinkingEnabled: false,
 
       setSelectedModelId: (id: string) => {
         set({ selectedModelId: id });
+      },
+
+      setThinkingEnabled: (enabled: boolean) => {
+        set({ thinkingEnabled: enabled });
       },
 
       getSelectedModel: () => {
