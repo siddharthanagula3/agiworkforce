@@ -10,7 +10,6 @@ import type { StateSnapshot } from '@agiworkforce/types';
 export type { StateSnapshot };
 
 class StateRecoveryService {
-  private static readonly MAX_SNAPSHOTS = 5;
   private static readonly SNAPSHOT_KEY_PREFIX = 'state_snapshot_';
   private static readonly RECOVERY_LOG_KEY = 'state_recovery_log';
 
@@ -72,8 +71,7 @@ class StateRecoveryService {
   /**
    * Reset state to default values
    */
-
-  static resetState(key: string, defaults: Record<string, unknown>): void {
+  static resetState(key: string, _defaults?: Record<string, unknown>): void {
     try {
       // Clear invalid state
       const storageKey = `${this.SNAPSHOT_KEY_PREFIX}${key}`;

@@ -38,7 +38,6 @@ export function HelpTour(): React.ReactNode {
     isActive,
     currentStep,
     totalSteps,
-    currentTourId,
     hasNextStep,
     hasPreviousStep,
     getCurrentStep,
