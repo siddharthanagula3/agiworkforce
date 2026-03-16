@@ -1,6 +1,10 @@
 use super::*;
 use crate::automation::browser::PlaywrightBridge;
 use crate::automation::AutomationService;
+use crate::core::agent::approval::{
+    ApprovalController, ApprovalRequestPayload, ApprovalResolution, ApprovalScope,
+    ApprovalScopeType,
+};
 use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
@@ -9,7 +13,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::System;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tokio::sync::{oneshot, Mutex as TokioMutex, Notify, RwLock};
 use tokio::time::sleep;
 
@@ -372,14 +376,9 @@ impl AutonomousAgent {
             if let Some(task) = task_clone {
                 if !self.approval.should_approve(&task).await? {
                     tracing::info!(
-                        "[Agent] Task {} requires approval, suspending until user responds",
+                        "[Agent] Task {} requires approval, escalating to ApprovalController",
                         task_id
                     );
-
-                    // Create a oneshot channel so the Tauri command
-                    // `resolve_task_approval` can wake us up.
-                    let (tx, rx) = oneshot::channel::<bool>();
-                    PENDING_TASK_APPROVALS.insert(task_id.clone(), tx);
 
                     {
                         let mut queue = self.task_queue.lock();
@@ -388,96 +387,225 @@ impl AutonomousAgent {
                         }
                     }
 
-                    // Emit an event so the frontend knows a task needs approval.
-                    if let Some(ref handle) = self.app_handle {
-                        if let Err(e) = handle.emit(
-                            "agent:task_approval_required",
-                            json!({
-                                "taskId": task_id,
-                                "description": task.description,
-                            }),
-                        ) {
-                            tracing::warn!("Failed to emit agent:task_approval_required: {}", e);
-                        }
-                    }
+                    // Escalate to ApprovalController for interactive user approval.
+                    // Falls back to the legacy PENDING_TASK_APPROVALS oneshot channel
+                    // if the controller is unavailable (no app_handle or state not managed).
+                    let controller_available = self
+                        .app_handle
+                        .as_ref()
+                        .and_then(|h| h.try_state::<ApprovalController>())
+                        .is_some();
 
-                    // Spawn a background future that awaits the user decision
-                    // (with timeout), then resumes or fails the task.
-                    let agent_clone = self.clone_for_task()?;
-                    let approval_task_id = task_id.clone();
-                    self.running_tasks.lock().push(task_id);
+                    if let (Some(ref handle), true) = (&self.app_handle, controller_available) {
+                        let payload = build_approval_payload(&task);
+                        let agent_clone = self.clone_for_task()?;
+                        let approval_task_id = task_id.clone();
+                        let app_handle_clone = handle.clone();
 
-                    tokio::spawn(async move {
-                        let approved = match tokio::time::timeout(
-                            Duration::from_secs(APPROVAL_TIMEOUT_SECS),
-                            rx,
-                        )
-                        .await
-                        {
-                            Ok(Ok(v)) => v,
-                            Ok(Err(_)) => {
-                                tracing::warn!(
-                                    "[Agent] Approval channel dropped for task {}",
-                                    approval_task_id
-                                );
-                                false
-                            }
-                            Err(_) => {
-                                PENDING_TASK_APPROVALS.remove(&approval_task_id);
-                                tracing::warn!(
-                                    "[Agent] Approval timeout ({}s) for task {}",
-                                    APPROVAL_TIMEOUT_SECS,
-                                    approval_task_id
-                                );
-                                false
-                            }
-                        };
+                        self.running_tasks.lock().push(task_id);
 
-                        if approved {
-                            tracing::info!(
-                                "[Agent] Task {} approved, resuming execution",
-                                approval_task_id
-                            );
+                        // Spawn to avoid blocking the task queue processor.
+                        // Uses ApprovalController::request_approval which emits
+                        // `agent:permission_required`, waits for user response via
+                        // oneshot channel, and integrates with the trust store.
+                        let task_notify = self.task_notify.clone();
+                        let running_tasks = self.running_tasks.clone();
+                        let task_queue = self.task_queue.clone();
+                        tokio::spawn(async move {
+                            let controller = app_handle_clone.state::<ApprovalController>();
+                            let resolution = match tokio::time::timeout(
+                                Duration::from_secs(APPROVAL_TIMEOUT_SECS),
+                                controller.request_approval(&app_handle_clone, payload),
+                            )
+                            .await
                             {
-                                let mut queue = agent_clone.task_queue.lock();
-                                if let Some(t) = queue.iter_mut().find(|t| t.id == approval_task_id)
-                                {
-                                    t.status = TaskStatus::Planning;
+                                Ok(Ok(res)) => res,
+                                Ok(Err(e)) => {
+                                    tracing::warn!(
+                                        "[Agent] ApprovalController error for task {}: {}",
+                                        approval_task_id,
+                                        e
+                                    );
+                                    ApprovalResolution::Rejected {
+                                        reason: Some(format!(
+                                            "Approval request failed: {}",
+                                            e
+                                        )),
+                                    }
+                                }
+                                Err(_) => {
+                                    tracing::warn!(
+                                        "[Agent] Approval timeout ({}s) for task {}",
+                                        APPROVAL_TIMEOUT_SECS,
+                                        approval_task_id
+                                    );
+                                    ApprovalResolution::Rejected {
+                                        reason: Some(format!(
+                                            "Approval timed out after {}s",
+                                            APPROVAL_TIMEOUT_SECS
+                                        )),
+                                    }
+                                }
+                            };
+
+                            match resolution {
+                                ApprovalResolution::Approved { .. } => {
+                                    tracing::info!(
+                                        "[Agent] Task {} approved via ApprovalController, resuming",
+                                        approval_task_id
+                                    );
+                                    {
+                                        let mut queue = task_queue.lock();
+                                        if let Some(t) =
+                                            queue.iter_mut().find(|t| t.id == approval_task_id)
+                                        {
+                                            t.status = TaskStatus::Planning;
+                                        }
+                                    }
+                                    if let Err(e) =
+                                        agent_clone.execute_task(approval_task_id.clone()).await
+                                    {
+                                        tracing::error!(
+                                            "[Agent] Task {} failed after approval: {}",
+                                            approval_task_id,
+                                            e
+                                        );
+                                        running_tasks
+                                            .lock()
+                                            .retain(|id| id != &approval_task_id);
+                                    }
+                                }
+                                ApprovalResolution::Rejected { reason } => {
+                                    let reason_msg = reason.unwrap_or_else(|| {
+                                        "User rejected the task".to_string()
+                                    });
+                                    tracing::info!(
+                                        "[Agent] Task {} rejected: {}",
+                                        approval_task_id,
+                                        reason_msg
+                                    );
+                                    {
+                                        let mut queue = task_queue.lock();
+                                        if let Some(t) =
+                                            queue.iter_mut().find(|t| t.id == approval_task_id)
+                                        {
+                                            t.status = TaskStatus::Failed(format!(
+                                                "Approval denied: {}",
+                                                reason_msg
+                                            ));
+                                        }
+                                    }
+                                    running_tasks
+                                        .lock()
+                                        .retain(|id| id != &approval_task_id);
+                                    task_notify.notify_waiters();
                                 }
                             }
-                            if let Err(e) = agent_clone.execute_task(approval_task_id.clone()).await
-                            {
-                                tracing::error!(
-                                    "[Agent] Task {} failed after approval: {}",
-                                    approval_task_id,
+                        });
+                    } else {
+                        // No app_handle or ApprovalController not available --
+                        // fall back to PENDING_TASK_APPROVALS oneshot channel
+                        // for backward compatibility.
+                        tracing::info!(
+                            "[Agent] ApprovalController unavailable for task {}, using legacy approval flow",
+                            task_id
+                        );
+                        let (tx, rx) = oneshot::channel::<bool>();
+                        PENDING_TASK_APPROVALS.insert(task_id.clone(), tx);
+
+                        if let Some(ref handle) = self.app_handle {
+                            if let Err(e) = handle.emit(
+                                "agent:task_approval_required",
+                                json!({
+                                    "taskId": task_id,
+                                    "description": task.description,
+                                }),
+                            ) {
+                                tracing::warn!(
+                                    "Failed to emit agent:task_approval_required: {}",
                                     e
                                 );
-                                // Clean up running_tasks slot on error
+                            }
+                        }
+
+                        let agent_clone = self.clone_for_task()?;
+                        let approval_task_id = task_id.clone();
+                        self.running_tasks.lock().push(task_id);
+
+                        tokio::spawn(async move {
+                            let approved = match tokio::time::timeout(
+                                Duration::from_secs(APPROVAL_TIMEOUT_SECS),
+                                rx,
+                            )
+                            .await
+                            {
+                                Ok(Ok(v)) => v,
+                                Ok(Err(_)) => {
+                                    tracing::warn!(
+                                        "[Agent] Approval channel dropped for task {}",
+                                        approval_task_id
+                                    );
+                                    false
+                                }
+                                Err(_) => {
+                                    PENDING_TASK_APPROVALS.remove(&approval_task_id);
+                                    tracing::warn!(
+                                        "[Agent] Approval timeout ({}s) for task {}",
+                                        APPROVAL_TIMEOUT_SECS,
+                                        approval_task_id
+                                    );
+                                    false
+                                }
+                            };
+
+                            if approved {
+                                tracing::info!(
+                                    "[Agent] Task {} approved, resuming execution",
+                                    approval_task_id
+                                );
+                                {
+                                    let mut queue = agent_clone.task_queue.lock();
+                                    if let Some(t) =
+                                        queue.iter_mut().find(|t| t.id == approval_task_id)
+                                    {
+                                        t.status = TaskStatus::Planning;
+                                    }
+                                }
+                                if let Err(e) =
+                                    agent_clone.execute_task(approval_task_id.clone()).await
+                                {
+                                    tracing::error!(
+                                        "[Agent] Task {} failed after approval: {}",
+                                        approval_task_id,
+                                        e
+                                    );
+                                    agent_clone
+                                        .running_tasks
+                                        .lock()
+                                        .retain(|id| id != &approval_task_id);
+                                }
+                            } else {
+                                tracing::info!(
+                                    "[Agent] Task {} rejected or timed out",
+                                    approval_task_id
+                                );
+                                {
+                                    let mut queue = agent_clone.task_queue.lock();
+                                    if let Some(t) =
+                                        queue.iter_mut().find(|t| t.id == approval_task_id)
+                                    {
+                                        t.status = TaskStatus::Failed(
+                                            "Task approval denied or timed out".to_string(),
+                                        );
+                                    }
+                                }
                                 agent_clone
                                     .running_tasks
                                     .lock()
                                     .retain(|id| id != &approval_task_id);
                             }
-                        } else {
-                            tracing::info!(
-                                "[Agent] Task {} rejected or timed out",
-                                approval_task_id
-                            );
-                            {
-                                let mut queue = agent_clone.task_queue.lock();
-                                if let Some(t) = queue.iter_mut().find(|t| t.id == approval_task_id)
-                                {
-                                    t.status = TaskStatus::Failed(
-                                        "Task approval denied or timed out".to_string(),
-                                    );
-                                }
-                            }
-                            agent_clone
-                                .running_tasks
-                                .lock()
-                                .retain(|id| id != &approval_task_id);
-                        }
-                    });
+                        });
+                    }
 
                     return Ok(());
                 }
@@ -1283,5 +1411,84 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
     pub fn list_tasks(&self) -> Result<Vec<Task>> {
         let queue = self.task_queue.lock();
         Ok(queue.clone())
+    }
+}
+
+/// Build an `ApprovalRequestPayload` from a `Task` for escalation to `ApprovalController`.
+///
+/// Maps the task's step actions to an appropriate scope type and risk level so the
+/// frontend can display a meaningful approval prompt.
+pub(crate) fn build_approval_payload(task: &Task) -> ApprovalRequestPayload {
+    let scope_type = task
+        .steps
+        .iter()
+        .find_map(|step| match &step.action {
+            Action::ExecuteCommand { .. } => Some(ApprovalScopeType::Terminal),
+            Action::WriteFile { .. } | Action::ReadFile { .. } => {
+                Some(ApprovalScopeType::Filesystem)
+            }
+            Action::Navigate { .. } => Some(ApprovalScopeType::Browser),
+            Action::Click { .. } | Action::Type { .. } | Action::PressKey { .. } => {
+                Some(ApprovalScopeType::Ui)
+            }
+            _ => None,
+        })
+        .unwrap_or(ApprovalScopeType::Unknown);
+
+    let risk_level = if task.steps.iter().any(|s| {
+        matches!(
+            s.action,
+            Action::ExecuteCommand { .. } | Action::WriteFile { .. }
+        )
+    }) {
+        "high"
+    } else if task
+        .steps
+        .iter()
+        .any(|s| matches!(s.action, Action::Navigate { .. }))
+    {
+        "medium"
+    } else {
+        "low"
+    };
+
+    let step_descriptions: Vec<String> = task
+        .steps
+        .iter()
+        .map(|s| s.description.clone())
+        .collect();
+
+    ApprovalRequestPayload {
+        action_id: task.id.clone(),
+        tool_name: "autonomous_task".to_string(),
+        title: format!("Autonomous task: {}", truncate_str(&task.description, 80)),
+        description: task.description.clone(),
+        reason: format!(
+            "Task requires approval ({} steps: {})",
+            task.steps.len(),
+            truncate_str(&step_descriptions.join(", "), 120)
+        ),
+        risk_level: risk_level.to_string(),
+        scope: ApprovalScope {
+            scope_type,
+            command: None,
+            cwd: None,
+            path: None,
+            domain: None,
+            description: Some(task.description.clone()),
+            risk: risk_level.to_string(),
+        },
+        workflow_hash: None,
+        action_signature: format!("task:{}", task.id),
+    }
+}
+
+/// Truncate a string to `max_len` characters, appending "..." if truncated.
+pub(crate) fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }

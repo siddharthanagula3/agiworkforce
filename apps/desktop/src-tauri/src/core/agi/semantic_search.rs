@@ -145,8 +145,9 @@ pub struct TfIdfIndex {
     document_count: usize,
     /// Document frequency for each term (number of documents containing the term)
     document_frequencies: Vec<usize>,
-    /// Optional dense embeddings stored per document (from external embedding models)
-    #[allow(dead_code)]
+    /// Optional dense embeddings stored per document (from external embedding models).
+    /// When populated via `set_dense_embedding`, the `search_with_embedding` method
+    /// blends dense cosine similarity (60%) with TF-IDF (40%) for higher-quality retrieval.
     dense_embeddings: HashMap<i64, Vec<f32>>,
 }
 
