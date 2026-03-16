@@ -93,7 +93,11 @@ pub async fn bg_llm_get_statistics(
     Ok(state.manager.get_statistics().await)
 }
 
-/// Process background LLM queue (should be called periodically)
+/// List IDs of queued background LLM requests.
+///
+/// When `new_with_router` was used the event-driven loop processes requests
+/// automatically.  This command is retained for observability (debugging,
+/// dashboards) and is no longer required to drive processing.
 #[tauri::command]
 pub async fn bg_llm_process_queue(state: State<'_, BackgroundLLMState>) -> Result<Vec<String>> {
     state.manager.process_queue().await
