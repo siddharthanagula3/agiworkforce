@@ -4,12 +4,10 @@
  */
 
 import { toast } from 'sonner';
+import type { StateSnapshot } from '@agiworkforce/types';
 
-export interface StateSnapshot {
-  timestamp: number;
-  data: Record<string, unknown>;
-  version: number;
-}
+// Re-export for backward compatibility
+export type { StateSnapshot };
 
 class StateRecoveryService {
   private static readonly MAX_SNAPSHOTS = 5;

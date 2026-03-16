@@ -14,51 +14,13 @@
 
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
 import type { EnhancedMessage } from '@/stores/unified/chat/types';
+import type { StoredChatSession, StoredMessage, SessionStorageMetadata } from '@agiworkforce/types';
 
 // Session storage schema version for migrations
 const SESSION_STORAGE_VERSION = 1;
 
-/**
- * Serializable chat session structure
- * Maps to UI/Zustand state but in localStorage-friendly format
- */
-interface StoredChatSession {
-  id: string;
-  title: string;
-  preview: string;
-  messageCount: number;
-  createdAt: string; // ISO string
-  updatedAt: string; // ISO string
-  messages: StoredMessage[];
-  selectedModel?: string;
-  selectedProvider?: string;
-}
-
-/**
- * Serializable message structure
- * Converts Date objects to ISO strings for JSON serialization
- */
-interface StoredMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: string; // ISO string
-  metadata?: {
-    model?: string;
-    provider?: string;
-    cost?: number;
-    tokenCount?: number;
-  };
-}
-
-/**
- * Session storage metadata
- * Tracks storage version for migrations
- */
-interface SessionStorageMetadata {
-  version: number;
-  lastSyncTime: string; // ISO string
-}
+// Re-export for backward compatibility
+export type { StoredChatSession, StoredMessage, SessionStorageMetadata };
 
 // Storage keys
 const SESSION_STORAGE_KEY = 'agi_chat_sessions';
@@ -166,7 +128,7 @@ export function loadSession(sessionId: string): StoredChatSession | null {
  */
 export function loadAllSessions(): StoredChatSession[] {
   try {
-    const data = safeGetJSON<StoredChatSession[]>(SESSION_STORAGE_KEY);
+    const data = safeGetJSON<StoredChatSession[]>(SESSION_STORAGE_KEY, []);
     return Array.isArray(data) ? data : [];
   } catch (error) {
     console.error('[SessionStorage] Failed to load sessions:', error);
@@ -225,8 +187,8 @@ export function saveCurrentSessionId(sessionId: string): void {
  */
 export function loadCurrentSessionId(): string | null {
   try {
-    const id = safeGetJSON<string>(CURRENT_SESSION_KEY);
-    return typeof id === 'string' ? id : null;
+    const id = safeGetJSON<string>(CURRENT_SESSION_KEY, '');
+    return typeof id === 'string' && id ? id : null;
   } catch (error) {
     console.error('[SessionStorage] Failed to load current session ID:', error);
     return null;
@@ -260,7 +222,10 @@ export function saveModelSelection(model: { modelId: string; provider: string })
  */
 export function loadModelSelection(): { modelId: string; provider: string } | null {
   try {
-    const data = safeGetJSON<{ modelId: string; provider: string }>(MODEL_SELECTION_KEY);
+    const data = safeGetJSON<{ modelId: string; provider: string }>(MODEL_SELECTION_KEY, {
+      modelId: '',
+      provider: '',
+    });
     return data && data.modelId ? data : null;
   } catch (error) {
     console.error('[SessionStorage] Failed to load model selection:', error);
@@ -284,7 +249,7 @@ export function saveSidebarState(collapsed: boolean): void {
  */
 export function loadSidebarState(): boolean | null {
   try {
-    const data = safeGetJSON<boolean>(SIDEBAR_STATE_KEY);
+    const data = safeGetJSON<boolean>(SIDEBAR_STATE_KEY, false);
     return typeof data === 'boolean' ? data : null;
   } catch (error) {
     console.error('[SessionStorage] Failed to load sidebar state:', error);
@@ -308,7 +273,7 @@ export function saveThemePreference(theme: 'light' | 'dark' | 'system'): void {
  */
 export function loadThemePreference(): 'light' | 'dark' | 'system' | null {
   try {
-    const data = safeGetJSON<string>(THEME_PREFERENCE_KEY);
+    const data = safeGetJSON<string>(THEME_PREFERENCE_KEY, '');
     if (data === 'light' || data === 'dark' || data === 'system') {
       return data;
     }
@@ -339,7 +304,10 @@ function updateSessionMetadata(): void {
  */
 export function getSessionMetadata(): SessionStorageMetadata | null {
   try {
-    const data = safeGetJSON<SessionStorageMetadata>(SESSION_METADATA_KEY);
+    const data = safeGetJSON<SessionStorageMetadata>(SESSION_METADATA_KEY, {
+      version: 0,
+      lastSyncTime: '',
+    });
     return data && data.version ? data : null;
   } catch (error) {
     console.error('[SessionStorage] Failed to get metadata:', error);
