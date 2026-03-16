@@ -278,27 +278,30 @@ impl McpToolRegistry {
 
     /// Resolve tool IDs, including hashed IDs used for OpenAI name-length compliance.
     /// Uses the pre-built `id_index` for O(1) lookup of hashed/encoded tool IDs.
-    fn resolve_tool_id(&self, tool_id: &str) -> McpResult<(String, String)> {
+    ///
+    /// Resolution order:
+    /// 1. Direct decode via `parse_tool_id` (base64/hex encoded IDs) -- no map needed.
+    /// 2. O(1) HashMap lookup in `id_index` (covers hashed IDs and any format
+    ///    that `parse_tool_id` cannot decode directly).
+    /// 3. On index miss, rebuild the full index (a server may have connected since
+    ///    the last build) and retry the O(1) lookup once.
+    pub fn resolve_tool_id(&self, tool_id: &str) -> McpResult<(String, String)> {
         // Fast path: decode the tool ID directly from its encoded components
         if let Ok(parsed) = Self::parse_tool_id(tool_id) {
             return Ok(parsed);
         }
 
-        // O(1) lookup via the pre-built index (covers hashed IDs and any format
-        // that parse_tool_id cannot decode directly)
+        // O(1) lookup via the pre-built index
         if let Some(entry) = self.id_index.read().get(tool_id) {
             return Ok(entry.clone());
         }
 
-        // Index miss: tool may have been registered after the last index rebuild.
-        // Do a one-time full scan and update the index if found.
-        for (server_name, tool) in self.mcp_client.list_all_tools() {
-            if create_safe_tool_id(&server_name, &tool.name) == tool_id {
-                self.id_index
-                    .write()
-                    .insert(tool_id.to_string(), (server_name.clone(), tool.name.clone()));
-                return Ok((server_name, tool.name));
-            }
+        // Index miss: a server may have been connected after the last rebuild.
+        // Rebuild the entire index and retry the O(1) lookup once.
+        self.rebuild_id_index();
+
+        if let Some(entry) = self.id_index.read().get(tool_id) {
+            return Ok(entry.clone());
         }
 
         Err(McpError::ToolNotFound(format!(
@@ -492,5 +495,167 @@ mod tests {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
         assert!(McpToolRegistry::parse_tool_id(&tool_id).is_err());
+    }
+
+    #[test]
+    fn test_id_index_is_empty_for_fresh_registry() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+        let index = registry.id_index.read();
+        assert!(index.is_empty(), "index should be empty with no servers");
+    }
+
+    #[test]
+    fn test_resolve_tool_id_decodes_base64_without_index() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+        let tool_id = create_safe_tool_id("filesystem", "read_file");
+
+        // parse_tool_id decodes directly -- no index entry needed
+        let result = registry.resolve_tool_id(&tool_id);
+        assert!(result.is_ok());
+        let (server, tool) = result.expect("should resolve");
+        assert_eq!(server, "filesystem");
+        assert_eq!(tool, "read_file");
+    }
+
+    #[test]
+    fn test_resolve_tool_id_returns_error_for_unknown() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+        let result = registry.resolve_tool_id("mcp__h__0000000000000000000000000000000000000000");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rebuild_id_index_is_idempotent() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+        registry.rebuild_id_index();
+        let count_first = registry.id_index.read().len();
+        registry.rebuild_id_index();
+        let count_second = registry.id_index.read().len();
+        assert_eq!(count_first, count_second);
+    }
+
+    /// Benchmark: verify that 100 tool IDs resolve quickly via direct decoding.
+    /// The index path is only exercised for hashed IDs (which need a live
+    /// McpClient with registered servers), but this test confirms the fast path
+    /// handles the common case without any linear scan.
+    #[test]
+    fn test_benchmark_100_tool_lookups_via_direct_decode() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+
+        // Build 100 tool IDs that are directly decodable (no index needed)
+        let tool_ids: Vec<String> = (0..100)
+            .map(|i| create_safe_tool_id(&format!("server_{}", i), &format!("tool_{}", i)))
+            .collect();
+
+        let start = std::time::Instant::now();
+        for _ in 0..1_000 {
+            for tool_id in &tool_ids {
+                let result = registry.resolve_tool_id(tool_id);
+                assert!(result.is_ok());
+            }
+        }
+        let elapsed = start.elapsed();
+
+        // 100 tools x 1000 iterations = 100,000 lookups
+        // With direct decode this should be well under 1 second
+        let per_lookup = elapsed / 100_000;
+        eprintln!(
+            "100,000 direct-decode lookups in {:?} ({:?}/lookup)",
+            elapsed, per_lookup
+        );
+        assert!(
+            elapsed.as_secs() < 5,
+            "100k direct-decode lookups should complete in under 5s, took {:?}",
+            elapsed
+        );
+    }
+
+    /// Verify the index path: when parse_tool_id cannot decode the ID (hashed
+    /// IDs), the HashMap lookup is used. We simulate this by manually inserting
+    /// an entry and resolving it.
+    #[test]
+    fn test_index_lookup_for_hashed_ids() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+
+        // Simulate a hashed tool ID that parse_tool_id cannot decode
+        let hashed_id = "mcp__h__aabbccdd00112233445566778899aabb00112233";
+        registry.id_index.write().insert(
+            hashed_id.to_string(),
+            ("my_server".to_string(), "my_tool".to_string()),
+        );
+
+        let result = registry.resolve_tool_id(hashed_id);
+        assert!(result.is_ok());
+        let (server, tool) = result.expect("should resolve via index");
+        assert_eq!(server, "my_server");
+        assert_eq!(tool, "my_tool");
+    }
+
+    /// Benchmark: compare indexed lookup vs simulated linear scan for hashed IDs.
+    #[test]
+    fn test_benchmark_index_vs_linear_scan() {
+        let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
+
+        // Populate the index with 100 hashed-style entries
+        let mut tool_ids = Vec::with_capacity(100);
+        {
+            let mut index = registry.id_index.write();
+            for i in 0..100 {
+                let fake_hash = format!(
+                    "mcp__h__{:040x}",
+                    i as u64 * 0x0102_0304_0506_0708u64
+                );
+                index.insert(
+                    fake_hash.clone(),
+                    (format!("server_{}", i), format!("tool_{}", i)),
+                );
+                tool_ids.push(fake_hash);
+            }
+        }
+
+        // Benchmark O(1) HashMap lookup
+        let start_indexed = std::time::Instant::now();
+        for _ in 0..1_000 {
+            for tool_id in &tool_ids {
+                let _result = registry.id_index.read().get(tool_id).cloned();
+            }
+        }
+        let elapsed_indexed = start_indexed.elapsed();
+
+        // Benchmark O(N) simulated linear scan (Vec of the same entries)
+        let entries: Vec<(String, String, String)> = tool_ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| {
+                (
+                    id.clone(),
+                    format!("server_{}", i),
+                    format!("tool_{}", i),
+                )
+            })
+            .collect();
+
+        let start_linear = std::time::Instant::now();
+        for _ in 0..1_000 {
+            for tool_id in &tool_ids {
+                let _result = entries.iter().find(|(id, _, _)| id == tool_id);
+            }
+        }
+        let elapsed_linear = start_linear.elapsed();
+
+        eprintln!(
+            "100 tools x 1000 iters: indexed={:?}, linear={:?}, speedup={:.1}x",
+            elapsed_indexed,
+            elapsed_linear,
+            elapsed_linear.as_nanos() as f64 / elapsed_indexed.as_nanos().max(1) as f64
+        );
+
+        // The indexed path should be meaningfully faster
+        assert!(
+            elapsed_indexed < elapsed_linear,
+            "indexed lookup ({:?}) should be faster than linear scan ({:?})",
+            elapsed_indexed,
+            elapsed_linear
+        );
     }
 }

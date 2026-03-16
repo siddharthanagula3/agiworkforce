@@ -50,7 +50,9 @@ impl Default for CapabilityState {
 pub fn tool_to_capability(tool_name: &str) -> Option<&'static str> {
     match tool_name {
         // File operations
-        "file_read" | "file_write" | "file_delete" | "file_list" => Some("fileOperations"),
+        "file_read" | "file_read_binary" | "file_write" | "file_delete" | "file_list" => {
+            Some("fileOperations")
+        }
 
         // Document operations
         "document_read"

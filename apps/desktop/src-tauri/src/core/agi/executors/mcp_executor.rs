@@ -276,21 +276,9 @@ impl McpExecutor {
     }
 
     /// Resolve tool IDs, including hashed IDs used for OpenAI name-length compliance.
+    /// Delegates to the registry's O(1) HashMap-based lookup.
     fn resolve_tool_id(&self, tool_id: &str) -> McpResult<(String, String)> {
-        if let Ok(parsed) = Self::parse_tool_id(tool_id) {
-            return Ok(parsed);
-        }
-
-        for (server_name, tool) in self.client.list_all_tools() {
-            if Self::create_tool_id(&server_name, &tool.name) == tool_id {
-                return Ok((server_name, tool.name));
-            }
-        }
-
-        Err(McpError::ToolNotFound(format!(
-            "Invalid or unknown MCP tool ID '{}'",
-            tool_id
-        )))
+        self.registry.resolve_tool_id(tool_id)
     }
 
     /// Creates a tool ID from server and tool names.
@@ -360,7 +348,11 @@ impl McpExecutor {
     /// Refreshes the cached tool names from connected MCP servers.
     ///
     /// This should be called when MCP servers connect or disconnect.
+    /// Also rebuilds the registry's HashMap index for O(1) tool ID lookups.
     pub fn refresh_tool_cache(&self) {
+        // Rebuild the registry index so resolve_tool_id stays O(1)
+        self.registry.rebuild_id_index();
+
         let tools = self.client.list_all_tools();
         let tool_names: Vec<String> = tools
             .into_iter()
@@ -647,6 +639,12 @@ impl McpExecutor {
             }
             McpError::RmcpError(msg) => {
                 format!("Protocol error: {}", msg)
+            }
+            McpError::ConnectionTimeout(msg) => {
+                format!("Connection timed out: {}", msg)
+            }
+            McpError::RequestTimeout(msg) => {
+                format!("Request timed out: {}", msg)
             }
         }
     }
