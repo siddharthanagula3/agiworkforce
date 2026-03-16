@@ -664,6 +664,157 @@ describe('ChatStore', () => {
   });
 
   // ==========================================================================
+  // 5a. pinSession / unpinSession
+  // ==========================================================================
+
+  describe('pinSession', () => {
+    it('sets isPinned to true on the target session', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().pinSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isPinned).toBe(true);
+    });
+
+    it('does not affect other sessions', () => {
+      const id1 = useChatStore.getState().createSession();
+      vi.advanceTimersByTime(1500);
+      const id2 = useChatStore.getState().createSession();
+
+      useChatStore.getState().pinSession(id1);
+
+      const session2 = useChatStore.getState().sessions.find((s) => s.id === id2);
+      expect(session2?.isPinned).toBeFalsy();
+    });
+
+    it('does nothing for a non-existent session ID', () => {
+      expect(() => {
+        useChatStore.getState().pinSession('nonexistent-id');
+      }).not.toThrow();
+    });
+
+    it('is idempotent — pinning an already-pinned session keeps isPinned=true', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().pinSession(id);
+      useChatStore.getState().pinSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isPinned).toBe(true);
+    });
+  });
+
+  describe('unpinSession', () => {
+    it('sets isPinned to false on the target session', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().pinSession(id);
+      useChatStore.getState().unpinSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isPinned).toBe(false);
+    });
+
+    it('does nothing for a non-existent session ID', () => {
+      expect(() => {
+        useChatStore.getState().unpinSession('nonexistent-id');
+      }).not.toThrow();
+    });
+
+    it('is idempotent — unpinning an already-unpinned session keeps isPinned=false', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().unpinSession(id); // already not pinned
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isPinned).toBeFalsy();
+    });
+  });
+
+  // ==========================================================================
+  // 5b. archiveSession / unarchiveSession
+  // ==========================================================================
+
+  describe('archiveSession', () => {
+    it('sets isArchived to true on the target session', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().archiveSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBe(true);
+    });
+
+    it('also clears isPinned when archiving a pinned session', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().pinSession(id);
+      useChatStore.getState().archiveSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBe(true);
+      expect(session?.isPinned).toBe(false);
+    });
+
+    it('does not affect other sessions', () => {
+      const id1 = useChatStore.getState().createSession();
+      vi.advanceTimersByTime(1500);
+      const id2 = useChatStore.getState().createSession();
+
+      useChatStore.getState().archiveSession(id1);
+
+      const session2 = useChatStore.getState().sessions.find((s) => s.id === id2);
+      expect(session2?.isArchived).toBeFalsy();
+    });
+
+    it('does nothing for a non-existent session ID', () => {
+      expect(() => {
+        useChatStore.getState().archiveSession('nonexistent-id');
+      }).not.toThrow();
+    });
+
+    it('is idempotent — archiving an already-archived session keeps isArchived=true', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().archiveSession(id);
+      useChatStore.getState().archiveSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBe(true);
+    });
+  });
+
+  describe('unarchiveSession', () => {
+    it('sets isArchived to false on the target session', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().archiveSession(id);
+      useChatStore.getState().unarchiveSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBe(false);
+    });
+
+    it('does not restore isPinned after unarchiving', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().pinSession(id);
+      useChatStore.getState().archiveSession(id); // clears isPinned
+      useChatStore.getState().unarchiveSession(id);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBe(false);
+      expect(session?.isPinned).toBe(false); // stays false, not restored
+    });
+
+    it('does nothing for a non-existent session ID', () => {
+      expect(() => {
+        useChatStore.getState().unarchiveSession('nonexistent-id');
+      }).not.toThrow();
+    });
+
+    it('is idempotent — unarchiving an already-active session keeps isArchived=false', () => {
+      const id = useChatStore.getState().createSession();
+      useChatStore.getState().unarchiveSession(id); // not archived
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === id);
+      expect(session?.isArchived).toBeFalsy();
+    });
+  });
+
+  // ==========================================================================
   // Additional: UI state helpers
   // ==========================================================================
 
