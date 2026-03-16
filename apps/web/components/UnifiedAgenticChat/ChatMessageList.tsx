@@ -133,19 +133,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     return (
       <div className={`flex flex-col items-center justify-center h-full text-center ${className}`}>
         <div className="max-w-md space-y-4">
-          <div className="w-16 h-16 mx-auto bg-linear-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-            <span className="text-3xl">🤖</span>
+          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary/20 to-agent/20 rounded-full flex items-center justify-center border border-border/50">
+            <Brain size={28} className="text-primary" />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            Welcome to AGI Workforce
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h2 className="text-xl font-semibold text-foreground">Welcome to AGI Workforce</h2>
+          <p className="text-sm text-muted-foreground">
             Start a conversation by typing a message below. AGI Workforce can automate tasks, manage
             files, run terminal commands, and much more.
           </p>
           <div className="space-y-2 text-sm text-left">
-            <p className="text-gray-700 dark:text-gray-300 font-medium">Try asking me to:</p>
-            <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+            <p className="text-foreground/80 font-medium">Try asking me to:</p>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
               <li>Analyze and refactor code</li>
               <li>Automate repetitive tasks</li>
               <li>Manage files and folders</li>
@@ -177,34 +175,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      {}
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900 backdrop-blur-xs">
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-background/90 backdrop-blur-sm">
         <button
           onClick={() => setShowSearch(!showSearch)}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          className="p-2 hover:bg-muted rounded transition-colors"
           title="Search messages"
         >
-          <Search size={16} className="text-gray-600 dark:text-gray-400" />
+          <Search size={16} className="text-muted-foreground" />
         </button>
         <button
           onClick={handleExport}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          className="p-2 hover:bg-muted rounded transition-colors"
           title="Export conversation"
         >
-          <Download size={16} className="text-gray-600 dark:text-gray-400" />
+          <Download size={16} className="text-muted-foreground" />
         </button>
         <button
           onClick={handleClearHistory}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          className="p-2 hover:bg-muted rounded transition-colors"
           title="Clear history"
         >
-          <Trash2 size={16} className="text-gray-600 dark:text-gray-400" />
+          <Trash2 size={16} className="text-muted-foreground" />
         </button>
         <div className="flex-1" />
-        <span className="text-sm text-gray-500">
+        <span className="text-xs text-muted-foreground">
           {filteredMessages.length} message{filteredMessages.length !== 1 ? 's' : ''}
         </span>
-        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={autoScroll}
@@ -215,15 +212,14 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         </label>
       </div>
 
-      {}
       {showSearch && (
-        <div className="sticky top-[52px] z-10 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900">
+        <div className="sticky top-[52px] z-10 px-4 py-2 border-b border-border/50 bg-background/90 backdrop-blur-sm">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search messages..."
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
             autoFocus
           />
         </div>
@@ -251,12 +247,11 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         ))}
       </div>
 
-      {}
       {isStreaming && (
-        <div className="px-4 py-2 border-t border-white/5 bg-zinc-800/40">
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <Brain size={14} className="animate-pulse text-zinc-500" />
-            Thinking...
+        <div className="px-4 py-2 border-t border-border/30 bg-muted/20">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Brain size={14} className="animate-pulse text-muted-foreground/70" />
+            Generating...
           </div>
         </div>
       )}
