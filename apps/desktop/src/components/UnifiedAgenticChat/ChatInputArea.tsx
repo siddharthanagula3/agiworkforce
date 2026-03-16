@@ -6,7 +6,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { FolderOpen, Globe, Loader2, Zap } from 'lucide-react';
+import { FolderOpen, Globe, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, isTauri } from '../../lib/tauri-mock';
@@ -130,10 +130,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [inlineSuggestion, setInlineSuggestion] = useState<string>('');
 
   // Agent mode toggle (per-message override)
-  const [agentModeEnabled, setAgentModeEnabled] = useState(false);
+  const [agentModeEnabled] = useState(false);
 
   // Intent detection & web search state
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [autoIntentTags, setAutoIntentTags] = useState<ModeTag[]>([]);
   const [userDismissedIntents, setUserDismissedIntents] = useState<Set<string>>(new Set());
 
@@ -452,23 +452,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       userModifiedContentRef.current = false;
     }
   }, [draftContent]);
-
-  // Agent mode toggle with capability notifications
-  const handleToggleAgentMode = useCallback(() => {
-    const next = !agentModeEnabled;
-    if (next) {
-      if (capabilities && !capabilities.supportsTools) {
-        toast.warning(
-          "Selected model doesn't support tools. Agent mode requires a tool-capable model.",
-        );
-      } else if (isToolFallback) {
-        toast.info(
-          'Tools will use prompt injection for this local model. Results may be less reliable than native tool calling.',
-        );
-      }
-    }
-    setAgentModeEnabled(next);
-  }, [agentModeEnabled, capabilities, isToolFallback]);
 
   // Keyboard shortcuts for model selector
   const toggleModelSelector = useCallback(() => setShowModelSelector((prev) => !prev), []);
@@ -1269,8 +1252,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         <div
           className={cn(
             'relative overflow-visible rounded-2xl',
-            'bg-white/95 dark:bg-charcoal-800/95 backdrop-blur-xl',
-            'border border-gray-200/80 dark:border-gray-700/80',
+            'bg-[hsl(var(--card))] backdrop-blur-xl',
+            'border border-[hsl(var(--border))]',
             'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
             'transition-all duration-200 ease-out',
             'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
@@ -1297,12 +1280,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           {/* Attachment processing indicator */}
           {isProcessingAttachments && (
             <div
-              className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3"
+              className="border-b border-[hsl(var(--border))] px-4 py-3"
               role="status"
               aria-live="polite"
               aria-atomic="true"
             >
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
                 <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 <span>{isSimpleMode ? 'Adding your files...' : 'Processing attachments...'}</span>
               </div>
@@ -1348,7 +1331,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               rows={1}
               className={cn(
                 'w-full resize-none bg-transparent py-2 px-1',
-                'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
+                'text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))]',
                 'focus:outline-hidden',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
                 'text-[15px] leading-6',
@@ -1423,8 +1406,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           )}
 
           {/* Toolbar row */}
-          <div className="flex items-center justify-between px-3 pb-2 pt-1">
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-1 overflow-hidden">
+            <div className="flex items-center gap-1 shrink-0">
               <AgentModeSwitcher />
               <PlusMenu
                 disabled={isAttachmentInteractionDisabled}
@@ -1472,31 +1455,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   <FolderOpen size={16} />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleToggleAgentMode}
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
-                  agentModeEnabled
-                    ? 'text-blue-400 hover:bg-blue-500/10'
-                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
-                )}
-                title={
-                  agentModeEnabled ? 'Agent mode enabled (click to disable)' : 'Enable agent mode'
-                }
-                aria-label={agentModeEnabled ? 'Disable agent mode' : 'Enable agent mode'}
-              >
-                <Zap size={16} />
-              </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               {content.length > maxLength * 0.8 && (
                 <div
                   className={cn(
                     'text-xs font-medium',
                     content.length > maxLength * 0.9
                       ? 'text-orange-500 dark:text-orange-400'
-                      : 'text-gray-400 dark:text-gray-500',
+                      : 'text-[hsl(var(--muted-foreground))]',
                   )}
                 >
                   {content.length} / {maxLength}

@@ -453,7 +453,15 @@ impl AGIExecutor {
                 .execute(tool_name, parameters, &exec_context, context)
                 .await
         } else {
-            // Fallback for tools not yet migrated to the registry
+            // Bug #31: warn when no executor is found so silent fallthrough
+            // is impossible to miss in logs.
+            tracing::warn!(
+                "[Executor] No executor registered for tool '{}'. Falling back to \
+                 fallback handler. If this tool should be handled, register it in \
+                 the appropriate executor's tool_names(). Session: {}",
+                tool_name,
+                session_id
+            );
             self.execute_fallback_tool(tool_name, parameters, &session_id, &tool_id)
                 .await
         };

@@ -30,7 +30,7 @@ pub use background_agent::{
     DEFAULT_AGENT_TIMEOUT_SECS, MAX_BACKGROUND_AGENTS,
 };
 pub use background_tasks::{AutonomousTaskCheckpoint, PersistentTask, TaskCheckpoint, TaskStorage};
-pub use change_tracker::ChangeTracker;
+pub use change_tracker::{ChangeTracker, NamedFileCheckpoint};
 pub use continuous_executor::{
     ContinuousExecutor, ContinuousExecutorConfig, ContinuousTask, ContinuousTaskStatus,
     DailyLimitTracker, DailyUsageStats, ExecutionCheckpoint, ExecutionProgress,
@@ -267,6 +267,10 @@ pub struct AgentConfig {
     pub max_cost_per_task: f64,
     /// Maximum cumulative cost allowed per session in USD (default $50.00)
     pub max_session_cost: f64,
+    /// Maximum loop iterations for autonomous execution.
+    /// Set to 0 to use the compile-time default (100).
+    #[serde(default)]
+    pub max_loop_iterations: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,6 +304,7 @@ impl Default for AgentConfig {
             memory_limit_mb: 512,
             max_cost_per_task: 5.0,
             max_session_cost: 50.0,
+            max_loop_iterations: 0,
         }
     }
 }

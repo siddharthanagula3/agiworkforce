@@ -389,7 +389,7 @@ The `MemoryStore` embedding cache uses a `VecDeque<i64>` to track insertion orde
 
 8. **RAGSystem is basic**: The `RAGSystem` in `rag_system.rs` uses simple substring matching (`content.to_lowercase().contains(query)`) rather than embeddings for retrieval. Its `embedding: Option<Vec<f32>>` fields on `CodeChunk`, `DocChunk`, and `Experience` are always `None` -- embeddings are never generated or used for similarity.
 
-9. **HttpSummaryLLM::extract_memories deferred**: The `extract_memories()` method works (makes LLM calls) but was noted in MEMORY.md as "returns empty" in certain conditions. Full LLM wiring for reliable extraction is listed as deferred tech debt.
+9. **HttpSummaryLLM::extract_memories**: The `extract_memories()` method makes LLM calls but may return empty in certain conditions. Full LLM wiring for reliable extraction is deferred.
 
 10. **Two cosine_similarity implementations**: `similarity.rs` (code embeddings) and `memory_persistence.rs` (memory embeddings) each have their own `cosine_similarity()` function. They are functionally identical but not shared. There is also a sparse-vector cosine similarity in `semantic_search.rs`.
 

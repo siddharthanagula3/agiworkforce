@@ -1,9 +1,9 @@
 # PRD-WEB: AGI Workforce Web Application
 
 > **Platform**: Web Application (Next.js 16 + Vercel)
-> **Document version**: 1.0.0
-> **Last updated**: 2026-03-09
-> **Status**: Living document
+> **Document version**: 1.1.0
+> **Last updated**: 2026-03-15
+> **Status**: Public Alpha — Living document
 > **Owner**: Product Team
 > **Competitor benchmark**: claude.ai, chatgpt.com, perplexity.ai
 
@@ -43,9 +43,9 @@ The web application is explicitly **not** a replacement for the desktop app. Des
 
 | Capability                 | AGI Workforce Web                            | claude.ai        | chatgpt.com         | perplexity.ai   |
 | -------------------------- | -------------------------------------------- | ---------------- | ------------------- | --------------- |
-| Multi-model (any LLM)      | Yes -- 9+ cloud providers                    | Anthropic only   | OpenAI only         | Perplexity only |
+| Multi-model (any LLM)      | Yes -- 12+ cloud providers                    | Anthropic only   | OpenAI only         | Perplexity only |
 | BYOK (bring your own keys) | Yes                                          | No               | No                  | No              |
-| AI skill marketplace       | Yes (140+ skills)                            | No               | GPTs store          | No              |
+| AI skill marketplace       | Yes (169+ skills)                            | No               | GPTs store          | No              |
 | Media generation           | Images + video (DALL-E, Flux, Runway, Veo 3) | No               | DALL-E              | No              |
 | Deep research mode         | Yes                                          | Limited          | Yes                 | Yes             |
 | Conversation branching     | Yes                                          | No               | No                  | No              |
@@ -568,7 +568,7 @@ Organizations requiring SSO/SCIM, priority support, SLA guarantees, audit loggin
 | Feature                 | AGI Workforce Web         | claude.ai   | chatgpt.com      | perplexity.ai |
 | ----------------------- | ------------------------- | ----------- | ---------------- | ------------- |
 | Free tier available     | Yes (limited)             | Yes         | Yes              | Yes           |
-| Multi-model access      | 9+ providers              | Claude only | GPT only         | Internal      |
+| Multi-model access      | 12+ providers              | Claude only | GPT only         | Internal      |
 | BYOK API keys           | Yes                       | No          | No               | No            |
 | Streaming responses     | Yes                       | Yes         | Yes              | Yes           |
 | Code execution          | Via API proxy             | Artifacts   | Code Interpreter | No            |
@@ -592,7 +592,7 @@ Organizations requiring SSO/SCIM, priority support, SLA guarantees, audit loggin
 | i18n                    | en, es                    | Multi       | Multi            | Multi         |
 | SSO/SAML                | Yes                       | Enterprise  | Enterprise       | No            |
 | Team management         | Workforce dashboard       | Team plan   | Team plan        | Enterprise    |
-| AI skill marketplace    | 140+ skills               | No          | GPTs store       | No            |
+| AI skill marketplace    | 169+ skills               | No          | GPTs store       | No            |
 | Code editor (Monaco)    | Vibe feature              | No          | No               | No            |
 | Live preview (Sandpack) | Vibe feature              | No          | No               | No            |
 | Tool calling UI         | Inline cards + timeline   | Artifacts   | Plugins          | No            |
@@ -693,7 +693,7 @@ Organizations requiring SSO/SCIM, priority support, SLA guarantees, audit loggin
 
 | Icon          | Title                 | Description                                                                                                          | Link                |
 | ------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| Users         | 140+ AI Skills        | Pre-built AI specialists across healthcare, legal, finance, creative, education, and more...                         | /features/ai-skills |
+| Users         | 169+ AI Skills        | Pre-built AI specialists across healthcare, legal, finance, creative, education, and more...                         | /features/ai-skills |
 | Plug          | Unlimited MCP Plugins | Connect any MCP tool -- file systems, databases, APIs, browsers, and cloud services...                               | /features/plugins   |
 | Wrench        | Desktop Automation    | Native computer use: browser control, terminal commands, file management, screen capture...                          | /features/tools     |
 | Bot           | Parallel AI Agents    | Swarm orchestration decomposes tasks, spawns parallel agents, and aggregates results...                              | /features/agents    |
@@ -707,8 +707,8 @@ Each card: rounded-2xl border, hover:border-blue-500/50, "Learn more" link with 
 4-column grid (centered):
 | Stat | Label | Detail |
 |---|---|---|
-| 140+ | AI Skills | Healthcare, legal, finance, creative, and more |
-| 9+ | AI Providers | OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama |
+| 169+ | AI Skills | Healthcare, legal, finance, creative, and more |
+| 12+ | AI Providers | OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Ollama |
 | (infinity) | MCP Tools | Unlimited plugins via Model Context Protocol |
 | 3 | Platforms | macOS, Windows, and Linux desktop + mobile |
 
@@ -2769,9 +2769,9 @@ Verified events: `checkout.session.completed`, `customer.subscription.updated`, 
 
 ### Where AGI Workforce Leads
 
-- **Multi-model access** -- claude.ai is Claude-only; AGI Workforce supports 9+ providers including local models
+- **Multi-model access** -- claude.ai is Claude-only; AGI Workforce supports 12+ providers including local models
 - **BYOK** -- claude.ai requires Anthropic subscription; AGI Workforce uses user-owned API keys
-- **AI skill marketplace** -- 140+ specialized skills vs. no marketplace on claude.ai
+- **AI skill marketplace** -- 169+ specialized skills vs. no marketplace on claude.ai
 - **Media generation** -- Image and video generation built-in; claude.ai has no media capabilities
 - **Deep research with citations** -- Perplexity-backed search with source attribution
 - **Conversation sharing** -- Token-based public URLs; claude.ai sharing is limited
@@ -2808,7 +2808,7 @@ Verified events: `checkout.session.completed`, `customer.subscription.updated`, 
 - **BYOK** -- chatgpt.com requires OpenAI subscription; AGI Workforce uses user keys
 - **Desktop automation** -- chatgpt.com has no desktop control; AGI Workforce has full desktop agent (via desktop app)
 - **MCP tools** -- Unlimited MCP tools vs. limited plugin ecosystem
-- **AI skills breadth** -- 140+ non-coding skills vs. GPTs (mostly coding/writing focused)
+- **AI skills breadth** -- 169+ non-coding skills vs. GPTs (mostly coding/writing focused)
 - **Video generation** -- Runway, Veo 3, Sora vs. limited Sora access on chatgpt.com
 - **Privacy** -- Local processing with BYOK vs. all data flows through OpenAI
 - **Conversation branching** -- Named branches vs. linear conversation only
@@ -2834,11 +2834,11 @@ Verified events: `checkout.session.completed`, `customer.subscription.updated`, 
 
 ### Where AGI Workforce Leads
 
-- **Multi-model** -- perplexity.ai uses internal models; AGI Workforce supports 9+ providers
+- **Multi-model** -- perplexity.ai uses internal models; AGI Workforce supports 12+ providers
 - **BYOK** -- No key management in perplexity.ai; full BYOK in AGI Workforce
 - **Tool execution** -- perplexity.ai is read-only; AGI Workforce executes tools, generates code, automates
 - **Desktop integration** -- No desktop app; AGI Workforce has full desktop agent
-- **AI skills** -- No skill marketplace; 140+ specialized skills in AGI Workforce
+- **AI skills** -- No skill marketplace; 169+ specialized skills in AGI Workforce
 - **Media generation** -- No media generation; full image/video pipeline in AGI Workforce
 - **Artifacts** -- No artifact system; full artifact rendering in AGI Workforce
 - **Privacy** -- perplexity.ai processes all queries; AGI Workforce supports local models
@@ -2851,8 +2851,8 @@ Verified events: `checkout.session.completed`, `customer.subscription.updated`, 
 
 ## 13.4 Strategic Gaps to Own
 
-1. **Multi-model web chat with BYOK** -- No competitor offers web-based chat with 9+ providers and user-owned API keys. This is the primary differentiator.
-2. **AI skill marketplace for non-coders** -- 140+ skills across healthcare, legal, finance, education, creative, and trades. Every competitor is code/writing focused.
+1. **Multi-model web chat with BYOK** -- No competitor offers web-based chat with 12+ providers and user-owned API keys. This is the primary differentiator.
+2. **AI skill marketplace for non-coders** -- 169+ skills across healthcare, legal, finance, education, creative, and trades. Every competitor is code/writing focused.
 3. **Web + Desktop integration** -- Seamless handoff between web chat and desktop app (deep linking, auth pairing, session sync). No competitor offers this bridge.
 4. **Vibe coding workspace** -- Full Monaco editor + Sandpack live preview + multi-agent collaboration in the browser. Competes with Bolt, Lovable, and Replit rather than claude.ai.
 5. **Comprehensive media generation** -- Image (DALL-E, Flux, Imagen) + video (Runway, Veo 3, Sora) in a single chat interface. No competitor combines all media types.
@@ -2905,7 +2905,7 @@ Verified events: `checkout.session.completed`, `customer.subscription.updated`, 
 | Premium tier           | $249.99/mo (Max)    | $200/mo (Max)  | $200/mo (Pro)    | $20/mo        |
 | BYOK (no subscription) | Yes                 | No             | No               | No            |
 | **Models**             |                     |                |                  |               |
-| Multi-provider         | 9+ providers        | Anthropic only | OpenAI only      | Internal      |
+| Multi-provider         | 12+ providers        | Anthropic only | OpenAI only      | Internal      |
 | Local models           | Via desktop         | No             | No               | No            |
 | Model switching        | In-chat toggle      | No             | Model selector   | No            |
 | **Chat**               |                     |                |                  |               |
@@ -3640,5 +3640,5 @@ The Vibe SDK (`features/vibe/sdk/`) provides the client-side runtime:
 ---
 
 _End of PRD-WEB.md_
-_Document version 1.0.0 -- 2026-03-09_
+_Document version 1.1.0 -- Last updated 2026-03-15_
 _Total sections: 13 + 7 appendices_

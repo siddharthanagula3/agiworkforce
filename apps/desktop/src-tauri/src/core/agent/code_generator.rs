@@ -213,26 +213,44 @@ impl CodeGenerator {
             .await
             .map_err(|e| anyhow::anyhow!("LLM generation failed: {}", e))?;
 
-        let files: Vec<GeneratedFile> = if let Ok(parsed) = serde_json::from_str(&response) {
-            parsed
-        } else {
-            let json_start = response.find('[');
-            let json_end = response.rfind(']');
+        let files: Vec<GeneratedFile> = match serde_json::from_str(&response) {
+            Ok(parsed) => parsed,
+            Err(direct_err) => {
+                tracing::warn!(
+                    "Failed to parse code generation response: {}. \
+                     Attempting JSON extraction from response ({} chars)",
+                    direct_err,
+                    response.len()
+                );
 
-            if let (Some(start), Some(end)) = (json_start, json_end) {
-                if start < end {
-                    let json_str = &response[start..=end];
-                    serde_json::from_str(json_str).unwrap_or_else(|e| {
-                        tracing::warn!("Failed to parse LLM response as JSON: {}", e);
+                let json_start = response.find('[');
+                let json_end = response.rfind(']');
+
+                if let (Some(start), Some(end)) = (json_start, json_end) {
+                    if start < end {
+                        let json_str = &response[start..=end];
+                        serde_json::from_str(json_str).unwrap_or_else(|e| {
+                            tracing::warn!(
+                                "Failed to parse extracted JSON from LLM response: {}",
+                                e
+                            );
+                            Vec::new()
+                        })
+                    } else {
+                        tracing::warn!(
+                            "Invalid JSON markers in LLM response (start={}, end={})",
+                            start,
+                            end
+                        );
                         Vec::new()
-                    })
+                    }
                 } else {
-                    tracing::warn!("Invalid JSON markers in LLM response");
+                    tracing::warn!(
+                        "No JSON array found in LLM response. First 200 chars: {}",
+                        response.chars().take(200).collect::<String>()
+                    );
                     Vec::new()
                 }
-            } else {
-                tracing::warn!("No JSON array found in LLM response");
-                Vec::new()
             }
         };
 

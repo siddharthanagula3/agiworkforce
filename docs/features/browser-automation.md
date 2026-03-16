@@ -12,8 +12,7 @@
 | | `apps/desktop/src/components/Browser/index.ts` |
 | Stores | `apps/desktop/src/stores/browserStore.ts` |
 | | `apps/desktop/src/stores/automationStore.ts` |
-| Hooks | `apps/desktop/src/hooks/useBrowserAutomation.ts` |
-| | `apps/desktop/src/hooks/useAutomationEvents.ts` |
+| Hooks | Browser automation hooks (`useBrowserAutomation.ts`, `useAutomationEvents.ts`) were removed during stabilization. Browser automation is now driven directly via `browserStore.ts` actions and `automationStore.ts` event handlers. |
 | Rust Commands | `apps/desktop/src-tauri/src/sys/commands/browser.rs` |
 | | `apps/desktop/src-tauri/src/sys/commands/automation.rs` |
 | | `apps/desktop/src-tauri/src/sys/commands/automation_enhanced.rs` |
@@ -180,45 +179,13 @@ User downloads .spec.ts file
   → Blob URL created from generated code string → anchor.click()
 ```
 
-### 7. Recording Replay (useBrowserAutomation hook)
+### 7. Recording Replay
 
-```
-hook.playRecording(steps, options)
-  → Sets isPlayingBack=true, totalSteps=steps.length
-  → listen('browser:playback_progress') for step tracking
-  → Iterates steps sequentially:
-      navigate → invoke('browser_navigate', ...)
-      click    → invoke('browser_click', ...)
-      type     → invoke('browser_type', ...)
-      wait     → invoke('browser_wait_for_selector', ...)
-      screenshot → invoke('browser_screenshot', ...)
-      execute  → invoke('browser_evaluate', ...)
-  → delayBetweenSteps (default 500ms) between each step
-  → stopOnError option aborts loop on first failure
-  → playbackAbortRef allows external abort via stopPlayback()
-  → Calls onStepStart/onStepComplete/onPlaybackComplete callbacks
-```
+Recording replay is driven directly by the browser store and automation store actions. Steps are iterated sequentially via `invoke()` calls (`browser_navigate`, `browser_click`, `browser_type`, `browser_wait_for_selector`, `browser_screenshot`, `browser_evaluate`) with configurable delay between steps (default 500ms).
 
-### 8. Automation Events (OS-level, useAutomationEvents hook)
+### 8. Automation Events (OS-level)
 
-```
-App root mounts useAutomationEvents()
-  → Registers Tauri event listeners:
-      'automation:recording_started'
-          → normalizes snake_case payload (session_id → sessionId)
-          → automationStore.handleRecordingStarted()
-      'automation:recording_stopped'
-          → normalizeRecording() + automationStore.handleRecordingStopped()
-      'automation:action_recorded'
-          → normalizeRecordedAction() + automationStore.handleActionRecorded()
-      'shortcut_action' → automationStore.handleShortcutAction()
-      'shortcut_registered' → automationStore.handleShortcutRegistered()
-      'shortcut_unregistered' → automationStore.handleShortcutUnregistered()
-  → Cleanup: all unlisten functions called on component unmount
-  → Uses isMountedRef guard to prevent state updates after unmount
-  → Uses handlersRef + store.subscribe() to always hold latest handler refs
-    without re-registering listeners on every render
-```
+Automation events from Rust (`automation:recording_started`, `automation:recording_stopped`, `automation:action_recorded`, `shortcut_action`, etc.) are handled directly by `automationStore.ts` event handlers with snake_case-to-camelCase normalization.
 
 ### 9. JavaScript Evaluation (Security-Gated)
 
@@ -480,20 +447,9 @@ When `isRecording` is true, every call to `addAction()` that produces `success: 
 
 Live view is implemented as a `window.setInterval(500ms)` in the frontend, not as a server-push event. The interval calls `browser_get_screenshot_stream` which internally calls `CdpClient.capture_screenshot()` on every tick. This is a polling model, not a true stream. The `isStreaming` flag prevents duplicate intervals, and `stopStreaming()` calls `window.clearInterval()`.
 
-### Event Normalization in `useAutomationEvents`
+### Event Normalization
 
-The Rust backend emits events with snake_case field names (`session_id`, `start_time`, `is_recording`, `action_type`, `timestamp_ms`, `duration_ms`, `created_at`). The hook `useAutomationEvents` normalizes these to camelCase (`sessionId`, `startTime`, etc.) before pushing them into `automationStore`. This pattern avoids polluting the store types with raw Rust casing.
-
-### `useBrowserAutomation` Hook — Unified Action Logger
-
-The hook wraps every `invoke()` call in an `executeCommand()` helper that:
-1. Records `startTime = Date.now()`
-2. Calls `invoke<T>(commandName, args)`
-3. On success: calls `addAction({ type, success: true, duration, details })`
-4. On error: sets `lastError` + calls `addAction({ type, success: false, duration, details.error })`
-5. Always clears `isExecuting` in `finally`
-
-This means every command called through `useBrowserAutomation` is automatically logged to the `browserStore.actions[]` array without extra boilerplate.
+The Rust backend emits events with snake_case field names (`session_id`, `start_time`, `is_recording`, `action_type`, `timestamp_ms`, `duration_ms`, `created_at`). The `automationStore` normalizes these to camelCase (`sessionId`, `startTime`, etc.) before writing to state. This pattern avoids polluting the store types with raw Rust casing.
 
 ### Tab ID = Chrome Target ID
 
@@ -594,7 +550,6 @@ The following files are the most critical for understanding the Browser Automati
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/automation/browser/mod.rs` | `BrowserState` struct — the three subsystems: PlaywrightBridge, TabManager, ExtensionBridge, CdpClient cache |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs` | CDP-free fallback via realtime WebSocket relay + auth token + retry logic |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/stores/browserStore.ts` | Complete frontend state model, all IPC calls, streaming loop, recording side-effect, event listeners |
-| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/hooks/useBrowserAutomation.ts` | Rich hook API wrapping all IPC calls with unified action logging and playback engine |
-| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/hooks/useAutomationEvents.ts` | Snake_case→camelCase normalization for Rust-emitted events; listener lifecycle management |
+| `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/stores/automationStore.ts` | OS-level automation state, event handling (replaces former `useBrowserAutomation.ts` and `useAutomationEvents.ts` hooks) |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserViewer.tsx` | Live screenshot viewer with zoom/pan/highlight overlay |
 | `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src/components/Browser/BrowserVisualization.tsx` | Live browser sidecar entry point used by the desktop runtime |

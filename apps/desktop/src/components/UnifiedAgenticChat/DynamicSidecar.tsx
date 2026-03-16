@@ -590,7 +590,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
   if (isMinimized) {
     return (
       <motion.div
-        className="flex flex-col items-center py-4 px-1 bg-gray-900/95 border-l border-gray-700/50 h-full"
+        className="flex flex-col items-center py-4 px-1 bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] h-full"
         initial="hidden"
         animate="visible"
         variants={sidecarVariants}
@@ -598,14 +598,14 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         <button
           type="button"
           onClick={() => setIsMinimized(false)}
-          className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors mb-4"
+          className="p-2 rounded-lg hover:bg-[hsl(var(--accent))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors mb-4"
           aria-label="Expand sidecar"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
 
         {panelType && (
-          <div className="p-2 rounded-lg bg-gray-800/50 text-gray-300">
+          <div className="p-2 rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
             {headerIconMap[panelType]}
           </div>
         )}
@@ -615,14 +615,14 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 
   return (
     <motion.div
-      className="flex h-full flex-col bg-gray-900/95 dark:bg-gray-950/95 backdrop-blur-xs"
+      className="flex h-full flex-col bg-[hsl(var(--card))] backdrop-blur-xs"
       initial="hidden"
       animate="visible"
       exit="hidden"
       variants={sidecarVariants}
     >
       {}
-      <div className="flex items-center justify-between border-b border-gray-700/50 px-4 py-3 bg-gray-800/30">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3 bg-[hsl(var(--muted))]">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-zinc-100">
             {panelType ? headerIconMap[panelType] : null}
@@ -638,7 +638,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             type="button"
             onClick={() => setIsMinimized(true)}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-gray-700/50 transition-colors',
+              'flex items-center justify-center h-7 w-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors',
             )}
             aria-label="Minimize sidecar"
             title="Minimize"
@@ -649,7 +649,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             type="button"
             onClick={onClose}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-gray-700/50 transition-colors',
+              'flex items-center justify-center h-7 w-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors',
               !onClose && 'opacity-60 pointer-events-none',
             )}
             aria-label="Close sidecar"

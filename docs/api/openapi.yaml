@@ -2,15 +2,21 @@ openapi: 3.1.0
 info:
   title: AGI Workforce API
   description: |
-    API for AGI Workforce platform - provides LLM access, subscription management,
-    credit tracking, and device linking capabilities.
+    API for AGI Workforce platform - provides LLM access, chat, agents, memory,
+    subscription management, credit tracking, device linking, media generation,
+    scheduling, and more.
 
     ## Authentication
 
-    Most endpoints require authentication via Bearer token:
+    Most endpoints require authentication via Bearer token or session cookie:
     ```
     Authorization: Bearer <supabase_access_token>
     ```
+
+    ## CSRF Protection
+
+    State-changing endpoints (POST, PUT, DELETE) require a CSRF token in the
+    `x-csrf-token` header. Obtain a token via `GET /csrf`.
 
     ## Rate Limiting
 
@@ -31,7 +37,7 @@ info:
       }
     }
     ```
-  version: 1.1.2
+  version: 2.0.0
   contact:
     name: AGI Workforce Support
     url: https://agiworkforce.com/support
@@ -48,27 +54,61 @@ servers:
 tags:
   - name: Health
     description: Service health and status
+  - name: Auth
+    description: Authentication and token management
   - name: User
     description: User profile and account management
   - name: Billing
-    description: Subscription and payment management
+    description: Subscription, checkout, and credit management
   - name: LLM
-    description: Language model completion API
-  - name: Credits
-    description: Credit balance and usage tracking
+    description: Language model completion APIs
+  - name: Chat
+    description: Web chat conversations and messages
+  - name: Agents
+    description: AI agent execution and session management
+  - name: Memory
+    description: User memory CRUD and sync
   - name: Device
     description: Device linking and synchronization
+  - name: Media
+    description: Image and video generation
+  - name: Schedules
+    description: Scheduled task management
+  - name: Share
+    description: Conversation sharing
+  - name: Models
+    description: Model catalog
+  - name: Voice
+    description: Voice transcription and health
+  - name: Downloads
+    description: Desktop app downloads
+  - name: Releases
+    description: App update and release management
   - name: Admin
     description: Administrative endpoints (requires admin role)
+  - name: Connectors
+    description: External service connectors
+  - name: Marketplace
+    description: Marketplace and workforce listings
+  - name: Messaging
+    description: Messaging platform configuration and stats
+  - name: Autotag
+    description: Conversation auto-tagging and classification
+  - name: GitHub
+    description: GitHub integration endpoints
+  - name: Webhooks
+    description: Webhook receivers and diagnostics
 
 paths:
+  # ──────────────────────────────────────────────
+  # Health
+  # ──────────────────────────────────────────────
   /health:
     get:
       operationId: getHealth
       summary: Health check
-      description: Returns the health status of the API and its dependencies
-      tags:
-        - Health
+      description: Returns the health status of the API and its dependencies (database, Stripe, environment)
+      tags: [Health]
       responses:
         '200':
           description: Service is healthy or degraded
@@ -85,13 +125,87 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimitExceeded'
 
+  # ──────────────────────────────────────────────
+  # CSRF
+  # ──────────────────────────────────────────────
+  /csrf:
+    get:
+      operationId: getCsrfToken
+      summary: Get CSRF token
+      description: |
+        Returns a CSRF token that must be included in the `x-csrf-token` header
+        for all state-changing requests (POST, PUT, DELETE). Token expires in 1 hour.
+      tags: [Auth]
+      responses:
+        '200':
+          description: CSRF token generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    description: Token lifetime in milliseconds (3600000 = 1 hour)
+
+  # ──────────────────────────────────────────────
+  # Auth
+  # ──────────────────────────────────────────────
+  /auth/desktop-token:
+    post:
+      operationId: getDesktopToken
+      summary: Exchange credentials for desktop token
+      tags: [Auth]
+      responses:
+        '200':
+          description: Token issued
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/set-token:
+    post:
+      operationId: setAuthToken
+      summary: Set authentication token via cookie
+      tags: [Auth]
+      responses:
+        '200':
+          description: Token set successfully
+
+  /auth/clear-token:
+    post:
+      operationId: clearAuthToken
+      summary: Clear authentication token cookie
+      tags: [Auth]
+      responses:
+        '200':
+          description: Token cleared
+
+  /auth/sso-check:
+    get:
+      operationId: checkSso
+      summary: Check SSO availability for email domain
+      tags: [Auth]
+      parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: SSO availability check result
+
+  # ──────────────────────────────────────────────
+  # User
+  # ──────────────────────────────────────────────
   /me:
     get:
       operationId: getMe
       summary: Get current user
-      description: Returns the authenticated user's profile, subscription, and credit balance
-      tags:
-        - User
+      description: Returns the authenticated user's profile, subscription, feature flags, and credit balance
+      tags: [User]
       security:
         - bearerAuth: []
       responses:
@@ -106,13 +220,87 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimitExceeded'
 
+  /user/export:
+    get:
+      operationId: exportUserData
+      summary: Export user data (GDPR Article 20)
+      description: |
+        Returns all user data in JSON format for GDPR data portability.
+        Add `?download=true` to receive as a downloadable file.
+      tags: [User]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: download
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+          description: Set to 'true' to download as JSON file
+      responses:
+        '200':
+          description: User data export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  export_timestamp:
+                    type: string
+                    format: date-time
+                  user_id:
+                    type: string
+                    format: uuid
+                  data:
+                    type: object
+                    description: Contains profile, subscription, credit_transactions, email_preferences, device_authorizations, etc.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /user/data:
+    delete:
+      operationId: deleteUserData
+      summary: Delete user data (GDPR Article 17)
+      description: |
+        Permanently deletes all user data from the system (Right to Erasure).
+        This is a destructive, irreversible operation. Rate limited to 3 requests per hour.
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Data deletion processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  user_id:
+                    type: string
+                    format: uuid
+                  deletion_timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # Billing
+  # ──────────────────────────────────────────────
   /checkout:
     post:
       operationId: createCheckoutSession
       summary: Create checkout session
-      description: Creates a Stripe checkout session for subscription purchase
-      tags:
-        - Billing
+      description: |
+        Creates a Stripe checkout session for subscription purchase.
+        If user already has an active subscription, redirects to billing portal instead.
+      tags: [Billing]
       security:
         - bearerAuth: []
       requestBody:
@@ -121,24 +309,17 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - plan
-                - billingInterval
+              required: [plan, billingInterval]
               properties:
                 plan:
                   type: string
                   enum: [hobby, pro, max]
-                  description: The subscription plan to purchase
                 billingInterval:
                   type: string
                   enum: [monthly, annual]
-                  description: Billing frequency
-              example:
-                plan: pro
-                billingInterval: monthly
       responses:
         '200':
-          description: Checkout session created
+          description: Checkout or portal session created
           content:
             application/json:
               schema:
@@ -147,7 +328,6 @@ paths:
                   url:
                     type: string
                     format: uri
-                    description: Stripe checkout URL to redirect user to
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -159,9 +339,8 @@ paths:
     post:
       operationId: createPortalSession
       summary: Create billing portal session
-      description: Creates a Stripe billing portal session for managing subscription
-      tags:
-        - Billing
+      description: Creates a Stripe billing portal session for managing subscription, invoices, and payment methods
+      tags: [Billing]
       security:
         - bearerAuth: []
       responses:
@@ -175,23 +354,17 @@ paths:
                   url:
                     type: string
                     format: uri
-                    description: Stripe billing portal URL
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: No active subscription
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        '404':
+          description: No subscription found
 
   /sync-subscription:
     post:
       operationId: syncSubscription
       summary: Sync subscription with Stripe
       description: Manually triggers synchronization of subscription data with Stripe
-      tags:
-        - Billing
+      tags: [Billing]
       security:
         - bearerAuth: []
       responses:
@@ -209,15 +382,124 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /credit-topup:
+    post:
+      operationId: createCreditTopup
+      summary: Purchase additional credits
+      description: |
+        Creates a Stripe checkout session for a one-time credit top-up purchase.
+        Amount must be between $10 (1000 cents) and $1,000 (100000 cents).
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount_cents:
+                  type: integer
+                  minimum: 1000
+                  maximum: 100000
+                  default: 10000
+                  description: Top-up amount in cents (default $100)
+      responses:
+        '200':
+          description: Credit top-up checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /usage:
+    get:
+      operationId: getUsage
+      summary: Get credit usage and balance
+      description: Returns the user's current credit balance, usage percentages, and subscription info
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usage data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan_tier:
+                    type: string
+                  credits_allocated_cents:
+                    type: integer
+                  credits_used_cents:
+                    type: integer
+                  credits_remaining_cents:
+                    type: integer
+                  usage_percentage:
+                    type: number
+                  period_start:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  period_end:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  daily_used_cents:
+                    type: integer
+                  daily_limit_cents:
+                    type: integer
+                  daily_remaining_cents:
+                    type: integer
+                  subscription_status:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /claim-offer:
+    post:
+      operationId: claimOffer
+      summary: Claim a promotional offer
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Offer claimed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stripe-webhook:
+    post:
+      operationId: stripeWebhook
+      summary: Stripe webhook receiver
+      description: Receives and processes Stripe webhook events. Authenticated via Stripe webhook signature.
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook processed
+
+  # ──────────────────────────────────────────────
+  # LLM
+  # ──────────────────────────────────────────────
   /llm/v1/chat/completions:
     post:
       operationId: createChatCompletion
-      summary: Create chat completion
+      summary: Create chat completion (OpenAI-compatible)
       description: |
-        OpenAI-compatible chat completion endpoint. Supports streaming responses.
+        OpenAI-compatible chat completion endpoint. Supports streaming via SSE.
         Credits are deducted based on token usage.
-      tags:
-        - LLM
+      tags: [LLM]
       security:
         - bearerAuth: []
       requestBody:
@@ -243,20 +525,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '402':
           description: Insufficient credits
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '429':
           $ref: '#/components/responses/RateLimitExceeded'
 
   /llm/v1/models:
     get:
-      operationId: listModels
-      summary: List available models
-      description: Returns a list of available LLM models based on user's subscription tier
-      tags:
-        - LLM
+      operationId: listLlmModels
+      summary: List available LLM models
+      description: Returns available LLM models based on user's subscription tier
+      tags: [LLM]
       security:
         - bearerAuth: []
       responses:
@@ -282,8 +559,7 @@ paths:
       operationId: getCreditBalance
       summary: Get credit balance
       description: Returns the user's current credit balance including monthly and daily limits
-      tags:
-        - Credits
+      tags: [Billing]
       security:
         - bearerAuth: []
       responses:
@@ -297,80 +573,63 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: No active subscription
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
-  /device/link:
+  /llm/v1/audio/transcriptions:
     post:
-      operationId: createDeviceLink
-      summary: Create device linking code
-      description: Generates a 6-digit code for linking a new device to the user's account
-      tags:
-        - Device
+      operationId: createAudioTranscription
+      summary: Transcribe audio
+      description: Transcribes audio file to text using an LLM audio model
+      tags: [Voice]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                model:
+                  type: string
+      responses:
+        '200':
+          description: Transcription result
+
+  /llm/v2/chat:
+    post:
+      operationId: createV2Chat
+      summary: Chat completion (v2 enhanced)
+      description: Enhanced chat completion endpoint with additional features
+      tags: [LLM]
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Device link code created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: string
-                    pattern: '^\d{6}$'
-                    description: 6-digit linking code (expires in 5 minutes)
-                  expires_at:
-                    type: string
-                    format: date-time
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Chat response
 
-  /device/poll:
-    get:
-      operationId: pollDeviceLink
-      summary: Poll for device link status
-      description: Desktop app polls this endpoint to check if a device link code has been approved
-      tags:
-        - Device
-      parameters:
-        - name: code
-          in: query
-          required: true
-          schema:
-            type: string
-            pattern: '^\d{6}$'
-          description: The 6-digit linking code
+  /llm/completion:
+    post:
+      operationId: createLlmCompletion
+      summary: LLM completion
+      description: Direct LLM completion endpoint
+      tags: [LLM]
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: Link status and tokens if approved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [pending, approved, expired]
-                  access_token:
-                    type: string
-                    description: Only present when status is 'approved'
-                  refresh_token:
-                    type: string
-                    description: Only present when status is 'approved'
-        '400':
-          description: Invalid or expired code
+          description: Completion response
 
-  /device/approve:
+  /completion:
     post:
-      operationId: approveDeviceLink
-      summary: Approve device link
-      description: Approves a pending device link code (called from web app)
-      tags:
-        - Device
+      operationId: createPromptCompletion
+      summary: Ghost-text prompt completion
+      description: |
+        Provides ghost-text prompt completions for the AI prompt box.
+        Uses a fast model (claude-haiku-4.5) for inline suggestions.
+      tags: [LLM]
       security:
         - bearerAuth: []
       requestBody:
@@ -379,15 +638,187 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - code
+              required: [input]
               properties:
-                code:
+                input:
                   type: string
-                  pattern: '^\d{6}$'
+                  minLength: 1
+                  maxLength: 10000
+                context:
+                  type: string
+                  maxLength: 5000
+                  nullable: true
       responses:
         '200':
-          description: Device link approved
+          description: Prompt completion suggestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestion:
+                    type: string
+                  model:
+                    type: string
+                  latency_ms:
+                    type: number
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # Models Catalog
+  # ──────────────────────────────────────────────
+  /models:
+    get:
+      operationId: getModelCatalog
+      summary: Get model catalog
+      description: |
+        Returns the canonical model catalog from models.json. Publicly cacheable (5 min).
+        No authentication required.
+      tags: [Models]
+      responses:
+        '200':
+          description: Model catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelEntry'
+                  version:
+                    type: string
+                  lastUpdated:
+                    type: string
+
+  # ──────────────────────────────────────────────
+  # Chat Conversations
+  # ──────────────────────────────────────────────
+  /chat/conversations:
+    get:
+      operationId: listConversations
+      summary: List conversations
+      description: Returns user's conversations, ordered by most recently updated
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        model:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                        updated_at:
+                          type: string
+                          format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createConversation
+      summary: Create a conversation
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                model:
+                  type: string
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chat/conversations/{id}:
+    get:
+      operationId: getConversation
+      summary: Get conversation with messages
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: Conversation and messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation:
+                    type: object
+                  messages:
+                    type: array
+                    items:
+                      type: object
+        '404':
+          description: Conversation not found
+    put:
+      operationId: updateConversation
+      summary: Update conversation (rename)
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 500
+                model:
+                  type: string
+      responses:
+        '200':
+          description: Conversation updated
+    delete:
+      operationId: deleteConversation
+      summary: Soft-delete conversation
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: Conversation deleted
           content:
             application/json:
               schema:
@@ -395,50 +826,1275 @@ paths:
                 properties:
                   success:
                     type: boolean
-        '400':
-          description: Invalid or expired code
-        '401':
-          $ref: '#/components/responses/Unauthorized'
 
-  /user/data:
-    get:
-      operationId: getUserData
-      summary: Export user data (GDPR)
-      description: Returns all user data in JSON format for GDPR compliance
-      tags:
-        - User
+  /chat/conversations/{id}/messages:
+    post:
+      operationId: sendMessage
+      summary: Send a message and get AI response
+      description: |
+        Sends a user message to a conversation and returns the AI response.
+        If `skipLlm` is true, saves the message without calling the LLM.
+      tags: [Chat]
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  maxLength: 100000
+                model:
+                  type: string
+                role:
+                  type: string
+                  enum: [user, assistant, system]
+                  default: user
+                skipLlm:
+                  type: boolean
+                  default: false
       responses:
         '200':
-          description: User data export
+          description: Messages saved and AI response generated
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  profile:
+                  userMessage:
                     type: object
-                  subscription:
+                  assistantMessage:
                     type: object
-                  credit_history:
-                    type: array
-                    items:
-                      type: object
-                  conversations:
-                    type: array
-                    items:
-                      type: object
+                  usage:
+                    type: object
+                    properties:
+                      prompt_tokens:
+                        type: integer
+                      completion_tokens:
+                        type: integer
+                      total_tokens:
+                        type: integer
+        '402':
+          description: Insufficient credits
+
+  # ──────────────────────────────────────────────
+  # Agents
+  # ──────────────────────────────────────────────
+  /agents/execute:
+    post:
+      operationId: executeAgent
+      summary: Execute an AI agent
+      description: |
+        Executes an AI agent with a given prompt and employee context.
+        Streams the response using SSE. Credits are checked and deducted.
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeId, message]
+              properties:
+                employeeId:
+                  type: string
+                  description: AI skill/employee ID (e.g., 'software-engineer')
+                message:
+                  type: string
+                  maxLength: 50000
+                systemPrompt:
+                  type: string
+                  maxLength: 10000
+                conversationHistory:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant, system]
+                      content:
+                        type: string
+                model:
+                  type: string
+                provider:
+                  type: string
+      responses:
+        '200':
+          description: SSE stream of agent response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient credits
+
+  /agents/session:
+    post:
+      operationId: manageAgentSession
+      summary: Create or manage agent chat sessions
+      description: Supports actions - create, list, get, delete
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [create, list, get, delete]
+                sessionId:
+                  type: string
+                  format: uuid
+                employeeId:
+                  type: string
+                  maxLength: 100
+                title:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Session operation result
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /agents/collaboration:
+    post:
+      operationId: agentCollaboration
+      summary: Multi-agent collaboration
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Collaboration result
+
+  /agents/communication:
+    get:
+      operationId: getAgentCommunication
+      summary: Get agent communication messages
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Communication messages
+    post:
+      operationId: sendAgentMessage
+      summary: Send message to agent
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Message sent
+
+  /agents/communication/{id}:
+    put:
+      operationId: respondToDelegation
+      summary: Respond to agent delegation
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Response recorded
+
+  # ──────────────────────────────────────────────
+  # Memory
+  # ──────────────────────────────────────────────
+  /memory:
+    get:
+      operationId: listMemories
+      summary: List user memories
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+      responses:
+        '200':
+          description: Memory list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  memories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Memory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createMemory
+      summary: Create a memory
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  maxLength: 10000
+                category:
+                  type: string
+                source:
+                  type: string
+                  enum: [mobile, desktop, web, auto]
+      responses:
+        '201':
+          description: Memory created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  memory:
+                    $ref: '#/components/schemas/Memory'
+
+  /memory/{id}:
+    get:
+      operationId: getMemory
+      summary: Get a single memory
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory retrieved
+        '404':
+          description: Memory not found
+    put:
+      operationId: updateMemory
+      summary: Update memory content
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  maxLength: 10000
+      responses:
+        '200':
+          description: Memory updated
+    delete:
+      operationId: deleteMemory
+      summary: Soft-delete a memory
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /memory/search:
+    get:
+      operationId: searchMemories
+      summary: Search memories by content
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 500
+          description: Search query text
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  memories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Memory'
+                  query:
+                    type: string
+
+  /memory/sync:
+    get:
+      operationId: getMemorySyncStatus
+      summary: Get memory sync status
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lastSync:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  entriesCount:
+                    type: integer
+                  sources:
+                    type: object
+                    properties:
+                      mobile:
+                        type: integer
+                      desktop:
+                        type: integer
+                      web:
+                        type: integer
+                      auto:
+                        type: integer
+    post:
+      operationId: triggerMemorySync
+      summary: Trigger memory sync
+      tags: [Memory]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  synced:
+                    type: integer
+                  conflicts:
+                    type: integer
+
+  # ──────────────────────────────────────────────
+  # Device
+  # ──────────────────────────────────────────────
+  /device/link:
+    post:
+      operationId: createDeviceLink
+      summary: Create device linking code
+      description: |
+        Generates a device linking code with QR code for pairing a desktop/mobile device.
+        Requires authentication. Code expires in 15 minutes.
+      tags: [Device]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id]
+              properties:
+                device_id:
+                  type: string
+                device_name:
+                  type: string
+                device_type:
+                  type: string
+                  enum: [desktop, mobile]
+                  default: desktop
+                device_fingerprint:
+                  type: string
+      responses:
+        '200':
+          description: Device link code created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link_code:
+                    type: string
+                    description: Hex-encoded linking code
+                  device_id:
+                    type: string
+                  verify_url:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: integer
+                    description: Unix timestamp
+                  qr_code_url:
+                    type: string
+                    description: Data URI of QR code image
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /device/poll:
+    post:
+      operationId: pollDeviceLink
+      summary: Poll for device link status
+      description: |
+        Desktop app polls this endpoint to check if a device link code has been approved.
+        Returns tokens when approved (one-time consumption).
+      tags: [Device]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id]
+              properties:
+                device_id:
+                  type: string
+                device_fingerprint:
+                  type: string
+                  description: Required for new sessions (legacy no-fingerprint path is deprecated)
+      responses:
+        '200':
+          description: Link status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, approved, expired, denied]
+                  access_token:
+                    type: string
+                    description: Present when status is 'approved'
+                  refresh_token:
+                    type: string
+                    description: Present when status is 'approved'
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+
+  /device/approve:
+    post:
+      operationId: approveDeviceLink
+      summary: Approve device link
+      description: Approves a pending device link code (called from web/mobile app)
+      tags: [Device]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                approved:
+                  type: boolean
+      responses:
+        '200':
+          description: Device link approved
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # Share
+  # ──────────────────────────────────────────────
+  /share:
+    post:
+      operationId: createShare
+      summary: Create a shareable link
+      description: Creates a shareable link for a conversation session (expires in 7 days)
+      tags: [Share]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  default: Shared Session
+                model_id:
+                  type: string
+                provider:
+                  type: string
+                messages:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shareUrl:
+                    type: string
+                    format: uri
+                  token:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  messageCount:
+                    type: integer
+
+  /share/{token}:
+    get:
+      operationId: getShare
+      summary: Get shared session
+      tags: [Share]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shared session data
+        '404':
+          description: Share not found or expired
+    delete:
+      operationId: deleteShare
+      summary: Delete a shared session
+      tags: [Share]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Share deleted
+
+  /shared:
+    get:
+      operationId: listSharedSessions
+      summary: List user's shared sessions
+      tags: [Share]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of shared sessions
+    post:
+      operationId: createSharedSession
+      summary: Create shared session (alternate)
+      tags: [Share]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Shared session created
+
+  # ──────────────────────────────────────────────
+  # Media
+  # ──────────────────────────────────────────────
+  /media/image/generate:
+    post:
+      operationId: generateImage
+      summary: Generate an image
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Generated image
+
+  /media/video/generate:
+    post:
+      operationId: generateVideo
+      summary: Generate a video
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Video generation started
+
+  /media/video/status:
+    get:
+      operationId: getVideoStatus
+      summary: Get video generation status
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Video generation status
+
+  # ──────────────────────────────────────────────
+  # Schedules
+  # ──────────────────────────────────────────────
+  /schedules:
+    get:
+      operationId: listSchedules
+      summary: List scheduled tasks
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Schedule list
+    post:
+      operationId: createSchedule
+      summary: Create a scheduled task
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Schedule created
+
+  /schedules/{id}:
+    get:
+      operationId: getSchedule
+      summary: Get schedule details
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule details
+    put:
+      operationId: updateSchedule
+      summary: Update a schedule
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule updated
+    patch:
+      operationId: toggleSchedule
+      summary: Toggle schedule enabled/disabled
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule toggled
+    delete:
+      operationId: deleteSchedule
+      summary: Delete a schedule
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule deleted
+
+  /schedules/{id}/runs:
+    get:
+      operationId: getScheduleRuns
+      summary: Get schedule run history
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Run history
+    post:
+      operationId: triggerScheduleRun
+      summary: Manually trigger a schedule run
+      tags: [Schedules]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Run triggered
+
+  # ──────────────────────────────────────────────
+  # Voice
+  # ──────────────────────────────────────────────
+  /voice/transcribe:
+    post:
+      operationId: transcribeVoice
+      summary: Transcribe voice audio
+      description: Proxies to LLM audio transcription endpoint
+      tags: [Voice]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Transcription result
+
+  /voice/health:
+    get:
+      operationId: voiceHealth
+      summary: Voice service health check
+      tags: [Voice]
+      responses:
+        '200':
+          description: Voice service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  service:
+                    type: string
+
+  # ──────────────────────────────────────────────
+  # Downloads & Releases
+  # ──────────────────────────────────────────────
+  /download:
+    get:
+      operationId: downloadDesktop
+      summary: Download desktop app
+      description: |
+        Public endpoint for downloading desktop installers.
+        Fetches latest release from GitHub. No authentication required.
+      tags: [Downloads]
+      parameters:
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [mac, windows, linux]
+      responses:
+        '200':
+          description: Installer file stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '307':
+          description: Redirect to download URL
+
+  /download-beta:
+    get:
+      operationId: downloadBeta
+      summary: Download beta desktop app
+      description: Requires active subscription
+      tags: [Downloads]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [mac, windows, linux]
+            default: mac
+      responses:
+        '200':
+          description: Beta installer file
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Active subscription required
+
+  /releases/check:
+    get:
+      operationId: checkForUpdates
+      summary: Check for app updates
+      tags: [Releases]
+      responses:
+        '200':
+          description: Update check result
+    post:
+      operationId: checkForUpdatesPost
+      summary: Check for app updates (POST)
+      tags: [Releases]
+      responses:
+        '200':
+          description: Update check result
+
+  /releases/latest/{platform}:
+    get:
+      operationId: getLatestRelease
+      summary: Get latest release for platform
+      tags: [Releases]
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest release info
+
+  /releases/{target}/{version}:
+    get:
+      operationId: getReleaseByVersion
+      summary: Get specific release
+      tags: [Releases]
+      parameters:
+        - name: target
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Release info
+
+  # ──────────────────────────────────────────────
+  # Connectors & Marketplace
+  # ──────────────────────────────────────────────
+  /connectors:
+    get:
+      operationId: listConnectors
+      summary: List connectors
+      tags: [Connectors]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connector list
+    post:
+      operationId: createConnector
+      summary: Create a connector
+      tags: [Connectors]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Connector created
+    delete:
+      operationId: deleteConnector
+      summary: Delete a connector
+      tags: [Connectors]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connector deleted
+
+  /marketplace:
+    get:
+      operationId: getMarketplace
+      summary: Get marketplace listings
+      tags: [Marketplace]
+      responses:
+        '200':
+          description: Marketplace data
+
+  /workforce:
+    get:
+      operationId: getWorkforce
+      summary: Get AI workforce skills
+      tags: [Marketplace]
+      responses:
+        '200':
+          description: Workforce skill listings
+    post:
+      operationId: createWorkforceEntry
+      summary: Create workforce entry
+      tags: [Marketplace]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Entry created
+    delete:
+      operationId: deleteWorkforceEntry
+      summary: Delete workforce entry
+      tags: [Marketplace]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Entry deleted
+
+  /mission:
+    post:
+      operationId: missionControl
+      summary: Mission control operations
+      tags: [Agents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Mission operation result
+
+  # ──────────────────────────────────────────────
+  # Waitlist
+  # ──────────────────────────────────────────────
+  /waitlist:
+    get:
+      operationId: getWaitlistStatus
+      summary: Get user's waitlist status
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Waitlist status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  joinedPlans:
+                    type: array
+                    items:
+                      type: string
+                      enum: [pro, max]
+    post:
+      operationId: joinWaitlist
+      summary: Join the waitlist
+      tags: [User]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  type: string
+                  enum: [pro, max]
+                billingInterval:
+                  type: string
+                  enum: [monthly, annual]
+                  default: annual
+                source:
+                  type: string
+      responses:
+        '200':
+          description: Successfully joined waitlist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  plan:
+                    type: string
+                  joined:
+                    type: boolean
+
+  # ──────────────────────────────────────────────
+  # Settings
+  # ──────────────────────────────────────────────
+  /settings/test-provider:
+    post:
+      operationId: testProvider
+      summary: Test an LLM provider connection
+      tags: [LLM]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Provider test result
+
+  # ──────────────────────────────────────────────
+  # Autotag
+  # ──────────────────────────────────────────────
+  /autotag/classify:
+    post:
+      operationId: classifyMessage
+      summary: Classify a message with auto-tags
+      tags: [Autotag]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Classification result
+
+  /autotag/batch:
+    post:
+      operationId: batchGetTags
+      summary: Batch retrieve tags for conversations
+      tags: [Autotag]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Batch tag results
+
+  /autotag/conversations:
+    get:
+      operationId: getConversationsByTag
+      summary: Get conversations filtered by tag
+      tags: [Autotag]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Tagged conversations
+
+  # ──────────────────────────────────────────────
+  # Messaging
+  # ──────────────────────────────────────────────
+  /messaging/config:
+    get:
+      operationId: getMessagingConfig
+      summary: Get messaging platform configurations
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Messaging configs
+    post:
+      operationId: createMessagingConfig
+      summary: Create or update messaging config
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Config saved
+
+  /messaging/config/{platform}:
+    get:
+      operationId: getMessagingPlatformConfig
+      summary: Get config for a specific platform
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Platform config
+    delete:
+      operationId: deleteMessagingPlatformConfig
+      summary: Delete platform config
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Config deleted
+
+  /messaging/stats/{platform}:
+    get:
+      operationId: getMessagingStats
+      summary: Get messaging stats for platform
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Platform stats
+
+  /messaging/test/{platform}:
+    post:
+      operationId: testMessagingConnection
+      summary: Test messaging platform connection
+      tags: [Messaging]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Connection test result
+
+  # ──────────────────────────────────────────────
+  # GitHub
+  # ──────────────────────────────────────────────
+  /github/install:
+    get:
+      operationId: githubInstall
+      summary: GitHub App installation redirect
+      tags: [GitHub]
+      responses:
+        '302':
+          description: Redirect to GitHub
+
+  /github/installations:
+    get:
+      operationId: listGithubInstallations
+      summary: List GitHub App installations
+      tags: [GitHub]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Installation list
+    delete:
+      operationId: removeGithubInstallation
+      summary: Remove a GitHub installation
+      tags: [GitHub]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Installation removed
+
+  /github/webhook:
+    post:
+      operationId: githubWebhook
+      summary: GitHub webhook receiver
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook processed
+
+  # ──────────────────────────────────────────────
+  # Admin
+  # ──────────────────────────────────────────────
   /admin/security:
     get:
       operationId: getSecurityDashboard
       summary: Get security dashboard
       description: Returns security metrics, alerts, and recent events (admin only)
-      tags:
-        - Admin
+      tags: [Admin]
       security:
         - bearerAuth: []
       parameters:
@@ -453,7 +2109,6 @@ paths:
           schema:
             type: string
             enum: [low, medium, high, critical]
-          description: Filter events by severity (for action=events)
         - name: limit
           in: query
           schema:
@@ -464,7 +2119,6 @@ paths:
           in: query
           schema:
             type: string
-          description: Required when action=user
       responses:
         '200':
           description: Security data retrieved
@@ -477,6 +2131,116 @@ paths:
         '403':
           description: User is not an admin
 
+  /admin/sso:
+    get:
+      operationId: getSsoConfig
+      summary: Get SSO configuration
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SSO configuration
+    post:
+      operationId: createSsoConfig
+      summary: Create or update SSO configuration
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SSO config saved
+    delete:
+      operationId: deleteSsoConfig
+      summary: Delete SSO configuration
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SSO config deleted
+
+  /admin/directory-sync:
+    get:
+      operationId: getDirectorySync
+      summary: Get directory sync status
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Directory sync status
+    post:
+      operationId: triggerDirectorySync
+      summary: Trigger directory sync
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync triggered
+    delete:
+      operationId: deleteDirectorySync
+      summary: Delete directory sync configuration
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Directory sync deleted
+
+  # ──────────────────────────────────────────────
+  # Webhooks & Diagnostics
+  # ──────────────────────────────────────────────
+  /webhooks/directory-sync:
+    post:
+      operationId: directorySyncWebhook
+      summary: Directory sync webhook receiver
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook processed
+
+  /validate-webhook:
+    get:
+      operationId: validateWebhook
+      summary: Validate webhook configuration
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Validation result
+
+  /webhook-diagnostic:
+    get:
+      operationId: webhookDiagnostic
+      summary: Webhook diagnostic information
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Diagnostic data
+
+  # ──────────────────────────────────────────────
+  # Debug & Cron
+  # ──────────────────────────────────────────────
+  /debug/llm-status:
+    get:
+      operationId: getLlmStatus
+      summary: Get LLM provider status (debug)
+      tags: [LLM]
+      responses:
+        '200':
+          description: LLM status info
+
+  /cron/reset-credits:
+    get:
+      operationId: resetCredits
+      summary: Cron job to reset monthly credits
+      description: Triggered by cron scheduler. Requires CRON_SECRET header.
+      tags: [Billing]
+      responses:
+        '200':
+          description: Credits reset
+
 components:
   securitySchemes:
     bearerAuth:
@@ -485,13 +2249,20 @@ components:
       bearerFormat: JWT
       description: Supabase access token
 
+  parameters:
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Conversation UUID
+
   schemas:
     HealthCheck:
       type: object
-      required:
-        - status
-        - timestamp
-        - checks
+      required: [status, timestamp, checks]
       properties:
         status:
           type: string
@@ -618,10 +2389,8 @@ components:
           properties:
             monthly_allocated_cents:
               type: integer
-              description: Total monthly credit allocation in cents
             monthly_remaining_cents:
               type: integer
-              description: Remaining monthly credits in cents
             monthly_used_cents:
               type: integer
             monthly_reset_at:
@@ -631,7 +2400,6 @@ components:
               type: integer
             daily_limit_cents:
               type: integer
-              description: Daily spending limit (30% of monthly)
             daily_used_cents:
               type: integer
             daily_remaining_cents:
@@ -656,9 +2424,7 @@ components:
 
     ChatCompletionRequest:
       type: object
-      required:
-        - model
-        - messages
+      required: [model, messages]
       properties:
         model:
           type: string
@@ -667,9 +2433,7 @@ components:
           type: array
           items:
             type: object
-            required:
-              - role
-              - content
+            required: [role, content]
             properties:
               role:
                 type: string
@@ -742,7 +2506,6 @@ components:
               type: integer
             cost_cents:
               type: number
-              description: Cost of this request in cents
 
     Model:
       type: object
@@ -765,6 +2528,85 @@ components:
         parent:
           type: string
           nullable: true
+
+    ModelEntry:
+      type: object
+      description: Entry from the model catalog (/api/models)
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        category:
+          type: string
+          enum: [chat, code, reasoning, image, video, other]
+        contextWindow:
+          type: integer
+        maxOutputTokens:
+          type: integer
+          nullable: true
+        pricing:
+          type: object
+          properties:
+            inputPerMillion:
+              type: number
+            outputPerMillion:
+              type: number
+        capabilities:
+          type: object
+          properties:
+            vision:
+              type: boolean
+            tools:
+              type: boolean
+            streaming:
+              type: boolean
+            thinking:
+              type: boolean
+            imageGen:
+              type: boolean
+            videoGen:
+              type: boolean
+            codeExecution:
+              type: boolean
+            search:
+              type: boolean
+        speed:
+          type: string
+          nullable: true
+        quality:
+          type: string
+          nullable: true
+        bestFor:
+          type: array
+          items:
+            type: string
+        released:
+          type: string
+          nullable: true
+
+    Memory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        category:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [mobile, desktop, web, auto]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     SecurityDashboard:
       type: object
@@ -865,14 +2707,11 @@ components:
 
     Error:
       type: object
-      required:
-        - error
+      required: [error]
       properties:
         error:
           type: object
-          required:
-            - message
-            - type
+          required: [message, type]
           properties:
             message:
               type: string

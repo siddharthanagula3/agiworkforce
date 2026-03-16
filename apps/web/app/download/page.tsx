@@ -1,11 +1,14 @@
 'use client';
 
-import { Bot } from 'lucide-react';
+import { CheckCircle2, HardDrive, Info, Monitor, RotateCcw, Shield, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { DownloadSection } from '../../components/DownloadSection';
 import { DirectDownloadButtons } from '../../components/DirectDownloadButtons';
-import { useEffect, useState } from 'react';
-import { getSupabaseClient } from '../../services/supabase';
+import { DownloadSection } from '../../components/DownloadSection';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+
+const APP_VERSION = '1.1.5';
+const LAST_UPDATED = 'March 2026';
 
 function getDownloadUrls() {
   return {
@@ -15,93 +18,180 @@ function getDownloadUrls() {
   };
 }
 
+interface TrustItem {
+  label: string;
+  value: string;
+}
+
+const releaseInfo: TrustItem[] = [
+  { label: 'Version', value: `${APP_VERSION} (Early Access)` },
+  { label: 'Last updated', value: LAST_UPDATED },
+  { label: 'macOS', value: 'Universal binary (Apple Silicon + Intel), .dmg, ~120 MB' },
+  { label: 'Windows', value: '64-bit installer, .exe, ~90 MB' },
+  { label: 'Linux', value: 'AppImage, ~110 MB' },
+];
+
+interface SafetyItem {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+}
+
+const safetyItems: SafetyItem[] = [
+  {
+    icon: Shield,
+    title: 'Code-signed by Apple',
+    description:
+      'The macOS build is signed with a Developer ID certificate (AGI Automation LLC) and notarized with Apple, so Gatekeeper will not block it.',
+  },
+  {
+    icon: HardDrive,
+    title: 'Your data stays local',
+    description:
+      'Conversations, API keys, and files never leave your machine. API keys are encrypted at rest with Argon2id + AES-256-GCM.',
+  },
+  {
+    icon: RotateCcw,
+    title: 'Every action is reversible',
+    description:
+      'The built-in undo manager tracks all AI actions — file writes, edits, and automations can be rolled back from inside the app.',
+  },
+  {
+    icon: Trash2,
+    title: 'Easy to uninstall',
+    description:
+      'macOS: drag AGI Workforce to Trash. Windows: standard Add/Remove Programs uninstaller. Linux: delete the AppImage file.',
+  },
+];
+
+interface FirstLaunchItem {
+  text: string;
+}
+
+const firstLaunchItems: FirstLaunchItem[] = [
+  { text: 'Open the app and start chatting immediately — no configuration required.' },
+  {
+    text: 'Connect your own API key (OpenAI, Anthropic, Google, etc.) or use local models via Ollama.',
+  },
+  {
+    text: 'No account required to try the app — sign up only if you want cloud sync and mobile access.',
+  },
+];
+
 export default function DownloadPage() {
-  const [hasSession, setHasSession] = useState<boolean>(false);
   const downloads = getDownloadUrls();
-
-  useEffect(() => {
-    let mounted = true;
-
-    const checkSession = async () => {
-      const supabase = getSupabaseClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (mounted) {
-        setHasSession(!!session?.user);
-      }
-    };
-    checkSession();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
-      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            {hasSession ? (
-              <Link
-                href="/dashboard"
-                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Sign In
-              </Link>
-            )}
-            <Link
-              href="/"
-              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-            >
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
-      <main className="flex flex-1 items-center justify-center px-4 pt-24 pb-12">
-        <div className="w-full max-w-5xl space-y-12">
+      <main className="flex flex-1 flex-col items-center px-4 pt-24 pb-20">
+        <div className="w-full max-w-5xl space-y-16">
+          {/* Page header */}
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold tracking-tight md:text-6xl bg-clip-text text-transparent bg-gradient-to-b from-white to-white/50">
               Download AGI Workforce
             </h1>
             <p className="text-zinc-400 text-lg max-w-2xl mx-auto leading-relaxed">
-              Just tell the AI what you want done. No setup required - open the app and start
-              chatting. Everything is reversible.
+              A native desktop app for AI chat, browser automation, and task execution. Free during
+              early access.
             </p>
           </div>
 
+          {/* Download buttons */}
           <DownloadSection downloads={downloads} />
 
-          {}
+          {/* Direct download buttons */}
           <DirectDownloadButtons />
 
+          {/* Release info grid */}
+          <section aria-label="Release information">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 divide-y divide-zinc-800">
+              {releaseInfo.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex flex-col sm:flex-row sm:items-center gap-1 px-6 py-4"
+                >
+                  <span className="w-36 shrink-0 text-sm font-medium text-zinc-400">
+                    {item.label}
+                  </span>
+                  <span className="text-sm text-white">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Before you install */}
+          <section aria-label="Before you install">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Info className="h-5 w-5 text-blue-400" />
+                </div>
+                <h2 className="text-xl font-semibold">Before you install</h2>
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                {safetyItems.map((item) => (
+                  <div key={item.title} className="flex gap-4">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                      <item.icon className="h-5 w-5 text-emerald-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-white">{item.title}</p>
+                      <p className="text-sm text-zinc-400 leading-relaxed">{item.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* What to expect on first launch */}
+          <section aria-label="What to expect on first launch">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Monitor className="h-5 w-5 text-blue-400" />
+                </div>
+                <h2 className="text-xl font-semibold">What to expect on first launch</h2>
+              </div>
+
+              <ul className="space-y-4">
+                {firstLaunchItems.map((item) => (
+                  <li key={item.text} className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                    <span className="text-sm text-zinc-300 leading-relaxed">{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          {/* Terms / Privacy */}
           <div className="text-center text-sm text-zinc-500">
-            <p>By downloading, you agree to our Terms of Service and Privacy Policy.</p>
+            <p>
+              By downloading, you agree to our{' '}
+              <Link
+                href="/terms"
+                className="text-zinc-400 underline underline-offset-2 hover:text-white transition-colors"
+              >
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link
+                href="/privacy"
+                className="text-zinc-400 underline underline-offset-2 hover:text-white transition-colors"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </div>
         </div>
       </main>
 
-      <footer className="border-t border-white/10 bg-black py-12">
-        <div className="container mx-auto px-4 text-center">
-          <div className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

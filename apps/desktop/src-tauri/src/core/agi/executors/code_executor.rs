@@ -272,27 +272,33 @@ impl CodeExecutor {
     /// `Ok(())` if no critical patterns found, or an error with details.
     fn check_critical_patterns(&self, code: &str, language: &str) -> Result<()> {
         let dangerous = self.validate_code(code, language);
-        let critical: Vec<_> = dangerous
+
+        // Block both Critical and High severity patterns
+        let blocked: Vec<_> = dangerous
             .iter()
-            .filter(|p| matches!(p.severity, Severity::Critical))
+            .filter(|p| matches!(p.severity, Severity::Critical | Severity::High))
             .collect();
 
-        if !critical.is_empty() {
-            let descriptions: Vec<_> = critical.iter().map(|p| p.description).collect();
+        if !blocked.is_empty() {
+            let severities: Vec<_> = blocked
+                .iter()
+                .map(|p| format!("{:?}: {}", p.severity, p.description))
+                .collect();
             tracing::error!(
-                "[CodeExecutor] SECURITY: Blocked code with critical patterns: {:?}",
-                descriptions
+                "[CodeExecutor] SECURITY: Blocked code with dangerous patterns: {:?}",
+                severities
             );
+            let descriptions: Vec<_> = blocked.iter().map(|p| p.description).collect();
             return Err(anyhow!(
                 "Code execution blocked: contains dangerous patterns ({})",
                 descriptions.join(", ")
             ));
         }
 
-        // Log warnings for non-critical patterns
+        // Log warnings for Medium/Low severity patterns
         let warnings: Vec<_> = dangerous
             .iter()
-            .filter(|p| !matches!(p.severity, Severity::Critical))
+            .filter(|p| matches!(p.severity, Severity::Medium | Severity::Low))
             .collect();
 
         if !warnings.is_empty() {
