@@ -127,6 +127,13 @@
   --color-chat-bg: var(--chat-bg);
   --color-chat-sidebar: var(--chat-sidebar-bg);
 
+  /* Exact hex aliases for the four canonical surface values — matches desktop design system.
+     These allow bg-chat-bg-light, bg-chat-bg-dark, etc. as Tailwind utility classes. */
+  --color-chat-bg-light: #faf9f7;
+  --color-chat-bg-dark: #0f0f13;
+  --color-chat-sidebar-light: #f5f4f1;
+  --color-chat-sidebar-dark: #0b0c14;
+
   /* Border radius */
   --radius-lg: 12px;
   --radius-md: 8px;
@@ -311,7 +318,8 @@
   :root {
     color-scheme: light;
 
-    --background: 39 33% 98%;
+    /* #faf9f7 ≈ hsl(40 23% 97%) — light background matches desktop */
+    --background: 40 23% 97%;
     --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
@@ -362,8 +370,8 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 98%;
+    /* Sidebar — #f5f4f1 ≈ hsl(45 17% 95%) matches desktop light sidebar */
+    --sidebar-background: 45 17% 95%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 221.2 83.2% 53.3%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -386,32 +394,35 @@
   .dark {
     color-scheme: dark;
 
-    --background: 120 2% 13%;
+    /* #0f0f13 ≈ hsl(240 12% 7%) — dark background matches desktop */
+    --background: 240 12% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    /* Slightly elevated surface above background — ~hsl(240 12% 9%) = #14141a */
+    --card: 240 12% 9%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 240 12% 9%;
     --popover-foreground: 210 40% 98%;
 
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    /* Elevated surface: ~hsl(240 10% 15%) = #22222a — consistent with #0f0f13 base */
+    --secondary: 240 10% 15%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 240 10% 15%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 240 10% 15%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 240 10% 15%;
+    --input: 240 10% 15%;
     --ring: 224.3 76.3% 48%;
 
     /* Brand colors */
@@ -437,14 +448,14 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar */
-    --sidebar-background: 240 6% 10%;
+    /* Sidebar — #0b0c14 ≈ hsl(233 29% 6%) matches desktop dark sidebar */
+    --sidebar-background: 233 29% 6%;
     --sidebar-foreground: 240 5% 65%;
     --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent: 240 12% 14%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-border: 240 12% 14%;
     --sidebar-ring: 224.3 76.3% 48%;
 
     /* Chat surface tokens — dark mode (#0f0f13 main, #0b0c14 sidebar) */
