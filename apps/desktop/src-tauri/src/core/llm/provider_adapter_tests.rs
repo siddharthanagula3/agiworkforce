@@ -6,7 +6,8 @@ mod tests {
     use crate::core::llm::{
         AudioData, AudioFormat, AudioInput, ChatMessage, ContentPart, DocumentFormat, DocumentInput,
         ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider, ResponseFormat,
-        ThinkingParameter, ToolChoice, ToolDefinition, VideoData, VideoFormat, VideoInput,
+        ThinkingParameter, ToolCall, ToolChoice, ToolDefinition, ToolResultInput, ToolUseInput,
+        VideoData, VideoFormat, VideoInput,
     };
     use serde_json::json;
 
@@ -2539,5 +2540,497 @@ mod tests {
 
         // Audio part
         assert_eq!(parts[2]["inlineData"]["mimeType"], "audio/wav");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #50 — Anthropic DirectAPI: tool-role messages use correct role
+    // ────────────────────────────────────────────────────────────────
+
+    /// A multimodal message with role="tool" containing ToolResult content
+    /// parts must be emitted with role="user" (Anthropic does not accept
+    /// role="tool").  Before the fix, the multimodal path passed msg.role
+    /// verbatim, so role="tool" leaked through.
+    #[test]
+    fn test_anthropic_adapter_multimodal_tool_result_uses_role_user() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Use the tool".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Assistant message with tool_use via multimodal content
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: Some(vec![ContentPart::ToolUse {
+                        tool_use: ToolUseInput {
+                            id: "toolu_multi_abc".to_string(),
+                            name: "read_file".to_string(),
+                            input: serde_json::json!({"path": "/tmp/test.txt"}),
+                        },
+                    }]),
+                },
+                // Tool result via multimodal path — role="tool" must become role="user"
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: String::new(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: Some(vec![ContentPart::ToolResult {
+                        tool_result: ToolResultInput {
+                            tool_use_id: "toolu_multi_abc".to_string(),
+                            content: "file contents here".to_string(),
+                            is_error: false,
+                        },
+                    }]),
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Anthropic adapter should handle multimodal tool result");
+
+        let messages = adapted["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 3);
+
+        // The tool result message MUST have role="user", NOT role="tool"
+        assert_eq!(
+            messages[2]["role"], "user",
+            "multimodal tool result must use role=user, not role=tool"
+        );
+
+        let content = messages[2]["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "tool_result");
+        assert_eq!(content[0]["tool_use_id"], "toolu_multi_abc");
+        assert_eq!(content[0]["content"], "file contents here");
+    }
+
+    /// Orphaned tool result message (no preceding assistant tool_use) must
+    /// cause an error rather than silently producing invalid API payloads.
+    #[test]
+    fn test_anthropic_adapter_orphaned_tool_result_returns_error() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Hello".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Tool result with NO preceding assistant tool_use
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "some result".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_orphan_123".to_string()),
+                    multimodal_content: None,
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(
+            result.is_err(),
+            "orphaned tool result must produce an error"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("toolu_orphan_123"),
+            "error must mention the orphaned tool_use_id, got: {}",
+            err_msg
+        );
+        assert!(
+            err_msg.contains("no matching tool_use block"),
+            "error must describe the orphan issue, got: {}",
+            err_msg
+        );
+    }
+
+    /// Orphaned tool result inside multimodal content parts must also be
+    /// detected and rejected.
+    #[test]
+    fn test_anthropic_adapter_orphaned_multimodal_tool_result_returns_error() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Hello".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Multimodal tool result with NO preceding assistant tool_use
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: String::new(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: Some(vec![ContentPart::ToolResult {
+                        tool_result: ToolResultInput {
+                            tool_use_id: "toolu_orphan_multi".to_string(),
+                            content: "orphaned result".to_string(),
+                            is_error: false,
+                        },
+                    }]),
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(
+            result.is_err(),
+            "orphaned multimodal tool result must produce an error"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("toolu_orphan_multi"),
+            "error must mention the orphaned tool_use_id"
+        );
+    }
+
+    /// Valid multi-turn tool conversation: user -> assistant(tool_use) ->
+    /// tool(result) -> assistant(text).  All pairings must validate.
+    #[test]
+    fn test_anthropic_adapter_valid_tool_pairing_succeeds() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Search for rust tutorials".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    tool_calls: Some(vec![ToolCall {
+                        id: "toolu_search_1".to_string(),
+                        name: "web_search".to_string(),
+                        arguments: r#"{"query":"rust tutorials"}"#.to_string(),
+                    }]),
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "Found 10 results for rust tutorials".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_search_1".to_string()),
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: "Here are some rust tutorials...".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("valid tool pairing should succeed");
+
+        let messages = adapted["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 4);
+
+        // tool result must be role=user
+        assert_eq!(messages[2]["role"], "user");
+        let content = messages[2]["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "tool_result");
+        assert_eq!(content[0]["tool_use_id"], "toolu_search_1");
+    }
+
+    /// Multiple sequential tool calls in a single assistant message must
+    /// all be paired correctly with their respective tool result messages.
+    #[test]
+    fn test_anthropic_adapter_multiple_tool_calls_all_paired() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Get weather and news".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Assistant makes TWO tool calls
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    tool_calls: Some(vec![
+                        ToolCall {
+                            id: "toolu_weather".to_string(),
+                            name: "get_weather".to_string(),
+                            arguments: r#"{"city":"NYC"}"#.to_string(),
+                        },
+                        ToolCall {
+                            id: "toolu_news".to_string(),
+                            name: "get_news".to_string(),
+                            arguments: r#"{"topic":"tech"}"#.to_string(),
+                        },
+                    ]),
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                // Two tool results
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "Sunny, 72F".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_weather".to_string()),
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "Top tech stories...".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_news".to_string()),
+                    multimodal_content: None,
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("multiple tool pairings should succeed");
+
+        let messages = adapted["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 4);
+
+        // Both tool results must be role=user
+        assert_eq!(messages[2]["role"], "user");
+        assert_eq!(messages[3]["role"], "user");
+
+        // Verify tool_use_ids are correct
+        let weather_content = messages[2]["content"].as_array().unwrap();
+        assert_eq!(weather_content[0]["tool_use_id"], "toolu_weather");
+
+        let news_content = messages[3]["content"].as_array().unwrap();
+        assert_eq!(news_content[0]["tool_use_id"], "toolu_news");
+
+        // Verify assistant message has both tool_use blocks
+        let assistant_content = messages[1]["content"].as_array().unwrap();
+        assert_eq!(assistant_content.len(), 2);
+        assert_eq!(assistant_content[0]["type"], "tool_use");
+        assert_eq!(assistant_content[0]["id"], "toolu_weather");
+        assert_eq!(assistant_content[1]["type"], "tool_use");
+        assert_eq!(assistant_content[1]["id"], "toolu_news");
+    }
+
+    /// Verify that the adapter output for tool results matches the
+    /// Anthropic API schema: role="user", content array with
+    /// type="tool_result" blocks containing tool_use_id and content.
+    #[test]
+    fn test_anthropic_adapter_tool_result_matches_api_schema() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        let request = LLMRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Run the command".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: "I'll run that.".to_string(),
+                    tool_calls: Some(vec![ToolCall {
+                        id: "toolu_cmd_1".to_string(),
+                        name: "bash".to_string(),
+                        arguments: r#"{"command":"ls -la"}"#.to_string(),
+                    }]),
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "total 42\ndrwxr-xr-x ...".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("toolu_cmd_1".to_string()),
+                    multimodal_content: None,
+                },
+            ],
+            model: "claude-sonnet-4-6".to_string(),
+            temperature: None,
+            max_tokens: Some(1024),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("schema validation test should succeed");
+
+        let tool_msg = &adapted["messages"][2];
+
+        // Schema check: role MUST be "user"
+        assert_eq!(tool_msg["role"], "user");
+
+        // Schema check: content MUST be an array
+        let content = tool_msg["content"].as_array().unwrap();
+        assert!(!content.is_empty());
+
+        // Schema check: each block must have required fields
+        let block = &content[0];
+        assert_eq!(block["type"], "tool_result");
+        assert!(
+            block.get("tool_use_id").is_some(),
+            "tool_result block must have tool_use_id field"
+        );
+        assert_eq!(block["tool_use_id"], "toolu_cmd_1");
+        assert!(
+            block.get("content").is_some(),
+            "tool_result block must have content field"
+        );
+
+        // Verify the assistant message also has the expected schema
+        let assistant_msg = &adapted["messages"][1];
+        assert_eq!(assistant_msg["role"], "assistant");
+        let assistant_content = assistant_msg["content"].as_array().unwrap();
+        // Should have text block + tool_use block
+        assert_eq!(assistant_content.len(), 2);
+        assert_eq!(assistant_content[0]["type"], "text");
+        assert_eq!(assistant_content[0]["text"], "I'll run that.");
+        assert_eq!(assistant_content[1]["type"], "tool_use");
+        assert_eq!(assistant_content[1]["id"], "toolu_cmd_1");
+        assert_eq!(assistant_content[1]["name"], "bash");
+        assert_eq!(assistant_content[1]["input"]["command"], "ls -la");
     }
 }
