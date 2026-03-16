@@ -1,0 +1,2506 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AGI Workforce — Competitive Landscape Analysis (March 2026)</title>
+    <style>
+      :root {
+        --bg: #0f1117;
+        --surface: #1a1d27;
+        --surface2: #232733;
+        --border: #2e3345;
+        --text: #e4e7ef;
+        --text-muted: #8b90a0;
+        --accent: #6366f1;
+        --accent-light: #818cf8;
+        --green: #22c55e;
+        --yellow: #eab308;
+        --red: #ef4444;
+        --orange: #f97316;
+        --blue: #3b82f6;
+        --purple: #a855f7;
+        --cyan: #06b6d4;
+        --pink: #ec4899;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+
+      /* Header */
+      .header {
+        padding: 32px 40px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .header h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .header p {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .header .date {
+        display: inline-block;
+        background: var(--surface2);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        color: var(--accent-light);
+        margin-top: 8px;
+      }
+
+      /* Navigation */
+      .nav {
+        display: flex;
+        gap: 8px;
+        padding: 16px 40px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+        z-index: 100;
+      }
+      .nav button {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        padding: 8px 18px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s;
+      }
+      .nav button:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .nav button.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      /* Sections */
+      .section {
+        display: none;
+        padding: 32px 40px;
+        max-width: 1400px;
+      }
+      .section.active {
+        display: block;
+      }
+      .section h2 {
+        font-size: 22px;
+        margin-bottom: 20px;
+        color: var(--accent-light);
+      }
+      .section h3 {
+        font-size: 17px;
+        margin: 24px 0 12px;
+        color: var(--text);
+      }
+
+      /* Cards */
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+      .card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+      .card .card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .card .card-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .card .card-title {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .card .card-subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .card .card-body {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.7;
+      }
+      .card .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        margin-right: 4px;
+        margin-bottom: 4px;
+      }
+      .tag-direct {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--red);
+      }
+      .tag-indirect {
+        background: rgba(234, 179, 8, 0.15);
+        color: var(--yellow);
+      }
+      .tag-adjacent {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--blue);
+      }
+
+      /* Pricing badges */
+      .price {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--green);
+      }
+
+      /* Feature matrix */
+      .matrix-container {
+        overflow-x: auto;
+        margin: 16px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--surface2);
+        color: var(--text-muted);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      td:first-child {
+        font-weight: 500;
+        white-space: nowrap;
+        min-width: 180px;
+      }
+      tr:hover td {
+        background: rgba(99, 102, 241, 0.05);
+      }
+      .rating-strong {
+        color: var(--green);
+        font-weight: 600;
+      }
+      .rating-adequate {
+        color: var(--yellow);
+      }
+      .rating-weak {
+        color: var(--orange);
+      }
+      .rating-absent {
+        color: var(--red);
+        opacity: 0.6;
+      }
+      .rating-leader {
+        color: var(--green);
+        font-weight: 700;
+      }
+      .category-row td {
+        background: var(--surface2);
+        font-weight: 700;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--accent-light);
+        padding: 8px 14px;
+      }
+
+      /* Landscape Map */
+      .landscape {
+        position: relative;
+        width: 100%;
+        height: 560px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin: 16px 0;
+        overflow: hidden;
+      }
+      .landscape .axis-label {
+        position: absolute;
+        color: var(--text-muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .landscape .axis-x {
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .landscape .axis-y {
+        top: 50%;
+        left: 12px;
+        transform: translateY(-50%) rotate(-90deg);
+      }
+      .landscape .axis-x-left {
+        bottom: 12px;
+        left: 80px;
+      }
+      .landscape .axis-x-right {
+        bottom: 12px;
+        right: 40px;
+      }
+      .landscape .axis-y-bottom {
+        bottom: 40px;
+        left: 12px;
+        transform: rotate(-90deg);
+      }
+      .landscape .axis-y-top {
+        top: 40px;
+        left: 12px;
+        transform: rotate(-90deg);
+      }
+      .landscape .quadrant-label {
+        position: absolute;
+        font-size: 10px;
+        color: var(--text-muted);
+        opacity: 0.4;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .bubble {
+        position: absolute;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      }
+      .bubble:hover {
+        transform: scale(1.15);
+        z-index: 10;
+      }
+      .bubble .bubble-label {
+        position: absolute;
+        bottom: -20px;
+        white-space: nowrap;
+        font-size: 11px;
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      /* Positioning cards */
+      .pos-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+      }
+      .pos-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .pos-card h4 {
+        font-size: 15px;
+        margin-bottom: 8px;
+      }
+      .pos-card .pos-quote {
+        font-style: italic;
+        color: var(--text-muted);
+        font-size: 13px;
+        margin: 8px 0;
+        padding-left: 12px;
+        border-left: 3px solid var(--accent);
+      }
+
+      /* Trends */
+      .trend-item {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 12px;
+      }
+      .trend-item h4 {
+        font-size: 15px;
+        margin-bottom: 6px;
+      }
+      .trend-item p {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .trend-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+      .trend-now {
+        background: rgba(34, 197, 94, 0.15);
+        color: var(--green);
+      }
+      .trend-soon {
+        background: rgba(234, 179, 8, 0.15);
+        color: var(--yellow);
+      }
+      .trend-later {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--blue);
+      }
+
+      /* SWOT */
+      .swot-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin: 16px 0;
+      }
+      .swot-box {
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .swot-box h4 {
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+      .swot-box ul {
+        list-style: none;
+        padding: 0;
+      }
+      .swot-box li {
+        font-size: 13px;
+        color: var(--text-muted);
+        padding: 4px 0;
+        padding-left: 16px;
+        position: relative;
+      }
+      .swot-box li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .swot-s li::before {
+        background: var(--green);
+      }
+      .swot-w li::before {
+        background: var(--red);
+      }
+      .swot-o li::before {
+        background: var(--blue);
+      }
+      .swot-t li::before {
+        background: var(--orange);
+      }
+      .swot-s h4 {
+        color: var(--green);
+      }
+      .swot-w h4 {
+        color: var(--red);
+      }
+      .swot-o h4 {
+        color: var(--blue);
+      }
+      .swot-t h4 {
+        color: var(--orange);
+      }
+
+      /* Detailed competitor panel */
+      .detail-panel {
+        display: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 28px;
+        margin: 16px 0;
+      }
+      .detail-panel.visible {
+        display: block;
+      }
+      .detail-panel .close-btn {
+        float: right;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .detail-panel h3 {
+        margin-top: 0;
+      }
+      .detail-section {
+        margin: 16px 0;
+      }
+      .detail-section h4 {
+        font-size: 14px;
+        color: var(--accent-light);
+        margin-bottom: 8px;
+      }
+      .detail-section p,
+      .detail-section li {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.7;
+      }
+      .detail-section ul {
+        padding-left: 16px;
+      }
+
+      /* Stats bar */
+      .stat-row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 16px 0;
+      }
+      .stat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 24px;
+        flex: 1;
+        min-width: 160px;
+      }
+      .stat .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--accent-light);
+      }
+      .stat .stat-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      /* Bar chart */
+      .bar-chart {
+        margin: 16px 0;
+      }
+      .bar-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .bar-label {
+        width: 140px;
+        font-size: 13px;
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+      .bar-track {
+        flex: 1;
+        height: 28px;
+        background: var(--surface2);
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        padding-left: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #fff;
+        transition: width 0.6s ease;
+      }
+
+      /* Tooltip */
+      .tooltip {
+        position: fixed;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 12px;
+        color: var(--text);
+        pointer-events: none;
+        z-index: 1000;
+        max-width: 280px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        display: none;
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .header,
+        .nav,
+        .section {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .card-grid {
+          grid-template-columns: 1fr;
+        }
+        .swot-grid {
+          grid-template-columns: 1fr;
+        }
+        .landscape {
+          height: 400px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>AGI Workforce — Competitive Landscape</h1>
+      <p>Comprehensive analysis of the AI desktop tools & agent platforms market</p>
+      <span class="date">March 16, 2026</span>
+    </div>
+
+    <div class="nav" id="nav">
+      <button class="active" data-tab="overview">Overview</button>
+      <button data-tab="landscape">Landscape Map</button>
+      <button data-tab="competitors">Competitor Deep-Dives</button>
+      <button data-tab="features">Feature Matrix</button>
+      <button data-tab="pricing">Pricing</button>
+      <button data-tab="positioning">Positioning</button>
+      <button data-tab="trends">Market Trends</button>
+      <button data-tab="swot">SWOT</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="section active" id="overview">
+      <h2>Market Overview</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-value">$11.8B</div>
+          <div class="stat-label">AI Agents Market (2026)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">46.3%</div>
+          <div class="stat-label">CAGR through 2030</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">40%</div>
+          <div class="stat-label">Enterprise apps with agents by EOY 2026</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">95%</div>
+          <div class="stat-label">Developers using AI tools weekly</div>
+        </div>
+      </div>
+
+      <h3>Competitive Set</h3>
+      <div class="card-grid">
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('claude');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #d97706, #f59e0b)">
+              C
+            </div>
+            <div>
+              <div class="card-title">Claude Desktop / Code</div>
+              <div class="card-subtitle">
+                Anthropic — <span class="tag tag-direct">Direct</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            Agentic desktop AI (Cowork mode) + CLI coding tool (Claude Code). Claude-only models.
+            MCP ecosystem leader (1,864+ servers). 46% "most loved" among developers. $380B
+            valuation.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('chatgpt');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #10a37f, #1a7f64)">
+              G
+            </div>
+            <div>
+              <div class="card-title">ChatGPT / OpenAI</div>
+              <div class="card-subtitle">OpenAI — <span class="tag tag-direct">Direct</span></div>
+            </div>
+          </div>
+          <div class="card-body">
+            Dominant consumer AI assistant. GPT-5.4 with native computer use (75% OSWorld). Operator
+            agent for web tasks. $200/mo Pro tier. Largest installed base globally. Stargate $500B
+            infra investment.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('cursor');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6)">
+              Cu
+            </div>
+            <div>
+              <div class="card-title">Cursor</div>
+              <div class="card-subtitle">
+                Anysphere — <span class="tag tag-direct">Direct</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            Leading AI IDE ($2B+ ARR, $29.3B valuation). Multi-model support. Background agents +
+            Automations. MCP capped at 40 tools. VS Code fork. Code-only, no desktop automation.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('gemini');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #4285f4, #34a853)">
+              G
+            </div>
+            <div>
+              <div class="card-title">Google Gemini</div>
+              <div class="card-subtitle">Google — <span class="tag tag-direct">Direct</span></div>
+            </div>
+          </div>
+          <div class="card-body">
+            Multimodal AI with deep Google ecosystem integration. Agent mode + computer use in API.
+            Desktop app (Windows Jan 2026). Replacing Google Assistant on Android. $249/mo Ultra
+            tier.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('windsurf');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2)">
+              W
+            </div>
+            <div>
+              <div class="card-title">Windsurf</div>
+              <div class="card-subtitle">
+                Cognition/Codeium — <span class="tag tag-direct">Direct</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            AI IDE with Cascade multi-model agent + SWE-1.5 proprietary model. 200K RAG context.
+            Gartner Magic Quadrant Leader. Enterprise compliance (HIPAA, FedRAMP). 25% cheaper than
+            Cursor.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('devin');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #ec4899, #be185d)">
+              D
+            </div>
+            <div>
+              <div class="card-title">Devin</div>
+              <div class="card-subtitle">
+                Cognition AI — <span class="tag tag-indirect">Indirect</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            Fully autonomous coding agent. Plans, codes, tests, debugs end-to-end. Cloud IDE +
+            parallel agent spawning. 67% PR merge rate. Desktop app testing (Linux). Pricing
+            collapsed from $500→$20/mo.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('copilot');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #333, #555)">GH</div>
+            <div>
+              <div class="card-title">GitHub Copilot</div>
+              <div class="card-subtitle">
+                Microsoft — <span class="tag tag-indirect">Indirect</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            15M deployed developers. Largest installed base among coding tools. $10/mo entry.
+            Gartner Leader. Enterprise preference (56% in 10K+ companies). IDE extension model, not
+            standalone.
+          </div>
+        </div>
+        <div
+          class="card"
+          onclick="
+            showTab('competitors');
+            showCompetitor('aider');
+          "
+        >
+          <div class="card-header">
+            <div class="card-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a)">
+              A
+            </div>
+            <div>
+              <div class="card-title">Aider</div>
+              <div class="card-subtitle">
+                Open Source — <span class="tag tag-adjacent">Adjacent</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            Free, open-source CLI AI coding tool. Full BYOK + local LLM support (Ollama). 70K+
+            GitHub stars. 100+ language support. Git integration. No GUI — terminal only.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANDSCAPE MAP -->
+    <div class="section" id="landscape">
+      <h2>Competitive Landscape Map</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px">
+        Bubble size = market presence/installed base. X-axis: Code-only → General purpose. Y-axis:
+        Cloud-only → Local-first/Desktop-native.
+      </p>
+
+      <div class="landscape" id="landscapeMap">
+        <span class="axis-label axis-x-left">Code-Only</span>
+        <span class="axis-label axis-x-right">General Purpose</span>
+        <span class="axis-label axis-y-bottom">Cloud-Only</span>
+        <span class="axis-label axis-y-top">Local / Desktop-Native</span>
+
+        <!-- Quadrant labels -->
+        <span class="quadrant-label" style="top: 60px; right: 60px">Local + General Purpose</span>
+        <span class="quadrant-label" style="top: 60px; left: 80px">Local + Code-Only</span>
+        <span class="quadrant-label" style="bottom: 60px; left: 80px">Cloud + Code-Only</span>
+        <span class="quadrant-label" style="bottom: 60px; right: 60px"
+          >Cloud + General Purpose</span
+        >
+
+        <!-- Grid lines -->
+        <div
+          style="
+            position: absolute;
+            left: 50%;
+            top: 40px;
+            bottom: 40px;
+            width: 1px;
+            background: var(--border);
+            opacity: 0.3;
+          "
+        ></div>
+        <div
+          style="
+            position: absolute;
+            top: 50%;
+            left: 60px;
+            right: 40px;
+            height: 1px;
+            background: var(--border);
+            opacity: 0.3;
+          "
+        ></div>
+
+        <!-- AGI Workforce - top right, large -->
+        <div
+          class="bubble"
+          style="
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            top: 12%;
+            right: 12%;
+          "
+          data-tooltip="AGI Workforce: Native Tauri desktop + 9 LLM providers + 140+ non-coding skills + mobile companion + local LLMs"
+        >
+          AGI
+          <span class="bubble-label">AGI Workforce</span>
+        </div>
+
+        <!-- Claude - top center-right, large -->
+        <div
+          class="bubble"
+          style="
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(135deg, #d97706, #f59e0b);
+            top: 22%;
+            right: 28%;
+          "
+          data-tooltip="Claude Desktop/Code: Cowork mode for knowledge workers + Claude Code for developers. Claude-only. MCP leader. $380B valuation."
+        >
+          CL
+          <span class="bubble-label">Claude</span>
+        </div>
+
+        <!-- ChatGPT - bottom right, very large -->
+        <div
+          class="bubble"
+          style="
+            width: 90px;
+            height: 90px;
+            background: linear-gradient(135deg, #10a37f, #1a7f64);
+            bottom: 18%;
+            right: 16%;
+          "
+          data-tooltip="ChatGPT: Largest consumer AI. GPT-5.4 computer use. Operator agent. Cloud-only, OpenAI-only models. $200/mo Pro."
+        >
+          GPT
+          <span class="bubble-label">ChatGPT</span>
+        </div>
+
+        <!-- Gemini - bottom center-right, large -->
+        <div
+          class="bubble"
+          style="
+            width: 68px;
+            height: 68px;
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            bottom: 25%;
+            right: 32%;
+          "
+          data-tooltip="Google Gemini: Multimodal + Google ecosystem. Desktop app emerging. Agent mode. $249/mo Ultra."
+        >
+          Ge
+          <span class="bubble-label">Gemini</span>
+        </div>
+
+        <!-- Cursor - top-left area, very large -->
+        <div
+          class="bubble"
+          style="
+            width: 76px;
+            height: 76px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            top: 28%;
+            left: 22%;
+          "
+          data-tooltip="Cursor: Leading AI IDE, $2B+ ARR. Multi-model. Background agents. MCP capped 40 tools. Code-only, no desktop automation."
+        >
+          Cu
+          <span class="bubble-label">Cursor</span>
+        </div>
+
+        <!-- Windsurf - center-left, medium -->
+        <div
+          class="bubble"
+          style="
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            top: 36%;
+            left: 30%;
+          "
+          data-tooltip="Windsurf: Cascade multi-model agent. 200K RAG context. Gartner Leader. Enterprise compliance. $15/mo."
+        >
+          W
+          <span class="bubble-label">Windsurf</span>
+        </div>
+
+        <!-- Devin - bottom-left, medium -->
+        <div
+          class="bubble"
+          style="
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #ec4899, #be185d);
+            bottom: 28%;
+            left: 24%;
+          "
+          data-tooltip="Devin: Fully autonomous coding agent. Cloud-only. Plans/codes/tests/debugs. 67% PR merge rate. $20/mo entry."
+        >
+          D
+          <span class="bubble-label">Devin</span>
+        </div>
+
+        <!-- Copilot - bottom center-left, large -->
+        <div
+          class="bubble"
+          style="
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #333, #555);
+            bottom: 34%;
+            left: 36%;
+          "
+          data-tooltip="GitHub Copilot: 15M developers. $10/mo. Gartner Leader. Enterprise dominant. IDE extension model."
+        >
+          GH
+          <span class="bubble-label">Copilot</span>
+        </div>
+
+        <!-- Aider - top-left, small -->
+        <div
+          class="bubble"
+          style="
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            top: 16%;
+            left: 14%;
+          "
+          data-tooltip="Aider: Open-source, CLI-only. BYOK + local LLMs. Free. 70K+ GitHub stars. No GUI."
+        >
+          A
+          <span class="bubble-label">Aider</span>
+        </div>
+      </div>
+
+      <h3>Key Insight</h3>
+      <p style="color: var(--text-muted); font-size: 14px">
+        AGI Workforce uniquely occupies the
+        <strong style="color: var(--accent-light)">top-right quadrant</strong> — the only product
+        combining native desktop-local execution with general-purpose (non-coding) capabilities.
+        Claude is the nearest competitor but remains Claude-only. All other competitors cluster in
+        code-only (left) or cloud-only (bottom) zones.
+      </p>
+    </div>
+
+    <!-- COMPETITOR DEEP-DIVES -->
+    <div class="section" id="competitors">
+      <h2>Competitor Deep-Dives</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px">
+        Click any competitor card above or select below to view detailed analysis.
+      </p>
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px">
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('claude')"
+        >
+          Claude
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('chatgpt')"
+        >
+          ChatGPT
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('cursor')"
+        >
+          Cursor
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('gemini')"
+        >
+          Gemini
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('windsurf')"
+        >
+          Windsurf
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('devin')"
+        >
+          Devin
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('copilot')"
+        >
+          Copilot
+        </button>
+        <button
+          class="nav"
+          style="padding: 6px 14px; font-size: 12px"
+          onclick="showCompetitor('aider')"
+        >
+          Aider
+        </button>
+      </div>
+
+      <!-- Claude Detail -->
+      <div class="detail-panel" id="detail-claude">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #d97706, #f59e0b)">
+            C
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Claude Desktop / Claude Code</div>
+            <div class="card-subtitle">
+              Anthropic &middot; $380B valuation &middot; Series G ($30B, Feb 2026)
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Claude Desktop includes Cowork mode (launched Jan 2026) — an agentic AI that reads,
+            edits, creates, and organizes files locally. "Claude Code for knowledge workers." Claude
+            Code is the CLI/desktop coding tool with agent mode, remote control (mobile QR pairing),
+            and MCP integration. Models: Opus 4.6 (1M context), Sonnet 4.6, Haiku 4.5 — Claude-only.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Best-in-class reasoning for complex coding/analysis tasks</li>
+            <li>MCP ecosystem leadership (1,864+ public servers, one-click desktop extensions)</li>
+            <li>46% "most loved" developer rating (vs. Cursor 19%, Copilot 9%)</li>
+            <li>Native document editing (DOCX, PPTX, XLSX, PDF)</li>
+            <li>Cowork mode extends agents to non-technical knowledge workers</li>
+            <li>Rapid model iteration (4 major releases in 6 months)</li>
+            <li>Local-first security (files stay on machine)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li><strong>Claude-only models</strong> — no multi-model support, no local LLMs</li>
+            <li>No native memory across sessions (planned)</li>
+            <li>Limited multimodal (no image/video generation)</li>
+            <li>
+              Remote Control is Max-tier exclusive ($100-200/mo), CLI-focused, terminal must stay
+              open
+            </li>
+            <li>macOS-first design (Windows still secondary)</li>
+            <li>Cloud-only inference (no offline capability)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>
+            Free ($0) • Pro ($17-20/mo) • Max 5x ($100/mo) • Max 20x ($200/mo) • Team Standard
+            ($25/seat) • Team Premium ($150/seat) • Enterprise (custom)
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>AGI Workforce Advantages</h4>
+          <ul>
+            <li>Multi-model by design (9+ providers vs. Claude-only)</li>
+            <li>Full BYOK + local LLMs (Ollama/LM Studio) for offline/privacy</li>
+            <li>Mobile companion with live agent dashboard (vs. CLI-only Remote Control)</li>
+            <li>140+ non-coding AI skills (vs. Cowork's general-purpose approach)</li>
+            <li>Unlimited MCP tools with native desktop UI</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ChatGPT Detail -->
+      <div class="detail-panel" id="detail-chatgpt">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #10a37f, #1a7f64)">
+            G
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">ChatGPT / OpenAI</div>
+            <div class="card-subtitle">
+              OpenAI &middot; Hundreds of millions of users &middot; Stargate $500B infra project
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Dominant consumer AI assistant with web, desktop, and mobile apps. GPT-5.4 (March 2026)
+            achieved 75% success on OSWorld benchmark for computer use — surpassing human experts
+            (72.4%). Operator agent handles web-based autonomous tasks. Full multimodal: voice
+            (emotion detection), DALL-E images, Sora video, vision. MCP support added March 2025.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Largest installed base globally — "ChatGPT" is synonymous with AI</li>
+            <li>GPT-5.4 computer use breakthrough (75% OSWorld, above human baseline)</li>
+            <li>Full multimodal depth: voice, vision, images, video generation</li>
+            <li>Enterprise security: SOC 2 Type 2, CSA STAR, ISO/IEC, EKM, data residency</li>
+            <li>Mature API ecosystem (900+ endpoints, strong developer community)</li>
+            <li>Memory system for cross-session continuity</li>
+            <li>Canvas feature for collaborative writing/code editing</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li><strong>OpenAI-only models</strong> — no multi-model, no local LLMs</li>
+            <li>Computer use not integrated into desktop app (API/web only)</li>
+            <li>Operator requires Pro tier ($200/mo)</li>
+            <li>MCP requires web Developer Mode toggle — not in desktop app</li>
+            <li>Behind Claude on coding benchmarks (SWE-bench)</li>
+            <li>No offline capability</li>
+            <li>34.8% of enterprise inputs contain sensitive data (governance risk)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>
+            Free ($0, ads tested) • Go ($8/mo) • Plus ($20/mo) • Pro ($200/mo) • Business ($25/seat)
+            • Enterprise (custom)
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>AGI Workforce Advantages</h4>
+          <ul>
+            <li>Multi-model choice (9+ providers vs. OpenAI-only walled garden)</li>
+            <li>Local LLMs for offline/privacy (vs. always-online requirement)</li>
+            <li>Native desktop automation integrated in app (vs. API-only computer use)</li>
+            <li>140+ domain-specific skills (vs. general-purpose assistant)</li>
+            <li>Mobile companion with per-tool-call approval (vs. passive mobile app)</li>
+            <li>Accessible pricing (vs. $200/mo Pro for advanced features)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Cursor Detail -->
+      <div class="detail-panel" id="detail-cursor">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6)">
+            Cu
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Cursor</div>
+            <div class="card-subtitle">
+              Anysphere &middot; $29.3B valuation &middot; $2B+ ARR &middot; 50%+ Fortune 500
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Leading AI IDE (VS Code fork) with $2B+ annualized revenue. Multi-model support (GPT-5,
+            Claude, Gemini, custom endpoints). Background agents + new Automations system (always-on
+            agents triggered by events). Composer for multi-file refactoring. JetBrains integration
+            added March 2026. Code-focused with no desktop automation.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Market revenue leader ($2B+ ARR, fastest B2B SaaS ramp in history)</li>
+            <li>Multi-model flexibility (GPT-5, Claude, Gemini, custom endpoints)</li>
+            <li>Codebase-aware indexing and semantic code search</li>
+            <li>Composer for visual multi-file diffs</li>
+            <li>Background agents + Automations (event-triggered, agent memory)</li>
+            <li>Familiar VS Code UX — low friction adoption</li>
+            <li>JetBrains integration expanding reach beyond VS Code</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li><strong>Code-only</strong> — no non-coding skills or general-purpose use cases</li>
+            <li><strong>MCP capped at 40 tools</strong> — hard limit in implementation</li>
+            <li>No desktop automation or screen control</li>
+            <li>No mobile app</li>
+            <li>Agents run in cloud sandboxes — not local machine</li>
+            <li>Credit-based billing can be unpredictable</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>
+            Hobby (Free) • Pro ($20/mo) • Pro+ ($60/mo) • Ultra ($200/mo) • Teams ($40/seat) •
+            Enterprise (custom)
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>AGI Workforce Advantages</h4>
+          <ul>
+            <li>140+ non-coding skills (healthcare, legal, finance, trades, creative)</li>
+            <li>Native desktop automation (screen, keyboard, OCR, app control)</li>
+            <li>Unlimited MCP tools (vs. 40-tool hard cap)</li>
+            <li>Mobile companion with live agent dashboard</li>
+            <li>BYOK + local LLMs in native desktop app</li>
+            <li>General-purpose AI workforce platform (not just an IDE)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Gemini Detail -->
+      <div class="detail-panel" id="detail-gemini">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #4285f4, #34a853)">
+            G
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Google Gemini</div>
+            <div class="card-subtitle">
+              Google &middot; Google Workspace integration &middot; Replacing Google Assistant
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Google's multimodal AI with deep ecosystem integration (Gmail, Drive, Calendar, etc.).
+            Agent mode for multi-step autonomous tasks. Computer use via Gemini 2.5 model (browser
+            automation). Desktop app launched on Windows (Jan 2026), macOS TBA. Replacing Google
+            Assistant on Android devices. Enterprise mobile apps launched Feb 2026.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Deep Google Workspace integration (Gmail, Drive, Calendar, Docs)</li>
+            <li>Multimodal reasoning (text, images, audio, video)</li>
+            <li>Agent mode with autonomous multi-step planning</li>
+            <li>Thought Signatures for encrypted reasoning state across turns</li>
+            <li>Android device actions (ordering, booking, navigation)</li>
+            <li>Massive distribution via Android + Chrome + Workspace</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li>Desktop app is very recent (Jan 2026) — less mature</li>
+            <li>No native desktop automation (browser-based only)</li>
+            <li>Google-only models (Gemini family)</li>
+            <li>MCP integration official but immature in consumer products</li>
+            <li>No local/offline capability</li>
+            <li>Ultra tier is expensive ($249/mo)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>Free (limited) • AI Pro ($19.99/mo) • AI Ultra ($249.99/mo) • API (pay-as-you-go)</p>
+        </div>
+      </div>
+
+      <!-- Windsurf Detail -->
+      <div class="detail-panel" id="detail-windsurf">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2)">
+            W
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Windsurf</div>
+            <div class="card-subtitle">
+              Cognition/Codeium &middot; Gartner Leader &middot; Enterprise compliance
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            AI IDE with Cascade agent (multi-model switching) and proprietary SWE-1.5 model.
+            RAG-based 200K+ token context from automatic codebase indexing. Arena Mode lets two
+            agents compete to find best model per task. Enterprise compliance: ZDR, SOC 2, HIPAA,
+            FedRAMP, ITAR. 25% cheaper than Cursor.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>200K+ token RAG context (vs. Cursor's 10-50K)</li>
+            <li>Cascade multi-model switching (GPT-5, Claude, SWE-1.5, Gemini)</li>
+            <li>Enterprise compliance certifications (HIPAA, FedRAMP, ITAR)</li>
+            <li>25% cheaper than Cursor ($15/mo Pro vs. $20/mo)</li>
+            <li>Arena Mode for model comparison</li>
+            <li>Memories system (learns codebase patterns after 48hr indexing)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li>Code-only — no non-coding use cases</li>
+            <li>Only 21 MCP tools integrated</li>
+            <li>No desktop automation</li>
+            <li>No mobile app</li>
+            <li>Smaller community than Cursor</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>Free (25 credits) • Pro ($15/mo) • Teams ($30/seat) • Enterprise ($60/seat)</p>
+        </div>
+      </div>
+
+      <!-- Devin Detail -->
+      <div class="detail-panel" id="detail-devin">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #ec4899, #be185d)">
+            D
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Devin</div>
+            <div class="card-subtitle">Cognition AI &middot; Most autonomous coding agent</div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Fully autonomous coding agent that plans, codes, tests, debugs, and iterates end-to-end.
+            Cloud-hosted with sandboxed IDE, browser, and terminal. Parallel agent spawning for
+            concurrent tasks. Devin Search for agentic codebase exploration. Desktop app testing on
+            Linux. Legacy codebase modernization (COBOL → modern languages).
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Most autonomous agent (end-to-end: requirements → working software)</li>
+            <li>67% PR merge rate (up from 34% last year)</li>
+            <li>Infinitely parallelizable agent spawning</li>
+            <li>Legacy codebase modernization</li>
+            <li>Dramatic pricing reduction ($500 → $20/mo)</li>
+            <li>3x faster startup, 2x faster responses (2026 updates)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li>Only ~15% success on complex, ambiguous tasks</li>
+            <li>Cloud-only — no local execution</li>
+            <li>Struggles with novel algorithms and deep refactoring</li>
+            <li>Hallucinated vulnerabilities during security reviews</li>
+            <li>Single model (no multi-model choice)</li>
+            <li>No non-coding skills</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>Core ($20/mo + $2.25/ACU) • Team ($500/mo) • Enterprise (custom)</p>
+        </div>
+      </div>
+
+      <!-- Copilot Detail -->
+      <div class="detail-panel" id="detail-copilot">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #333, #555)">GH</div>
+          <div>
+            <div class="card-title" style="font-size: 20px">GitHub Copilot</div>
+            <div class="card-subtitle">
+              Microsoft &middot; 15M developers &middot; Gartner Leader
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            GitHub's AI coding assistant with 15 million deployed developers — the largest installed
+            base. IDE extension model (VS Code, JetBrains, Neovim). Gartner Magic Quadrant Leader
+            (2025). Dominant in enterprises with 10K+ employees (56% market share).
+            Autocomplete-focused with growing agent capabilities.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Largest installed base (15M developers)</li>
+            <li>Most affordable entry ($10/mo individual)</li>
+            <li>Deep GitHub ecosystem integration (PRs, issues, Actions)</li>
+            <li>Enterprise procurement advantage (Microsoft backing)</li>
+            <li>Gartner Leader recognition</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li>IDE extension only — not standalone app</li>
+            <li>Autocomplete-first philosophy (less agentic than competitors)</li>
+            <li>Limited model choice (GitHub-tuned models)</li>
+            <li>No desktop automation, no MCP support</li>
+            <li>No non-coding use cases</li>
+            <li>9% "most loved" (trailing Claude 46%, Cursor 19%)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>Free (limited) • Individual ($10/mo) • Business ($19/mo) • Enterprise ($39/mo)</p>
+        </div>
+      </div>
+
+      <!-- Aider Detail -->
+      <div class="detail-panel" id="detail-aider">
+        <button class="close-btn" onclick="this.parentElement.classList.remove('visible')">
+          &times;
+        </button>
+        <div class="card-header" style="margin-bottom: 16px">
+          <div class="card-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a)">
+            A
+          </div>
+          <div>
+            <div class="card-title" style="font-size: 20px">Aider</div>
+            <div class="card-subtitle">
+              Open Source &middot; Free &middot; CLI-only &middot; 70K+ GitHub stars
+            </div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Product Overview</h4>
+          <p>
+            Free, open-source AI pair programming CLI tool. Full BYOK model support (OpenAI,
+            Anthropic, Ollama local models, any OpenAI-compatible API). 100+ language support. Git
+            integration with auto-commits. AST-aware linting. Voice-to-code. Fully offline capable
+            with local LLMs.
+          </p>
+        </div>
+        <div class="detail-section">
+          <h4>Key Strengths</h4>
+          <ul>
+            <li>Free and open-source (MIT license)</li>
+            <li>Full BYOK + local LLM support</li>
+            <li>Fully offline capable</li>
+            <li>100+ language support</li>
+            <li>Git-native auto-staging and commits</li>
+            <li>Active community (70K+ GitHub stars)</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Key Weaknesses</h4>
+          <ul>
+            <li>CLI-only — no GUI</li>
+            <li>Smaller context windows than enterprise tools</li>
+            <li>No MCP support</li>
+            <li>No desktop automation</li>
+            <li>No non-coding use cases</li>
+            <li>No mobile app</li>
+          </ul>
+        </div>
+        <div class="detail-section">
+          <h4>Pricing</h4>
+          <p>Free (open-source, bring your own API keys)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEATURE MATRIX -->
+    <div class="section" id="features">
+      <h2>Feature Comparison Matrix</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px">
+        Ratings: <span class="rating-strong">Strong</span> &middot;
+        <span class="rating-adequate">Adequate</span> &middot;
+        <span class="rating-weak">Weak</span> &middot; <span class="rating-absent">Absent</span>
+      </p>
+
+      <div class="matrix-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th style="background: #6366f1; color: #fff">AGI Workforce</th>
+              <th>Claude</th>
+              <th>ChatGPT</th>
+              <th>Cursor</th>
+              <th>Gemini</th>
+              <th>Windsurf</th>
+              <th>Devin</th>
+              <th>Copilot</th>
+              <th>Aider</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Platform -->
+            <tr class="category-row">
+              <td colspan="10">Platform & Architecture</td>
+            </tr>
+            <tr>
+              <td>Native Desktop App</td>
+              <td class="rating-strong">Strong (Tauri v2)</td>
+              <td class="rating-strong">Strong</td>
+              <td class="rating-adequate">Adequate (Electron)</td>
+              <td class="rating-strong">Strong (VS Code fork)</td>
+              <td class="rating-weak">Weak (new, Win only)</td>
+              <td class="rating-strong">Strong (Electron)</td>
+              <td class="rating-absent">Absent (web SaaS)</td>
+              <td class="rating-absent">Absent (extension)</td>
+              <td class="rating-absent">Absent (CLI)</td>
+            </tr>
+            <tr>
+              <td>Multi-Model Support</td>
+              <td class="rating-strong">Strong (9+ providers)</td>
+              <td class="rating-absent">Absent (Claude-only)</td>
+              <td class="rating-absent">Absent (OpenAI-only)</td>
+              <td class="rating-strong">Strong (GPT, Claude, Gemini)</td>
+              <td class="rating-absent">Absent (Gemini-only)</td>
+              <td class="rating-strong">Strong (Cascade)</td>
+              <td class="rating-absent">Absent (single model)</td>
+              <td class="rating-weak">Weak (GitHub models)</td>
+              <td class="rating-strong">Strong (any via API)</td>
+            </tr>
+            <tr>
+              <td>Local LLM Support</td>
+              <td class="rating-strong">Strong (Ollama + LM Studio)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-adequate">Adequate (custom endpoints)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-strong">Strong (Ollama native)</td>
+            </tr>
+            <tr>
+              <td>BYOK (Bring Your Own Keys)</td>
+              <td class="rating-strong">Strong (all tiers)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (Enterprise EKM only)</td>
+              <td class="rating-strong">Strong</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-strong">Strong</td>
+            </tr>
+            <tr>
+              <td>Offline Capability</td>
+              <td class="rating-strong">Strong (local models)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (limited)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-strong">Strong</td>
+            </tr>
+
+            <!-- MCP & Tools -->
+            <tr class="category-row">
+              <td colspan="10">MCP & Tool Integration</td>
+            </tr>
+            <tr>
+              <td>MCP Support</td>
+              <td class="rating-strong">Strong (unlimited, 3 transports)</td>
+              <td class="rating-strong">Strong (1,864+ servers)</td>
+              <td class="rating-adequate">Adequate (web dev mode)</td>
+              <td class="rating-adequate">Adequate (40-tool cap)</td>
+              <td class="rating-adequate">Adequate (official, immature)</td>
+              <td class="rating-weak">Weak (21 tools)</td>
+              <td class="rating-adequate">Adequate (marketplace)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>MCP Tool Limit</td>
+              <td class="rating-strong">Unlimited</td>
+              <td class="rating-strong">Unlimited</td>
+              <td class="rating-adequate">Unknown</td>
+              <td class="rating-weak">40 tools max</td>
+              <td class="rating-adequate">Unknown</td>
+              <td class="rating-weak">21 integrated</td>
+              <td class="rating-adequate">Unknown</td>
+              <td class="rating-absent">N/A</td>
+              <td class="rating-absent">N/A</td>
+            </tr>
+
+            <!-- Desktop Automation -->
+            <tr class="category-row">
+              <td colspan="10">Desktop Automation & Control</td>
+            </tr>
+            <tr>
+              <td>Screen Capture & OCR</td>
+              <td class="rating-strong">Strong (native Tauri)</td>
+              <td class="rating-weak">Weak (Cowork limited)</td>
+              <td class="rating-adequate">Adequate (screenshot)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (browser only)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (Linux only)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>Keyboard/Mouse Simulation</td>
+              <td class="rating-strong">Strong (native APIs)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-adequate">Adequate (GPT-5.4 API)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (browser auto)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (Linux sandbox)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>Browser Automation</td>
+              <td class="rating-strong">Strong (extension + CDP)</td>
+              <td class="rating-adequate">Adequate (Chrome ext)</td>
+              <td class="rating-strong">Strong (Operator)</td>
+              <td class="rating-adequate">Adequate (Playwright MCP)</td>
+              <td class="rating-adequate">Adequate (Gemini 2.5)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-adequate">Adequate (sandbox)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+
+            <!-- Agent Capabilities -->
+            <tr class="category-row">
+              <td colspan="10">Agent Capabilities</td>
+            </tr>
+            <tr>
+              <td>Autonomous Agent Mode</td>
+              <td class="rating-strong">Strong (swarm + teams)</td>
+              <td class="rating-strong">Strong (Cowork, Code)</td>
+              <td class="rating-strong">Strong (Agent, Operator)</td>
+              <td class="rating-strong">Strong (Automations)</td>
+              <td class="rating-adequate">Adequate (Agent Mode)</td>
+              <td class="rating-adequate">Adequate (Cascade)</td>
+              <td class="rating-strong">Strong (full autonomy)</td>
+              <td class="rating-weak">Weak (suggestions)</td>
+              <td class="rating-adequate">Adequate (pair prog)</td>
+            </tr>
+            <tr>
+              <td>Multi-Agent Orchestration</td>
+              <td class="rating-strong">Strong (swarm, parallel)</td>
+              <td class="rating-strong">Strong (agent teams)</td>
+              <td class="rating-adequate">Adequate (Agents SDK)</td>
+              <td class="rating-strong">Strong (subagents)</td>
+              <td class="rating-weak">Weak</td>
+              <td class="rating-weak">Weak</td>
+              <td class="rating-adequate">Adequate (parallel spawn)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>Background / Scheduled Agents</td>
+              <td class="rating-strong">Strong (scheduler)</td>
+              <td class="rating-weak">Weak (limited)</td>
+              <td class="rating-weak">Weak</td>
+              <td class="rating-strong">Strong (Automations)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-adequate">Adequate</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+
+            <!-- Non-Coding -->
+            <tr class="category-row">
+              <td colspan="10">Non-Coding & Knowledge Work</td>
+            </tr>
+            <tr>
+              <td>Domain-Specific AI Skills</td>
+              <td class="rating-strong">Strong (140+ skills)</td>
+              <td class="rating-adequate">Adequate (Cowork skills)</td>
+              <td class="rating-adequate">Adequate (Custom GPTs)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-weak">Weak (Gems)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>Document Creation (DOCX/PPTX/XLSX)</td>
+              <td class="rating-adequate">Adequate (planned)</td>
+              <td class="rating-strong">Strong (native editing)</td>
+              <td class="rating-adequate">Adequate (Canvas)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-adequate">Adequate (Workspace)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+
+            <!-- Mobile -->
+            <tr class="category-row">
+              <td colspan="10">Mobile & Companion</td>
+            </tr>
+            <tr>
+              <td>Mobile App</td>
+              <td class="rating-strong">Strong (iOS/Android, QR pair)</td>
+              <td class="rating-adequate">Adequate (chat + Remote Ctrl)</td>
+              <td class="rating-strong">Strong (full-featured)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-strong">Strong (iOS/Android)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+            <tr>
+              <td>Live Agent Dashboard (Mobile)</td>
+              <td class="rating-strong">Strong (real-time oversight)</td>
+              <td class="rating-weak">Weak (CLI remote ctrl)</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+              <td class="rating-absent">Absent</td>
+            </tr>
+
+            <!-- Security -->
+            <tr class="category-row">
+              <td colspan="10">Security & Compliance</td>
+            </tr>
+            <tr>
+              <td>Data Privacy (Local Execution)</td>
+              <td class="rating-strong">Strong (local-first)</td>
+              <td class="rating-adequate">Adequate (files local)</td>
+              <td class="rating-weak">Weak (cloud-only)</td>
+              <td class="rating-adequate">Adequate (local IDE)</td>
+              <td class="rating-weak">Weak (cloud-only)</td>
+              <td class="rating-adequate">Adequate (local IDE)</td>
+              <td class="rating-absent">Absent (cloud sandbox)</td>
+              <td class="rating-adequate">Adequate (extension)</td>
+              <td class="rating-strong">Strong (fully local)</td>
+            </tr>
+            <tr>
+              <td>Enterprise Compliance Certs</td>
+              <td class="rating-adequate">Adequate (planned)</td>
+              <td class="rating-adequate">Adequate (enterprise)</td>
+              <td class="rating-strong">Strong (SOC2, ISO, EKM)</td>
+              <td class="rating-adequate">Adequate (SOC 2)</td>
+              <td class="rating-strong">Strong (Google Cloud)</td>
+              <td class="rating-strong">Strong (HIPAA, FedRAMP)</td>
+              <td class="rating-adequate">Adequate (enterprise)</td>
+              <td class="rating-strong">Strong (Microsoft)</td>
+              <td class="rating-absent">Absent (OSS)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PRICING -->
+    <div class="section" id="pricing">
+      <h2>Pricing Comparison</h2>
+
+      <h3>Individual Entry-Level Price</h3>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Aider</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 2%; background: var(--green)">Free</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">GitHub Copilot</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 5%; background: #555">$10/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Windsurf Pro</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 7.5%; background: var(--cyan)">$15/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Claude Pro</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 10%; background: #d97706">$20/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">ChatGPT Plus</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 10%; background: #10a37f">$20/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Cursor Pro</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 10%; background: var(--accent)">$20/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Devin Core</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 10%; background: var(--pink)">$20/mo+usage</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Gemini AI Pro</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 10%; background: #4285f4">$20/mo</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Premium / Pro Tier</h3>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Cursor Pro+</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 24%; background: var(--accent)">$60/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Claude Max 5x</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 40%; background: #d97706">$100/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">ChatGPT Pro</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 80%; background: #10a37f">$200/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Cursor Ultra</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 80%; background: var(--accent)">$200/mo</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Gemini Ultra</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 100%; background: #4285f4">$250/mo</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Team/Enterprise Per-Seat Pricing</h3>
+      <div class="matrix-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Team Tier</th>
+              <th>Enterprise Tier</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Claude</td>
+              <td>$25/seat (Standard)</td>
+              <td>Custom</td>
+              <td>Premium team at $150/seat</td>
+            </tr>
+            <tr>
+              <td>ChatGPT</td>
+              <td>$25/seat (Business)</td>
+              <td>Custom</td>
+              <td>SAML SSO at no extra cost</td>
+            </tr>
+            <tr>
+              <td>Cursor</td>
+              <td>$40/seat</td>
+              <td>Custom</td>
+              <td>SCIM 2.0, audit logs</td>
+            </tr>
+            <tr>
+              <td>Windsurf</td>
+              <td>$30/seat</td>
+              <td>$60/seat</td>
+              <td>HIPAA, FedRAMP, ITAR</td>
+            </tr>
+            <tr>
+              <td>Devin</td>
+              <td>$500/mo (team)</td>
+              <td>Custom</td>
+              <td>SaaS or VPC deployment</td>
+            </tr>
+            <tr>
+              <td>GitHub Copilot</td>
+              <td>$19/seat (Business)</td>
+              <td>$39/seat</td>
+              <td>Microsoft procurement advantage</td>
+            </tr>
+            <tr>
+              <td>Gemini</td>
+              <td>Via Workspace</td>
+              <td>Custom</td>
+              <td>Google Cloud integration</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- POSITIONING -->
+    <div class="section" id="positioning">
+      <h2>Positioning Analysis</h2>
+
+      <h3>Competitive Positioning Statements</h3>
+      <div class="pos-grid">
+        <div class="pos-card">
+          <h4 style="color: var(--accent-light)">AGI Workforce</h4>
+          <div class="pos-quote">
+            "The open, model-agnostic AI desktop platform. Connect any LLM, use MCP tools, manage
+            agents, run autonomous workflows."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> AI Desktop Platform<br /><strong>Differentiator:</strong>
+            Local control + multi-model + native GUI (trifecta)<br /><strong>Target:</strong>
+            Knowledge workers & developers who want choice and control
+          </p>
+        </div>
+        <div class="pos-card">
+          <h4 style="color: #d97706">Claude Desktop / Code</h4>
+          <div class="pos-quote">
+            "Claude Code transformed programming. Now Claude Cowork is coming for the rest of the
+            enterprise."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> Agentic AI Assistant<br /><strong>Differentiator:</strong>
+            Best reasoning + MCP ecosystem + knowledge work<br /><strong>Target:</strong> Developers
+            (Code) + knowledge workers (Cowork)
+          </p>
+        </div>
+        <div class="pos-card">
+          <h4 style="color: #10a37f">ChatGPT / OpenAI</h4>
+          <div class="pos-quote">
+            "AI copilot for work and life — agents that do work for you autonomously."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> Universal AI Assistant<br /><strong>Differentiator:</strong>
+            Brand dominance + multimodal + computer use<br /><strong>Target:</strong> Everyone
+            (consumer → enterprise)
+          </p>
+        </div>
+        <div class="pos-card">
+          <h4 style="color: var(--accent)">Cursor</h4>
+          <div class="pos-quote">
+            "Workflow-first, AI-native. Always-on AI software factory worker."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> AI IDE / Coding Platform<br /><strong
+              >Differentiator:</strong
+            >
+            Editor velocity + multi-model + Automations<br /><strong>Target:</strong> Developers
+            coding 4+ hours daily
+          </p>
+        </div>
+        <div class="pos-card">
+          <h4 style="color: #4285f4">Google Gemini</h4>
+          <div class="pos-quote">
+            "The most capable multimodal AI, deeply integrated with Google's ecosystem."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> Multimodal AI + Workspace Integration<br /><strong
+              >Differentiator:</strong
+            >
+            Google ecosystem + Android + distribution<br /><strong>Target:</strong> Google Workspace
+            users, Android users
+          </p>
+        </div>
+        <div class="pos-card">
+          <h4 style="color: var(--cyan)">Windsurf</h4>
+          <div class="pos-quote">
+            "Enterprise-grade AI IDE with deep codebase understanding and compliance."
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px">
+            <strong>Category:</strong> Enterprise AI IDE<br /><strong>Differentiator:</strong> 200K
+            RAG context + compliance certs (HIPAA, FedRAMP)<br /><strong>Target:</strong> Enterprise
+            engineering teams with large codebases
+          </p>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 32px">Positioning Gaps & Opportunities</h3>
+      <div class="card-grid">
+        <div class="card" style="border-color: var(--green); border-width: 2px">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            Unclaimed: Multi-Model Desktop + Non-Code Skills
+          </div>
+          <div class="card-body">
+            No competitor combines native desktop app + 9+ model providers + 140+ non-coding skills.
+            AGI Workforce owns this intersection uniquely. Claude has Cowork but is Claude-only.
+            Cursor has multi-model but code-only.
+          </div>
+        </div>
+        <div class="card" style="border-color: var(--green); border-width: 2px">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            Unclaimed: Mobile Agent Oversight
+          </div>
+          <div class="card-body">
+            Zero competitors offer real-time mobile agent dashboards with per-tool-call
+            approve/deny. Claude's Remote Control is CLI-only and Max-tier restricted. ChatGPT
+            mobile is passive chat only.
+          </div>
+        </div>
+        <div class="card" style="border-color: var(--yellow); border-width: 2px">
+          <div class="card-title" style="color: var(--yellow); margin-bottom: 8px">
+            Crowded: "AI Coding Assistant"
+          </div>
+          <div class="card-body">
+            Cursor, Windsurf, Copilot, Claude Code, Devin, Aider all compete here. Position has lost
+            differentiation. AGI Workforce should avoid being just another AI coding tool.
+          </div>
+        </div>
+        <div class="card" style="border-color: var(--blue); border-width: 2px">
+          <div class="card-title" style="color: var(--blue); margin-bottom: 8px">
+            Emerging: Desktop Automation Agent
+          </div>
+          <div class="card-body">
+            GPT-5.4 computer use and Gemini 2.5 are maturing fast. Early mover advantage is
+            shrinking. AGI Workforce should accelerate native desktop automation to maintain lead
+            over vision-based approaches.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MARKET TRENDS -->
+    <div class="section" id="trends">
+      <h2>Market Trends (2026)</h2>
+
+      <div class="trend-item">
+        <h4>
+          Multi-Agent Orchestration Becomes Standard
+          <span class="trend-badge trend-now">Happening Now</span>
+        </h4>
+        <p>
+          57% of organizations deploy multi-step agent workflows. Agent teams (parallel execution,
+          task decomposition) are now table stakes. Claude agent teams, Cursor subagents, and Devin
+          parallel spawning all shipped in 2025-2026. AGI Workforce's swarm orchestration is
+          well-positioned.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>MCP Ecosystem Explosion <span class="trend-badge trend-now">Happening Now</span></h4>
+        <p>
+          97 million monthly SDK downloads. Tens of thousands of MCP servers. Anthropic donated MCP
+          to Agentic AI Foundation (Linux Foundation). OpenAI, Microsoft, Google all adopted. MCP is
+          the standard for AI tool integration. AGI Workforce's unlimited MCP support is a
+          structural advantage.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>
+          Desktop Computer Use as Competitive Necessity
+          <span class="trend-badge trend-now">Happening Now</span>
+        </h4>
+        <p>
+          GPT-5.4 achieved 75% success on OSWorld (above human experts). Gemini 2.5 computer use
+          model in API. Claude Code has screen automation. Moving from novelty to expected
+          capability. AGI Workforce's native Tauri desktop control (system APIs vs. vision-based) is
+          differentiated but needs to keep pace.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>
+          AI Beyond Code: Knowledge Worker Agents
+          <span class="trend-badge trend-now">Happening Now</span>
+        </h4>
+        <p>
+          Claude Cowork (Jan 2026) validated demand for agent platforms beyond developers. Customer
+          service agents saving 40+ hrs/month. Finance agents accelerating close by 30-50%. AGI
+          Workforce's 140+ non-coding skills are ahead of this trend.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>
+          Local LLM Adoption Accelerating <span class="trend-badge trend-soon">1-2 Years</span>
+        </h4>
+        <p>
+          Ollama has 70K+ GitHub stars. Privacy demands, compliance requirements, and cost control
+          driving local-first architectures. Models now run on MacBook Pro hardware. AGI Workforce's
+          Ollama/LM Studio support is a key differentiator as this trend accelerates.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>
+          Enterprise Governance Maturation <span class="trend-badge trend-soon">1-2 Years</span>
+        </h4>
+        <p>
+          46% cite system integration as primary challenge for AI agents. Shift from viewing
+          governance as compliance overhead to enabler. Windsurf's HIPAA/FedRAMP certs winning
+          enterprise. AGI Workforce should prioritize compliance certifications for enterprise
+          market entry.
+        </p>
+      </div>
+
+      <div class="trend-item">
+        <h4>
+          Agent-to-Agent Communication Standards
+          <span class="trend-badge trend-later">3-5 Years</span>
+        </h4>
+        <p>
+          MCP 2026 roadmap includes agent-to-agent communication. AGENTS.md spec from OpenAI.
+          Agentic AI Foundation forming standards. Cross-platform agent collaboration is the next
+          frontier after individual agent autonomy.
+        </p>
+      </div>
+
+      <h3 style="margin-top: 32px">Market Size & Growth</h3>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-value">$7.8B</div>
+          <div class="stat-label">AI Agents Market 2025</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">$11.8B</div>
+          <div class="stat-label">AI Agents Market 2026</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">$52.6B</div>
+          <div class="stat-label">Projected 2030</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">$211B</div>
+          <div class="stat-label">AI VC Funding 2025</div>
+        </div>
+      </div>
+
+      <h3>Developer Tool Adoption (2026)</h3>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Claude Code</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 46%; background: #d97706">46% most loved</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Cursor</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 19%; background: var(--accent)">19% most loved</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">GitHub Copilot</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 9%; background: #555">9% most loved</div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted)">
+        Source: Pragmatic Engineer Survey, 2026. 95% of developers use AI tools weekly.
+      </p>
+    </div>
+
+    <!-- SWOT -->
+    <div class="section" id="swot">
+      <h2>AGI Workforce — SWOT Analysis</h2>
+
+      <div class="swot-grid">
+        <div class="swot-box swot-s">
+          <h4>Strengths</h4>
+          <ul>
+            <li>
+              <strong>Only trifecta product:</strong> Native desktop + multi-model (9+ providers) +
+              native GUI — no competitor has all three
+            </li>
+            <li>
+              <strong>140+ non-coding AI skills:</strong> Healthcare, legal, finance, education,
+              creative, trades, e-commerce — entirely uncontested market
+            </li>
+            <li>
+              <strong>Mobile companion with live agent dashboard:</strong> QR-pair, real-time
+              oversight, per-tool-call approval — zero competitors
+            </li>
+            <li>
+              <strong>Full BYOK + local LLMs:</strong> Ollama, LM Studio, offline-capable — only
+              tool combining this with polished desktop GUI
+            </li>
+            <li>
+              <strong>Unlimited MCP:</strong> No artificial tool limits (vs. Cursor's 40-cap), stdio
+              + SSE + HTTP transports
+            </li>
+            <li>
+              <strong>Native desktop automation:</strong> Tauri v2 with direct system APIs (screen,
+              keyboard, OCR) — structural advantage over vision-based approaches
+            </li>
+            <li>
+              <strong>Proprietary codebase:</strong> Enterprise-grade security, IP protection,
+              commercial SaaS model
+            </li>
+          </ul>
+        </div>
+        <div class="swot-box swot-w">
+          <h4>Weaknesses</h4>
+          <ul>
+            <li>
+              <strong>Brand awareness gap:</strong> Competing against ChatGPT (household name),
+              Claude ($380B), Cursor ($29.3B)
+            </li>
+            <li>
+              <strong>Enterprise compliance:</strong> Missing SOC 2, HIPAA, FedRAMP certifications
+              that Windsurf/ChatGPT already have
+            </li>
+            <li>
+              <strong>Market entry timing:</strong> Late entrant in a market where leaders have
+              massive installed bases (Copilot 15M, ChatGPT hundreds of millions)
+            </li>
+            <li>
+              <strong>Resource asymmetry:</strong> Competitors backed by Anthropic ($380B), OpenAI
+              (Stargate $500B), Microsoft, Google
+            </li>
+            <li>
+              <strong>Developer ecosystem:</strong> No VS Code fork or IDE integration (Cursor,
+              Windsurf have this)
+            </li>
+            <li>
+              <strong>Document editing maturity:</strong> Claude Cowork already ships native
+              DOCX/PPTX/XLSX creation
+            </li>
+          </ul>
+        </div>
+        <div class="swot-box swot-o">
+          <h4>Opportunities</h4>
+          <ul>
+            <li>
+              <strong>Non-developer market:</strong> $52.6B market by 2030 — Claude Cowork validates
+              demand but is Claude-only; AGI is multi-model
+            </li>
+            <li>
+              <strong>Enterprise cross-functional teams:</strong> Engineering + legal + finance +
+              operations in one platform — no competitor serves this
+            </li>
+            <li>
+              <strong>Privacy-first/regulated industries:</strong> Healthcare, finance, legal need
+              local-first AI — only AGI + Aider offer this; Aider is CLI-only
+            </li>
+            <li>
+              <strong>MCP ecosystem growth:</strong> 97M monthly downloads; as tools proliferate,
+              unlimited MCP becomes more valuable
+            </li>
+            <li>
+              <strong>Multi-tool fatigue:</strong> 70% of developers use 2-4 AI tools —
+              consolidation opportunity for an all-in-one platform
+            </li>
+            <li>
+              <strong>Local LLM acceleration:</strong> Ollama 70K+ stars; enterprises adopting
+              self-hosted models for data sovereignty
+            </li>
+            <li>
+              <strong>Emerging markets:</strong> Cost-sensitive markets where BYOK + local models =
+              dramatically lower TCO
+            </li>
+          </ul>
+        </div>
+        <div class="swot-box swot-t">
+          <h4>Threats</h4>
+          <ul>
+            <li>
+              <strong>Claude Cowork expansion:</strong> If Anthropic adds multi-model support,
+              eliminates AGI's key differentiator
+            </li>
+            <li>
+              <strong>OpenAI computer use maturation:</strong> GPT-5.4 already exceeds human
+              baseline; rapid improvement trajectory
+            </li>
+            <li>
+              <strong>Cursor's non-code expansion:</strong> Automations system + enterprise push
+              could expand beyond coding
+            </li>
+            <li>
+              <strong>Platform commoditization:</strong> MCP standardization may commoditize tool
+              integration
+            </li>
+            <li>
+              <strong>Funding disparity:</strong> Competitors can outspend on R&D, marketing, and
+              enterprise sales
+            </li>
+            <li>
+              <strong>Model quality convergence:</strong> If all models reach parity, multi-model
+              becomes less valuable
+            </li>
+            <li>
+              <strong>Apple Intelligence / native OS agents:</strong> If macOS/Windows build agent
+              platforms into the OS, third-party apps face displacement risk
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 32px">Strategic Recommendations</h3>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            1. Own "AI Workforce" Category
+          </div>
+          <div class="card-body">
+            Don't compete as "another AI coding tool." Position as the first AI workforce platform
+            for entire organizations — developers, legal, finance, healthcare, operations. Make
+            non-coding skills the hero feature.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            2. Ship Mobile Companion ASAP
+          </div>
+          <div class="card-body">
+            Zero competitors have real-time mobile agent oversight. This is a white-space
+            opportunity that won't last. Enterprise buyers will love approve/deny controls for
+            autonomous agents.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            3. Accelerate Desktop Automation
+          </div>
+          <div class="card-body">
+            GPT-5.4 computer use is catching up fast. AGI's native system API approach is
+            structurally better (faster, more reliable) than vision-based methods. Ship
+            benchmarkable results and publicize the comparison.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            4. Target Regulated Industries First
+          </div>
+          <div class="card-body">
+            Healthcare, finance, and legal need local-first AI with data sovereignty. Pursue SOC 2
+            and HIPAA certifications. No competitor combines local LLMs + native desktop +
+            compliance certs.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            5. Exploit Multi-Tool Fatigue
+          </div>
+          <div class="card-body">
+            70% of developers use 2-4 AI tools. Position AGI as the consolidation play: "One
+            platform for every AI workflow." Multi-model + non-coding skills + desktop automation =
+            replace 3-4 separate tools.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--green); margin-bottom: 8px">
+            6. Price Below Claude/ChatGPT Premium
+          </div>
+          <div class="card-body">
+            Claude Max ($100-200/mo) and ChatGPT Pro ($200/mo) are expensive. Position AGI's premium
+            tier below these while offering more features (multi-model, unlimited MCP, desktop
+            automation, skills).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+      // Tab navigation
+      document.querySelectorAll('.nav button[data-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          showTab(btn.dataset.tab);
+        });
+      });
+
+      function showTab(tabId) {
+        document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
+        document
+          .querySelectorAll('.nav button[data-tab]')
+          .forEach((b) => b.classList.remove('active'));
+        document.getElementById(tabId)?.classList.add('active');
+        document.querySelector(`[data-tab="${tabId}"]`)?.classList.add('active');
+      }
+
+      // Competitor details
+      function showCompetitor(id) {
+        document.querySelectorAll('.detail-panel').forEach((p) => p.classList.remove('visible'));
+        const panel = document.getElementById('detail-' + id);
+        if (panel) {
+          panel.classList.add('visible');
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+
+      // Bubble tooltips
+      const tooltip = document.getElementById('tooltip');
+      document.querySelectorAll('.bubble').forEach((bubble) => {
+        bubble.addEventListener('mouseenter', (e) => {
+          tooltip.textContent = bubble.dataset.tooltip;
+          tooltip.style.display = 'block';
+        });
+        bubble.addEventListener('mousemove', (e) => {
+          tooltip.style.left = e.clientX + 16 + 'px';
+          tooltip.style.top = e.clientY - 10 + 'px';
+        });
+        bubble.addEventListener('mouseleave', () => {
+          tooltip.style.display = 'none';
+        });
+      });
+    </script>
+  </body>
+</html>
