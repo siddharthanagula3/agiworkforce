@@ -273,7 +273,7 @@ const ChatComposerNewComponent = ({
   }, []);
 
   return (
-    <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
+    <div className="relative mx-auto w-full max-w-3xl px-2 sm:px-4 pb-4">
       <DragDropOverlay onDrop={handleFileDrop} />
       {/* Focus Mode Pills */}
       <FocusModeButtons activeMode={focusMode} onChange={handleFocusModeChange} />
@@ -351,7 +351,7 @@ const ChatComposerNewComponent = ({
       {/* Main Input Container */}
       <div
         className={cn(
-          'relative rounded-2xl border bg-card/80 shadow-sm backdrop-blur-xl transition-all duration-200',
+          'relative rounded-xl sm:rounded-2xl border bg-card/80 shadow-sm backdrop-blur-xl transition-all duration-200',
           isFocused ? 'border-border/80 shadow-md ring-1 ring-ring/20' : 'border-border/40',
         )}
       >
@@ -407,7 +407,7 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
-        <div className="flex items-end gap-1 p-2">
+        <div className="flex flex-col sm:flex-row items-end gap-1 sm:gap-2 p-2 sm:p-3">
           {/* + Tools Button */}
           <div className="relative" ref={toolsRef}>
             <button
@@ -477,7 +477,7 @@ const ChatComposerNewComponent = ({
             onBlur={() => setIsFocused(false)}
             placeholder={placeholder}
             disabled={isLoading || disabled}
-            className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-2 py-3 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-2 py-3 text-xs sm:text-sm md:text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
             rows={1}
             aria-label="Message input"
           />
