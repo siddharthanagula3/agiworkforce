@@ -951,6 +951,8 @@ describe('ChatStore', () => {
           message_count: 5,
           created_at: now.toISOString(),
           updated_at: now.toISOString(),
+          is_pinned: false,
+          is_archived: false,
         });
       });
 
