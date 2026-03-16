@@ -265,7 +265,7 @@ impl ProviderAdapterFactory {
             Provider::AI21 => Box::new(OpenAIAdapter),
             Provider::Sambanova => Box::new(OpenAIAdapter),
             Provider::Azure => Box::new(OpenAIAdapter), // Azure OpenAI uses OpenAI format
-            Provider::Bedrock => Box::new(OpenAIAdapter), // Bedrock stub — will need custom adapter later
+            Provider::Bedrock => Box::new(BedrockAdapter), // Bedrock Converse API format
         }
     }
 }
@@ -2841,5 +2841,35 @@ impl ProviderAdapter for ZhipuAdapter {
 
     fn supports_extended_thinking(&self) -> bool {
         true
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bedrock adapter (Converse API)
+// ---------------------------------------------------------------------------
+
+/// Adapter for AWS Bedrock Converse API format.
+///
+/// Note: The BedrockProvider handles its own request building and SigV4 signing
+/// internally, so this adapter is primarily used when Bedrock is routed through
+/// the DirectApiProvider path. In practice, the BedrockProvider uses
+/// `build_converse_request()` directly. This adapter provides a consistent
+/// interface for the ProviderAdapterFactory.
+struct BedrockAdapter;
+
+impl ProviderAdapter for BedrockAdapter {
+    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        Ok(crate::core::llm::providers::bedrock::build_converse_request_for_adapter(request))
+    }
+
+    fn adapt_response(
+        &self,
+        response: &Value,
+    ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        crate::core::llm::providers::bedrock::parse_converse_response_for_adapter(response, "bedrock-model")
+    }
+
+    fn provider_name(&self) -> &str {
+        "Bedrock"
     }
 }
