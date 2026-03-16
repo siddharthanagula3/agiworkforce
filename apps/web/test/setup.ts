@@ -1,6 +1,7 @@
 import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
+import React from 'react';
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
@@ -62,3 +63,21 @@ vi.mock('@/lib/csrf', async () => {
     requireCsrfToken: vi.fn().mockResolvedValue(null),
   };
 });
+
+// Mock framer-motion to prevent CSS parsing errors in jsdom
+// motion-dom tries to parse CSS transforms which fails in jsdom's cssstyle parser
+// This mock provides no-op motion components that render normally without animation
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: React.forwardRef(({ children, ...props }: any, ref: any) =>
+      React.createElement('div', { ref, ...props }, children),
+    ),
+    span: React.forwardRef(({ children, ...props }: any, ref: any) =>
+      React.createElement('span', { ref, ...props }, children),
+    ),
+    button: React.forwardRef(({ children, ...props }: any, ref: any) =>
+      React.createElement('button', { ref, ...props }, children),
+    ),
+  },
+  AnimatePresence: ({ children }: any) => children,
+}));
