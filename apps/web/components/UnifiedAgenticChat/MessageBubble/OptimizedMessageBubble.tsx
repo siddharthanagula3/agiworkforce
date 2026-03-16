@@ -8,7 +8,7 @@
  * when their actual content changes, not on every parent render.
  */
 
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { MessageBubble as BaseMessageBubble } from './index';
 import type { MessageBubbleProps } from './index';
 
