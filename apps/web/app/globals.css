@@ -123,6 +123,10 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Chat surface color aliases — Tailwind utilities bg-chat-bg, bg-chat-sidebar */
+  --color-chat-bg: var(--chat-bg);
+  --color-chat-sidebar: var(--chat-sidebar-bg);
+
   /* Border radius */
   --radius-lg: 12px;
   --radius-md: 8px;
@@ -150,7 +154,7 @@
   --ease-spring-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
   /* Backdrop blur */
-  --blur-xs: 2px;
+  --blur-2xs: 2px;
   --blur-xs: 4px;
   --blur-md: 12px;
   --blur-lg: 16px;
@@ -368,6 +372,12 @@
     --sidebar-border: 214.3 31.8% 91.4%;
     --sidebar-ring: 221.2 83.2% 53.3%;
 
+    /* Chat surface tokens — light mode (#faf9f7 main, #f5f4f1 sidebar) */
+    --chat-bg: #faf9f7;
+    --chat-sidebar-bg: #f5f4f1;
+    --chat-border-strong: rgba(0, 0, 0, 0.08);
+    --chat-border-subtle: rgba(0, 0, 0, 0.06);
+
     --radius: 0.5rem;
   }
 
@@ -434,6 +444,12 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 224.3 76.3% 48%;
+
+    /* Chat surface tokens — dark mode (#0f0f13 main, #0b0c14 sidebar) */
+    --chat-bg: #0f0f13;
+    --chat-sidebar-bg: #0b0c14;
+    --chat-border-strong: rgba(255, 255, 255, 0.07);
+    --chat-border-subtle: rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -489,6 +505,39 @@
 
   .message-bubble {
     animation: messageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Message metadata text — timestamp, role badge, streaking indicator */
+  .message-meta {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* Chat message max-width matches desktop max-w-5xl */
+  .chat-content-width {
+    @apply mx-auto w-full max-w-5xl px-4;
+  }
+
+  /* Standardized button heights */
+  .btn-h-normal {
+    @apply h-10;
+  }
+
+  .btn-h-compact {
+    @apply h-9;
+  }
+
+  /* Code block styling — matches desktop oneDark theme */
+  .code-block-container {
+    @apply my-3 rounded-md overflow-hidden border border-border/50;
+  }
+
+  .code-block-header-bar {
+    @apply flex items-center justify-between px-4 py-2 bg-zinc-800 dark:bg-zinc-900 border-b border-zinc-700/50;
+  }
+
+  .code-block-body {
+    @apply bg-zinc-950 font-mono text-sm;
+    line-height: 1.5;
   }
 
   @media (prefers-reduced-motion: reduce) {

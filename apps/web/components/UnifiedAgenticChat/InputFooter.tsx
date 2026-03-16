@@ -41,8 +41,8 @@ export const InputFooter: React.FC<InputFooterProps> = ({
   const hasTokenUsage = tokenCurrent != null && tokenMax != null;
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700/50">
-      <span className="text-xs text-gray-500 dark:text-gray-400">
+    <div className="flex items-center justify-between px-4 py-2 border-t border-border/50">
+      <span className="text-xs text-muted-foreground">
         {isSimpleMode ? (
           <>Press Enter to send</>
         ) : hasInlineSuggestion ? (
@@ -58,15 +58,15 @@ export const InputFooter: React.FC<InputFooterProps> = ({
           className="flex items-center gap-2"
           title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
         >
-          <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+          <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
                 creditPercentage > 90
-                  ? 'bg-red-500'
+                  ? 'bg-destructive'
                   : creditPercentage > 75
-                    ? 'bg-amber-500'
-                    : 'bg-green-500',
+                    ? 'bg-warning'
+                    : 'bg-success',
               )}
               style={{ width: `${creditPercentage}%` }}
             />
@@ -74,9 +74,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
           <span
             className={cn(
               'text-xs font-medium tabular-nums',
-              isLowBalance
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-gray-600 dark:text-gray-300',
+              isLowBalance ? 'text-warning' : 'text-muted-foreground',
             )}
           >
             {creditPercentage.toFixed(1)}%
@@ -84,20 +82,20 @@ export const InputFooter: React.FC<InputFooterProps> = ({
         </div>
       ) : !isSimpleMode && hasTokenUsage ? (
         <div className="flex items-center gap-2" title="Context Window Usage">
-          <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+          <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
                 tokenPercentage > 90
-                  ? 'bg-red-500'
+                  ? 'bg-destructive'
                   : tokenPercentage > 70
-                    ? 'bg-amber-500'
+                    ? 'bg-warning'
                     : 'bg-primary',
               )}
               style={{ width: `${tokenPercentage}%` }}
             />
           </div>
-          <span className="text-xs text-gray-600 dark:text-gray-300">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {(tokenCurrent ?? 0).toLocaleString()} / {(tokenMax ?? 0).toLocaleString()}
           </span>
         </div>
