@@ -4,8 +4,9 @@
 mod tests {
     use crate::core::llm::provider_adapter::{OpenAIServerTool, ProviderAdapterFactory};
     use crate::core::llm::{
-        ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider,
-        ResponseFormat, ThinkingParameter, ToolChoice, ToolDefinition,
+        AudioData, AudioFormat, AudioInput, ChatMessage, ContentPart, DocumentFormat, DocumentInput,
+        ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider, ResponseFormat,
+        ThinkingParameter, ToolChoice, ToolDefinition, VideoData, VideoFormat, VideoInput,
     };
     use serde_json::json;
 
@@ -2076,5 +2077,467 @@ mod tests {
         );
         assert_eq!(tool_result_content[0]["tool_use_id"], "toolu_xyz");
         assert_eq!(tool_result_content[0]["content"], "Sunny, 22°C");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #46 — Gemini multimodal: audio converted to inlineData
+    // ────────────────────────────────────────────────────────────────
+
+    /// Verifies that audio content parts are converted to Gemini inlineData
+    /// format instead of being silently dropped.
+    #[test]
+    fn test_google_adapter_audio_converted_to_inline_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let audio_bytes = vec![0xFF, 0xFB, 0x90, 0x00]; // minimal MP3 frame header
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Transcribe this audio".to_string(),
+                    },
+                    ContentPart::Audio {
+                        audio: AudioInput {
+                            data: AudioData::Bytes(audio_bytes),
+                            format: AudioFormat::Mp3,
+                            duration_secs: None,
+                        },
+                    },
+                ]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle audio content");
+
+        let contents = adapted["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 1);
+
+        let parts = contents[0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2, "should have text part and audio part");
+
+        assert_eq!(parts[0]["text"], "Transcribe this audio");
+
+        assert!(
+            parts[1].get("inlineData").is_some(),
+            "audio must be converted to inlineData format"
+        );
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "audio/mpeg");
+        assert!(
+            !parts[1]["inlineData"]["data"].as_str().unwrap().is_empty(),
+            "base64 data must be non-empty"
+        );
+    }
+
+    /// Verifies that audio with a base64 string is passed through directly.
+    #[test]
+    fn test_google_adapter_audio_base64_passthrough() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![ContentPart::Audio {
+                    audio: AudioInput {
+                        data: AudioData::Base64("c29tZS1hdWRpby1kYXRh".to_string()),
+                        format: AudioFormat::Wav,
+                        duration_secs: Some(3.5),
+                    },
+                }]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle base64 audio");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0]["inlineData"]["mimeType"], "audio/wav");
+        assert_eq!(parts[0]["inlineData"]["data"], "c29tZS1hdWRpby1kYXRh");
+    }
+
+    /// Verifies that audio with a URI uses Gemini fileData format.
+    #[test]
+    fn test_google_adapter_audio_uri_uses_file_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![ContentPart::Audio {
+                    audio: AudioInput {
+                        data: AudioData::Uri("gs://bucket/audio.ogg".to_string()),
+                        format: AudioFormat::Ogg,
+                        duration_secs: None,
+                    },
+                }]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle audio URI");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 1);
+        assert!(
+            parts[0].get("fileData").is_some(),
+            "URI audio must use fileData format"
+        );
+        assert_eq!(parts[0]["fileData"]["mimeType"], "audio/ogg");
+        assert_eq!(parts[0]["fileData"]["fileUri"], "gs://bucket/audio.ogg");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #46 — Gemini multimodal: video converted to inlineData/fileData
+    // ────────────────────────────────────────────────────────────────
+
+    /// Verifies that video bytes are converted to Gemini inlineData format.
+    #[test]
+    fn test_google_adapter_video_bytes_converted_to_inline_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let video_bytes = vec![0x00, 0x00, 0x00, 0x1C]; // minimal MP4 header fragment
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Describe this video".to_string(),
+                    },
+                    ContentPart::Video {
+                        video: VideoInput {
+                            data: VideoData::Bytes(video_bytes),
+                            format: VideoFormat::Mp4,
+                            duration_secs: Some(10.0),
+                        },
+                    },
+                ]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle video bytes");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2, "should have text part and video part");
+
+        assert_eq!(parts[0]["text"], "Describe this video");
+
+        assert!(
+            parts[1].get("inlineData").is_some(),
+            "video bytes must be converted to inlineData format"
+        );
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "video/mp4");
+        assert!(
+            !parts[1]["inlineData"]["data"].as_str().unwrap().is_empty(),
+            "base64 data must be non-empty"
+        );
+    }
+
+    /// Verifies that video with a URI uses Gemini fileData format.
+    #[test]
+    fn test_google_adapter_video_uri_uses_file_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![ContentPart::Video {
+                    video: VideoInput {
+                        data: VideoData::Uri("gs://bucket/clip.webm".to_string()),
+                        format: VideoFormat::Webm,
+                        duration_secs: None,
+                    },
+                }]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle video URI");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 1);
+        assert!(
+            parts[0].get("fileData").is_some(),
+            "URI video must use fileData format"
+        );
+        assert_eq!(parts[0]["fileData"]["mimeType"], "video/webm");
+        assert_eq!(parts[0]["fileData"]["fileUri"], "gs://bucket/clip.webm");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Bug #46 — Gemini multimodal: document converted to inlineData
+    // ────────────────────────────────────────────────────────────────
+
+    /// Verifies that a PDF document is converted to Gemini inlineData format.
+    #[test]
+    fn test_google_adapter_document_converted_to_inline_data() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        let pdf_header = b"%PDF-1.4 fake".to_vec();
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Summarize this document".to_string(),
+                    },
+                    ContentPart::Document {
+                        document: DocumentInput {
+                            data: pdf_header,
+                            format: DocumentFormat::Pdf,
+                            name: Some("report.pdf".to_string()),
+                        },
+                    },
+                ]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(128),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle document content");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2, "should have text part and document part");
+
+        assert_eq!(parts[0]["text"], "Summarize this document");
+
+        assert!(
+            parts[1].get("inlineData").is_some(),
+            "document must be converted to inlineData format"
+        );
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "application/pdf");
+        assert!(
+            !parts[1]["inlineData"]["data"].as_str().unwrap().is_empty(),
+            "base64 data must be non-empty"
+        );
+    }
+
+    /// Verifies that a mixed multimodal message with text, image, and audio
+    /// produces the correct number of parts with proper formats.
+    #[test]
+    fn test_google_adapter_mixed_multimodal_text_image_audio() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Google);
+
+        // 1x1 white PNG
+        let png_data = {
+            use image::{ImageBuffer, Rgb};
+            let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                ImageBuffer::from_fn(1, 1, |_, _| Rgb([255u8, 255u8, 255u8]));
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+            buf.into_inner()
+        };
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Analyze both".to_string(),
+                    },
+                    ContentPart::Image {
+                        image: ImageInput {
+                            data: png_data,
+                            format: ImageFormat::Png,
+                            detail: ImageDetail::Auto,
+                        },
+                    },
+                    ContentPart::Audio {
+                        audio: AudioInput {
+                            data: AudioData::Bytes(vec![0xAA, 0xBB]),
+                            format: AudioFormat::Wav,
+                            duration_secs: None,
+                        },
+                    },
+                ]),
+            }],
+            model: "gemini-2.0-flash".to_string(),
+            temperature: None,
+            max_tokens: Some(256),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("Google adapter should handle mixed multimodal");
+
+        let parts = adapted["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 3, "should have text + image + audio");
+
+        // Text part
+        assert_eq!(parts[0]["text"], "Analyze both");
+
+        // Image part
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
+
+        // Audio part
+        assert_eq!(parts[2]["inlineData"]["mimeType"], "audio/wav");
     }
 }
