@@ -538,18 +538,11 @@ mod tests {
     }
 
     #[test]
-    fn get_pricing_returns_none_for_completely_unknown_model_and_provider() {
-        // A provider variant that has no entry in models.json at all.
-        // Bedrock is NOT IMPLEMENTED and may or may not be in models.json,
-        // so we test with an unknown model under a provider that definitely
-        // exists to ensure we get Some, and then confirm that the fallback
-        // path returns None only when the provider itself is absent.
-        //
-        // Since all Provider enum variants have entries in models.json,
-        // we verify the function never returns a silent (1.0, 1.0) default.
-        // The None path is only reachable for providers absent from the
-        // config, which cannot happen via the Provider enum but is a safety
-        // net for future changes.
+    fn get_pricing_returns_provider_default_for_all_enum_variants() {
+        // All Provider enum variants have entries in models.json, so unknown
+        // models get provider-level default pricing. The None path is a safety
+        // net for future changes when providers might be added to the enum
+        // before models.json is updated.
         let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4-6");
         assert!(pricing.is_some(), "known model must have pricing");
 

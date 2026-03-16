@@ -197,7 +197,7 @@ impl VisionAutomation {
 
             // Guard: discard results with very low confidence -- they are
             // almost certainly garbage and would cause false-positive clicks.
-            if ocr_result.confidence < MIN_OCR_CONFIDENCE {
+            if ocr_result.confidence <= MIN_OCR_CONFIDENCE {
                 tracing::info!(
                     "OCR confidence too low ({:.1}% < {:.1}%) — discarding result",
                     ocr_result.confidence * 100.0,
