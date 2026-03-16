@@ -45,7 +45,10 @@ function getBackoffDelay(retryCount: number): number {
  */
 function loadQueue(): OfflineQueueState {
   try {
-    const data = safeGetJSON<OfflineQueueState>(OFFLINE_QUEUE_KEY);
+    const data = safeGetJSON<OfflineQueueState>(OFFLINE_QUEUE_KEY, {
+      messages: [],
+      toolExecutions: [],
+    });
     return data || { messages: [], toolExecutions: [] };
   } catch (error) {
     console.error('[OfflineQueue] Failed to load queue:', error);

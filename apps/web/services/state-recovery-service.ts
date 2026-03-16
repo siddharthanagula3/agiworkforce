@@ -72,6 +72,7 @@ class StateRecoveryService {
   /**
    * Reset state to default values
    */
+
   static resetState(key: string, defaults: Record<string, unknown>): void {
     try {
       // Clear invalid state

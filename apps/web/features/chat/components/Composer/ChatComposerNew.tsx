@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   Plus,
   Paperclip,
