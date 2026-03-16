@@ -9,6 +9,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { CommandPalette } from '@/components/UnifiedAgenticChat/CommandPalette';
 import { KeyboardShortcutsDialog } from '@/components/UnifiedAgenticChat/KeyboardShortcutsDialog';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
+import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
 
 const SIDEBAR_WIDTH_KEY = 'chat-sidebar-width';
 const SIDEBAR_MIN_WIDTH = 200;
@@ -161,11 +162,13 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
         style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
         aria-label="Conversation list"
       >
-        <ChatSidebarNew
-          {...sharedSidebarProps}
-          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
-          collapsed={sidebarCollapsed}
-        />
+        <SectionErrorBoundary sectionName="Sidebar" compact>
+          <ChatSidebarNew
+            {...sharedSidebarProps}
+            onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+            collapsed={sidebarCollapsed}
+          />
+        </SectionErrorBoundary>
         {!sidebarCollapsed && (
           <ResizeHandle
             onResize={handleSidebarResize}
@@ -190,11 +193,13 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
         aria-label="Conversation list"
         aria-hidden={!mobileSidebarOpen}
       >
-        <ChatSidebarNew
-          {...sharedSidebarProps}
-          onToggleSidebar={closeMobileSidebar}
-          collapsed={false}
-        />
+        <SectionErrorBoundary sectionName="Mobile Sidebar" compact>
+          <ChatSidebarNew
+            {...sharedSidebarProps}
+            onToggleSidebar={closeMobileSidebar}
+            collapsed={false}
+          />
+        </SectionErrorBoundary>
       </aside>
 
       {/* Main content area */}
@@ -225,7 +230,7 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
           <span className="text-sm font-semibold text-foreground">AGI Workforce</span>
         </div>
 
-        {children}
+        <SectionErrorBoundary sectionName="Chat Content">{children}</SectionErrorBoundary>
       </main>
 
       {/* Bottom gradient fade */}
