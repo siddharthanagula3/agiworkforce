@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { useChatStore, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
-import { MessageListNew } from '@features/chat/components/messages/MessageListNew';
+import { ChatMessageList } from '@features/chat/components/messages/ChatMessageList';
+import { ChatLoadingState } from '@features/chat/components/messages/ChatLoadingState';
 import {
   ArtifactsPanel,
   ArtifactsToggleButton,
@@ -253,12 +254,20 @@ export default function ChatSessionPage() {
         </span>
       </div>
 
-      {hasMessages ? (
+      {isLoading && !hasMessages ? (
+        <>
+          {/* Chat history is loading from DB — show skeleton placeholders */}
+          <div className="relative flex-1 overflow-hidden">
+            <ChatLoadingState count={4} animation="pulse" />
+          </div>
+          <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
+        </>
+      ) : hasMessages ? (
         <>
           {/* Message list */}
           <div className="relative flex-1 overflow-hidden">
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[var(--chat-bg)] to-transparent" />
-            <MessageListNew
+            <ChatMessageList
               messages={messages}
               isLoading={isLoading}
               onDelete={handleDeleteMessage}
