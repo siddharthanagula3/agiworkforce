@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useUnifiedChatStore, uuidToDbId } from '@/stores/unified/unifiedChatStore';
 import { useBillingStore } from '@/stores/unified/auth';
@@ -27,6 +28,7 @@ interface AppLayoutProps {
 const ARTIFACT_PANEL_WIDTH = 400;
 
 export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
+  const { theme, setTheme } = useTheme();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -180,26 +182,49 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
 
-      if (isMeta && e.key === 'k') {
+      // Cmd+K: command palette
+      if (isMeta && !e.shiftKey && e.key === 'k') {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
       }
 
-      if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
+      // Cmd+N: new chat
+      if (isMeta && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
-        setSidebarCollapsed(!sidebarCollapsed);
+        handleNewChat();
       }
 
+      // Cmd+B: toggle sidebar
+      if (isMeta && !e.shiftKey && e.key === 'b') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+
+      // Cmd+Shift+S: toggle sidebar (alternate)
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+
+      // Cmd+Shift+O: new conversation (alternate)
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         handleNewChat();
       }
 
+      // Cmd+/: keyboard shortcuts dialog
       if (isMeta && e.key === '/') {
         e.preventDefault();
         setShortcutsDialogOpen((prev) => !prev);
       }
 
+      // Cmd+D: toggle dark mode
+      if (isMeta && !e.shiftKey && e.key === 'd') {
+        e.preventDefault();
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+      }
+
+      // Cmd+Shift+T: toggle timestamps
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         useUnifiedChatStore.getState().toggleMessageTimestamps();
@@ -208,7 +233,14 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNewChat, setCommandPaletteOpen, setSidebarCollapsed, sidebarCollapsed]);
+  }, [
+    handleNewChat,
+    setCommandPaletteOpen,
+    setSidebarCollapsed,
+    sidebarCollapsed,
+    theme,
+    setTheme,
+  ]);
 
   return (
     <div
