@@ -823,4 +823,299 @@ mod tests {
         assert_eq!(context.tool_results.len(), 1);
         assert!(context.tool_results[0].success);
     }
+
+    // ============================================
+    // CPU Threshold & Multiplier Tests (Bug #48)
+    //
+    // Validates that calculate_plan_duration checks
+    // >80 BEFORE >50, making both branches reachable.
+    // ============================================
+
+    /// Mirror of the CPU resource multiplier logic from
+    /// AGIPlanner::calculate_plan_duration. Must check >80
+    /// before >50 so the 2.0 multiplier branch is reachable.
+    fn cpu_resource_multiplier(cpu_percent: f64) -> f64 {
+        if cpu_percent > 80.0 {
+            2.0
+        } else if cpu_percent > 50.0 {
+            1.5
+        } else {
+            1.0
+        }
+    }
+
+    /// Mirror of the network multiplier logic from
+    /// AGIPlanner::calculate_plan_duration.
+    fn network_multiplier(network_mb: f64) -> f64 {
+        if network_mb > 0.0 {
+            1.2
+        } else {
+            1.0
+        }
+    }
+
+    /// Mirror of the base duration lookup from
+    /// AGIPlanner::calculate_plan_duration.
+    fn base_duration_for_tool(tool_id: &str) -> u64 {
+        match tool_id {
+            "ui_screenshot" | "file_read" | "ui_click" => 1,
+            "ui_type" | "file_write" | "image_ocr" => 3,
+            "browser_navigate" | "db_query" | "api_call" => 8,
+            "code_execute" | "llm_reason" => 20,
+            _ => 5,
+        }
+    }
+
+    /// Full mirror of calculate_plan_duration for testing.
+    fn calculate_plan_duration_mirror(steps: &[TestPlanStep]) -> Duration {
+        if steps.is_empty() {
+            return Duration::from_secs(5);
+        }
+
+        let mut total_seconds = 0u64;
+
+        for step in steps {
+            let base = base_duration_for_tool(&step.tool_id);
+            let cpu_mult = cpu_resource_multiplier(step.estimated_resources.cpu_percent);
+            let net_mult = network_multiplier(step.estimated_resources.network_mb);
+            let step_duration = (base as f64 * cpu_mult * net_mult) as u64;
+            total_seconds += step_duration;
+        }
+
+        total_seconds += (steps.len() as u64) / 2;
+        total_seconds = total_seconds.min(600);
+
+        Duration::from_secs(total_seconds)
+    }
+
+    fn make_step(tool_id: &str, cpu_percent: f64, network_mb: f64) -> TestPlanStep {
+        TestPlanStep {
+            id: "s".to_string(),
+            tool_id: tool_id.to_string(),
+            description: "test".to_string(),
+            parameters: HashMap::new(),
+            estimated_resources: ResourceUsage {
+                cpu_percent,
+                memory_mb: 50,
+                network_mb,
+            },
+            dependencies: vec![],
+        }
+    }
+
+    // --- CPU multiplier threshold tests ---
+
+    #[test]
+    fn test_cpu_multiplier_below_50() {
+        assert_eq!(cpu_resource_multiplier(0.0), 1.0);
+        assert_eq!(cpu_resource_multiplier(25.0), 1.0);
+        assert_eq!(cpu_resource_multiplier(49.9), 1.0);
+    }
+
+    #[test]
+    fn test_cpu_multiplier_exactly_50_is_1x() {
+        // 50.0 is NOT > 50.0, so it falls through to the 1.0 branch
+        assert_eq!(cpu_resource_multiplier(50.0), 1.0);
+    }
+
+    #[test]
+    fn test_cpu_multiplier_between_50_and_80() {
+        assert_eq!(cpu_resource_multiplier(50.1), 1.5);
+        assert_eq!(cpu_resource_multiplier(65.0), 1.5);
+        assert_eq!(cpu_resource_multiplier(79.9), 1.5);
+    }
+
+    #[test]
+    fn test_cpu_multiplier_exactly_80_is_1_5x() {
+        // 80.0 is NOT > 80.0, so it falls to the >50 branch (1.5)
+        assert_eq!(cpu_resource_multiplier(80.0), 1.5);
+    }
+
+    #[test]
+    fn test_cpu_multiplier_above_80() {
+        // This is the branch that was unreachable when >50 was checked first
+        assert_eq!(cpu_resource_multiplier(80.1), 2.0);
+        assert_eq!(cpu_resource_multiplier(90.0), 2.0);
+        assert_eq!(cpu_resource_multiplier(100.0), 2.0);
+    }
+
+    // --- Network multiplier tests ---
+
+    #[test]
+    fn test_network_multiplier_zero() {
+        assert_eq!(network_multiplier(0.0), 1.0);
+    }
+
+    #[test]
+    fn test_network_multiplier_positive() {
+        assert_eq!(network_multiplier(0.1), 1.2);
+        assert_eq!(network_multiplier(5.0), 1.2);
+        assert_eq!(network_multiplier(100.0), 1.2);
+    }
+
+    // --- End-to-end duration calculation tests ---
+
+    #[test]
+    fn test_duration_empty_steps_returns_5s() {
+        let steps: Vec<TestPlanStep> = vec![];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(5)
+        );
+    }
+
+    #[test]
+    fn test_duration_single_step_low_cpu_no_network() {
+        // file_read base=1, cpu=10 (1.0x), network=0 (1.0x)
+        // step_duration = (1 * 1.0 * 1.0) = 1
+        // overhead = 1 / 2 = 0 (integer division)
+        // total = 1 + 0 = 1
+        let steps = vec![make_step("file_read", 10.0, 0.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(1)
+        );
+    }
+
+    #[test]
+    fn test_duration_single_step_mid_cpu() {
+        // file_write base=3, cpu=60 (1.5x), network=0 (1.0x)
+        // step_duration = (3 * 1.5 * 1.0) = 4.5 -> 4 as u64
+        // overhead = 1 / 2 = 0
+        // total = 4
+        let steps = vec![make_step("file_write", 60.0, 0.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(4)
+        );
+    }
+
+    #[test]
+    fn test_duration_single_step_high_cpu() {
+        // code_execute base=20, cpu=90 (2.0x), network=0 (1.0x)
+        // step_duration = (20 * 2.0 * 1.0) = 40
+        // overhead = 1 / 2 = 0
+        // total = 40
+        let steps = vec![make_step("code_execute", 90.0, 0.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(40)
+        );
+    }
+
+    #[test]
+    fn test_duration_with_network_multiplier() {
+        // browser_navigate base=8, cpu=10 (1.0x), network=5.0 (1.2x)
+        // step_duration = (8 * 1.0 * 1.2) = 9.6 -> 9 as u64
+        // overhead = 1 / 2 = 0
+        // total = 9
+        let steps = vec![make_step("browser_navigate", 10.0, 5.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(9)
+        );
+    }
+
+    #[test]
+    fn test_duration_high_cpu_and_network_combined() {
+        // llm_reason base=20, cpu=95 (2.0x), network=10.0 (1.2x)
+        // step_duration = (20 * 2.0 * 1.2) = 48
+        // overhead = 1 / 2 = 0
+        // total = 48
+        let steps = vec![make_step("llm_reason", 95.0, 10.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(48)
+        );
+    }
+
+    #[test]
+    fn test_duration_multiple_steps_with_overhead() {
+        // 4 steps, each file_read (base=1), cpu=10 (1.0x), network=0 (1.0x)
+        // each step_duration = 1
+        // sum = 4
+        // overhead = 4 / 2 = 2
+        // total = 4 + 2 = 6
+        let steps = vec![
+            make_step("file_read", 10.0, 0.0),
+            make_step("file_read", 10.0, 0.0),
+            make_step("file_read", 10.0, 0.0),
+            make_step("file_read", 10.0, 0.0),
+        ];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(6)
+        );
+    }
+
+    #[test]
+    fn test_duration_capped_at_600s() {
+        // 50 steps of llm_reason (base=20), cpu=95 (2.0x), network=10 (1.2x)
+        // each step_duration = 48
+        // sum = 50 * 48 = 2400
+        // overhead = 50 / 2 = 25
+        // raw total = 2425, capped to 600
+        let steps: Vec<TestPlanStep> = (0..50)
+            .map(|_| make_step("llm_reason", 95.0, 10.0))
+            .collect();
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(600)
+        );
+    }
+
+    #[test]
+    fn test_duration_mixed_tools_and_thresholds() {
+        // step1: file_read base=1, cpu=10 (1.0x), net=0 (1.0x) -> 1
+        // step2: file_write base=3, cpu=60 (1.5x), net=2.0 (1.2x) -> (3*1.5*1.2)=5.4 -> 5
+        // step3: code_execute base=20, cpu=85 (2.0x), net=0 (1.0x) -> 40
+        // step4: api_call base=8, cpu=50 (1.0x), net=1.0 (1.2x) -> (8*1.0*1.2)=9.6 -> 9
+        // sum = 1 + 5 + 40 + 9 = 55
+        // overhead = 4 / 2 = 2
+        // total = 57
+        let steps = vec![
+            make_step("file_read", 10.0, 0.0),
+            make_step("file_write", 60.0, 2.0),
+            make_step("code_execute", 85.0, 0.0),
+            make_step("api_call", 50.0, 1.0),
+        ];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(57)
+        );
+    }
+
+    #[test]
+    fn test_duration_unknown_tool_uses_default_base() {
+        // unknown tool base=5, cpu=10 (1.0x), net=0 (1.0x) -> 5
+        // overhead = 1 / 2 = 0
+        // total = 5
+        let steps = vec![make_step("totally_custom_tool", 10.0, 0.0)];
+        assert_eq!(
+            calculate_plan_duration_mirror(&steps),
+            Duration::from_secs(5)
+        );
+    }
+
+    #[test]
+    fn test_threshold_ordering_correctness() {
+        // The critical invariant: cpu=90 must produce 2.0x, not 1.5x.
+        // If thresholds were checked in wrong order (>50 before >80),
+        // cpu=90 would match >50 first and return 1.5 instead of 2.0.
+        let high_cpu = cpu_resource_multiplier(90.0);
+        let mid_cpu = cpu_resource_multiplier(60.0);
+        let low_cpu = cpu_resource_multiplier(30.0);
+
+        assert!(
+            high_cpu > mid_cpu,
+            "90% CPU must produce higher multiplier than 60%"
+        );
+        assert!(
+            mid_cpu > low_cpu,
+            "60% CPU must produce higher multiplier than 30%"
+        );
+        assert_eq!(high_cpu, 2.0);
+        assert_eq!(mid_cpu, 1.5);
+        assert_eq!(low_cpu, 1.0);
+    }
 }

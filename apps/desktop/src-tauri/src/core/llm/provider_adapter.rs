@@ -1935,6 +1935,7 @@ impl ProviderAdapter for GoogleAdapter {
                     other => other, // "user" stays "user"
                 };
                 if let Some(multimodal) = &msg.multimodal_content {
+                    use base64::{engine::general_purpose::STANDARD, Engine as _};
                     let parts: Vec<Value> = multimodal
                         .iter()
                         .filter_map(|part| match part {
@@ -1942,9 +1943,68 @@ impl ProviderAdapter for GoogleAdapter {
                                 Some(serde_json::json!({"text": text}))
                             }
                             super::ContentPart::Image { image } => {
-                                use base64::{engine::general_purpose::STANDARD, Engine as _};
                                 let base64_data = STANDARD.encode(&image.data);
                                 let mime = image.format.mime_type();
+                                Some(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": mime,
+                                        "data": base64_data
+                                    }
+                                }))
+                            }
+                            super::ContentPart::Audio { audio } => {
+                                let base64_data = match &audio.data {
+                                    super::AudioData::Bytes(bytes) => STANDARD.encode(bytes),
+                                    super::AudioData::Base64(b64) => b64.clone(),
+                                    super::AudioData::Uri(uri) => {
+                                        // Gemini fileData for URI-based audio
+                                        return Some(serde_json::json!({
+                                            "fileData": {
+                                                "mimeType": audio.format.mime_type(),
+                                                "fileUri": uri
+                                            }
+                                        }));
+                                    }
+                                };
+                                let mime = audio.format.mime_type();
+                                Some(serde_json::json!({
+                                    "inlineData": {
+                                        "mimeType": mime,
+                                        "data": base64_data
+                                    }
+                                }))
+                            }
+                            super::ContentPart::Video { video } => {
+                                match &video.data {
+                                    super::VideoData::Bytes(bytes) => {
+                                        let base64_data = STANDARD.encode(bytes);
+                                        let mime = video.format.mime_type();
+                                        Some(serde_json::json!({
+                                            "inlineData": {
+                                                "mimeType": mime,
+                                                "data": base64_data
+                                            }
+                                        }))
+                                    }
+                                    super::VideoData::Uri(uri) => {
+                                        Some(serde_json::json!({
+                                            "fileData": {
+                                                "mimeType": video.format.mime_type(),
+                                                "fileUri": uri
+                                            }
+                                        }))
+                                    }
+                                }
+                            }
+                            super::ContentPart::Document { document } => {
+                                let base64_data = STANDARD.encode(&document.data);
+                                let mime = match document.format {
+                                    super::DocumentFormat::Pdf => "application/pdf",
+                                    super::DocumentFormat::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    super::DocumentFormat::Txt => "text/plain",
+                                    super::DocumentFormat::Html => "text/html",
+                                    super::DocumentFormat::Md => "text/markdown",
+                                };
                                 Some(serde_json::json!({
                                     "inlineData": {
                                         "mimeType": mime,
@@ -1970,7 +2030,6 @@ impl ProviderAdapter for GoogleAdapter {
                                     }
                                 }))
                             }
-                            _ => None,
                         })
                         .collect();
                     serde_json::json!({"role": gemini_role, "parts": parts})
