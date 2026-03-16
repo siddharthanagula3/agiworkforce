@@ -29,6 +29,43 @@ use tauri::State;
 use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::sys::error::{Error, Result};
 
+/// Maximum allowed length for a shell command string.
+/// Commands exceeding this are rejected to prevent abuse via extremely large payloads.
+const MAX_COMMAND_LENGTH: usize = 4096;
+
+/// Maximum execution time for a scheduled shell command (seconds).
+/// Commands that exceed this timeout are forcefully terminated.
+const SHELL_COMMAND_TIMEOUT_SECS: u64 = 300;
+
+/// Allowlist of command binaries permitted in scheduled shell commands.
+/// Only the base command name (the first token) is matched.
+/// Commands not on this list are rejected at both creation and dispatch time.
+const ALLOWED_SHELL_COMMANDS: &[&str] = &[
+    // File operations
+    "ls", "cat", "cp", "mv", "mkdir", "touch", "find", "head", "tail", "wc",
+    "sort", "uniq", "diff", "file", "stat", "du", "df",
+    // Text processing
+    "echo", "printf", "grep", "awk", "sed", "cut", "tr", "tee", "xargs",
+    // Compression
+    "tar", "zip", "unzip", "gzip", "gunzip", "bzip2",
+    // Network (non-destructive)
+    "curl", "wget", "ping", "dig", "nslookup", "host",
+    // System info
+    "date", "uptime", "whoami", "hostname", "uname", "env", "printenv", "id",
+    "ps", "top", "free", "lsof", "which", "whereis", "type",
+    // Development
+    "git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3",
+    "pip", "pip3", "cargo", "rustc", "go", "java", "javac", "make", "cmake",
+    "docker", "docker-compose",
+    // Shell utilities
+    "test", "true", "false", "sleep", "basename", "dirname", "realpath",
+    "pwd", "cd", "export", "set",
+    // macOS specific
+    "open", "pbcopy", "pbpaste", "say", "defaults", "osascript", "sw_vers",
+    // Script runners (for Script action type; the script content itself is validated)
+    "bash", "sh", "zsh",
+];
+
 /// The type of action a scheduled job should perform
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -472,6 +509,33 @@ pub async fn scheduler_add_job(
         }
     });
 
+    // SECURITY: Validate shell commands and scripts at creation time, not just at dispatch.
+    // This prevents storing malicious payloads that could later execute when the job fires.
+    match resolved_action_type {
+        SchedulerActionType::ShellCommand => {
+            if let Some(command) = resolved_action_data
+                .get("command")
+                .and_then(|v| v.as_str())
+            {
+                validate_shell_command(command).map_err(|e| {
+                    Error::Generic(format!("Shell command rejected at creation: {}", e))
+                })?;
+            }
+        }
+        SchedulerActionType::Script => {
+            let script = resolved_action_data
+                .get("script")
+                .or_else(|| resolved_action_data.get("command"))
+                .and_then(|v| v.as_str());
+            if let Some(script_content) = script {
+                validate_shell_command(script_content).map_err(|e| {
+                    Error::Generic(format!("Script rejected at creation: {}", e))
+                })?;
+            }
+        }
+        _ => {}
+    }
+
     state
         .scheduler
         .add_job(name, cron_expr, resolved_action_type, resolved_action_data)
@@ -699,11 +763,83 @@ pub async fn scheduler_run_job_now(
 }
 
 /// SECURITY: Validates a shell command/script against dangerous patterns.
+///
+/// Performs multi-layer validation:
+/// 1. Length and encoding checks (null bytes, newlines, max length)
+/// 2. Command allowlist enforcement (base command must be in ALLOWED_SHELL_COMMANDS)
+/// 3. Dangerous destructive pattern detection
+/// 4. Protected system path write prevention
+/// 5. Command chaining / injection operator blocking
+/// 6. I/O redirection blocking (>, <, >>)
+/// 7. Encoded / obfuscated character detection
+///
 /// Returns Err with a descriptive message if the command is blocked.
 fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
+    // --- Layer 0: Basic sanity ---
+
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Err("Command is empty or whitespace-only.".to_string());
+    }
+
+    if trimmed.len() > MAX_COMMAND_LENGTH {
+        tracing::warn!(
+            "[SECURITY][Scheduler] Blocked command exceeding max length ({} > {})",
+            trimmed.len(),
+            MAX_COMMAND_LENGTH
+        );
+        return Err(format!(
+            "Command blocked: length {} exceeds maximum allowed {} characters.",
+            trimmed.len(),
+            MAX_COMMAND_LENGTH
+        ));
+    }
+
+    // Null bytes can cause C-level string truncation, allowing hidden payloads
+    if command.contains('\0') {
+        tracing::warn!("[SECURITY][Scheduler] Blocked command containing null byte");
+        return Err(
+            "Command blocked: contains null byte (\\0). This is not a valid shell command."
+                .to_string(),
+        );
+    }
+
+    // Newlines can inject additional commands since sh -c processes them
+    if command.contains('\n') || command.contains('\r') {
+        tracing::warn!("[SECURITY][Scheduler] Blocked command containing newline characters");
+        return Err(
+            "Command blocked: contains newline characters. \
+             Scheduled commands must be single-line. \
+             If you need multi-line scripts, use the Script action type with a script file."
+                .to_string(),
+        );
+    }
+
     let cmd_lower = command.to_lowercase();
 
-    // Dangerous destructive commands
+    // --- Layer 1: Command allowlist enforcement ---
+    //
+    // Extract the base command (first whitespace-delimited token) and verify
+    // it appears in ALLOWED_SHELL_COMMANDS. This prevents execution of
+    // arbitrary binaries like `nmap`, `nc`, `python -c 'import os; ...'` etc.
+    // Handles optional leading path prefixes (e.g., /usr/bin/git -> git).
+
+    let base_command = extract_base_command(trimmed);
+    if !base_command.is_empty() && !ALLOWED_SHELL_COMMANDS.contains(&base_command.as_str()) {
+        tracing::warn!(
+            "[SECURITY][Scheduler] Blocked command with disallowed binary: '{}'",
+            base_command
+        );
+        return Err(format!(
+            "Command blocked: '{}' is not in the scheduler's allowed command list. \
+             Allowed commands include: ls, cat, echo, git, node, python, cargo, curl, etc. \
+             If you need to run a custom binary, execute it manually instead of via scheduler.",
+            base_command
+        ));
+    }
+
+    // --- Layer 2: Dangerous destructive patterns ---
+
     let dangerous_patterns: &[(&str, &str)] = &[
         ("rm -rf /", "recursive deletion of root filesystem"),
         ("rm -rf /*", "recursive deletion of root filesystem"),
@@ -744,7 +880,8 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
         }
     }
 
-    // Block commands that attempt to modify critical system paths
+    // --- Layer 3: Protected system path writes ---
+
     let protected_paths = ["/etc/", "/boot/", "/sys/", "/proc/", "/dev/"];
     let write_prefixes = ["rm ", "mv ", "cp ", "> ", "tee "];
     for path in &protected_paths {
@@ -766,8 +903,8 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
         }
     }
 
-    // Block command chaining operators that could bypass the pattern checks above.
-    // These allow an attacker to append arbitrary commands after an innocuous-looking prefix.
+    // --- Layer 4: Command chaining / injection operators ---
+
     let chaining_patterns: &[(&str, &str)] = &[
         (";", "command chaining with semicolon"),
         ("&&", "command chaining with AND operator"),
@@ -815,7 +952,47 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
         }
     }
 
-    // Block command chaining that could bypass checks via encoded/obfuscated patterns
+    // --- Layer 5: I/O redirection operators ---
+    //
+    // Block >, >>, <, << which could write arbitrary files or read sensitive data.
+    // These are not caught by the chaining checks above.
+    {
+        let chars: Vec<char> = command.chars().collect();
+        for (i, &ch) in chars.iter().enumerate() {
+            if ch == '>' {
+                // Allow if it's part of ">(" which is already caught by fork-bomb check
+                let next = chars.get(i + 1).copied().unwrap_or('\0');
+                if next == '(' {
+                    continue; // Already caught by ">()" pattern
+                }
+                // This is a redirect: > or >> (including fd redirects like 2>)
+                tracing::warn!(
+                    "[SECURITY][Scheduler] Blocked command with output redirect operator at position {}",
+                    i
+                );
+                return Err(
+                    "Command blocked: contains output redirect operator '>'. \
+                     Scheduled commands cannot redirect output to files. \
+                     If you need to write output, handle it in your application logic."
+                        .to_string(),
+                );
+            }
+            if ch == '<' {
+                tracing::warn!(
+                    "[SECURITY][Scheduler] Blocked command with input redirect operator at position {}",
+                    i
+                );
+                return Err(
+                    "Command blocked: contains input redirect operator '<'. \
+                     Scheduled commands cannot use input redirection."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    // --- Layer 6: Encoded / obfuscated character detection ---
+
     if cmd_lower.contains("\\x") || cmd_lower.contains("$'\\") || cmd_lower.contains("$(printf") {
         tracing::warn!("[SECURITY][Scheduler] Blocked command with encoded/obfuscated characters");
         return Err(
@@ -825,7 +1002,58 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
         );
     }
 
+    // Block hex/octal escape sequences that could hide payloads
+    if cmd_lower.contains("\\u00") || cmd_lower.contains("\\x0") || cmd_lower.contains("%0a") || cmd_lower.contains("%0d") {
+        tracing::warn!("[SECURITY][Scheduler] Blocked command with Unicode/hex escape sequences");
+        return Err(
+            "Command blocked: contains encoded escape sequences. \
+             Use plain text commands only."
+                .to_string(),
+        );
+    }
+
     Ok(())
+}
+
+/// Extract the base command name from a shell command string.
+///
+/// Handles:
+/// - Simple commands: "echo hello" -> "echo"
+/// - Path-prefixed commands: "/usr/bin/git status" -> "git"
+/// - Leading environment variables: "FOO=bar echo hello" -> "echo"
+/// - Empty/whitespace commands: returns empty string
+fn extract_base_command(command: &str) -> String {
+    let trimmed = command.trim();
+
+    // Skip leading env var assignments (KEY=VALUE patterns)
+    let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+    let mut command_token = "";
+    for token in &tokens {
+        // Environment variable assignment: contains '=' and starts with letter/underscore
+        if token.contains('=')
+            && token
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        {
+            continue;
+        }
+        command_token = token;
+        break;
+    }
+
+    if command_token.is_empty() {
+        return String::new();
+    }
+
+    // Strip path prefix: /usr/bin/git -> git
+    let base = if let Some(last_slash_pos) = command_token.rfind('/') {
+        &command_token[last_slash_pos + 1..]
+    } else {
+        command_token
+    };
+
+    base.to_lowercase()
 }
 
 /// Dispatch the actual job action based on type and data.
@@ -856,23 +1084,40 @@ async fn dispatch_job_action(
                 return Err("Shell command is empty".to_string());
             }
 
-            // SECURITY: ShellCommand requires explicit ToolGuard approval before execution.
-            // TODO: Wire ToolGuard into dispatch_job_action (requires passing ToolGuard state
-            // through AppHandle::try_state or adding it to SchedulerState) and call:
-            //   tool_guard.validate_tool_call("shell_execute", &serde_json::json!({"command": command})).await
-            // Until ToolGuard is wired here, ShellCommand jobs must be treated as
-            // pre-approved by the user at job-creation time. All scheduled shell commands
-            // are therefore logged at WARN level so operators can audit them.
-            // See tool_guard.rs for the validation API.
-            tracing::warn!(
-                "[SECURITY][Scheduler] Executing scheduled shell command for job '{}' \
-                 without runtime ToolGuard approval — command: {}",
-                job_name,
-                command
-            );
-
-            // SECURITY: Validate command against dangerous patterns
+            // SECURITY: Validate command against dangerous patterns, allowlist, and injection
             validate_shell_command(command)?;
+
+            // SECURITY: Wire ToolGuard validation via ToolConfirmationState.
+            // The ToolConfirmationState is managed by Tauri and contains the ToolExecutionGuard.
+            // We access it through the app_handle to validate the command at runtime.
+            {
+                use tauri::Manager;
+                if let Some(confirmation_state) =
+                    app_handle.try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>()
+                {
+                    let guard = confirmation_state.tool_guard();
+                    let params = serde_json::json!({"command": command});
+                    if let Err(e) = guard.validate_tool_call("code_execute", &params).await {
+                        tracing::warn!(
+                            "[SECURITY][Scheduler] ToolGuard rejected shell command for job '{}': {}",
+                            job_name,
+                            e
+                        );
+                        return Err(format!(
+                            "Shell command rejected by ToolGuard: {}",
+                            e
+                        ));
+                    }
+                } else {
+                    tracing::warn!(
+                        "[SECURITY][Scheduler] ToolConfirmationState not available — \
+                         shell command for job '{}' proceeding without ToolGuard validation. \
+                         Command: {}",
+                        job_name,
+                        command
+                    );
+                }
+            }
 
             tracing::info!(
                 "[Scheduler] Executing shell command for job '{}': {}",
@@ -880,7 +1125,8 @@ async fn dispatch_job_action(
                 command
             );
 
-            let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
+            // Execute with a timeout to prevent runaway commands
+            let child_future = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"
             } else {
                 "sh"
@@ -890,8 +1136,19 @@ async fn dispatch_job_action(
             } else {
                 vec!["-c", command]
             })
-            .output()
+            .output();
+
+            let output = tokio::time::timeout(
+                std::time::Duration::from_secs(SHELL_COMMAND_TIMEOUT_SECS),
+                child_future,
+            )
             .await
+            .map_err(|_| {
+                format!(
+                    "Shell command timed out after {}s for job '{}'. Command: {}",
+                    SHELL_COMMAND_TIMEOUT_SECS, job_name, command
+                )
+            })?
             .map_err(|e| format!("Failed to execute command: {}", e))?;
 
             if !output.status.success() {
@@ -1088,8 +1345,38 @@ async fn dispatch_job_action(
                 return Err("Script content is empty".to_string());
             }
 
-            // SECURITY: Validate script against dangerous patterns
+            // SECURITY: Validate script against dangerous patterns, allowlist, and injection
             validate_shell_command(script)?;
+
+            // SECURITY: Wire ToolGuard validation for scripts (same as ShellCommand)
+            {
+                use tauri::Manager;
+                if let Some(confirmation_state) =
+                    app_handle.try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>()
+                {
+                    let guard = confirmation_state.tool_guard();
+                    let params = serde_json::json!({"code": script});
+                    if let Err(e) = guard.validate_tool_call("code_execute", &params).await {
+                        tracing::warn!(
+                            "[SECURITY][Scheduler] ToolGuard rejected script for job '{}': {}",
+                            job_name,
+                            e
+                        );
+                        return Err(format!(
+                            "Script rejected by ToolGuard: {}",
+                            e
+                        ));
+                    }
+                } else {
+                    tracing::warn!(
+                        "[SECURITY][Scheduler] ToolConfirmationState not available — \
+                         script for job '{}' proceeding without ToolGuard validation. \
+                         Script length: {} chars",
+                        job_name,
+                        script.len()
+                    );
+                }
+            }
 
             tracing::info!(
                 "[Scheduler] Executing script for job '{}': <{} chars>",
@@ -1097,7 +1384,8 @@ async fn dispatch_job_action(
                 script.len()
             );
 
-            let output = tokio::process::Command::new(if cfg!(target_os = "windows") {
+            // Execute with a timeout to prevent runaway scripts
+            let child_future = tokio::process::Command::new(if cfg!(target_os = "windows") {
                 "cmd"
             } else {
                 "sh"
@@ -1107,8 +1395,19 @@ async fn dispatch_job_action(
             } else {
                 vec!["-c", script]
             })
-            .output()
+            .output();
+
+            let output = tokio::time::timeout(
+                std::time::Duration::from_secs(SHELL_COMMAND_TIMEOUT_SECS),
+                child_future,
+            )
             .await
+            .map_err(|_| {
+                format!(
+                    "Script timed out after {}s for job '{}'. Script length: {} chars",
+                    SHELL_COMMAND_TIMEOUT_SECS, job_name, script.len()
+                )
+            })?
             .map_err(|e| format!("Failed to execute script: {}", e))?;
 
             if !output.status.success() {
@@ -1450,5 +1749,235 @@ mod tests {
     fn test_scheduler_state_creation() {
         let state = SchedulerState::new();
         assert!(Arc::strong_count(&state.scheduler) >= 1);
+    }
+
+    // ======================================================================
+    // Security tests for validate_shell_command
+    // ======================================================================
+
+    #[test]
+    fn test_validate_allows_safe_commands() {
+        // Basic safe commands should pass
+        assert!(validate_shell_command("echo hello world").is_ok());
+        assert!(validate_shell_command("ls -la").is_ok());
+        assert!(validate_shell_command("git status").is_ok());
+        assert!(validate_shell_command("date").is_ok());
+        assert!(validate_shell_command("python3 script.py").is_ok());
+        assert!(validate_shell_command("cargo build").is_ok());
+        assert!(validate_shell_command("node index.js").is_ok());
+    }
+
+    #[test]
+    fn test_validate_blocks_command_chaining_semicolon() {
+        let result = validate_shell_command("echo hi; rm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("semicolon"));
+    }
+
+    #[test]
+    fn test_validate_blocks_command_chaining_and() {
+        let result = validate_shell_command("echo hi && rm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("AND operator"));
+    }
+
+    #[test]
+    fn test_validate_blocks_command_chaining_or() {
+        let result = validate_shell_command("echo hi || rm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("OR operator"));
+    }
+
+    #[test]
+    fn test_validate_blocks_pipe() {
+        let result = validate_shell_command("cat file.txt | grep secret");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("pipe operator"));
+    }
+
+    #[test]
+    fn test_validate_blocks_backtick_substitution() {
+        let result = validate_shell_command("echo `whoami`");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("backtick"));
+    }
+
+    #[test]
+    fn test_validate_blocks_dollar_substitution() {
+        let result = validate_shell_command("echo $(whoami)");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("$()"));
+    }
+
+    #[test]
+    fn test_validate_blocks_output_redirect() {
+        let result = validate_shell_command("echo secret > /tmp/leak.txt");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("redirect"));
+    }
+
+    #[test]
+    fn test_validate_blocks_append_redirect() {
+        let result = validate_shell_command("echo secret >> /tmp/leak.txt");
+        assert!(result.is_err());
+        // >> will be caught by the > check (first > triggers)
+        assert!(result.unwrap_err().contains("redirect"));
+    }
+
+    #[test]
+    fn test_validate_blocks_input_redirect() {
+        let result = validate_shell_command("cat < /etc/shadow");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("redirect"));
+    }
+
+    #[test]
+    fn test_validate_blocks_destructive_rm() {
+        assert!(validate_shell_command("rm -rf /").is_err());
+        assert!(validate_shell_command("rm -rf /*").is_err());
+        assert!(validate_shell_command("rm -rf ~").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_fork_bomb() {
+        assert!(validate_shell_command(":(){:|:&};:").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_system_commands() {
+        assert!(validate_shell_command("shutdown -h now").is_err());
+        assert!(validate_shell_command("reboot").is_err());
+        assert!(validate_shell_command("poweroff").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_protected_path_writes() {
+        // rm is not in the allowlist, so it gets caught at the allowlist layer
+        assert!(validate_shell_command("rm /etc/passwd").is_err());
+        // cp IS in the allowlist, so test patterns that hit the protected-path layer
+        assert!(validate_shell_command("cp /boot/vmlinuz /tmp/backup").is_err());
+        assert!(validate_shell_command("mv /sys/something /tmp/out").is_err());
+        // tee writing to protected path
+        assert!(validate_shell_command("tee /etc/shadow").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_null_bytes() {
+        let result = validate_shell_command("echo hello\0rm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("null byte"));
+    }
+
+    #[test]
+    fn test_validate_blocks_newlines() {
+        let result = validate_shell_command("echo hello\nrm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("newline"));
+    }
+
+    #[test]
+    fn test_validate_blocks_carriage_return() {
+        let result = validate_shell_command("echo hello\rrm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("newline"));
+    }
+
+    #[test]
+    fn test_validate_blocks_overlength_command() {
+        let long_cmd = format!("echo {}", "A".repeat(MAX_COMMAND_LENGTH + 1));
+        let result = validate_shell_command(&long_cmd);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_validate_blocks_empty_command() {
+        assert!(validate_shell_command("").is_err());
+        assert!(validate_shell_command("   ").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_encoded_patterns() {
+        assert!(validate_shell_command("echo \\x41\\x42").is_err());
+        assert!(validate_shell_command("echo $'\\n'").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_hex_escape_sequences() {
+        assert!(validate_shell_command("echo %0a%0d").is_err());
+        assert!(validate_shell_command("echo \\u0027").is_err());
+    }
+
+    #[test]
+    fn test_validate_blocks_disallowed_binaries() {
+        // These are not in ALLOWED_SHELL_COMMANDS
+        let result = validate_shell_command("nmap 127.0.0.1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+
+        let result = validate_shell_command("nc -l 4444");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+
+        let result = validate_shell_command("telnet example.com 80");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_allows_path_prefixed_allowed_commands() {
+        // /usr/bin/git should be allowed (base command "git" is in allowlist)
+        assert!(validate_shell_command("/usr/bin/git status").is_ok());
+        assert!(validate_shell_command("/usr/local/bin/node script.js").is_ok());
+    }
+
+    #[test]
+    fn test_validate_blocks_path_prefixed_disallowed_commands() {
+        let result = validate_shell_command("/usr/bin/nmap 127.0.0.1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+    }
+
+    #[test]
+    fn test_validate_handles_env_var_prefix() {
+        // FOO=bar echo hello -> base command is "echo", which is allowed
+        assert!(validate_shell_command("FOO=bar echo hello").is_ok());
+        // FOO=bar nmap -> base command is "nmap", which is NOT allowed
+        let result = validate_shell_command("FOO=bar nmap 127.0.0.1");
+        assert!(result.is_err());
+    }
+
+    // ======================================================================
+    // Tests for extract_base_command
+    // ======================================================================
+
+    #[test]
+    fn test_extract_base_command_simple() {
+        assert_eq!(extract_base_command("echo hello"), "echo");
+        assert_eq!(extract_base_command("ls -la"), "ls");
+        assert_eq!(extract_base_command("git status"), "git");
+    }
+
+    #[test]
+    fn test_extract_base_command_with_path() {
+        assert_eq!(extract_base_command("/usr/bin/git status"), "git");
+        assert_eq!(extract_base_command("/usr/local/bin/node app.js"), "node");
+    }
+
+    #[test]
+    fn test_extract_base_command_with_env_vars() {
+        assert_eq!(extract_base_command("FOO=bar echo hello"), "echo");
+        assert_eq!(extract_base_command("A=1 B=2 python3 script.py"), "python3");
+    }
+
+    #[test]
+    fn test_extract_base_command_empty() {
+        assert_eq!(extract_base_command(""), "");
+        assert_eq!(extract_base_command("   "), "");
+    }
+
+    #[test]
+    fn test_extract_base_command_only_env_vars() {
+        // Edge case: only env vars, no command — returns empty
+        assert_eq!(extract_base_command("FOO=bar"), "");
     }
 }
