@@ -9,7 +9,7 @@ interface KeyboardShortcutsDialogProps {
 }
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
-const metaKey = isMac ? '⌘' : 'Cmd';
+const metaKey = isMac ? '⌘' : 'Ctrl';
 
 interface Shortcut {
   keys: string[];
@@ -26,8 +26,10 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: 'Navigation',
     shortcuts: [
       { keys: [metaKey, 'K'], description: 'Open command palette' },
+      { keys: [metaKey, 'N'], description: 'New chat' },
       { keys: [metaKey, '/'], description: 'Show keyboard shortcuts' },
-      { keys: [metaKey, 'Shift', 'S'], description: 'Toggle sidebar' },
+      { keys: [metaKey, 'B'], description: 'Toggle sidebar' },
+      { keys: [metaKey, 'Shift', 'S'], description: 'Toggle sidebar (alternate)' },
     ],
   },
   {
@@ -35,7 +37,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     shortcuts: [
       { keys: ['Enter'], description: 'Send message' },
       { keys: ['Shift', 'Enter'], description: 'New line in message' },
-      { keys: ['Escape'], description: 'Stop streaming' },
+      { keys: ['Escape'], description: 'Stop streaming / close dialog' },
     ],
   },
   {
@@ -43,16 +45,16 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     shortcuts: [{ keys: [metaKey, 'M'], description: 'Open model selector' }],
   },
   {
-    title: 'Settings',
+    title: 'Appearance',
     shortcuts: [
+      { keys: [metaKey, 'D'], description: 'Toggle dark mode' },
       { keys: [metaKey, ','], description: 'Open settings' },
-      { keys: [metaKey, 'Shift', 'D'], description: 'Toggle dark mode' },
     ],
   },
   {
     title: 'Other',
     shortcuts: [
-      { keys: [metaKey, 'Shift', 'O'], description: 'New conversation' },
+      { keys: [metaKey, 'Shift', 'O'], description: 'New conversation (alternate)' },
       { keys: [metaKey, 'F'], description: 'Search messages' },
     ],
   },
