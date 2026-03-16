@@ -167,19 +167,8 @@ impl AGICore {
             Some(reflection_engine.clone()),
             Some(change_tracker),
         )?);
-        // Bug #35 fix: Removed duplicate LearningSystem::new() call.
-        // The `learning` Arc created at line 121 is reused here; the second
-        // instantiation leaked the first instance.
 
         tool_registry.register_all_tools()?;
-
-        // Create reflection engine for multi-turn reasoning
-        // MOVED UP to line 117 to be available for executor
-        // let reflection_engine = Arc::new(ReflectionEngine::new(
-        //    router.clone(),
-        //    knowledge_base.clone(),
-        //    learning.clone(),
-        // )?);
 
         Ok(Self {
             config,

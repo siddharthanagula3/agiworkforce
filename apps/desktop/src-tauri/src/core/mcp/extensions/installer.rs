@@ -306,8 +306,9 @@ impl ExtensionInstaller {
         // Open and extract the ZIP
         let file = std::fs::File::open(package_path.as_ref())?;
         let mut archive = ZipArchive::new(file)?;
+        let total_entries = archive.len();
 
-        for i in 0..archive.len() {
+        for i in 0..total_entries {
             let mut entry = archive.by_index(i)?;
             let entry_path = entry.name().to_string();
 
@@ -403,6 +404,24 @@ impl ExtensionInstaller {
                         std::fs::set_permissions(&output_path, perms)?;
                     }
                 }
+            }
+
+            // Emit per-file extraction progress (scaled to 30-50% range)
+            if total_entries > 0 {
+                let pct = 30 + ((i + 1) * 20) / total_entries;
+                // Clamp to u8 range; values are always 30..=50 so this is safe
+                let pct = pct.min(50) as u8;
+                self.emit_progress(InstallProgress {
+                    extension_id: extension_id.to_string(),
+                    phase: InstallPhase::Extracting,
+                    progress: pct,
+                    message: format!(
+                        "Extracting file {}/{}: {}",
+                        i + 1,
+                        total_entries,
+                        entry_path
+                    ),
+                });
             }
         }
 
