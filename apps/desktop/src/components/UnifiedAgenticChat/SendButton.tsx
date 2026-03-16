@@ -73,7 +73,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
           ? isQueueMode
             ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-md'
             : 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
-          : 'bg-gray-100 dark:bg-charcoal-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
+          : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] cursor-not-allowed',
       )}
       title={
         isQueueMode

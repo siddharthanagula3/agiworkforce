@@ -248,7 +248,7 @@ export function Header() {
                 href="/download"
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
               >
-                Download ALPHA
+                Download Free
               </Link>
             </>
           )}
@@ -347,7 +347,7 @@ export function Header() {
                   className="text-blue-400 hover:text-blue-300 transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Download ALPHA
+                  Download Free
                 </Link>
               </>
             )}

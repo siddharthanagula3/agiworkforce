@@ -49,27 +49,6 @@ const activeClass: Record<'emerald' | 'violet' | 'blue' | 'amber', string> = {
   amber: 'bg-amber-500/20 text-amber-400',
 };
 
-/** Tooltip badge shown below the switcher when Plan mode is active */
-function PlanModeBanner() {
-  const setAgentMode = useSettingsStore((state) => state.setAgentMode);
-
-  return (
-    <div className="mt-1 flex items-center gap-2 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-xs text-violet-300">
-      <Eye className="h-3 w-3 shrink-0" />
-      <span>
-        <strong>Plan mode</strong> — read-only. The agent will analyse and propose changes.
-      </span>
-      <button
-        type="button"
-        onClick={() => setAgentMode('build')}
-        className="ml-auto shrink-0 rounded bg-violet-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-violet-200 hover:bg-violet-500/50"
-      >
-        Switch to Build
-      </button>
-    </div>
-  );
-}
-
 export function AgentModeSwitcher() {
   const agentMode = useSettingsStore((state) => state.chatPreferences.agentMode);
   const setAgentMode = useSettingsStore((state) => state.setAgentMode);
@@ -91,7 +70,7 @@ export function AgentModeSwitcher() {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5">
+      <div className="flex items-center gap-0.5 rounded-lg bg-[hsl(var(--muted))] p-0.5">
         {modes.map(({ id, label, icon: Icon, color, description }) => {
           const isActive = agentMode === id;
           return (
@@ -99,19 +78,26 @@ export function AgentModeSwitcher() {
               key={id}
               type="button"
               aria-pressed={isActive}
-              title={description}
+              title={`${label}: ${description}`}
               onClick={() => handleModeChange(id)}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all ${
-                isActive ? activeClass[color] : 'text-white/50 hover:text-white/80'
+              className={`group relative flex items-center gap-1 rounded-md py-1 text-xs font-medium transition-all ${
+                isActive
+                  ? `${activeClass[color]} px-2`
+                  : 'px-1.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
               }`}
             >
-              <Icon className="h-3 w-3" />
-              <span>{label}</span>
+              <Icon className="h-3.5 w-3.5" />
+              {isActive && <span>{label}</span>}
+              {/* Tooltip on hover for inactive buttons */}
+              {!isActive && (
+                <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-[hsl(var(--popover))] px-1.5 py-0.5 text-[10px] text-[hsl(var(--popover-foreground))] opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  {label}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
-      {agentMode === 'plan' && <PlanModeBanner />}
     </div>
   );
 }

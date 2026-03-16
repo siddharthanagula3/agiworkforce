@@ -20,8 +20,9 @@ const MAX_PENDING_TASKS: usize = 500;
 const MAX_REPLAN_COUNT: usize = 2;
 /// Timeout for waiting on user approval before the task is automatically failed.
 const APPROVAL_TIMEOUT_SECS: u64 = 300;
-/// Safety-net cap on autonomous loop iterations to prevent runaway execution.
-const MAX_LOOP_ITERATIONS: usize = 25;
+/// Default safety-net cap on autonomous loop iterations to prevent runaway execution.
+/// Can be overridden per-agent via `AgentConfig::max_loop_iterations`.
+const MAX_LOOP_ITERATIONS: usize = 100;
 /// Emit a budget warning event when cumulative cost reaches this fraction of the session cap.
 const BUDGET_WARNING_THRESHOLD: f64 = 0.80;
 /// Maximum number of step outcomes to include in the LLM feedback prompt to avoid
@@ -130,6 +131,12 @@ impl AutonomousAgent {
 
         let mut iteration: usize = 0;
         let mut budget_warning_emitted = false;
+        // Use config override if set (non-zero), otherwise fall back to compile-time default.
+        let max_iterations = if self.config.max_loop_iterations > 0 {
+            self.config.max_loop_iterations
+        } else {
+            MAX_LOOP_ITERATIONS
+        };
         // Reuse a single System instance across loop iterations to avoid
         // the cost of re-scanning all processes via new_all() on every 50ms tick.
         let mut sys = System::new();
@@ -142,19 +149,19 @@ impl AutonomousAgent {
 
             // Safety-net iteration cap to prevent runaway loops.
             iteration += 1;
-            if iteration > MAX_LOOP_ITERATIONS {
+            if iteration > max_iterations {
                 tracing::warn!(
                     "[Agent] Iteration limit ({}) reached, shutting down autonomous loop",
-                    MAX_LOOP_ITERATIONS
+                    max_iterations
                 );
                 if let Some(ref handle) = self.app_handle {
                     if let Err(e) = handle.emit(
                         "agent:loop-iteration-limit",
                         json!({
-                            "maxIterations": MAX_LOOP_ITERATIONS,
+                            "maxIterations": max_iterations,
                             "message": format!(
                                 "Autonomous loop stopped after {} iterations (safety limit)",
-                                MAX_LOOP_ITERATIONS
+                                max_iterations
                             )
                         }),
                     ) {
@@ -222,7 +229,7 @@ impl AutonomousAgent {
 
             // Only check system resource usage every 10 iterations (~500ms) to avoid
             // the overhead of sysinfo refresh on every 50ms tick.
-            if iteration % 10 == 0 && !self.check_resource_limits(&mut sys).await? {
+            if iteration.is_multiple_of(10) && !self.check_resource_limits(&mut sys).await? {
                 tracing::warn!("[Agent] Resource limits exceeded, pausing");
                 sleep(Duration::from_secs(5)).await;
                 continue;

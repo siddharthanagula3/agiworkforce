@@ -35,6 +35,8 @@ export default [
       'coverage/**',
       '**/coverage/**',
       '**/.expo/**',
+      '.claude/worktrees/**',
+      '**/.claude/worktrees/**',
       // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',

@@ -244,7 +244,8 @@ const DesktopShell = () => {
     void (async () => {
       try {
         // Wait for settings store hydration from localStorage before loading from backend
-        const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
+        const { useSettingsStore, waitForSettingsHydration } =
+          await import('./stores/settingsStore');
         await runStartupStep('Settings hydration', () => waitForSettingsHydration());
         if (disposed) return;
 
@@ -281,6 +282,17 @@ const DesktopShell = () => {
           });
         }
 
+        // Restore selected theme on startup
+        await runStartupStep('Theme restore', async () => {
+          const settings = useSettingsStore.getState();
+          const themeId = settings.windowPreferences?.selectedTheme;
+          if (themeId) {
+            const { getThemeById, applyTheme } = await import('./themes/index');
+            const theme = getThemeById(themeId);
+            if (theme) applyTheme(theme);
+          }
+        });
+
         if (disposed) return;
         const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
         await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
@@ -291,7 +303,8 @@ const DesktopShell = () => {
         // Initialize Ollama health service for graceful degradation of local models
         if (isTauri) {
           await runStartupStep('Ollama health monitor', async () => {
-            const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
+            const { initializeOllamaHealthService } =
+              await import('./services/ollamaHealthService');
             const cleanup = initializeOllamaHealthService();
             registerCleanup(cleanup);
           });
@@ -684,7 +697,8 @@ const DesktopShell = () => {
               <AlertTriangle className="h-4 w-4" />
               <span>Using cached account data. Subscription status may be outdated.</span>
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => {
                 setSubscriptionFetchFailed(false);
                 void useAccountStore
@@ -709,7 +723,8 @@ const DesktopShell = () => {
                     <p className="mb-4 text-lg font-semibold text-foreground">
                       Chat interface encountered an error
                     </p>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => window.location.reload()}
                       className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/90"
                     >

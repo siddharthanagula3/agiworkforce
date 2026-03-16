@@ -204,6 +204,25 @@ pub(super) async fn prepare_send_message(
         project_context_content
     });
 
+    // Inject coding context if project folder exists
+    if let Some(ref folder) = effective_folder {
+        let folder_path = std::path::Path::new(folder);
+        if folder_path.is_dir() {
+            let coding_prompt =
+                super::prompt_context::build_coding_system_prompt(folder_path);
+            if !coding_prompt.is_empty() {
+                llm_messages.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: coding_prompt,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                });
+                debug!("[Chat] Added coding context for project folder: {}", folder);
+            }
+        }
+    }
+
     if let Some(custom_instructions) = request
         .custom_instructions
         .as_ref()

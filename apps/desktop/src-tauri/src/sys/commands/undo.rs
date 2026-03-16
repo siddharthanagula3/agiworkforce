@@ -8,10 +8,11 @@
 //! 1. File/system change undo (via UndoManager)
 //! 2. Form submission undo (via FormUndoManager)
 
-use crate::core::agent::change_tracker::ChangeTracker;
+use crate::core::agent::change_tracker::{ChangeTracker, NamedFileCheckpoint};
 use crate::core::agent::form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 use crate::core::agent::undo_manager::{UndoManager, UndoResult, UndoSummary, UndoableChange};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -129,6 +130,68 @@ pub async fn undo_can_undo(
 /// (Used by other modules to record file operations)
 pub fn get_change_tracker(undo_state: &UndoState) -> Arc<ChangeTracker> {
     undo_state.change_tracker.clone()
+}
+
+// ============================================================================
+// Named File Checkpoint Commands
+// ============================================================================
+
+/// Create a named checkpoint by snapshotting the current contents of the given files.
+///
+/// Returns the checkpoint ID that can later be used with `coding_checkpoint_rewind`.
+/// A maximum of 50 checkpoints are retained; the oldest is evicted when exceeded.
+#[tauri::command]
+pub async fn coding_checkpoint_create(
+    name: String,
+    paths: Vec<String>,
+    undo_state: State<'_, UndoState>,
+) -> Result<String, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Checkpoint name cannot be empty".to_string());
+    }
+    if paths.is_empty() {
+        return Err("At least one path must be provided".to_string());
+    }
+    let pathbufs: Vec<PathBuf> = paths
+        .iter()
+        .filter(|p| !p.trim().is_empty())
+        .map(PathBuf::from)
+        .collect();
+    if pathbufs.is_empty() {
+        return Err("No valid paths provided".to_string());
+    }
+    let tracker = &undo_state.change_tracker;
+    tracker.create_named_checkpoint(name, pathbufs).await
+}
+
+/// List all named file checkpoints in chronological order.
+#[tauri::command]
+pub async fn coding_checkpoint_list(
+    undo_state: State<'_, UndoState>,
+) -> Result<Vec<NamedFileCheckpoint>, String> {
+    let tracker = &undo_state.change_tracker;
+    Ok(tracker.list_named_checkpoints().await)
+}
+
+/// Rewind files to a named checkpoint, restoring their snapshotted contents.
+///
+/// All checkpoints created after the target checkpoint are removed.
+/// Returns the list of restored file paths.
+#[tauri::command]
+pub async fn coding_checkpoint_rewind(
+    id: String,
+    undo_state: State<'_, UndoState>,
+) -> Result<Vec<String>, String> {
+    if id.trim().is_empty() {
+        return Err("Checkpoint ID cannot be empty".to_string());
+    }
+    let tracker = &undo_state.change_tracker;
+    let paths = tracker.rewind_to_checkpoint(&id).await?;
+    Ok(paths
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
 }
 
 // ============================================================================

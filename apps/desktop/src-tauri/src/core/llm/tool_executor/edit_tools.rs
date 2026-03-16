@@ -399,6 +399,257 @@ impl ToolExecutor {
         })
     }
 
+    /// Execute the `edit_exact_replace` tool: find-and-replace with uniqueness validation.
+    ///
+    /// Parameters:
+    /// - `path` (required) — file path to edit
+    /// - `old_text` (required) — text to find and replace
+    /// - `new_text` (required) — replacement text
+    /// - `replace_all` (optional bool, default false) — replace all occurrences
+    ///
+    /// When `replace_all` is false (default), the `old_text` must appear exactly once in
+    /// the file. If multiple occurrences are found, returns an error with occurrence count
+    /// and line numbers so the caller can provide more context or opt into replace_all.
+    pub(crate) async fn execute_edit_exact_replace_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        // Extract required parameters
+        let raw_path = match args.get("path").and_then(|v| v.as_str()) {
+            Some(p) => p,
+            None => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Missing 'path' parameter", "success": false }),
+                    error: Some("Missing 'path' parameter".to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let old_text = match args.get("old_text").and_then(|v| v.as_str()) {
+            Some(t) => t.to_string(),
+            None => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Missing 'old_text' parameter", "success": false }),
+                    error: Some("Missing 'old_text' parameter".to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let new_text = match args.get("new_text").and_then(|v| v.as_str()) {
+            Some(t) => t.to_string(),
+            None => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Missing 'new_text' parameter", "success": false }),
+                    error: Some("Missing 'new_text' parameter".to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let replace_all = args
+            .get("replace_all")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Resolve and validate path
+        let resolved = self.resolve_path(raw_path);
+        let validated_path = match self.canonicalize_validated_path(&resolved).await {
+            Ok(p) => p,
+            Err(e) => {
+                let msg = format!("Path validation failed for '{}': {}", resolved, e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        let path_string = validated_path.to_string_lossy().to_string();
+
+        // Check file size before reading
+        match fs::metadata(&validated_path).await {
+            Ok(meta) if meta.len() > EDIT_MAX_FILE_BYTES => {
+                let msg = format!(
+                    "File '{}' too large ({} bytes, max {})",
+                    path_string,
+                    meta.len(),
+                    EDIT_MAX_FILE_BYTES
+                );
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+            Err(e) => {
+                let msg = format!("Cannot stat '{}': {}", path_string, e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+            _ => {}
+        }
+
+        // Read file content
+        let content = match fs::read_to_string(&validated_path).await {
+            Ok(c) => c,
+            Err(e) => {
+                let msg = format!("Failed to read '{}': {}", path_string, e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        // Count occurrences
+        let occurrence_count = content.matches(&old_text).count();
+
+        if occurrence_count == 0 {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": "Text not found in file",
+                    "success": false,
+                    "path": &path_string
+                }),
+                error: Some("Text not found in file".to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+            });
+        }
+
+        if occurrence_count > 1 && !replace_all {
+            // Find line numbers of each occurrence
+            let mut line_numbers: Vec<usize> = Vec::new();
+            let mut search_start = 0usize;
+            while let Some(pos) = content[search_start..].find(&old_text) {
+                let absolute_pos = search_start + pos;
+                let line_number = content[..absolute_pos].lines().count() + 1;
+                line_numbers.push(line_number);
+                search_start = absolute_pos + old_text.len();
+            }
+
+            let lines_str = line_numbers
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let msg = format!(
+                "Found {} occurrences of old_text (at lines {}). Use replace_all=true to replace all, or provide more context to make old_text unique.",
+                occurrence_count, lines_str
+            );
+
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": &msg,
+                    "success": false,
+                    "path": &path_string,
+                    "occurrences": occurrence_count,
+                    "line_numbers": line_numbers
+                }),
+                error: Some(msg),
+                metadata: HashMap::from([
+                    ("path".to_string(), json!(&path_string)),
+                    ("occurrences".to_string(), json!(occurrence_count)),
+                ]),
+            });
+        }
+
+        // Apply replacement
+        let before_content = content.clone();
+        let after_content = if replace_all {
+            content.replace(&old_text, &new_text)
+        } else {
+            content.replacen(&old_text, &new_text, 1)
+        };
+
+        // Write the updated file
+        if let Err(e) = fs::write(&validated_path, &after_content).await {
+            let msg = format!("Failed to write '{}': {}", path_string, e);
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": &msg, "success": false }),
+                error: Some(msg),
+                metadata: HashMap::new(),
+            });
+        }
+
+        let replacements_made = if replace_all { occurrence_count } else { 1 };
+
+        // Record change in undo tracker + create named checkpoint
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                let task_id = args
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+                undo_state
+                    .change_tracker
+                    .record_file_modified(
+                        validated_path.clone(),
+                        before_content.clone(),
+                        after_content.clone(),
+                        task_id,
+                    )
+                    .await;
+
+                // Create a named checkpoint for the modified file
+                let checkpoint_name = format!("edit_exact_replace: {}", path_string);
+                if let Err(e) = undo_state
+                    .change_tracker
+                    .create_named_checkpoint(checkpoint_name, vec![validated_path.clone()])
+                    .await
+                {
+                    tracing::warn!(
+                        "[edit_exact_replace] Failed to create undo checkpoint for '{}': {}",
+                        path_string,
+                        e
+                    );
+                }
+            }
+        }
+
+        // Compute a minimal unified diff
+        let diff = compute_unified_diff(&before_content, &after_content, 3);
+
+        let message = format!(
+            "Replaced {} occurrence(s) in {}",
+            replacements_made, path_string
+        );
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "success": true,
+                "path": &path_string,
+                "diff": &diff,
+                "replacements_made": replacements_made,
+                "message": &message
+            }),
+            error: None,
+            metadata: HashMap::from([
+                ("path".to_string(), json!(&path_string)),
+                ("replacements_made".to_string(), json!(replacements_made)),
+            ]),
+        })
+    }
+
     /// Rollback files to their snapshotted state.
     async fn rollback_files(
         snapshots: &HashMap<String, String>,
@@ -596,6 +847,125 @@ fn apply_hunk(content: &str, hunk: &DiffHunk) -> Result<String> {
     }
 
     Ok(result)
+}
+
+// ── Unified Diff Generator ─────────────────────────────────────────────────
+
+/// Compute a minimal unified diff between two strings.
+///
+/// Produces standard unified diff format with `context` lines of surrounding
+/// context around each changed region. Consecutive changes within the context
+/// window are merged into a single hunk.
+fn compute_unified_diff(before: &str, after: &str, context: usize) -> String {
+    let before_lines: Vec<&str> = before.lines().collect();
+    let after_lines: Vec<&str> = after.lines().collect();
+
+    // Find changed line regions using a simple LCS-free approach:
+    // walk both line lists, marking ranges that differ.
+    let max_len = before_lines.len().max(after_lines.len());
+    let mut changed: Vec<bool> = vec![false; max_len + 1];
+
+    // Mark lines where the two versions differ
+    let common_len = before_lines.len().min(after_lines.len());
+    for i in 0..common_len {
+        if before_lines[i] != after_lines[i] {
+            changed[i] = true;
+        }
+    }
+    // Lines that only exist in one version are always changed
+    for item in changed.iter_mut().take(max_len).skip(common_len) {
+        *item = true;
+    }
+
+    // Collect change regions (start, end) in the before-file coordinate space
+    let mut regions: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < max_len {
+        if changed[i] {
+            let start = i;
+            while i < max_len && changed[i] {
+                i += 1;
+            }
+            regions.push((start, i));
+        } else {
+            i += 1;
+        }
+    }
+
+    if regions.is_empty() {
+        return String::new();
+    }
+
+    // Merge regions that are within `context` lines of each other
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for (start, end) in &regions {
+        if let Some(last) = merged.last_mut() {
+            if *start <= last.1 + context * 2 {
+                last.1 = *end;
+                continue;
+            }
+        }
+        merged.push((*start, *end));
+    }
+
+    // Generate diff output
+    let mut output = String::new();
+
+    for (change_start, change_end) in &merged {
+        let ctx_start = change_start.saturating_sub(context);
+        let ctx_end_before = (*change_end + context).min(before_lines.len());
+        let ctx_end_after = (*change_end + context).min(after_lines.len());
+
+        // Compute after-file offset: the change_start is the same in both
+        // since we use a simple positional comparison
+        let before_count = ctx_end_before - ctx_start;
+        let after_count = ctx_end_after - ctx_start;
+
+        output.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            ctx_start + 1,
+            before_count,
+            ctx_start + 1,
+            after_count
+        ));
+
+        // Leading context
+        for idx in ctx_start..*change_start {
+            if idx < before_lines.len() {
+                output.push(' ');
+                output.push_str(before_lines[idx]);
+                output.push('\n');
+            }
+        }
+
+        // Changed lines
+        for idx in *change_start..*change_end {
+            if idx < before_lines.len() {
+                output.push('-');
+                output.push_str(before_lines[idx]);
+                output.push('\n');
+            }
+        }
+        for idx in *change_start..*change_end {
+            if idx < after_lines.len() {
+                output.push('+');
+                output.push_str(after_lines[idx]);
+                output.push('\n');
+            }
+        }
+
+        // Trailing context
+        let trailing_start = *change_end;
+        for idx in trailing_start..ctx_end_before {
+            if idx < before_lines.len() {
+                output.push(' ');
+                output.push_str(before_lines[idx]);
+                output.push('\n');
+            }
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]

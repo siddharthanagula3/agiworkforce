@@ -28,6 +28,8 @@ pub fn append_no_xml_rule(prompt: &str) -> String {
 }
 
 /// Check if a request already contains the no-XML rule marker.
+///
+/// Returns immediately once the marker is found -- does not scan remaining messages.
 fn request_has_no_xml_rule(request: &LLMRequest) -> bool {
     if let Some(system) = &request.system {
         if system.contains(NO_XML_RULE_MARKER) {
@@ -35,10 +37,13 @@ fn request_has_no_xml_rule(request: &LLMRequest) -> bool {
         }
     }
 
-    request
-        .messages
-        .iter()
-        .any(|m| m.role == "system" && m.content.contains(NO_XML_RULE_MARKER))
+    for m in &request.messages {
+        if m.role == "system" && m.content.contains(NO_XML_RULE_MARKER) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Apply the no-XML rule to the request.

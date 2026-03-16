@@ -89,7 +89,8 @@ impl ToolTimeoutConfig {
     pub fn get_timeout(&self, tool_id: &str) -> u64 {
         match tool_id {
             // Fast tools (15s)
-            "search_web" | "api_call" | "web_fetch" | "llm_reason" | "code_search" => self.fast,
+            "search_web" | "api_call" | "web_fetch" | "llm_reason" | "code_search"
+            | "grep_search" | "glob_search" => self.fast,
 
             // Medium tools (60s)
             "file_read"
@@ -107,7 +108,8 @@ impl ToolTimeoutConfig {
             | "db_transaction_commit"
             | "db_transaction_rollback"
             | "multi_edit"
-            | "apply_patch" => self.medium,
+            | "apply_patch"
+            | "edit_exact_replace" => self.medium,
 
             // Slow tools (180s)
             "terminal_execute"
@@ -163,6 +165,7 @@ const DANGEROUS_TOOLS: &[&str] = &[
     "code_execute",
     "multi_edit",
     "apply_patch",
+    "edit_exact_replace",
 ];
 
 fn is_dangerous_tool(tool_id: &str) -> bool {
@@ -325,6 +328,27 @@ impl ToolExecutor {
             Self::promote_alias_arg(args, "query", &["pattern", "symbol", "name", "search"]);
             Self::promote_alias_arg(args, "type", &["symbol_type", "kind"]);
             Self::promote_alias_arg(args, "root", &["directory", "path", "cwd"]);
+        }
+
+        if normalized == "grep_search" {
+            Self::promote_alias_arg(args, "pattern", &["query", "regex", "search", "text"]);
+            Self::promote_alias_arg(args, "root", &["directory", "path", "cwd", "folder"]);
+            Self::promote_alias_arg(args, "include_pattern", &["glob", "file_pattern", "filter"]);
+        }
+
+        if normalized == "glob_search" {
+            Self::promote_alias_arg(args, "pattern", &["query", "glob", "search"]);
+            Self::promote_alias_arg(args, "root", &["directory", "path", "cwd", "folder"]);
+        }
+
+        if normalized == "edit_exact_replace" {
+            Self::promote_alias_arg(
+                args,
+                "path",
+                &["file_path", "filepath", "target_path", "file"],
+            );
+            Self::promote_alias_arg(args, "old_text", &["old_string", "find", "search"]);
+            Self::promote_alias_arg(args, "new_text", &["new_string", "replace", "replacement"]);
         }
 
         if normalized == "image_generate" || normalized == "media_generate_image" {
@@ -1584,6 +1608,9 @@ impl ToolExecutor {
             "test_run" => self.execute_test_run_tool(args, action_id).await,
             "multi_edit" => self.execute_multi_edit_tool(&args).await,
             "apply_patch" => self.execute_apply_patch_tool(&args).await,
+            "grep_search" => self.execute_grep_search_tool(&args).await,
+            "glob_search" => self.execute_glob_search_tool(&args).await,
+            "edit_exact_replace" => self.execute_edit_exact_replace_tool(&args).await,
             id if id.starts_with("browser_") => self.execute_browser_tool(id, args).await,
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
