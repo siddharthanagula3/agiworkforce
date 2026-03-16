@@ -144,24 +144,34 @@ describe('AdminToolsPanel', () => {
 
     it('allows sorting by time', async () => {
       const user = userEvent.setup();
-      render(<AdminToolsPanel />);
+      const { container } = render(<AdminToolsPanel />);
 
-      const sortButton = screen.getByRole('button', { name: 'Time' });
+      // Find the sort button by aria-label
+      const sortButton = container.querySelector(
+        'button[aria-label="sort by time"]',
+      ) as HTMLButtonElement;
+      expect(sortButton).toBeTruthy();
+
       await user.click(sortButton);
 
-      // After clicking, should show a visual indicator of sorted state (bg-blue-500)
-      expect(sortButton).toHaveClass('bg-blue-500');
+      // After clicking, should show blue background
+      expect(sortButton.className).toContain('bg-blue-500');
     });
 
     it('allows sorting by cost', async () => {
       const user = userEvent.setup();
-      render(<AdminToolsPanel />);
+      const { container } = render(<AdminToolsPanel />);
 
-      const sortButton = screen.getByRole('button', { name: 'Cost' });
+      // Find the sort button by aria-label
+      const sortButton = container.querySelector(
+        'button[aria-label="sort by cost"]',
+      ) as HTMLButtonElement;
+      expect(sortButton).toBeTruthy();
+
       await user.click(sortButton);
 
       // After clicking, should show blue background
-      expect(sortButton).toHaveClass('bg-blue-500');
+      expect(sortButton.className).toContain('bg-blue-500');
     });
 
     it('provides replay option for requests', async () => {
