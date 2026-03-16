@@ -121,12 +121,12 @@ describe('ApiErrorHandler', () => {
 
   describe('fetchWithTimeout', () => {
     it('should throw timeout error when request exceeds timeout', async () => {
-      const mockFetch = vi.fn(
+      const mockFetch: typeof fetch = vi.fn(
         () =>
-          new Promise(() => {
+          new Promise<Response>(() => {
             // Never resolves
           }),
-      );
+      ) as typeof fetch;
 
       global.fetch = mockFetch;
 
@@ -139,7 +139,6 @@ describe('ApiErrorHandler', () => {
 
   describe('showErrorToast', () => {
     it('should show error toast', () => {
-      const toastSpy = vi.fn();
       const error = new Error('Test error') as ApiError;
 
       // Mock toast - this would normally be imported from sonner
