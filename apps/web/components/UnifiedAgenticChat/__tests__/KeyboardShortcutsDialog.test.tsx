@@ -1,6 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
@@ -42,7 +42,7 @@ vi.mock('framer-motion', () => {
 import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 
 describe('KeyboardShortcutsDialog', () => {
-  let onCloseMock: ReturnType<typeof vi.fn>;
+  let onCloseMock: () => void;
 
   beforeEach(() => {
     onCloseMock = vi.fn();
