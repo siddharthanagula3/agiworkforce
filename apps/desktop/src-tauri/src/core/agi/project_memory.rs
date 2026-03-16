@@ -311,12 +311,16 @@ impl ProjectMemoryManager {
             .map_err(|e| Error::Generic(format!("Failed to serialize style: {}", e)))?;
 
         // Build a JSON key pattern to match existing rows with the same style_key.
-        // The style_key is embedded in the JSON content as "style_key":"<value>".
+        // Use serde_json to get the exact JSON-escaped form of the key, then escape
+        // SQL LIKE wildcards. This handles backslashes correctly (JSON doubles them).
+        let json_escaped_key = serde_json::to_string(style_key)
+            .unwrap_or_else(|_| format!("\"{}\"", style_key));
+        // Strip surrounding quotes from JSON string
+        let json_inner = &json_escaped_key[1..json_escaped_key.len() - 1];
         let key_pattern = format!(
             "%\"style_key\":\"{}\"%",
-            style_key
+            json_inner
                 .replace('\\', "\\\\")
-                .replace('"', "\\\"")
                 .replace('%', "\\%")
                 .replace('_', "\\_")
         );
@@ -460,11 +464,14 @@ impl ProjectMemoryManager {
             .map_err(|e| Error::Generic(format!("Failed to serialize decision: {}", e)))?;
 
         // Build a pattern to match existing rows with the same decision text.
+        // Use serde_json to get the exact JSON-escaped form, then escape LIKE wildcards.
+        let json_escaped_decision = serde_json::to_string(decision)
+            .unwrap_or_else(|_| format!("\"{}\"", decision));
+        let json_inner_decision = &json_escaped_decision[1..json_escaped_decision.len() - 1];
         let decision_pattern = format!(
             "%\"decision\":\"{}\"%",
-            decision
+            json_inner_decision
                 .replace('\\', "\\\\")
-                .replace('"', "\\\"")
                 .replace('%', "\\%")
                 .replace('_', "\\_")
         );
