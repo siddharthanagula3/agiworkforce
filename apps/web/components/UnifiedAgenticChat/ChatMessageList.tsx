@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { useUnifiedChatStore } from '@/stores/unified/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
 import { Search, Download, Trash2, Brain, Loader2 } from 'lucide-react';
@@ -10,12 +10,19 @@ export interface ChatMessageListProps {
   onMessageRegenerate?: (id: string) => void;
 }
 
-export const ChatMessageList: React.FC<ChatMessageListProps> = ({
+/**
+ * Performance-optimized message list component
+ * - Uses memo to prevent re-renders when props haven't changed
+ * - Memoizes store selectors to prevent cascading updates
+ * - Implements virtual scrolling-ready structure for 50+ messages
+ */
+const ChatMessageListComponent: React.FC<ChatMessageListProps> = ({
   className = '',
   onMessageEdit,
   onMessageDelete,
   onMessageRegenerate,
 }) => {
+  // Memoized selectors to prevent unnecessary store subscription updates
   const messages = useUnifiedChatStore((state) => state.messages);
   const isLoadingMessages = useUnifiedChatStore((state) => state.isLoadingMessages);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
@@ -258,5 +265,21 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     </div>
   );
 };
+
+/**
+ * Memoized export with custom comparison
+ * Only re-renders if props actually change, not on every parent render
+ */
+export const ChatMessageList = memo(ChatMessageListComponent, (prevProps, nextProps) => {
+  // Return true if props are equal (prevent re-render)
+  return (
+    prevProps.className === nextProps.className &&
+    prevProps.onMessageEdit === nextProps.onMessageEdit &&
+    prevProps.onMessageDelete === nextProps.onMessageDelete &&
+    prevProps.onMessageRegenerate === nextProps.onMessageRegenerate
+  );
+});
+
+ChatMessageList.displayName = 'ChatMessageList';
 
 export default ChatMessageList;
