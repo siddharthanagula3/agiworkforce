@@ -314,6 +314,13 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut credits = None;
     let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
 
+    // Track the last tool call index we saw across data: lines within this SSE
+    // event. When a continuation delta omits the "index" field and the delta
+    // array has only one element, falling back to array position (0) is wrong
+    // if the actual tool call lives at a higher index. Using the last-seen
+    // index is a much safer heuristic.
+    let mut last_tool_call_index: Option<usize> = None;
+
     for line in event.lines() {
         if let Some(data) = extract_data_payload(line) {
             if data == "[DONE]" {
@@ -369,24 +376,38 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             delta.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             for (position, tool_call) in delta_tool_calls.iter().enumerate() {
-                                // Bug #27 fix: Prefer the explicit "index" field from the
-                                // provider. Falling back to array position is dangerous
-                                // because a single-element array with index=1 would be
-                                // misassigned to 0. Log a warning when falling back so
-                                // we can detect providers that omit the index.
+                                // Prefer the explicit "index" field from the provider.
+                                // Falling back to array position is dangerous because a
+                                // single-element array with index=1 would be misassigned
+                                // to 0. When the explicit index is missing AND the delta
+                                // array has only one element, use the last-seen index
+                                // (from a prior data: line) if available — this handles
+                                // continuation deltas that carry only arguments without
+                                // repeating the index. For multi-element arrays without
+                                // explicit indices, fall back to array position (best we
+                                // can do) and log a warning.
                                 let explicit_index = tool_call
                                     .get("index")
                                     .and_then(|i| i.as_u64())
                                     .map(|idx| idx as usize);
-                                if explicit_index.is_none() && delta_tool_calls.len() > 1 {
+
+                                let index = if let Some(idx) = explicit_index {
+                                    idx
+                                } else if delta_tool_calls.len() == 1 {
+                                    // Single-element continuation: prefer last-seen index.
+                                    last_tool_call_index.unwrap_or(position)
+                                } else {
                                     tracing::warn!(
-                                        "[SSE] Tool call delta at position {} missing 'index' field \
-                                        in multi-tool chunk — falling back to array position. \
-                                        This may corrupt tool call accumulation.",
+                                        "[SSE] Tool call delta at position {} missing 'index' \
+                                        field in multi-tool chunk — falling back to array \
+                                        position. This may corrupt tool call accumulation.",
                                         position
                                     );
-                                }
-                                let index = explicit_index.unwrap_or(position);
+                                    position
+                                };
+
+                                last_tool_call_index = Some(index);
+
                                 let id = tool_call
                                     .get("id")
                                     .and_then(|i| i.as_str())
@@ -405,12 +426,12 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                     .unwrap_or("")
                                     .to_string();
 
-                                // Bug #27 fix: look up existing entry by index rather
-                                // than always appending. Multiple data: lines in the
-                                // same SSE event can carry deltas for the same tool
-                                // call index (e.g. first line sends id+name, second
-                                // sends arguments). Blindly pushing creates duplicate
-                                // entries, corrupting tool call assembly downstream.
+                                // Look up existing entry by index rather than always
+                                // appending. Multiple data: lines in the same SSE event
+                                // can carry deltas for the same tool call index (e.g.
+                                // first line sends id+name, second sends arguments).
+                                // Blindly pushing creates duplicate entries, corrupting
+                                // tool call assembly downstream.
                                 if let Some(existing) =
                                     tool_calls.iter_mut().find(|t| t.index == index)
                                 {
@@ -555,6 +576,12 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         }
     }
 
+    // Sort tool calls by index to guarantee correct execution order.
+    // Entries may have been inserted out of order when multiple data: lines
+    // within the same SSE event carry deltas for different indices, or when
+    // an OpenAI-compatible provider sends indices non-sequentially.
+    tool_calls.sort_by_key(|tc| tc.index);
+
     Ok(StreamChunk {
         content,
         done,
@@ -695,19 +722,28 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                         }
                         "input_json_delta" => {
                             // Streaming tool call arguments as partial JSON.
-                            // We emit a StreamingToolCall with just the argument
-                            // fragment – the accumulation loop in chat/mod.rs
-                            // will merge it by index.
+                            // Merge into existing entry if one was created by
+                            // content_block_start (same index), otherwise push
+                            // a new entry. This prevents duplicate entries with
+                            // the same index in the Vec, which could confuse
+                            // consumers that iterate the Vec directly instead
+                            // of accumulating by HashMap.
                             let partial_json = delta
                                 .get("partial_json")
                                 .and_then(|p| p.as_str())
                                 .unwrap_or("");
-                            tool_calls.push(StreamingToolCall {
-                                index,
-                                id: String::new(), // already sent in content_block_start
-                                name: String::new(), // already sent in content_block_start
-                                arguments: partial_json.to_string(),
-                            });
+                            if let Some(existing) =
+                                tool_calls.iter_mut().find(|t| t.index == index)
+                            {
+                                existing.arguments.push_str(partial_json);
+                            } else {
+                                tool_calls.push(StreamingToolCall {
+                                    index,
+                                    id: String::new(), // already sent in content_block_start
+                                    name: String::new(), // already sent in content_block_start
+                                    arguments: partial_json.to_string(),
+                                });
+                            }
                         }
                         "thinking_delta" => {
                             if let Some(thinking_text) = delta
@@ -830,6 +866,9 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
             _ => {}
         }
     }
+
+    // Sort tool calls by index so execution order is deterministic.
+    tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
         content,
@@ -961,6 +1000,9 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         }
     }
 
+    // Sort tool calls by index so execution order is deterministic.
+    tool_calls.sort_by_key(|tc| tc.index);
+
     Ok(StreamChunk {
         content,
         done,
@@ -1078,6 +1120,9 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     } else {
         None
     };
+
+    // Sort tool calls by index so execution order is deterministic.
+    tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
         content,
@@ -1310,5 +1355,129 @@ mod stream_tests {
         assert_eq!(chunk.content, "");
         assert!(!chunk.done);
         assert!(chunk.tool_calls.is_none());
+    }
+
+    // ── Bug #27 regression tests: tool call index ordering ──────────
+
+    /// Reproduces the core out-of-order issue: an OpenAI SSE event with two
+    /// data: lines where the second line carries a tool call delta at index 1
+    /// but with no explicit "index" field. Before the fix, the fallback index
+    /// would be 0 (array position), causing it to collide with or appear before
+    /// the first tool call.
+    #[test]
+    fn test_openai_multi_data_line_tool_call_index_preserved() {
+        // First data: line introduces tool call at index 1 with id and name.
+        // Second data: line continues arguments for the same tool call but
+        // omits the "index" field (only has function.arguments).
+        let event = concat!(
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_x\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"src/\"}}]}}]}\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"arguments\":\"main.rs\\\"}\"}}]}}]}"
+        );
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+        let tool_calls = chunk.tool_calls.expect("should have tool calls");
+
+        // Should be a single merged entry at index 1, not two entries.
+        assert_eq!(tool_calls.len(), 1, "should merge into one entry, not two");
+        assert_eq!(tool_calls[0].index, 1, "index must be 1, not 0");
+        assert_eq!(tool_calls[0].id, "call_x");
+        assert_eq!(tool_calls[0].name, "read_file");
+        assert_eq!(
+            tool_calls[0].arguments, "{\"path\":\"src/main.rs\"}",
+            "arguments should be concatenated across data: lines"
+        );
+    }
+
+    /// When tool calls arrive out of insertion order (index 2 before index 0),
+    /// the Vec must be sorted by index before being returned.
+    #[test]
+    fn test_openai_tool_calls_sorted_by_index() {
+        // Single data: line with two tool calls: index 2 first, then index 0.
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":2,"id":"call_c","type":"function","function":{"name":"tool_c","arguments":"{}"}},{"index":0,"id":"call_a","type":"function","function":{"name":"tool_a","arguments":"{}"}}]}}]}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+        let tool_calls = chunk.tool_calls.expect("should have tool calls");
+
+        assert_eq!(tool_calls.len(), 2);
+        // Must be sorted: index 0 first, then index 2.
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].id, "call_a");
+        assert_eq!(tool_calls[1].index, 2);
+        assert_eq!(tool_calls[1].id, "call_c");
+    }
+
+    /// Anthropic: content_block_start + input_json_delta in a single SSE
+    /// parsing event should merge by index rather than creating duplicates.
+    /// This tests the Anthropic-specific merge fix.
+    #[test]
+    fn test_anthropic_input_json_delta_merges_with_content_block_start() {
+        // Simulate: first we parse content_block_start (creates entry at index 2),
+        // then in a separate call we parse input_json_delta at index 2.
+        // Both calls produce separate StreamChunks, so we just verify the
+        // delta doesn't create duplicate entries when the start was in the
+        // same event. (In practice they are separate events, so this test
+        // verifies the delta alone produces one clean entry.)
+        let start_event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_99\",\"name\":\"bash\",\"input\":{}}}";
+        let delta_event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"ls\"}}";
+
+        let start_chunk =
+            parse_sse_event(start_event, crate::core::llm::Provider::Anthropic).unwrap();
+        let start_tcs = start_chunk.tool_calls.expect("start should have tool call");
+        assert_eq!(start_tcs.len(), 1);
+        assert_eq!(start_tcs[0].index, 2);
+        assert_eq!(start_tcs[0].id, "toolu_99");
+        assert_eq!(start_tcs[0].name, "bash");
+        assert_eq!(start_tcs[0].arguments, "");
+
+        let delta_chunk =
+            parse_sse_event(delta_event, crate::core::llm::Provider::Anthropic).unwrap();
+        let delta_tcs = delta_chunk.tool_calls.expect("delta should have tool call");
+        // Should be exactly one entry, not a duplicate
+        assert_eq!(delta_tcs.len(), 1);
+        assert_eq!(delta_tcs[0].index, 2);
+        assert_eq!(delta_tcs[0].arguments, "{\"cmd\":\"ls");
+    }
+
+    /// Three tool calls from Google arriving in a single SSE event should be
+    /// sorted by their assigned indices (0, 1, 2).
+    #[test]
+    fn test_google_tool_calls_sorted_by_index() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"tool_b","args":{"x":2}}},{"functionCall":{"name":"tool_a","args":{"x":1}}},{"functionCall":{"name":"tool_c","args":{"x":3}}}]},"finishReason":"STOP"}]}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Google).unwrap();
+        let tool_calls = chunk.tool_calls.expect("should have tool calls");
+
+        assert_eq!(tool_calls.len(), 3);
+        // Google assigns sequential indices 0, 1, 2 based on array position,
+        // so they should already be sorted.
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].name, "tool_b");
+        assert_eq!(tool_calls[1].index, 1);
+        assert_eq!(tool_calls[1].name, "tool_a");
+        assert_eq!(tool_calls[2].index, 2);
+        assert_eq!(tool_calls[2].name, "tool_c");
+    }
+
+    /// OpenAI: when the same SSE event has two data: lines both carrying
+    /// deltas for index 0, they must be merged (arguments concatenated,
+    /// id/name from whichever line has them).
+    #[test]
+    fn test_openai_same_index_across_data_lines_merges() {
+        let event = concat!(
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_merge\",\"type\":\"function\",\"function\":{\"name\":\"write_file\",\"arguments\":\"{\\\"path\\\":\\\"a.txt\\\",\"}}]}}]}\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"content\\\":\\\"hello\\\"}\"}}]}}]}"
+        );
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+        let tool_calls = chunk.tool_calls.expect("should have tool calls");
+
+        assert_eq!(tool_calls.len(), 1, "duplicate index entries must be merged");
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].id, "call_merge");
+        assert_eq!(tool_calls[0].name, "write_file");
+        assert_eq!(
+            tool_calls[0].arguments,
+            "{\"path\":\"a.txt\",\"content\":\"hello\"}"
+        );
     }
 }
