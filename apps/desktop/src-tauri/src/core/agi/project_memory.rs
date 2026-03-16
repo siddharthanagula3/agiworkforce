@@ -314,7 +314,11 @@ impl ProjectMemoryManager {
         // The style_key is embedded in the JSON content as "style_key":"<value>".
         let key_pattern = format!(
             "%\"style_key\":\"{}\"%",
-            style_key.replace('\\', "\\\\").replace('"', "\\\"")
+            style_key
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
         );
 
         // Atomic upsert: try UPDATE on the existing row with the same style_key.
@@ -324,7 +328,7 @@ impl ProjectMemoryManager {
                  SET content = ?1, importance = ?2, updated_at = datetime('now')
                  WHERE id = (
                      SELECT id FROM project_memories
-                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5
+                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5 ESCAPE '\\'
                      ORDER BY created_at ASC LIMIT 1
                  )",
                 params![
@@ -362,7 +366,7 @@ impl ProjectMemoryManager {
         let id: i64 = conn
             .query_row(
                 "SELECT id FROM project_memories
-                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3
+                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3 ESCAPE '\\'
                  ORDER BY updated_at DESC LIMIT 1",
                 params![
                     project_folder,
@@ -458,7 +462,11 @@ impl ProjectMemoryManager {
         // Build a pattern to match existing rows with the same decision text.
         let decision_pattern = format!(
             "%\"decision\":\"{}\"%",
-            decision.replace('\\', "\\\\").replace('"', "\\\"")
+            decision
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
         );
 
         // Atomic upsert: try UPDATE on an existing row with the same decision text.
@@ -468,7 +476,7 @@ impl ProjectMemoryManager {
                  SET content = ?1, importance = ?2, updated_at = datetime('now')
                  WHERE id = (
                      SELECT id FROM project_memories
-                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5
+                     WHERE project_folder = ?3 AND memory_type = ?4 AND content LIKE ?5 ESCAPE '\\'
                      ORDER BY created_at ASC LIMIT 1
                  )",
                 params![
@@ -509,7 +517,7 @@ impl ProjectMemoryManager {
         let id: i64 = conn
             .query_row(
                 "SELECT id FROM project_memories
-                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3
+                 WHERE project_folder = ?1 AND memory_type = ?2 AND content LIKE ?3 ESCAPE '\\'
                  ORDER BY updated_at DESC LIMIT 1",
                 params![
                     project_folder,
