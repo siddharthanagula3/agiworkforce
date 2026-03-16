@@ -295,7 +295,9 @@ pub(crate) fn parse_sse_event(
         crate::core::llm::Provider::AI21 => parse_openai_sse(event),
         crate::core::llm::Provider::Sambanova => parse_openai_sse(event),
         crate::core::llm::Provider::Azure => parse_openai_sse(event), // Azure OpenAI uses OpenAI-compatible format
-        crate::core::llm::Provider::Bedrock => parse_openai_sse(event), // Bedrock stub — will need custom parser later
+        // Bedrock uses its own event stream parser (BedrockEventStream), not SSE.
+        // This branch should not be reached in practice; fallback to OpenAI format.
+        crate::core::llm::Provider::Bedrock => parse_openai_sse(event),
     }
 }
 
