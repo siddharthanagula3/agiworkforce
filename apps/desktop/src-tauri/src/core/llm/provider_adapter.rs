@@ -1466,17 +1466,31 @@ impl ProviderAdapter for AnthropicAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let canonical_model = Self::canonicalize_model(&request.model);
 
+        // ── Validate tool message pairing ────────────────────────────
+        // Ensure every tool result message has a matching tool_use block
+        // in a preceding assistant message.  Orphaned tool results would
+        // cause Anthropic API errors.
+        Self::validate_tool_message_pairing(&request.messages)?;
+
         // ── Build messages array, handling multimodal content ────────
         // Anthropic requires images encoded as content-block arrays with
         // source.type = "base64".  Plain text messages are passed through
         // as-is; messages that carry `multimodal_content` are converted
         // into the Anthropic multi-block format.
+        //
+        // IMPORTANT: Anthropic does NOT accept role="tool".  Tool result
+        // messages must use role="user" with content blocks of type
+        // "tool_result".  We detect tool-result-bearing messages in both
+        // the multimodal and plain-text paths and always emit role="user".
         let messages: Vec<Value> = {
             use base64::{engine::general_purpose::STANDARD, Engine as _};
             let mut out = Vec::with_capacity(request.messages.len());
             for msg in &request.messages {
                 if let Some(parts) = &msg.multimodal_content {
                     let mut content_blocks: Vec<Value> = Vec::new();
+                    // Track whether this multimodal message contains any
+                    // tool_result blocks so we can force role="user".
+                    let mut has_tool_result = false;
                     for part in parts {
                         match part {
                             super::ContentPart::Image { image } => {
@@ -1527,6 +1541,11 @@ impl ProviderAdapter for AnthropicAdapter {
                                 }));
                             }
                             super::ContentPart::ToolResult { tool_result } => {
+                                has_tool_result = true;
+                                tracing::debug!(
+                                    "[Anthropic] Tool message {} paired with tool_use block",
+                                    tool_result.tool_use_id
+                                );
                                 content_blocks.push(serde_json::json!({
                                     "type": "tool_result",
                                     "tool_use_id": tool_result.tool_use_id,
@@ -1553,14 +1572,29 @@ impl ProviderAdapter for AnthropicAdapter {
                             "text": msg.content
                         }));
                     }
+                    // Determine the correct Anthropic role.
+                    // - Messages with tool_result blocks MUST use role="user"
+                    //   (Anthropic does not accept role="tool").
+                    // - Messages with role="tool" (OpenAI style) MUST become
+                    //   role="user".
+                    // - Otherwise preserve the original role.
+                    let anthropic_role = if has_tool_result || msg.role == "tool" {
+                        "user"
+                    } else {
+                        &msg.role
+                    };
                     out.push(serde_json::json!({
-                        "role": msg.role,
+                        "role": anthropic_role,
                         "content": content_blocks
                     }));
                 } else if msg.role == "tool" {
                     // Convert OpenAI-style tool result messages to Anthropic format.
                     // Anthropic expects role="user" with a tool_result content block.
                     let tool_use_id = msg.tool_call_id.as_deref().unwrap_or("unknown");
+                    tracing::debug!(
+                        "[Anthropic] Tool message {} paired with tool_use block",
+                        tool_use_id
+                    );
                     out.push(serde_json::json!({
                         "role": "user",
                         "content": [{
@@ -1915,6 +1949,81 @@ impl ProviderAdapter for AnthropicAdapter {
 impl AnthropicAdapter {
     fn canonicalize_model(model: &str) -> String {
         super::models_config::get_canonicalized_id(model)
+    }
+
+    /// Validate that every tool result message has a matching tool_use block
+    /// in a preceding assistant message.  Orphaned tool results would cause
+    /// the Anthropic API to reject the request.
+    ///
+    /// We collect all tool_use IDs emitted by assistant messages (both from
+    /// `tool_calls` and from multimodal `ContentPart::ToolUse` blocks), then
+    /// check that every tool result references one of those IDs.
+    fn validate_tool_message_pairing(
+        messages: &[super::ChatMessage],
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        use std::collections::HashSet;
+
+        let mut emitted_tool_use_ids: HashSet<String> = HashSet::new();
+
+        for msg in messages {
+            // Collect tool_use IDs from assistant messages
+            if msg.role == "assistant" {
+                // From OpenAI-style tool_calls
+                if let Some(ref tool_calls) = msg.tool_calls {
+                    for tc in tool_calls {
+                        emitted_tool_use_ids.insert(tc.id.clone());
+                    }
+                }
+                // From multimodal ToolUse content parts
+                if let Some(ref parts) = msg.multimodal_content {
+                    for part in parts {
+                        if let super::ContentPart::ToolUse { tool_use } = part {
+                            emitted_tool_use_ids.insert(tool_use.id.clone());
+                        }
+                    }
+                }
+            }
+
+            // Validate tool result messages reference known tool_use IDs
+            if msg.role == "tool" {
+                if let Some(ref tool_call_id) = msg.tool_call_id {
+                    if !emitted_tool_use_ids.contains(tool_call_id) {
+                        tracing::error!(
+                            "[Anthropic] Orphaned tool message {} has no matching tool_use block",
+                            tool_call_id
+                        );
+                        return Err(format!(
+                            "Orphaned tool message {} has no matching tool_use block in a preceding assistant message",
+                            tool_call_id
+                        )
+                        .into());
+                    }
+                }
+                // tool_call_id == None with role="tool" uses "unknown" as fallback;
+                // we allow this to avoid breaking existing callers that rely on it.
+            }
+
+            // Validate tool results inside multimodal content parts
+            if let Some(ref parts) = msg.multimodal_content {
+                for part in parts {
+                    if let super::ContentPart::ToolResult { tool_result } = part {
+                        if !emitted_tool_use_ids.contains(&tool_result.tool_use_id) {
+                            tracing::error!(
+                                "[Anthropic] Orphaned tool message {} has no matching tool_use block",
+                                tool_result.tool_use_id
+                            );
+                            return Err(format!(
+                                "Orphaned tool message {} has no matching tool_use block in a preceding assistant message",
+                                tool_result.tool_use_id
+                            )
+                            .into());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
