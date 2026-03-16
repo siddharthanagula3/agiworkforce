@@ -314,11 +314,11 @@ const ChatPage: React.FC = () => {
       }
     >
       <div className="flex h-screen bg-background">
-        {/* Sidebar - Collapsible with smooth transition */}
+        {/* Sidebar — 280 px default width matching desktop design token */}
         <div
           className={cn(
             'border-r border-border bg-card/50 backdrop-blur-sm transition-all duration-300 ease-in-out',
-            sidebarOpen ? 'w-0 sm:w-72' : 'w-0',
+            sidebarOpen ? 'w-0 sm:w-[280px]' : 'w-0',
             'overflow-hidden', // Prevent content overflow when collapsed
           )}
         >
@@ -351,7 +351,7 @@ const ChatPage: React.FC = () => {
         {/* Main Chat Area - Optimized for full screen usage */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Message List - Maximum vertical space */}
-          <div className="flex-1 overflow-hidden">
+          <div className="relative flex-1 overflow-hidden">
             <MessageList
               messages={messages}
               isLoading={isLoading}
@@ -372,6 +372,12 @@ const ChatPage: React.FC = () => {
                 />
               </div>
             )}
+
+            {/* Bottom gradient fade — softens the message list edge above the composer */}
+            <div
+              className="chat-bottom-fade pointer-events-none absolute bottom-0 left-0 right-0 h-14"
+              aria-hidden="true"
+            />
           </div>
 
           {/* Composer */}

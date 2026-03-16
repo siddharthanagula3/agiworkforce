@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -510,14 +511,23 @@ const MessageListNewComponent = ({
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="flex-1" />
       <div>
-        {messages.map((message) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            onRegenerate={handleRegenerate}
-            onDelete={handleDelete}
-          />
-        ))}
+        <AnimatePresence initial={false}>
+          {messages.map((message, messageIndex) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: 'easeOut', delay: messageIndex * 0.04 }}
+            >
+              <MessageItem
+                message={message}
+                onRegenerate={handleRegenerate}
+                onDelete={handleDelete}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {isLoading && messages.length > 0 && !messages[messages.length - 1]?.isStreaming && (
           <TypingIndicator />
         )}
