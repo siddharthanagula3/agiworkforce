@@ -193,6 +193,12 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     example: '/settings theme dark',
     icon: '⚙️',
   },
+  {
+    command: '/plan',
+    description: 'Generate an interactive execution plan for a task',
+    example: '/plan deploy the new feature to staging',
+    icon: '📋',
+  },
 ];
 
 export function useSlashCommandAutocomplete() {
