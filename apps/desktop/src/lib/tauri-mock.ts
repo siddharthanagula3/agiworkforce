@@ -347,6 +347,18 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'scheduler_run_job_now':
       return undefined as T;
 
+    case 'scheduler_get_job':
+      return null as T;
+
+    case 'scheduler_get_history':
+    case 'scheduler_get_next_runs':
+      return [] as T;
+
+    // Analytics trend commands
+    case 'analytics_get_cost_saved_trend':
+    case 'analytics_get_time_saved_trend':
+      return [] as T;
+
     // Background task commands
     case 'background_task_list':
       return [] as T;
