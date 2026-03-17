@@ -2054,19 +2054,19 @@ impl ProviderAdapter for GoogleAdapter {
                     use base64::{engine::general_purpose::STANDARD, Engine as _};
                     let parts: Vec<Value> = multimodal
                         .iter()
-                        .filter_map(|part| match part {
+                        .map(|part| match part {
                             super::ContentPart::Text { text } => {
-                                Some(serde_json::json!({"text": text}))
+                                serde_json::json!({"text": text})
                             }
                             super::ContentPart::Image { image } => {
                                 let base64_data = STANDARD.encode(&image.data);
                                 let mime = image.format.mime_type();
-                                Some(serde_json::json!({
+                                serde_json::json!({
                                     "inlineData": {
                                         "mimeType": mime,
                                         "data": base64_data
                                     }
-                                }))
+                                })
                             }
                             super::ContentPart::Audio { audio } => {
                                 let base64_data = match &audio.data {
@@ -2074,41 +2074,41 @@ impl ProviderAdapter for GoogleAdapter {
                                     super::AudioData::Base64(b64) => b64.clone(),
                                     super::AudioData::Uri(uri) => {
                                         // Gemini fileData for URI-based audio
-                                        return Some(serde_json::json!({
+                                        return serde_json::json!({
                                             "fileData": {
                                                 "mimeType": audio.format.mime_type(),
                                                 "fileUri": uri
                                             }
-                                        }));
+                                        });
                                     }
                                 };
                                 let mime = audio.format.mime_type();
-                                Some(serde_json::json!({
+                                serde_json::json!({
                                     "inlineData": {
                                         "mimeType": mime,
                                         "data": base64_data
                                     }
-                                }))
+                                })
                             }
                             super::ContentPart::Video { video } => {
                                 match &video.data {
                                     super::VideoData::Bytes(bytes) => {
                                         let base64_data = STANDARD.encode(bytes);
                                         let mime = video.format.mime_type();
-                                        Some(serde_json::json!({
+                                        serde_json::json!({
                                             "inlineData": {
                                                 "mimeType": mime,
                                                 "data": base64_data
                                             }
-                                        }))
+                                        })
                                     }
                                     super::VideoData::Uri(uri) => {
-                                        Some(serde_json::json!({
+                                        serde_json::json!({
                                             "fileData": {
                                                 "mimeType": video.format.mime_type(),
                                                 "fileUri": uri
                                             }
-                                        }))
+                                        })
                                     }
                                 }
                             }
@@ -2121,30 +2121,30 @@ impl ProviderAdapter for GoogleAdapter {
                                     super::DocumentFormat::Html => "text/html",
                                     super::DocumentFormat::Md => "text/markdown",
                                 };
-                                Some(serde_json::json!({
+                                serde_json::json!({
                                     "inlineData": {
                                         "mimeType": mime,
                                         "data": base64_data
                                     }
-                                }))
+                                })
                             }
                             super::ContentPart::ToolUse { tool_use } => {
-                                Some(serde_json::json!({
+                                serde_json::json!({
                                     "functionCall": {
                                         "name": tool_use.name,
                                         "args": tool_use.input
                                     }
-                                }))
+                                })
                             }
                             super::ContentPart::ToolResult { tool_result } => {
-                                Some(serde_json::json!({
+                                serde_json::json!({
                                     "functionResponse": {
                                         "name": tool_result.tool_use_id,
                                         "response": {
                                             "result": tool_result.content
                                         }
                                     }
-                                }))
+                                })
                             }
                         })
                         .collect();
@@ -2386,7 +2386,7 @@ impl ProviderAdapter for GoogleAdapter {
             prompt_tokens,
             completion_tokens,
             cache_read_input_tokens,
-            model: response["modelVersion"].as_str().unwrap_or("").to_string(),
+            model: response["model"].as_str().or_else(|| response["modelVersion"].as_str()).unwrap_or("").to_string(),
             tool_calls,
             finish_reason,
             ..LLMResponse::default()

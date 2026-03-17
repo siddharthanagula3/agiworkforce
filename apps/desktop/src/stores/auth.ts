@@ -23,12 +23,55 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { supabaseAuth, type AuthState as SupabaseAuthState } from '../services/supabaseAuth';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
 import { cleanupAllStoresOnLogout, clearPersistedUserData } from './logoutCleanup';
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Sensitive field names that must never appear in logs. */
+const SENSITIVE_KEYS = new Set([
+  'access_token',
+  'refresh_token',
+  'token',
+  'secret',
+  'password',
+  'api_key',
+  'apiKey',
+  'private_key',
+  'privateKey',
+]);
+
+/**
+ * Strip tokens and secrets from an auth state object before logging.
+ * Returns a shallow copy with sensitive leaf values replaced by '[REDACTED]'.
+ */
+function sanitizeAuthState(state: SupabaseAuthState): Record<string, unknown> {
+  const sanitize = (obj: unknown): unknown => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(sanitize);
+
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (SENSITIVE_KEYS.has(key)) {
+        result[key] = '[REDACTED]';
+      } else if (typeof value === 'object' && value !== null) {
+        result[key] = sanitize(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  };
+
+  return sanitize(state) as Record<string, unknown>;
+}
 
 // =============================================================================
 // Types
@@ -904,12 +947,10 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               await supabaseAuth.refreshUserData();
 
               const authState = supabaseAuth.getState();
-              console.debug('[UnifiedAuth] Auth state after refresh:', {
-                hasUser: !!authState.user,
-                hasSession: !!authState.session,
-                planTier: authState.subscription?.plan_tier,
-                subscriptionFetchStatus: authState.subscriptionFetchStatus,
-              });
+              console.debug(
+                '[UnifiedAuth] Auth state after refresh:',
+                sanitizeAuthState(authState),
+              );
 
               if (!authState.user) {
                 console.warn('[UnifiedAuth] No authenticated user - skipping sync');

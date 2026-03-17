@@ -307,6 +307,51 @@ export interface McpbEventPayload {
   error?: string;
 }
 
+// MCP Extension Types
+
+export type McpExtensionStatus =
+  | 'disabled'
+  | 'enabled'
+  | 'running'
+  | 'error'
+  | 'updating'
+  | 'pending_removal';
+
+export interface McpExtensionInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  status: McpExtensionStatus;
+  lastError: string | null;
+  installPath: string;
+  toolCount: number;
+  tools: string[];
+  requiresConfig: boolean;
+  configComplete: boolean;
+  configSchema: unknown | null;
+  category: string | null;
+  iconPath: string | null;
+  installedAt: string;
+  updatedAt: string;
+  useCount: number;
+}
+
+export interface McpExtensionPackageInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  toolCount: number;
+  tools: string[];
+  requiresConfig: boolean;
+  fileCount: number;
+  totalSize: number;
+  hasDependencies: boolean;
+}
+
 // MCP OAuth Types for GitHub, Google Drive, and Slack integrations
 
 /**

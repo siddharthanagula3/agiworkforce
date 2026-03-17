@@ -171,6 +171,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const session = sessionData.session;
+
+    // Guard against race condition: the session may have expired between
+    // the getUser() JWT verification and the getSession() cookie read.
+    // expires_at is a Unix timestamp in seconds.
+    if (session.expires_at && session.expires_at * 1000 <= Date.now()) {
+      logger.warn({ userId: userData.user.id }, 'Session expired between getUser and getSession');
+      return NextResponse.json({ error: 'Session expired' }, { status: 401 });
+    }
+
     const now = Date.now();
     const nonce = crypto.randomBytes(16).toString('hex');
 
