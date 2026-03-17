@@ -7,7 +7,12 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
-import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
+import {
+  resolvePlanTier,
+  isValidPlanTier,
+  getTierMapping,
+  isPriceIdRegistered,
+} from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 // AUDIT-P3: Use shared Stripe type helpers for type safety
@@ -439,6 +444,21 @@ async function upsertSubscriptionFromSession(
 
   // Get plan_tier from metadata or price ID using strict mapping
   const priceId = session.line_items?.data?.[0]?.price?.id;
+
+  // SECURITY: Validate that the price ID from the checkout session is registered.
+  if (priceId && !isPriceIdRegistered(priceId)) {
+    logger.warn(
+      {
+        sessionId: session.id,
+        priceId,
+        registeredPriceIds: Object.keys(getTierMapping()),
+      },
+      'Checkout session contained unrecognised price ID — skipping subscription upsert. ' +
+        'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
+    );
+    return;
+  }
+
   const planTier = resolvePlanTier(session.metadata as Record<string, string> | null, priceId);
 
   if (!planTier || !isValidPlanTier(planTier)) {
@@ -731,6 +751,21 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   const firstSubItem = subscription.items.data[0];
   if (firstSubItem) {
     stripePriceId = firstSubItem.price.id;
+  }
+
+  // SECURITY: Validate that the price ID is one of our configured prices.
+  // A crafted webhook with an unrecognised price could manipulate tiers.
+  if (stripePriceId && !isPriceIdRegistered(stripePriceId)) {
+    logger.warn(
+      {
+        subscriptionId: subscription.id,
+        priceId: stripePriceId,
+        registeredPriceIds: Object.keys(getTierMapping()),
+      },
+      'Webhook contained unrecognised price ID — skipping subscription update. ' +
+        'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
+    );
+    return;
   }
 
   // Use centralized price-tier-mapping for consistent plan resolution

@@ -22,6 +22,36 @@ export interface SkillInfo {
   contextMode: string;
 }
 
+/** Result of invoking a skill. */
+export interface SkillInvocationResult {
+  skillName: string;
+  instructions: string;
+  allowedTools: string[];
+  contextMode: string;
+}
+
+/** Result of checking skill requirements. */
+export interface RequirementCheckResult {
+  satisfied: boolean;
+  missingBins: string[];
+  missingEnv: string[];
+  osSupported: boolean;
+}
+
+/** Skill match result from message matching. */
+export interface SkillMatchResult {
+  skillName: string;
+  description: string;
+  relevanceScore: number;
+  matchReason: string;
+}
+
+/** Slash command definition. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+}
+
 /** Frontend-augmented skill with derived category and active state. */
 export interface MarketplaceSkill extends SkillInfo {
   category: SkillCategory;
@@ -190,6 +220,8 @@ function inferCategory(skill: SkillInfo): Exclude<SkillCategory, 'all'> {
 
 interface SkillMarketplaceState {
   skills: MarketplaceSkill[];
+  slashCommands: SlashCommand[];
+  skillCount: number;
   isLoading: boolean;
   error: string | null;
   selectedCategory: SkillCategory;
@@ -197,7 +229,7 @@ interface SkillMarketplaceState {
   viewMode: ViewMode;
   expandedSkillName: string | null;
 
-  // Derived (computed on the fly, no caching needed at store level)
+  // Core actions
   fetchSkills: () => Promise<void>;
   reloadSkills: () => Promise<void>;
   setCategory: (category: SkillCategory) => void;
@@ -205,12 +237,26 @@ interface SkillMarketplaceState {
   setViewMode: (mode: ViewMode) => void;
   setExpandedSkill: (name: string | null) => void;
   toggleSkillActive: (name: string) => void;
+
+  // Newly wired skill commands
+  getSkill: (name: string) => Promise<SkillInfo | null>;
+  getSkillInstructions: (name: string) => Promise<string | null>;
+  checkRequirements: (name: string) => Promise<RequirementCheckResult | null>;
+  invokeSkill: (name: string, args: string) => Promise<SkillInvocationResult>;
+  matchForMessage: (content: string) => Promise<SkillMatchResult[]>;
+  parseSlashCommand: (input: string) => Promise<SkillInvocationResult | null>;
+  fetchSlashCommands: () => Promise<SlashCommand[]>;
+  fetchSkillCount: () => Promise<number>;
+  setWorkspace: (path: string | null) => Promise<void>;
+  getContext: () => Promise<string>;
 }
 
 export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
   devtools(
     (set, get) => ({
       skills: [],
+      slashCommands: [],
+      skillCount: 0,
       isLoading: false,
       error: null,
       selectedCategory: 'all',
@@ -256,6 +302,101 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
         set((state) => ({
           skills: state.skills.map((s) => (s.name === name ? { ...s, isActive: !s.isActive } : s)),
         }));
+      },
+
+      // ── Newly wired skill commands ────────────────────────────────────
+
+      getSkill: async (name) => {
+        try {
+          return await invoke<SkillInfo | null>('skill_get', { name });
+        } catch {
+          return null;
+        }
+      },
+
+      getSkillInstructions: async (name) => {
+        try {
+          return await invoke<string | null>('skill_get_instructions', { name });
+        } catch {
+          return null;
+        }
+      },
+
+      checkRequirements: async (name) => {
+        try {
+          return await invoke<RequirementCheckResult | null>('skill_check_requirements', { name });
+        } catch {
+          return null;
+        }
+      },
+
+      invokeSkill: async (name, arguments_) => {
+        try {
+          return await invoke<SkillInvocationResult>('skill_invoke', {
+            name,
+            arguments: arguments_,
+          });
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to invoke skill' });
+          throw err;
+        }
+      },
+
+      matchForMessage: async (content) => {
+        try {
+          return await invoke<SkillMatchResult[]>('skill_match_for_message', { content });
+        } catch {
+          return [];
+        }
+      },
+
+      parseSlashCommand: async (input) => {
+        try {
+          const result = await invoke<SkillInvocationResult | null>('skill_parse_slash_command', {
+            input,
+          });
+          return result;
+        } catch {
+          return null;
+        }
+      },
+
+      fetchSlashCommands: async () => {
+        try {
+          const commands = await invoke<SlashCommand[]>('skill_get_slash_commands');
+          set({ slashCommands: commands });
+          return commands;
+        } catch {
+          return [];
+        }
+      },
+
+      fetchSkillCount: async () => {
+        try {
+          const count = await invoke<number>('skill_count');
+          set({ skillCount: count });
+          return count;
+        } catch {
+          return 0;
+        }
+      },
+
+      setWorkspace: async (path) => {
+        try {
+          await invoke('skill_set_workspace', { path });
+          // Refresh skills after workspace change
+          await get().fetchSkills();
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to set workspace' });
+        }
+      },
+
+      getContext: async () => {
+        try {
+          return await invoke<string>('skill_get_context');
+        } catch {
+          return '';
+        }
       },
     }),
     { name: 'skill-marketplace' },

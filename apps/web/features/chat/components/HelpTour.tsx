@@ -196,7 +196,8 @@ export function HelpTour(): React.ReactNode {
             <button
               onClick={skipTour}
               className="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Skip tour"
+              aria-label="Close tour"
+              data-testid="tour-close-button"
             >
               <X className="w-5 h-5" />
             </button>
@@ -227,7 +228,13 @@ export function HelpTour(): React.ReactNode {
 
           {/* Controls */}
           <div className="flex gap-3">
-            <Button onClick={skipTour} variant="outline" size="sm" className="flex-1">
+            <Button
+              onClick={skipTour}
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              data-testid="tour-skip-button"
+            >
               Skip
             </Button>
 

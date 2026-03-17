@@ -37,6 +37,8 @@ export default [
       '**/.expo/**',
       '.claude/worktrees/**',
       '**/.claude/worktrees/**',
+      '.worktrees/**',
+      '**/.worktrees/**',
       // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',
