@@ -30,6 +30,11 @@ let unsubscribeFromQueue: (() => void) | null = null;
 let syncRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let isInitialized = false;
 
+// Retry configuration
+const BASE_RETRY_DELAY_MS = 5000;
+const MAX_RETRY_DELAY_MS = 120000;
+let retryCount = 0;
+
 /**
  * Initialize the sync manager.
  * Must be called once during app startup.
@@ -81,6 +86,7 @@ export function cleanupSyncManager(): void {
     syncRetryTimeout = null;
   }
 
+  retryCount = 0;
   isInitialized = false;
 }
 
@@ -140,6 +146,7 @@ async function performSync(): Promise<void> {
     managerState.lastSyncTime = new Date();
     managerState.lastSyncSummary = summary;
     managerState.error = undefined;
+    retryCount = 0;
 
     updateQueuedCount();
     managerState.state = SyncState.ONLINE;
@@ -160,7 +167,8 @@ function scheduleRetry(): void {
     clearTimeout(syncRetryTimeout);
   }
 
-  const delayMs = Math.min(5000 * Math.pow(2, 3), 120000);
+  const delayMs = Math.min(BASE_RETRY_DELAY_MS * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
+  retryCount++;
 
   syncRetryTimeout = setTimeout(() => {
     if (managerState.isOnline) {
