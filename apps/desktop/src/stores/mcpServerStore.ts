@@ -83,6 +83,7 @@ export const useMcpServerStore = create<McpServerStore>()(
           await McpClient.startRuntimeServer();
           await get().fetchConfig();
           await get().fetchTools();
+          set({ loading: false }, undefined, 'mcpServer/start/success');
         } catch (error) {
           set(
             { error: error instanceof Error ? error.message : String(error), loading: false },
