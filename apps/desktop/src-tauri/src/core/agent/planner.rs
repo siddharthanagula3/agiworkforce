@@ -181,12 +181,19 @@ The user wants to open Notepad and type "Hello".
             .ok_or_else(|| anyhow!("Missing step description"))?
             .to_string();
 
-        let expected_result = step_json["expected_result"].as_str().map(|s| s.to_string());
+        // Accept both snake_case (legacy LLM output) and camelCase (serde serialization)
+        let expected_result = step_json["expectedResult"]
+            .as_str()
+            .or_else(|| step_json["expected_result"].as_str())
+            .map(|s| s.to_string());
 
         let timeout_secs = step_json["timeout"].as_u64().unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
 
-        let retry_on_failure = step_json["retry_on_failure"].as_bool().unwrap_or(true);
+        let retry_on_failure = step_json["retryOnFailure"]
+            .as_bool()
+            .or_else(|| step_json["retry_on_failure"].as_bool())
+            .unwrap_or(true);
 
         let action = self.parse_action(&step_json["action"])?;
 
@@ -205,8 +212,9 @@ The user wants to open Notepad and type "Hello".
             .as_str()
             .ok_or_else(|| anyhow!("Missing action type"))?;
 
+        // Accept both PascalCase (LLM output) and camelCase (serde serialization)
         match action_type {
-            "Screenshot" => {
+            "Screenshot" | "screenshot" => {
                 let region = if action_json["region"].is_null() {
                     None
                 } else {
@@ -219,11 +227,11 @@ The user wants to open Notepad and type "Hello".
                 };
                 Ok(Action::Screenshot { region })
             }
-            "Click" => {
+            "Click" | "click" => {
                 let target = self.parse_click_target(&action_json["target"])?;
                 Ok(Action::Click { target })
             }
-            "Type" => {
+            "Type" | "type" => {
                 let target = self.parse_click_target(&action_json["target"])?;
                 let text = action_json["text"]
                     .as_str()
@@ -231,14 +239,14 @@ The user wants to open Notepad and type "Hello".
                     .to_string();
                 Ok(Action::Type { target, text })
             }
-            "Navigate" => {
+            "Navigate" | "navigate" => {
                 let url = action_json["url"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing URL"))?
                     .to_string();
                 Ok(Action::Navigate { url })
             }
-            "WaitForElement" => {
+            "WaitForElement" | "waitForElement" => {
                 let target = self.parse_click_target(&action_json["target"])?;
                 let timeout_secs = action_json["timeout"].as_u64().unwrap_or(10);
                 Ok(Action::WaitForElement {
@@ -246,7 +254,7 @@ The user wants to open Notepad and type "Hello".
                     timeout: Duration::from_secs(timeout_secs),
                 })
             }
-            "ExecuteCommand" => {
+            "ExecuteCommand" | "executeCommand" => {
                 let command = action_json["command"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing command"))?
@@ -261,14 +269,14 @@ The user wants to open Notepad and type "Hello".
                     .unwrap_or_default();
                 Ok(Action::ExecuteCommand { command, args })
             }
-            "ReadFile" => {
+            "ReadFile" | "readFile" => {
                 let path = action_json["path"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing path"))?
                     .to_string();
                 Ok(Action::ReadFile { path })
             }
-            "WriteFile" => {
+            "WriteFile" | "writeFile" => {
                 let path = action_json["path"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing path"))?
@@ -279,14 +287,14 @@ The user wants to open Notepad and type "Hello".
                     .to_string();
                 Ok(Action::WriteFile { path, content })
             }
-            "SearchText" => {
+            "SearchText" | "searchText" => {
                 let query = action_json["query"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing query"))?
                     .to_string();
                 Ok(Action::SearchText { query })
             }
-            "Scroll" => {
+            "Scroll" | "scroll" => {
                 let direction_str = action_json["direction"].as_str().unwrap_or("down");
                 let direction = match direction_str {
                     "up" => ScrollDirection::Up,
@@ -298,7 +306,7 @@ The user wants to open Notepad and type "Hello".
                 let amount = action_json["amount"].as_i64().unwrap_or(3) as i32;
                 Ok(Action::Scroll { direction, amount })
             }
-            "PressKey" => {
+            "PressKey" | "pressKey" => {
                 let keys = action_json["keys"]
                     .as_array()
                     .map(|arr| {
@@ -318,25 +326,35 @@ The user wants to open Notepad and type "Hello".
             .as_str()
             .ok_or_else(|| anyhow!("Missing target type"))?;
 
+        // Accept both PascalCase (LLM output) and camelCase (serde serialization).
+        // Also accept the serde-generated uIAElement tag for UIAElement.
         match target_type {
-            "Coordinates" => Ok(ClickTarget::Coordinates {
+            "Coordinates" | "coordinates" => Ok(ClickTarget::Coordinates {
                 x: target_json["x"].as_i64().unwrap_or(0) as i32,
                 y: target_json["y"].as_i64().unwrap_or(0) as i32,
             }),
-            "UIAElement" => Ok(ClickTarget::UIAElement {
-                element_id: target_json["element_id"]
+            "UIAElement" | "uIAElement" => {
+                // Accept both element_id (snake_case) and elementId (camelCase)
+                let element_id = target_json["elementId"]
                     .as_str()
+                    .or_else(|| target_json["element_id"].as_str())
                     .ok_or_else(|| anyhow!("Missing element_id"))?
-                    .to_string(),
-            }),
-            "ImageMatch" => Ok(ClickTarget::ImageMatch {
-                image_path: target_json["image_path"]
+                    .to_string();
+                Ok(ClickTarget::UIAElement { element_id })
+            }
+            "ImageMatch" | "imageMatch" => {
+                // Accept both image_path (snake_case) and imagePath (camelCase)
+                let image_path = target_json["imagePath"]
                     .as_str()
+                    .or_else(|| target_json["image_path"].as_str())
                     .ok_or_else(|| anyhow!("Missing image_path"))?
-                    .to_string(),
-                threshold: target_json["threshold"].as_f64().unwrap_or(0.8),
-            }),
-            "TextMatch" => Ok(ClickTarget::TextMatch {
+                    .to_string();
+                Ok(ClickTarget::ImageMatch {
+                    image_path,
+                    threshold: target_json["threshold"].as_f64().unwrap_or(0.8),
+                })
+            }
+            "TextMatch" | "textMatch" => Ok(ClickTarget::TextMatch {
                 text: target_json["text"]
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing text"))?
