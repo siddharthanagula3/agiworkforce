@@ -139,7 +139,8 @@ export function HelpTour(): React.ReactNode {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isActive, hasNextStep(), hasPreviousStep(), skipTour, nextStep, previousStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- step navigation functions are stable refs from useTour()
+  }, [isActive, skipTour, nextStep, previousStep]);
 
   if (!isActive || !currentStepData) {
     return null;

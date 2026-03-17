@@ -78,7 +78,7 @@ export interface UseFeatureAvailabilityOptions {
 export interface UseFeatureAvailabilityReturn {
   features: FeatureFlags;
   isAvailable: (feature: keyof FeatureFlags) => boolean;
-  getFallback: (feature: keyof FeatureFlags, value: any) => any;
+  getFallback: (feature: keyof FeatureFlags, value: unknown) => unknown;
 }
 
 /**
@@ -90,7 +90,7 @@ export interface PersistedSession {
   title: string;
   preview: string;
   messageCount: number;
-  messages: any[]; // EnhancedMessage[]
+  messages: unknown[]; // EnhancedMessage[]
   selectedModel?: string;
   selectedProvider?: string;
   createdAt: Date;
