@@ -24,6 +24,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Users,
   Wand2,
   X,
   Zap,
@@ -82,6 +83,7 @@ interface SidebarProps {
   onResize?: (width: number) => void;
   onOpenResearch?: () => void;
   onOpenRewind?: () => void;
+  onOpenCollaboration?: () => void;
   onToggleMediaLab?: () => void;
   canAccessMediaLab?: boolean;
 }
@@ -351,6 +353,7 @@ export function Sidebar({
   onResize,
   onOpenResearch,
   onOpenRewind,
+  onOpenCollaboration,
   onToggleMediaLab,
   canAccessMediaLab,
 }: SidebarProps) {
@@ -970,6 +973,17 @@ export function Sidebar({
                 <History className="w-3.5 h-3.5" />
               </span>
               Rewind Timeline
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenCollaboration?.()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-400/20 text-purple-400">
+                <Users className="w-3.5 h-3.5" />
+              </span>
+              Agent Swarm
             </button>
 
             {canAccessMediaLab && (

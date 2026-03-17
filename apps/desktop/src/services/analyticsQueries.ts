@@ -276,3 +276,133 @@ export async function exportAnalyticsReport(
     return new Blob([csv], { type: 'text/csv' });
   }
 }
+
+// ============================================================================
+// Newly-wired Tauri analytics commands
+// ============================================================================
+
+/** A single data point in a trend series */
+export interface TrendPoint {
+  date: string;
+  value: number;
+}
+
+/** Process-level usage metrics */
+export interface ProcessMetrics {
+  processName: string;
+  totalDuration: number;
+  executionCount: number;
+  avgDuration: number;
+}
+
+/** Analytics snapshot metadata */
+export interface AnalyticsSnapshot {
+  id: string;
+  userId: string;
+  teamId?: string;
+  startDate: number;
+  endDate: number;
+  createdAt: string;
+}
+
+/**
+ * Generate a weekly analytics report.
+ * Returns a formatted report string.
+ */
+export async function generateWeeklyReport(): Promise<string> {
+  if (!isTauri) return 'Weekly report unavailable in browser mode.';
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<string>('analytics_generate_weekly_report');
+  } catch (error) {
+    console.error('[Analytics] Failed to generate weekly report:', error);
+    return '';
+  }
+}
+
+/**
+ * Generate a monthly analytics report.
+ * Returns a formatted report string.
+ */
+export async function generateMonthlyReport(): Promise<string> {
+  if (!isTauri) return 'Monthly report unavailable in browser mode.';
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<string>('analytics_generate_monthly_report');
+  } catch (error) {
+    console.error('[Analytics] Failed to generate monthly report:', error);
+    return '';
+  }
+}
+
+/**
+ * Get cost-saved trend data over a number of days.
+ */
+export async function getCostSavedTrend(days: number = 30): Promise<TrendPoint[]> {
+  if (!isTauri) return [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<TrendPoint[]>('analytics_get_cost_saved_trend', { days });
+  } catch (error) {
+    console.error('[Analytics] Failed to get cost saved trend:', error);
+    return [];
+  }
+}
+
+/**
+ * Get time-saved trend data over a number of days.
+ */
+export async function getTimeSavedTrend(days: number = 30): Promise<TrendPoint[]> {
+  if (!isTauri) return [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<TrendPoint[]>('analytics_get_time_saved_trend', { days });
+  } catch (error) {
+    console.error('[Analytics] Failed to get time saved trend:', error);
+    return [];
+  }
+}
+
+/**
+ * Get top automated processes by usage.
+ */
+export async function getTopProcesses(
+  startDate: number,
+  endDate: number,
+  limit: number = 10,
+): Promise<ProcessMetrics[]> {
+  if (!isTauri) return [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<ProcessMetrics[]>('analytics_get_top_processes', {
+      startDate,
+      endDate,
+      limit,
+    });
+  } catch (error) {
+    console.error('[Analytics] Failed to get top processes:', error);
+    return [];
+  }
+}
+
+/**
+ * Save an analytics snapshot for later comparison.
+ */
+export async function saveAnalyticsSnapshot(
+  startDate: number,
+  endDate: number,
+  teamId?: string,
+): Promise<AnalyticsSnapshot | null> {
+  if (!isTauri) return null;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<AnalyticsSnapshot>('analytics_save_snapshot', {
+      teamId,
+      startDate,
+      endDate,
+    });
+  } catch (error) {
+    console.error('[Analytics] Failed to save analytics snapshot:', error);
+    return null;
+  }
+}
