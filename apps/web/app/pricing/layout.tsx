@@ -4,10 +4,18 @@ export const metadata: Metadata = {
   title: 'Pricing Plans | AGI Workforce',
   description:
     'Choose the perfect plan for your AI automation needs. From hobbyists to enterprises, AGI Workforce has a plan for you. Start free or upgrade anytime.',
+  keywords: [
+    'AI pricing',
+    'AI agent plans',
+    'AGI Workforce pricing',
+    'AI automation cost',
+    'BYOK AI',
+    'AI subscription',
+  ],
   openGraph: {
     title: 'Pricing Plans | AGI Workforce',
     description:
-      'Affordable AI agent automation. Hobby ($0), Pro ($19/mo), Max ($99/mo). Pay only for what you use.',
+      'Affordable AI agent automation. Hobby, Pro, and Max plans. Start free or upgrade anytime.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -15,12 +23,20 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce Pricing',
+        alt: 'AGI Workforce Pricing Plans',
       },
     ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Pricing Plans | AGI Workforce',
+    description:
+      'Affordable AI agent automation plans. Start free, upgrade when ready. No credit card required.',
+    images: ['/app-preview.png'],
+    creator: '@agiworkforce',
+  },
   alternates: {
-    canonical: 'https://agiworkforce.com/pricing',
+    canonical: '/pricing',
   },
 };
 
