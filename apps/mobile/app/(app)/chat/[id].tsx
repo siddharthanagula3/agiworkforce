@@ -2,8 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import { View, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { ArrowLeft, Menu } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -23,10 +22,9 @@ import { colors } from '@/lib/theme';
  */
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ id: string }>();
-  // useLocalSearchParams can return string | string[] — narrow to string
+  // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
-  const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
@@ -58,7 +56,7 @@ export default function ChatScreen() {
   }, [id, setCurrentConversationId, loadMessages]);
 
   // ---------------------------------------------------------------------------
-  // Voice playback — speak completed assistant messages aloud.
+  // Voice playback -- speak completed assistant messages aloud.
   // Declared early so handleSend / handleBack can reference stopSpeaking.
   // ---------------------------------------------------------------------------
   const { speak, stop: stopSpeaking } = useVoicePlayback();
@@ -137,7 +135,7 @@ export default function ChatScreen() {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       sendMessage(id, text, selectedModel);
-      // Return the user text as acknowledgement — streaming response will be
+      // Return the user text as acknowledgement -- streaming response will be
       // spoken separately by VoiceConversationScreen via the TTS onDone callback
       // once the next assistant message arrives in the store.
       return `Got it. Processing: "${text}"`;
@@ -150,7 +148,7 @@ export default function ChatScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(app)');
+      router.replace('/(app)' as Parameters<typeof router.replace>[0]);
     }
   }, [router, stopSpeaking]);
 
@@ -198,16 +196,6 @@ export default function ChatScreen() {
 
           {/* Network badge */}
           <NetworkBadge />
-
-          {/* Drawer toggle */}
-          <Pressable
-            onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-            className="p-2 rounded-lg active:bg-white/5"
-            accessibilityLabel="Open menu"
-            accessibilityRole="button"
-          >
-            <Menu size={20} color={colors.textSecondary} />
-          </Pressable>
         </View>
 
         {/* Messages */}

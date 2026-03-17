@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 import {
-  Menu,
+  ArrowLeft,
   QrCode,
   Monitor,
   Wifi,
@@ -27,7 +27,7 @@ import { startHealthChecks, stopHealthChecks, requestAgentRefresh } from '@/serv
 import { colors } from '@/lib/theme';
 
 export default function CompanionScreen() {
-  const navigation = useNavigation();
+  const router = useRouter();
   const [showScanner, setShowScanner] = useState(false);
 
   const {
@@ -87,6 +87,11 @@ export default function CompanionScreen() {
     }
   }, [clearError, pairingCode, connect]);
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+  }, [router]);
+
   // Full-screen QR scanner
   if (showScanner) {
     return <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />;
@@ -95,12 +100,14 @@ export default function CompanionScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-3 h-12">
         <Pressable
-          onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-          className="p-2 -ml-2 rounded-lg active:bg-white/5"
+          onPress={handleBack}
+          className="p-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
-          <Menu size={22} color={colors.textSecondary} />
+          <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2 flex-1">
           Desktop Companion
