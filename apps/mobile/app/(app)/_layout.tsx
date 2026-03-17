@@ -1,82 +1,48 @@
-import { useWindowDimensions } from 'react-native';
-import { Drawer } from 'expo-router/drawer';
-import {
-  MessageSquarePlus,
-  Bot,
-  Smartphone,
-  Settings,
-  MessageCircle,
-  Calendar,
-} from 'lucide-react-native';
+import { Stack } from 'expo-router';
 import { colors } from '@/lib/theme';
-import { SidebarContent } from '@/components/sidebar/SidebarContent';
 
+/**
+ * App layout -- Stack navigator wrapping the entire authenticated section.
+ *
+ * Navigation structure:
+ *   (tabs)/     -- Bottom tab bar (Home, Chat, Agents, Settings)
+ *   chat/[id]   -- Full chat conversation (pushes on top of tabs)
+ *   agents/[id] -- Agent detail view
+ *   companion/  -- QR pairing + desktop companion
+ *   profile/    -- User profile
+ *   schedules/  -- Schedule management
+ *   settings/memory -- Memory management
+ *   messaging/  -- External messaging
+ *
+ * The drawer was replaced with bottom tabs for easier thumb-reach navigation
+ * on mobile. The sidebar conversation list lives inside the Chat tab.
+ */
 export default function AppLayout() {
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
-
   return (
-    <Drawer
-      drawerContent={() => <SidebarContent />}
+    <Stack
       screenOptions={{
         headerShown: false,
-        drawerType: isTablet ? 'permanent' : 'front',
-        drawerStyle: {
-          backgroundColor: '#131514',
-          width: isTablet ? 300 : 280,
-          borderRightColor: colors.border,
-          borderRightWidth: 1,
-        },
-        overlayColor: 'rgba(0,0,0,0.5)',
-        swipeEnabled: !isTablet,
+        contentStyle: { backgroundColor: colors.background },
+        animation: 'slide_from_right',
       }}
     >
-      <Drawer.Screen
-        name="index"
-        options={{
-          drawerLabel: 'New Chat',
-          drawerIcon: ({ color, size }) => <MessageSquarePlus size={size} color={color} />,
-        }}
-      />
-      <Drawer.Screen name="chat/[id]" options={{ drawerItemStyle: { display: 'none' } }} />
-      <Drawer.Screen
-        name="agents/index"
-        options={{
-          drawerLabel: 'Agents',
-          drawerIcon: ({ color, size }) => <Bot size={size} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="companion/index"
-        options={{
-          drawerLabel: 'Desktop',
-          drawerIcon: ({ color, size }) => <Smartphone size={size} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="messaging/index"
-        options={{
-          drawerLabel: 'Messaging',
-          drawerIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="schedules/index"
-        options={{
-          drawerLabel: 'Schedules',
-          drawerIcon: ({ color, size }) => <Calendar size={size} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="settings/index"
-        options={{
-          drawerLabel: 'Settings',
-          drawerIcon: ({ color, size }) => <Settings size={size} color={color} />,
-        }}
-      />
-      {/* Hidden routes */}
-      <Drawer.Screen name="schedules/create" options={{ drawerItemStyle: { display: 'none' } }} />
-      <Drawer.Screen name="settings/memory" options={{ drawerItemStyle: { display: 'none' } }} />
-    </Drawer>
+      {/* Redirect index */}
+      <Stack.Screen name="index" options={{ animation: 'none' }} />
+
+      {/* Tab navigator */}
+      <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+
+      {/* Stack screens pushed on top of tabs */}
+      <Stack.Screen name="chat/[id]" />
+      <Stack.Screen name="agents/[id]" />
+      <Stack.Screen name="agents/index" />
+      <Stack.Screen name="companion/index" />
+      <Stack.Screen name="profile/index" />
+      <Stack.Screen name="schedules/index" />
+      <Stack.Screen name="schedules/create" />
+      <Stack.Screen name="settings/index" />
+      <Stack.Screen name="settings/memory" />
+      <Stack.Screen name="messaging/index" />
+    </Stack>
   );
 }
