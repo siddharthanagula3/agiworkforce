@@ -51,7 +51,11 @@ function saveQueue(queue: OfflineQueueState): void {
 }
 
 export function queueMessage(sessionId: string, content: string): string {
-  const id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  if (!sessionId?.trim() || !content?.trim()) {
+    throw new Error('sessionId and content are required');
+  }
+
+  const id = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   const queue = loadQueue();
 
   const message: QueuedMessage = {
@@ -63,8 +67,10 @@ export function queueMessage(sessionId: string, content: string): string {
     addedAt: new Date().toISOString(),
   };
 
-  queue.messages.push(message);
-  saveQueue(queue);
+  saveQueue({
+    ...queue,
+    messages: [...queue.messages, message],
+  });
 
   return id;
 }
@@ -74,7 +80,11 @@ export function queueToolExecution(
   toolName: string,
   toolInput: Record<string, unknown>,
 ): string {
-  const id = `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  if (!sessionId?.trim() || !toolName?.trim()) {
+    throw new Error('sessionId and toolName are required');
+  }
+
+  const id = `tool_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   const queue = loadQueue();
 
   const execution: QueuedToolExecution = {
@@ -87,8 +97,10 @@ export function queueToolExecution(
     addedAt: new Date().toISOString(),
   };
 
-  queue.toolExecutions.push(execution);
-  saveQueue(queue);
+  saveQueue({
+    ...queue,
+    toolExecutions: [...queue.toolExecutions, execution],
+  });
 
   return id;
 }

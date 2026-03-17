@@ -108,6 +108,14 @@ export const useMcpExtensionStore = create<McpExtensionState>()(
       },
 
       getExtension: async (extensionId: string) => {
+        if (!extensionId || !extensionId.trim()) {
+          set(
+            { error: 'Invalid extension ID', isLoading: false },
+            undefined,
+            'mcpExtension/getExtension/validationError',
+          );
+          return null;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcpExtension/getExtension/start');
         try {
           const ext = await McpClient.getExtension(extensionId);
@@ -132,6 +140,14 @@ export const useMcpExtensionStore = create<McpExtensionState>()(
       },
 
       installExtension: async (filePath: string) => {
+        if (!filePath || !filePath.trim()) {
+          set(
+            { error: 'Invalid file path', isInstalling: false, installProgress: null },
+            undefined,
+            'mcpExtension/installExtension/validationError',
+          );
+          return null;
+        }
         set(
           {
             isInstalling: true,
@@ -229,6 +245,14 @@ export const useMcpExtensionStore = create<McpExtensionState>()(
       },
 
       uninstallExtension: async (extensionId: string) => {
+        if (!extensionId || !extensionId.trim()) {
+          set(
+            { error: 'Invalid extension ID', isLoading: false },
+            undefined,
+            'mcpExtension/uninstall/validationError',
+          );
+          return;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcpExtension/uninstall/start');
         try {
           await McpClient.uninstallExtension(extensionId);
@@ -250,6 +274,14 @@ export const useMcpExtensionStore = create<McpExtensionState>()(
       },
 
       enableExtension: async (extensionId: string) => {
+        if (!extensionId || !extensionId.trim()) {
+          set(
+            { error: 'Invalid extension ID', isLoading: false },
+            undefined,
+            'mcpExtension/enable/validationError',
+          );
+          return;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcpExtension/enable/start');
         try {
           await McpClient.enableExtension(extensionId);
@@ -271,6 +303,14 @@ export const useMcpExtensionStore = create<McpExtensionState>()(
       },
 
       disableExtension: async (extensionId: string) => {
+        if (!extensionId || !extensionId.trim()) {
+          set(
+            { error: 'Invalid extension ID', isLoading: false },
+            undefined,
+            'mcpExtension/disable/validationError',
+          );
+          return;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcpExtension/disable/start');
         try {
           await McpClient.disableExtension(extensionId);

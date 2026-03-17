@@ -79,8 +79,11 @@ function loadAllSessions(): PersistedSession[] {
 }
 
 function saveAllSessions(sessions: PersistedSession[]): void {
-  // Cap to 50 sessions to prevent unbounded growth
-  const trimmed = sessions.slice(Math.max(0, sessions.length - 50));
+  // Sort by updatedAt (newest first) and cap to 50 sessions to prevent unbounded growth
+  const sorted = [...sessions].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+  const trimmed = sorted.slice(0, 50);
   safeSetJSON(SESSION_STORAGE_KEY, trimmed);
 }
 
@@ -311,17 +314,17 @@ export function useSessionPersistence(
     }
   }, []);
 
-  // Auto-save effect
+  // Auto-save placeholder: the hook does not hold session state internally,
+  // so auto-save must be driven by the consumer. This interval is reserved
+  // for future use when session state tracking is integrated.
   useEffect(() => {
     if (!autoSaveInterval || autoSaveInterval <= 0) {
       return;
     }
 
-    const interval = setInterval(() => {
-      log('Auto-save interval tick');
-    }, autoSaveInterval);
+    log('Auto-save interval configured but no session state available to auto-save');
 
-    return () => clearInterval(interval);
+    return undefined;
   }, [autoSaveInterval, log]);
 
   return {
