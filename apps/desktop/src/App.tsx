@@ -68,6 +68,9 @@ const UnifiedAgenticChat = lazy(() =>
 import { UpdateChecker } from './components/Updates';
 import { AutomationPermissionsModal } from './components/Settings/AutomationPermissionsModal';
 import { StatusBanner } from './components/StatusBanner';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { useSessionPersistence } from './hooks/useSessionPersistence';
+import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -81,6 +84,7 @@ const LoadingFallback = () => (
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   useVoiceHotkey();
+  const { restoreSession } = useSessionPersistence();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const settingsPanelOpen = useSettingsDialogStore((s) => s.settingsOpen);
   const settingsInitialTab = useSettingsDialogStore((s) => s.settingsInitialTab);
@@ -225,6 +229,11 @@ const DesktopShell = () => {
     };
 
     trackAction('app_loaded');
+
+    void runStartupStep('Sync manager', async () => {
+      initializeSyncManager();
+    });
+    registerCleanup(() => cleanupSyncManager());
 
     void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
     void runStartupStep('Tool event listener', () => initializeToolEventListener());
@@ -376,10 +385,11 @@ const DesktopShell = () => {
     };
   }, [addError]);
 
-  // Run once on mount - ensureActiveConversation is a stable store function
+  // Run once on mount - restore persisted session, then ensure active conversation
   useEffect(() => {
+    restoreSession();
     ensureActiveConversation();
-  }, [ensureActiveConversation]);
+  }, [restoreSession, ensureActiveConversation]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -691,6 +701,7 @@ const DesktopShell = () => {
         )}
         <VoiceInputOverlay />
         <StatusBanner />
+        <OfflineIndicator position="top" />
         {subscriptionFetchFailed && (
           <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
             <div className="flex items-center gap-2">

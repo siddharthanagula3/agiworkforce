@@ -298,6 +298,14 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         enabled_tools: [],
         running: false,
       } as T;
+    case 'mcp_server_status':
+      return false as T;
+    case 'mcp_server_list_tools':
+      return { tools: [] } as T;
+    case 'mcp_set_credential':
+      return 'Credential stored' as T;
+    case 'mcp_delete_credential':
+      return 'Credential deleted' as T;
 
     // Model capabilities command
     case 'get_model_capabilities':
@@ -525,9 +533,762 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'dir_list':
       return [] as T;
 
+    // Workspace indexing & code analysis
+    case 'workspace_index':
+      return {
+        rootPath: (args?.['workspacePath'] as string | undefined) ?? '.',
+        files: [],
+        symbols: [],
+        dependencies: { nodes: [], edges: [] },
+        lastUpdated: Date.now(),
+      } as T;
+    case 'workspace_search_symbols':
+      return [] as T;
+    case 'workspace_find_definition':
+      return null as T;
+    case 'workspace_find_references':
+    case 'workspace_get_file_symbols':
+      return [] as T;
+    case 'workspace_get_dependencies':
+      return { nodes: [], edges: [] } as T;
+    case 'workspace_get_stats':
+      return {
+        totalFiles: 0,
+        totalSymbols: 0,
+        totalLines: 0,
+        languages: {},
+        symbolKinds: {},
+      } as T;
+
+    // Debugging / error analysis
+    case 'debug_parse_error':
+      return {
+        errorType: 'Unknown',
+        message: (args?.['errorText'] as string | undefined) ?? '',
+        filePath: null,
+        line: null,
+        column: null,
+        stackTrace: [],
+        severity: 'Medium',
+      } as T;
+    case 'debug_suggest_fixes':
+      return [] as T;
+    case 'debug_analyze_stack_trace':
+      return {
+        rootCauseFrame: 0,
+        explanation: '(mock analysis)',
+        errorPath: '',
+        recommendations: [],
+      } as T;
+
+    // Formatter detection
+    case 'format_detect':
+      return {
+        language: '',
+        formatter: 'none',
+        command: [],
+        available: false,
+      } as T;
+
+    // Test runner detection
+    case 'test_detect_runner':
+      return 'auto' as T;
+
+    // LSP server listing
+    case 'lsp_list_servers':
+      return [] as T;
+
     // Extension status
     case 'extension_status':
       return { status: 'inactive' } as T;
+
+    // ── Vision commands ─────────────────────────────────────────────
+    case 'vision_send_message':
+    case 'vision_analyze_screenshot':
+    case 'vision_extract_text':
+    case 'vision_describe_ui_elements':
+    case 'vision_answer_question':
+      return {
+        content: '(mock vision response)',
+        model: 'mock-vision',
+        tokens: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        cost: 0,
+        processingTimeMs: 100,
+      } as T;
+
+    case 'vision_compare_images':
+      return {
+        similarityScore: 0,
+        differencesDescription: '(mock comparison)',
+        visualDiffHighlighted: null,
+        model: 'mock-vision',
+        cost: 0,
+      } as T;
+
+    case 'vision_locate_element':
+      return {
+        description: '',
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        confidence: 0,
+      } as T;
+
+    // ── Swarm commands ──────────────────────────────────────────────
+    case 'swarm_init':
+    case 'swarm_stop':
+      return undefined as T;
+
+    case 'swarm_execute_goal':
+      return {
+        success: true,
+        output: '(mock swarm result)',
+        agentsUsed: 0,
+        totalDurationMs: 0,
+        subtaskResults: [],
+      } as T;
+
+    case 'swarm_get_stats':
+      return {
+        totalAgents: 0,
+        activeAgents: 0,
+        completedTasks: 0,
+        failedTasks: 0,
+        averageTaskDurationMs: 0,
+      } as T;
+
+    // ── Workflow orchestration commands ──────────────────────────────
+    case 'create_workflow':
+      return `wf_mock_${Date.now()}` as T;
+
+    case 'update_workflow':
+    case 'delete_workflow':
+    case 'pause_workflow':
+    case 'resume_workflow':
+    case 'cancel_workflow':
+    case 'schedule_workflow':
+      return undefined as T;
+
+    case 'get_workflow':
+      return {
+        id: (args?.['id'] as string | undefined) ?? 'mock-wf',
+        name: 'Mock Workflow',
+        description: '',
+        userId: '',
+        steps: [],
+      } as T;
+
+    case 'get_workflow_status':
+      return {
+        id: (args?.['executionId'] as string | undefined) ?? 'mock-exec',
+        workflow_id: '',
+        status: 'completed',
+        inputs: {},
+        outputs: {},
+      } as T;
+
+    case 'get_execution_logs':
+      return [] as T;
+
+    case 'trigger_workflow_on_event':
+      return `exec_mock_${Date.now()}` as T;
+
+    case 'get_next_execution_time':
+      return (Date.now() + 3600000) as T;
+
+    // ── Background agent commands ───────────────────────────────────
+    case 'background_agent_push':
+      return {
+        agentId: `bg_mock_${Date.now()}`,
+        queuePosition: null,
+        started: true,
+      } as T;
+
+    case 'background_agent_list':
+      return { agents: [], activeCount: 0, maxAgents: 10 } as T;
+
+    case 'background_agent_list_active':
+      return [] as T;
+
+    case 'background_agent_get':
+      return null as T;
+
+    case 'background_agent_pause':
+    case 'background_agent_resume':
+    case 'background_agent_cancel':
+      return undefined as T;
+
+    case 'background_agent_take_over':
+      throw new Error('Background agent take-over requires the desktop application');
+
+    case 'background_agent_stats':
+      return {
+        totalAgents: 0,
+        runningCount: 0,
+        queuedCount: 0,
+        pausedCount: 0,
+        completedCount: 0,
+        failedCount: 0,
+        maxAgents: 10,
+        atCapacity: false,
+      } as T;
+
+    case 'background_agent_cleanup':
+      return 0 as T;
+
+    case 'background_agent_should_push':
+      return [false, (args?.['goal'] as string | undefined) ?? ''] as T;
+
+    // ── Skill commands (newly wired) ────────────────────────────────
+    case 'skill_get':
+      return null as T;
+
+    case 'skill_get_instructions':
+    case 'skill_get_context':
+      return '' as T;
+
+    case 'skill_check_requirements':
+      return {
+        satisfied: true,
+        missingBins: [],
+        missingEnv: [],
+        osSupported: true,
+      } as T;
+
+    case 'skill_invoke':
+      return {
+        skillName: (args?.['name'] as string | undefined) ?? '',
+        instructions: '(mock instructions)',
+        allowedTools: [],
+        contextMode: 'main',
+      } as T;
+
+    case 'skill_match_for_message':
+      return [] as T;
+
+    case 'skill_parse_slash_command':
+      return null as T;
+
+    case 'skill_get_slash_commands':
+      return [] as T;
+
+    case 'skill_count':
+      return 0 as T;
+
+    case 'skill_set_workspace':
+      return undefined as T;
+
+    // ── Voice commands (newly wired) ────────────────────────────────
+    case 'voice_configure':
+    case 'voice_wake_enable':
+    case 'voice_wake_disable':
+    case 'voice_wake_configure':
+    case 'voice_ptt_configure':
+    case 'voice_ptt_key_down':
+    case 'voice_ptt_key_up':
+    case 'voice_deepgram_configure':
+    case 'voice_start_deepgram_stream':
+    case 'voice_stop_deepgram_stream':
+    case 'voice_deepgram_send_audio':
+    case 'voice_set_whisper_model':
+    case 'voice_delete_whisper_model':
+    case 'voice_set_piper_voice':
+    case 'voice_delete_piper_voice':
+    case 'voice_tts_configure':
+    case 'voice_enable_barge_in':
+    case 'voice_set_barge_in_sensitivity':
+    case 'voice_configure_barge_in':
+    case 'voice_start_barge_in_monitoring':
+    case 'voice_stop_barge_in_monitoring':
+    case 'voice_download_piper_binary':
+    case 'voice_download_whisper_model':
+    case 'voice_download_piper_voice':
+      return undefined as T;
+
+    case 'voice_get_settings':
+      return {
+        provider: 'local_whisper',
+        language: 'en',
+        hotkey: 'option',
+      } as T;
+
+    case 'voice_check_local_whisper':
+    case 'voice_check_piper_binary':
+    case 'voice_wake_status':
+      return false as T;
+
+    case 'voice_get_capabilities':
+      return {
+        localWhisper: false,
+        deepgram: false,
+        tts: false,
+        wakeWord: false,
+        ptt: false,
+      } as T;
+
+    case 'voice_tts_list_voices':
+    case 'voice_list_whisper_models':
+    case 'voice_list_piper_voices':
+    case 'voice_list_local_models':
+      return [] as T;
+
+    case 'voice_ptt_state':
+      return 'idle' as T;
+
+    case 'voice_deepgram_status':
+      return { connected: false, streaming: false } as T;
+
+    case 'voice_tts_speak_local':
+    case 'voice_tts_speak_with_barge_in':
+    case 'voice_tts_stop':
+      return undefined as T;
+
+    case 'voice_tts_is_playing':
+      return false as T;
+
+    case 'voice_get_barge_in_status':
+      return { enabled: false, monitoring: false, sensitivity: 0.5 } as T;
+
+    case 'voice_convert_audio_to_pcm':
+      return [] as T;
+
+    case 'voice_transcribe_file':
+    case 'voice_transcribe_local':
+      return { text: '(mock transcript)', confidence: 0.95 } as T;
+
+    // ── Agent/AGI commands ──────────────────────────────────────────
+    case 'agent_init':
+    case 'agi_init':
+    case 'agi_stop':
+      return undefined as T;
+
+    case 'agent_submit_task':
+    case 'start_agent_task':
+      return `task_mock_${Date.now()}` as T;
+
+    case 'agent_get_task_status':
+      return { status: 'pending' } as T;
+
+    case 'agent_list_tasks':
+    case 'agent_list_trusted_workflows':
+    case 'list_active_agents':
+      return [] as T;
+
+    case 'agi_should_use_swarm':
+      return false as T;
+
+    case 'agi_submit_goal_auto':
+    case 'agi_submit_goal_swarm':
+      return { goalId: `goal_mock_${Date.now()}` } as T;
+
+    // ── Orchestration commands ──────────────────────────────────────
+    case 'orchestrator_spawn_parallel':
+      return [] as T;
+
+    case 'orchestrator_cancel_all':
+    case 'orchestrator_cleanup':
+    case 'orchestrator_wait_all':
+    case 'pause_agent':
+    case 'resume_agent':
+      return undefined as T;
+
+    case 'orchestrator_get_agent_status':
+      return null as T;
+
+    // ── Notification commands ───────────────────────────────────────
+    case 'notification_check_permission':
+    case 'notification_request_permission':
+      return true as T;
+
+    case 'notification_show_with_actions':
+    case 'notification_schedule':
+    case 'notification_schedule_reminder':
+    case 'notification_register_actions':
+    case 'notification_update':
+      return undefined as T;
+
+    case 'notification_get_scheduled':
+      return [] as T;
+
+    case 'notification_unread_count':
+      return 0 as T;
+
+    // ── Tutorial commands ───────────────────────────────────────────
+    case 'get_tutorials':
+    case 'get_user_tutorial_progress':
+      return [] as T;
+
+    case 'get_tutorial':
+    case 'get_tutorial_progress':
+    case 'get_recommended_tutorial':
+      return null as T;
+
+    case 'get_tutorial_stats':
+      return { total: 0, completed: 0, inProgress: 0 } as T;
+
+    case 'start_tutorial':
+    case 'complete_tutorial':
+    case 'complete_tutorial_step':
+    case 'skip_tutorial_step':
+    case 'reset_tutorial':
+    case 'submit_tutorial_feedback':
+    case 'record_step_view':
+    case 'record_demo_results':
+    case 'select_demo':
+      return undefined as T;
+
+    case 'run_instant_demo':
+      return { success: true } as T;
+
+    // ── Settings V2 commands ────────────────────────────────────────
+    case 'settings_v2_get_batch':
+    case 'settings_v2_get_category':
+    case 'settings_v2_list_all':
+    case 'settings_v2_load_app_settings':
+      return {} as T;
+
+    case 'settings_v2_delete':
+    case 'settings_v2_save_app_settings':
+      return undefined as T;
+
+    // ── Misc newly registered commands ──────────────────────────────
+    case 'ai_analyze_project':
+    case 'ai_generate_code':
+    case 'ai_generate_tests':
+    case 'ai_refactor_code':
+    case 'ai_get_project_context':
+    case 'ai_generate_context_prompt':
+    case 'ai_access_file':
+    case 'ai_add_constraint':
+      return { result: '(mock)' } as T;
+
+    case 'get_inline_completion':
+      return null as T;
+
+    case 'code_generate_edit':
+      return { edit: '(mock edit)' } as T;
+
+    case 'search_chat_history_semantic':
+      return [] as T;
+
+    case 'sync_conversations_to_cloud':
+    case 'clear_sample_data':
+    case 'populate_sample_data':
+      return undefined as T;
+
+    case 'has_sample_data':
+      return false as T;
+
+    case 'check_connectivity':
+      return { connected: false } as T;
+
+    case 'continuous_job_runner_start':
+    case 'continuous_job_runner_stop':
+      return undefined as T;
+
+    case 'continuous_job_runner_status':
+      return { running: false } as T;
+
+    case 'window_is_fullscreen':
+    case 'window_is_maximized':
+    case 'window_is_floating_visible':
+      return false as T;
+
+    case 'window_maximize':
+    case 'window_unmaximize':
+    case 'window_open_floating':
+      return undefined as T;
+
+    case 'form_undo_record':
+    case 'form_undo_clear':
+    case 'form_undo_clear_old':
+      return undefined as T;
+
+    case 'form_undo_attempt':
+    case 'form_undo_get':
+      return null as T;
+
+    case 'form_undo_can_undo':
+      return false as T;
+
+    case 'form_undo_list':
+    case 'form_undo_list_undoable':
+      return [] as T;
+
+    case 'form_undo_stats':
+      return { total: 0, undoable: 0 } as T;
+
+    case 'error_get_logs':
+    case 'error_export_logs':
+      return [] as T;
+
+    case 'error_clear_logs':
+      return undefined as T;
+
+    case 'error_get_stats':
+      return { total: 0, byLevel: {} } as T;
+
+    case 'shortcuts_list':
+    case 'shortcuts_get_defaults':
+      return [] as T;
+
+    case 'shortcuts_register':
+    case 'shortcuts_unregister':
+    case 'shortcuts_register_global':
+    case 'shortcuts_unregister_global':
+    case 'shortcuts_trigger':
+    case 'shortcuts_update':
+    case 'shortcuts_apply_quick_query_preferences':
+      return undefined as T;
+
+    case 'shortcuts_check_key':
+      return { available: true } as T;
+
+    case 'intent_detect':
+    case 'intent_detect_with_llm':
+      return { intent: 'general', confidence: 0.5 } as T;
+
+    case 'intent_detect_batch':
+    case 'intent_extract_entities':
+    case 'intent_get_categories':
+    case 'intent_get_complexity_levels':
+      return [] as T;
+
+    case 'intent_check_quick_win':
+      return false as T;
+
+    case 'intent_configure':
+    case 'intent_create_routing_plan':
+      return undefined as T;
+
+    // ── Background tasks commands ───────────────────────────────────
+    case 'bg_submit_task':
+      return `bgtask_mock_${Date.now()}` as T;
+
+    case 'bg_list_tasks':
+    case 'list_background_tasks':
+      return [] as T;
+
+    case 'bg_get_task_status':
+    case 'bg_get_task_stats':
+      return null as T;
+
+    case 'bg_cancel_task':
+    case 'bg_pause_task':
+    case 'bg_resume_task':
+    case 'cancel_background_task':
+    case 'pause_background_task':
+    case 'resume_background_task':
+      return undefined as T;
+
+    // ── Onboarding commands ─────────────────────────────────────────
+    case 'complete_first_run':
+    case 'complete_onboarding_step':
+    case 'skip_first_run':
+    case 'skip_onboarding_step':
+    case 'mark_setup_completed':
+    case 'reset_onboarding':
+    case 'start_first_run_experience':
+    case 'update_first_run_step':
+      return undefined as T;
+
+    case 'has_completed_first_run':
+      return false as T;
+
+    case 'get_first_run_session':
+    case 'get_first_run_statistics':
+      return null as T;
+
+    // ── Subscription commands ───────────────────────────────────────
+    case 'get_pricing_plans':
+      return [] as T;
+
+    case 'get_user_credits':
+      return { credits: 0, usedCredits: 0 } as T;
+
+    case 'get_user_rewards':
+      return [] as T;
+
+    case 'has_reward':
+    case 'has_unlocked_feature':
+      return false as T;
+
+    case 'subscribe_to_plan':
+    case 'upgrade_plan':
+      return undefined as T;
+
+    // ── Marketplace (new) ───────────────────────────────────────────
+    case 'fork_marketplace_workflow':
+    case 'publish_workflow_to_marketplace':
+    case 'track_workflow_view':
+    case 'get_workflow_by_share_url':
+      return undefined as T;
+
+    case 'get_creator_workflows':
+    case 'get_workflows_by_category':
+    case 'get_workflow_templates_by_category':
+    case 'search_workflow_templates':
+      return [] as T;
+
+    // ── Misc/catch-all for remaining newly registered commands ──────
+    case 'analytics_generate_weekly_report':
+    case 'analytics_generate_monthly_report':
+    case 'analytics_get_top_processes':
+    case 'analytics_save_snapshot':
+    case 'artifact_clear_all':
+    case 'artifact_export_all':
+    case 'artifact_import_all':
+    case 'auth_store_session':
+    case 'auth_retrieve_session':
+    case 'auth_remove_session':
+    case 'automation_drag_drop':
+    case 'automation_get_text':
+    case 'browser_enable_request_interception':
+    case 'calendar_disconnect':
+    case 'cloud_disconnect':
+    case 'chat_create_message':
+    case 'chat_update_message':
+    case 'chat_delete_message':
+    case 'chat_update_conversation':
+    case 'chat_delete_conversation':
+    case 'chat_clear_pending_messages':
+    case 'chat_get_pending_messages':
+    case 'codebase_cache_clear_all':
+    case 'codebase_cache_clear_expired':
+    case 'codebase_cache_clear_file':
+    case 'codebase_cache_clear_project':
+    case 'codebase_cache_calculate_hash':
+    case 'codebase_cache_get_stats':
+    case 'codebase_cache_get_file_tree':
+    case 'codebase_cache_get_symbols':
+    case 'codebase_cache_get_dependencies':
+    case 'codebase_cache_set_file_tree':
+    case 'codebase_cache_set_symbols':
+    case 'codebase_cache_set_dependencies':
+    case 'computer_use_execute_tool':
+    case 'computer_use_execute_opa_task':
+    case 'computer_use_type_text':
+    case 'computer_use_zoom_at_point':
+    case 'computer_use_suggest_zoom_level':
+    case 'computer_use_get_session':
+    case 'computer_use_list_sessions':
+    case 'contact_get':
+    case 'contact_search':
+    case 'contact_export_vcard':
+    case 'contact_import_vcard':
+    case 'db_get_pool_stats':
+    case 'db_has_stored_password':
+    case 'db_mysql_bulk_insert':
+    case 'db_mysql_call_procedure':
+    case 'db_mysql_describe_table':
+    case 'db_mysql_list_indexes':
+    case 'db_mysql_list_tables':
+    case 'db_mysql_test_connection':
+    case 'db_validate_query':
+    case 'design_apply_css':
+    case 'design_check_accessibility':
+    case 'design_generate_color_scheme':
+    case 'design_generate_css':
+    case 'design_get_element_styles':
+    case 'design_suggest_improvements':
+    case 'design_tokens_to_css':
+    case 'email_check_keyring_status':
+    case 'email_migrate_credentials':
+    case 'approve_operation':
+    case 'reject_operation':
+    case 'coord_get_pending_approvals':
+    case 'coord_request_approval':
+    case 'coord_update_app_state':
+    case 'get_approval_request':
+    case 'clear_model_capability_cache':
+    case 'detect_use_case':
+    case 'enhance_and_route_prompt':
+    case 'get_available_providers':
+    case 'get_available_use_cases':
+    case 'get_suggested_provider':
+    case 'llm_list_ollama_models':
+    case 'route_to_best_api':
+    case 'memory_archive_compacted_logs':
+    case 'memory_compact_old_logs':
+    case 'memory_decay_single':
+    case 'memory_get_compaction_candidates':
+    case 'memory_get_compaction_stats':
+    case 'memory_get_decay_candidates':
+    case 'memory_get_extraction_prompt':
+    case 'memory_get_logs_in_range':
+    case 'memory_import_json_string':
+    case 'memory_promote_extracted':
+    case 'memory_recall_with_boost':
+    case 'compare_to_industry_benchmark':
+    case 'compare_to_manual':
+    case 'compare_to_previous_period':
+    case 'get_metrics_history':
+    case 'metrics_increment_automations':
+    case 'metrics_increment_goals':
+    case 'metrics_set_cache_hit_rate':
+    case 'metrics_set_mcp_servers':
+    case 'record_automation_metrics':
+    case 'ocr_detect_languages':
+    case 'ocr_preprocess_image':
+    case 'ocr_process_multi_language':
+    case 'ocr_process_with_boxes':
+    case 'get_best_practices':
+    case 'get_process_success_rates':
+    case 'get_process_templates':
+    case 'get_current_plan':
+    case 'get_outcome_tracking':
+    case 'get_session_info':
+    case 'reset_session_cost':
+    case 'update_session_activity':
+    case 'project_context_get_folder':
+    case 'project_context_get_summary':
+    case 'project_context_list_files':
+    case 'project_context_validate_path':
+    case 'project_has_instructions':
+    case 'project_load_instructions':
+    case 'auto_save_decision':
+    case 'clear_project_memories':
+    case 'delete_project_memory':
+    case 'get_architectural_decisions':
+    case 'get_coding_styles':
+    case 'get_project_context':
+    case 'get_project_memory_stats':
+    case 'save_architectural_decision':
+    case 'save_coding_style':
+    case 'update_memory_importance':
+    case 'get_prompt_enhancement_config':
+    case 'set_prompt_enhancement_config':
+    case 'research_get_modes':
+    case 'research_quick':
+    case 'task_create':
+    case 'task_pause':
+    case 'task_resume':
+    case 'task_save_context':
+    case 'task_update_progress':
+    case 'resolve_task_approval':
+    case 'get_allowed_directories':
+    case 'file_get_metadata':
+    case 'fs_get_workspace_files':
+    case 'fs_read_file_content':
+    case 'composer_start_session':
+    case 'composer_apply_session':
+    case 'composer_get_session':
+    case 'delete_autonomous_task_checkpoint':
+    case 'delete_autonomous_task_checkpoints':
+    case 'resume_autonomous_task':
+      return undefined as T;
+
+    case 'task_get_resumable':
+    case 'task_get_status':
+      return null as T;
+
+    case 'task_list_by_status':
+    case 'list_autonomous_task_checkpoints':
+    case 'list_autonomous_task_checkpoints_by_task':
+      return [] as T;
 
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues

@@ -93,6 +93,13 @@ export interface ResearchAvailability {
   default_mode: ResearchModeId;
 }
 
+export interface ResearchMode {
+  id: string;
+  name: string;
+  description: string;
+  estimated_time: string;
+}
+
 interface ResearchState {
   // Current research session
   activeSession: {
@@ -113,6 +120,9 @@ interface ResearchState {
   config: ResearchConfig | null;
   availability: ResearchAvailability | null;
 
+  // Available research modes (from backend)
+  availableModes: ResearchMode[];
+
   // UI state
   isConfigLoading: boolean;
   isHistoryLoading: boolean;
@@ -121,6 +131,7 @@ interface ResearchState {
 interface ResearchActions {
   // Session actions
   startResearch: (query: string, mode?: ResearchModeId) => Promise<ResearchResponse>;
+  quickResearch: (query: string) => Promise<ResearchResponse>;
   cancelResearch: () => Promise<void>;
   resetSession: () => void;
 
@@ -137,6 +148,7 @@ interface ResearchActions {
   loadConfig: () => Promise<void>;
   updateConfig: (config: Partial<ResearchConfig>) => Promise<void>;
   checkAvailability: () => Promise<ResearchAvailability>;
+  loadModes: () => Promise<ResearchMode[]>;
 
   // Initialization
   initialize: () => Promise<void>;
@@ -173,6 +185,7 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
         history: [],
         config: null,
         availability: null,
+        availableModes: [],
         isConfigLoading: false,
         isHistoryLoading: false,
 
@@ -214,6 +227,44 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : 'Research failed. Please try again.';
+
+            set((state) => {
+              state.activeSession.status = 'error';
+              state.activeSession.error = errorMessage;
+            });
+
+            throw error;
+          }
+        },
+
+        quickResearch: async (query: string) => {
+          set((state) => {
+            state.activeSession = {
+              id: null,
+              query,
+              mode: 'quick',
+              status: 'researching',
+              progress: null,
+              result: null,
+              error: null,
+              startedAt: Date.now(),
+            };
+          });
+
+          try {
+            const result = await invoke<ResearchResponse>('research_quick', { query });
+
+            set((state) => {
+              state.activeSession.id = result.session_id;
+              state.activeSession.status = 'complete';
+              state.activeSession.result = result;
+            });
+
+            get().addToHistory(result);
+            return result;
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : 'Quick research failed. Please try again.';
 
             set((state) => {
               state.activeSession.status = 'error';
@@ -367,15 +418,25 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           }
         },
 
+        loadModes: async () => {
+          try {
+            const modes = await invoke<ResearchMode[]>('research_get_modes');
+            set((state) => {
+              state.availableModes = modes;
+            });
+            return modes;
+          } catch (error) {
+            console.error('Failed to load research modes:', error);
+            return [];
+          }
+        },
+
         // Initialization
         initialize: async () => {
           if (!isTauri) return;
 
-          // Load config
-          await get().loadConfig();
-
-          // Check availability
-          await get().checkAvailability();
+          // Load config, availability, and modes in parallel
+          await Promise.all([get().loadConfig(), get().checkAvailability(), get().loadModes()]);
 
           // Set up event listeners
           listen<ResearchProgress>('research:progress', (event) => {
@@ -408,5 +469,6 @@ export const selectIsResearching = (state: ResearchState) =>
   state.activeSession.status === 'researching';
 export const selectHasResult = (state: ResearchState) =>
   state.activeSession.status === 'complete' && state.activeSession.result !== null;
+export const selectAvailableModes = (state: ResearchState) => state.availableModes;
 
 export default useResearchStore;

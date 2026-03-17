@@ -15,7 +15,6 @@ pub struct CodeChunk {
     pub class_name: Option<String>,
     pub doc_comment: Option<String>,
     pub dependencies: Vec<String>,
-    pub embedding: Option<Vec<f32>>,
     pub metadata: HashMap<String, String>,
 }
 
@@ -26,7 +25,6 @@ pub struct DocChunk {
     pub title: String,
     pub content: String,
     pub section: Option<String>,
-    pub embedding: Option<Vec<f32>>,
     pub metadata: HashMap<String, String>,
 }
 
@@ -39,7 +37,6 @@ pub struct Experience {
     pub success: bool,
     pub timestamp: DateTime<Utc>,
     pub tags: Vec<String>,
-    pub embedding: Option<Vec<f32>>,
 }
 
 pub struct RAGSystem {
@@ -111,7 +108,7 @@ impl RAGSystem {
                     doc_comment: doc_comment.clone(),
                     dependencies: self
                         .extract_dependencies(&lines[current_chunk_start..=i].join("\n")),
-                    embedding: None,
+
                     metadata: HashMap::new(),
                 };
                 chunks.push(chunk);
@@ -132,7 +129,6 @@ impl RAGSystem {
                 class_name: None,
                 doc_comment: None,
                 dependencies: self.extract_dependencies(content),
-                embedding: None,
                 metadata: HashMap::new(),
             });
         }

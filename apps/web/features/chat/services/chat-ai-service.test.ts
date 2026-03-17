@@ -8,7 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mocks — must be set up before importing the module under test
+// Mocks — must be set up before importing the module under test.
+// Every mock that is consumed with .then() MUST return a Promise so that
+// callers chaining .then() do not throw a TypeError on `undefined`.
+//
+// NOTE: vi.mock factories are hoisted above all imports and variable
+// declarations, so they cannot reference module-scope `const` values.
 // ---------------------------------------------------------------------------
 
 vi.mock('@/utils/supabase/client', () => ({
@@ -31,6 +36,8 @@ vi.mock('@shared/stores/model-store', () => ({
 
 vi.mock('@core/ai/employees/prompt-management', () => ({
   systemPromptsService: {
+    // Must return a Promise — the source code chains .then() on the result.
+    // Returning undefined (which vi.fn() does by default) causes a TypeError.
     getAvailableEmployees: vi.fn().mockResolvedValue([
       {
         name: 'backend-engineer',
@@ -69,12 +76,16 @@ vi.mock('@core/ai/orchestration/intelligent-agent-router', () => {
 });
 
 import { ChatAIService } from './chat-ai-service';
+import { systemPromptsService } from '@core/ai/employees/prompt-management';
 
 describe('ChatAIService', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    // Restore default mock implementations after clearAllMocks
-    const { systemPromptsService } = await import('@core/ai/employees/prompt-management');
+    // Restore mock implementation synchronously (no async import gap) so that
+    // getAvailableEmployees always returns a Promise — never undefined.
+    // vi.clearAllMocks() strips mockResolvedValue, leaving a bare vi.fn()
+    // that returns undefined. The source code calls .then() on the return
+    // value, which would throw TypeError on undefined.
     vi.mocked(systemPromptsService.getAvailableEmployees).mockResolvedValue([
       {
         name: 'backend-engineer',
@@ -91,8 +102,6 @@ describe('ChatAIService', () => {
         avatar: '/avatars/finance.png',
       },
     ] as never);
-    // Reset the cached employees between tests by re-importing
-    // We can't easily reset module-level state, so we test idempotent paths
   });
 
   // ==========================================================================
@@ -100,14 +109,19 @@ describe('ChatAIService', () => {
   // ==========================================================================
 
   describe('getAvailableSkillsSync', () => {
-    it('returns an array of SkillInfo objects', () => {
+    it('returns an array of SkillInfo objects', async () => {
       const skills = ChatAIService.getAvailableSkillsSync();
+      // getAvailableSkillsSync() fires loadEmployees() internally without
+      // awaiting it. Flush microtasks so the floating promise settles before
+      // the test ends, preventing an unhandled rejection.
+      await Promise.resolve();
       expect(Array.isArray(skills)).toBe(true);
       expect(skills.length).toBeGreaterThan(0);
     });
 
-    it('each skill has id, name, description, category', () => {
+    it('each skill has id, name, description, category', async () => {
       const skills = ChatAIService.getAvailableSkillsSync();
+      await Promise.resolve();
       for (const skill of skills) {
         expect(skill).toHaveProperty('id');
         expect(skill).toHaveProperty('name');
@@ -116,8 +130,9 @@ describe('ChatAIService', () => {
       }
     });
 
-    it('formats kebab-case ids into human-readable names', () => {
+    it('formats kebab-case ids into human-readable names', async () => {
       const skills = ChatAIService.getAvailableSkillsSync();
+      await Promise.resolve();
       // The default skills include 'backend-engineer' which should become 'Backend Engineer'
       const backendSkill = skills.find((s) => s.id === 'backend-engineer');
       if (backendSkill) {

@@ -15,6 +15,8 @@ import type {
   McpOAuthTokenResponse,
   McpOAuthConnectionStatus,
   McpOAuthProviderConfig,
+  McpExtensionInfo,
+  McpExtensionPackageInfo,
 } from '../types/mcp';
 
 export type {
@@ -33,6 +35,8 @@ export type {
   McpOAuthTokenResponse,
   McpOAuthConnectionStatus,
   McpOAuthProviderConfig,
+  McpExtensionInfo,
+  McpExtensionPackageInfo,
 };
 
 const MCP_TIMEOUT_MS = 30000;
@@ -288,10 +292,7 @@ export async function mcpCheckServerHealth(serverName: string): Promise<McpServe
   }
 }
 
-export async function mcpGetServerLogs(
-  serverName: string,
-  lines?: number,
-): Promise<string[]> {
+export async function mcpGetServerLogs(serverName: string, lines?: number): Promise<string[]> {
   try {
     validateNonEmpty(serverName, 'server name');
     return await invokeWithTimeout<string[]>('mcp_get_server_logs', { serverName, lines });
@@ -578,9 +579,7 @@ export async function mcpOAuthSetCredentialsRaw(
   }
 }
 
-export async function mcpOAuthStartRaw(
-  provider: string,
-): Promise<McpOAuthStartResponse> {
+export async function mcpOAuthStartRaw(provider: string): Promise<McpOAuthStartResponse> {
   try {
     validateNonEmpty(provider, 'provider');
     const result = await invokeWithTimeout<{ auth_url: string; state: string }>(
@@ -657,10 +656,7 @@ export async function mcpServerStop(): Promise<void> {
   }
 }
 
-export async function mcpServerUpdateConfig(
-  port?: number,
-  enabledTools?: string[],
-): Promise<void> {
+export async function mcpServerUpdateConfig(port?: number, enabledTools?: string[]): Promise<void> {
   try {
     await invokeWithTimeout<void>('mcp_server_update_config', {
       port: port ?? null,
@@ -676,6 +672,125 @@ export async function mcpUpdateFilesystemDirectories(directories: string[]): Pro
     await invokeWithTimeout<void>('mcp_update_filesystem_directories', { directories });
   } catch (error) {
     throw new Error(`Failed to update MCP filesystem directories: ${error}`);
+  }
+}
+
+export async function mcpSetCredential(
+  serverName: string,
+  key: string,
+  value: string,
+): Promise<string> {
+  try {
+    validateNonEmpty(serverName, 'server name');
+    validateNonEmpty(key, 'credential key');
+    if (value === undefined || value === null) {
+      throw new Error('credential value cannot be null or undefined');
+    }
+    return await invokeWithTimeout<string>('mcp_set_credential', {
+      serverName,
+      key,
+      value,
+    });
+  } catch (error) {
+    throw new Error(`Failed to set credential for server '${serverName}': ${error}`);
+  }
+}
+
+export async function mcpDeleteCredential(serverName: string, key: string): Promise<string> {
+  try {
+    validateNonEmpty(serverName, 'server name');
+    validateNonEmpty(key, 'credential key');
+    return await invokeWithTimeout<string>('mcp_delete_credential', {
+      serverName,
+      key,
+    });
+  } catch (error) {
+    throw new Error(`Failed to delete credential for server '${serverName}': ${error}`);
+  }
+}
+
+export async function mcpServerStatus(): Promise<boolean> {
+  try {
+    return await invokeWithTimeout<boolean>('mcp_server_status');
+  } catch (error) {
+    throw new Error(`Failed to get MCP server status: ${error}`);
+  }
+}
+
+export async function mcpServerListTools(): Promise<{ tools: unknown[] }> {
+  try {
+    return await invokeWithTimeout<{ tools: unknown[] }>('mcp_server_list_tools');
+  } catch (error) {
+    throw new Error(`Failed to list MCP server tools: ${error}`);
+  }
+}
+
+// ============================================================================
+// MCP Extension Functions
+// ============================================================================
+
+export async function mcpExtensionList(): Promise<McpExtensionInfo[]> {
+  try {
+    return await invokeWithTimeout<McpExtensionInfo[]>('extension_list');
+  } catch (error) {
+    throw new Error(`Failed to list extensions: ${error}`);
+  }
+}
+
+export async function mcpExtensionGet(extensionId: string): Promise<McpExtensionInfo> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<McpExtensionInfo>('extension_get', { extensionId });
+  } catch (error) {
+    throw new Error(`Failed to get extension '${extensionId}': ${error}`);
+  }
+}
+
+export async function mcpExtensionInstall(filePath: string): Promise<McpExtensionInfo> {
+  try {
+    validateNonEmpty(filePath, 'file path');
+    return await invokeWithTimeout<McpExtensionInfo>(
+      'extension_install',
+      { filePath },
+      MCP_INIT_TIMEOUT_MS,
+    );
+  } catch (error) {
+    throw new Error(`Failed to install extension from '${filePath}': ${error}`);
+  }
+}
+
+export async function mcpExtensionUninstall(extensionId: string): Promise<string> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<string>('extension_uninstall', { extensionId });
+  } catch (error) {
+    throw new Error(`Failed to uninstall extension '${extensionId}': ${error}`);
+  }
+}
+
+export async function mcpExtensionEnable(extensionId: string): Promise<string> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<string>('extension_enable', { extensionId });
+  } catch (error) {
+    throw new Error(`Failed to enable extension '${extensionId}': ${error}`);
+  }
+}
+
+export async function mcpExtensionDisable(extensionId: string): Promise<string> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<string>('extension_disable', { extensionId });
+  } catch (error) {
+    throw new Error(`Failed to disable extension '${extensionId}': ${error}`);
+  }
+}
+
+export async function mcpExtensionSelectPackage(): Promise<string | null> {
+  try {
+    return await invokeWithTimeout<string | null>('extension_select_package');
+  } catch (error) {
+    throw new Error(`Failed to open extension file picker: ${error}`);
   }
 }
 
@@ -930,15 +1045,60 @@ export class McpClient {
     return mcpServerStop();
   }
 
-  static async updateRuntimeServerConfig(
-    port?: number,
-    enabledTools?: string[],
-  ): Promise<void> {
+  static async updateRuntimeServerConfig(port?: number, enabledTools?: string[]): Promise<void> {
     return mcpServerUpdateConfig(port, enabledTools);
   }
 
   static async updateFilesystemDirectories(directories: string[]): Promise<void> {
     return mcpUpdateFilesystemDirectories(directories);
+  }
+
+  static async setCredential(serverName: string, key: string, value: string): Promise<string> {
+    return mcpSetCredential(serverName, key, value);
+  }
+
+  static async deleteCredential(serverName: string, key: string): Promise<string> {
+    return mcpDeleteCredential(serverName, key);
+  }
+
+  static async getRuntimeServerStatus(): Promise<boolean> {
+    return mcpServerStatus();
+  }
+
+  static async listRuntimeServerTools(): Promise<{ tools: unknown[] }> {
+    return mcpServerListTools();
+  }
+
+  // ============================================================================
+  // Extension Methods
+  // ============================================================================
+
+  static async listExtensions(): Promise<McpExtensionInfo[]> {
+    return mcpExtensionList();
+  }
+
+  static async getExtension(extensionId: string): Promise<McpExtensionInfo> {
+    return mcpExtensionGet(extensionId);
+  }
+
+  static async installExtension(filePath: string): Promise<McpExtensionInfo> {
+    return mcpExtensionInstall(filePath);
+  }
+
+  static async uninstallExtension(extensionId: string): Promise<string> {
+    return mcpExtensionUninstall(extensionId);
+  }
+
+  static async enableExtension(extensionId: string): Promise<string> {
+    return mcpExtensionEnable(extensionId);
+  }
+
+  static async disableExtension(extensionId: string): Promise<string> {
+    return mcpExtensionDisable(extensionId);
+  }
+
+  static async selectExtensionPackage(): Promise<string | null> {
+    return mcpExtensionSelectPackage();
   }
 
   /**
