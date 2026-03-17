@@ -39,7 +39,6 @@ vi.mock('@/components/UnifiedAgenticChat/BudgetTrackerDisplay', () => ({
 }));
 
 // AgentModeSwitcher stub that captures mode changes
-const mockOnChange = vi.fn();
 vi.mock('../AgentModeSwitcher', () => ({
   AgentModeSwitcher: ({
     mode,

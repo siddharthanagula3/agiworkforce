@@ -43,7 +43,12 @@ class MockSpeechRecognition {
   triggerResult(transcript: string) {
     this.onresult?.({
       resultIndex: 0,
-      results: [Object.assign([{ transcript, confidence: 0.95 }], { isFinal: true })],
+      results: [
+        Object.assign([{ transcript, confidence: 0.95 }], { isFinal: true }),
+      ] as unknown as ArrayLike<{
+        isFinal: boolean;
+        0: { transcript: string; confidence: number };
+      }>,
     });
   }
 

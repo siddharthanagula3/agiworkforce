@@ -338,7 +338,6 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
-  const canSend = hasContent && !isLoading && !disabled;
 
   /**
    * Derive the 3-state mode for SendButton:
