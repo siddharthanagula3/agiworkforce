@@ -56,3 +56,36 @@ export * from './web-offline';
 
 // Web app custom hook types
 export * from './web-hooks';
+
+// Agent types (Agent, AgentConfig, AgentLifecycleStatus, ToolExecution, AgentApprovalRequest)
+export {
+  type AgentConfig,
+  type AgentLifecycleStatus,
+  type Agent,
+  type ToolExecution,
+  type AgentApprovalRequest,
+} from './agent';
+
+// Chat types (ChatMessage, Conversation, ChatAttachment)
+export * from './chat';
+
+// Pairing types (PairingToken, PairingStatus, DeviceInfo)
+export * from './pairing';
+
+// Model types (ModelConfig, ModelProvider, ModelPricing)
+export * from './model';
+
+// User types (User, ExtendedUserProfile, SubscriptionTier)
+export * from './user';
+
+// Scheduler types (ScheduledTask, ScheduleConfig, CronExpression)
+export * from './scheduler';
+
+// Memory types (Memory, MemoryCategory, ImportanceScore)
+export * from './memory';
+
+// Research types (ResearchQuery, ResearchReport, Citation)
+export * from './research';
+
+// Council types (CouncilQuery, CouncilResponse, ModelVote)
+export * from './council';
