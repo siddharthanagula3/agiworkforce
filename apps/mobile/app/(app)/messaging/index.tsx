@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import type GorhomBottomSheet from '@gorhom/bottom-sheet';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { Menu, MessageCircle } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { PlatformCard } from '@/components/messaging/PlatformCard';
 import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
@@ -12,7 +12,7 @@ import { useMessagingStore, type MessagingPlatform } from '@/stores/messagingSto
 import { colors } from '@/lib/theme';
 
 export default function MessagingScreen() {
-  const navigation = useNavigation();
+  const router = useRouter();
   const setupSheetRef = useRef<GorhomBottomSheet>(null);
 
   const {
@@ -66,15 +66,22 @@ export default function MessagingScreen() {
     [selectedPlatform, connectPlatform],
   );
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+  }, [router]);
+
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-3 h-12">
         <Pressable
-          onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-          className="p-2 -ml-2 rounded-lg active:bg-white/5"
+          onPress={handleBack}
+          className="p-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
-          <Menu size={22} color={colors.textSecondary} />
+          <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2 flex-1">
           Messaging Platforms

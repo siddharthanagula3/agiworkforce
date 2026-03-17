@@ -3,14 +3,20 @@ import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
-import { ArrowLeft, Bot } from 'lucide-react-native';
+import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/badge';
 import { AgentCard } from '@/components/agents/AgentCard';
+import { ConnectionStatusBar } from '@/components/shared/ConnectionStatus';
 import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { colors } from '@/lib/theme';
 
-export default function AgentsScreen() {
+/**
+ * Agents tab -- grid of active agents synced from desktop via WebRTC.
+ * Shows real-time status, progress, and pending approvals.
+ */
+export default function AgentsTabScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -19,6 +25,9 @@ export default function AgentsScreen() {
   const agents = useAgentStore((s) => s.agents);
   const selectAgent = useAgentStore((s) => s.selectAgent);
   const clearCompleted = useAgentStore((s) => s.clearCompleted);
+  const pendingApprovals = useAgentStore((s) =>
+    s.pendingApprovals.filter((r) => r.status === 'pending'),
+  );
 
   const activeCount = agents.filter((a) => a.status === 'running' || a.status === 'waiting').length;
 
@@ -37,54 +46,53 @@ export default function AgentsScreen() {
   const handleRefresh = useCallback(() => {
     if (connectionStatus !== 'connected') return;
     setRefreshing(true);
-    // Request the desktop to push a fresh agents snapshot
     sendControl('request_agents_refresh');
-    // Auto-clear the spinner after a short delay since the response
-    // arrives via the WebRTC data channel (no direct await)
     setTimeout(() => setRefreshing(false), 1500);
   }, [connectionStatus, sendControl]);
 
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
-  }, [router]);
-
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-3 h-12 gap-3">
-        <Pressable
-          onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
-
+      <View className="flex-row items-center px-4 h-12 gap-3">
         <View className="flex-row items-center gap-2 flex-1">
           <Text variant="subheading" className="text-white">
-            Active Agents
+            Agents
           </Text>
-          {agents.length > 0 ? (
-            <View
-              className="px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: `${colors.agentActive}25` }}
-            >
-              <Text className="text-[11px] font-semibold" style={{ color: colors.agentActive }}>
-                {activeCount > 0 ? activeCount : agents.length}
-              </Text>
-            </View>
-          ) : null}
+          {agents.length > 0 && (
+            <Badge
+              label={activeCount > 0 ? `${activeCount} active` : `${agents.length}`}
+              color={activeCount > 0 ? 'blue' : 'gray'}
+            />
+          )}
         </View>
 
-        {/* Clear completed button */}
-        {agents.some((a) => a.status === 'completed') ? (
+        {agents.some((a) => a.status === 'completed') && (
           <Pressable onPress={clearCompleted} className="px-3 py-1 rounded-lg active:bg-white/5">
             <Text className="text-[12px] text-white/40">Clear done</Text>
           </Pressable>
-        ) : null}
+        )}
       </View>
+
+      {/* Connection status */}
+      <View className="px-4 mb-2">
+        <ConnectionStatusBar />
+      </View>
+
+      {/* Pending approvals banner */}
+      {pendingApprovals.length > 0 && (
+        <Pressable
+          onPress={() => router.push('/(app)/agents' as Parameters<typeof router.push>[0])}
+          className="mx-4 mb-2 px-3 py-2 rounded-lg flex-row items-center gap-2"
+          style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+        >
+          <Badge label={`${pendingApprovals.length}`} color="red" />
+          <Text className="text-[12px] text-red-400 flex-1">
+            {pendingApprovals.length === 1
+              ? '1 action needs approval'
+              : `${pendingApprovals.length} actions need approval`}
+          </Text>
+        </Pressable>
+      )}
 
       {/* Agent grid or empty state */}
       {agents.length === 0 ? (
