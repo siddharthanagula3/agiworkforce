@@ -14,7 +14,7 @@
  * can be migrated by swapping import + component name.
  */
 
-import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '../../stores/chat-store';
 import { MessageBubble } from './MessageBubble';

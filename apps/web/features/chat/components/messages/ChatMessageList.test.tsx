@@ -9,7 +9,7 @@
  * - Typing indicator visibility
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ChatMessageList, groupMessages } from './ChatMessageList';
 import type { ChatMessage } from '../../stores/chat-store';
@@ -102,9 +102,9 @@ describe('groupMessages()', () => {
     const msgs = [makeMessage({ id: '1', role: 'user', content: 'hi' })];
     const groups = groupMessages(msgs);
     expect(groups).toHaveLength(1);
-    expect(groups[0].role).toBe('user');
-    expect(groups[0].messages).toHaveLength(1);
-    expect(groups[0].firstId).toBe('1');
+    expect(groups[0]!.role).toBe('user');
+    expect(groups[0]!.messages).toHaveLength(1);
+    expect(groups[0]!.firstId).toBe('1');
   });
 
   it('groups consecutive messages from the same role', () => {
@@ -115,10 +115,10 @@ describe('groupMessages()', () => {
     ];
     const groups = groupMessages(msgs);
     expect(groups).toHaveLength(2);
-    expect(groups[0].role).toBe('user');
-    expect(groups[0].messages).toHaveLength(2);
-    expect(groups[1].role).toBe('assistant');
-    expect(groups[1].messages).toHaveLength(1);
+    expect(groups[0]!.role).toBe('user');
+    expect(groups[0]!.messages).toHaveLength(2);
+    expect(groups[1]!.role).toBe('assistant');
+    expect(groups[1]!.messages).toHaveLength(1);
   });
 
   it('creates a new group when role alternates', () => {
@@ -141,7 +141,7 @@ describe('groupMessages()', () => {
     ];
     const groups = groupMessages(msgs);
     expect(groups).toHaveLength(1);
-    expect(groups[0].messages).toHaveLength(3);
+    expect(groups[0]!.messages).toHaveLength(3);
   });
 
   it('preserves firstId as the id of the first message in each group', () => {
@@ -150,7 +150,7 @@ describe('groupMessages()', () => {
       makeMessage({ id: 'second', role: 'user', content: 'b' }),
     ];
     const groups = groupMessages(msgs);
-    expect(groups[0].firstId).toBe('first');
+    expect(groups[0]!.firstId).toBe('first');
   });
 });
 
