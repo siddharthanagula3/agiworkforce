@@ -215,10 +215,13 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 // ---------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
-  // Resolve existing session from localStorage
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) {
-      useBillingStore.setState({ user: session.user });
+  // Resolve existing session by verifying with the server.
+  // getUser() forces a server-side JWT re-verification, unlike getSession()
+  // which only reads the cookie without validating the token. This prevents
+  // session fixation attacks where a tampered cookie passes client-side checks.
+  supabase.auth.getUser().then(({ data: { user: existingUser } }) => {
+    if (existingUser) {
+      useBillingStore.setState({ user: existingUser });
       useBillingStore.getState().refreshUser();
     } else {
       useBillingStore.setState({ isLoading: false, initialized: true });
