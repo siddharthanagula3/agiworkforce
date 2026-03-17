@@ -128,7 +128,9 @@ class AuthService {
         // Return enhanced error with lockout info
         return {
           user: null,
-          error: failedResult.isLocked ? failedResult.message : 'Invalid email or password',
+          error: failedResult.isLocked
+            ? failedResult.message
+            : error.message || 'Invalid email or password',
           attemptsRemaining: failedResult.attemptsRemaining,
           lockout: failedResult.isLocked
             ? {

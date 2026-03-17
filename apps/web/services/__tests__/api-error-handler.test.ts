@@ -122,18 +122,26 @@ describe('ApiErrorHandler', () => {
   describe('fetchWithTimeout', () => {
     it('should throw timeout error when request exceeds timeout', async () => {
       const mockFetch: typeof fetch = vi.fn(
-        () =>
-          new Promise<Response>(() => {
-            // Never resolves
+        (_url: RequestInfo | URL, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const signal = options?.signal;
+            if (signal) {
+              signal.addEventListener(
+                'abort',
+                () => {
+                  reject(new DOMException('The operation was aborted.', 'AbortError'));
+                },
+                { once: true },
+              );
+            }
           }),
       ) as typeof fetch;
 
       global.fetch = mockFetch;
 
-      const promise = ApiErrorHandler.fetchWithTimeout('http://example.com', { timeout: 10 });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      await expect(promise).rejects.toThrow();
+      await expect(
+        ApiErrorHandler.fetchWithTimeout('http://example.com', { timeout: 10 }),
+      ).rejects.toThrow();
     });
   });
 
