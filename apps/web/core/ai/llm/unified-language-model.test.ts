@@ -154,7 +154,7 @@ describe('UnifiedLLMService', () => {
 
     // Restore default mock implementations after clearAllMocks
     vi.mocked(canUserMakeRequest).mockResolvedValue({ allowed: true });
-    vi.mocked(deductTokens).mockResolvedValue({ success: true });
+    vi.mocked(deductTokens).mockResolvedValue({ success: true, newBalance: 1000 });
     vi.mocked(checkUserInput).mockReturnValue({ allowed: true, riskLevel: 'none' });
     vi.mocked(checkApiAbuse).mockResolvedValue({ allowed: true });
     vi.mocked(isFeatureEnabled).mockReturnValue(false);
