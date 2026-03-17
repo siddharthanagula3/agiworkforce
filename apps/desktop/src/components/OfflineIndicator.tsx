@@ -8,13 +8,12 @@
  * Ported from apps/web/components/OfflineIndicator.tsx for desktop integration.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader, Wifi, WifiOff } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getSyncState,
   subscribeSyncState,
-  getStatusMessage,
-  getStatusSeverity,
   isOnline,
   retrySync,
   SyncState,
@@ -64,12 +63,48 @@ export function OfflineIndicator({
     setIsVisible(shouldShow);
   }, [state, alwaysShow]);
 
+  const handleRetry = useCallback(async () => {
+    try {
+      await retrySync();
+    } catch {
+      toast.error('Failed to retry sync. Please try again.');
+    }
+  }, []);
+
   if (!state || !isVisible) {
     return null;
   }
 
-  const severity = getStatusSeverity();
-  const message = getStatusMessage();
+  // Derive severity and message from local state to avoid mismatch with global state
+  const severity = ((): 'success' | 'warning' | 'error' | 'info' => {
+    switch (state.state) {
+      case SyncState.ONLINE:
+        return state.queuedCount > 0 ? 'info' : 'success';
+      case SyncState.OFFLINE:
+        return state.queuedCount > 0 ? 'warning' : 'info';
+      case SyncState.SYNCING:
+        return 'info';
+      case SyncState.ERROR:
+        return 'error';
+      default:
+        return 'info';
+    }
+  })();
+
+  const message = ((): string => {
+    switch (state.state) {
+      case SyncState.ONLINE:
+        return state.queuedCount > 0 ? `${state.queuedCount} item(s) synced` : 'Online';
+      case SyncState.OFFLINE:
+        return state.queuedCount > 0 ? `Offline - ${state.queuedCount} pending` : 'Offline';
+      case SyncState.SYNCING:
+        return 'Syncing...';
+      case SyncState.ERROR:
+        return 'Sync failed - will retry';
+      default:
+        return 'Unknown';
+    }
+  })();
 
   const bgColor = {
     success: 'bg-green-50 dark:bg-green-950',
@@ -150,7 +185,7 @@ export function OfflineIndicator({
           {state.state === SyncState.ERROR && (
             <button
               type="button"
-              onClick={() => void retrySync()}
+              onClick={() => void handleRetry()}
               className={`
                 px-3 py-1 rounded text-sm font-medium
                 bg-red-200 hover:bg-red-300 dark:bg-red-800 dark:hover:bg-red-700
@@ -164,7 +199,7 @@ export function OfflineIndicator({
           )}
 
           {state.queuedCount > 0 && state.state !== SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded text-xs font-medium bg-opacity-50">
+            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 bg-opacity-50">
               {state.queuedCount} pending
             </span>
           )}

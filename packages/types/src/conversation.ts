@@ -231,8 +231,9 @@ export interface FileAttachmentBase {
  *
  * ```typescript
  * // Desktop (apps/desktop/src/types/chat.ts)
- * interface Conversation extends ConversationBase {
- *   id: number;  // SQLite autoincrement — widened from ConversationId
+ * // Uses Omit to replace the branded ConversationId with SQLite number id
+ * interface Conversation extends Omit<ConversationBase, 'id'> {
+ *   id: number;  // SQLite autoincrement
  *   custom_instructions?: string;
  * }
  *

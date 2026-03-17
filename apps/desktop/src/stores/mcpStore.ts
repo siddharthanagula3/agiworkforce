@@ -399,6 +399,14 @@ export const useMcpStore = create<McpState>()(
       },
 
       setCredential: async (serverName: string, key: string, value: string) => {
+        if (!serverName.trim() || !key.trim()) {
+          set(
+            { error: 'Server name and key are required', isLoading: false },
+            undefined,
+            'mcp/setCredential/validationError',
+          );
+          return;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcp/setCredential/start');
         try {
           await McpClient.setCredential(serverName, key, value);
@@ -416,6 +424,14 @@ export const useMcpStore = create<McpState>()(
       },
 
       deleteCredential: async (serverName: string, key: string) => {
+        if (!serverName.trim() || !key.trim()) {
+          set(
+            { error: 'Server name and key are required', isLoading: false },
+            undefined,
+            'mcp/deleteCredential/validationError',
+          );
+          return;
+        }
         set({ isLoading: true, error: null }, undefined, 'mcp/deleteCredential/start');
         try {
           await McpClient.deleteCredential(serverName, key);

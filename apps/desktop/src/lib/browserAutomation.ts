@@ -137,6 +137,20 @@ export class BrowserAutomation {
   // ---------------------------------------------------------------------------
 
   static async navigate(tabId: string | undefined, url: string): Promise<void> {
+    if (!url || !url.trim()) {
+      throw new Error('URL cannot be empty');
+    }
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error(`Only HTTP(S) URLs are allowed, got: ${parsed.protocol}`);
+      }
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(`Invalid URL: ${url}`);
+      }
+      throw error;
+    }
     return invoke('browser_navigate', { tabId, url });
   }
 
@@ -280,10 +294,16 @@ export class BrowserAutomation {
   // ---------------------------------------------------------------------------
 
   static async evaluate(tabId: string | undefined, script: string): Promise<unknown> {
+    if (!script || !script.trim()) {
+      throw new Error('Script cannot be empty');
+    }
     return invoke('browser_evaluate', { tabId, script });
   }
 
   static async executeAsyncJs(tabId: string | undefined, script: string): Promise<unknown> {
+    if (!script || !script.trim()) {
+      throw new Error('Script cannot be empty');
+    }
     return invoke('browser_execute_async_js', { tabId, script });
   }
 
@@ -316,6 +336,12 @@ export class BrowserAutomation {
     selector: string,
     filePath: string,
   ): Promise<void> {
+    if (!filePath || !filePath.trim()) {
+      throw new Error('File path cannot be empty');
+    }
+    if (filePath.includes('..')) {
+      throw new Error('File path must not contain path traversal sequences');
+    }
     return invoke('browser_upload_file', { tabId, selector, paths: [filePath] });
   }
 
@@ -376,6 +402,12 @@ export class BrowserAutomation {
     functionName: string,
     args: unknown[] = [],
   ): Promise<unknown> {
+    if (!functionName || !functionName.trim()) {
+      throw new Error('Function name cannot be empty');
+    }
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$.*]*$/.test(functionName)) {
+      throw new Error(`Invalid function name format: ${functionName}`);
+    }
     return invoke('browser_call_function', { tabId, functionName, args });
   }
 
