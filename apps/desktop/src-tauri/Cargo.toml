@@ -122,7 +122,7 @@ ed25519-dalek = { version = "2.1", features = ["pkcs8", "rand_core"] } # For upd
 
 
 image = { version = "0.25", features = ["png", "jpeg", "webp"] }
-imageproc = "0.26"
+imageproc = "0.26.1"
 
 
 tracing = "0.1"
