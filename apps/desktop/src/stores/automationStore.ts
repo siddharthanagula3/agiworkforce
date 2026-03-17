@@ -122,6 +122,32 @@ interface AutomationState {
   handleShortcutAction: (action: string) => void;
   handleShortcutRegistered: (shortcut: Shortcut) => void;
   handleShortcutUnregistered: (shortcutId: string) => void;
+
+  // Clipboard operations (wired to automation.rs)
+  clipboardGet: () => Promise<string | null>;
+  clipboardSet: (text: string) => Promise<boolean>;
+
+  // Drag and drop (wired to automation.rs)
+  dragDrop: (
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    durationMs?: number,
+  ) => Promise<boolean>;
+
+  // Enhanced automation (wired to automation_enhanced.rs)
+  generateCode: (
+    recordingId: string,
+    language: string,
+    framework: string,
+  ) => Promise<string | null>;
+  generateSelector: (
+    elementId: string,
+  ) => Promise<Array<{ selector: string; type: string }> | null>;
+  getElementTree: (canvasId: string, depth?: number) => Promise<unknown[] | null>;
+  findElementBySelector: (selectorType: string, selectorValue: string) => Promise<string | null>;
+  inspectElementById: (elementId: string) => Promise<DetailedElementInfo | null>;
 }
 
 export const useAutomationStore = create<AutomationState>()(
@@ -657,6 +683,123 @@ export const useAutomationStore = create<AutomationState>()(
             undefined,
             'automation/handleShortcutUnregistered',
           );
+        },
+
+        // ====================================================================
+        // Clipboard operations
+        // ====================================================================
+
+        clipboardGet: async () => {
+          try {
+            return await invoke<string>('automation_clipboard_get');
+          } catch (error) {
+            console.error('Failed to get clipboard:', error);
+            set({ error: String(error) }, undefined, 'automation/clipboardGet/error');
+            return null;
+          }
+        },
+
+        clipboardSet: async (text) => {
+          try {
+            await invoke('automation_clipboard_set', { text });
+            return true;
+          } catch (error) {
+            console.error('Failed to set clipboard:', error);
+            set({ error: String(error) }, undefined, 'automation/clipboardSet/error');
+            return false;
+          }
+        },
+
+        // ====================================================================
+        // Drag and drop
+        // ====================================================================
+
+        dragDrop: async (fromX, fromY, toX, toY, durationMs = 500) => {
+          set({ runningAction: true, error: null }, undefined, 'automation/dragDrop/start');
+          try {
+            await invoke('automation_drag_drop', {
+              request: { fromX, fromY, toX, toY, durationMs },
+            });
+            set({ runningAction: false }, undefined, 'automation/dragDrop/success');
+            return true;
+          } catch (error) {
+            console.error('Automation drag-drop failed:', error);
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/dragDrop/error',
+            );
+            return false;
+          }
+        },
+
+        // ====================================================================
+        // Enhanced automation commands
+        // ====================================================================
+
+        generateCode: async (recordingId, language, framework) => {
+          try {
+            return await invoke<string>('automation_generate_code', {
+              recordingId,
+              language,
+              framework,
+            });
+          } catch (error) {
+            console.error('Failed to generate code from recording:', error);
+            set({ error: String(error) }, undefined, 'automation/generateCode/error');
+            return null;
+          }
+        },
+
+        generateSelector: async (elementId) => {
+          try {
+            return await invoke<Array<{ selector: string; type: string }>>(
+              'automation_generate_selector',
+              { elementId },
+            );
+          } catch (error) {
+            console.error('Failed to generate selector:', error);
+            set({ error: String(error) }, undefined, 'automation/generateSelector/error');
+            return null;
+          }
+        },
+
+        getElementTree: async (canvasId, depth) => {
+          try {
+            return await invoke<unknown[]>('automation_get_element_tree', {
+              canvasId,
+              depth,
+            });
+          } catch (error) {
+            console.error('Failed to get element tree:', error);
+            set({ error: String(error) }, undefined, 'automation/getElementTree/error');
+            return null;
+          }
+        },
+
+        findElementBySelector: async (selectorType, selectorValue) => {
+          try {
+            return await invoke<string | null>('automation_find_element_by_selector', {
+              selectorType,
+              selectorValue,
+            });
+          } catch (error) {
+            console.error('Failed to find element by selector:', error);
+            set({ error: String(error) }, undefined, 'automation/findElementBySelector/error');
+            return null;
+          }
+        },
+
+        inspectElementById: async (elementId) => {
+          try {
+            return await invoke<DetailedElementInfo>('automation_inspect_element_by_id', {
+              elementId,
+            });
+          } catch (error) {
+            console.error('Failed to inspect element by ID:', error);
+            set({ error: String(error) }, undefined, 'automation/inspectElementById/error');
+            return null;
+          }
         },
       })),
     ),

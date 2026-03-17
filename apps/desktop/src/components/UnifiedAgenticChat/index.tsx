@@ -54,6 +54,7 @@ import {
   buildProjectSlashCommandInstructions,
   validateSlashCommandArgs,
 } from '../../lib/chatToolUtils';
+import { getSkillById } from '../../lib/skillLoader';
 import { CanvasWorkspace } from '../Canvas';
 import { InteractiveHelp } from '../Help/InteractiveHelp';
 import { ChatErrorBoundary } from '../ErrorBoundary';
@@ -97,6 +98,27 @@ import {
   executeSettingsCommand,
   executeCompactCommand,
 } from '../../handlers/slashCommandHandlers';
+
+/**
+ * Extracts skill IDs from @mentions in message content.
+ * Matches patterns like "@backend-engineer", "@3d-artist", etc.
+ * Filters out common false positives (e.g. email-like patterns).
+ */
+function extractSkillMentions(content: string): string[] {
+  const mentionPattern = /@([\w][\w-]*)/g;
+  const matches: string[] = [];
+  let match;
+  while ((match = mentionPattern.exec(content)) !== null) {
+    const id = match[1] ?? '';
+    if (!id) continue;
+    // Skip common non-skill patterns (file: prefix handled separately)
+    if (id.startsWith('file') || id.startsWith('http') || id.startsWith('www')) {
+      continue;
+    }
+    matches.push(id);
+  }
+  return matches;
+}
 
 /**
  * Status bar shown above the chat input when the agentic loop is running.
@@ -901,6 +923,26 @@ export const UnifiedAgenticChat: React.FC<{
             : customSlashInstructions;
         }
 
+        // Extract @skill-id mentions from the message and inject their systemPrompts.
+        // This ensures the LLM receives the full skill prompt when a user @-mentions a skill.
+        const mentionedSkillIds = extractSkillMentions(content);
+        if (mentionedSkillIds.length > 0) {
+          const skillBlocks = mentionedSkillIds
+            .map((skillId) => {
+              const skill = getSkillById(skillId);
+              if (!skill) return null;
+              return `## Activated Skill: ${skill.name}\n\n${skill.systemPrompt}`;
+            })
+            .filter(Boolean)
+            .join('\n\n---\n\n');
+
+          if (skillBlocks) {
+            mergedCustomInstructions = mergedCustomInstructions
+              ? `${skillBlocks}\n\n${mergedCustomInstructions}`
+              : skillBlocks;
+          }
+        }
+
         // Check if always use agent mode is enabled in settings
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
@@ -1247,7 +1289,8 @@ export const UnifiedAgenticChat: React.FC<{
                   <div className="flex-1 flex items-center justify-center p-8">
                     <div className="text-center">
                       <p className="text-zinc-400 mb-4">Failed to load chat messages</p>
-                      <button type="button"
+                      <button
+                        type="button"
                         onClick={() => window.location.reload()}
                         className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600"
                       >

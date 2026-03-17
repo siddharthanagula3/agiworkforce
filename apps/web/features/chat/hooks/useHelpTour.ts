@@ -162,7 +162,7 @@ export function useHelpTour(): HelpTourState {
   }, [getTotalSteps]);
 
   const previousStep = useCallback(() => {
-    setCurrentStep((prev) => (prev > 0 ? prev - 1 : prev));
+    setCurrentStep((prev) => prev - 1);
   }, []);
 
   const markTourComplete = useCallback((tourId: string) => {
