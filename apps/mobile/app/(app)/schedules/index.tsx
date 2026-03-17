@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable, FlatList, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Menu, Plus, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Plus, Calendar } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +14,6 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 
 export default function SchedulesScreen() {
-  const navigation = useNavigation();
   const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -44,6 +42,11 @@ export default function SchedulesScreen() {
     }
     router.push('/(app)/schedules/create');
   }, [hapticsEnabled, router]);
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+  }, [router]);
 
   const handlePress = useCallback(
     (id: string) => {
@@ -82,10 +85,7 @@ export default function SchedulesScreen() {
   if (loading && schedules.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-surface-base">
-        <Header
-          onMenuPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-          onCreatePress={handleCreate}
-        />
+        <Header onBackPress={handleBack} onCreatePress={handleCreate} />
         <View className="px-4 gap-3 mt-2">
           {[0, 1, 2].map((i) => (
             <View
@@ -110,10 +110,7 @@ export default function SchedulesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
-      <Header
-        onMenuPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-        onCreatePress={handleCreate}
-      />
+      <Header onBackPress={handleBack} onCreatePress={handleCreate} />
 
       {/* Error banner */}
       {error && (
@@ -173,16 +170,21 @@ export default function SchedulesScreen() {
 // ---------------------------------------------------------------------------
 
 function Header({
-  onMenuPress,
+  onBackPress,
   onCreatePress,
 }: {
-  onMenuPress: () => void;
+  onBackPress: () => void;
   onCreatePress: () => void;
 }) {
   return (
-    <View className="flex-row items-center px-4 h-12">
-      <Pressable onPress={onMenuPress} className="p-2 -ml-2 rounded-lg active:bg-white/5">
-        <Menu size={22} color={colors.textSecondary} />
+    <View className="flex-row items-center px-3 h-12">
+      <Pressable
+        onPress={onBackPress}
+        className="p-2 rounded-lg active:bg-white/5"
+        accessibilityLabel="Go back"
+        accessibilityRole="button"
+      >
+        <ArrowLeft size={20} color={colors.textSecondary} />
       </Pressable>
       <Text variant="subheading" className="ml-2 flex-1">
         Schedules
