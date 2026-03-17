@@ -850,7 +850,8 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gpt-4.1-vision".to_string(),
+            // Use gpt-4o which routes to Chat Completions API (not Responses API)
+            model: "gpt-4o".to_string(),
             temperature: None,
             max_tokens: Some(100),
             stream: false,
@@ -879,7 +880,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-4.1-vision");
+        assert_eq!(adapted["model"], "gpt-4o");
 
         // Verify the message structure includes both text and image
         let messages = adapted["messages"].as_array().unwrap();
