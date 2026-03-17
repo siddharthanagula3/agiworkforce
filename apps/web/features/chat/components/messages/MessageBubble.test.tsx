@@ -24,17 +24,17 @@ function makeMessage(overrides: Partial<Parameters<typeof MessageBubble>[0]['mes
 describe('MessageBubble', () => {
   describe('animation variants exports', () => {
     it('exports messageListVariants with staggerChildren', () => {
-      expect(messageListVariants.hidden).toBeDefined();
-      expect(messageListVariants.visible).toBeDefined();
+      expect(messageListVariants['hidden']).toBeDefined();
+      expect(messageListVariants['visible']).toBeDefined();
       // Stagger is nested inside transition
-      const visible = messageListVariants.visible as Record<string, unknown>;
+      const visible = messageListVariants['visible'] as Record<string, unknown>;
       const transition = visible['transition'] as Record<string, unknown>;
       expect(transition?.['staggerChildren']).toBeGreaterThan(0);
     });
 
     it('exports messageBubbleVariants with opacity and y transitions', () => {
-      const hidden = messageBubbleVariants.hidden as Record<string, unknown>;
-      const visible = messageBubbleVariants.visible as Record<string, unknown>;
+      const hidden = messageBubbleVariants['hidden'] as Record<string, unknown>;
+      const visible = messageBubbleVariants['visible'] as Record<string, unknown>;
       expect(hidden['opacity']).toBe(0);
       expect(hidden['y']).toBeGreaterThan(0);
       expect(visible['opacity']).toBe(1);
@@ -367,7 +367,7 @@ describe('MessageBubble', () => {
   describe('no Tauri dependencies', () => {
     it('renders without window.__TAURI__ being defined', () => {
       // Ensure Tauri global is not set (web environment)
-      expect((window as unknown as Record<string, unknown>).__TAURI__).toBeUndefined();
+      expect((window as unknown as Record<string, unknown>)['__TAURI__']).toBeUndefined();
 
       // Component should render successfully without Tauri
       expect(() => {
@@ -391,7 +391,7 @@ describe('MessageBubble', () => {
       });
 
       // Verify no Tauri invoke was used (window.__TAURI__ is not defined)
-      expect((window as unknown as Record<string, unknown>).__TAURI__).toBeUndefined();
+      expect((window as unknown as Record<string, unknown>)['__TAURI__']).toBeUndefined();
     });
   });
 });

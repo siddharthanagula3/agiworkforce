@@ -17,9 +17,9 @@ import * as path from 'path';
  */
 function hslToHex(hslString: string): string {
   const parts = hslString.trim().split(/\s+/);
-  const h = parseFloat(parts[0]);
-  const s = parseFloat(parts[1]) / 100;
-  const l = parseFloat(parts[2]) / 100;
+  const h = parseFloat(parts[0]!);
+  const s = parseFloat(parts[1]!) / 100;
+  const l = parseFloat(parts[2]!) / 100;
 
   const k = (n: number) => (n + h / 30) % 12;
   const a = s * Math.min(l, 1 - l);
@@ -38,15 +38,15 @@ function hslToHex(hslString: string): string {
  */
 function parseDarkModeVar(cssContent: string, varName: string): string | null {
   // Find .dark { ... } block
-  const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+  const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
   if (!darkBlockMatch) return null;
 
-  const darkBlock = darkBlockMatch[1];
+  const darkBlock = darkBlockMatch[1]!;
   const varPattern = new RegExp(`${varName}\\s*:\\s*([^;]+);`);
   const match = darkBlock.match(varPattern);
   if (!match) return null;
 
-  return match[1].trim();
+  return match[1]!.trim();
 }
 
 const cssPath = path.resolve(__dirname, '../globals.css');
@@ -65,7 +65,7 @@ describe('Dark mode color tokens', () => {
       const value = parseDarkModeVar(cssContent, '--background');
       expect(value).not.toBeNull();
 
-      const hex = hslToHex(value!);
+      const hex = hslToHex(value as string);
       // #0f0f13 is the exact target; #101014 is the nearest rounded value
       // Both are visually identical (1-digit difference in each channel)
       expect(['#0f0f13', '#101014']).toContain(hex);
@@ -77,14 +77,14 @@ describe('Dark mode color tokens', () => {
       const value = parseDarkModeVar(cssContent, '--sidebar-background');
       expect(value).not.toBeNull();
 
-      const hex = hslToHex(value!);
+      const hex = hslToHex(value as string);
       expect(hex).toBe('#0b0c14');
     });
   });
 
   describe('Chat surface tokens', () => {
     it('--chat-bg is set to #0f0f13 in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
@@ -92,7 +92,7 @@ describe('Dark mode color tokens', () => {
     });
 
     it('--chat-sidebar-bg is set to #0b0c14 in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
@@ -100,7 +100,7 @@ describe('Dark mode color tokens', () => {
     });
 
     it('--chat-border-subtle defines a subtle border color', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
@@ -109,7 +109,7 @@ describe('Dark mode color tokens', () => {
     });
 
     it('--chat-text-primary defines a readable text color in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
@@ -134,7 +134,7 @@ describe('Dark mode color tokens', () => {
         '--ring',
       ];
 
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       for (const varName of required) {

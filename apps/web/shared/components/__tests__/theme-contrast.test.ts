@@ -36,7 +36,7 @@ function toLinear(c: number): number {
 }
 
 function relativeLuminance(hex: string): number {
-  const [r, g, b] = hexToSRGB(hex).map(toLinear);
+  const [r = 0, g = 0, b = 0] = hexToSRGB(hex).map(toLinear);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 

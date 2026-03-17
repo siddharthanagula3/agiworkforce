@@ -197,13 +197,13 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
       // Cmd+B: toggle sidebar
       if (isMeta && !e.shiftKey && e.key === 'b') {
         e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
+        setSidebarCollapsed(!sidebarCollapsed);
       }
 
       // Cmd+Shift+S: toggle sidebar (alternate)
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
+        setSidebarCollapsed(!sidebarCollapsed);
       }
 
       // Cmd+Shift+O: new conversation (alternate)

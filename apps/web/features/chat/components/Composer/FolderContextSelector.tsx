@@ -11,7 +11,7 @@
  * - Gracefully hides if user is not authenticated or has no folders
  */
 
-import React, { useEffect, useState, useCallback, memo } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { Folder, FolderOpen, ChevronDown } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { cn } from '@shared/lib/utils';
