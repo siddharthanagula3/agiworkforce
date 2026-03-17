@@ -122,19 +122,11 @@ impl VisionAutomation {
 
     /// Search the primary screen for `query` text using OCR.
     ///
-    /// Returns a list of `(x, y, matched_text)` tuples.  Because the current
-    /// Tesseract backend does not provide per-word bounding boxes, the returned
-    /// coordinates are the *center of the captured screen* -- this is the best
-    /// approximation available until a bbox-capable OCR backend is integrated.
-    ///
-    /// # Screen dimension detection
-    ///
-    /// The screen is captured exactly **once** and reused for both dimension
-    /// detection and the OCR pass to avoid redundant screen captures.  The
-    /// center coordinates are derived from the actual captured pixel buffer
-    /// dimensions, which correctly handles Retina/HiDPI screens where the
-    /// pixel buffer may be 2x the logical resolution (e.g. 3840x2160 on a
-    /// 1920x1080 logical display).
+    /// Returns a list of `(x, y, matched_text)` tuples where `(x, y)` is the
+    /// center of the bounding box for the matched word(s).  When word-level
+    /// bounding boxes are available from Tesseract TSV output, the coordinates
+    /// point to the actual text location on screen.  If TSV extraction fails
+    /// (graceful degradation), falls back to the center of the captured screen.
     ///
     /// # Guards
     ///
@@ -146,9 +138,7 @@ impl VisionAutomation {
         #[cfg(feature = "ocr")]
         {
             // Capture the screen exactly once -- reuse the same image for both
-            // dimension detection and saving to disk for the OCR engine.  This
-            // eliminates the previous bug where two separate captures could
-            // return different screen contents or dimensions.
+            // dimension detection and saving to disk for the OCR engine.
             let captured = match capture_primary_screen() {
                 Ok(img) => img,
                 Err(e) => {
@@ -170,12 +160,7 @@ impl VisionAutomation {
                 return Ok(Vec::new());
             }
 
-            // Derive center coordinates from the actual captured image dimensions.
-            let center_x = (img_width / 2) as i32;
-            let center_y = (img_height / 2) as i32;
-
-            // Save the already-captured image to disk for the OCR engine, avoiding
-            // a second call to capture_primary_screen().
+            // Save the already-captured image to disk for the OCR engine.
             let filename =
                 format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
             let screenshot_path = self.screenshot_dir.join(&filename);
@@ -207,17 +192,72 @@ impl VisionAutomation {
             }
 
             let mut matches = Vec::new();
-            if fuzzy {
-                if ocr_result
-                    .text
-                    .to_lowercase()
-                    .contains(&query.to_lowercase())
-                {
+            let query_lower = query.to_lowercase();
+
+            // First, try word-level matching using bounding boxes from TSV data.
+            // This provides accurate click coordinates for each matched word.
+            if !ocr_result.words.is_empty() {
+                let words = &ocr_result.words;
+                for i in 0..words.len() {
+                    // Try matching starting from word[i] with increasing spans
+                    let mut combined_text = String::new();
+                    let mut min_x = words[i].x;
+                    let mut min_y = words[i].y;
+                    let mut max_x = words[i].x + words[i].width as i32;
+                    let mut max_y = words[i].y + words[i].height as i32;
+
+                    for j in i..words.len() {
+                        if !combined_text.is_empty() {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(&words[j].text);
+
+                        // Expand bounding box to cover all words in the span
+                        min_x = min_x.min(words[j].x);
+                        min_y = min_y.min(words[j].y);
+                        max_x = max_x.max(words[j].x + words[j].width as i32);
+                        max_y = max_y.max(words[j].y + words[j].height as i32);
+
+                        let matched = if fuzzy {
+                            combined_text.to_lowercase().contains(&query_lower)
+                        } else {
+                            combined_text.contains(query)
+                        };
+
+                        if matched {
+                            // Return center of the combined bounding box
+                            let center_x = (min_x + max_x) / 2;
+                            let center_y = (min_y + max_y) / 2;
+                            matches.push((center_x, center_y, combined_text.clone()));
+                            break; // Found match starting at word[i], move to next
+                        }
+
+                        // If combined text is much longer than query, stop extending
+                        if combined_text.len() > query.len() + 50 {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Fallback: if no word-level matches found but full text contains
+            // the query, return screen center as best approximation.
+            if matches.is_empty() {
+                let center_x = (img_width / 2) as i32;
+                let center_y = (img_height / 2) as i32;
+                let full_text_matched = if fuzzy {
+                    ocr_result.text.to_lowercase().contains(&query_lower)
+                } else {
+                    ocr_result.text.contains(query)
+                };
+                if full_text_matched {
+                    tracing::debug!(
+                        "find_text: word-level bbox unavailable, falling back to screen center"
+                    );
                     matches.push((center_x, center_y, ocr_result.text.clone()));
                 }
-            } else if ocr_result.text.contains(query) {
-                matches.push((center_x, center_y, ocr_result.text.clone()));
             }
+
             Ok(matches)
         }
 

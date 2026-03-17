@@ -645,6 +645,30 @@ impl AutonomousAgent {
         task.status = TaskStatus::Executing;
         tracing::info!("[Agent] Executing task {}: {}", task_id, task.description);
 
+        // Pre-validate vision capabilities for all steps before execution begins.
+        // This catches OCR-dependent steps early (at task start) instead of
+        // discovering the capability gap mid-execution after wasting LLM calls.
+        for (idx, step) in task.steps.iter().enumerate() {
+            if let Err(e) = super::vision::VisionAutomation::check_vision_capability(&step.action) {
+                tracing::warn!(
+                    "[Agent] Task {} step {} requires unavailable vision capability: {}",
+                    task_id,
+                    idx,
+                    e
+                );
+                task.status = TaskStatus::Failed(format!(
+                    "Step {} ({}) requires unavailable vision capability: {}",
+                    idx, step.description, e
+                ));
+                // Update the task in the queue with the failure status.
+                let mut queue = self.task_queue.lock();
+                if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
+                    *t = task;
+                }
+                return Err(e);
+            }
+        }
+
         // P1: Capture cost before this task starts for per-task cost cap enforcement
         let cost_before_task = self.router.read().await.get_cumulative_cost();
 
