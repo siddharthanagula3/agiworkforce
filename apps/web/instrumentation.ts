@@ -10,25 +10,25 @@
 export async function register() {
   // Only run on server-side (Node.js runtime)
   if (process.env['NEXT_RUNTIME'] === 'nodejs') {
-    // Import validation module (dynamic import to avoid bundling in edge runtime)
-    const { validateEnvironmentOrThrow } = await import('./lib/validate-env');
-
     try {
-      // Run comprehensive environment validation
-      validateEnvironmentOrThrow();
+      // Import validation module (dynamic import to avoid bundling in edge runtime)
+      const { validateEnvironment, logValidationResults } = await import('./lib/validate-env');
+      const result = validateEnvironment();
+      logValidationResults(result);
 
-      console.log('✅ Server initialization complete - environment validated');
-    } catch (error) {
-      console.error('❌ Server initialization failed - environment validation error');
-      console.error(error);
-
-      // In production, fail fast to prevent deployment with invalid config
-      if (process.env.NODE_ENV === 'production') {
-        throw error;
+      if (result.valid) {
+        console.log('✅ Server initialization complete - environment validated');
+      } else {
+        // Log errors but do NOT throw — let the site render.
+        // Features that need missing vars will fail gracefully at call time.
+        console.error(
+          `⚠️ Environment validation found ${result.errors.length} error(s). ` +
+            'Some features may not work until env vars are configured.',
+        );
       }
-
-      // In development, warn but allow server to start (for easier debugging)
-      console.warn('⚠️  Continuing in development mode despite validation errors');
+    } catch (error) {
+      // Even if validation itself crashes, don't take down the site
+      console.error('⚠️ Environment validation could not run:', error);
     }
   }
 }
