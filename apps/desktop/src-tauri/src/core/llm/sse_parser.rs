@@ -1,5 +1,6 @@
 use futures_util::Stream;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -314,7 +315,10 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut model = None;
     let mut usage = None;
     let mut credits = None;
-    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
+    // Use a HashMap keyed by index so that out-of-order or duplicate indices
+    // within the same SSE event are merged correctly instead of appended as
+    // separate entries. The map is converted to a sorted Vec at the end.
+    let mut tool_call_map: HashMap<usize, StreamingToolCall> = HashMap::new();
 
     // Track the last tool call index we saw across data: lines within this SSE
     // event. When a continuation delta omits the "index" field and the delta
@@ -428,30 +432,27 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                     .unwrap_or("")
                                     .to_string();
 
-                                // Look up existing entry by index rather than always
-                                // appending. Multiple data: lines in the same SSE event
-                                // can carry deltas for the same tool call index (e.g.
-                                // first line sends id+name, second sends arguments).
-                                // Blindly pushing creates duplicate entries, corrupting
-                                // tool call assembly downstream.
-                                if let Some(existing) =
-                                    tool_calls.iter_mut().find(|t| t.index == index)
-                                {
-                                    if !id.is_empty() {
-                                        existing.id = id;
-                                    }
-                                    if !name.is_empty() {
-                                        existing.name = name;
-                                    }
-                                    existing.arguments.push_str(&arguments);
-                                } else {
-                                    tool_calls.push(StreamingToolCall {
+                                // Merge into the HashMap entry for this index.
+                                // Multiple data: lines in the same SSE event can carry
+                                // deltas for the same tool call index (e.g. first line
+                                // sends id+name, second sends arguments). The HashMap
+                                // guarantees O(1) lookup and prevents duplicate entries
+                                // regardless of arrival order.
+                                let entry = tool_call_map.entry(index).or_insert_with(|| {
+                                    StreamingToolCall {
                                         index,
-                                        id,
-                                        name,
-                                        arguments,
-                                    });
+                                        id: String::new(),
+                                        name: String::new(),
+                                        arguments: String::new(),
+                                    }
+                                });
+                                if !id.is_empty() {
+                                    entry.id = id;
                                 }
+                                if !name.is_empty() {
+                                    entry.name = name;
+                                }
+                                entry.arguments.push_str(&arguments);
                             }
                         }
                     }
@@ -578,10 +579,8 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         }
     }
 
-    // Sort tool calls by index to guarantee correct execution order.
-    // Entries may have been inserted out of order when multiple data: lines
-    // within the same SSE event carry deltas for different indices, or when
-    // an OpenAI-compatible provider sends indices non-sequentially.
+    // Convert HashMap to Vec sorted by index for deterministic execution order.
+    let mut tool_calls: Vec<StreamingToolCall> = tool_call_map.into_values().collect();
     tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
@@ -612,7 +611,10 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
     let mut finish_reason = None;
     let mut model = None;
     let mut usage = None;
-    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
+    // Use HashMap keyed by block index so content_block_start and
+    // content_block_delta for the same index merge correctly even if
+    // events arrive out of order or are reprocessed.
+    let mut tool_call_map: HashMap<usize, StreamingToolCall> = HashMap::new();
 
     let mut event_type = None;
     let mut data_str = None;
@@ -672,12 +674,21 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                                 .and_then(|n| n.as_str())
                                 .unwrap_or("")
                                 .to_string();
-                            tool_calls.push(StreamingToolCall {
-                                index,
-                                id,
-                                name,
-                                arguments: String::new(),
-                            });
+                            let entry =
+                                tool_call_map.entry(index).or_insert_with(|| {
+                                    StreamingToolCall {
+                                        index,
+                                        id: String::new(),
+                                        name: String::new(),
+                                        arguments: String::new(),
+                                    }
+                                });
+                            if !id.is_empty() {
+                                entry.id = id;
+                            }
+                            if !name.is_empty() {
+                                entry.name = name;
+                            }
                         }
                         // web_search_tool_result / web_fetch_tool_result are
                         // server-side result blocks.  They don't need client
@@ -724,28 +735,22 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                         }
                         "input_json_delta" => {
                             // Streaming tool call arguments as partial JSON.
-                            // Merge into existing entry if one was created by
-                            // content_block_start (same index), otherwise push
-                            // a new entry. This prevents duplicate entries with
-                            // the same index in the Vec, which could confuse
-                            // consumers that iterate the Vec directly instead
-                            // of accumulating by HashMap.
+                            // Merge into the HashMap entry for this index --
+                            // the entry was typically created by content_block_start
+                            // but the HashMap handles both cases uniformly.
                             let partial_json = delta
                                 .get("partial_json")
                                 .and_then(|p| p.as_str())
                                 .unwrap_or("");
-                            if let Some(existing) =
-                                tool_calls.iter_mut().find(|t| t.index == index)
-                            {
-                                existing.arguments.push_str(partial_json);
-                            } else {
-                                tool_calls.push(StreamingToolCall {
+                            let entry = tool_call_map
+                                .entry(index)
+                                .or_insert_with(|| StreamingToolCall {
                                     index,
-                                    id: String::new(), // already sent in content_block_start
-                                    name: String::new(), // already sent in content_block_start
-                                    arguments: partial_json.to_string(),
+                                    id: String::new(),
+                                    name: String::new(),
+                                    arguments: String::new(),
                                 });
-                            }
+                            entry.arguments.push_str(partial_json);
                         }
                         "thinking_delta" => {
                             if let Some(thinking_text) = delta
@@ -869,7 +874,8 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         }
     }
 
-    // Sort tool calls by index so execution order is deterministic.
+    // Convert HashMap to Vec sorted by index for deterministic execution order.
+    let mut tool_calls: Vec<StreamingToolCall> = tool_call_map.into_values().collect();
     tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
@@ -899,7 +905,9 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut finish_reason = None;
     let mut model = None;
     let mut usage = None;
-    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
+    // Use HashMap so duplicate indices within the same event are merged.
+    let mut tool_call_map: HashMap<usize, StreamingToolCall> = HashMap::new();
+    let mut next_tool_index: usize = 0;
 
     for line in event.lines() {
         if let Some(data) = extract_data_payload(line) {
@@ -945,14 +953,23 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                                 .unwrap_or_else(|_| "{}".to_string())
                                         })
                                         .unwrap_or_else(|| "{}".to_string());
-                                    // Google doesn't provide IDs; generate one
+                                    // Google doesn't provide IDs; generate one.
+                                    // Use a monotonic counter for the index.
                                     let id = format!("call_{}", uuid::Uuid::new_v4());
-                                    tool_calls.push(StreamingToolCall {
-                                        index: tool_calls.len(),
-                                        id,
-                                        name: name.to_string(),
-                                        arguments: args,
-                                    });
+                                    let idx = next_tool_index;
+                                    next_tool_index += 1;
+                                    let entry =
+                                        tool_call_map.entry(idx).or_insert_with(|| {
+                                            StreamingToolCall {
+                                                index: idx,
+                                                id: String::new(),
+                                                name: String::new(),
+                                                arguments: String::new(),
+                                            }
+                                        });
+                                    entry.id = id;
+                                    entry.name = name.to_string();
+                                    entry.arguments.push_str(&args);
                                 }
                             }
                         }
@@ -1002,7 +1019,8 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         }
     }
 
-    // Sort tool calls by index so execution order is deterministic.
+    // Convert HashMap to Vec sorted by index for deterministic execution order.
+    let mut tool_calls: Vec<StreamingToolCall> = tool_call_map.into_values().collect();
     tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
@@ -1034,7 +1052,8 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut done = false;
     let mut model = None;
     let mut usage = None;
-    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
+    // Use HashMap for consistent index-based merging.
+    let mut tool_call_map: HashMap<usize, StreamingToolCall> = HashMap::new();
 
     if let Some(message) = json.get("message") {
         if let Some(text) = message.get("content").and_then(|c| c.as_str()) {
@@ -1064,12 +1083,21 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         .and_then(|i| i.as_str())
                         .unwrap_or("")
                         .to_string();
-                    tool_calls.push(StreamingToolCall {
-                        index: idx,
-                        id,
-                        name,
-                        arguments,
+                    let entry = tool_call_map.entry(idx).or_insert_with(|| {
+                        StreamingToolCall {
+                            index: idx,
+                            id: String::new(),
+                            name: String::new(),
+                            arguments: String::new(),
+                        }
                     });
+                    if !id.is_empty() {
+                        entry.id = id;
+                    }
+                    if !name.is_empty() {
+                        entry.name = name;
+                    }
+                    entry.arguments.push_str(&arguments);
                 }
             }
         }
@@ -1112,7 +1140,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
 
     // Extract finish reason: Ollama sends done_reason when done=true.
     // Synthesize "tool_calls" if tool calls are present (Ollama doesn't always signal this).
-    let finish_reason = if !tool_calls.is_empty() {
+    let finish_reason = if !tool_call_map.is_empty() {
         Some("tool_calls".to_string())
     } else if done {
         json.get("done_reason")
@@ -1123,7 +1151,8 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         None
     };
 
-    // Sort tool calls by index so execution order is deterministic.
+    // Convert HashMap to Vec sorted by index for deterministic execution order.
+    let mut tool_calls: Vec<StreamingToolCall> = tool_call_map.into_values().collect();
     tool_calls.sort_by_key(|tc| tc.index);
 
     Ok(StreamChunk {
