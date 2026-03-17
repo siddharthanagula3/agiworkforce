@@ -132,13 +132,13 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 // Get mocked modules
-const { anthropicProvider } = await import('./providers/anthropic-claude');
-const { openaiProvider } = await import('./providers/openai-gpt');
-const { googleProvider } = await import('./providers/google-gemini');
-const { perplexityProvider } = await import('./providers/perplexity-ai');
-const { grokProvider } = await import('./providers/grok-ai');
-const { deepseekProvider } = await import('./providers/deepseek-ai');
-const { qwenProvider } = await import('./providers/qwen-ai');
+const { anthropicProvider, AnthropicProvider } = await import('./providers/anthropic-claude');
+const { openaiProvider, OpenAIProvider } = await import('./providers/openai-gpt');
+const { googleProvider, GoogleProvider } = await import('./providers/google-gemini');
+const { perplexityProvider, PerplexityProvider } = await import('./providers/perplexity-ai');
+const { grokProvider, GrokProvider } = await import('./providers/grok-ai');
+const { deepseekProvider, DeepSeekProvider } = await import('./providers/deepseek-ai');
+const { qwenProvider, QwenProvider } = await import('./providers/qwen-ai');
 const { canUserMakeRequest, deductTokens } =
   await import('@core/billing/token-enforcement-service');
 const { checkUserInput, logInjectionAttempt } =
@@ -151,6 +151,44 @@ describe('UnifiedLLMService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Restore default mock implementations after clearAllMocks
+    vi.mocked(canUserMakeRequest).mockResolvedValue({ allowed: true });
+    vi.mocked(deductTokens).mockResolvedValue({ success: true });
+    vi.mocked(checkUserInput).mockReturnValue({ allowed: true, riskLevel: 'none' });
+    vi.mocked(checkApiAbuse).mockResolvedValue({ allowed: true });
+    vi.mocked(isFeatureEnabled).mockReturnValue(false);
+    vi.mocked(anthropicProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(openaiProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(googleProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(perplexityProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(grokProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(deepseekProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(qwenProvider.isConfigured).mockReturnValue(true);
+    vi.mocked(AnthropicProvider.getAvailableModels).mockReturnValue([
+      'claude-opus-4-5-20251101',
+      'claude-sonnet-4-5-20250929',
+    ] as never);
+    vi.mocked(OpenAIProvider.getAvailableModels).mockReturnValue([
+      'gpt-4o',
+      'gpt-5.2',
+      'o3',
+    ] as never);
+    vi.mocked(GoogleProvider.getAvailableModels).mockReturnValue([
+      'gemini-2.0-flash',
+      'gemini-3-pro-preview',
+    ] as never);
+    vi.mocked(PerplexityProvider.getAvailableModels).mockReturnValue([
+      'sonar',
+      'sonar-pro',
+    ] as never);
+    vi.mocked(GrokProvider.getAvailableModels).mockReturnValue(['grok-4', 'grok-3'] as never);
+    vi.mocked(DeepSeekProvider.getAvailableModels).mockReturnValue([
+      'deepseek-chat',
+      'deepseek-reasoner',
+    ] as never);
+    vi.mocked(QwenProvider.getAvailableModels).mockReturnValue(['qwen-plus', 'qwen3-max'] as never);
+
     service = new UnifiedLLMService();
   });
 
