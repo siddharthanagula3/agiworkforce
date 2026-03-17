@@ -3,8 +3,22 @@ import { Bot } from 'lucide-react';
 
 export const metadata = {
   title: 'Privacy Policy',
-  description: 'Privacy policy for AGI Workforce - how we handle your data securely.',
+  description:
+    'Privacy policy for AGI Workforce. Learn how we protect your data with local-first architecture, encrypted API keys, and zero server-side storage.',
   alternates: { canonical: '/privacy' },
+  openGraph: {
+    title: 'Privacy Policy | AGI Workforce',
+    description:
+      'How AGI Workforce protects your data. Local-first architecture, encrypted API keys, zero server-side storage.',
+    type: 'website',
+    url: 'https://agiworkforce.com/privacy',
+  },
+  twitter: {
+    card: 'summary' as const,
+    title: 'Privacy Policy | AGI Workforce',
+    description:
+      'How AGI Workforce protects your data. Local-first, encrypted keys, zero server storage.',
+  },
 };
 
 export default function PrivacyPage() {

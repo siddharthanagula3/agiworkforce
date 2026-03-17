@@ -59,6 +59,12 @@ export async function getCurrentUser() {
   return user;
 }
 
+/**
+ * @deprecated Prefer getCurrentUser() which uses getUser() for server-side JWT
+ * verification. getSession() only reads the cookie without validating the token,
+ * making it vulnerable to session fixation with tampered cookies.
+ * Only use this when you specifically need the session tokens (access_token, refresh_token).
+ */
 export async function getCurrentSession() {
   const {
     data: { session },

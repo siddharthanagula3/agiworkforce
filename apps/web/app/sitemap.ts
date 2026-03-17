@@ -22,13 +22,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/features/agents', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/ai-chat', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/features/ai-dashboards', priority: 0.7, changeFrequency: 'weekly' },
+    { path: '/features/ai-project-manager', priority: 0.7, changeFrequency: 'weekly' },
 
     // About / Blog / Support pages
     { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/blog', priority: 0.7, changeFrequency: 'daily' },
+    { path: '/changelog', priority: 0.6, changeFrequency: 'weekly' },
     { path: '/contact', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/faq', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/diagnose', priority: 0.6, changeFrequency: 'weekly' },
+    { path: '/security', priority: 0.7, changeFrequency: 'monthly' },
 
     // Legal/Policy pages
     { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
