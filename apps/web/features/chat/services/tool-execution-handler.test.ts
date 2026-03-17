@@ -70,6 +70,14 @@ describe('ToolsExecutionService', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Restore supabase mock after clearAllMocks
+    const { supabase } = await import('@shared/lib/supabase-client');
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: { access_token: 'mock-token' } },
+      error: null,
+    } as never);
+
     service = new ToolsExecutionService();
 
     // Suppress console logs in tests

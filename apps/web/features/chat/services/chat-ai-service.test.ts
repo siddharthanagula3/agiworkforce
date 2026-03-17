@@ -71,8 +71,26 @@ vi.mock('@core/ai/orchestration/intelligent-agent-router', () => {
 import { ChatAIService } from './chat-ai-service';
 
 describe('ChatAIService', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Restore default mock implementations after clearAllMocks
+    const { systemPromptsService } = await import('@core/ai/employees/prompt-management');
+    vi.mocked(systemPromptsService.getAvailableEmployees).mockResolvedValue([
+      {
+        name: 'backend-engineer',
+        description: 'Expert in server-side development',
+        expertise: ['node', 'python', 'databases'],
+        tools: ['code-editor'],
+        avatar: '/avatars/backend.png',
+      },
+      {
+        name: 'financial-advisor',
+        description: 'Financial planning and advice',
+        expertise: ['investing', 'budgeting'],
+        tools: ['calculator'],
+        avatar: '/avatars/finance.png',
+      },
+    ] as never);
     // Reset the cached employees between tests by re-importing
     // We can't easily reset module-level state, so we test idempotent paths
   });

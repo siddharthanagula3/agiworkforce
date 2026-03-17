@@ -357,8 +357,7 @@ describe('Media Generation Handler', () => {
     });
 
     it('should convert 4k to 1080p (Veo limitation)', async () => {
-      mockVeo.enhancePrompt.mockResolvedValueOnce('Enhanced');
-      mockVeo.generateVideo.mockResolvedValueOnce({
+      const mockResponse = {
         id: 'vid-123',
         video: { url: 'https://example.com/video.mp4' },
         prompt: 'Test',
@@ -374,7 +373,11 @@ describe('Media Generation Handler', () => {
         tokensUsed: 25,
         createdAt: new Date(),
         status: 'completed',
-      });
+      };
+      mockVeo.enhancePrompt.mockResolvedValueOnce('Enhanced');
+      mockVeo.generateVideo.mockResolvedValueOnce(mockResponse);
+      mockVeo.enhancePrompt.mockResolvedValueOnce('Enhanced');
+      mockVeo.generateVideo.mockResolvedValueOnce(mockResponse);
 
       await mediaGenerationService.generateVideo({
         prompt: 'Test',
