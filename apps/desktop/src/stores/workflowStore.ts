@@ -236,6 +236,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       },
 
       pauseWorkflow: async (executionId) => {
+        set({ error: null }, undefined, 'workflow/pause/start');
         try {
           await invoke('pause_workflow', { executionId });
           set(
@@ -257,6 +258,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       },
 
       resumeWorkflow: async (executionId) => {
+        set({ error: null }, undefined, 'workflow/resume/start');
         try {
           await invoke('resume_workflow', { executionId });
           set(
@@ -278,6 +280,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       },
 
       cancelWorkflow: async (executionId) => {
+        set({ error: null }, undefined, 'workflow/cancel/start');
         try {
           await invoke('cancel_workflow', { executionId });
           set(
@@ -313,6 +316,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
           return execution;
         } catch (error) {
           console.error('Failed to get workflow status:', error);
+          set({ error: String(error) }, undefined, 'workflow/status/error');
           return null;
         }
       },
@@ -332,6 +336,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
           return logs;
         } catch (error) {
           console.error('Failed to get execution logs:', error);
+          set({ error: String(error) }, undefined, 'workflow/logs/error');
           return [];
         }
       },
@@ -356,6 +361,20 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
             eventType,
             eventData,
           });
+          set(
+            (state) => {
+              state.executions.set(executionId, {
+                id: executionId,
+                workflow_id: workflowId,
+                status: 'running',
+                inputs: eventData,
+                outputs: {},
+                started_at: Date.now(),
+              });
+            },
+            undefined,
+            'workflow/trigger/success',
+          );
           return executionId;
         } catch (error) {
           console.error('Failed to trigger workflow on event:', error);

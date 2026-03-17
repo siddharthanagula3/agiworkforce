@@ -54,7 +54,14 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
 
   // Load all 150 skills from bundled .md files (cached after first call)
-  const allSkills = useMemo(() => loadSkills().map(toMentionSkill), []);
+  const allSkills = useMemo(() => {
+    try {
+      return loadSkills().map(toMentionSkill);
+    } catch (error) {
+      console.error('Failed to load skills:', error);
+      return [];
+    }
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
