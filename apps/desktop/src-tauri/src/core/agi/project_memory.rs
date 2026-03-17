@@ -157,7 +157,7 @@ impl ProjectMemoryManager {
         frameworks: Vec<String>,
         importance: Option<i32>,
     ) -> Result<i64> {
-        let conn = self
+        let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
@@ -178,9 +178,14 @@ impl ProjectMemoryManager {
         })
         .map_err(|e| Error::Generic(format!("Failed to serialize project context: {}", e)))?;
 
-        // Atomic upsert: try UPDATE first, INSERT only if nothing was updated.
-        // One context row per project folder -- UPDATE the oldest matching row.
-        let updated = conn
+        // Atomic upsert inside a transaction to prevent TOCTOU races where two
+        // concurrent saves both see updated==0 and both attempt INSERT, causing
+        // a UNIQUE constraint violation on pre-v58 databases.
+        let tx = conn.transaction().map_err(|e| {
+            Error::Database(format!("Failed to begin transaction: {}", e))
+        })?;
+
+        let updated = tx
             .execute(
                 "UPDATE project_memories
                  SET content = ?1, importance = ?2, updated_at = datetime('now')
@@ -201,8 +206,10 @@ impl ProjectMemoryManager {
             })?;
 
         if updated == 0 {
-            conn.execute(
-                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+            // Use INSERT OR REPLACE to handle pre-v58 schemas that have a
+            // UNIQUE(project_folder, memory_type) constraint.
+            tx.execute(
+                "INSERT OR REPLACE INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
                 params![
                     project_folder,
@@ -218,6 +225,10 @@ impl ProjectMemoryManager {
                 ))
             })?;
         }
+
+        tx.commit().map_err(|e| {
+            Error::Database(format!("Failed to commit transaction: {}", e))
+        })?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
@@ -289,7 +300,7 @@ impl ProjectMemoryManager {
         category: &str, // "naming", "pattern", "formatting", "convention"
         importance: Option<i32>,
     ) -> Result<i64> {
-        let conn = self
+        let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
@@ -326,7 +337,12 @@ impl ProjectMemoryManager {
         );
 
         // Atomic upsert: try UPDATE on the existing row with the same style_key.
-        let updated = conn
+        // Wrap in a transaction to prevent TOCTOU UNIQUE constraint crashes.
+        let tx = conn.transaction().map_err(|e| {
+            Error::Database(format!("Failed to begin transaction: {}", e))
+        })?;
+
+        let updated = tx
             .execute(
                 "UPDATE project_memories
                  SET content = ?1, importance = ?2, updated_at = datetime('now')
@@ -348,8 +364,8 @@ impl ProjectMemoryManager {
             })?;
 
         if updated == 0 {
-            conn.execute(
-                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+            tx.execute(
+                "INSERT OR REPLACE INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
                 params![
                     project_folder,
@@ -365,6 +381,10 @@ impl ProjectMemoryManager {
                 ))
             })?;
         }
+
+        tx.commit().map_err(|e| {
+            Error::Database(format!("Failed to commit transaction: {}", e))
+        })?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
@@ -441,7 +461,7 @@ impl ProjectMemoryManager {
         status: Option<&str>, // "proposed", "accepted", "deprecated"
         importance: Option<i32>,
     ) -> Result<i64> {
-        let conn = self
+        let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
@@ -476,8 +496,12 @@ impl ProjectMemoryManager {
                 .replace('_', "\\_")
         );
 
-        // Atomic upsert: try UPDATE on an existing row with the same decision text.
-        let updated = conn
+        // Wrap in a transaction to prevent TOCTOU UNIQUE constraint crashes.
+        let tx = conn.transaction().map_err(|e| {
+            Error::Database(format!("Failed to begin transaction: {}", e))
+        })?;
+
+        let updated = tx
             .execute(
                 "UPDATE project_memories
                  SET content = ?1, importance = ?2, updated_at = datetime('now')
@@ -502,8 +526,8 @@ impl ProjectMemoryManager {
             })?;
 
         if updated == 0 {
-            conn.execute(
-                "INSERT INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
+            tx.execute(
+                "INSERT OR REPLACE INTO project_memories (project_folder, memory_type, content, importance, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
                 params![
                     project_folder,
@@ -519,6 +543,10 @@ impl ProjectMemoryManager {
                 ))
             })?;
         }
+
+        tx.commit().map_err(|e| {
+            Error::Database(format!("Failed to commit transaction: {}", e))
+        })?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
