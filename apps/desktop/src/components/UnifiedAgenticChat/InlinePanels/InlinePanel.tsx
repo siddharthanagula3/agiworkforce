@@ -39,6 +39,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         lsp: '🔍',
         marketplace: '🛒',
         generic: '📋',
+        plan: '📋',
       };
       return icons[type];
     };
@@ -62,6 +63,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         lsp: 'LSP',
         marketplace: 'Marketplace',
         generic: 'Result',
+        plan: 'Interactive Plan',
       };
       return titles[type];
     };
@@ -108,7 +110,8 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <button type="button"
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleCollapse();
@@ -126,7 +129,8 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
               />
             </button>
             {onClose && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onClose();

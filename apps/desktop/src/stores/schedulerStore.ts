@@ -299,11 +299,23 @@ export const useSchedulerStore = create<SchedulerState>()(
           set({ isLoading: true, error: null }, undefined, 'scheduler/addJob/start');
 
           try {
+            // Parse actionData from JSON string to object so Rust receives
+            // serde_json::Value as an object, not a string literal.
+            let parsedActionData: Record<string, unknown> | undefined;
+            try {
+              parsedActionData = actionData
+                ? (JSON.parse(actionData) as Record<string, unknown>)
+                : undefined;
+            } catch {
+              // If actionData is not valid JSON, wrap it as a plain object
+              parsedActionData = actionData ? { raw: actionData } : undefined;
+            }
+
             const jobId = await invoke<string>('scheduler_add_job', {
               name,
               schedule,
               actionType,
-              actionData,
+              actionData: parsedActionData,
             });
 
             // Refresh job list after adding
