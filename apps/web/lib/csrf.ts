@@ -74,17 +74,18 @@ export function verifyCsrfToken(
     return false;
   }
 
-  // Verify signature using constant-time comparison to prevent timing attacks
+  // Verify signature using constant-time comparison to prevent timing attacks.
   const data = `${tokenSessionId}:${timestamp}`;
   const expectedSignature = createHmac('sha256', getCsrfSecret()).update(data).digest('hex');
 
-  // Do NOT length-check before timingSafeEqual — a pre-check creates a timing side channel.
-  // timingSafeEqual throws for unequal-length buffers, which the catch below handles.
-  try {
-    return timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
-  } catch {
-    return false;
-  }
+  // Hash both values to a fixed-length digest before comparing.
+  // This ensures timingSafeEqual always receives equal-length buffers,
+  // eliminating the timing side channel from the try/catch that previously
+  // caught length-mismatch exceptions (distinguishable from normal comparison).
+  const hmacKey = getCsrfSecret();
+  const providedHash = createHmac('sha256', hmacKey).update(signature).digest();
+  const expectedHash = createHmac('sha256', hmacKey).update(expectedSignature).digest();
+  return timingSafeEqual(providedHash, expectedHash);
 }
 
 /**

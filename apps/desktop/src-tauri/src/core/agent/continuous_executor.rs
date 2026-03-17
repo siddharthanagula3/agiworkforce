@@ -14,8 +14,7 @@
 //! let task_id = executor.start_task("Complete the quarterly report".to_string()).await?;
 //! ```
 
-// Allow dead code - this module is still being developed and timezone is reserved for future use
-#![allow(dead_code)]
+// Module exports used by sys/commands/continuous_job_runner.rs and tests
 
 use crate::core::agi::Priority;
 use anyhow::{anyhow, Result};

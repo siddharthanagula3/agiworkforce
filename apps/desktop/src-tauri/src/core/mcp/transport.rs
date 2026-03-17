@@ -876,7 +876,6 @@ const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 /// - Requests are sent via POST to the server's endpoint
 /// - The server can respond with either a direct JSON response or initiate an SSE stream
 /// - SSE is used for long-running operations and server-initiated notifications
-
 pub struct HttpSseTransport {
     /// Server name for logging
     server_name: String,

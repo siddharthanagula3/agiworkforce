@@ -29,6 +29,44 @@ export interface MemoryEntry {
   updated_at: string;
 }
 
+// --- Types for decay, compaction, export/import, and dashboard ---
+
+export interface DecayConfig {
+  enabled: boolean;
+  decay_rate: number;
+  decay_period_days: number;
+  min_importance: number;
+  access_boost: number;
+}
+
+export interface DecayResult {
+  memories_decayed: number;
+  total_decay_applied: number;
+}
+
+export interface MemoryStats {
+  total_count: number;
+  avg_importance: number;
+  high_importance_count: number;
+  low_importance_count: number;
+}
+
+export interface DailyLogEntry {
+  id: number;
+  log_date: string;
+  content: string;
+  entry_type: string;
+  metadata?: string;
+  created_at: string;
+}
+
+export interface ImportResult {
+  memories_imported: number;
+  logs_imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 interface MemoryState {
   memories: MemoryEntry[];
   isLoading: boolean;
@@ -38,7 +76,7 @@ interface MemoryState {
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 
-  // Actions
+  // --- Existing actions ---
   remember: (
     category: MemoryCategory,
     topic: string,
@@ -54,6 +92,44 @@ interface MemoryState {
   loadAll: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
+
+  // --- Newly wired actions ---
+
+  // Core memory operations
+  storeMemory: (
+    category: MemoryCategory,
+    topic: string,
+    content: string,
+    importance?: number,
+    source?: string,
+  ) => Promise<number>;
+  deleteMemory: (memoryId: number) => Promise<boolean>;
+  forgetById: (memoryId: number) => Promise<boolean>;
+  listCategories: () => Promise<string[]>;
+  exportAll: () => Promise<MemoryEntry[]>;
+
+  // Daily log operations
+  logContext: (content: string, entryType?: string, metadata?: string) => Promise<number>;
+  getDailyLogs: (date: string) => Promise<DailyLogEntry[]>;
+  cleanupLogs: (keepDays?: number) => Promise<number>;
+
+  // Decay operations
+  runDecay: () => Promise<DecayResult>;
+  getDecayConfig: () => Promise<DecayConfig>;
+  setDecayConfig: (config: DecayConfig) => Promise<void>;
+  boostOnAccess: (memoryId: number) => Promise<number>;
+  getStats: () => Promise<MemoryStats>;
+
+  // Export/import operations
+  exportJson: (path?: string) => Promise<Record<string, unknown>>;
+  exportMarkdown: (path?: string) => Promise<string>;
+  importJson: (path: string, strategy?: string) => Promise<ImportResult>;
+
+  // Dashboard operations
+  getDashboardStats: () => Promise<Record<string, unknown>>;
+  getProjectMemories: (projectName?: string, limit?: number) => Promise<MemoryEntry[]>;
+  getUsageTrends: () => Promise<Record<string, unknown>>;
+  suggestImportant: () => Promise<MemoryEntry[]>;
 }
 
 const storageFallback: Storage = {
@@ -292,6 +368,332 @@ export const useMemoryStore = create<MemoryState>()(
             const message = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to load all memories:', message);
             set({ error: message, isLoading: false }, undefined, 'memory/loadAll/error');
+          }
+        },
+
+        // ---------------------------------------------------------------
+        // Newly wired actions
+        // ---------------------------------------------------------------
+
+        storeMemory: async (
+          category: MemoryCategory,
+          topic: string,
+          content: string,
+          importance?: number,
+          source?: string,
+        ) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/store/start');
+          try {
+            const id = await invoke<number>('memory_store', {
+              category,
+              topic,
+              content,
+              importance,
+              source,
+            });
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/store/success');
+            return id;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to store:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/store/error');
+            throw error;
+          }
+        },
+
+        deleteMemory: async (memoryId: number) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/delete/start');
+          try {
+            const deleted = await invoke<boolean>('memory_delete', { memoryId });
+            if (deleted) {
+              await get().loadAll();
+              toast.success('Memory deleted');
+            }
+            set({ isLoading: false }, undefined, 'memory/delete/success');
+            return deleted;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to delete:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/delete/error');
+            toast.error(`Failed to delete memory: ${msg}`);
+            throw error;
+          }
+        },
+
+        forgetById: async (memoryId: number) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/forgetById/start');
+          try {
+            const deleted = await invoke<boolean>('memory_forget', { memoryId });
+            if (deleted) {
+              await get().loadAll();
+              toast.success('Memory forgotten');
+            }
+            set({ isLoading: false }, undefined, 'memory/forgetById/success');
+            return deleted;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to forget by id:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/forgetById/error');
+            throw error;
+          }
+        },
+
+        listCategories: async () => {
+          try {
+            return await invoke<string[]>('memory_list_categories');
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to list categories:', msg);
+            throw error;
+          }
+        },
+
+        exportAll: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/exportAll/start');
+          try {
+            const entries = await invoke<MemoryEntry[]>('memory_export_all');
+            set({ isLoading: false }, undefined, 'memory/exportAll/success');
+            return entries;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to export all:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/exportAll/error');
+            throw error;
+          }
+        },
+
+        // Daily log operations
+
+        logContext: async (content: string, entryType?: string, metadata?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/logContext/start');
+          try {
+            const id = await invoke<number>('memory_log_context', {
+              content,
+              entryType,
+              metadata,
+            });
+            set({ isLoading: false }, undefined, 'memory/logContext/success');
+            return id;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to log context:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/logContext/error');
+            throw error;
+          }
+        },
+
+        getDailyLogs: async (date: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getDailyLogs/start');
+          try {
+            const logs = await invoke<DailyLogEntry[]>('memory_get_daily_logs', { date });
+            set({ isLoading: false }, undefined, 'memory/getDailyLogs/success');
+            return logs;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get daily logs:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getDailyLogs/error');
+            throw error;
+          }
+        },
+
+        cleanupLogs: async (keepDays?: number) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/cleanupLogs/start');
+          try {
+            const removed = await invoke<number>('memory_cleanup_logs', { keepDays });
+            set({ isLoading: false }, undefined, 'memory/cleanupLogs/success');
+            toast.success(`Cleaned up ${removed} old log entries`);
+            return removed;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to cleanup logs:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/cleanupLogs/error');
+            throw error;
+          }
+        },
+
+        // Decay operations
+
+        runDecay: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/runDecay/start');
+          try {
+            const result = await invoke<DecayResult>('memory_run_decay');
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/runDecay/success');
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to run decay:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/runDecay/error');
+            throw error;
+          }
+        },
+
+        getDecayConfig: async () => {
+          try {
+            return await invoke<DecayConfig>('memory_get_decay_config');
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get decay config:', msg);
+            throw error;
+          }
+        },
+
+        setDecayConfig: async (config: DecayConfig) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/setDecayConfig/start');
+          try {
+            await invoke<void>('memory_set_decay_config', {
+              enabled: config.enabled,
+              decayRate: config.decay_rate,
+              decayPeriodDays: config.decay_period_days,
+              minImportance: config.min_importance,
+              accessBoost: config.access_boost,
+            });
+            set({ isLoading: false }, undefined, 'memory/setDecayConfig/success');
+            toast.success('Decay config updated');
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to set decay config:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/setDecayConfig/error');
+            throw error;
+          }
+        },
+
+        boostOnAccess: async (memoryId: number) => {
+          try {
+            return await invoke<number>('memory_boost_on_access', { memoryId });
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to boost on access:', msg);
+            throw error;
+          }
+        },
+
+        getStats: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getStats/start');
+          try {
+            const stats = await invoke<MemoryStats>('memory_get_stats');
+            set({ isLoading: false }, undefined, 'memory/getStats/success');
+            return stats;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get stats:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getStats/error');
+            throw error;
+          }
+        },
+
+        // Export/import operations
+
+        exportJson: async (path?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/exportJson/start');
+          try {
+            const result = await invoke<Record<string, unknown>>('memory_export_json', { path });
+            set({ isLoading: false }, undefined, 'memory/exportJson/success');
+            toast.success('Memories exported to JSON');
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to export JSON:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/exportJson/error');
+            toast.error(`Failed to export: ${msg}`);
+            throw error;
+          }
+        },
+
+        exportMarkdown: async (path?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/exportMarkdown/start');
+          try {
+            const result = await invoke<string>('memory_export_markdown', { path });
+            set({ isLoading: false }, undefined, 'memory/exportMarkdown/success');
+            toast.success('Memories exported to Markdown');
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to export Markdown:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/exportMarkdown/error');
+            toast.error(`Failed to export: ${msg}`);
+            throw error;
+          }
+        },
+
+        importJson: async (path: string, strategy?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/importJson/start');
+          try {
+            const result = await invoke<ImportResult>('memory_import_json', { path, strategy });
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/importJson/success');
+            toast.success(
+              `Imported ${result.memories_imported} memories and ${result.logs_imported} logs`,
+            );
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to import JSON:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/importJson/error');
+            toast.error(`Failed to import: ${msg}`);
+            throw error;
+          }
+        },
+
+        // Dashboard operations
+
+        getDashboardStats: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getDashboardStats/start');
+          try {
+            const stats = await invoke<Record<string, unknown>>('memory_get_dashboard_stats');
+            set({ isLoading: false }, undefined, 'memory/getDashboardStats/success');
+            return stats;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get dashboard stats:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getDashboardStats/error');
+            throw error;
+          }
+        },
+
+        getProjectMemories: async (projectName?: string, limit?: number) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getProjectMemories/start');
+          try {
+            const entries = await invoke<MemoryEntry[]>('memory_get_project_memories', {
+              projectName,
+              limit,
+            });
+            set({ isLoading: false }, undefined, 'memory/getProjectMemories/success');
+            return entries;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get project memories:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getProjectMemories/error');
+            throw error;
+          }
+        },
+
+        getUsageTrends: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getUsageTrends/start');
+          try {
+            const trends = await invoke<Record<string, unknown>>('memory_get_usage_trends');
+            set({ isLoading: false }, undefined, 'memory/getUsageTrends/success');
+            return trends;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get usage trends:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getUsageTrends/error');
+            throw error;
+          }
+        },
+
+        suggestImportant: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/suggestImportant/start');
+          try {
+            const entries = await invoke<MemoryEntry[]>('memory_suggest_important');
+            set({ isLoading: false }, undefined, 'memory/suggestImportant/success');
+            return entries;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to suggest important:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/suggestImportant/error');
+            throw error;
           }
         },
 

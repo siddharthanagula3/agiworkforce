@@ -64,11 +64,28 @@ vi.mock('@/lib/csrf', async () => {
   };
 });
 
-// Mock framer-motion to prevent CSS parsing errors in jsdom.
-// motion-dom tries to parse CSS transforms which fails in jsdom's cssstyle parser.
-// This mock provides no-op motion components that render normally without animation.
-// Covers all element types used across the codebase (div, span, button, section,
-// article, header, p, li, img, circle, path).
+// ---------------------------------------------------------------------------
+// Mock framer-motion / motion-dom / motion to prevent CSS parsing errors in jsdom.
+//
+// Root cause: motion-dom v12 calls HTMLVisualElement.renderHTML which sets CSS
+// transform values via jsdom's cssstyle parser. cssstyle's `parse()` function
+// chokes on motion-dom's computed transform strings, throwing:
+//   TypeError: Cannot read properties of undefined (reading 'split')
+//     at parse cssstyle/lib/properties.js:211:17
+//     at HTMLVisualElement.renderHTML motion-dom/.../render.mjs:6:27
+//
+// The fix is two-fold:
+//   1. vitest.config.ts sets `css: false` to skip CSS processing entirely.
+//   2. These mocks replace motion components with plain DOM elements and stub
+//      all hooks, so motion-dom's render pipeline is never invoked.
+//
+// All three import paths are mocked because framer-motion v12 re-exports
+// through the `motion` and `motion-dom` packages:
+//   - `framer-motion` — the primary import used across the codebase
+//   - `motion/react` — the modern import path (framer-motion v12+)
+//   - `motion-dom` — the internal CSS/DOM rendering engine
+// ---------------------------------------------------------------------------
+
 function makeMotionComponent(tag: string) {
   return React.forwardRef(({ children, ...props }: any, ref: any) => {
     // Strip framer-motion-specific props that are invalid on native DOM elements
@@ -89,13 +106,15 @@ function makeMotionComponent(tag: string) {
       dragConstraints: _dragConstraints,
       onDragStart: _onDragStart,
       onDragEnd: _onDragEnd,
+      onAnimationStart: _onAnimationStart,
+      onAnimationComplete: _onAnimationComplete,
       ...domProps
     } = props;
     return React.createElement(tag, { ref, ...domProps }, children);
   });
 }
 
-vi.mock('framer-motion', () => ({
+const motionMock = {
   motion: {
     div: makeMotionComponent('div'),
     span: makeMotionComponent('span'),
@@ -103,16 +122,33 @@ vi.mock('framer-motion', () => ({
     section: makeMotionComponent('section'),
     article: makeMotionComponent('article'),
     header: makeMotionComponent('header'),
+    footer: makeMotionComponent('footer'),
+    nav: makeMotionComponent('nav'),
+    main: makeMotionComponent('main'),
+    aside: makeMotionComponent('aside'),
     p: makeMotionComponent('p'),
+    a: makeMotionComponent('a'),
     li: makeMotionComponent('li'),
     ul: makeMotionComponent('ul'),
+    ol: makeMotionComponent('ol'),
     h1: makeMotionComponent('h1'),
     h2: makeMotionComponent('h2'),
     h3: makeMotionComponent('h3'),
+    h4: makeMotionComponent('h4'),
+    h5: makeMotionComponent('h5'),
+    h6: makeMotionComponent('h6'),
     img: makeMotionComponent('img'),
     svg: makeMotionComponent('svg'),
     circle: makeMotionComponent('circle'),
     path: makeMotionComponent('path'),
+    input: makeMotionComponent('input'),
+    textarea: makeMotionComponent('textarea'),
+    form: makeMotionComponent('form'),
+    label: makeMotionComponent('label'),
+    table: makeMotionComponent('table'),
+    tr: makeMotionComponent('tr'),
+    td: makeMotionComponent('td'),
+    th: makeMotionComponent('th'),
   },
   AnimatePresence: ({ children }: any) => children,
   useAnimation: () => ({
@@ -131,4 +167,41 @@ vi.mock('framer-motion', () => ({
     Array.isArray(output) ? output[0] : output,
   useDragControls: () => ({ start: vi.fn() }),
   useReducedMotion: () => false,
+  useScroll: () => ({
+    scrollX: { get: () => 0, set: vi.fn(), onChange: vi.fn() },
+    scrollY: { get: () => 0, set: vi.fn(), onChange: vi.fn() },
+    scrollXProgress: { get: () => 0, set: vi.fn(), onChange: vi.fn() },
+    scrollYProgress: { get: () => 0, set: vi.fn(), onChange: vi.fn() },
+  }),
+  useVelocity: () => ({ get: () => 0, set: vi.fn(), onChange: vi.fn() }),
+  m: {},
+};
+
+// Primary import path — used by all existing code
+vi.mock('framer-motion', () => motionMock);
+
+// Modern import path (framer-motion v12+). Some libraries or future code
+// may import from 'motion/react' instead of 'framer-motion'.
+vi.mock('motion/react', () => motionMock);
+
+// Stub motion-dom to prevent its CSS rendering pipeline from executing.
+// This is the internal package that causes the cssstyle TypeError.
+vi.mock('motion-dom', () => ({
+  animate: vi.fn(),
+  scroll: vi.fn(),
+  inView: vi.fn(),
+  resize: vi.fn(),
+  spring: vi.fn(),
+  stagger: vi.fn(),
+  timeline: vi.fn(),
+  anticipate: vi.fn(),
+  backIn: vi.fn(),
+  backInOut: vi.fn(),
+  backOut: vi.fn(),
+  circIn: vi.fn(),
+  circInOut: vi.fn(),
+  circOut: vi.fn(),
+  easeIn: vi.fn(),
+  easeInOut: vi.fn(),
+  easeOut: vi.fn(),
 }));

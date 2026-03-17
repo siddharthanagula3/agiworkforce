@@ -4,6 +4,12 @@
  * Manages code artifacts for the Canvas/Code Execution Workspace.
  * Supports HTML, Markdown, code (Python, JS, TS, bash, etc.) and document types.
  * Code execution goes through Tauri invoke with graceful fallback.
+ *
+ * Also wires the backend canvas commands from canvas.rs:
+ * - canvas_create, canvas_get, canvas_list, canvas_destroy
+ * - canvas_set_active, canvas_get_active
+ * - canvas_add_element, canvas_remove_element, canvas_update_element
+ * - canvas_clear, canvas_export, canvas_a2ui_execute, canvas_add_text
  */
 
 import { create } from 'zustand';
@@ -34,12 +40,52 @@ export interface CanvasArtifact {
   messageId?: string; // which chat message spawned this
 }
 
+/** Backend canvas element (matches Rust CanvasElement) */
+export interface BackendCanvasElement {
+  id: string;
+  [key: string]: unknown;
+}
+
+/** A2UI command for AGI-driven canvas operations */
+export interface A2UICommand {
+  action: string;
+  [key: string]: unknown;
+}
+
+/** A2UI response from the backend */
+export interface A2UIResponse {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+}
+
+/** Element style for canvas text elements */
+export interface CanvasElementStyle {
+  fontSize?: number;
+  fontWeight?: string;
+  color?: string;
+  backgroundColor?: string;
+  [key: string]: unknown;
+}
+
+/** Summary entry from canvas_list */
+export interface CanvasSummary {
+  id: string;
+  name: string;
+}
+
 interface CanvasStoreState {
   artifacts: CanvasArtifact[];
   activeArtifactId: string | null;
   isPanelOpen: boolean;
 
-  // Actions
+  /** Backend canvases */
+  backendCanvases: CanvasSummary[];
+  activeBackendCanvasId: string | null;
+  loadingBackendCanvases: boolean;
+  backendError: string | null;
+
+  // Artifact actions (existing)
   createArtifact: (
     type: CanvasArtifactType,
     content: string,
@@ -52,6 +98,32 @@ interface CanvasStoreState {
   deleteArtifact: (id: string) => void;
   openPanel: (artifactId?: string) => void;
   closePanel: () => void;
+
+  // Backend canvas actions (new)
+  createBackendCanvas: (name: string, width?: number, height?: number) => Promise<string | null>;
+  getBackendCanvas: (id: string) => Promise<unknown | null>;
+  listBackendCanvases: () => Promise<CanvasSummary[]>;
+  destroyBackendCanvas: (id: string) => Promise<boolean>;
+  setActiveBackendCanvas: (id: string | null) => Promise<boolean>;
+  getActiveBackendCanvas: () => Promise<string | null>;
+  addElement: (canvasId: string, element: BackendCanvasElement) => Promise<boolean>;
+  removeElement: (canvasId: string, elementId: string) => Promise<boolean>;
+  updateElement: (
+    canvasId: string,
+    elementId: string,
+    updates: Record<string, unknown>,
+  ) => Promise<boolean>;
+  clearCanvas: (canvasId: string) => Promise<boolean>;
+  exportCanvas: (canvasId: string) => Promise<string | null>;
+  executeA2UI: (command: A2UICommand) => Promise<A2UIResponse | null>;
+  addTextElement: (
+    canvasId: string,
+    text: string,
+    x: number,
+    y: number,
+    width?: number,
+    style?: CanvasElementStyle,
+  ) => Promise<string | null>;
 }
 
 // =============================================================================
@@ -151,6 +223,11 @@ export const useCanvasStore = create<CanvasStoreState>()(
       activeArtifactId: null,
       isPanelOpen: false,
 
+      backendCanvases: [],
+      activeBackendCanvasId: null,
+      loadingBackendCanvases: false,
+      backendError: null,
+
       createArtifact: (type, content, language, title, messageId) => {
         const id = generateId();
         const now = Date.now();
@@ -246,6 +323,169 @@ export const useCanvasStore = create<CanvasStoreState>()(
 
       closePanel: () => {
         set({ isPanelOpen: false });
+      },
+
+      // =========================================================================
+      // Backend Canvas Actions (wired to canvas.rs Tauri commands)
+      // =========================================================================
+
+      createBackendCanvas: async (name, width, height) => {
+        set({ backendError: null });
+        try {
+          const id = await invoke<string>('canvas_create', { name, width, height });
+          set((state) => ({
+            backendCanvases: [...state.backendCanvases, { id, name }],
+          }));
+          return id;
+        } catch (error) {
+          console.error('Failed to create backend canvas:', error);
+          set({ backendError: String(error) });
+          return null;
+        }
+      },
+
+      getBackendCanvas: async (id) => {
+        try {
+          return await invoke<unknown>('canvas_get', { id });
+        } catch (error) {
+          console.error('Failed to get backend canvas:', error);
+          set({ backendError: String(error) });
+          return null;
+        }
+      },
+
+      listBackendCanvases: async () => {
+        set({ loadingBackendCanvases: true, backendError: null });
+        try {
+          const entries = await invoke<[string, string][]>('canvas_list');
+          const canvases = entries.map(([id, name]) => ({ id, name }));
+          set({ backendCanvases: canvases, loadingBackendCanvases: false });
+          return canvases;
+        } catch (error) {
+          console.error('Failed to list backend canvases:', error);
+          set({ backendError: String(error), loadingBackendCanvases: false });
+          return [];
+        }
+      },
+
+      destroyBackendCanvas: async (id) => {
+        try {
+          await invoke<boolean>('canvas_destroy', { id });
+          set((state) => ({
+            backendCanvases: state.backendCanvases.filter((c) => c.id !== id),
+            activeBackendCanvasId:
+              state.activeBackendCanvasId === id ? null : state.activeBackendCanvasId,
+          }));
+          return true;
+        } catch (error) {
+          console.error('Failed to destroy backend canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      setActiveBackendCanvas: async (id) => {
+        try {
+          await invoke('canvas_set_active', { id });
+          set({ activeBackendCanvasId: id });
+          return true;
+        } catch (error) {
+          console.error('Failed to set active canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      getActiveBackendCanvas: async () => {
+        try {
+          const id = await invoke<string | null>('canvas_get_active');
+          set({ activeBackendCanvasId: id });
+          return id;
+        } catch (error) {
+          console.error('Failed to get active canvas:', error);
+          return null;
+        }
+      },
+
+      addElement: async (canvasId, element) => {
+        try {
+          await invoke('canvas_add_element', { canvasId, element });
+          return true;
+        } catch (error) {
+          console.error('Failed to add element to canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      removeElement: async (canvasId, elementId) => {
+        try {
+          await invoke<boolean>('canvas_remove_element', { canvasId, elementId });
+          return true;
+        } catch (error) {
+          console.error('Failed to remove element from canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      updateElement: async (canvasId, elementId, updates) => {
+        try {
+          await invoke<boolean>('canvas_update_element', { canvasId, elementId, updates });
+          return true;
+        } catch (error) {
+          console.error('Failed to update element on canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      clearCanvas: async (canvasId) => {
+        try {
+          await invoke('canvas_clear', { canvasId });
+          return true;
+        } catch (error) {
+          console.error('Failed to clear canvas:', error);
+          set({ backendError: String(error) });
+          return false;
+        }
+      },
+
+      exportCanvas: async (canvasId) => {
+        try {
+          return await invoke<string>('canvas_export', { canvasId });
+        } catch (error) {
+          console.error('Failed to export canvas:', error);
+          set({ backendError: String(error) });
+          return null;
+        }
+      },
+
+      executeA2UI: async (command) => {
+        try {
+          return await invoke<A2UIResponse>('canvas_a2ui_execute', { command });
+        } catch (error) {
+          console.error('Failed to execute A2UI command:', error);
+          set({ backendError: String(error) });
+          return null;
+        }
+      },
+
+      addTextElement: async (canvasId, text, x, y, width, style) => {
+        try {
+          return await invoke<string>('canvas_add_text', {
+            canvasId,
+            text,
+            x,
+            y,
+            width,
+            style,
+          });
+        } catch (error) {
+          console.error('Failed to add text element:', error);
+          set({ backendError: String(error) });
+          return null;
+        }
       },
     }),
     { name: 'CanvasStore', enabled: import.meta.env.DEV },

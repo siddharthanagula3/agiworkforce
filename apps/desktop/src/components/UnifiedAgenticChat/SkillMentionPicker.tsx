@@ -2,11 +2,13 @@
  * SkillMentionPicker Component
  *
  * Dropdown picker that appears when the user types "@" in the chat input.
- * Shows a filtered list of AI skills with keyboard navigation support.
+ * Shows a filtered list of all 150 AI skills loaded from bundled .md files,
+ * with keyboard navigation support.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
+import { loadSkills, type LoadedSkill } from '../../lib/skillLoader';
 
 export interface MentionSkill {
   id: string;
@@ -24,49 +26,22 @@ interface SkillMentionPickerProps {
 }
 
 /**
- * Static list of commonly used skills for the mention picker.
- * These map to the .agi/employees/ markdown skill files.
+ * Converts a LoadedSkill to the MentionSkill shape used by the picker UI.
+ * Formats the name for display by converting kebab-case to Title Case.
  */
-const AVAILABLE_SKILLS: MentionSkill[] = [
-  // Technical
-  { id: 'senior-software-engineer', name: 'Software Engineer', category: 'Technical' },
-  { id: 'frontend-engineer', name: 'Frontend Engineer', category: 'Technical' },
-  { id: 'backend-engineer', name: 'Backend Engineer', category: 'Technical' },
-  { id: 'system-architect', name: 'System Architect', category: 'Technical' },
-  { id: 'senior-devops-engineer', name: 'DevOps Engineer', category: 'Technical' },
-  { id: 'code-reviewer', name: 'Code Reviewer', category: 'Technical' },
-  { id: 'debugger', name: 'Debugger', category: 'Technical' },
-  { id: 'senior-qa-engineer', name: 'QA Engineer', category: 'Technical' },
-  { id: 'senior-ui-ux-designer', name: 'UI/UX Designer', category: 'Technical' },
-  { id: 'product-manager', name: 'Product Manager', category: 'Technical' },
-  // Creative
-  { id: 'photographer', name: 'Photographer', category: 'Creative' },
-  { id: 'video-editor', name: 'Video Editor', category: 'Creative' },
-  { id: 'illustrator', name: 'Illustrator', category: 'Creative' },
-  { id: 'music-producer', name: 'Music Producer', category: 'Creative' },
-  { id: '3d-artist', name: '3D Artist', category: 'Creative' },
-  // Education
-  { id: 'expert-tutor', name: 'Expert Tutor', category: 'Education' },
-  { id: 'language-tutor', name: 'Language Tutor', category: 'Education' },
-  { id: 'sat-act-tutor', name: 'SAT/ACT Tutor', category: 'Education' },
-  // Finance
-  { id: 'financial-advisor', name: 'Financial Advisor', category: 'Finance' },
-  { id: 'cpa-tax-specialist', name: 'CPA Tax Specialist', category: 'Finance' },
-  { id: 'investment-advisor', name: 'Investment Advisor', category: 'Finance' },
-  // Healthcare
-  { id: 'health-advisor', name: 'Health Advisor', category: 'Healthcare' },
-  { id: 'nutritionist', name: 'Nutritionist', category: 'Healthcare' },
-  { id: 'personal-trainer', name: 'Personal Trainer', category: 'Healthcare' },
-  { id: 'mental-health-therapist', name: 'Mental Health Therapist', category: 'Healthcare' },
-  // Legal
-  { id: 'ai-lawyer', name: 'AI Lawyer', category: 'Legal' },
-  // Lifestyle
-  { id: 'travel-advisor', name: 'Travel Advisor', category: 'Lifestyle' },
-  { id: 'expert-chef', name: 'Expert Chef', category: 'Lifestyle' },
-  { id: 'life-coach', name: 'Life Coach', category: 'Lifestyle' },
-  { id: 'career-counselor', name: 'Career Counselor', category: 'Lifestyle' },
-  { id: 'personal-finance-coach', name: 'Personal Finance Coach', category: 'Lifestyle' },
-];
+function toMentionSkill(skill: LoadedSkill): MentionSkill {
+  // Format name for display: "backend-engineer" -> "Backend Engineer"
+  const displayName = skill.name
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  return {
+    id: skill.id,
+    name: displayName,
+    category: skill.category,
+  };
+}
 
 const MAX_RESULTS = 8;
 
@@ -78,16 +53,21 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Load all 150 skills from bundled .md files (cached after first call)
+  const allSkills = useMemo(() => loadSkills().map(toMentionSkill), []);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    if (!q) return AVAILABLE_SKILLS.slice(0, MAX_RESULTS);
-    return AVAILABLE_SKILLS.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q),
-    ).slice(0, MAX_RESULTS);
-  }, [query]);
+    if (!q) return allSkills.slice(0, MAX_RESULTS);
+    return allSkills
+      .filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.id.toLowerCase().includes(q) ||
+          s.category.toLowerCase().includes(q),
+      )
+      .slice(0, MAX_RESULTS);
+  }, [query, allSkills]);
 
   // Reset selection when results change
   useEffect(() => {
