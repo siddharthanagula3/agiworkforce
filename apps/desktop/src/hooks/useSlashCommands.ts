@@ -64,6 +64,7 @@ const BUILTIN_COMMANDS = [
   'migrate',
   'message',
   'settings',
+  'plan',
 ] as const;
 
 const COMMAND_PATTERN = /^\/([A-Za-z0-9._-]+)\s*(.*)$/;

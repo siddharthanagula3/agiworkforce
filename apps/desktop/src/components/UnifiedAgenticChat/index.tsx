@@ -66,6 +66,8 @@ import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
+import { PlanPreview } from '../Planning/PlanPreview';
+import { usePlanningStore, selectPlanningOpen } from '../../stores/planningStore';
 import { useTauriStreamListeners } from './useTauriStreamListeners';
 import {
   executeTerminalCommand,
@@ -97,6 +99,7 @@ import {
   executeMessageCommand,
   executeSettingsCommand,
   executeCompactCommand,
+  executePlanCommand,
 } from '../../handlers/slashCommandHandlers';
 
 /**
@@ -175,6 +178,33 @@ const PendingMessagesBubbles: React.FC = () => {
           {msg.content}
         </div>
       ))}
+    </div>
+  );
+};
+
+/**
+ * PlanPreviewPanel — renders the interactive plan preview inline above the chat input.
+ * Bridges the usePlanningStore state to the PlanPreview component.
+ * Only mounts when the planning panel is open.
+ */
+const PlanPreviewPanel: React.FC = () => {
+  const isOpen = usePlanningStore(selectPlanningOpen);
+  const description = usePlanningStore((s) => s.description);
+  const closePanel = usePlanningStore((s) => s.closePanel);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="px-4 py-2 border-t border-border/30">
+      <PlanPreview
+        initialDescription={description || undefined}
+        onExecutionStarted={() => {
+          // Plan execution started — close the panel after a brief display
+          // The agent runtime will continue execution in the background
+          setTimeout(() => closePanel(), 2000);
+        }}
+        onClose={closePanel}
+      />
     </div>
   );
 };
@@ -592,6 +622,9 @@ export const UnifiedAgenticChat: React.FC<{
               panel = await executeCompactCommand(slashCommand.args, compactDbId, compactUserId);
               break;
             }
+            case 'plan':
+              panel = await executePlanCommand(slashCommand.args);
+              break;
             default:
               throw new Error(`Unknown command: ${slashCommand.command}`);
           }
@@ -1309,6 +1342,8 @@ export const UnifiedAgenticChat: React.FC<{
               </SectionErrorBoundary>
               {/* Pending queued messages — dimmed bubbles shown when agentic loop is active */}
               <PendingMessagesBubbles />
+              {/* Interactive plan preview panel — shown when /plan triggered or Plan button clicked */}
+              <PlanPreviewPanel />
               {/* Status bar: shown while agentic loop is running, hidden otherwise */}
               <AgenticLoopStatusBar />
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
