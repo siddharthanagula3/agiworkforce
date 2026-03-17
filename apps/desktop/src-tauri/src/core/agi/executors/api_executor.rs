@@ -1,7 +1,6 @@
 //! API operations executor.
 //!
 //! Handles HTTP API operations including calls, uploads, and downloads.
-//! Delegates to the `api_tools_impl` module for actual implementation.
 //!
 //! # Supported Operations
 //!
@@ -24,11 +23,10 @@
 //! - Timeout limits prevent hanging on unresponsive servers
 
 use super::{ExecutorContext, ToolExecutor};
-use crate::core::agi::api_tools_impl;
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Executor for API operations.
@@ -114,7 +112,7 @@ impl ApiExecutor {
 
         context.emit_progress("Making API request...", Some(0.1));
 
-        let result = api_tools_impl::execute_api_call(app, parameters).await;
+        let result = execute_api_call_impl(app, parameters).await;
 
         match &result {
             Ok(response) => {
@@ -176,7 +174,7 @@ impl ApiExecutor {
 
         context.emit_progress(&format!("Uploading file: {}...", file_path), Some(0.1));
 
-        let result = api_tools_impl::execute_api_upload(app, parameters).await;
+        let result = execute_api_upload_impl(app, parameters).await;
 
         match &result {
             Ok(response) => {
