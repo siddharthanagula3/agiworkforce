@@ -2160,3 +2160,39 @@ export async function executeRedoCommand(): Promise<InlinePanel> {
 
   return panel;
 }
+
+/**
+ * Opens the interactive plan preview panel for a task description.
+ * The /plan slash command generates a step-by-step execution plan the user can
+ * review, reorder, and approve before the agent executes it.
+ *
+ * @param description - Task description to generate a plan for
+ * @returns An InlinePanel confirming the plan panel was opened
+ */
+export async function executePlanCommand(description: string): Promise<InlinePanel> {
+  const panelId = `plan-${crypto.randomUUID()}`;
+
+  // Open the planning store panel — the actual plan generation happens inside the panel component
+  const { usePlanningStore } = await import('../stores/planningStore');
+  usePlanningStore.getState().openPanel(description || undefined);
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'plan',
+    content: {
+      data: {
+        title: 'Interactive Plan',
+        description: description
+          ? `Generating execution plan for: "${description.slice(0, 100)}${description.length > 100 ? '...' : ''}"`
+          : 'Plan panel opened — enter a task description to generate steps.',
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: description ? 'running' : 'completed',
+    },
+  };
+
+  return panel;
+}

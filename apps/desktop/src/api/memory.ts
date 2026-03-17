@@ -409,6 +409,182 @@ export async function importFromJson(
 }
 
 // ============================================================================
+// MEMORY COMPACTION API (newly wired)
+// ============================================================================
+
+/** Configuration for memory compaction */
+export interface CompactionConfig {
+  minAge?: number;
+  maxLogsPerDate?: number;
+  includeArchived?: boolean;
+}
+
+/** A candidate log entry for compaction */
+export interface CompactionCandidate {
+  date: string;
+  logCount: number;
+  totalSize: number;
+}
+
+/** Result of a memory compaction operation */
+export interface MemoryCompactionResult {
+  compactedDates: number;
+  extractedMemories: number;
+  archivedLogs: number;
+}
+
+/** A memory extracted during compaction */
+export interface ExtractedMemory {
+  category: string;
+  topic: string;
+  content: string;
+  importance: number;
+  source: string;
+}
+
+/** A daily log entry */
+export interface DailyLogEntry {
+  date: string;
+  content: string;
+  entryType: string;
+}
+
+/** Result of importing memories */
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: number;
+}
+
+/**
+ * Get logs that are candidates for compaction.
+ */
+export async function getCompactionCandidates(
+  config?: CompactionConfig,
+): Promise<CompactionCandidate[]> {
+  return invoke<CompactionCandidate[]>('memory_get_compaction_candidates', {
+    config: config ?? null,
+  });
+}
+
+/**
+ * Get compaction statistics (total logs, compacted, uncompacted, etc.)
+ */
+export async function getCompactionStats(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('memory_get_compaction_stats');
+}
+
+/**
+ * Compact old daily logs into summarized entries.
+ */
+export async function compactOldLogs(
+  startDate?: string,
+  endDate?: string,
+): Promise<MemoryCompactionResult> {
+  return invoke<MemoryCompactionResult>('memory_compact_old_logs', {
+    startDate,
+    endDate,
+  });
+}
+
+/**
+ * Get daily logs within a date range.
+ */
+export async function getLogsInRange(
+  startDate?: string,
+  endDate?: string,
+): Promise<DailyLogEntry[]> {
+  return invoke<DailyLogEntry[]>('memory_get_logs_in_range', {
+    startDate,
+    endDate,
+  });
+}
+
+/**
+ * Promote extracted memories from compaction to long-term storage.
+ */
+export async function promoteExtracted(memories: ExtractedMemory[]): Promise<number> {
+  return invoke<number>('memory_promote_extracted', { memories });
+}
+
+/**
+ * Archive compacted logs by date, optionally deleting originals.
+ */
+export async function archiveCompactedLogs(
+  dates: string[],
+  deleteCompacted: boolean = false,
+): Promise<number> {
+  return invoke<number>('memory_archive_compacted_logs', {
+    dates,
+    deleteCompacted,
+  });
+}
+
+/**
+ * Get a prompt template for LLM-based memory extraction from logs.
+ */
+export async function getExtractionPrompt(
+  startDate?: string,
+  endDate?: string,
+  config?: CompactionConfig,
+): Promise<string> {
+  return invoke<string>('memory_get_extraction_prompt', {
+    startDate,
+    endDate,
+    config: config ?? null,
+  });
+}
+
+// ============================================================================
+// MEMORY DECAY API (additional commands)
+// ============================================================================
+
+/** A candidate memory for importance decay */
+export interface DecayCandidate {
+  id: number;
+  topic: string;
+  category: string;
+  currentImportance: number;
+  suggestedDecay: number;
+  daysSinceAccess: number;
+}
+
+/**
+ * Get memories that are candidates for importance decay.
+ */
+export async function getDecayCandidates(): Promise<DecayCandidate[]> {
+  return invoke<DecayCandidate[]>('memory_get_decay_candidates');
+}
+
+/**
+ * Decay a single memory's importance by a specified amount.
+ * Returns the new importance value.
+ */
+export async function decaySingle(memoryId: number, decayAmount: number): Promise<number> {
+  return invoke<number>('memory_decay_single', { memoryId, decayAmount });
+}
+
+/**
+ * Recall a memory by category and topic, boosting its importance on access.
+ */
+export async function recallWithBoost(
+  category: string,
+  topic: string,
+): Promise<MemoryEntry | null> {
+  return invoke<MemoryEntry | null>('memory_recall_with_boost', { category, topic });
+}
+
+/**
+ * Import memories from a JSON string (for programmatic import without file).
+ */
+export async function importFromJsonString(
+  json: string,
+  strategy: string = 'skip',
+): Promise<ImportResult> {
+  return invoke<ImportResult>('memory_import_json_string', { json, strategy });
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 

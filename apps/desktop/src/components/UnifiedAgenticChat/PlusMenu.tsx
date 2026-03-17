@@ -1,5 +1,16 @@
 import { useCallback, useState } from 'react';
-import { Folder, FolderOpen, Plus, Paperclip, Link, Brain, Globe, Check, X } from 'lucide-react';
+import {
+  Folder,
+  FolderOpen,
+  Plus,
+  Paperclip,
+  Link,
+  Brain,
+  Globe,
+  Check,
+  X,
+  ListChecks,
+} from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
@@ -7,6 +18,7 @@ import type { CaptureResult } from '../../types/capture';
 import { cn } from '../../lib/utils';
 import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../../stores/projectStore';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import { usePlanningStore } from '../../stores/planningStore';
 
 interface PlusMenuProps {
   disabled?: boolean;
@@ -187,6 +199,19 @@ export function PlusMenu({
         >
           <Brain className="h-4 w-4 shrink-0" />
           <span>Skills</span>
+        </button>
+
+        {/* Plan — generate interactive execution plan */}
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(false);
+            usePlanningStore.getState().openPanel();
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+        >
+          <ListChecks className="h-4 w-4 shrink-0" />
+          <span>Plan</span>
         </button>
 
         {/* Separator */}

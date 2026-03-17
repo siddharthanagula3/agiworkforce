@@ -164,7 +164,8 @@ export interface InlinePanel {
     | 'schedule'
     | 'lsp'
     | 'marketplace'
-    | 'generic';
+    | 'generic'
+    | 'plan';
   content: InlinePanelContent;
   isCollapsed: boolean;
   timestamp: Date;
@@ -203,7 +204,8 @@ export type BuiltInSlashCommandName =
   | 'enhance'
   | 'migrate'
   | 'message'
-  | 'settings';
+  | 'settings'
+  | 'plan';
 
 export type SlashCommandName = BuiltInSlashCommandName | (string & {});
 
