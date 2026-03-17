@@ -1,42 +1,73 @@
-# Stabilization Plan — 2026-03-16
+# Execution Plan — 2026-03-17
 
-## Final Status
+## Vision: Open Multi-Model AI Platform — Beat Claude, No Lock-In
 
-| Phase                   | Status | Result                                           |
-| ----------------------- | ------ | ------------------------------------------------ |
-| 0. Bootstrap            | DONE   | CLAUDE.md, docs, 23 agents/13 skills/16 rules    |
-| 1. Build Health         | DONE   | cargo check + clippy + typecheck all pass        |
-| 2. Fix Clippy + Audit   | DONE   | 0 warnings, 0 LIVE audit issues                  |
-| 3. Fix Issues           | DONE   | 4 code fixes, 2 by-design, 3 deferred            |
-| 4. Security Sweep       | DONE   | S1-S8 PASS + 4 CRITICAL vulns fixed              |
-| 5. Wire Commands        | DONE   | 53+ commands wired (memory, browser, MCP server) |
-| 6. Cross-Surface Builds | DONE   | ALL 5 PASS                                       |
-| 7. Cleanup              | DONE   | 34 stale docs deleted, tracking updated          |
+**Positioning**: AGI Workforce is the open, model-agnostic alternative to Anthropic's entire product suite (Claude Desktop, Claude Code, Claude.ai, Claude Mobile). Users can connect ANY LLM — cloud or local — and get full desktop autonomy, mobile companion, and 140+ non-coding skills.
 
-## Code Changes Made
+**Competitive thesis**: Claude locks users into one model. We give them all models in one platform.
 
-| #   | File                      | Change                                               |
-| --- | ------------------------- | ---------------------------------------------------- |
-| 1   | transport.rs:878          | Removed empty line after doc comment                 |
-| 2   | provider_adapter.rs:2055  | filter_map → map (all arms return value)             |
-| 3   | continuous_executor.rs:18 | Removed #![allow(dead_code)] pragma                  |
-| 4   | rag_system.rs             | Removed 3 unused embedding fields                    |
-| 5   | lib.rs                    | Registered mcp_server_status + mcp_server_list_tools |
-| 6   | FULL_AUDIT.md             | 8 [LIVE] rows reclassified                           |
-| 7   | \_layout.tsx (mobile)     | Deep link pairing code regex validation              |
-| 8   | csrf.ts (web)             | HMAC hash before timingSafeEqual (timing attack fix) |
-| 9   | auth.ts (desktop)         | sanitizeAuthState() strips tokens from logs          |
-| 10  | memoryStore.ts            | 20 new actions + 5 new interfaces                    |
-| 11  | projectMemoryStore.ts     | NEW — 3 project memory actions                       |
-| 12  | chatMemoryStore.ts        | NEW — 11 chat memory actions                         |
-| 13  | knowledgeStore.ts         | NEW — 2 knowledge base actions                       |
-| 14  | browserAutomation.ts      | 17 new methods + release gate fixes                  |
+**Solo developer building a trillion-dollar platform.**
 
-## Desktop Release Gate: ALL 6 PASS
+---
 
-1. One canonical frontend send path (chat_send_message)
-2. One canonical backend runtime (chat/send_message.rs)
-3. One canonical reasoning stream (ChatStream → ThinkingBlock)
-4. One canonical approval path (MessageApprovals → ApprovalRequestCard)
-5. Zero duplicate chat handlers
-6. Reasoning, tools, approvals all render inline
+## Session 7: Release Readiness + Competitive Features
+
+### Phase Status
+
+| Phase                      | Status      | Result                                            |
+| -------------------------- | ----------- | ------------------------------------------------- |
+| 0. Bootstrap & Consolidate | DONE        | All root .md files current                        |
+| 1. Build Health            | DONE        | ALL 8 surfaces build clean, 0 TS errors           |
+| 2. Feature Sprint          | DONE        | 10 major features completed                       |
+| 3. Audit & Bug Fix         | DONE        | All HIGH/MEDIUM Rust bugs pre-fixed, 13 new fixes |
+| 4. Release Readiness Audit | DONE        | 4 BLOCKERs, 8 WARNINGs identified                 |
+| 5. Competitive Research    | IN PROGRESS | Researching Claude Desktop/Code/MCP               |
+| 6. Fix Blockers            | PENDING     | Patch vulns, narrow permissions, set IDs          |
+| 7. Store Submissions       | PENDING     | 7 distribution channels                           |
+
+### Build Health (ALL PASS)
+
+All 8 surfaces: cargo check, tsc, vite/esbuild, pnpm build — PASS with 0 errors.
+
+### Features Completed This Session
+
+1. Model Council — multi-model consensus
+2. Interactive Planning — preview/edit/approve plans
+3. DynamicCanvas — 10 widget types + palette
+4. Voice Mode — animated orb, push-to-talk, STT→LLM→TTS
+5. Agent Collaboration — swarm, task delegation, results
+6. Scheduler Panel — NLP input, history, controls
+7. Memory Panel — browse, timeline, decay settings
+8. Deep Research Panel — citations, reports
+9. Services — 10 API endpoints + 7 WebSocket handlers
+10. 13 audit bug fixes
+
+### Release Blockers (4)
+
+1. B-1: 20 dependency vulnerabilities (patch jsPDF, undici, next)
+2. B-2: Chrome extension host_permissions too broad
+3. B-3: Mobile Expo project ID placeholder
+4. B-4: Web missing robots.txt
+
+### Sprint Plan
+
+| Sprint | Focus                                      | Status    |
+| ------ | ------------------------------------------ | --------- |
+| 1      | Planning + Council                         | DONE      |
+| 2      | Canvas + Voice                             | DONE      |
+| 3      | Fix blockers + Store submissions           | THIS WEEK |
+| 4      | AGI Workforce CLI (Claude Code competitor) | NEXT WEEK |
+| 5      | Deep Research + Codebase Wiki              | Week 3    |
+| 6      | Remote Control + Meeting Agent             | Week 4    |
+
+### Distribution Channels
+
+| #   | Channel             | Status     | Blocker                       |
+| --- | ------------------- | ---------- | ----------------------------- |
+| 1   | Desktop             | ALMOST     | Code signing                  |
+| 2   | Website             | ALMOST     | robots.txt, Next.js patch     |
+| 3   | App Store           | NEEDS WORK | Expo ID, signing, screenshots |
+| 4   | Play Store          | NEEDS WORK | Expo ID, signing, listing     |
+| 5   | Chrome Web Store    | NEEDS WORK | Permissions, listing          |
+| 6   | VS Code Marketplace | ALMOST     | .vscodeignore, CHANGELOG      |
+| 7   | API Services        | READY      | Deploys clean                 |
