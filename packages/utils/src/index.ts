@@ -72,3 +72,15 @@ export type { ApiError, FriendlyError, ErrorCodeValue } from './errors';
 
 // Voice utilities
 export * from './voice';
+
+// Crypto utilities
+export {
+  generateToken,
+  generateUUID,
+  sha256,
+  sha1,
+  generateNumericCode,
+  generateShortId,
+  hmacSha256,
+  timingSafeEqual,
+} from './crypto';
