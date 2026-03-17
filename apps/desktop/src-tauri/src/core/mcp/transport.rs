@@ -2047,11 +2047,14 @@ mod tests {
         let err = result.unwrap_err();
         let err_msg = err.to_string();
 
-        // The error should be either a ConnectionTimeout or a ConnectionError
-        // (depending on OS behavior for non-routable addresses).
+        // The error should be either:
+        // - a ConnectionTimeout / ConnectionError from OS-level network failure, or
+        // - a security rejection (HTTP non-localhost addresses are blocked)
         assert!(
-            err_msg.contains("timed out") || err_msg.contains("failed"),
-            "Error should mention timeout or failure, got: {}",
+            err_msg.contains("timed out")
+                || err_msg.contains("failed")
+                || err_msg.contains("Refusing to connect"),
+            "Error should mention timeout, failure, or security rejection, got: {}",
             err_msg,
         );
 

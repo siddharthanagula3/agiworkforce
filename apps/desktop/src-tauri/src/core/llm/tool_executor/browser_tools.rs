@@ -75,8 +75,8 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
     let lower = trimmed.to_lowercase();
 
     // 2. Characters that break out of a JS string literal when interpolated.
-    //    These are never valid in a CSS selector token anyway.
-    for ch in ['<', '>', '\'', '"', '\\'] {
+    //    Note: `>` is the CSS child combinator and is intentionally NOT blocked here.
+    for ch in ['<', '\'', '"', '\\'] {
         if trimmed.contains(ch) {
             return Err(format!(
                 "contains disallowed character '{}'",
@@ -110,18 +110,19 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
         return Err("contains url() (external resource loading risk)".to_string());
     }
 
-    // 4. Validate pseudo-classes against the safe allowlist.
-    //    Walk the selector and extract every `:name` or `::name` token.
-    validate_pseudo_classes(trimmed)?;
-
-    // 5. Reject nested :not() — `:not(:not(...))` is a known abuse vector.
-    validate_not_nesting(trimmed)?;
-
-    // 6. Reject :has() — it allows parent/ancestor selection which can have
+    // 4. Reject :has() — it allows parent/ancestor selection which can have
     //    side effects in some engines and is a known attack surface.
+    //    Check before pseudo-class allowlist walk so the error message is specific.
     if lower.contains(":has(") {
         return Err("contains :has() (parent selection with potential side effects)".to_string());
     }
+
+    // 5. Validate pseudo-classes against the safe allowlist.
+    //    Walk the selector and extract every `:name` or `::name` token.
+    validate_pseudo_classes(trimmed)?;
+
+    // 6. Reject nested :not() — `:not(:not(...))` is a known abuse vector.
+    validate_not_nesting(trimmed)?;
 
     Ok(())
 }

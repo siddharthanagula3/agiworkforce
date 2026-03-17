@@ -689,6 +689,11 @@ impl OpenAIAdapter {
             api_request["tools"] = self.adapt_tools_to_nested_format(tools)?;
         }
 
+        // Add tool_choice
+        if let Some(tool_choice) = &request.tool_choice {
+            api_request["tool_choice"] = serde_json::to_value(tool_choice)?;
+        }
+
         // Add streaming
         if request.stream {
             api_request["stream"] = serde_json::json!(true);
