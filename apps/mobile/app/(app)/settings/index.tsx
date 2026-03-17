@@ -1,10 +1,14 @@
 import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
-// Note: `Vibrate` was removed from Lucide in some intermediate versions but
-// was re-added and is present in lucide-react-native ≥ 0.460. Confirmed
-// available in the project's installed version (^0.474.0).
-import { Menu, LogOut, Bell, Vibrate, ExternalLink, type LucideIcon } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import {
+  ArrowLeft,
+  LogOut,
+  Bell,
+  Vibrate,
+  ExternalLink,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
@@ -39,7 +43,7 @@ function SettingRow({
 }
 
 export default function SettingsScreen() {
-  const navigation = useNavigation();
+  const router = useRouter();
   const { user, signOut } = useAuthStore();
   const { hapticsEnabled, notificationsEnabled, setHapticsEnabled, setNotificationsEnabled } =
     useSettingsStore();
@@ -74,12 +78,17 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-3 h-12">
         <Pressable
-          onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
-          className="p-2 -ml-2 rounded-lg active:bg-white/5"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+          }}
+          className="p-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
-          <Menu size={22} color={colors.textSecondary} />
+          <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2">
           Settings
