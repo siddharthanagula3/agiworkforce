@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { User } from '@supabase/supabase-js';
@@ -146,6 +147,10 @@ async function handleGetConnectors(request: NextRequest) {
 // ─── POST: save new connection ─────────────────────────────────────────────────
 
 async function handleCreateConnector(request: NextRequest) {
+  // CSRF protection for state-changing POST endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -215,6 +220,10 @@ async function handleCreateConnector(request: NextRequest) {
 // ─── DELETE: remove connection ─────────────────────────────────────────────────
 
 async function handleDeleteConnector(request: NextRequest) {
+  // CSRF protection for state-changing DELETE endpoint
+  const csrfError2 = await requireCsrfToken(request);
+  if (csrfError2) return csrfError2 as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 

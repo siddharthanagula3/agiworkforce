@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
@@ -37,6 +38,10 @@ async function handleCollaboration(request: NextRequest): Promise<NextResponse> 
   // CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
+
+  // CSRF protection for state-changing POST endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
 
   // Rate limiting — collaboration uses the same budget as LLM completion
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');

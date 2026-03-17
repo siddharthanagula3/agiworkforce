@@ -3,8 +3,20 @@ import { Bot } from 'lucide-react';
 
 export const metadata = {
   title: 'Terms of Service',
-  description: 'Terms of service for AGI Workforce - the AI agent desktop platform.',
+  description:
+    'Terms of service for AGI Workforce. Read the license terms, user responsibilities, and policies for using the AI agent desktop platform.',
   alternates: { canonical: '/terms' },
+  openGraph: {
+    title: 'Terms of Service | AGI Workforce',
+    description: 'Terms of service for AGI Workforce, the AI agent desktop platform.',
+    type: 'website',
+    url: 'https://agiworkforce.com/terms',
+  },
+  twitter: {
+    card: 'summary' as const,
+    title: 'Terms of Service | AGI Workforce',
+    description: 'Terms of service for the AGI Workforce AI agent desktop platform.',
+  },
 };
 
 export default function TermsPage() {
