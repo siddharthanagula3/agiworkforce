@@ -1,5 +1,7 @@
 module.exports = {
   preset: 'jest-expo',
+  // Runs BEFORE jest-expo's setup to fix missing UIManager mock
+  setupFiles: ['./jest.setup.js'],
   // setupFilesAfterFramework was a typo — correct key is setupFilesAfterEnv
   setupFilesAfterEnv: ['@testing-library/react-native/extend-expect'],
   // The pnpm package store resolves to paths like:
