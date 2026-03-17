@@ -65,9 +65,10 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_PRO_YEARLY',
     'STRIPE_PRICE_MAX_MONTHLY',
     'STRIPE_PRICE_MAX_YEARLY',
-    'STRIPE_PRICE_ENTERPRISE_MONTHLY',
-    'STRIPE_PRICE_ENTERPRISE_YEARLY',
   ];
+
+  // Optional enterprise tier (warn if missing, don't error)
+  const optionalPriceVars = ['STRIPE_PRICE_ENTERPRISE_MONTHLY', 'STRIPE_PRICE_ENTERPRISE_YEARLY'];
 
   // Check critical variables
   for (const varName of criticalVars) {
@@ -89,6 +90,13 @@ export function validateRequiredEnvVars(): ValidationResult {
   for (const varName of priceIdVars) {
     if (!process.env[varName]) {
       errors.push(`Missing Stripe price ID: ${varName}`);
+    }
+  }
+
+  // Check optional enterprise price IDs (warn only)
+  for (const varName of optionalPriceVars) {
+    if (!process.env[varName]) {
+      warnings.push(`Optional Stripe price ID not set: ${varName} (enterprise tier)`);
     }
   }
 
