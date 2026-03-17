@@ -1,90 +1,113 @@
-# TODO
+# TODO — Release Fixes + Competitive Strategy
 
-_Updated: 2026-03-16 (Phase 0 consolidation)_
+_Updated: 2026-03-17 (session 7, release readiness audit + competitive analysis)_
 
-## Phase 6A Critical Fixes (Web App)
+## BLOCKERS — Fix Before Release
 
-> Extracted from PHASE_6A_REPORT_GENERATED.txt and PHASE_6A_VERIFICATION_STATUS.txt
+### B-1: Patch Vulnerable Dependencies
 
-### Blocking Phase 6B (must fix before proceeding)
+```bash
+pnpm update jspdf undici next
+```
 
-- [x] CRIT-002: Export `SyncManagerState` — already resolved ✅
-- [x] CRIT-003: Fix test mock type mismatches — already resolved ✅
-- [x] CRIT-004: Fix session storage function signatures — already resolved (all callers pass correct args, typecheck:all passes) ✅
-- [x] CRIT-005: Fix HelpTour test failures — skip button selector ambiguity, previous step boundary condition (expected -1, got 0) ✅
-- [x] CRIT-006: Fix runtime CSS error in motion-dom — motion-dom mock + css:false in vitest config ✅
-- [x] CRIT-007: Remove unused imports/variables — fixed (eslint worktree ignore) ✅
-- [x] CRIT-008: Fix PerformanceUtils type access — already resolved (proper type guards in place) ✅
+- jsPDF <=4.2.0: CRITICAL HTML injection + HIGH PDF object injection
+- undici <6.24.0 / <7.24.0: 6 HIGH WebSocket vulns + 3 moderate
+- next 16.1.6: LOW HMR CSRF — patch to >=16.1.7
 
-### Phase 6A Gate Status
+### B-2: Narrow Chrome Extension Host Permissions
 
-- Gate 1: TypeScript Compilation — PASS (0 errors)
-- Gate 2: Test Suite — PASS (3207 tests, 0 failures)
-- Gate 3: Runtime Stability — PASS (motion-dom mock fixed)
-- Gate 4: Code Builds — PASS (all exports resolved)
-- Gate 5: Critical Issues Fixed — PASS (7/7)
-- Gate 6: HIGH Issues Addressed — FAIL (1/34)
+File: `apps/extension/manifest.json`
+Change from `["http://*/*", "https://*/*"]` to specific domains + `activeTab`.
 
-## Wave 5.4 Integration Checklist
+### B-3: Set Expo Project ID
 
-> Extracted from WAVE_5_4_DELIVERABLES.txt (implementation complete, integration pending)
+File: `apps/mobile/app.json` — replace `EXPO_PROJECT_ID_REQUIRED` placeholder.
 
-- [ ] Wire `OfflineIndicator` into main app layout
-- [ ] Add `useSessionPersistence` to chat store initialization
-- [ ] Implement `syncOfflineQueue` callbacks in API layer
-- [ ] Add `/api/health` endpoint for connectivity check
-- [ ] Test offline-to-online-to-offline transitions
-- [ ] Verify localStorage quota handling (5-10MB)
-- [ ] Add analytics tracking for sync metrics
-- [ ] Load test with large message histories
-- [ ] Test on slow/intermittent networks
-- [ ] Document user-facing offline behavior
+### B-4: Create robots.txt
 
-## Deferred (Architectural — Future Sessions)
+Create `apps/web/public/robots.txt` with proper Allow/Disallow rules + sitemap.
 
-- Dual tool execution paths consolidation (#19)
-- Semantic search embeddings wiring (#41)
-- ContinuousExecutor progress tracking (#43)
+## WARNINGS — Fix Before Public Launch
 
-## Previous Session Accomplishments (Reference)
+- W-1: 22 console.log in desktop prod code — remove or replace with structured logging
+- W-2: 7 dangerouslySetInnerHTML — all sanitized, audit each sanitizer function
+- W-3: Version inconsistency (desktop 1.1.5, mobile/vscode 0.1.0) — align
+- W-4: VS Code ext missing .vscodeignore + CHANGELOG.md
+- W-5: Mobile newArchEnabled: false
+- W-6: 10 TODO/FIXME comments (6 Rust + 4 TS)
+- W-7: Desktop CSP allows unsafe-inline for styles
+- W-8: Next.js 16.1.6 low-severity advisory
 
-<details>
-<summary>Sessions 1-4 (2026-03-16)</summary>
+## COMPETITIVE STRATEGY — Beat Claude Across All Surfaces
 
-### Build Status (Desktop)
+### Position: "Claude for everyone, with no model lock-in"
 
-- cargo check: PASS
-- cargo clippy: 0 warnings
-- pnpm typecheck: PASS
-- pnpm lint: 0 errors, 0 warnings
-- Desktop tests: 1460 passed, 1 skipped
-- All 5 surfaces build clean
+AGI Workforce is the OPEN, multi-model alternative to Claude's entire product suite:
 
-### Commands: 484+ wired/registered
+| Claude Product    | AGI Workforce Equivalent    | Our Advantage                                       |
+| ----------------- | --------------------------- | --------------------------------------------------- |
+| Claude Desktop    | Desktop App (Tauri)         | Multi-model (9+ providers), full desktop automation |
+| Claude Code (CLI) | AGI Workforce CLI (planned) | Multi-model CLI, same agent runtime                 |
+| Claude.ai (web)   | Web App (Next.js)           | Multi-model, self-hostable                          |
+| Claude Mobile     | Mobile App (React Native)   | QR pair with desktop, live agent dashboard          |
+| Claude MCP        | MCP + unlimited tools       | No artificial tool limits                           |
+| Claude Projects   | Workspace + Memory          | Persistent cross-session memory with decay          |
+| Claude Artifacts  | DynamicCanvas               | 10 widget types vs Claude's code/text only          |
 
-- 354 commands registered in lib.rs
-- 87+ commands wired to frontend stores
-- 30+ differentiator commands wired
-- 9 new Zustand stores created
+### Key Differentiators to Amplify
 
-### Security: 8 CRITICAL fixes
+1. **No model lock-in**: Use Claude, GPT, Gemini, Mistral, Llama, Ollama all in one app
+2. **Desktop autonomy**: Full screen/keyboard/app control (Claude Desktop can't do this)
+3. **Mobile companion**: Live agent dashboard from phone (Claude has nothing)
+4. **Model Council**: Query multiple models simultaneously, get consensus
+5. **140+ non-coding skills**: Healthcare, legal, finance, education (Claude is code-focused)
+6. **AGI Workforce CLI**: Direct Claude Code competitor with multi-model support
 
-- CSRF timing attack, deep link validation, auth token logging
-- Webhook null guard, session token race, Stripe price validation
-- Stripe idempotency verified, Chrome extension permissions scoped
+## STORE SUBMISSION PREP
 
-### Quality
+### Apple App Store
 
-- 0 [LIVE] audit issues (was 8)
-- Google adapter modelVersion bug fixed
-- ESLint worktree ignore fix
-- Shared conversation types in packages/types
-- Web model catalog synced (10 providers added)
-- Wave 5.4 fully wired (OfflineIndicator, SyncManager, useSessionPersistence)
-- All release gate docs reconciled
-- Desktop Release Gate: ALL 6 PASS
+- [ ] App Store Connect account
+- [ ] Code signing + provisioning profiles
+- [ ] Screenshots (6 device sizes)
+- [ ] Privacy policy URL + privacy labels
+- [ ] App review notes
 
-### Cleanup
+### Google Play Store
 
-- 60+ stale docs deleted across sessions
-</details>
+- [ ] Play Console account ($25)
+- [ ] Play App Signing setup
+- [ ] Feature graphic + screenshots
+- [ ] Data safety section
+
+### Chrome Web Store
+
+- [ ] Developer account ($5)
+- [ ] Store listing + screenshots
+- [ ] Privacy policy + permissions justification
+
+### VS Code Marketplace
+
+- [ ] Azure DevOps publisher
+- [ ] vsce package test
+- [ ] README + CHANGELOG
+
+### Desktop Distribution
+
+- [ ] macOS code signing + notarization
+- [ ] Windows code signing (EV cert)
+- [ ] Linux AppImage/deb/rpm
+- [ ] Auto-updater endpoint
+
+## Build Status (ALL PASS — 2026-03-17)
+
+| Surface      | Build            | TS       | Lint          |
+| ------------ | ---------------- | -------- | ------------- |
+| Desktop Rust | cargo check PASS | N/A      | clippy 0 warn |
+| Desktop TS   | vite PASS        | 0 errors | clean         |
+| Web          | pnpm build PASS  | 0 errors | clean         |
+| Mobile       | N/A              | 0 errors | clean         |
+| Chrome Ext   | vite PASS        | clean    | clean         |
+| VS Code Ext  | esbuild PASS     | clean    | clean         |
+| API Gateway  | pnpm build PASS  | clean    | clean         |
+| Signaling    | pnpm build PASS  | clean    | clean         |
