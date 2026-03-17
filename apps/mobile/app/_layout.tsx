@@ -95,7 +95,7 @@ export default function RootLayout() {
       if (code) {
         const PAIRING_CODE_RE = /^[A-Za-z0-9]{6,8}$/;
         if (!PAIRING_CODE_RE.test(code)) {
-          console.warn('[deep-link] Invalid pairing code format, ignoring:', code);
+          console.warn('[deep-link] Invalid pairing code format, ignoring');
           return;
         }
         router.push(`/(app)/companion?pairingCode=${encodeURIComponent(code)}`);

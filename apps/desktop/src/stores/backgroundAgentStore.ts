@@ -294,7 +294,8 @@ export const useBackgroundAgentStore = create<BackgroundAgentState>()(
             { goal },
           );
           return { shouldPush, cleanedGoal };
-        } catch {
+        } catch (error) {
+          console.warn('Failed to check shouldPush:', getSimpleErrorMessage(error));
           return { shouldPush: false, cleanedGoal: goal };
         }
       },
