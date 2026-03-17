@@ -107,7 +107,7 @@ vi.mock('@features/chat/components/VoiceInputButton', () => ({
 const mockUseApiPromptCompletion = vi.fn(() => ({
   suggestion: '',
   isLoading: false,
-  accept: () => ' accepted',
+  accept: (): string => ' accepted',
   clear: vi.fn(),
 }));
 
