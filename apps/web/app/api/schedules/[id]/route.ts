@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { User } from '@supabase/supabase-js';
@@ -130,6 +131,10 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
 const VALID_RECURRENCES = ['once', 'daily', 'weekly', 'monthly', 'custom'];
 
 async function handleUpdateSchedule(request: NextRequest, context: RouteContext) {
+  // CSRF protection for state-changing PUT endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -217,6 +222,10 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
 // ---------------------------------------------------------------------------
 
 async function handleDeleteSchedule(request: NextRequest, context: RouteContext) {
+  // CSRF protection for state-changing DELETE endpoint
+  const csrfError2 = await requireCsrfToken(request);
+  if (csrfError2) return csrfError2 as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -246,6 +255,10 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
 // ---------------------------------------------------------------------------
 
 async function handleToggleSchedule(request: NextRequest, context: RouteContext) {
+  // CSRF protection for state-changing PATCH endpoint
+  const csrfError3 = await requireCsrfToken(request);
+  if (csrfError3) return csrfError3 as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
