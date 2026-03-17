@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
+import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 
@@ -202,6 +204,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // CSRF protection for state-changing POST endpoint
+    const csrfError = await requireCsrfToken(request);
+    if (csrfError) return csrfError as NextResponse;
+
+    // Rate limiting
+    const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const userId = await authenticateRequest(request);
     const supabase = getAdminClient();
     const corsHeaders = getCorsHeaders(request);
@@ -292,6 +302,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  */
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
+    // CSRF protection for state-changing DELETE endpoint
+    const csrfError = await requireCsrfToken(request);
+    if (csrfError) return csrfError as NextResponse;
+
+    // Rate limiting
+    const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const userId = await authenticateRequest(request);
     const supabase = getAdminClient();
     const corsHeaders = getCorsHeaders(request);

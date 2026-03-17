@@ -48,10 +48,11 @@ export default function UpdatePasswordPage() {
             // Wait a bit for Supabase to process the recovery token
             setTimeout(async () => {
               if (!mounted) return;
+              // Use getUser() for server-side verification
               const {
-                data: { session: retrySession },
-              } = await supabase.auth.getSession();
-              if (retrySession) {
+                data: { user: retryUser },
+              } = await supabase.auth.getUser();
+              if (retryUser) {
                 setIsRecoveryMode(true);
                 setIsInitializing(false);
               } else {
@@ -71,11 +72,13 @@ export default function UpdatePasswordPage() {
     });
 
     // Also check immediately for existing session
+    // Use getUser() to force server-side JWT re-verification
+    // instead of getSession() which only reads the cookie without validating.
     const checkSession = async () => {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session && mounted) {
+        data: { user: existingUser },
+      } = await supabase.auth.getUser();
+      if (existingUser && mounted) {
         setIsInitializing(false);
       }
     };

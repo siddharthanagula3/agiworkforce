@@ -26,10 +26,16 @@ export default function ForgotPasswordPage() {
     });
 
     if (resetError) {
-      setError(resetError.message);
-    } else {
-      setSuccess(true);
+      // Log the error for debugging but do not expose it to the user.
+      // Showing different messages for existing vs non-existing emails
+      // would allow user enumeration attacks.
+      console.error('Password reset error:', resetError.message);
     }
+
+    // Always show success to prevent user enumeration.
+    // If the email exists, the user will receive the reset link.
+    // If it doesn't, nothing happens but the attacker learns nothing.
+    setSuccess(true);
     setLoading(false);
   };
 

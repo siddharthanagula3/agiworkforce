@@ -32,7 +32,20 @@ function LoginForm() {
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [ssoMode, setSsoMode] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
+
+  // Check for account suspension errors passed from middleware
+  const initialMessage = useMemo(() => {
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    if (error === 'account_suspended' && errorDescription) {
+      return { text: errorDescription, type: 'error' as const };
+    }
+    return null;
+  }, [searchParams]);
+
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(
+    initialMessage,
+  );
 
   // Debounce SSO domain check — only fire after user stops typing
   const ssoCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
