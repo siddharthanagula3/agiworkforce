@@ -63,6 +63,8 @@ interface McpState {
 
   // Credential management - used by MCPCredentialManager component
   storeCredential: (serverName: string, key: string, value: string) => Promise<void>;
+  setCredential: (serverName: string, key: string, value: string) => Promise<void>;
+  deleteCredential: (serverName: string, key: string) => Promise<void>;
 
   // Server enable/disable - used by MCPServerManager component
   enableServer: (name: string) => Promise<void>;
@@ -207,8 +209,7 @@ export const useMcpStore = create<McpState>()(
         } catch (error) {
           set(
             {
-              error:
-                error instanceof Error ? error.message : 'Failed to get MCP execution history',
+              error: error instanceof Error ? error.message : 'Failed to get MCP execution history',
             },
             undefined,
             'mcp/refreshExecutionHistory/error',
@@ -393,6 +394,40 @@ export const useMcpStore = create<McpState>()(
             },
             undefined,
             'mcp/storeCredential/error',
+          );
+        }
+      },
+
+      setCredential: async (serverName: string, key: string, value: string) => {
+        set({ isLoading: true, error: null }, undefined, 'mcp/setCredential/start');
+        try {
+          await McpClient.setCredential(serverName, key, value);
+          set({ isLoading: false }, undefined, 'mcp/setCredential/success');
+        } catch (error) {
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to set credential',
+              isLoading: false,
+            },
+            undefined,
+            'mcp/setCredential/error',
+          );
+        }
+      },
+
+      deleteCredential: async (serverName: string, key: string) => {
+        set({ isLoading: true, error: null }, undefined, 'mcp/deleteCredential/start');
+        try {
+          await McpClient.deleteCredential(serverName, key);
+          set({ isLoading: false }, undefined, 'mcp/deleteCredential/success');
+        } catch (error) {
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to delete credential',
+              isLoading: false,
+            },
+            undefined,
+            'mcp/deleteCredential/error',
           );
         }
       },

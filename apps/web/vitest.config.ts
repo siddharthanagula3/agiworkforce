@@ -25,8 +25,14 @@ export default defineConfig({
         'postcss.config.*',
       ],
     },
-    // Disable CSS parsing in jsdom to prevent motion-dom CSS rendering errors
-    // (CSS parsing errors occur when framer-motion tries to set animation transforms)
+    // Disable CSS injection in jsdom to prevent motion-dom CSS rendering errors.
+    // motion-dom tries to set CSS transforms (e.g. translateX, opacity) via
+    // jsdom's cssstyle parser, which throws:
+    //   TypeError: Cannot read properties of undefined (reading 'split')
+    // Setting css to false prevents Vitest from processing CSS imports, and the
+    // framer-motion mock in test/setup.ts replaces motion components with plain
+    // DOM elements to avoid the cssstyle interaction entirely.
+    css: false,
     mockReset: true,
   },
   resolve: {
