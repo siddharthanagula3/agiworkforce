@@ -12,7 +12,7 @@
  *   - Tab or ArrowRight accepts the suggestion
  */
 
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { cn } from '@shared/lib/utils';
 
 interface GhostTextOverlayProps {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MessageBubbleSkeleton } from './MessageBubbleSkeleton';
 import { ChatLoadingState } from './ChatLoadingState';
 
@@ -134,10 +134,10 @@ describe('ChatLoadingState', () => {
     const { container } = render(<ChatLoadingState count={4} />);
     const allMessages = container.querySelectorAll('.mx-auto.flex.max-w-3xl');
     // index 0 → user (flex-row-reverse), index 1 → assistant, etc.
-    expect(allMessages[0].classList.contains('flex-row-reverse')).toBe(true);
-    expect(allMessages[1].classList.contains('flex-row-reverse')).toBe(false);
-    expect(allMessages[2].classList.contains('flex-row-reverse')).toBe(true);
-    expect(allMessages[3].classList.contains('flex-row-reverse')).toBe(false);
+    expect(allMessages[0]!.classList.contains('flex-row-reverse')).toBe(true);
+    expect(allMessages[1]!.classList.contains('flex-row-reverse')).toBe(false);
+    expect(allMessages[2]!.classList.contains('flex-row-reverse')).toBe(true);
+    expect(allMessages[3]!.classList.contains('flex-row-reverse')).toBe(false);
   });
 
   it('renders 0 skeletons when count=0', () => {

@@ -163,6 +163,9 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, reactionType: 'up' | 'down' | 'helpful') => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
+  showAvatar?: boolean;
+  showTimestamp?: boolean;
+  enableActions?: boolean;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
