@@ -69,8 +69,8 @@ class ErrorTrackingService {
       });
 
       this.initialized = true;
-    } catch (error) {
-      console.error('Failed to initialize error tracking:', error);
+    } catch {
+      // Sentry initialization failed — tracking will remain disabled
     }
   }
 
@@ -102,17 +102,14 @@ class ErrorTrackingService {
       ) {
         this.config.environment = environment;
       }
-    } catch (error) {
-      console.error('Failed to load error tracking config:', error);
+    } catch {
+      // Config load failed — defaults will be used
     }
   }
 
   public updateConfig(config: Partial<ErrorTrackingConfig>) {
     this.config = { ...this.config, ...config };
-    const success = safeSetJSON('error_tracking_config', this.config);
-    if (!success) {
-      console.warn('[ErrorTracking] Failed to persist config - changes may not survive reload');
-    }
+    safeSetJSON('error_tracking_config', this.config);
 
     if (config.enabled !== undefined) {
       if (config.enabled) {
@@ -131,7 +128,6 @@ class ErrorTrackingService {
     },
   ) {
     if (!this.config.enabled) {
-      console.error(error);
       return;
     }
 
@@ -157,8 +153,8 @@ class ErrorTrackingService {
           },
         },
       });
-    } catch (err) {
-      console.error('Failed to capture error:', err);
+    } catch {
+      // Sentry capture failed — error already tracked via analytics above
     }
   }
 
@@ -171,8 +167,8 @@ class ErrorTrackingService {
       Sentry.captureMessage(message, {
         level: this.mapSeverityToLevel(severity),
       });
-    } catch (error) {
-      console.error('Failed to capture message:', error);
+    } catch {
+      // Sentry message capture failed silently
     }
   }
 
@@ -188,8 +184,8 @@ class ErrorTrackingService {
         data: data,
         timestamp: Date.now() / 1000,
       });
-    } catch (error) {
-      console.error('Failed to add breadcrumb:', error);
+    } catch {
+      // Breadcrumb addition failed silently
     }
   }
 
@@ -203,8 +199,8 @@ class ErrorTrackingService {
         id: userId,
         ...userData,
       });
-    } catch (error) {
-      console.error('Failed to set user context:', error);
+    } catch {
+      // User context setting failed silently
     }
   }
 
@@ -215,8 +211,8 @@ class ErrorTrackingService {
 
     try {
       Sentry.setTags(tags);
-    } catch (error) {
-      console.error('Failed to set tags:', error);
+    } catch {
+      // Tag setting failed silently
     }
   }
 
@@ -240,8 +236,8 @@ class ErrorTrackingService {
         errorFormEntry: 'Some fields were invalid. Please correct them and try again.',
         successMessage: 'Your feedback has been sent. Thank you!',
       });
-    } catch (error) {
-      console.error('Failed to show feedback dialog:', error);
+    } catch {
+      // Feedback dialog failed silently
     }
   }
 
@@ -258,8 +254,7 @@ class ErrorTrackingService {
         },
         () => null,
       );
-    } catch (error) {
-      console.error('Failed to start transaction:', error);
+    } catch {
       return null;
     }
   }
@@ -296,12 +291,10 @@ export function setupGlobalErrorHandler() {
 
     // Suppress known Tauri internal errors that occur during cleanup
     if (errorMessage.includes('listeners[eventId]')) {
-      console.debug('[Tauri] Suppressed internal event cleanup error');
       event.preventDefault(); // Prevent the error dialog from showing
       return;
     }
 
-    console.error('Unhandled promise rejection:', event.reason);
     errorTracking.captureError(
       event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
       {
@@ -313,7 +306,6 @@ export function setupGlobalErrorHandler() {
   });
 
   window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
     errorTracking.captureError(event.error || new Error(event.message), {
       component: 'global',
       severity: ErrorSeverity.HIGH,

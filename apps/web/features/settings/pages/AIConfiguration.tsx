@@ -167,6 +167,19 @@ const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'apiKey' | 'isConfig
   },
 };
 
+/** Map lowercase Select values to PascalCase PROVIDER_CONFIGS keys */
+const PROVIDER_KEY_MAP: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google',
+  perplexity: 'Perplexity',
+  grok: 'Grok',
+  deepseek: 'DeepSeek',
+  qwen: 'Qwen',
+  moonshot: 'Moonshot',
+  zhipu: 'Zhipu',
+};
+
 const AIConfigurationPageContent: React.FC = () => {
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({});
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -201,9 +214,8 @@ const AIConfigurationPageContent: React.FC = () => {
 
   // Initialize configurations
   useEffect(() => {
-    // SECURITY: All providers are available through authenticated Netlify proxies
-    // API keys are managed server-side, not exposed to client
-    // All providers are shown as configured since the proxy handles API key availability
+    // SECURITY: API keys are managed server-side, not exposed to client
+    // Providers default to not-configured until an API key is set
 
     const initialConfigs: Record<string, ProviderConfig> = {};
 
@@ -214,8 +226,8 @@ const AIConfigurationPageContent: React.FC = () => {
       initialConfigs[key] = {
         ...config,
         apiKey,
-        // All providers are available through authenticated proxies
-        isConfigured: true,
+        // Default to not configured — badge updates when an API key is provided
+        isConfigured: false,
       };
     });
 
@@ -233,12 +245,7 @@ const AIConfigurationPageContent: React.FC = () => {
     }));
 
     // SECURITY: API keys should NOT be saved to localStorage
-    // Instead, show a warning that environment variables must be updated
-    if (apiKey) {
-      toast.error(
-        'API keys cannot be saved from the UI for security reasons. Please update your .env file instead.',
-      );
-    }
+    // A static info message is shown near the input field instead
   };
 
   const handleTestProvider = async (provider: string) => {
@@ -330,19 +337,7 @@ const AIConfigurationPageContent: React.FC = () => {
   };
 
   const getModelsForProvider = (provider: string): string[] => {
-    // Map lowercase provider names to PROVIDER_CONFIGS keys
-    const providerMap: Record<string, string> = {
-      openai: 'OpenAI',
-      anthropic: 'Anthropic',
-      google: 'Google',
-      perplexity: 'Perplexity',
-      grok: 'Grok',
-      deepseek: 'DeepSeek',
-      qwen: 'Qwen',
-      moonshot: 'Moonshot',
-      zhipu: 'Zhipu',
-    };
-    const configKey = providerMap[provider.toLowerCase()] || provider;
+    const configKey = PROVIDER_KEY_MAP[provider.toLowerCase()] ?? provider;
     const config = PROVIDER_CONFIGS[configKey];
     return config ? config.models : [];
   };
@@ -457,6 +452,9 @@ const AIConfigurationPageContent: React.FC = () => {
               )}
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            API keys cannot be saved from the UI. Please update your .env file instead.
+          </p>
         </div>
 
         {/* Features */}
@@ -645,7 +643,9 @@ const AIConfigurationPageContent: React.FC = () => {
                     onValueChange={(value) => {
                       setDefaultProvider(value);
                       // Update model to match the provider's default
-                      const providerConfig = PROVIDER_CONFIGS[value];
+                      // Select values are lowercase but PROVIDER_CONFIGS keys are PascalCase
+                      const configKey = PROVIDER_KEY_MAP[value] ?? value;
+                      const providerConfig = PROVIDER_CONFIGS[configKey];
                       if (providerConfig) {
                         setDefaultModel(providerConfig.defaultModel);
                       }
@@ -760,16 +760,6 @@ const AIConfigurationPageContent: React.FC = () => {
               <CardTitle>Advanced Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enable Streaming</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable real-time response streaming
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Auto Fallback</Label>

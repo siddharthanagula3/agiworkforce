@@ -496,7 +496,6 @@ class SettingsService {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching profile:', error);
         return { data: null, error: error.message };
       }
 
@@ -515,7 +514,6 @@ class SettingsService {
         },
       };
     } catch (error) {
-      console.error('Error getting profile:', error);
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -549,13 +547,11 @@ class SettingsService {
       });
 
       if (error) {
-        console.error('Error updating profile:', error);
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Error updating profile:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -582,7 +578,6 @@ class SettingsService {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching settings:', error);
         return { data: {}, error: error.message };
       }
 
@@ -619,7 +614,6 @@ class SettingsService {
 
       return { data: data as UserSettings };
     } catch (error) {
-      console.error('Error getting settings:', error);
       return {
         data: {},
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -648,13 +642,11 @@ class SettingsService {
       });
 
       if (error) {
-        console.error('Error updating settings:', error);
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Error updating settings:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -685,7 +677,6 @@ class SettingsService {
       });
 
       if (uploadError) {
-        console.error('Error uploading avatar:', uploadError);
         return { data: '', error: uploadError.message };
       }
 
@@ -699,7 +690,6 @@ class SettingsService {
 
       return { data: publicUrl };
     } catch (error) {
-      console.error('Error uploading avatar:', error);
       return {
         data: '',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -717,13 +707,11 @@ class SettingsService {
       });
 
       if (error) {
-        console.error('Error changing password:', error);
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Error changing password:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -750,13 +738,11 @@ class SettingsService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching API keys:', error);
         return { data: [], error: error.message };
       }
 
       return { data: data as APIKey[] };
     } catch (error) {
-      console.error('Error getting API keys:', error);
       return {
         data: [],
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -796,13 +782,11 @@ class SettingsService {
         .single();
 
       if (error) {
-        console.error('Error creating API key:', error);
         return { data: null, error: error.message };
       }
 
       return { data: data as APIKey, fullKey };
     } catch (error) {
-      console.error('Error creating API key:', error);
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -822,13 +806,11 @@ class SettingsService {
         .eq('id', keyId);
 
       if (error) {
-        console.error('Error deleting API key:', error);
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Error deleting API key:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -862,7 +844,6 @@ class SettingsService {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching 2FA status:', error);
         return { data: { enabled: false }, error: error.message };
       }
 
@@ -878,7 +859,6 @@ class SettingsService {
         },
       };
     } catch (error) {
-      console.error('Error getting 2FA status:', error);
       return {
         data: { enabled: false },
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -951,7 +931,6 @@ class SettingsService {
       });
 
       if (updateError) {
-        console.error('Error storing 2FA setup:', updateError);
         return { error: updateError.message };
       }
 
@@ -963,7 +942,6 @@ class SettingsService {
         },
       };
     } catch (error) {
-      console.error('Error setting up 2FA:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -993,7 +971,6 @@ class SettingsService {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('Error fetching 2FA settings:', fetchError);
         return { success: false, error: fetchError.message };
       }
 
@@ -1037,13 +1014,11 @@ class SettingsService {
         .eq('id', user.id);
 
       if (updateError) {
-        console.error('Error enabling 2FA:', updateError);
         return { success: false, error: updateError.message };
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error verifying 2FA:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -1076,7 +1051,6 @@ class SettingsService {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('Error fetching 2FA settings:', fetchError);
         return { valid: false, error: fetchError.message };
       }
 
@@ -1112,7 +1086,7 @@ class SettingsService {
             .eq('id', user.id);
 
           if (updateError) {
-            console.error('Error updating backup code usage:', updateError);
+            // Non-fatal: backup code was valid but usage counter update failed
           }
 
           return { valid: true, usedBackupCode: true };
@@ -1121,7 +1095,6 @@ class SettingsService {
 
       return { valid: false, error: 'Invalid code' };
     } catch (error) {
-      console.error('Error validating TOTP code:', error);
       return {
         valid: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -1168,13 +1141,11 @@ class SettingsService {
         .eq('id', user.id);
 
       if (updateError) {
-        console.error('Error disabling 2FA:', updateError);
         return { success: false, error: updateError.message };
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error disabling 2FA:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -1246,7 +1217,6 @@ class SettingsService {
 
       return { backupCodes };
     } catch (error) {
-      console.error('Error regenerating backup codes:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
       };

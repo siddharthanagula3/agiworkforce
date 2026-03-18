@@ -140,18 +140,25 @@ export default function MemoryPage() {
   };
 
   const handleResetAll = async () => {
-    try {
-      for (const memory of memories) {
-        await fetch(`/api/memory/${memory.id}`, {
+    const results = await Promise.allSettled(
+      memories.map((m) =>
+        fetch(`/api/memory/${m.id}`, {
           method: 'DELETE',
           headers: getAuthHeaders(),
-        });
-      }
-      setMemories([]);
+        }),
+      ),
+    );
+    const failedCount = results.filter((r) => r.status === 'rejected').length;
+    if (failedCount > 0) {
+      toast.error(`Failed to delete ${failedCount} memories`);
+    }
+    const successIds = memories
+      .filter((_, i) => results[i].status === 'fulfilled')
+      .map((m) => m.id);
+    setMemories((prev) => prev.filter((m) => !successIds.includes(m.id)));
+    if (failedCount === 0) {
       setShowResetConfirm(false);
       toast.success('All memories cleared');
-    } catch {
-      toast.error('Failed to clear memories');
     }
   };
 

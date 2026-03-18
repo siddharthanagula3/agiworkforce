@@ -132,13 +132,6 @@ function getCloudApiEndpoint(): string {
 }
 
 /**
- * Returns the AI API endpoint for LLM calls. Always uses the cloud API.
- */
-function getApiEndpoint(): string {
-  return getCloudApiEndpoint();
-}
-
-/**
  * Returns the desktop bridge base URL for bridge-specific (non-AI) operations.
  * Returns undefined if the bridge is not enabled.
  */
@@ -416,7 +409,7 @@ export async function streamChatCompletion(
     );
   }
 
-  const endpoint = getApiEndpoint();
+  const endpoint = getCloudApiEndpoint();
   const model = overrideModel ?? getModel();
   const streaming = isStreamingEnabled();
   const features = getFeatureFlags();

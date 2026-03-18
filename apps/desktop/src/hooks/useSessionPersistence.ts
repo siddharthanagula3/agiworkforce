@@ -8,7 +8,7 @@
  * app's chat types (MessageUI instead of EnhancedMessage).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { safeGetJSON, safeSetJSON, safeRemoveItem } from '@/utils/localStorage';
 
 // Storage keys
@@ -45,9 +45,9 @@ interface StoredDesktopMessage {
   tokens?: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface UseSessionPersistenceOptions {
-  autoSaveInterval?: number;
-  debug?: boolean;
+  // Reserved for future use
 }
 
 export interface UseSessionPersistenceReturn {
@@ -93,7 +93,7 @@ function saveAllSessions(sessions: PersistedSession[]): void {
 export function useSessionPersistence(
   options: UseSessionPersistenceOptions = {},
 ): UseSessionPersistenceReturn {
-  const { autoSaveInterval = 0 } = options;
+  void options; // options reserved for future use
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -308,19 +308,6 @@ export function useSessionPersistence(
       return 0;
     }
   }, []);
-
-  // Auto-save placeholder: the hook does not hold session state internally,
-  // so auto-save must be driven by the consumer. This interval is reserved
-  // for future use when session state tracking is integrated.
-  useEffect(() => {
-    if (!autoSaveInterval || autoSaveInterval <= 0) {
-      return;
-    }
-
-    log('Auto-save interval configured but no session state available to auto-save');
-
-    return undefined;
-  }, [autoSaveInterval, log]);
 
   return {
     restoreSession,

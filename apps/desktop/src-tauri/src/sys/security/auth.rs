@@ -328,42 +328,52 @@ impl AuthManager {
     pub fn validate_token(&self, access_token: &str) -> Result<User, String> {
         // SECSYS-003 fix: Rate limiting to prevent brute-force token attacks
         // Use a digest of the full token so similar prefixes cannot rate-limit each other.
+        // Rate-limit check only — do not increment yet (only failed lookups consume quota).
         let rate_key = validation_rate_key(access_token);
 
         {
-            let mut attempts = self.validation_attempts.write();
-            if let Some(attempt) = attempts.get_mut(&rate_key) {
+            let attempts = self.validation_attempts.read();
+            if let Some(attempt) = attempts.get(&rate_key) {
                 if attempt.is_rate_limited() {
                     return Err(
                         "Too many validation attempts. Please wait before trying again."
                             .to_string(),
                     );
                 }
-                attempt.increment();
-            } else {
-                // Evict expired entries if at capacity to prevent unbounded memory growth
-                if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
-                    attempts.retain(|_, attempt| !attempt.is_window_expired());
-                }
-                // If still at capacity after eviction, remove the oldest entry
-                if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
-                    if let Some(oldest_key) = attempts
-                        .iter()
-                        .min_by_key(|(_, v)| v.window_start)
-                        .map(|(k, _)| k.clone())
-                    {
-                        attempts.remove(&oldest_key);
-                    }
-                }
-                attempts.insert(rate_key.clone(), ValidationAttempt::new());
             }
         }
 
         let mut sessions = self.sessions.write();
-        let session = sessions
+        let session = match sessions
             .values_mut()
             .find(|s| constant_time_eq(&s.access_token, access_token))
-            .ok_or("Invalid access token")?;
+        {
+            Some(s) => s,
+            None => {
+                // Token not found — record the failed attempt for rate limiting
+                let mut attempts = self.validation_attempts.write();
+                if let Some(attempt) = attempts.get_mut(&rate_key) {
+                    attempt.increment();
+                } else {
+                    // Evict expired entries if at capacity to prevent unbounded memory growth
+                    if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
+                        attempts.retain(|_, attempt| !attempt.is_window_expired());
+                    }
+                    // If still at capacity after eviction, remove the oldest entry
+                    if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
+                        if let Some(oldest_key) = attempts
+                            .iter()
+                            .min_by_key(|(_, v)| v.window_start)
+                            .map(|(k, _)| k.clone())
+                        {
+                            attempts.remove(&oldest_key);
+                        }
+                    }
+                    attempts.insert(rate_key.clone(), ValidationAttempt::new());
+                }
+                return Err("Invalid access token".to_string());
+            }
+        };
 
         if session.is_expired() {
             return Err("Token expired".to_string());

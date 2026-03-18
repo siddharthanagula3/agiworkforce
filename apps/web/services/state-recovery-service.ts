@@ -26,9 +26,6 @@ class StateRecoveryService {
 
       const storageKey = `${this.SNAPSHOT_KEY_PREFIX}${key}`;
       localStorage.setItem(storageKey, JSON.stringify(snapshot));
-
-      // Keep only the latest snapshots
-      this.pruneOldSnapshots(key);
     } catch (error) {
       // Silently handle snapshot capture failure
     }
@@ -166,28 +163,6 @@ class StateRecoveryService {
       localStorage.setItem(this.RECOVERY_LOG_KEY, JSON.stringify(log));
     } catch (error) {
       // Silently handle recovery log failure
-    }
-  }
-
-  /**
-   * Private: Remove old snapshots, keep only latest N
-   */
-  private static pruneOldSnapshots(key: string): void {
-    try {
-      const storageKey = `${this.SNAPSHOT_KEY_PREFIX}${key}`;
-      const snapshot = localStorage.getItem(storageKey);
-
-      if (!snapshot) return;
-
-      // For now, keep one snapshot per key
-      // In the future, could implement versioned snapshots
-      const parsed = JSON.parse(snapshot);
-      if (parsed && parsed.timestamp) {
-        // Valid snapshot, keep it
-        return;
-      }
-    } catch (error) {
-      // Silently handle snapshot pruning failure
     }
   }
 }

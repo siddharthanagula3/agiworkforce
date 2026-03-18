@@ -60,8 +60,9 @@ impl PlannerMemoryIntegration {
         // Search for relevant memories
         let relevant_memories = self.memory_manager.hybrid_search(goal, 10)?;
         let memory_count = relevant_memories.len();
+        let mut score_sum = 0.0_f32;
 
-        for search_result in relevant_memories {
+        for search_result in &relevant_memories {
             let memory = &search_result.memory;
 
             match memory.category {
@@ -79,9 +80,12 @@ impl PlannerMemoryIntegration {
                 }
             }
 
-            // Weight confidence by similarity score
-            context.memory_confidence =
-                (context.memory_confidence + search_result.combined_score) / 2.0;
+            score_sum += search_result.combined_score;
+        }
+
+        // Compute average confidence from search scores
+        if memory_count > 0 {
+            context.memory_confidence = score_sum / memory_count as f32;
         }
 
         // Cap confidence at 1.0
@@ -251,9 +255,4 @@ mod tests {
         assert_eq!(ctx.memory_confidence, 0.5);
     }
 
-    #[test]
-    fn test_architecture_pattern_identification() {
-        // This would need a full memory manager setup
-        // Placeholder for integration testing
-    }
 }

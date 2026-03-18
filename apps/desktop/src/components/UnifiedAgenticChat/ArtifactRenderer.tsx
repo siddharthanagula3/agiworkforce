@@ -131,8 +131,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       await openFile(absolutePath);
       setActiveFile(absolutePath);
       toast.success('Code applied to editor');
-    } catch (error) {
-      console.error('Failed to apply code to editor', error);
+    } catch {
       toast.error('Failed to write code to file');
     }
   };
@@ -155,8 +154,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         }
         copyTimeoutRef.current = null;
       }, 2000);
-    } catch (error) {
-      console.error('Failed to copy artifact output:', error);
+    } catch {
       toast.error('Failed to copy output');
     }
   };
@@ -198,8 +196,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         paragraphs,
       });
       toast.success('Exported to PDF successfully');
-    } catch (error) {
-      console.error('Failed to export PDF:', error);
+    } catch {
       toast.error('Failed to export to PDF');
     }
   };
@@ -225,8 +222,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         paragraphs,
       });
       toast.success('Exported to Word successfully');
-    } catch (error) {
-      console.error('Failed to export Word:', error);
+    } catch {
       toast.error('Failed to export to Word');
     }
   };
@@ -245,9 +241,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       let data: Record<string, string | number>[];
       try {
         data = JSON.parse(artifact.content) as Record<string, string | number>[];
-      } catch (parseError) {
+      } catch {
         toast.error('Invalid JSON format in artifact');
-        console.error('[ArtifactRenderer] JSON parse failed:', parseError);
         return;
       }
 
@@ -272,8 +267,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         rows,
       });
       toast.success('Exported to Excel successfully');
-    } catch (error) {
-      console.error('Failed to export Excel:', error);
+    } catch {
       toast.error('Failed to export to Excel');
     }
   };
@@ -333,8 +327,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           if (isMountedRef.current) {
             toast.success('Exported as SVG');
           }
-        } catch (err) {
-          console.error('Failed to write SVG file:', err);
+        } catch {
           if (isMountedRef.current) {
             toast.error('Failed to save SVG file');
           }
@@ -346,8 +339,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         }
       };
       reader.readAsDataURL(blob);
-    } catch (error) {
-      console.error('Failed to export SVG:', error);
+    } catch {
       // Fallback: download using blob URL
       try {
         const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
@@ -441,8 +433,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         }
       };
       img.src = url;
-    } catch (error) {
-      console.error('Failed to export PNG:', error);
+    } catch {
       toast.error('Failed to export PNG');
     }
   };
@@ -474,8 +465,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
       await navigator.clipboard.writeText(markdown);
       toast.success('Copied as Markdown table');
-    } catch (error) {
-      console.error('Failed to copy as Markdown:', error);
+    } catch {
       toast.error('Failed to copy as Markdown');
     }
   };

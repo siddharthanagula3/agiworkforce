@@ -67,7 +67,7 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
     // 2 KiB is far beyond any real-world selector; reject to prevent ReDoS-style abuse.
     if trimmed.len() > 2048 {
         return Err(format!(
-            "selector exceeds maximum length ({}  > 2048)",
+            "selector exceeds maximum length ({} > 2048)",
             trimmed.len()
         ));
     }

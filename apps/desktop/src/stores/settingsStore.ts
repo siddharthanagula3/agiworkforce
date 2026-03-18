@@ -678,10 +678,12 @@ export const useSettingsStore = create<SettingsState>()(
             'settings/setDyslexicFont',
           );
           // Apply/remove dyslexic font class immediately
-          if (enabled) {
-            document.documentElement.classList.add('dyslexic-font');
-          } else {
-            document.documentElement.classList.remove('dyslexic-font');
+          if (typeof document !== 'undefined') {
+            if (enabled) {
+              document.documentElement.classList.add('dyslexic-font');
+            } else {
+              document.documentElement.classList.remove('dyslexic-font');
+            }
           }
         },
 
