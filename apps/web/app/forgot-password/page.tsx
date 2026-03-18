@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
       // Log the error for debugging but do not expose it to the user.
       // Showing different messages for existing vs non-existing emails
       // would allow user enumeration attacks.
-      console.error('Password reset error:', resetError.message);
+      // Password reset error logged server-side; suppressed client-side to prevent enumeration
     }
 
     // Always show success to prevent user enumeration.

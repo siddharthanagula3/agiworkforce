@@ -30,7 +30,7 @@ class StateRecoveryService {
       // Keep only the latest snapshots
       this.pruneOldSnapshots(key);
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to capture snapshot:', error);
+      // Silently handle snapshot capture failure
     }
   }
 
@@ -50,7 +50,7 @@ class StateRecoveryService {
       this.logRecovery(key, 'snapshot_restore', true);
       return snapshot.data as T;
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to restore snapshot:', error);
+      // Silently handle snapshot restore failure
       this.logRecovery(key, 'snapshot_restore', false, error as Error);
       return fallback;
     }
@@ -63,7 +63,7 @@ class StateRecoveryService {
     try {
       return validator(state);
     } catch (error) {
-      console.error('[StateRecoveryService] Validation failed:', error);
+      // Silently handle validation failure
       return false;
     }
   }
@@ -83,7 +83,7 @@ class StateRecoveryService {
       // Show recovery message
       toast.info(`${key} has been reset to defaults`);
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to reset state:', error);
+      // Silently handle state reset failure
       this.logRecovery(key, 'state_reset', false, error as Error);
     }
   }
@@ -110,7 +110,7 @@ class StateRecoveryService {
 
       return merged;
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to merge state:', error);
+      // Silently handle state merge failure
       return current;
     }
   }
@@ -140,7 +140,7 @@ class StateRecoveryService {
     try {
       localStorage.removeItem(this.RECOVERY_LOG_KEY);
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to clear log:', error);
+      // Silently handle log clear failure
     }
   }
 
@@ -165,7 +165,7 @@ class StateRecoveryService {
 
       localStorage.setItem(this.RECOVERY_LOG_KEY, JSON.stringify(log));
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to log recovery:', error);
+      // Silently handle recovery log failure
     }
   }
 
@@ -187,7 +187,7 @@ class StateRecoveryService {
         return;
       }
     } catch (error) {
-      console.error('[StateRecoveryService] Failed to prune snapshots:', error);
+      // Silently handle snapshot pruning failure
     }
   }
 }

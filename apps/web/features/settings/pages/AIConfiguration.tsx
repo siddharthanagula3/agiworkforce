@@ -145,6 +145,26 @@ const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'apiKey' | 'isConfig
     documentation: 'https://help.aliyun.com/qwen',
     pricing: 'https://www.alibabacloud.com/qwen/pricing',
   },
+  Moonshot: {
+    name: 'Moonshot (Kimi)',
+    models: ['kimi-k2', 'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
+    defaultModel: 'kimi-k2',
+    costPerToken: 0.000002,
+    maxTokens: 8192,
+    features: ['Streaming', 'Long Context', 'Multilingual', 'Tool Use', 'Coding'],
+    documentation: 'https://platform.moonshot.cn/docs',
+    pricing: 'https://platform.moonshot.cn/pricing',
+  },
+  Zhipu: {
+    name: 'Zhipu (GLM)',
+    models: ['glm-4-plus', 'glm-4-flash', 'glm-4-long', 'glm-4v-plus'],
+    defaultModel: 'glm-4-plus',
+    costPerToken: 0.000003,
+    maxTokens: 8192,
+    features: ['Streaming', 'Vision', 'Tool Use', 'Long Context', 'Multilingual'],
+    documentation: 'https://open.bigmodel.cn/dev/api',
+    pricing: 'https://open.bigmodel.cn/pricing',
+  },
 };
 
 const AIConfigurationPageContent: React.FC = () => {
@@ -280,7 +300,16 @@ const AIConfigurationPageContent: React.FC = () => {
     setIsSavingPreferences(true);
     try {
       const { error } = await settingsService.updateSettings({
-        default_ai_provider: defaultProvider as 'openai' | 'anthropic' | 'google' | 'perplexity',
+        default_ai_provider: defaultProvider as
+          | 'openai'
+          | 'anthropic'
+          | 'google'
+          | 'perplexity'
+          | 'grok'
+          | 'deepseek'
+          | 'qwen'
+          | 'moonshot'
+          | 'zhipu',
         default_ai_model: defaultModel,
         prefer_streaming: preferStreaming,
         ai_temperature: aiTemperature,
@@ -310,6 +339,8 @@ const AIConfigurationPageContent: React.FC = () => {
       grok: 'Grok',
       deepseek: 'DeepSeek',
       qwen: 'Qwen',
+      moonshot: 'Moonshot',
+      zhipu: 'Zhipu',
     };
     const configKey = providerMap[provider.toLowerCase()] || provider;
     const config = PROVIDER_CONFIGS[configKey];
@@ -631,6 +662,8 @@ const AIConfigurationPageContent: React.FC = () => {
                       <SelectItem value="grok">xAI (Grok 4)</SelectItem>
                       <SelectItem value="deepseek">DeepSeek</SelectItem>
                       <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
+                      <SelectItem value="moonshot">Moonshot (Kimi)</SelectItem>
+                      <SelectItem value="zhipu">Zhipu (GLM)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">

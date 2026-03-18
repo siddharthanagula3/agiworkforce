@@ -13,6 +13,7 @@
  */
 
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
+import { logger } from '@/lib/logger';
 import type {
   QueuedMessage,
   QueuedToolExecution,
@@ -51,7 +52,7 @@ function loadQueue(): OfflineQueueState {
     });
     return data || { messages: [], toolExecutions: [] };
   } catch (error) {
-    console.error('[OfflineQueue] Failed to load queue:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to load queue');
     return { messages: [], toolExecutions: [] };
   }
 }
@@ -63,7 +64,7 @@ function saveQueue(queue: OfflineQueueState): void {
   try {
     safeSetJSON(OFFLINE_QUEUE_KEY, queue);
   } catch (error) {
-    console.error('[OfflineQueue] Failed to save queue:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to save queue');
   }
 }
 
@@ -89,7 +90,7 @@ export function queueMessage(sessionId: string, content: string): string {
 
     return id;
   } catch (error) {
-    console.error('[OfflineQueue] Failed to queue message:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to queue message');
     throw error;
   }
 }
@@ -121,7 +122,7 @@ export function queueToolExecution(
 
     return id;
   } catch (error) {
-    console.error('[OfflineQueue] Failed to queue tool execution:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to queue tool execution');
     throw error;
   }
 }
@@ -157,7 +158,7 @@ export function clearQueuedMessage(messageId: string): void {
     queue.messages = queue.messages.filter((m) => m.id !== messageId);
     saveQueue(queue);
   } catch (error) {
-    console.error('[OfflineQueue] Failed to clear message:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to clear message');
   }
 }
 
@@ -170,7 +171,7 @@ export function clearQueuedToolExecution(toolId: string): void {
     queue.toolExecutions = queue.toolExecutions.filter((t) => t.id !== toolId);
     saveQueue(queue);
   } catch (error) {
-    console.error('[OfflineQueue] Failed to clear tool execution:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to clear tool execution');
   }
 }
 
@@ -181,7 +182,7 @@ export function clearAllQueued(): void {
   try {
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
   } catch (error) {
-    console.error('[OfflineQueue] Failed to clear all queued items:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to clear all queued items');
   }
 }
 
@@ -235,7 +236,7 @@ async function isOnline(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error('[OfflineQueue] Failed to check online status:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to check online status');
     return navigator.onLine;
   }
 }
@@ -258,7 +259,7 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
     // Check connectivity first
     const online = await isOnline();
     if (!online) {
-      console.log('[OfflineQueue] Still offline, skipping sync');
+      logger.info('[OfflineQueue] Still offline, skipping sync');
       callbacks?.onSyncComplete?.(false, summary);
       return summary;
     }
@@ -270,7 +271,7 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
       try {
         // Check if max retries exceeded
         if (message.retryCount >= MAX_RETRIES) {
-          console.warn(`[OfflineQueue] Max retries exceeded for message ${message.id}`);
+          logger.warn(`[OfflineQueue] Max retries exceeded for message ${message.id}`);
           summary.messagesFailed++;
           clearQueuedMessage(message.id);
           continue;
@@ -298,7 +299,7 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
       try {
         // Check if max retries exceeded
         if (tool.retryCount >= MAX_RETRIES) {
-          console.warn(`[OfflineQueue] Max retries exceeded for tool ${tool.id}`);
+          logger.warn(`[OfflineQueue] Max retries exceeded for tool ${tool.id}`);
           summary.toolsFailed++;
           clearQueuedToolExecution(tool.id);
           continue;
@@ -331,7 +332,7 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
 
     return summary;
   } catch (error) {
-    console.error('[OfflineQueue] Sync failed with fatal error:', error);
+    logger.error({ err: error }, '[OfflineQueue] Sync failed with fatal error');
     summary.totalTime = Date.now() - startTime;
     callbacks?.onSyncComplete?.(false, summary);
     throw error;
@@ -346,7 +347,7 @@ export function getLastSyncTime(): Date | null {
     const queue = loadQueue();
     return queue.lastSyncTime ? new Date(queue.lastSyncTime) : null;
   } catch (error) {
-    console.error('[OfflineQueue] Failed to get last sync time:', error);
+    logger.error({ err: error }, '[OfflineQueue] Failed to get last sync time');
     return null;
   }
 }

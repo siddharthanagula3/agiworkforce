@@ -1,6 +1,25 @@
 @import 'tailwindcss';
 @plugin "tailwindcss-animate";
 
+/* OpenDyslexic font for accessibility */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff')
+    format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff')
+    format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Tailwind v4 CSS-based configuration */
 @theme {
   /* Font families */
@@ -123,9 +142,16 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  /* Chat surface color aliases — Tailwind utilities bg-chat-bg, bg-chat-sidebar */
+  /* Chat surface color aliases — Tailwind utilities bg-chat-bg, bg-chat-sidebar, etc. */
   --color-chat-bg: var(--chat-bg);
+  --color-chat-bg-elevated: var(--chat-bg-elevated);
   --color-chat-sidebar: var(--chat-sidebar-bg);
+  --color-chat-input-bg: var(--chat-input-bg);
+  --color-chat-code-bg: var(--chat-code-bg);
+  --color-chat-accent: var(--chat-accent);
+  --color-chat-accent-secondary: var(--chat-accent-secondary);
+  --color-chat-glass: var(--chat-glass);
+  --color-chat-glass-border: var(--chat-glass-border);
 
   /* Exact hex aliases for the four canonical surface values — matches desktop design system.
      These allow bg-chat-bg-light, bg-chat-bg-dark, etc. as Tailwind utility classes. */
@@ -291,6 +317,16 @@
   }
 }
 
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -383,11 +419,18 @@
 
     /* Chat surface tokens — light mode (#faf9f7 main, #f5f4f1 sidebar) */
     --chat-bg: #faf9f7;
+    --chat-bg-elevated: #f9fafb;
     --chat-sidebar-bg: #f5f4f1;
     --chat-border-strong: #d1ccc5;
-    --chat-border-subtle: #e5e1d8;
+    --chat-border-subtle: rgba(0, 0, 0, 0.06);
+    --chat-glass: rgba(0, 0, 0, 0.03);
+    --chat-glass-border: rgba(0, 0, 0, 0.08);
+    --chat-input-bg: #ffffff;
+    --chat-code-bg: #f6f8fa;
     --chat-text-primary: #1a1a1a;
     --chat-text-secondary: #636363;
+    --chat-accent: #21808d;
+    --chat-accent-secondary: #da7756;
 
     --radius: 0.5rem;
   }
@@ -460,13 +503,20 @@
     --sidebar-border: 240 12% 14%;
     --sidebar-ring: 224.3 76.3% 48%;
 
-    /* Chat surface tokens — dark mode (#0f0f13 main, #0b0c14 sidebar) */
-    --chat-bg: #0f0f13;
+    /* Chat surface tokens — dark mode (glassmorphism dark theme) */
+    --chat-bg: #0a0a0a;
+    --chat-bg-elevated: rgba(26, 26, 26, 0.8);
     --chat-sidebar-bg: #0b0c14;
     --chat-border-strong: #2d2d35;
-    --chat-border-subtle: #1a1a22;
+    --chat-border-subtle: rgba(255, 255, 255, 0.08);
+    --chat-glass: rgba(255, 255, 255, 0.04);
+    --chat-glass-border: rgba(255, 255, 255, 0.1);
+    --chat-input-bg: #1a1a1a;
+    --chat-code-bg: #0d1117;
     --chat-text-primary: #e4e4e7;
     --chat-text-secondary: #a1a1a6;
+    --chat-accent: #21808d;
+    --chat-accent-secondary: #da7756;
   }
 }
 
@@ -1267,4 +1317,13 @@
 
 .agi-dashboard-theme .gradient-primary {
   background: linear-gradient(135deg, hsl(200, 98%, 39%) 0%, hsl(240, 6%, 12%) 100%);
+}
+
+/* Font family utilities for chat */
+[data-chat-font='system'] {
+  --font-chat: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+[data-chat-font='dyslexic'] {
+  --font-chat: 'OpenDyslexic', system-ui, sans-serif;
 }

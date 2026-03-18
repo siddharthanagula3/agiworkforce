@@ -10,6 +10,8 @@ import {
   FileText,
   Globe,
   Sparkles,
+  Brain,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -23,7 +25,9 @@ import { DragDropOverlay } from './DragDropOverlay';
 import { GhostTextOverlay } from './GhostTextOverlay';
 import { AgentModeSwitcher } from './AgentModeSwitcher';
 import { FolderContextSelector } from './FolderContextSelector';
-import { VoiceInputButton } from '@features/chat/components/VoiceInputButton';
+import { VoiceInputButton } from './VoiceInputButton';
+import { AttachmentPreview } from './AttachmentPreview';
+import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
 import type { ChatMode } from '@features/chat/types';
 
@@ -47,6 +51,14 @@ interface ChatComposerProps {
   initialAgentMode?: ChatMode;
   /** Whether to enable ghost-text prompt completion (default: true) */
   promptCompletionEnabled?: boolean;
+  /** Pre-fill the textarea with this text (e.g. from empty-state pills). */
+  prefillText?: string;
+  /** Callback fired after prefillText has been consumed and applied. */
+  onPrefillConsumed?: () => void;
+  /** Files dropped onto the message area that should be added as attachments. */
+  droppedFiles?: File[] | null;
+  /** Callback fired after droppedFiles have been consumed and added to attachments. */
+  onDroppedFilesConsumed?: () => void;
 }
 
 const TOOLS = [
@@ -75,14 +87,29 @@ const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
   isGenerating = false,
-  placeholder = 'Message AI...',
+  placeholder = 'Message AGI Workforce...',
   disabled = false,
   initialAgentMode = 'solo',
   promptCompletionEnabled = true,
+  prefillText,
+  onPrefillConsumed,
+  droppedFiles,
+  onDroppedFilesConsumed,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [showTools, setShowTools] = useState(false);
+  const {
+    attachments,
+    previews,
+    addFiles,
+    removeFile,
+    clearAll: clearAttachments,
+  } = useAttachments({
+    onError: (msg) => {
+      // Surface validation errors via console; could wire to a toast later
+      console.warn('[Attachments]', msg);
+    },
+  });
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -98,10 +125,13 @@ const ChatComposerNewComponent = ({
   const [slashQuery, setSlashQuery] = useState('');
   const [agentMode, setAgentMode] = useState<ChatMode>(initialAgentMode);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [researchEnabled, setResearchEnabled] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const toolsRef = useRef<HTMLDivElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
 
@@ -114,6 +144,27 @@ const ChatComposerNewComponent = ({
   } = useApiPromptCompletion(message, {
     enabled: promptCompletionEnabled && !showSlashMenu && !showMentions,
   });
+
+  // Handle prefillText prop — React "derived state from props" pattern.
+  // When the parent passes a new non-empty prefillText, we update message
+  // and notify the parent. This uses the recommended setState-during-render
+  // pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [prevPrefill, setPrevPrefill] = useState(prefillText);
+  if (prefillText && prefillText.length > 0 && prefillText !== prevPrefill) {
+    setPrevPrefill(prefillText);
+    setMessage(prefillText);
+    onPrefillConsumed?.();
+  }
+
+  // Handle droppedFiles prop — same derived-state-from-props pattern as prefillText.
+  // When the parent passes files dropped onto the message area, feed them into the
+  // attachment hook and notify the parent so it can clear the pending state.
+  const [prevDroppedFiles, setPrevDroppedFiles] = useState(droppedFiles);
+  if (droppedFiles && droppedFiles.length > 0 && droppedFiles !== prevDroppedFiles) {
+    setPrevDroppedFiles(droppedFiles);
+    addFiles(droppedFiles);
+    onDroppedFilesConsumed?.();
+  }
 
   // Load real skills data on mount
   useEffect(() => {
@@ -148,8 +199,8 @@ const ChatComposerNewComponent = ({
   // Close popover on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
-        setShowTools(false);
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
@@ -168,6 +219,35 @@ const ChatComposerNewComponent = ({
   const handleTagDismiss = useCallback((id: string) => {
     setActiveTags((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const handleWebSearchToggle = useCallback(() => {
+    setWebSearchEnabled((prev) => {
+      const next = !prev;
+      if (next) {
+        handleFocusModeChange('web');
+      } else if (focusMode === 'web') {
+        handleFocusModeChange(null);
+      }
+      return next;
+    });
+  }, [focusMode, handleFocusModeChange]);
+
+  const handleThinkingToggle = useCallback(() => {
+    setThinkingEnabled((prev) => !prev);
+  }, []);
+
+  const handleResearchToggle = useCallback(() => {
+    setResearchEnabled((prev) => {
+      const next = !prev;
+      if (next) {
+        handleFocusModeChange('research');
+        setWebSearchEnabled(false);
+      } else if (focusMode === 'research') {
+        handleFocusModeChange(null);
+      }
+      return next;
+    });
+  }, [focusMode, handleFocusModeChange]);
 
   // Handle input change: detect @mention and /command; clear stale ghost-text
   const handleInputChange = useCallback(
@@ -261,16 +341,27 @@ const ChatComposerNewComponent = ({
       search: '[Web Search] ',
     };
     const prefix = selectedTools.map((t) => toolPrefixes[t] || '').join('');
+    const thinkingPrefix = thinkingEnabled ? '[Extended Thinking] ' : '';
+    const researchPrefix =
+      researchEnabled && !selectedTools.includes('search') ? '[Research Mode] ' : '';
 
-    onSend(prefix + message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
-      agentMode,
-      folderId: selectedFolderId,
-    });
+    onSend(
+      thinkingPrefix + researchPrefix + prefix + message,
+      attachments.length > 0 ? attachments : undefined,
+      selectedSkill?.id,
+      {
+        agentMode,
+        folderId: selectedFolderId,
+      },
+    );
 
     setMessage('');
-    setAttachments([]);
+    clearAttachments();
     setSelectedTools([]);
     setSelectedSkill(null);
+    setWebSearchEnabled(false);
+    setThinkingEnabled(false);
+    setResearchEnabled(false);
     clearSuggestion();
 
     if (textareaRef.current) {
@@ -285,7 +376,10 @@ const ChatComposerNewComponent = ({
     disabled,
     agentMode,
     selectedFolderId,
+    thinkingEnabled,
+    researchEnabled,
     onSend,
+    clearAttachments,
     clearSuggestion,
   ]);
 
@@ -319,7 +413,7 @@ const ChatComposerNewComponent = ({
 
       if (e.key === 'Escape') {
         setShowMentions(false);
-        setShowTools(false);
+        setShowOverflowMenu(false);
         setShowSlashMenu(false);
         clearSuggestion();
       }
@@ -331,10 +425,6 @@ const ChatComposerNewComponent = ({
     setSelectedTools((prev) =>
       prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId],
     );
-  }, []);
-
-  const removeAttachment = useCallback((index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
@@ -353,18 +443,28 @@ const ChatComposerNewComponent = ({
       ? 'Tab to accept suggestion · Enter to send'
       : 'Enter to send · Shift+Enter for newline';
 
-  const handleFileDrop = useCallback((files: File[]) => {
-    setAttachments((prev) => [...prev, ...files]);
-  }, []);
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      addFiles(files);
+    },
+    [addFiles],
+  );
+
+  // Determine if any overflow features are active (for the + button indicator)
+  const hasOverflowActive =
+    focusMode !== null ||
+    agentMode !== 'solo' ||
+    selectedFolderId !== null ||
+    selectedTools.length > 0 ||
+    webSearchEnabled ||
+    thinkingEnabled ||
+    researchEnabled;
 
   return (
-    <div className="relative mx-auto w-full max-w-3xl px-2 sm:px-4 pb-4">
+    <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
 
-      {/* Focus Mode Pills */}
-      <FocusModeButtons activeMode={focusMode} onChange={handleFocusModeChange} />
-
-      {/* Active Mode Tags */}
+      {/* Active Mode Tags — shown above the composer when a focus mode is active */}
       <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
@@ -412,33 +512,17 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Attachments */}
-      {attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {attachments.map((file, i) => (
-            <div
-              key={`${file.name}-${file.size}`}
-              className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-1.5"
-            >
-              <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="max-w-[150px] truncate text-xs">{file.name}</span>
-              <button
-                onClick={() => removeAttachment(i)}
-                className="rounded-full p-0.5 hover:bg-muted"
-                aria-label={`Remove ${file.name}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Attachments — rich preview with image thumbnails and doc chips */}
+      <AttachmentPreview previews={previews} onRemove={removeFile} className="mb-2" />
 
       {/* Main Input Container */}
       <div
+        id="chat-composer"
         className={cn(
-          'relative rounded-xl sm:rounded-2xl border bg-card/80 shadow-sm backdrop-blur-xl transition-all duration-200',
-          isFocused ? 'border-border/80 shadow-md ring-1 ring-ring/20' : 'border-border/40',
+          'relative rounded-2xl border bg-[var(--chat-bg-elevated)] shadow-sm backdrop-blur-sm transition-all duration-200',
+          isFocused
+            ? 'border-teal-500/40 shadow-md ring-2 ring-teal-500/30'
+            : 'border-[var(--chat-glass-border)]',
         )}
       >
         {/* Slash Command Menu */}
@@ -493,54 +577,107 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row items-end gap-1 sm:gap-2 p-2 sm:p-3">
-          {/* + Tools Button */}
-          <div className="relative" ref={toolsRef}>
+        <div className="flex items-end gap-1 p-2 sm:gap-2 sm:p-3">
+          {/* + Overflow Menu Button — contains focus modes, agent mode, folder, tools */}
+          <div className="relative" ref={overflowRef}>
             <button
-              onClick={() => setShowTools(!showTools)}
+              onClick={() => setShowOverflowMenu(!showOverflowMenu)}
               disabled={isLoading || disabled}
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                selectedTools.length > 0
-                  ? 'bg-primary/15 text-primary'
+                hasOverflowActive
+                  ? 'bg-teal-500/15 text-teal-500'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 (isLoading || disabled) && 'cursor-not-allowed opacity-50',
               )}
-              aria-label="Add tools"
-              aria-expanded={showTools}
+              aria-label="More options"
+              aria-expanded={showOverflowMenu}
             >
               <Plus className="h-5 w-5" />
             </button>
 
-            {/* Tools Popover */}
-            {showTools && (
-              <div className="absolute bottom-full left-0 z-50 mb-2 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Tools
+            {/* Overflow Menu Popover */}
+            {showOverflowMenu && (
+              <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-2 shadow-xl backdrop-blur-xl">
+                {/* Focus Modes */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Focus Mode
+                  </div>
+                  <FocusModeButtons
+                    activeMode={focusMode}
+                    onChange={(mode) => {
+                      handleFocusModeChange(mode);
+                    }}
+                  />
                 </div>
-                {TOOLS.map((tool) => {
-                  const Icon = tool.icon;
-                  const isSelected = selectedTools.includes(tool.id);
-                  return (
-                    <button
-                      key={tool.id}
-                      onClick={() => toggleTool(tool.id)}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                        isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <Icon className={cn('h-4 w-4', tool.color)} />
-                      <span className="flex-1 text-left">{tool.label}</span>
-                      {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
-                    </button>
-                  );
-                })}
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Agent Mode */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Agent Mode
+                  </div>
+                  <div className="px-1">
+                    <AgentModeSwitcher
+                      mode={agentMode}
+                      onChange={setAgentMode}
+                      disabled={isLoading || disabled}
+                    />
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Folder Context */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Project Context
+                  </div>
+                  <div className="px-1">
+                    <FolderContextSelector
+                      selectedFolderId={selectedFolderId}
+                      onChange={setSelectedFolderId}
+                      disabled={isLoading || disabled}
+                    />
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Tools */}
+                <div>
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Tools
+                  </div>
+                  {TOOLS.map((tool) => {
+                    const Icon = tool.icon;
+                    const isSelected = selectedTools.includes(tool.id);
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => toggleTool(tool.id)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <Icon className={cn('h-4 w-4', tool.color)} />
+                        <span className="flex-1 text-left">{tool.label}</span>
+                        {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Attach Button */}
+          {/* Attach Button (paperclip) */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || disabled}
@@ -552,6 +689,60 @@ const ChatComposerNewComponent = ({
           >
             <Paperclip className="h-5 w-5" />
           </button>
+
+          {/* Quick Toggle Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleWebSearchToggle}
+              disabled={isLoading || disabled || researchEnabled}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                webSearchEnabled
+                  ? 'bg-teal-500/15 text-teal-400 ring-1 ring-teal-500/30'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled || researchEnabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Toggle web search"
+              aria-pressed={webSearchEnabled}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Search</span>
+            </button>
+
+            <button
+              onClick={handleThinkingToggle}
+              disabled={isLoading || disabled}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                thinkingEnabled
+                  ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Toggle extended thinking"
+              aria-pressed={thinkingEnabled}
+            >
+              <Brain className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Think</span>
+            </button>
+
+            <button
+              onClick={handleResearchToggle}
+              disabled={isLoading || disabled}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                researchEnabled
+                  ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Toggle research mode"
+              aria-pressed={researchEnabled}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Research</span>
+            </button>
+          </div>
 
           {/* Textarea + Ghost-text overlay wrapper */}
           <div className="relative min-h-[52px] flex-1">
@@ -572,7 +763,7 @@ const ChatComposerNewComponent = ({
               placeholder={placeholder}
               disabled={isLoading || disabled}
               // bg-transparent so the ghost-text overlay behind shows through
-              className="relative z-10 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-3 text-xs sm:text-sm md:text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative z-10 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 md:text-[15px]"
               rows={1}
               aria-label="Message input"
               aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
@@ -598,7 +789,7 @@ const ChatComposerNewComponent = ({
             disabled={isLoading || disabled}
           />
 
-          {/* 3-State Send Button */}
+          {/* Send / Stop Button */}
           <SendButton
             mode={sendButtonMode}
             hasContent={hasContent}
@@ -615,33 +806,18 @@ const ChatComposerNewComponent = ({
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
-            setAttachments((prev) => [...prev, ...files]);
+            addFiles(files);
             e.target.value = '';
           }}
           aria-label="File upload"
         />
       </div>
 
-      {/* Footer row 1: keyboard hint + credit usage bar */}
+      {/* Footer: keyboard hint + credits */}
       <InputFooter hint={footerHint} />
 
-      {/* Footer row 2: agent mode + folder context (left) + model selector (right) */}
-      <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
-        {/* Left cluster: agent mode switcher + folder/project context */}
-        <div className="flex items-center gap-1">
-          <AgentModeSwitcher
-            mode={agentMode}
-            onChange={setAgentMode}
-            disabled={isLoading || disabled}
-          />
-          <FolderContextSelector
-            selectedFolderId={selectedFolderId}
-            onChange={setSelectedFolderId}
-            disabled={isLoading || disabled}
-          />
-        </div>
-
-        {/* Right cluster: model selector */}
+      {/* Footer row 2: model selector */}
+      <div className="mt-1.5 flex items-center justify-end gap-2 px-1">
         <ComposerFooter showModelSelector />
       </div>
     </div>
@@ -653,8 +829,9 @@ const ChatComposerNewComponent = ({
  *
  * Enhancements over the original version:
  * - Ghost-text prompt completion via useApiPromptCompletion (Tab/ArrowRight to accept)
- * - Agent mode switcher (solo / engineer / research / team / race)
- * - Folder/project context selector
+ * - Agent mode, focus modes, folder selector moved into "+" overflow menu
+ * - Accepts prefillText prop for empty-state category pills
+ * - Rounded-2xl border with teal focus ring
  * - Existing slash commands, @mentions, and voice input preserved
  */
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
@@ -665,7 +842,11 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.placeholder === next.placeholder &&
     prev.disabled === next.disabled &&
     prev.initialAgentMode === next.initialAgentMode &&
-    prev.promptCompletionEnabled === next.promptCompletionEnabled
+    prev.promptCompletionEnabled === next.promptCompletionEnabled &&
+    prev.prefillText === next.prefillText &&
+    prev.onPrefillConsumed === next.onPrefillConsumed &&
+    prev.droppedFiles === next.droppedFiles &&
+    prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed
   );
 });
 
