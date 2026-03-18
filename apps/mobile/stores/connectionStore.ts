@@ -141,31 +141,34 @@ function setupPeerConnection(): void {
   peerConnection = pc;
 
   // Handle ICE candidates — send to peer via signaling
-  pc.addEventListener('icecandidate', (event) => {
+  // react-native-webrtc uses on* callback style
+  (pc as unknown as Record<string, unknown>).onicecandidate = (event: {
+    candidate: RTCIceCandidate | null;
+  }) => {
     if (event.candidate && signalingClient) {
       signalingClient.sendSignal('ice', {
-        candidate: (event.candidate as RTCIceCandidate).toJSON(),
+        candidate: event.candidate.toJSON(),
       });
     }
-  });
+  };
 
-  // Handle incoming data channels from the desktop.
-  // react-native-webrtc's datachannel event carries a `.channel` property.
-  pc.addEventListener('datachannel', (event) => {
-    const channel = (event as Event & { channel: RTCDataChannelType }).channel;
-    dataChannel = channel;
+  // Handle incoming data channels from the desktop
+  (pc as unknown as Record<string, unknown>).ondatachannel = (event: {
+    channel: RTCDataChannelType;
+  }) => {
+    dataChannel = event.channel;
     if (dataChannel) {
       setupDataChannel(dataChannel);
     }
-  });
+  };
 
-  pc.addEventListener('connectionstatechange', () => {
+  // Handle connection state changes
+  (pc as unknown as Record<string, unknown>).onconnectionstatechange = () => {
     const state = pc.connectionState;
     if (state === 'failed' || state === 'disconnected') {
-      // WebRTC failed — continue using signaling relay as fallback
       console.warn('[companion] WebRTC connection state:', state);
     }
-  });
+  };
 }
 
 /**
@@ -173,23 +176,25 @@ function setupPeerConnection(): void {
  */
 
 function setupDataChannel(channel: RTCDataChannelType): void {
-  channel.addEventListener('open', () => {
-    console.log('[companion] DataChannel open — low-latency control active');
-  });
+  const ch = channel as unknown as Record<string, unknown>;
 
-  channel.addEventListener('message', (event) => {
+  ch.onopen = () => {
+    // DataChannel open — low-latency control active
+  };
+
+  ch.onmessage = (event: { data: string }) => {
     try {
       const parsed = JSON.parse(String(event.data));
       handleControlMessage(parsed);
     } catch {
       console.warn('[companion] Failed to parse DataChannel message');
     }
-  });
+  };
 
-  channel.addEventListener('close', () => {
-    console.log('[companion] DataChannel closed');
+  ch.onclose = () => {
+    // DataChannel closed
     dataChannel = null;
-  });
+  };
 }
 
 /**

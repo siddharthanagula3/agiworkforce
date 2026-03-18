@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Pressable, ActionSheetIOS, Platform, Alert } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/lib/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -10,6 +11,7 @@ import type { Attachment } from './AttachmentPreview';
 /**
  * Plus button that opens an action sheet to attach images or files.
  * Uses expo-image-picker for camera and photo library.
+ * Uses expo-document-picker for PDFs and documents.
  * Returns selected media via the onAttach callback.
  */
 
@@ -112,6 +114,34 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
     }
   }, [onAttach]);
 
+  const openDocumentPicker = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/csv',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const attachments: Attachment[] = result.assets.map((asset) => ({
+          id: generateId(),
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? 'application/octet-stream',
+          fileName: asset.name ?? getFileName(asset.uri),
+          fileSize: asset.size,
+        }));
+        onAttach(attachments);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
+  }, [onAttach]);
+
   const showActionSheet = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -120,7 +150,7 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Take Photo', 'Photo Library'],
+          options: ['Cancel', 'Take Photo', 'Photo Library', 'Choose File'],
           cancelButtonIndex: 0,
           title: 'Add Attachment',
         },
@@ -132,6 +162,9 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
             case 2:
               openPhotoLibrary();
               break;
+            case 3:
+              openDocumentPicker();
+              break;
           }
         },
       );
@@ -141,9 +174,10 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
         { text: 'Cancel', style: 'cancel' },
         { text: 'Take Photo', onPress: openCamera },
         { text: 'Photo Library', onPress: openPhotoLibrary },
+        { text: 'Choose File', onPress: openDocumentPicker },
       ]);
     }
-  }, [hapticsEnabled, openCamera, openPhotoLibrary]);
+  }, [hapticsEnabled, openCamera, openPhotoLibrary, openDocumentPicker]);
 
   return (
     <Pressable
@@ -152,7 +186,7 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
       className="p-1.5 rounded-lg active:bg-white/5"
       style={disabled ? { opacity: 0.5 } : undefined}
       accessibilityLabel="Add attachment"
-      accessibilityHint="Opens options to take a photo or choose from library"
+      accessibilityHint="Opens options to take a photo, choose from library, or pick a document"
       accessibilityRole="button"
     >
       <Plus size={20} color={colors.textMuted} />

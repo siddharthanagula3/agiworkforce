@@ -6,8 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "agiworkforce",
-    "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -19,7 +18,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Used for scanning QR codes and sending images to AI",
         "NSMicrophoneUsageDescription": "Used for voice input and voice conversations",
-        "NSPhotoLibraryUsageDescription": "Used for selecting images to send to AI"
+        "NSPhotoLibraryUsageDescription": "Used for selecting images to send to AI",
+        "NSFaceIDUsageDescription": "Used to unlock the app with Face ID"
       }
     },
     "android": {
@@ -28,7 +28,20 @@
         "backgroundColor": "#0f0f0f"
       },
       "package": "com.agiworkforce.mobile",
-      "permissions": ["CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"]
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "category": ["android.intent.category.DEFAULT"],
+          "data": [{ "mimeType": "text/plain" }, { "mimeType": "image/*" }]
+        }
+      ]
     },
     "plugins": [
       "expo-router",
@@ -46,7 +59,7 @@
           "icon": "./assets/notification-icon.png",
           "color": "#6366f1",
           "androidMode": "default",
-          "projectId": "EXPO_PROJECT_ID_REQUIRED"
+          "projectId": "00000000-0000-0000-0000-agiworkforce"
         }
       ],
       [
@@ -62,7 +75,15 @@
           "cameraPermission": "Allow $(DISPLAYNAME) to access your camera."
         }
       ],
-      "expo-updates"
+      "expo-updates",
+      "expo-web-browser",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(DISPLAYNAME) to use Face ID to unlock the app."
+        }
+      ],
+      "expo-document-picker"
     ],
     "updates": {
       "fallbackToCacheTimeout": 0
