@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
-  "description": "AI-powered coding assistant powered by AGI Workforce",
+  "description": "Multi-model AI coding assistant — GPT, Claude, Gemini, and 15+ LLMs in VS Code",
   "version": "0.1.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
@@ -187,6 +187,11 @@
         "command": "agi-workforce.modelDashboard",
         "title": "AGI Workforce: Model Dashboard",
         "icon": "$(graph)"
+      },
+      {
+        "command": "agi-workforce.showTokenBreakdown",
+        "title": "AGI Workforce: Show Token Breakdown",
+        "icon": "$(pulse)"
       }
     ],
     "chatParticipants": [

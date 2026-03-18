@@ -420,18 +420,66 @@ export class AgentModePanel {
       });
     }
 
-    // Show diff preview for each file
     const batchId = `batch-${Date.now()}`;
-    const descriptions: string[] = [];
 
-    for (const edit of edits) {
-      descriptions.push(edit.filePath);
+    // Show QuickPick FIRST so the user decides which files to review/apply
+    // before any diff tabs are opened.
+    const ACCEPT_ALL_LABEL = '$(check-all) Accept All Changes';
+    const REJECT_ALL_LABEL = '$(close-all) Reject All Changes';
+    const SEPARATOR_LABEL = '';
 
-      // Create a virtual document showing the diff
+    type EditPickItem = vscode.QuickPickItem & { edit?: FileEdit };
+
+    const pickItems: EditPickItem[] = [
+      { label: ACCEPT_ALL_LABEL, description: `Apply all ${edits.length} file(s) without review` },
+      { label: REJECT_ALL_LABEL, description: 'Discard all proposed changes' },
+      { label: SEPARATOR_LABEL, kind: vscode.QuickPickItemKind.Separator },
+      ...edits.map((e) => ({
+        label: e.filePath,
+        description: e.originalContent === '' ? '(new file)' : '(modified)',
+        picked: true,
+        edit: e,
+      })),
+    ];
+
+    const selected = await vscode.window.showQuickPick(pickItems, {
+      title: `AGI Agent: ${edits.length} proposed change(s) — select files to review & apply`,
+      canPickMany: true,
+      placeHolder: 'Check files to apply, or pick Accept All / Reject All',
+    });
+
+    if (selected === undefined || selected.length === 0) {
+      this.postMessage({ type: 'systemMessage', text: 'Edits cancelled.' });
+      return;
+    }
+
+    // Handle Accept All
+    if (selected.some((s) => s.label === ACCEPT_ALL_LABEL)) {
+      await this.applyEdits(edits, batchId, edits.length);
+      return;
+    }
+
+    // Handle Reject All
+    if (selected.some((s) => s.label === REJECT_ALL_LABEL)) {
+      this.postMessage({ type: 'systemMessage', text: 'All proposed changes rejected.' });
+      return;
+    }
+
+    // User picked individual files — open diff tabs only for those
+    const selectedEdits = selected
+      .filter((s): s is EditPickItem & { edit: FileEdit } => s.edit !== undefined)
+      .map((s) => s.edit);
+
+    if (selectedEdits.length === 0) {
+      this.postMessage({ type: 'systemMessage', text: 'No files selected. Edits cancelled.' });
+      return;
+    }
+
+    // Open diff previews only for the selected files
+    for (const edit of selectedEdits) {
       const originalUri = edit.uri.with({ scheme: 'agi-original', query: batchId });
       const modifiedUri = edit.uri.with({ scheme: 'agi-modified', query: batchId });
 
-      // Populate the shared content maps (providers registered once in constructor)
       this._originalContents.set(originalUri.toString(), edit.originalContent);
       this._modifiedContents.set(modifiedUri.toString(), edit.newContent);
 
@@ -444,64 +492,62 @@ export class AgentModePanel {
       );
     }
 
-    // Per-file accept/reject via QuickPick
-    const pickItems = edits.map((e) => ({
-      label: e.filePath,
-      description: e.originalContent === '' ? '(new file)' : '(modified)',
-      picked: true,
-      edit: e,
-    }));
+    // After reviewing diffs, confirm apply
+    const confirmChoice = await vscode.window.showInformationMessage(
+      `Apply changes to ${selectedEdits.length} file(s)?`,
+      { modal: false },
+      'Apply',
+      'Cancel',
+    );
 
-    const selected = await vscode.window.showQuickPick(pickItems, {
-      title: `AGI Agent: Select files to apply (${edits.length} proposed)`,
-      canPickMany: true,
-      placeHolder: 'Uncheck files you want to skip',
-    });
-
-    if (selected !== undefined && selected.length > 0) {
-      const approvedEdits = selected.map((s) => s.edit);
-      const batch: EditBatch = {
-        id: batchId,
-        timestamp: Date.now(),
-        edits: approvedEdits,
-        description: `Edited ${approvedEdits.length} file(s): ${approvedEdits.map((e) => e.filePath).join(', ')}`,
-      };
-
-      const wsEdit = new vscode.WorkspaceEdit();
-
-      for (const edit of approvedEdits) {
-        if (edit.originalContent === '') {
-          wsEdit.createFile(edit.uri, { overwrite: true });
-          wsEdit.insert(edit.uri, new vscode.Position(0, 0), edit.newContent);
-        } else {
-          const doc = await vscode.workspace.openTextDocument(edit.uri);
-          const fullRange = new vscode.Range(
-            doc.positionAt(0),
-            doc.positionAt(doc.getText().length),
-          );
-          wsEdit.replace(edit.uri, fullRange, edit.newContent);
-        }
-      }
-
-      const applied = await vscode.workspace.applyEdit(wsEdit);
-      if (applied) {
-        this.editHistory.push(batch);
-        this.postMessage({
-          type: 'editsApplied',
-          batchId,
-          files: approvedEdits.map((e) => e.filePath),
-        });
-        const skipped = edits.length - approvedEdits.length;
-        const skippedMsg = skipped > 0 ? ` (${skipped} file(s) skipped)` : '';
-        this.postMessage({
-          type: 'systemMessage',
-          text: `Applied edits to ${approvedEdits.length} file(s)${skippedMsg}. Use "Undo Batch" to revert.`,
-        });
-      } else {
-        this.postMessage({ type: 'error', text: 'Failed to apply edits.' });
-      }
+    if (confirmChoice === 'Apply') {
+      await this.applyEdits(selectedEdits, batchId, edits.length);
     } else {
-      this.postMessage({ type: 'systemMessage', text: 'Edits cancelled.' });
+      this.postMessage({ type: 'systemMessage', text: 'Edits cancelled after review.' });
+    }
+  }
+
+  private async applyEdits(
+    approvedEdits: FileEdit[],
+    batchId: string,
+    totalProposed: number,
+  ): Promise<void> {
+    const batch: EditBatch = {
+      id: batchId,
+      timestamp: Date.now(),
+      edits: approvedEdits,
+      description: `Edited ${approvedEdits.length} file(s): ${approvedEdits.map((e) => e.filePath).join(', ')}`,
+    };
+
+    const wsEdit = new vscode.WorkspaceEdit();
+
+    for (const edit of approvedEdits) {
+      if (edit.originalContent === '') {
+        wsEdit.createFile(edit.uri, { overwrite: true });
+        wsEdit.insert(edit.uri, new vscode.Position(0, 0), edit.newContent);
+      } else {
+        const doc = await vscode.workspace.openTextDocument(edit.uri);
+        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+        wsEdit.replace(edit.uri, fullRange, edit.newContent);
+      }
+    }
+
+    const applied = await vscode.workspace.applyEdit(wsEdit);
+    if (applied) {
+      this.editHistory.push(batch);
+      this.postMessage({
+        type: 'editsApplied',
+        batchId,
+        files: approvedEdits.map((e) => e.filePath),
+      });
+      const skipped = totalProposed - approvedEdits.length;
+      const skippedMsg = skipped > 0 ? ` (${skipped} file(s) skipped)` : '';
+      this.postMessage({
+        type: 'systemMessage',
+        text: `Applied edits to ${approvedEdits.length} file(s)${skippedMsg}. Use "Undo Batch" to revert.`,
+      });
+    } else {
+      this.postMessage({ type: 'error', text: 'Failed to apply edits.' });
     }
   }
 
