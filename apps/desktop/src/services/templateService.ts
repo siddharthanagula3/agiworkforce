@@ -17,12 +17,12 @@ export class TemplateService {
   }
 
   static async installTemplate(templateId: string): Promise<void> {
-    return await invoke<void>('install_template', { template_id: templateId });
+    return await invoke<void>('install_template', { templateId });
   }
 
   static async uninstallTemplate(templateId: string): Promise<void> {
     return await invoke<void>('uninstall_template', {
-      template_id: templateId,
+      templateId,
     });
   }
 
@@ -39,7 +39,7 @@ export class TemplateService {
     params: Record<string, string>,
   ): Promise<string> {
     return await invoke<string>('execute_template', {
-      template_id: templateId,
+      templateId,
       params,
     });
   }

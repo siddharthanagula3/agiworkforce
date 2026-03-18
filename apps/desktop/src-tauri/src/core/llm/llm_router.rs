@@ -981,6 +981,17 @@ impl LLMRouter {
             }
         }
 
+        // Demote rate-limited providers to the end of the candidate list
+        // so non-limited providers are tried first, but rate-limited ones
+        // remain as last-resort fallbacks.
+        if let Some(ref tracker) = self.rate_limit_tracker {
+            let (ok, limited): (Vec<_>, Vec<_>) = order
+                .into_iter()
+                .partition(|c| !tracker.is_rate_limited(c.provider, Some(&c.model)));
+            order = ok;
+            order.extend(limited);
+        }
+
         order
     }
 

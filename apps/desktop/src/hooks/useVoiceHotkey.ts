@@ -7,6 +7,11 @@ import { useVoiceInputStore } from '../stores/voiceInputStore';
  * Pressing the configured hotkey calls startListening(); releasing calls
  * stopListening(). The overlay VoiceInputOverlay renders automatically based
  * on the store mode.
+ *
+ * For 'caps_lock' mode the hotkey acts as a toggle: first Caps Lock press
+ * starts listening, second Caps Lock press stops listening. Note that browsers
+ * expose CapsLock via KeyboardEvent.code === 'CapsLock' on keydown; the
+ * actual lock state is readable via KeyboardEvent.getModifierState('CapsLock').
  */
 export function useVoiceHotkey() {
   const startListening = useVoiceInputStore((s) => s.startListening);
@@ -21,6 +26,7 @@ export function useVoiceHotkey() {
     const isOptionHotkey = hotkey === 'option';
     const isCtrlSpace = hotkey === 'ctrl+space';
     const isCtrlShiftV = hotkey === 'ctrl+shift+v';
+    const isCapsLock = hotkey === 'caps_lock';
 
     const matchesHotkey = (e: KeyboardEvent): boolean => {
       if (isOptionHotkey) return e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
@@ -28,19 +34,38 @@ export function useVoiceHotkey() {
         return (e.ctrlKey || e.metaKey) && e.code === 'Space' && !e.shiftKey && !e.altKey;
       if (isCtrlShiftV)
         return (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'v';
+      // Caps Lock: match only the CapsLock key itself, without other modifiers
+      if (isCapsLock)
+        return e.code === 'CapsLock' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
       return false;
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isListeningViaKeyboard.current) return;
-      if (matchesHotkey(e)) {
+      if (!matchesHotkey(e)) return;
+
+      if (isCapsLock) {
+        // Toggle mode: if already listening, stop; otherwise start.
         e.preventDefault();
-        isListeningViaKeyboard.current = true;
-        void startListening();
+        if (isListeningViaKeyboard.current) {
+          isListeningViaKeyboard.current = false;
+          void stopListening();
+        } else {
+          isListeningViaKeyboard.current = true;
+          void startListening();
+        }
+        return;
       }
+
+      if (isListeningViaKeyboard.current) return;
+      e.preventDefault();
+      isListeningViaKeyboard.current = true;
+      void startListening();
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Caps Lock is toggle-based — keyup has no release semantics here.
+      if (isCapsLock) return;
+
       if (!isListeningViaKeyboard.current) return;
       // For option key, fire on any keyup that releases Alt
       const releaseMatches =

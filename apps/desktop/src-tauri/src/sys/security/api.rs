@@ -204,15 +204,14 @@ pub fn compute_hmac(secret: &str, payload: &str) -> String {
 }
 
 fn constant_time_compare(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-
-    let mut result = 0u8;
+    // Use XOR of lengths to avoid early return that leaks length info via timing.
+    // The iteration still runs over the shorter string, but the length
+    // mismatch is folded into the result without a branch.
+    let len_diff = a.len() ^ b.len();
+    let mut result = len_diff as u8;
     for (byte_a, byte_b) in a.bytes().zip(b.bytes()) {
         result |= byte_a ^ byte_b;
     }
-
     result == 0
 }
 

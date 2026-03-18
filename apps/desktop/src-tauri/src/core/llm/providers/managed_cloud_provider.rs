@@ -867,6 +867,7 @@ mod tests {
                         "params": { "type": "array" }
                     }
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,

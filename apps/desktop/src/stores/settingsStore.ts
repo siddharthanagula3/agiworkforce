@@ -80,6 +80,8 @@ interface WindowPreferences {
   dockOnStartup: 'left' | 'right' | null;
   /** Named theme ID from the theme registry. When set, overrides `theme` for color values. */
   selectedTheme?: string;
+  /** When true, applies the OpenDyslexic font for improved readability. */
+  dyslexicFont?: boolean;
 }
 
 export interface ChatPreferences {
@@ -180,6 +182,7 @@ interface SettingsState {
 
   setTheme: (theme: Theme) => void;
   setSelectedTheme: (themeId: string | undefined) => void;
+  setDyslexicFont: (enabled: boolean) => void;
   setLanguage: (language: Language) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
@@ -317,7 +320,8 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v16: Added customKeybindings for user-defined keyboard shortcuts
 // v17: Added selectedTheme to windowPreferences (named theme registry ID)
 // v18: Coding tools parity (no schema changes, version bump to invalidate stale caches)
-const SETTINGS_STORE_VERSION = 18;
+// v19: Added dyslexicFont accessibility toggle to windowPreferences
+const SETTINGS_STORE_VERSION = 19;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -662,6 +666,22 @@ export const useSettingsStore = create<SettingsState>()(
             import('../themes/index').then(({ clearAppliedTheme }) => {
               clearAppliedTheme();
             });
+          }
+        },
+
+        setDyslexicFont: (enabled: boolean) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, dyslexicFont: enabled },
+            }),
+            undefined,
+            'settings/setDyslexicFont',
+          );
+          // Apply/remove dyslexic font class immediately
+          if (enabled) {
+            document.documentElement.classList.add('dyslexic-font');
+          } else {
+            document.documentElement.classList.remove('dyslexic-font');
           }
         },
 
@@ -1395,6 +1415,16 @@ export const useSettingsStore = create<SettingsState>()(
           // Migration from v17 to v18: Coding tools parity — no schema changes needed
           if (version < 18) {
             // No-op: version bump only to signal coding tools parity release
+          }
+
+          // Migration from v18 to v19: Add dyslexicFont to windowPreferences
+          if (version < 19) {
+            if (state.windowPreferences && state.windowPreferences.dyslexicFont === undefined) {
+              state.windowPreferences = {
+                ...state.windowPreferences,
+                dyslexicFont: false,
+              };
+            }
           }
 
           return state as SettingsState;

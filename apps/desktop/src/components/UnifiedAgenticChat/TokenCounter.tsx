@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Scissors, TrendingUp } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../lib/utils';
 import { formatTokens } from '../../utils/tokenCount';
@@ -24,6 +24,12 @@ export interface TokenCounterProps {
   compact?: boolean;
 
   className?: string;
+
+  /**
+   * When provided, a "Compact" button is shown when context usage exceeds 95%.
+   * The button is also shown as a warning action at >80% in full mode.
+   */
+  onCompact?: () => void;
 }
 
 function getUsageStatus(current: number, max: number, budget?: number) {
@@ -68,6 +74,7 @@ export const TokenCounter = ({
   showDetails = true,
   compact = false,
   className,
+  onCompact,
 }: TokenCounterProps) => {
   const { percentage, budgetPercentage, status, statusColor, barColor } = useMemo(
     () => getUsageStatus(currentTokens, maxTokens, budgetLimit),
@@ -78,53 +85,83 @@ export const TokenCounter = ({
   const budgetRemaining = budgetLimit ? budgetLimit - currentTokens : null;
 
   if (compact) {
+    const showWarningBadge = percentage >= 80 && percentage < 95;
+    const showDangerBadge = percentage >= 95;
+
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-              'bg-muted/50 hover:bg-muted',
-              className,
-            )}
-          >
-            <Activity className={cn('h-3.5 w-3.5', statusColor)} />
-            <span className={statusColor}>{formatTokens(currentTokens)}</span>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">{formatTokens(maxTokens)}</span>
-          </div>
-        </TooltipTrigger>
-        {showDetails && (
-          <TooltipContent side="top" className="max-w-xs">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-xs text-muted-foreground">Usage</span>
-                <span className="text-xs font-medium">{percentage.toFixed(1)}%</span>
-              </div>
-              {(inputTokens > 0 || outputTokens > 0) && (
-                <>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-xs text-muted-foreground">↓ Input</span>
-                    <span className="text-xs font-medium text-blue-400">
-                      {formatTokens(inputTokens)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-xs text-muted-foreground">↑ Output</span>
-                    <span className="text-xs font-medium text-green-400">
-                      {formatTokens(outputTokens)}
-                    </span>
-                  </div>
-                </>
+      <div className={cn('flex items-center gap-1', className)}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                'bg-muted/50 hover:bg-muted',
+                showDangerBadge && 'ring-1 ring-destructive/50',
+                showWarningBadge && 'ring-1 ring-warning/50',
               )}
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-xs text-muted-foreground">Remaining</span>
-                <span className="text-xs font-medium">{formatTokens(tokensRemaining)}</span>
-              </div>
+            >
+              <Activity className={cn('h-3.5 w-3.5', statusColor)} />
+              <span className={statusColor}>{formatTokens(currentTokens)}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-muted-foreground">{formatTokens(maxTokens)}</span>
+              {showWarningBadge && (
+                <span className="ml-0.5 rounded px-1 py-0.5 text-[9px] font-semibold bg-warning/20 text-warning">
+                  {percentage.toFixed(0)}%
+                </span>
+              )}
+              {showDangerBadge && (
+                <span className="ml-0.5 rounded px-1 py-0.5 text-[9px] font-semibold bg-destructive/20 text-destructive">
+                  {percentage.toFixed(0)}%
+                </span>
+              )}
             </div>
-          </TooltipContent>
+          </TooltipTrigger>
+          {showDetails && (
+            <TooltipContent side="top" className="max-w-xs">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs text-muted-foreground">Usage</span>
+                  <span className="text-xs font-medium">{percentage.toFixed(1)}%</span>
+                </div>
+                {(inputTokens > 0 || outputTokens > 0) && (
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-xs text-muted-foreground">↓ Input</span>
+                      <span className="text-xs font-medium text-blue-400">
+                        {formatTokens(inputTokens)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-xs text-muted-foreground">↑ Output</span>
+                      <span className="text-xs font-medium text-green-400">
+                        {formatTokens(outputTokens)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs text-muted-foreground">Remaining</span>
+                  <span className="text-xs font-medium">{formatTokens(tokensRemaining)}</span>
+                </div>
+              </div>
+            </TooltipContent>
+          )}
+        </Tooltip>
+        {showDangerBadge && onCompact && (
+          <button
+            type="button"
+            onClick={onCompact}
+            className={cn(
+              'flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium transition-colors',
+              'bg-destructive/15 text-destructive hover:bg-destructive/25',
+            )}
+            title="Compact context to free up space"
+          >
+            <Scissors className="h-3 w-3" />
+            Compact
+          </button>
         )}
-      </Tooltip>
+      </div>
     );
   }
 
@@ -247,11 +284,40 @@ export const TokenCounter = ({
             </div>
           )}
 
+          {status === 'warning' && (
+            <div className="col-span-2 rounded-md bg-warning/10 px-2 py-1.5">
+              <div className="flex items-center gap-2 text-xs text-warning">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Context window over 80% full</span>
+                {onCompact && (
+                  <button
+                    type="button"
+                    onClick={onCompact}
+                    className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-warning/20 hover:bg-warning/30 transition-colors"
+                  >
+                    <Scissors className="h-2.5 w-2.5" />
+                    Compact
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {status === 'danger' && (
             <div className="col-span-2 rounded-md bg-destructive/10 px-2 py-1.5">
               <div className="flex items-center gap-2 text-xs text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Approaching context limit</span>
+                {onCompact && (
+                  <button
+                    type="button"
+                    onClick={onCompact}
+                    className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-destructive/20 hover:bg-destructive/30 transition-colors"
+                  >
+                    <Scissors className="h-2.5 w-2.5" />
+                    Compact now
+                  </button>
+                )}
               </div>
             </div>
           )}

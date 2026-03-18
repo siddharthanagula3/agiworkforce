@@ -1,5 +1,5 @@
 import { Copy, Download, File, FileSpreadsheet, FileText, FolderOpen, Loader2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
@@ -17,6 +17,17 @@ interface DocumentGenerationData {
   status?: string;
   success?: boolean;
   error?: string;
+}
+
+interface FileMetadata {
+  sizeBytes: number;
+  createdAt: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function inferExtension(filePath?: string, format?: string): string {
@@ -75,6 +86,37 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
   const fileName = useMemo(() => inferFilename(resolvedPath, extension), [resolvedPath, extension]);
   const success = data?.success ?? true;
   const failed = status === 'failed' || status === 'error' || !success || Boolean(data?.error);
+
+  // Load file metadata (size + creation time) once the file path is available
+  const [fileMeta, setFileMeta] = useState<FileMetadata | null>(null);
+  useEffect(() => {
+    if (!resolvedPath || failed) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const meta = await invoke<FileMetadata>('file_get_metadata', { path: resolvedPath });
+        if (!cancelled) setFileMeta(meta);
+      } catch {
+        // Metadata unavailable — silently skip
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedPath, failed]);
+
+  // Must be declared before all early returns to satisfy rules of hooks
+  const createdAtDisplay = useMemo(() => {
+    if (!fileMeta?.createdAt) return null;
+    try {
+      return new Date(fileMeta.createdAt).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return fileMeta.createdAt;
+    }
+  }, [fileMeta?.createdAt]);
 
   // Check running state before null guard so the spinner is reachable
   if (status === 'running') {
@@ -158,6 +200,15 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   };
 
+  const handleOpenInFinder = async () => {
+    if (!resolvedPath) return;
+    try {
+      await invoke<void>('open_file_location', { path: resolvedPath });
+    } catch (error) {
+      console.error('[InlineDocumentGeneration] Open in Finder failed', error);
+    }
+  };
+
   const docType = getDocTypeInfo(extension);
 
   return (
@@ -168,8 +219,16 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
           <span className="text-xs font-medium text-muted-foreground">
             Generated {docType.label}
           </span>
+          {fileMeta && (
+            <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
+              {formatFileSize(fileMeta.sizeBytes)}
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{fileName}</p>
+        {createdAtDisplay && (
+          <p className="text-[10px] text-muted-foreground mt-0.5">Created {createdAtDisplay}</p>
+        )}
       </div>
 
       <div className="px-3 py-2 space-y-2">
@@ -188,6 +247,18 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
             >
               <FolderOpen className="h-4 w-4" />
               Open
+            </Button>
+          )}
+          {resolvedPath && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-2"
+              onClick={() => void handleOpenInFinder()}
+              title="Reveal in Finder"
+            >
+              <FolderOpen className="h-4 w-4" />
+              Show in Finder
             </Button>
           )}
           <Button

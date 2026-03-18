@@ -64,6 +64,7 @@ import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
+import { TasksView } from './TasksView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import { PlanPreview } from '../Planning/PlanPreview';
@@ -327,6 +328,9 @@ export const UnifiedAgenticChat: React.FC<{
   // Stream Throttling state - batches updates to avoid React saturation
   const streamBufferRef = useRef<Map<string, string>>(new Map());
   const rafIdRef = useRef<number | null>(null);
+
+  // Auto-compaction: prevents repeated compaction within the same session
+  const hasCompactedThisSessionRef = useRef(false);
 
   /**
    * Processes buffered stream updates using requestAnimationFrame.
@@ -773,6 +777,33 @@ export const UnifiedAgenticChat: React.FC<{
       const confirmed = await confirmRisk(riskLevel as 'medium' | 'high', riskMessage);
       if (!confirmed) {
         return;
+      }
+    }
+
+    // Auto-compaction: if we have more than 50 messages and haven't compacted this session,
+    // compact the context before sending to keep the conversation running smoothly.
+    if (isTauri && !hasCompactedThisSessionRef.current) {
+      const currentMessageCount = useChatStore.getState().messages.length;
+      if (currentMessageCount > 50) {
+        hasCompactedThisSessionRef.current = true;
+        try {
+          const autoCompactConvId = useUnifiedChatStore.getState().activeConversationId;
+          const autoCompactDbId = autoCompactConvId ? uuidToDbId(autoCompactConvId) : undefined;
+          const autoCompactUserId = supabaseAuth.getUser()?.id;
+          await ipcInvoke('chat_compact_context', {
+            conversationId: autoCompactDbId,
+            focus: undefined,
+            userId: autoCompactUserId,
+          });
+          toast({
+            title: 'Context compacted',
+            description: 'Context compacted for continuous conversation',
+            duration: 3000,
+          });
+        } catch {
+          // Non-fatal: compaction failure should not block the send
+          hasCompactedThisSessionRef.current = false;
+        }
       }
     }
 
@@ -1350,6 +1381,8 @@ export const UnifiedAgenticChat: React.FC<{
             </>
           ) : activeView === 'projects' ? (
             <ProjectsView />
+          ) : activeView === 'tasks' ? (
+            <TasksView />
           ) : activeView === 'artifacts' ? (
             <div className="flex-1 p-4">
               <CanvasWorkspace className="h-full" />

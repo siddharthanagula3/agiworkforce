@@ -55,7 +55,11 @@ export type ArtifactType =
   | 'audio'
   | 'music'
   | 'search'
-  | 'document';
+  | 'document'
+  | 'svg'
+  | 'markdown'
+  | 'react'
+  | 'component';
 
 export interface Artifact {
   id: string;

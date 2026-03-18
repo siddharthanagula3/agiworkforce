@@ -1,4 +1,4 @@
-// TODO: remove — superseded by api_executor.rs
+// API tool implementations used by api_executor.rs
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;

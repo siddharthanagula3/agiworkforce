@@ -11,6 +11,18 @@ use uuid::Uuid;
 
 use super::secret_manager::SecretManager;
 
+/// Constant-time string comparison to prevent timing side-channels on token validation.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes()
+        .iter()
+        .zip(b.as_bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
+
 const ACCESS_TOKEN_DURATION: i64 = 60;
 const REFRESH_TOKEN_DURATION: i64 = 30 * 24 * 60;
 const MAX_FAILED_ATTEMPTS: u32 = 5;
@@ -21,6 +33,7 @@ const INACTIVITY_TIMEOUT: i64 = 15;
 // SECSYS-003 fix: Rate limiting constants for token validation
 const TOKEN_VALIDATION_MAX_ATTEMPTS: u32 = 100; // Max attempts per minute
 const TOKEN_VALIDATION_WINDOW_SECS: i64 = 60; // 1 minute window
+const VALIDATION_ATTEMPTS_MAX_ENTRIES: usize = 10_000; // Cap to prevent unbounded memory growth
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -289,7 +302,7 @@ impl AuthManager {
         let mut sessions = self.sessions.write();
         let session_id = sessions
             .iter()
-            .find(|(_, s)| s.access_token == access_token)
+            .find(|(_, s)| constant_time_eq(&s.access_token, access_token))
             .map(|(id, _)| id.clone())
             .ok_or("Invalid session")?;
 
@@ -301,7 +314,7 @@ impl AuthManager {
         let mut sessions = self.sessions.write();
         let session = sessions
             .values_mut()
-            .find(|s| s.refresh_token == refresh_token)
+            .find(|s| constant_time_eq(&s.refresh_token, refresh_token))
             .ok_or("Invalid refresh token")?;
 
         if session.is_expired() {
@@ -328,6 +341,20 @@ impl AuthManager {
                 }
                 attempt.increment();
             } else {
+                // Evict expired entries if at capacity to prevent unbounded memory growth
+                if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
+                    attempts.retain(|_, attempt| !attempt.is_window_expired());
+                }
+                // If still at capacity after eviction, remove the oldest entry
+                if attempts.len() >= VALIDATION_ATTEMPTS_MAX_ENTRIES {
+                    if let Some(oldest_key) = attempts
+                        .iter()
+                        .min_by_key(|(_, v)| v.window_start)
+                        .map(|(k, _)| k.clone())
+                    {
+                        attempts.remove(&oldest_key);
+                    }
+                }
                 attempts.insert(rate_key.clone(), ValidationAttempt::new());
             }
         }
@@ -335,7 +362,7 @@ impl AuthManager {
         let mut sessions = self.sessions.write();
         let session = sessions
             .values_mut()
-            .find(|s| s.access_token == access_token)
+            .find(|s| constant_time_eq(&s.access_token, access_token))
             .ok_or("Invalid access token")?;
 
         if session.is_expired() {
@@ -429,7 +456,7 @@ fn generate_token() -> String {
     use rand::RngCore;
 
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    OsRng.fill_bytes(&mut bytes);
     general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 

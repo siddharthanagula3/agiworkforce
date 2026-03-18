@@ -161,6 +161,7 @@ fn convert_tool_to_definition(tool: &Tool) -> ToolDefinition {
         name: tool.id.clone(),
         description: tool.description.clone(),
         parameters,
+        strict: None,
     }
 }
 
@@ -195,6 +196,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["path"]
             }),
+            strict: None,
         },
         // File Write
         ToolDefinition {
@@ -214,6 +216,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["path", "content"]
             }),
+            strict: None,
         },
         // File Delete
         ToolDefinition {
@@ -229,6 +232,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["path"]
             }),
+            strict: None,
         },
         // File List (Directory listing)
         ToolDefinition {
@@ -261,6 +265,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Screenshot
         ToolDefinition {
@@ -271,6 +276,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "properties": {},
                 "required": []
             }),
+            strict: None,
         },
         // UI Click
         ToolDefinition {
@@ -291,6 +297,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["target"]
             }),
+            strict: None,
         },
         // UI Type
         ToolDefinition {
@@ -310,6 +317,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["target", "text"]
             }),
+            strict: None,
         },
         // Web Search
         ToolDefinition {
@@ -333,6 +341,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["query"]
             }),
+            strict: None,
         },
         // Terminal Execute
         // AUDIT-TERMINAL-055 fix: Expose timeout_ms and shell parameters to the model
@@ -361,6 +370,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["command"]
             }),
+            strict: None,
         },
         // Image Generate
         ToolDefinition {
@@ -384,6 +394,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["prompt"]
             }),
+            strict: None,
         },
         // Video Generate
         ToolDefinition {
@@ -403,6 +414,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["prompt"]
             }),
+            strict: None,
         },
         // Browser Navigate
         ToolDefinition {
@@ -418,6 +430,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["url"]
             }),
+            strict: None,
         },
         // Browser Click
         ToolDefinition {
@@ -437,6 +450,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Extract
         ToolDefinition {
@@ -464,6 +478,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Type
         ToolDefinition {
@@ -491,6 +506,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector", "text"]
             }),
+            strict: None,
         },
         // Browser Wait For Selector
         ToolDefinition {
@@ -514,6 +530,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Get Text
         ToolDefinition {
@@ -533,6 +550,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Get Attribute
         ToolDefinition {
@@ -556,6 +574,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector", "attribute"]
             }),
+            strict: None,
         },
         // Browser Screenshot
         ToolDefinition {
@@ -575,6 +594,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Hover
         ToolDefinition {
@@ -594,6 +614,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Focus
         ToolDefinition {
@@ -613,6 +634,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Scroll Into View
         ToolDefinition {
@@ -632,6 +654,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Query All
         ToolDefinition {
@@ -651,6 +674,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Execute Async JS
         ToolDefinition {
@@ -690,6 +714,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["script"]
             }),
+            strict: None,
         },
         // Browser Get Element State
         ToolDefinition {
@@ -709,6 +734,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Wait For Interactive
         ToolDefinition {
@@ -732,6 +758,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Select Option
         ToolDefinition {
@@ -755,6 +782,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector", "value"]
             }),
+            strict: None,
         },
         // Browser Check
         ToolDefinition {
@@ -774,6 +802,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Uncheck
         ToolDefinition {
@@ -793,6 +822,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["selector"]
             }),
+            strict: None,
         },
         // Browser Get URL
         ToolDefinition {
@@ -808,6 +838,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Get Title
         ToolDefinition {
@@ -823,6 +854,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Back
         ToolDefinition {
@@ -838,6 +870,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Forward
         ToolDefinition {
@@ -853,6 +886,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Reload
         ToolDefinition {
@@ -868,6 +902,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Get Content
         ToolDefinition {
@@ -883,6 +918,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Wait For Navigation
         ToolDefinition {
@@ -902,6 +938,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Browser Get DOM Snapshot
         ToolDefinition {
@@ -917,6 +954,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
         // Document Creation - PDF
         ToolDefinition {
@@ -947,6 +985,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["output_path", "paragraphs"]
             }),
+            strict: None,
         },
         // Document Creation - Word
         ToolDefinition {
@@ -977,6 +1016,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["output_path", "paragraphs"]
             }),
+            strict: None,
         },
         // Document Creation - Excel
         ToolDefinition {
@@ -1013,6 +1053,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["output_path", "headers", "rows"]
             }),
+            strict: None,
         },
 
         // ── grep_search — regex content search ────────────────────────────────
@@ -1045,6 +1086,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["pattern"]
             }),
+            strict: None,
         },
 
         // ── glob_search — file pattern search ─────────────────────────────────
@@ -1073,6 +1115,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["pattern"]
             }),
+            strict: None,
         },
 
         // ── file_read_range — read with line offset ────────────────────────────
@@ -1103,6 +1146,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["path"]
             }),
+            strict: None,
         },
 
         // ── format_file — auto-formatter ───────────────────────────────────────
@@ -1125,6 +1169,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["path"]
             }),
+            strict: None,
         },
 
         // ── test_run — run tests and get structured results ────────────────────
@@ -1158,6 +1203,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": []
             }),
+            strict: None,
         },
     ]
 }
@@ -1305,6 +1351,7 @@ mod tests {
                 "type": "object",
                 "properties": {}
             }),
+            strict: None,
         }
     }
 
