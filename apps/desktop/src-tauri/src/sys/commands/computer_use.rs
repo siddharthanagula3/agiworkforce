@@ -593,3 +593,17 @@ pub async fn computer_use_execute_opa_task(
 
     Ok(value)
 }
+
+#[tauri::command]
+pub async fn computer_use_stop_session(
+    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    session_id: String,
+) -> Result<(), String> {
+    let computer_state = state.lock().await;
+    let mut current = computer_state.current_session.lock().await;
+    if current.as_deref() == Some(&session_id) {
+        *current = None;
+        tracing::info!("Stopped computer use session: {}", session_id);
+    }
+    Ok(())
+}

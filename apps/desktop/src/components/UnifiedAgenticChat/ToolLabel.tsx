@@ -110,7 +110,7 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
     if (!checkpointId) return;
     setRewinding(true);
     try {
-      await invoke('codingCheckpointRewind', { id: checkpointId });
+      await invoke('coding_checkpoint_rewind', { id: checkpointId });
       onRewind?.();
     } catch (err) {
       console.error('[ToolLabel] Rewind failed:', err);
@@ -192,9 +192,8 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
       : undefined;
 
   const hasDiff = Boolean(diffContent);
-  const checkpointId: string | undefined = (
-    entry as ToolLabelEntry & { checkpointId?: string }
-  ).checkpointId;
+  const checkpointId: string | undefined = (entry as ToolLabelEntry & { checkpointId?: string })
+    .checkpointId;
 
   return (
     <motion.div
