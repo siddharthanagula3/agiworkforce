@@ -150,6 +150,8 @@ export function VoiceConversationScreen({
 }: VoiceConversationScreenProps) {
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
+  const speechRate = useSettingsStore((s) => s.speechRate);
 
   const [phase, setPhase] = useState<ConversationPhase>('idle');
   const [muted, setMuted] = useState(false);
@@ -234,7 +236,8 @@ export function VoiceConversationScreen({
       // Speak AI response
       setPhase('speaking');
       await TTS.speak(aiResponse, {
-        rate: 1.0,
+        voice: selectedVoiceId ?? undefined,
+        rate: speechRate,
         onStart: () => {
           if (activeRef.current) setAudioLevel(0.5);
         },
@@ -258,7 +261,7 @@ export function VoiceConversationScreen({
         setAudioLevel(0);
       }
     }
-  }, [hapticsEnabled, onSendMessage, startListening]);
+  }, [hapticsEnabled, onSendMessage, startListening, selectedVoiceId, speechRate]);
 
   const handleOrbPress = useCallback(() => {
     if (phase === 'idle') {

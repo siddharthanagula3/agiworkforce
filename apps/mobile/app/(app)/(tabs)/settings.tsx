@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,8 +15,17 @@ import {
   Calendar,
   HardDrive,
   ChevronRight,
+  MessageCircle,
+  Palette,
+  Fingerprint,
+  Sun,
+  Moon,
+  Monitor,
+  Volume2,
   type LucideIcon,
 } from 'lucide-react-native';
+import type BottomSheet from '@gorhom/bottom-sheet';
+import type { ThemeMode } from '@/stores/settingsStore';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
@@ -27,6 +37,8 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
 import { api } from '@/services/api';
 import { colors } from '@/lib/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { VoiceSelector } from '@/components/voice/VoiceSelector';
 import type { AutoApproveMode } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
@@ -155,15 +167,22 @@ export default function SettingsTabScreen() {
   const { user, signOut } = useAuthStore();
   const connectionStatus = useConnectionStore((s) => s.status);
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const { colors: themeColors } = useTheme();
+  const voiceSelectorRef = useRef<BottomSheet>(null);
   const {
     hapticsEnabled,
     notificationsEnabled,
     voiceEnabled,
     backgroundFetchEnabled,
+    themeMode,
+    biometricLockEnabled,
+    selectedVoiceId,
     setHapticsEnabled,
     setNotificationsEnabled,
     setVoiceEnabled,
     setBackgroundFetchEnabled,
+    setThemeMode,
+    setBiometricLockEnabled,
   } = useSettingsStore();
 
   const handleSignOut = () => {
@@ -248,14 +267,6 @@ export default function SettingsTabScreen() {
           />
         </Card>
 
-        {/* Security */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Security
-          </Text>
-          <AutoApproveSelector />
-        </Card>
-
         {/* Preferences */}
         <Card>
           <Text variant="caption" className="mb-3 uppercase tracking-wider">
@@ -282,11 +293,77 @@ export default function SettingsTabScreen() {
             onValueChange={setVoiceEnabled}
           />
           <Separator />
+          <SettingRow
+            icon={Volume2}
+            label="Voice"
+            value={selectedVoiceId ? 'Custom' : 'System Default'}
+            onPress={() => voiceSelectorRef.current?.snapToIndex(0)}
+          />
+          <Separator />
           <SettingToggle
             icon={HardDrive}
             label="Background Agent Sync"
             value={backgroundFetchEnabled}
             onValueChange={setBackgroundFetchEnabled}
+          />
+        </Card>
+
+        {/* Appearance */}
+        <Card>
+          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+            Appearance
+          </Text>
+          <View className="flex-row items-center gap-2 mb-1">
+            <Palette size={18} color={colors.textSecondary} />
+            <Text className="text-sm text-white">Theme</Text>
+          </View>
+          <View className="flex-row gap-2 mt-2">
+            {[
+              { mode: 'dark' as ThemeMode, label: 'Dark', icon: Moon },
+              { mode: 'light' as ThemeMode, label: 'Light', icon: Sun },
+              { mode: 'system' as ThemeMode, label: 'System', icon: Monitor },
+            ].map((opt) => {
+              const Icon = opt.icon;
+              const selected = themeMode === opt.mode;
+              return (
+                <Pressable
+                  key={opt.mode}
+                  onPress={() => setThemeMode(opt.mode)}
+                  className="flex-1 items-center gap-1.5 py-2.5 rounded-lg"
+                  style={{
+                    backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'transparent',
+                    borderWidth: selected ? 1 : 0,
+                    borderColor: selected ? 'rgba(33,128,141,0.3)' : 'transparent',
+                  }}
+                  accessibilityLabel={opt.label}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
+                  <Text
+                    className="text-xs"
+                    style={{ color: selected ? colors.teal : colors.textSecondary }}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+
+        {/* Security */}
+        <Card>
+          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+            Security
+          </Text>
+          <AutoApproveSelector />
+          <Separator className="my-3" />
+          <SettingToggle
+            icon={Fingerprint}
+            label="Biometric Lock"
+            value={biometricLockEnabled}
+            onValueChange={setBiometricLockEnabled}
           />
         </Card>
 
@@ -322,6 +399,15 @@ export default function SettingsTabScreen() {
           />
         </Card>
 
+        {/* Feedback */}
+        <Card>
+          <SettingRow
+            icon={MessageCircle}
+            label="Send Feedback"
+            onPress={() => router.push('/(app)/feedback' as Parameters<typeof router.push>[0])}
+          />
+        </Card>
+
         {/* Sign Out */}
         <Card>
           <SettingRow icon={LogOut} label="Sign Out" onPress={handleSignOut} />
@@ -332,6 +418,8 @@ export default function SettingsTabScreen() {
           <Text className="text-[11px] text-white/20">AGI Workforce Mobile v0.1.0</Text>
         </View>
       </ScrollView>
+
+      <VoiceSelector ref={voiceSelectorRef} />
     </SafeAreaView>
   );
 }

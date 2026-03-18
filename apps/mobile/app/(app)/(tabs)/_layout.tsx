@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Home, MessageSquare, Bot, Settings } from 'lucide-react-native';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Bottom tab navigator for the main app screens.
@@ -8,20 +8,22 @@ import { colors } from '@/lib/theme';
  * Each tab has its own stack navigator for drill-down screens.
  */
 export default function TabsLayout() {
+  const { colors: themeColors } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.surfaceElevated,
-          borderTopColor: colors.border,
+          backgroundColor: themeColors.surfaceElevated,
+          borderTopColor: themeColors.border,
           borderTopWidth: 1,
           height: 84,
           paddingBottom: 28,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: colors.teal,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarActiveTintColor: themeColors.teal,
+        tabBarInactiveTintColor: themeColors.textMuted,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
