@@ -54,8 +54,7 @@ export const useAuthStore = create<AuthState>()(
             set({ session, user: session?.user ?? null });
           });
           authSubscription = subscription;
-        } catch (error) {
-          console.warn('[authStore] Failed to initialize session:', error);
+        } catch {
           set({ isLoading: false, isInitialized: true });
         }
       },
@@ -129,8 +128,8 @@ export const useAuthStore = create<AuthState>()(
       signOut: async () => {
         try {
           await supabase.auth.signOut();
-        } catch (error) {
-          console.warn('[authStore] signOut error:', error);
+        } catch {
+          // signOut network call may fail — always clear local session below
         } finally {
           // Always clear session, even if signOut network call fails
           set({ session: null, user: null, isLoading: false });
@@ -151,16 +150,11 @@ export const useAuthStore = create<AuthState>()(
             timeoutPromise,
           ]);
           if (error || !data.session) {
-            console.warn('[authStore] Refresh failed:', error?.message ?? 'no session');
             set({ session: null, user: null });
             return;
           }
           set({ session: data.session, user: data.session.user });
-        } catch (err) {
-          console.warn(
-            '[authStore] Refresh failed:',
-            err instanceof Error ? err.message : 'unknown error',
-          );
+        } catch {
           set({ session: null, user: null });
         }
       },

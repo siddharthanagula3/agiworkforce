@@ -158,13 +158,16 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
 </html>`;
   }, []);
 
+  // Reset loading/error state whenever code or reloadKey changes
+  useEffect(() => {
+    setError(null);
+    setIsLoading(true);
+  }, [code, reloadKey]);
+
   const srcDoc = useMemo(() => {
     try {
-      setError(null);
-      setIsLoading(true);
       return buildDocument(code);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to build preview');
+    } catch {
       return '';
     }
     // reloadKey intentionally included so manual reload rebuilds the srcdoc

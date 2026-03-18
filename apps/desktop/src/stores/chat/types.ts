@@ -42,7 +42,7 @@ export interface MessageMetadata {
   widgets?: ChatWidgetData[];
 
   tool?: string;
-  tool_call?: string;
+  toolCall?: string;
   name?: string;
   event?: string;
   status?: string;
@@ -51,7 +51,6 @@ export interface MessageMetadata {
   command?: string;
   requiresApproval?: boolean;
   actionId?: string;
-  action_id?: string;
   sidecarType?: 'browser' | 'terminal' | 'code' | 'video' | 'media' | 'files' | 'data';
   thinking?: {
     title?: string;

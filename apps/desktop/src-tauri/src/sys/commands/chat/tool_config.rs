@@ -52,25 +52,30 @@ pub(super) fn build_tool_definitions(
         }
     }
 
-    if is_web_focus && model.to_lowercase().contains("claude") {
-        let already_has_web_search = tool_defs.iter().any(|tool| tool.name == "web_search");
-        if !already_has_web_search {
-            tool_defs.push(ToolDefinition {
-                name: "web_search".to_string(),
-                description: "Search the web for real-time information. Use this for current events, prices, news, and anything requiring up-to-date data.".to_string(),
-                parameters: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query"
-                        }
-                    },
-                    "required": ["query"]
-                }),
-                strict: None,
-            });
-            info!("[Chat] Injected Anthropic web_search server tool for web focus mode");
+    if is_web_focus {
+        // web_search is an Anthropic server tool — only inject for Claude models
+        if model.to_lowercase().contains("claude") {
+            let already_has_web_search = tool_defs.iter().any(|tool| tool.name == "web_search");
+            if !already_has_web_search {
+                tool_defs.push(ToolDefinition {
+                    name: "web_search".to_string(),
+                    description: "Search the web for real-time information. Use this for current events, prices, news, and anything requiring up-to-date data.".to_string(),
+                    parameters: serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query"
+                            }
+                        },
+                        "required": ["query"]
+                    }),
+                    strict: None,
+                });
+                info!("[Chat] Injected Anthropic web_search server tool for web focus mode");
+            }
+        } else {
+            debug!("Web focus mode active but web_search tool only supported for Claude models (current: {})", model);
         }
     }
 

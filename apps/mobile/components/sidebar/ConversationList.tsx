@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { MessageSquare, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -76,11 +76,6 @@ export function ConversationList({ searchQuery, searchResults }: ConversationLis
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);
-
-  // Load conversations on mount
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
 
   const grouped = useMemo(() => groupConversations(conversations), [conversations]);
 
