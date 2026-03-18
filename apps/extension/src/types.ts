@@ -59,7 +59,26 @@ export type NativeMessageType =
   // Internal content-script alias for GET_ACCESSIBILITY_TREE
   | 'BUILD_ACCESSIBILITY_TREE'
   // Side panel → background: notify that the bridge URL was updated in storage
-  | 'BRIDGE_URL_CHANGED';
+  | 'BRIDGE_URL_CHANGED'
+  // WebMCP tool discovery and invocation
+  | 'WEBMCP_DISCOVER_TOOLS'
+  | 'WEBMCP_CALL_TOOL'
+  | 'WEBMCP_TOOLS_CHANGED'
+  // NLWeb detection result
+  | 'NLWEB_DETECTED'
+  // Console log reading
+  | 'GET_CONSOLE_LOGS'
+  | 'CLEAR_CONSOLE_LOGS'
+  // Saved shortcuts (workflow recording)
+  | 'SAVE_SHORTCUT'
+  | 'LIST_SHORTCUTS'
+  | 'DELETE_SHORTCUT'
+  | 'REPLAY_SHORTCUT'
+  // Scheduled tasks
+  | 'CREATE_SCHEDULED_TASK'
+  | 'LIST_SCHEDULED_TASKS'
+  | 'UPDATE_SCHEDULED_TASK'
+  | 'DELETE_SCHEDULED_TASK';
 
 /**
  * Internal-only messages that travel between extension contexts (background ↔ side panel).
@@ -394,7 +413,10 @@ export interface SyncPageContextMessage extends BaseMessage {
     selectedText?: string;
     timestamp?: number;
     reason?: string;
+    metadata?: import('./page-metadata').PageMetadata;
   };
+  /** Structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.) */
+  metadata?: import('./page-metadata').PageMetadata;
 }
 
 export interface RunPageAction {
@@ -452,7 +474,7 @@ export interface ChatMessageMessage extends BaseMessage {
   text: string;
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
-  /** API key forwarded from the side panel's chrome.storage.local agi_api_key. */
+  /** API key forwarded from the side panel's chrome.storage.session agi_api_key. */
   apiKey?: string;
 }
 
@@ -671,6 +693,164 @@ export interface BridgeUrlChangedMessage extends BaseMessage {
   url?: string;
 }
 
+// ─── WebMCP messages ──────────────────────────────────────────────────────────
+
+export interface WebMCPToolInfo {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+  source: 'imperative' | 'declarative';
+}
+
+export interface WebMCPDiscoverToolsMessage extends BaseMessage {
+  type: 'WEBMCP_DISCOVER_TOOLS';
+}
+
+export interface WebMCPDiscoverToolsResponse {
+  success: boolean;
+  supported: boolean;
+  tools: WebMCPToolInfo[];
+  url?: string;
+  error?: string;
+}
+
+export interface WebMCPCallToolMessage extends BaseMessage {
+  type: 'WEBMCP_CALL_TOOL';
+  toolName: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface WebMCPCallToolResponse {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+export interface WebMCPToolsChangedMessage extends BaseMessage {
+  type: 'WEBMCP_TOOLS_CHANGED';
+  tools: WebMCPToolInfo[];
+  url?: string;
+}
+
+export interface NLWebDetectedMessage extends BaseMessage {
+  type: 'NLWEB_DETECTED';
+  nlweb: import('./nlweb').NLWebDetectionResult;
+  url?: string;
+}
+
+// ─── Console log reading ────────────────────────────────────────────────────
+
+export interface ConsoleLogEntry {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  message: string;
+  timestamp: number;
+}
+
+export interface GetConsoleLogsMessage extends BaseMessage {
+  type: 'GET_CONSOLE_LOGS';
+}
+
+export interface GetConsoleLogsResponse {
+  success: boolean;
+  logs?: ConsoleLogEntry[];
+  error?: string;
+}
+
+export interface ClearConsoleLogsMessage extends BaseMessage {
+  type: 'CLEAR_CONSOLE_LOGS';
+}
+
+export interface ClearConsoleLogsResponse {
+  success: boolean;
+  error?: string;
+}
+
+// ─── Saved shortcuts (workflow recording) ───────────────────────────────────
+
+export interface SavedShortcut {
+  id: string;
+  name: string;
+  actions: RunPageAction[];
+  createdAt: number;
+  url?: string;
+}
+
+export interface SaveShortcutMessage extends BaseMessage {
+  type: 'SAVE_SHORTCUT';
+  name: string;
+  actions: RunPageAction[];
+  url?: string;
+}
+
+export interface ListShortcutsMessage extends BaseMessage {
+  type: 'LIST_SHORTCUTS';
+}
+
+export interface DeleteShortcutMessage extends BaseMessage {
+  type: 'DELETE_SHORTCUT';
+  shortcutId: string;
+}
+
+export interface ReplayShortcutMessage extends BaseMessage {
+  type: 'REPLAY_SHORTCUT';
+  shortcutId: string;
+}
+
+export interface ShortcutResponse {
+  success: boolean;
+  shortcuts?: SavedShortcut[];
+  error?: string;
+}
+
+// ─── Scheduled tasks ────────────────────────────────────────────────────────
+
+export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'monthly';
+
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  enabled: boolean;
+  scheduleType: ScheduleType;
+  /** Minutes for hourly, HH:MM for daily, day+HH:MM for weekly/monthly */
+  scheduleValue: string;
+  /** Either a shortcutId to replay OR a prompt to send as chat */
+  shortcutId?: string;
+  prompt?: string;
+  createdAt: number;
+  lastRun?: number;
+}
+
+export interface CreateScheduledTaskMessage extends BaseMessage {
+  type: 'CREATE_SCHEDULED_TASK';
+  task: Omit<ScheduledTask, 'id' | 'createdAt' | 'lastRun'>;
+}
+
+export interface ListScheduledTasksMessage extends BaseMessage {
+  type: 'LIST_SCHEDULED_TASKS';
+}
+
+export interface UpdateScheduledTaskMessage extends BaseMessage {
+  type: 'UPDATE_SCHEDULED_TASK';
+  taskId: string;
+  updates: Partial<
+    Pick<
+      ScheduledTask,
+      'name' | 'enabled' | 'scheduleType' | 'scheduleValue' | 'shortcutId' | 'prompt'
+    >
+  >;
+}
+
+export interface DeleteScheduledTaskMessage extends BaseMessage {
+  type: 'DELETE_SCHEDULED_TASK';
+  taskId: string;
+}
+
+export interface ScheduledTaskResponse {
+  success: boolean;
+  tasks?: ScheduledTask[];
+  error?: string;
+}
+
 // Union types for all messages
 export type ExtensionMessage =
   | CaptureScreenshotMessage
@@ -724,7 +904,26 @@ export type ExtensionMessage =
   | ScrollMessage
   | DragDropMessage
   | ClickAtCoordinatesMessage
-  | BridgeUrlChangedMessage;
+  | BridgeUrlChangedMessage
+  // WebMCP
+  | WebMCPDiscoverToolsMessage
+  | WebMCPCallToolMessage
+  | WebMCPToolsChangedMessage
+  // NLWeb
+  | NLWebDetectedMessage
+  // Console logs
+  | GetConsoleLogsMessage
+  | ClearConsoleLogsMessage
+  // Saved shortcuts
+  | SaveShortcutMessage
+  | ListShortcutsMessage
+  | DeleteShortcutMessage
+  | ReplayShortcutMessage
+  // Scheduled tasks
+  | CreateScheduledTaskMessage
+  | ListScheduledTasksMessage
+  | UpdateScheduledTaskMessage
+  | DeleteScheduledTaskMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -759,7 +958,17 @@ export type ExtensionResponse =
   // Accessibility
   | GetAccessibilityTreeResponse
   // Recording
-  | RecordingResponse;
+  | RecordingResponse
+  // WebMCP
+  | WebMCPDiscoverToolsResponse
+  | WebMCPCallToolResponse
+  // Console logs
+  | GetConsoleLogsResponse
+  | ClearConsoleLogsResponse
+  // Saved shortcuts
+  | ShortcutResponse
+  // Scheduled tasks
+  | ScheduledTaskResponse;
 
 // Popup state
 export interface PopupState {
@@ -820,7 +1029,7 @@ export interface ChromeExtensionAPI {
   tabs: {
     query: (query: chrome.tabs.QueryInfo) => Promise<chrome.tabs.Tab[]>;
     get: (tabId: number) => Promise<chrome.tabs.Tab>;
-    executeScript: (tabId: number, details: chrome.tabs.InjectDetails) => Promise<unknown[]>;
+    executeScript: (tabId: number, details: Record<string, unknown>) => Promise<unknown[]>;
   };
   storage: {
     local: {
