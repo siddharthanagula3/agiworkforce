@@ -33,6 +33,7 @@
 use super::deepgram::{DeepgramClient, DeepgramConfig};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
@@ -141,7 +142,7 @@ struct RecognitionSession {
 pub struct SpeechRecognizer {
     config: SpeechRecognitionConfig,
     is_running: Arc<RwLock<bool>>,
-    results: Arc<Mutex<Vec<SpeechRecognitionResult>>>,
+    results: Arc<Mutex<VecDeque<SpeechRecognitionResult>>>,
     session: Arc<Mutex<Option<RecognitionSession>>>,
     deepgram_client: Option<Arc<DeepgramClient>>,
 }
@@ -173,7 +174,7 @@ impl SpeechRecognizer {
         Ok(Self {
             config,
             is_running: Arc::new(RwLock::new(false)),
-            results: Arc::new(Mutex::new(Vec::new())),
+            results: Arc::new(Mutex::new(VecDeque::new())),
             session: Arc::new(Mutex::new(None)),
             deepgram_client,
         })
@@ -278,9 +279,9 @@ impl SpeechRecognizer {
                     let mut results_guard = results.lock().await;
                     if results_guard.len() >= MAX_RESULTS {
                         // Remove oldest result to maintain bounded size
-                        results_guard.remove(0);
+                        results_guard.pop_front();
                     }
-                    results_guard.push(result.clone());
+                    results_guard.push_back(result.clone());
                 }
 
                 // Forward to receiver
@@ -450,7 +451,7 @@ impl SpeechRecognizer {
     /// Get all recognition results from the current session
     pub async fn get_results(&self) -> Result<Vec<SpeechRecognitionResult>> {
         let results = self.results.lock().await;
-        Ok(results.clone())
+        Ok(results.iter().cloned().collect())
     }
 
     /// Clear all stored results

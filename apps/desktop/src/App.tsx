@@ -129,7 +129,14 @@ const DesktopShell = () => {
   const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
   const addError = useErrorStore((store) => store.addError);
 
-  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    /mac/i.test(
+      (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+        ?.platform ??
+        navigator.platform ??
+        '',
+    );
 
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {

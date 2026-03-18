@@ -179,18 +179,7 @@ fn normalize_model_id(id: &str) -> String {
         return canonical;
     }
 
-    // Additional routing-only aliases not covered by models.json.
-    // These map dot-versioned shorthand forms to their canonical hyphenated
-    // equivalents so that prefix matching and provider selection work correctly.
-    match trimmed.as_str() {
-        // Zhipu GLM dot-versioned aliases
-        "glm-4.7" => "glm-4.7".to_string(), // GLM keeps dots in real API IDs — pass through
-        // Moonshot Kimi dot-versioned aliases
-        "kimi-k2.5" => "kimi-k2.5".to_string(),
-        "kimi-k2.5-thinking" => "kimi-k2.5-thinking".to_string(),
-        // Pass through if no alias match
-        _ => trimmed,
-    }
+    trimmed
 }
 
 /// Rewrite an auth error into a user-friendly message that tells the user
@@ -520,7 +509,7 @@ impl LLMRouter {
                     (
                         Provider::Anthropic,
                         "claude-sonnet-4-6".to_string(),
-                        "Coding intent detected - routing to Claude Sonnet 4.5 (excellent coding)."
+                        "Coding intent detected - routing to Claude Sonnet 4-6 (excellent coding)."
                             .to_string(),
                     )
                 }
@@ -558,7 +547,7 @@ impl LLMRouter {
                     (
                         Provider::Anthropic,
                         "claude-sonnet-4-6".to_string(),
-                        "Agentic intent detected - routing to Claude Sonnet 4.5 for tool orchestration.".to_string(),
+                        "Agentic intent detected - routing to Claude Sonnet 4-6 for tool orchestration.".to_string(),
                     )
                 }
             }

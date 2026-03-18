@@ -901,7 +901,7 @@ impl ToolExecutionGuard {
             "db_transaction_commit".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 10,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec!["connection_id".to_string()],
                 risk_level: RiskLevel::High,
             },
@@ -1634,6 +1634,16 @@ impl ToolExecutionGuard {
                 return Err(SecurityError::BlockedDomain(host.to_string()));
             }
 
+            // Block IPv6 ULA addresses (fc00::/7 — fc and fd prefixes)
+            if host.starts_with("fc")
+                || host.starts_with("fd")
+                || host.starts_with("[fc")
+                || host.starts_with("[fd")
+            {
+                warn!("Private IPv6 address (ULA) detected: {}", host);
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
             // Block 0.0.0.0
             if host == "0.0.0.0" {
                 warn!("Null-route IP address detected: {}", host);
@@ -1695,8 +1705,9 @@ impl ToolExecutionGuard {
             "subprocess.",
         ];
 
+        let code_lower = code.to_lowercase();
         for pattern in dangerous_patterns {
-            if code.contains(pattern) {
+            if code_lower.contains(pattern) {
                 warn!("Dangerous code pattern detected: {}", pattern);
                 return Err(SecurityError::CommandInjection(pattern.to_string()));
             }

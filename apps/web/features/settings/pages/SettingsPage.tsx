@@ -34,7 +34,7 @@ function ProfileTab() {
     .slice(0, 2);
 
   const handleSave = () => {
-    toast.success('Profile updated successfully');
+    toast.info('Profile saving is not yet implemented');
   };
 
   const handleAvatarUpload = () => {
@@ -44,6 +44,9 @@ function ProfileTab() {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
+        if (avatarUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(avatarUrl);
+        }
         const url = URL.createObjectURL(file);
         setAvatarUrl(url);
         toast.success('Avatar updated');
@@ -109,7 +112,7 @@ function AIConfigurationTab() {
   const [systemPrompt, setSystemPrompt] = useState('');
 
   const handleSave = () => {
-    toast.success('AI configuration saved');
+    toast.info('AI configuration saving is not yet implemented');
   };
 
   return (
@@ -218,7 +221,7 @@ function ApiKeyField({ label, id, value, onChange }: ApiKeyFieldProps) {
       toast.error(`Please enter your ${label} first`);
       return;
     }
-    toast.success(`${label} connection test passed`);
+    toast.info('Provider testing is not yet implemented');
   };
 
   return (
@@ -257,7 +260,7 @@ function APIKeysTab() {
   const [googleKey, setGoogleKey] = useState('');
 
   const handleSave = () => {
-    toast.success('API keys saved securely');
+    toast.info('API key saving is not yet implemented');
   };
 
   return (

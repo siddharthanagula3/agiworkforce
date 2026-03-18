@@ -88,7 +88,6 @@ export class AgentModePanel {
   private messages: ChatMessage[] = [];
   private editHistory: EditBatch[] = [];
   private isProcessing = false;
-  private diffProviderDisposables: vscode.Disposable[] = [];
   private _planMode = false;
   private _originalContents = new Map<string, string>();
   private _modifiedContents = new Map<string, string>();
@@ -230,97 +229,100 @@ export class AgentModePanel {
 
   private async handleUserMessage(text: string): Promise<void> {
     if (this.isProcessing) return;
-    this.isProcessing = true;
-
-    // Reset iteration counter on each new user message (new agent session).
-    this._iterationCount = 0;
-
-    this.postMessage({ type: 'userMessage', text });
-    this.postMessage({ type: 'thinking', active: true });
-
-    this.messages.push({ role: 'user', content: text });
 
     try {
-      // Gather workspace context
-      if (this.indexer.isStale()) {
-        await this.indexer.index();
-      }
-      const wsContext = this.indexer.getRelevantContext(text);
+      this.isProcessing = true;
 
-      // Include open editor context
-      const editorContext = this.getOpenEditorsContext();
+      // Reset iteration counter on each new user message (new agent session).
+      this._iterationCount = 0;
 
-      // Include rich context (diagnostics, git, workspace structure)
-      const richContext = await getContextBuilder().buildFullContext({ includeOpenFiles: false });
+      this.postMessage({ type: 'userMessage', text });
+      this.postMessage({ type: 'thinking', active: true });
 
-      // Build augmented message
-      const augmentedMessages = [...this.messages];
-      if (wsContext || editorContext || richContext) {
-        const contextMsg = [wsContext, editorContext, richContext].filter(Boolean).join('\n\n');
-        augmentedMessages.splice(1, 0, {
-          role: 'system',
-          content: `Current workspace context:\n${contextMsg}`,
-        });
-      }
+      this.messages.push({ role: 'user', content: text });
 
-      // Get LLM response
-      const cancelSource = new vscode.CancellationTokenSource();
-      const response = await chatCompletion(this.secrets, augmentedMessages, cancelSource.token);
-      cancelSource.dispose();
+      try {
+        // Gather workspace context
+        if (this.indexer.isStale()) {
+          await this.indexer.index();
+        }
+        const wsContext = this.indexer.getRelevantContext(text);
 
-      this.messages.push({ role: 'assistant', content: response });
+        // Include open editor context
+        const editorContext = this.getOpenEditorsContext();
 
-      // Check for file read requests
-      const readRequests = parseFileReads(response);
-      if (readRequests.length > 0) {
-        const fileContents = await this.readFiles(readRequests);
-        // Show the response first, then auto-feed file contents back
-        this.postMessage({ type: 'assistantMessage', text: response });
+        // Include rich context (diagnostics, git, workspace structure)
+        const richContext = await getContextBuilder().buildFullContext({ includeOpenFiles: false });
+
+        // Build augmented message
+        const augmentedMessages = [...this.messages];
+        if (wsContext || editorContext || richContext) {
+          const contextMsg = [wsContext, editorContext, richContext].filter(Boolean).join('\n\n');
+          augmentedMessages.splice(1, 0, {
+            role: 'system',
+            content: `Current workspace context:\n${contextMsg}`,
+          });
+        }
+
+        // Get LLM response
+        const cancelSource = new vscode.CancellationTokenSource();
+        const response = await chatCompletion(this.secrets, augmentedMessages, cancelSource.token);
+        cancelSource.dispose();
+
+        this.messages.push({ role: 'assistant', content: response });
+
+        // Check for file read requests
+        const readRequests = parseFileReads(response);
+        if (readRequests.length > 0) {
+          const fileContents = await this.readFiles(readRequests);
+          // Show the response first, then auto-feed file contents back
+          this.postMessage({ type: 'assistantMessage', text: response });
+          this.postMessage({ type: 'thinking', active: false });
+
+          if (fileContents.length > 0) {
+            const contentMsg = fileContents
+              .map((f) => `--- ${f.path} ---\n\`\`\`${f.language}\n${f.content}\n\`\`\``)
+              .join('\n\n');
+
+            this.messages.push({
+              role: 'user',
+              content: `Here are the requested file contents:\n\n${contentMsg}\n\nPlease proceed with your analysis or edits.`,
+            });
+
+            this.postMessage({
+              type: 'systemMessage',
+              text: `Read ${fileContents.length} file(s): ${fileContents.map((f) => f.path).join(', ')}`,
+            });
+
+            // Auto-continue the conversation
+            this.isProcessing = false;
+            await this.handleAgentContinue();
+            return;
+          }
+        }
+
+        // Check for file edits
+        const editRequests = parseFileEdits(response);
+        if (editRequests.length > 0) {
+          this.postMessage({ type: 'assistantMessage', text: response });
+          this.postMessage({ type: 'thinking', active: false });
+          await this.handleEditRequests(editRequests);
+        } else {
+          this.postMessage({ type: 'assistantMessage', text: response });
+          this.postMessage({ type: 'thinking', active: false });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.postMessage({ type: 'error', text: message });
         this.postMessage({ type: 'thinking', active: false });
 
-        if (fileContents.length > 0) {
-          const contentMsg = fileContents
-            .map((f) => `--- ${f.path} ---\n\`\`\`${f.language}\n${f.content}\n\`\`\``)
-            .join('\n\n');
-
-          this.messages.push({
-            role: 'user',
-            content: `Here are the requested file contents:\n\n${contentMsg}\n\nPlease proceed with your analysis or edits.`,
-          });
-
-          this.postMessage({
-            type: 'systemMessage',
-            text: `Read ${fileContents.length} file(s): ${fileContents.map((f) => f.path).join(', ')}`,
-          });
-
-          // Auto-continue the conversation
-          this.isProcessing = false;
-          await this.handleAgentContinue();
-          return;
+        if (err instanceof Error) {
+          telemetry.logError(err, { context: 'agentMode' });
         }
       }
-
-      // Check for file edits
-      const editRequests = parseFileEdits(response);
-      if (editRequests.length > 0) {
-        this.postMessage({ type: 'assistantMessage', text: response });
-        this.postMessage({ type: 'thinking', active: false });
-        await this.handleEditRequests(editRequests);
-      } else {
-        this.postMessage({ type: 'assistantMessage', text: response });
-        this.postMessage({ type: 'thinking', active: false });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.postMessage({ type: 'error', text: message });
-      this.postMessage({ type: 'thinking', active: false });
-
-      if (err instanceof Error) {
-        telemetry.logError(err, { context: 'agentMode' });
-      }
+    } finally {
+      this.isProcessing = false;
     }
-
-    this.isProcessing = false;
   }
 
   private async handleAgentContinue(): Promise<void> {
@@ -345,7 +347,6 @@ export class AgentModePanel {
           type: 'systemMessage',
           text: `Agent stopped after ${maxIterations} iterations. Send a new message to continue.`,
         });
-        this.isProcessing = false;
         return;
       }
       // User approved — reset counter so they get another N iterations before
@@ -353,31 +354,33 @@ export class AgentModePanel {
       this._iterationCount = 1;
     }
 
-    this.isProcessing = true;
-
-    this.postMessage({ type: 'thinking', active: true });
-
     try {
-      const cancelSource = new vscode.CancellationTokenSource();
-      const response = await chatCompletion(this.secrets, this.messages, cancelSource.token);
-      cancelSource.dispose();
+      this.isProcessing = true;
 
-      this.messages.push({ role: 'assistant', content: response });
+      this.postMessage({ type: 'thinking', active: true });
 
-      const editRequests = parseFileEdits(response);
-      this.postMessage({ type: 'assistantMessage', text: response });
-      this.postMessage({ type: 'thinking', active: false });
+      try {
+        const cancelSource = new vscode.CancellationTokenSource();
+        const response = await chatCompletion(this.secrets, this.messages, cancelSource.token);
+        cancelSource.dispose();
 
-      if (editRequests.length > 0) {
-        await this.handleEditRequests(editRequests);
+        this.messages.push({ role: 'assistant', content: response });
+
+        const editRequests = parseFileEdits(response);
+        this.postMessage({ type: 'assistantMessage', text: response });
+        this.postMessage({ type: 'thinking', active: false });
+
+        if (editRequests.length > 0) {
+          await this.handleEditRequests(editRequests);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.postMessage({ type: 'error', text: message });
+        this.postMessage({ type: 'thinking', active: false });
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.postMessage({ type: 'error', text: message });
-      this.postMessage({ type: 'thinking', active: false });
+    } finally {
+      this.isProcessing = false;
     }
-
-    this.isProcessing = false;
   }
 
   private async handleEditRequests(

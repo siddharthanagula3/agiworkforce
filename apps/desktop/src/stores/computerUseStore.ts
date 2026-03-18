@@ -151,6 +151,14 @@ export const useComputerUseStore = create<ComputerUseState>()(
       },
 
       stopSession: async () => {
+        const { sessionId } = get();
+        if (sessionId) {
+          try {
+            await invoke('computer_use_stop_session', { sessionId });
+          } catch {
+            // Best-effort cleanup
+          }
+        }
         set(
           (state) => {
             state.isActive = false;

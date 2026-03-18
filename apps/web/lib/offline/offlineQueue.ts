@@ -283,7 +283,10 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
           clearQueuedMessage(message.id);
         }
       } catch (error) {
-        console.error(`[OfflineQueue] Failed to sync message ${message.id}:`, error);
+        logger.error(
+          { err: error, messageId: message.id },
+          '[OfflineQueue] Failed to sync message',
+        );
         incrementMessageRetry(message.id);
         summary.messagesFailed++;
 
@@ -311,7 +314,7 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
           clearQueuedToolExecution(tool.id);
         }
       } catch (error) {
-        console.error(`[OfflineQueue] Failed to sync tool ${tool.id}:`, error);
+        logger.error({ err: error, toolId: tool.id }, '[OfflineQueue] Failed to sync tool');
         incrementToolRetry(tool.id);
         summary.toolsFailed++;
 

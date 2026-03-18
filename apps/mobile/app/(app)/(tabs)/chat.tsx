@@ -47,8 +47,8 @@ export default function ChatTabScreen() {
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
         sendMessage(conversationId, text, selectedModel, attachments);
-      } catch (error) {
-        console.warn('Failed to create conversation:', error);
+      } catch {
+        // Conversation creation failed — no-op (user can retry)
       }
     },
     [createConversation, sendMessage, selectedModel, router],
@@ -80,6 +80,15 @@ export default function ChatTabScreen() {
     [createConversation, sendMessage, selectedModel],
   );
 
+  const handleNewChat = useCallback(async () => {
+    try {
+      const conversationId = await createConversation('New conversation');
+      router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+    } catch {
+      // Conversation creation failed — no-op (user can retry)
+    }
+  }, [createConversation, router]);
+
   const handleSearchChange = useCallback(
     (text: string) => {
       setSearchQuery(text);
@@ -96,7 +105,7 @@ export default function ChatTabScreen() {
           Chats
         </Text>
         <Pressable
-          onPress={() => handleSend('')}
+          onPress={handleNewChat}
           className="w-8 h-8 rounded-lg bg-teal-500/20 items-center justify-center active:bg-teal-500/30"
           accessibilityLabel="New chat"
           accessibilityRole="button"

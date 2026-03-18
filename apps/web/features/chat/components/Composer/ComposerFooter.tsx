@@ -6,9 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { Command, CommandList, CommandItem, CommandGroup, CommandInput } from '@shared/ui/command';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/components/UnifiedAgenticChat/BudgetTrackerDisplay';
-import { AgentModeSwitcher } from './AgentModeSwitcher';
 import { StyleSelector } from './StyleSelector';
-import type { ChatMode } from '@features/chat/types';
 
 const PROVIDER_COLORS: Record<string, string> = {
   OpenAI: 'bg-emerald-500',
@@ -38,7 +36,6 @@ export function ComposerFooter({
   showModelSelector = true,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
-  const [chatMode, setChatMode] = useState<ChatMode>('solo');
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
@@ -59,9 +56,6 @@ export function ComposerFooter({
         <div className="flex items-center gap-2">
           {/* Response style selector */}
           <StyleSelector />
-
-          {/* Agent mode switcher */}
-          <AgentModeSwitcher mode={chatMode} onChange={setChatMode} />
 
           {/* Model selector */}
           {showModelSelector && (

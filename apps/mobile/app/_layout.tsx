@@ -41,8 +41,7 @@ export default function RootLayout() {
   useEffect(() => {
     initMmkvEncryption()
       .then(() => initialize())
-      .catch((err) => {
-        console.error('[layout] Failed to initialise MMKV encryption:', err);
+      .catch(() => {
         // Fall through to initialize anyway so auth guard still runs
         initialize();
       });
@@ -107,7 +106,6 @@ export default function RootLayout() {
       if (code) {
         const PAIRING_CODE_RE = /^[A-Za-z0-9]{6,8}$/;
         if (!PAIRING_CODE_RE.test(code)) {
-          console.warn('[deep-link] Invalid pairing code format, ignoring');
           return;
         }
         router.push(`/(app)/companion?pairingCode=${encodeURIComponent(code)}`);

@@ -493,7 +493,6 @@ function getWebviewContent(
     // ── State ─────────────────────────────────────────────────────────────────
     let streaming = false;
     let mentionIndex = -1;
-    let mentionQuery = '';
     let mentionStart = -1;
     let currentAssistantEl = null;
     let accumulatedContent = '';
@@ -757,7 +756,6 @@ function getWebviewContent(
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
-          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -769,7 +767,6 @@ function getWebviewContent(
       mentionDropdown.className = 'mention-dropdown';
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
-      mentionQuery = '';
       mentionStart = -1;
     }
 
