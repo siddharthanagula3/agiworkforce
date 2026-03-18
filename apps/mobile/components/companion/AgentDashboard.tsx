@@ -359,7 +359,6 @@ export function AgentDashboard() {
     <FlashList
       data={agents}
       keyExtractor={(item) => item.id}
-      estimatedItemSize={140}
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
       ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
       refreshControl={

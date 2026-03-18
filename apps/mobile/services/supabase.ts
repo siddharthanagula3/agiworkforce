@@ -41,9 +41,8 @@ async function secureSet(key: string, value: string): Promise<void> {
       // Clean up any stale chunked data from a previous larger write.
       await secureRemoveChunks(key);
     } else {
-      // Remove any existing chunks to prevent orphans when new value has fewer chunks.
-      await secureRemoveChunks(key);
-      // Split into chunks.
+      // Write new chunks FIRST, then clean up old data.
+      // This prevents data loss if the write fails mid-way.
       const count = Math.ceil(value.length / CHUNK_SIZE);
       for (let i = 0; i < count; i++) {
         await SecureStore.setItemAsync(
@@ -52,8 +51,16 @@ async function secureSet(key: string, value: string): Promise<void> {
         );
       }
       await SecureStore.setItemAsync(key + CHUNK_COUNT_SUFFIX, String(count));
-      // Remove any direct-key value that may have existed previously.
+      // Now clean up: remove direct-key value and any excess old chunks.
       await SecureStore.deleteItemAsync(key).catch(() => {});
+      // Remove orphan chunks from a previous write that had more chunks.
+      const oldCountStr = await SecureStore.getItemAsync(key + CHUNK_COUNT_SUFFIX).catch(
+        () => null,
+      );
+      const oldCount = oldCountStr ? parseInt(oldCountStr, 10) : 0;
+      for (let i = count; i < oldCount; i++) {
+        await SecureStore.deleteItemAsync(`${key}__chunk_${i}`).catch(() => {});
+      }
     }
   } catch (err) {
     // CRIT-005: Do NOT fall back to unencrypted MMKV storage for auth tokens.

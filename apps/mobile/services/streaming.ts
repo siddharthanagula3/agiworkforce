@@ -53,7 +53,10 @@ function isNetworkError(err: unknown): boolean {
 async function attemptStream(
   body: {
     model: string;
-    messages: Array<{ role: string; content: string }>;
+    messages: Array<{
+      role: string;
+      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    }>;
     stream: true;
     thinking?: boolean;
   },
@@ -149,7 +152,10 @@ async function attemptStream(
 export async function streamChat(
   body: {
     model: string;
-    messages: Array<{ role: string; content: string }>;
+    messages: Array<{
+      role: string;
+      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    }>;
     stream: true;
     thinking?: boolean;
   },

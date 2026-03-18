@@ -23,6 +23,7 @@ export function useVoicePlayback() {
   const isSpeaking = useRef(false);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
+  const speechPitch = useSettingsStore((s) => s.speechPitch);
 
   const speak = useCallback(
     async (text: string) => {
@@ -35,7 +36,7 @@ export function useVoicePlayback() {
       Speech.speak(text, {
         voice: selectedVoiceId ?? undefined,
         language: 'en-US',
-        pitch: 1.0,
+        pitch: speechPitch,
         rate: speechRate,
         onDone: () => {
           isSpeaking.current = false;
@@ -48,7 +49,7 @@ export function useVoicePlayback() {
         },
       });
     },
-    [selectedVoiceId, speechRate],
+    [selectedVoiceId, speechRate, speechPitch],
   );
 
   const stop = useCallback(() => {

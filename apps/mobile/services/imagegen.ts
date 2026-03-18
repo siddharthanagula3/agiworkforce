@@ -13,7 +13,7 @@ import { api } from './api';
 
 export interface ImageGenRequest {
   prompt: string;
-  model?: string; // e.g., 'gpt-image-1', 'dall-e-3', 'stable-diffusion-xl'
+  model?: string;
   size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792';
   quality?: 'standard' | 'hd';
   style?: 'natural' | 'vivid';
@@ -30,8 +30,8 @@ export interface ImageGenResponse {
 export interface ImageGenProgress {
   id: string;
   status: 'pending' | 'generating' | 'completed' | 'failed';
-  progress: number; // 0-100
-  estimatedTimeRemaining?: number; // seconds
+  progress: number;
+  estimatedTimeRemaining?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,23 +41,37 @@ export interface ImageGenProgress {
 /**
  * Submit an image generation request.
  * Returns immediately with an ID for polling.
+ * @throws {Error} On network or server errors
  */
 export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
+  if (!request.prompt.trim()) {
+    throw new Error('Image generation requires a non-empty prompt');
+  }
   return api.post<ImageGenResponse>('/api/imagegen/generate', request);
 }
 
 /**
  * Poll the status/progress of an in-flight image generation.
+ * @throws {Error} On network or server errors
  */
 export async function getImageStatus(id: string): Promise<ImageGenProgress> {
-  return api.get<ImageGenProgress>(`/api/imagegen/status/${id}`);
+  if (!id) {
+    throw new Error('Image generation ID is required');
+  }
+  return api.get<ImageGenProgress>(`/api/imagegen/status/${encodeURIComponent(id)}`);
 }
 
 /**
  * List all generated images for a conversation.
+ * Returns empty array if the endpoint is unavailable.
  */
 export async function listGeneratedImages(conversationId: string): Promise<ImageGenResponse[]> {
-  return api.get<ImageGenResponse[]>(
-    `/api/imagegen/list?conversationId=${encodeURIComponent(conversationId)}`,
-  );
+  if (!conversationId) return [];
+  try {
+    return await api.get<ImageGenResponse[]>(
+      `/api/imagegen/list?conversationId=${encodeURIComponent(conversationId)}`,
+    );
+  } catch {
+    return [];
+  }
 }
