@@ -14,7 +14,6 @@ use super::{
 use crate::core::mcp::{McpClient, McpServerConfig};
 use crate::sys::security::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
 use crate::sys::security::machine_key::{self, KeyPurpose};
-use chrono::Utc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -101,18 +100,8 @@ pub struct ExtensionManager {
 /// Information about a running extension server
 #[derive(Debug, Clone)]
 struct ExtensionServerInfo {
-    /// Extension ID
-    // Used by: extension lifecycle -- logging, identification, and stop operations
-    #[allow(dead_code)]
-    extension_id: String,
-
     /// MCP server name (used for MCP client)
     server_name: String,
-
-    /// Start time
-    // Used by: uptime reporting and extension health monitoring
-    #[allow(dead_code)]
-    started_at: chrono::DateTime<Utc>,
 }
 
 impl ExtensionManager {
@@ -201,9 +190,7 @@ impl ExtensionManager {
             running.insert(
                 id.to_string(),
                 ExtensionServerInfo {
-                    extension_id: id.to_string(),
                     server_name,
-                    started_at: Utc::now(),
                 },
             );
         }

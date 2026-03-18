@@ -263,6 +263,8 @@ export interface ConversationSummary {
   projectId?: string;
   /** When true, messages in this conversation are not persisted to disk */
   incognito?: boolean;
+  /** Per-conversation model override — takes precedence over the global default model */
+  modelOverride?: string;
 }
 
 // Pending user message - for mid-task input while AI is processing
@@ -294,7 +296,7 @@ export interface TokenUsage {
 
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
-export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'help';
+export type ActiveView = 'chat' | 'projects' | 'artifacts' | 'help' | 'tasks';
 
 /**
  * Conversation Mode controls AI autonomy level

@@ -189,7 +189,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
 
   try {
     if (!navigator.onLine) {
-      console.log('[OfflineQueue] Still offline, skipping sync');
       callbacks?.onSyncComplete?.(false, summary);
       return summary;
     }

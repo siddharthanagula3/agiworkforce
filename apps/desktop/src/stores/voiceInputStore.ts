@@ -87,7 +87,7 @@ interface VoiceInputState {
   error: string | null;
 
   // Wispr Flow settings
-  hotkey: 'option' | 'ctrl+space' | 'ctrl+shift+v';
+  hotkey: 'option' | 'ctrl+space' | 'ctrl+shift+v' | 'caps_lock';
   provider: 'local_whisper' | 'deepgram' | 'openai_whisper';
   language: string;
 

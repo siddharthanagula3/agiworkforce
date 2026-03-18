@@ -41,10 +41,7 @@ impl Default for MemoryPlanContext {
 /// Memory-aware planner enhancement
 pub struct PlannerMemoryIntegration {
     memory_manager: Arc<MemoryManager>,
-    /// Injects memory context into planner prompts
-    // Used by: memory-enhanced planning — will inject relevant memories into LLM prompts
-    #[allow(dead_code)]
-    memory_injector: MemoryInjector,
+    _memory_injector: MemoryInjector,
 }
 
 impl PlannerMemoryIntegration {
@@ -52,7 +49,7 @@ impl PlannerMemoryIntegration {
     pub fn new(memory_manager: Arc<MemoryManager>, memory_injector: MemoryInjector) -> Self {
         Self {
             memory_manager,
-            memory_injector,
+            _memory_injector: memory_injector,
         }
     }
 

@@ -1,6 +1,16 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Clock, MessageSquare, FileText, X, Loader2, TrendingUp, Zap } from 'lucide-react';
+import {
+  Search,
+  Clock,
+  MessageSquare,
+  FileText,
+  X,
+  Loader2,
+  TrendingUp,
+  Zap,
+  History,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Fuse from 'fuse.js';
 import { useChatStore, dbIdToUuid, type ConversationSummary } from '../../stores/chat/chatStore';
@@ -89,6 +99,75 @@ function formatRelativeTime(date: Date | string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// ─── Highlight utility ────────────────────────────────────────────────────────
+
+function highlightSearchTerm(text: string, searchQuery: string): ReactNode {
+  if (!searchQuery.trim()) return text;
+  try {
+    const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === searchQuery.toLowerCase() ? (
+            <mark key={`hl-${i}`} className="bg-teal-500/30 text-teal-200 rounded-sm px-0.5">
+              {part}
+            </mark>
+          ) : (
+            <span key={`t-${i}`}>{part}</span>
+          ),
+        )}
+      </>
+    );
+  } catch {
+    return text;
+  }
+}
+
+// ─── Recent search history (localStorage) ────────────────────────────────────
+
+const RECENT_SEARCHES_KEY = 'agiworkforce-recent-searches';
+const MAX_RECENT_SEARCHES = 6;
+
+interface RecentSearchEntry {
+  query: string;
+  timestamp: number;
+}
+
+function getRecentSearches(): RecentSearchEntry[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as RecentSearchEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function recordRecentSearch(searchQuery: string): void {
+  if (!searchQuery.trim() || searchQuery.trim().length < 3) return;
+  try {
+    const entries = getRecentSearches().filter(
+      (e) => e.query.toLowerCase() !== searchQuery.toLowerCase(),
+    );
+    entries.unshift({ query: searchQuery.trim(), timestamp: Date.now() });
+    localStorage.setItem(
+      RECENT_SEARCHES_KEY,
+      JSON.stringify(entries.slice(0, MAX_RECENT_SEARCHES)),
+    );
+  } catch {
+    // Silently ignore storage errors
+  }
+}
+
+function clearRecentSearches(): void {
+  try {
+    localStorage.removeItem(RECENT_SEARCHES_KEY);
+  } catch {
+    // Silently ignore
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPaletteProps) {
@@ -97,16 +176,18 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   const [ftsResults, setFtsResults] = useState<ChatSearchResult[]>([]);
   const [ftsLoading, setFtsLoading] = useState(false);
   const [recentCommandIds, setRecentCommandIds] = useState<string[]>([]);
+  const [recentSearchEntries, setRecentSearchEntries] = useState<RecentSearchEntry[]>([]);
   const ftsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const conversations = useChatStore((state) => state.conversations);
   const selectConversation = useChatStore((state) => state.selectConversation);
 
-  // Load recent commands on open
+  // Load recent commands + recent searches on open
   useEffect(() => {
     if (isOpen) {
       setRecentCommandIds(getRecentCommandIds());
+      setRecentSearchEntries(getRecentSearches());
     }
   }, [isOpen]);
 
@@ -125,6 +206,10 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           limit: 8,
         });
         setFtsResults(results);
+        // Record search in recent history when results come back
+        if (results.length > 0) {
+          recordRecentSearch(query.trim());
+        }
       } catch {
         setFtsResults([]);
       } finally {
@@ -317,6 +402,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   };
 
   const renderResultContent = (result: PaletteResult) => {
+    const q = query.trim();
+
     if (result.kind === 'command' && result.command) {
       const cmd = result.command;
       const stats = getCommandStats(cmd.id);
@@ -326,9 +413,13 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
             <span
               className={cn('text-sm font-medium text-zinc-100', cmd.active && 'text-teal-300')}
             >
-              {cmd.title}
+              {q ? highlightSearchTerm(cmd.title, q) : cmd.title}
             </span>
-            {cmd.subtitle && <span className="text-xs text-zinc-500 truncate">{cmd.subtitle}</span>}
+            {cmd.subtitle && (
+              <span className="text-xs text-zinc-500 truncate">
+                {q ? highlightSearchTerm(cmd.subtitle, q) : cmd.subtitle}
+              </span>
+            )}
             {!cmd.subtitle && cmd.group && (
               <span className="text-xs text-zinc-600 truncate">{cmd.group}</span>
             )}
@@ -359,13 +450,17 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-zinc-100">
-              {r.conversation_title || 'Untitled conversation'}
+              {q
+                ? highlightSearchTerm(r.conversation_title || 'Untitled conversation', q)
+                : r.conversation_title || 'Untitled conversation'}
             </span>
             <span className="shrink-0 rounded-full bg-teal-500/20 px-1.5 py-0.5 text-[10px] font-medium text-teal-300">
               {r.role}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{r.content_snippet}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+            {q ? highlightSearchTerm(r.content_snippet, q) : r.content_snippet}
+          </p>
         </div>
       );
     }
@@ -376,7 +471,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold text-zinc-100">
-            {conv.title || 'Untitled'}
+            {q ? highlightSearchTerm(conv.title || 'Untitled', q) : conv.title || 'Untitled'}
           </span>
           {conv.updatedAt && (
             <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
@@ -385,7 +480,11 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
             </span>
           )}
         </div>
-        <p className="mt-1 truncate text-xs text-zinc-500">{conv.lastMessage || 'No activity'}</p>
+        <p className="mt-1 truncate text-xs text-zinc-500">
+          {q && conv.lastMessage
+            ? highlightSearchTerm(conv.lastMessage, q)
+            : conv.lastMessage || 'No activity'}
+        </p>
       </div>
     );
   };
@@ -438,7 +537,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   const renderItem = (result: PaletteResult, flatIndex: number) => {
     const isSelected = flatIndex === selectedIndex;
     return (
-      <button type="button"
+      <button
+        type="button"
         key={result.id}
         id={`palette-result-${flatIndex}`}
         onClick={() => handleSelect(result)}
@@ -533,7 +633,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 flatResults.length > 0 ? `palette-result-${selectedIndex}` : undefined
               }
             />
-            <button type="button"
+            <button
+              type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
               aria-label="Close command palette"
@@ -544,12 +645,60 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
 
           {/* Results */}
           <div className="max-h-[420px] overflow-y-auto" id="palette-results" role="listbox">
-            {flatResults.length === 0 ? (
+            {flatResults.length === 0 && !query.trim() ? (
+              // Empty default view — show recent searches + empty state
+              <div className="py-2">
+                {recentSearchEntries.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between px-4 py-1.5">
+                      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                        <History className="h-3 w-3" />
+                        Recent Searches
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearRecentSearches();
+                          setRecentSearchEntries([]);
+                        }}
+                        className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {recentSearchEntries.map((entry) => (
+                      <button
+                        type="button"
+                        key={`rsearch-${entry.timestamp}`}
+                        onClick={() => setQuery(entry.query)}
+                        className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-zinc-900/50 transition-colors border-l-2 border-transparent"
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-zinc-500">
+                          <Clock className="h-3.5 w-3.5" />
+                        </div>
+                        <span className="text-sm text-zinc-300 truncate">{entry.query}</span>
+                        <span className="ml-auto text-[10px] text-zinc-600 shrink-0">
+                          {formatRelativeTime(new Date(entry.timestamp).toISOString())}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {recentSearchEntries.length === 0 && (
+                  <div className="px-4 py-10 text-center" role="status">
+                    <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
+                    <p className="mt-3 text-sm text-zinc-500">No recent activity</p>
+                    <p className="mt-1 text-xs text-zinc-600">
+                      Search conversations, messages, and commands
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : flatResults.length === 0 && query.trim() ? (
               <div className="px-4 py-10 text-center" role="status">
                 <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
-                <p className="mt-3 text-sm text-zinc-500">
-                  {query ? 'No results found' : 'No recent activity'}
-                </p>
+                <p className="mt-3 text-sm text-zinc-500">No results found</p>
+                <p className="mt-1 text-xs text-zinc-600">Try different keywords</p>
               </div>
             ) : sections ? (
               // Grouped view (default, no query)
@@ -564,9 +713,47 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 ))}
               </div>
             ) : (
-              // Flat list (search mode)
+              // Flat list (search mode) — group by kind
               <div className="py-2">
-                {flatResults.map((result, idx) => renderItem(result, idx))}
+                {(() => {
+                  const cmdResults = flatResults.filter((r) => r.kind === 'command');
+                  const convResults = flatResults.filter((r) => r.kind === 'conversation');
+                  const msgResults = flatResults.filter((r) => r.kind === 'message');
+                  return (
+                    <>
+                      {cmdResults.length > 0 && (
+                        <div>
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                            Commands
+                          </div>
+                          {cmdResults.map((result) =>
+                            renderItem(result, flatResults.indexOf(result)),
+                          )}
+                        </div>
+                      )}
+                      {convResults.length > 0 && (
+                        <div>
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                            Conversations
+                          </div>
+                          {convResults.map((result) =>
+                            renderItem(result, flatResults.indexOf(result)),
+                          )}
+                        </div>
+                      )}
+                      {msgResults.length > 0 && (
+                        <div>
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                            Messages
+                          </div>
+                          {msgResults.map((result) =>
+                            renderItem(result, flatResults.indexOf(result)),
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

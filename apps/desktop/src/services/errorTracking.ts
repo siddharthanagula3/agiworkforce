@@ -164,7 +164,6 @@ class ErrorTrackingService {
 
   public captureMessage(message: string, severity: ErrorSeverity = ErrorSeverity.LOW) {
     if (!this.config.enabled) {
-      console.log(message);
       return;
     }
 

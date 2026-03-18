@@ -2004,8 +2004,7 @@ export async function executeMessageCommand(args: string): Promise<InlinePanel> 
 
     if (slackMatch) {
       const [, channel, text] = slackMatch;
-      // TODO: Verify 'slack_send_message' exists on the Rust side before renaming
-      response = await invoke<Record<string, unknown>>('slack_send_message', { channel, text });
+      response = await invoke<Record<string, unknown>>('messaging_send', { channel, text });
       resultText =
         `Message sent to ${channel ?? 'channel'}.\n${(response['message'] as string | undefined) ?? ''}`.trim();
     } else if (emailMatch) {

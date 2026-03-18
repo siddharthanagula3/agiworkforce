@@ -13,6 +13,7 @@ import {
   FileUp,
   Globe,
   Image as ImageIcon,
+  Layers,
   Maximize2,
   Minimize2,
   Network,
@@ -23,6 +24,8 @@ import {
   Table2,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
@@ -59,6 +62,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/DropdownMenu';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
+import { ReactPreview } from './artifact-components/ReactPreview';
 import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
 
 interface ArtifactRendererProps {
@@ -275,9 +279,15 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   };
 
   // Check if artifact type supports document export
-  const supportsDocumentExport = ['code', 'presentation', 'mermaid'].includes(artifact.type);
+  const supportsDocumentExport = [
+    'code',
+    'presentation',
+    'mermaid',
+    'markdown',
+    'document',
+  ].includes(artifact.type);
   const supportsExcelExport = ['spreadsheet', 'table'].includes(artifact.type);
-  const supportsImageExport = ['chart', 'mermaid'].includes(artifact.type);
+  const supportsImageExport = ['chart', 'mermaid', 'svg'].includes(artifact.type);
   const supportsMarkdownExport = ['table', 'spreadsheet'].includes(artifact.type);
 
   const handleExportSvg = async () => {
@@ -476,6 +486,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     }
     if (artifact.type === 'spreadsheet') return 'csv';
     if (artifact.type === 'presentation') return 'md';
+    if (artifact.type === 'markdown') return 'md';
+    if (artifact.type === 'svg') return 'svg';
+    if (artifact.type === 'react' || artifact.type === 'component') return 'tsx';
     return artifact.type === 'chart' || artifact.type === 'diagram' ? 'json' : 'txt';
   };
 
@@ -496,7 +509,13 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       case 'html':
         return <Globe className="h-4 w-4" />;
       case 'document':
+      case 'markdown':
         return <FileText className="h-4 w-4" />;
+      case 'svg':
+        return <ImageIcon className="h-4 w-4" />;
+      case 'react':
+      case 'component':
+        return <Layers className="h-4 w-4" />;
       default:
         return <Code2 className="h-4 w-4" />;
     }
@@ -640,6 +659,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         <CardContent className="p-0">
           {awaitingOutput ? (
             <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
+          ) : artifact.type === 'code' && artifact.language === 'mermaid' ? (
+            <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
           ) : artifact.type === 'code' ? (
             <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
           ) : artifact.type === 'chart' ? (
@@ -647,7 +668,15 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           ) : artifact.type === 'table' ? (
             <TableArtifact artifact={artifact} />
           ) : artifact.type === 'mermaid' ? (
-            <MermaidArtifact artifact={artifact} />
+            <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
+          ) : artifact.type === 'svg' ||
+            (typeof artifact.content === 'string' &&
+              artifact.content.trimStart().startsWith('<svg')) ? (
+            <SvgArtifact artifact={artifact} />
+          ) : artifact.type === 'markdown' ? (
+            <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
+          ) : artifact.type === 'react' || artifact.type === 'component' ? (
+            <ReactPreview code={artifact.content} />
           ) : artifact.type === 'spreadsheet' ? (
             <SpreadsheetArtifact artifact={artifact} />
           ) : artifact.type === 'presentation' ? (
@@ -655,7 +684,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           ) : artifact.type === 'html' ? (
             <HtmlArtifact artifact={artifact} />
           ) : artifact.type === 'document' ? (
-            <DocumentArtifact artifact={artifact} />
+            <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
           ) : (
             <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
           )}
@@ -850,7 +879,7 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
-function MermaidArtifact({ artifact }: { artifact: Artifact }) {
+function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [svg, setSvg] = React.useState<string>('');
   const [error, setError] = React.useState<string | null>(null);
@@ -866,7 +895,7 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
 
         mermaid.initialize({
           startOnLoad: false,
-          theme: 'dark',
+          theme: isDark ? 'dark' : 'default',
           securityLevel: 'strict', // Updated from 'loose' for security - blocks arbitrary JavaScript in diagrams
           fontFamily: 'Styrene, Inter, sans-serif',
         });
@@ -885,7 +914,6 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
         }
       } catch (err) {
         if (mounted) {
-          console.error('Mermaid render error:', err);
           setError(err instanceof Error ? err.message : String(err));
         }
       }
@@ -896,7 +924,7 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
     return () => {
       mounted = false;
     };
-  }, [artifact.content]);
+  }, [artifact.content, isDark]);
 
   if (error) {
     return (
@@ -1353,7 +1381,8 @@ ${content}
 
         <div className="flex-1" />
 
-        <button type="button"
+        <button
+          type="button"
           onClick={() => setShowCode((prev) => !prev)}
           className={cn(
             'px-2 py-1 text-xs rounded transition-colors',
@@ -1450,7 +1479,8 @@ ${content}
                   <div className="text-center">
                     <Square className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
                     <p className="text-sm text-zinc-400">Execution stopped</p>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={handleRun}
                       className="mt-2 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 transition-colors"
                     >
@@ -1466,7 +1496,8 @@ ${content}
               <div className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50 border-b border-zinc-700/50 flex items-center justify-between">
                 <span>Console</span>
                 {consoleOutput.length > 0 && (
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setConsoleOutput([])}
                     className="text-zinc-500 hover:text-zinc-300 transition-colors"
                   >
@@ -1504,12 +1535,142 @@ ${content}
     </div>
   );
 }
-function DocumentArtifact({ artifact }: { artifact: Artifact }) {
+/**
+ * SVG artifact renderer. Sanitizes the SVG markup with DOMPurify before
+ * injecting it via dangerouslySetInnerHTML.
+ */
+function SvgArtifact({ artifact }: { artifact: Artifact }) {
+  const sanitized = useMemo(
+    () =>
+      sanitizeHtml(artifact.content, {
+        allowedTags: [
+          'svg',
+          'path',
+          'circle',
+          'ellipse',
+          'rect',
+          'line',
+          'polyline',
+          'polygon',
+          'g',
+          'text',
+          'tspan',
+          'defs',
+          'clipPath',
+          'use',
+          'image',
+          'marker',
+          'symbol',
+          'title',
+          'desc',
+          'linearGradient',
+          'radialGradient',
+          'stop',
+          'pattern',
+          'mask',
+          'filter',
+          'feBlend',
+          'feColorMatrix',
+          'feComposite',
+          'feGaussianBlur',
+          'feMerge',
+          'feMergeNode',
+          'feOffset',
+        ],
+        allowedAttributes: {
+          '*': [
+            'fill',
+            'fill-opacity',
+            'stroke',
+            'stroke-width',
+            'stroke-opacity',
+            'stroke-linecap',
+            'stroke-linejoin',
+            'stroke-dasharray',
+            'd',
+            'x',
+            'y',
+            'x1',
+            'y1',
+            'x2',
+            'y2',
+            'cx',
+            'cy',
+            'r',
+            'rx',
+            'ry',
+            'width',
+            'height',
+            'viewBox',
+            'xmlns',
+            'transform',
+            'opacity',
+            'class',
+            'id',
+            'href',
+            'preserveAspectRatio',
+            'clip-path',
+            'mask',
+            'filter',
+            'marker-start',
+            'marker-end',
+            'marker-mid',
+            'refX',
+            'refY',
+            'markerWidth',
+            'markerHeight',
+            'orient',
+            'offset',
+            'stop-color',
+            'stop-opacity',
+            'gradientUnits',
+            'gradientTransform',
+            'patternUnits',
+            'patternTransform',
+          ],
+          svg: ['viewBox', 'xmlns', 'width', 'height', 'preserveAspectRatio'],
+        },
+      }),
+    [artifact.content],
+  );
+
+  if (!sanitized) {
+    return <div className="p-4 text-sm text-muted-foreground">Unable to render SVG content.</div>;
+  }
+
   return (
-    <div className="p-4 bg-white/5 rounded-lg overflow-auto max-h-[500px]">
-      <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap font-sans">
-        {artifact.content}
-      </pre>
+    <div className="p-4 bg-white/5 rounded-lg overflow-auto flex justify-center items-center min-h-[200px]">
+      <div
+        className="w-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Markdown/document artifact renderer. Uses react-markdown with remark-gfm
+ * for GitHub Flavored Markdown support. Dark-mode aware prose styling.
+ */
+function MarkdownArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
+  return (
+    <div
+      className={cn(
+        'p-4 overflow-auto max-h-[600px]',
+        'prose prose-sm max-w-none',
+        isDark ? 'prose-invert prose-zinc' : 'prose-zinc',
+        '[&_pre]:bg-zinc-900 [&_pre]:rounded [&_pre]:overflow-x-auto',
+        '[&_code]:bg-zinc-800 [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs',
+        '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+        '[&_table]:w-full [&_table]:text-sm',
+        '[&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:px-3 [&_th]:py-2',
+        '[&_td]:px-3 [&_td]:py-2 [&_td]:border-b',
+        '[&_blockquote]:border-l-4 [&_blockquote]:border-zinc-500 [&_blockquote]:pl-4 [&_blockquote]:italic',
+        '[&_a]:text-blue-400 [&_a]:underline',
+        '[&_hr]:border-zinc-600',
+      )}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{artifact.content}</ReactMarkdown>
     </div>
   );
 }

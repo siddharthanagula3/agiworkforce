@@ -1277,7 +1277,9 @@ impl ToolExecutionGuard {
                 }
             }
             "terminal_execute" => {
-                if parameters.get("command").and_then(|c| c.as_str()).is_none() {
+                if let Some(command) = parameters.get("command").and_then(|c| c.as_str()) {
+                    self.validate_terminal_command(command)?;
+                } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'command' parameter".to_string(),
                     ));
@@ -1636,6 +1638,37 @@ impl ToolExecutionGuard {
             if host == "0.0.0.0" {
                 warn!("Null-route IP address detected: {}", host);
                 return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_terminal_command(&self, command: &str) -> std::result::Result<(), SecurityError> {
+        debug!("Validating terminal command");
+
+        let dangerous_patterns = [
+            "rm -rf /",
+            "rm -rf ~",
+            "rm -rf /*",
+            "mkfs.",
+            "dd if=/dev/zero",
+            "dd if=/dev/random",
+            "> /dev/sda",
+            ":(){ :|:& };:",
+            "chmod -R 777 /",
+            "chown -R",
+            "curl | sh",
+            "curl | bash",
+            "wget -O - | sh",
+            "wget -O - | bash",
+        ];
+
+        let cmd_lower = command.to_lowercase();
+        for pattern in dangerous_patterns {
+            if cmd_lower.contains(pattern) {
+                warn!("Dangerous terminal command pattern detected: {}", pattern);
+                return Err(SecurityError::CommandInjection(pattern.to_string()));
             }
         }
 

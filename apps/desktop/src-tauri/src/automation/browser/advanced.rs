@@ -215,6 +215,15 @@ impl AdvancedBrowserOps {
         frame_id: &str,
         script: &str,
     ) -> Result<Value> {
+        // Basic script validation to prevent obviously dangerous operations
+        const MAX_SCRIPT_LENGTH: usize = 100_000;
+        if script.len() > MAX_SCRIPT_LENGTH {
+            return Err(Error::Generic(format!(
+                "Script exceeds maximum length of {} bytes",
+                MAX_SCRIPT_LENGTH
+            )));
+        }
+
         let params = json!({
             "frameId": frame_id,
             "expression": script,

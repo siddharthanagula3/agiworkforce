@@ -1,3 +1,9 @@
+//! Agent runtime: planning, execution, autonomous mode, vision, and RAG.
+//!
+//! Agents decompose goals into steps, execute tools via [`executor`], and iterate
+//! up to configurable limits. [`autonomous`] provides full desktop automation.
+//! [`vision`] handles OCR and screen analysis. [`planner`] creates multi-step plans.
+
 pub mod ai_orchestrator;
 pub mod approval;
 pub mod autonomous;
