@@ -1595,7 +1595,16 @@ impl ProviderAdapter for AnthropicAdapter {
                 } else if msg.role == "tool" {
                     // Convert OpenAI-style tool result messages to Anthropic format.
                     // Anthropic expects role="user" with a tool_result content block.
-                    let tool_use_id = msg.tool_call_id.as_deref().unwrap_or("unknown");
+                    let tool_use_id = match msg.tool_call_id.as_deref() {
+                        Some(id) => id,
+                        None => {
+                            tracing::warn!(
+                                "[Anthropic] Tool result message missing tool_call_id; falling back to 'unknown'. \
+                                 This may cause API errors with Anthropic."
+                            );
+                            "unknown"
+                        }
+                    };
                     tracing::debug!(
                         "[Anthropic] Tool message {} paired with tool_use block",
                         tool_use_id
@@ -1745,14 +1754,23 @@ impl ProviderAdapter for AnthropicAdapter {
         // Anthropic expects: {"type":"enabled","budget_tokens":N} or {"type":"adaptive"}.
         // The ThinkingParameter::Enabled variant serializes as a bare boolean via
         // serde(untagged), so we must map it explicitly to Anthropic's format.
+        //
+        // IMPORTANT constraints when thinking is enabled:
+        //   1. `temperature` must be omitted (defaults to 1) — any other value
+        //      causes a 400 error from the Anthropic API.
+        //   2. `max_tokens` must be >= budget_tokens + 1, otherwise the API
+        //      rejects the request because there are no tokens left for output.
+        let mut thinking_budget_tokens: Option<u32> = None;
         if let Some(thinking) = &request.thinking {
             use super::ThinkingParameter;
             match thinking {
                 ThinkingParameter::Enabled(true) => {
+                    let budget = 8192u32;
                     anthropic_request["thinking"] = serde_json::json!({
                         "type": "enabled",
-                        "budget_tokens": 8192
+                        "budget_tokens": budget
                     });
+                    thinking_budget_tokens = Some(budget);
                 }
                 ThinkingParameter::Enabled(false) => {
                     anthropic_request["thinking"] = serde_json::json!({
@@ -1771,10 +1789,49 @@ impl ProviderAdapter for AnthropicAdapter {
                         "type": "enabled",
                         "budget_tokens": budget
                     });
+                    thinking_budget_tokens = Some(budget);
                 }
-                // Budget and Adaptive variants serialize correctly via serde
-                other => {
-                    anthropic_request["thinking"] = serde_json::to_value(other)?;
+                ThinkingParameter::Budget { budget_tokens, .. } => {
+                    anthropic_request["thinking"] = serde_json::json!({
+                        "type": "enabled",
+                        "budget_tokens": budget_tokens
+                    });
+                    thinking_budget_tokens = Some(*budget_tokens);
+                }
+                ThinkingParameter::Adaptive { .. } => {
+                    anthropic_request["thinking"] = serde_json::json!({
+                        "type": "adaptive"
+                    });
+                    // Adaptive thinking has no fixed budget; the model decides.
+                    // Still remove temperature below but no max_tokens adjustment.
+                    thinking_budget_tokens = Some(0);
+                }
+            }
+        }
+
+        // When thinking is enabled Anthropic requires temperature to be
+        // exactly 1 (the default when omitted).  Remove any explicitly set
+        // temperature so the API does not reject the request.
+        if let Some(budget) = thinking_budget_tokens {
+            anthropic_request.as_object_mut().map(|obj| obj.remove("temperature"));
+
+            // Ensure max_tokens is large enough to hold both the thinking
+            // budget and the actual response.  The API requires
+            // max_tokens >= budget_tokens; we add a comfortable margin for
+            // the actual output text.
+            if budget > 0 {
+                let current_max = anthropic_request["max_tokens"]
+                    .as_u64()
+                    .unwrap_or(4096) as u32;
+                let min_required = budget + 1024; // budget + at least 1024 for output
+                if current_max < min_required {
+                    anthropic_request["max_tokens"] = serde_json::json!(min_required);
+                    tracing::debug!(
+                        budget_tokens = budget,
+                        old_max_tokens = current_max,
+                        new_max_tokens = min_required,
+                        "Increased max_tokens to accommodate thinking budget"
+                    );
                 }
             }
         }
@@ -2151,7 +2208,16 @@ impl ProviderAdapter for GoogleAdapter {
                     serde_json::json!({"role": gemini_role, "parts": parts})
                 } else if msg.role == "tool" {
                     // Tool result message: convert to Gemini functionResponse
-                    let fn_name = msg.tool_call_id.as_deref().unwrap_or("unknown");
+                    let fn_name = match msg.tool_call_id.as_deref() {
+                        Some(id) => id,
+                        None => {
+                            tracing::warn!(
+                                "[Gemini] Tool result message missing tool_call_id; falling back to 'unknown'. \
+                                 This may cause API errors with Gemini."
+                            );
+                            "unknown"
+                        }
+                    };
                     serde_json::json!({
                         "role": "function",
                         "parts": [{

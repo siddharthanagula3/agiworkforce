@@ -169,9 +169,7 @@ class WidgetRegistryImpl {
     this.widgets.set(definition.type, registered);
     this.notifyListeners();
 
-    if (import.meta.env.DEV) {
-      console.log(`[WidgetRegistry] Registered widget: ${definition.type}`);
-    }
+    // Widget registration is silent in all environments
   }
 
   /**

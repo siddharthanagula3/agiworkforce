@@ -1,5 +1,23 @@
 @import 'tailwindcss';
 
+/* OpenDyslexic font for accessibility */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff')
+    format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff')
+    format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Source path for content detection */
 @source "../**/*.{js,ts,jsx,tsx}";
 @source "../../index.html";
@@ -498,6 +516,12 @@
 
   .message-avatar-user {
     @apply bg-linear-to-br from-blue-500 to-indigo-600 text-white;
+  }
+
+  /* Dyslexic-friendly font override */
+  .dyslexic-font,
+  .dyslexic-font * {
+    font-family: 'OpenDyslexic', sans-serif !important;
   }
 
   .message-body {

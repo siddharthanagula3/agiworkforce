@@ -369,6 +369,11 @@ interface ArtifactStoreState {
   togglePanel: () => void;
   setPanelWidth: (width: number) => void;
 
+  // Bulk operations (previously unwired)
+  clearAllArtifacts: () => Promise<boolean>;
+  exportAllArtifacts: () => Promise<string | null>;
+  importAllArtifacts: (exportData: string) => Promise<boolean>;
+
   // Utility
   clearCache: () => void;
   resetOnLogout: () => void;
@@ -876,6 +881,60 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         closePanel: () => set({ panelOpen: false }),
         togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
         setPanelWidth: (width) => set({ panelWidth: width }),
+
+        // Bulk operations
+        clearAllArtifacts: async () => {
+          set({ isLoading: true });
+          try {
+            const response = await invoke<ArtifactResponse<void>>('artifact_clear_all');
+            if (response.success) {
+              set({ artifacts: new Map(), summaries: [], isLoading: false });
+              return true;
+            }
+            return false;
+          } catch (error) {
+            console.error('Error clearing all artifacts:', error);
+            return false;
+          } finally {
+            set({ isLoading: false });
+          }
+        },
+
+        exportAllArtifacts: async () => {
+          try {
+            const response = await invoke<ArtifactResponse<string>>('artifact_export_all');
+            return response.success ? (response.data ?? null) : null;
+          } catch (error) {
+            console.error('Error exporting artifacts:', error);
+            return null;
+          }
+        },
+
+        importAllArtifacts: async (exportData) => {
+          set({ isLoading: true });
+          try {
+            const response = await invoke<ArtifactResponse<void>>('artifact_import_all', {
+              exportData,
+            });
+            if (response.success) {
+              // Refresh the list after import
+              const refreshResponse = await invoke<ArtifactResponse<ArtifactSummary[]>>(
+                'artifact_list',
+                {},
+              );
+              if (refreshResponse.success && refreshResponse.data) {
+                set({ summaries: refreshResponse.data, isLoading: false });
+              }
+              return true;
+            }
+            return false;
+          } catch (error) {
+            console.error('Error importing artifacts:', error);
+            return false;
+          } finally {
+            set({ isLoading: false });
+          }
+        },
 
         // Utility
         clearCache: () => set({ artifacts: new Map(), summaries: [] }),

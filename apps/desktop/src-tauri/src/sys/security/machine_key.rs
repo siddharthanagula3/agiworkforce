@@ -249,14 +249,15 @@ pub fn derive_key_with_password(password_key: &[u8], purpose: KeyPurpose) -> Vec
 
     // HKDF-Extract: PRK = HMAC(salt, IKM)
     let salt = b"com.agiworkforce.desktop:password_key:v1";
-    let mut extract_hmac =
-        <Hmac<Sha256> as Mac>::new_from_slice(salt).expect("HMAC can take key of any size");
+    // SAFETY: HMAC-SHA256 accepts any key size per RFC 2104 — new_from_slice cannot fail.
+    let mut extract_hmac = <Hmac<Sha256> as Mac>::new_from_slice(salt)
+        .expect("HMAC-SHA256 accepts any key size (RFC 2104)");
     extract_hmac.update(&combined);
     let prk = extract_hmac.finalize().into_bytes();
 
     // HKDF-Expand: OKM = HMAC(PRK, info || 0x01)
-    let mut expand_hmac =
-        <Hmac<Sha256> as Mac>::new_from_slice(&prk).expect("HMAC can take key of any size");
+    let mut expand_hmac = <Hmac<Sha256> as Mac>::new_from_slice(&prk)
+        .expect("HMAC-SHA256 accepts any key size (RFC 2104)");
     expand_hmac.update(info.as_bytes());
     expand_hmac.update(&[0x01]);
     let okm = expand_hmac.finalize().into_bytes();

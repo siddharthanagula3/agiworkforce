@@ -51,7 +51,7 @@ describe('schedulerStore — Tauri command wiring', () => {
         name: 'Test Job',
         schedule: '0 9 * * *',
         actionType: 'briefing',
-        actionData: '{}',
+        actionData: {},
       }),
     );
   });

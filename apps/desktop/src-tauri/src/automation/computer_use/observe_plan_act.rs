@@ -601,12 +601,6 @@ Only include actions you're confident will make progress."#,
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        let reasoning = parsed
-            .get("reasoning")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
         let actions = if let Some(actions_arr) = parsed.get("actions").and_then(|v| v.as_array()) {
             actions_arr
                 .iter()
@@ -623,7 +617,6 @@ Only include actions you're confident will make progress."#,
             task_complete,
             making_progress,
             actions,
-            reasoning,
         })
     }
 
@@ -1099,10 +1092,6 @@ struct ActionPlan {
     task_complete: bool,
     making_progress: bool,
     actions: Vec<ComputerUseAction>,
-    /// LLM reasoning for action plan
-    // Used by: debug logging and action plan tracing
-    #[allow(dead_code)]
-    reasoning: String,
 }
 
 #[cfg(test)]

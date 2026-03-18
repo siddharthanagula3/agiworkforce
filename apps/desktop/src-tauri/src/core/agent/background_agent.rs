@@ -1444,7 +1444,12 @@ fn truncate_string(s: &str, max_len: usize) -> &str {
     if s.len() <= max_len {
         s
     } else {
-        &s[..max_len.saturating_sub(3)]
+        let mut end = max_len.saturating_sub(3);
+        // Walk back to a valid UTF-8 character boundary to avoid panicking on multi-byte chars
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
     }
 }
 

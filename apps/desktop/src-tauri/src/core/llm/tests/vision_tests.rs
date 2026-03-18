@@ -221,6 +221,7 @@ mod unit_tests {
                     },
                     "required": ["objects"]
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -294,6 +295,7 @@ mod function_calling_tests {
                 },
                 "required": ["location"]
             }),
+            strict: None,
         };
 
         assert_eq!(tool_def.name, "get_weather");
@@ -372,6 +374,7 @@ mod function_calling_tests {
                     },
                     "required": ["location"]
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,

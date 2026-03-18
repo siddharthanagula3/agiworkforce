@@ -57,6 +57,11 @@ impl AuthDatabaseManager {
     }
 
     pub fn register(&self, email: String, password_hash: String, role: UserRole) -> Result<User> {
+        // Basic email validation: must contain @, no null bytes, reasonable length
+        if !email.contains('@') || email.contains('\0') || email.len() > 254 || email.len() < 3 {
+            return Err(anyhow!("Invalid email address format"));
+        }
+
         let db = self.db.lock();
 
         let exists: bool = db
@@ -269,28 +274,30 @@ impl AuthDatabaseManager {
                         row.get::<_, String>(6)?,
                     ))
                 },
-            )
-            .map(
-                |(session_id, user_id, access_enc, refresh_enc, created, expires, last_act)| {
-                    let access = decrypt_token(&access_enc).unwrap_or(access_enc);
-                    let refresh = decrypt_token(&refresh_enc).unwrap_or(refresh_enc);
-                    Session {
-                        session_id,
-                        user_id,
-                        access_token: access,
-                        refresh_token: refresh,
-                        created_at: DateTime::parse_from_rfc3339(&created)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        expires_at: DateTime::parse_from_rfc3339(&expires)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        last_activity_at: DateTime::parse_from_rfc3339(&last_act)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                    }
-                },
             )?;
+
+        let (session_id, user_id, access_enc, refresh_enc, created, expires, last_act) = session;
+        let access = decrypt_token(&access_enc).map_err(|e| {
+            anyhow!("[AUTH] Access token decryption failed for session {}: {}", session_id, e)
+        })?;
+        let refresh = decrypt_token(&refresh_enc).map_err(|e| {
+            anyhow!("[AUTH] Refresh token decryption failed for session {}: {}", session_id, e)
+        })?;
+        let session = Session {
+            session_id,
+            user_id,
+            access_token: access,
+            refresh_token: refresh,
+            created_at: DateTime::parse_from_rfc3339(&created)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+            expires_at: DateTime::parse_from_rfc3339(&expires)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+            last_activity_at: DateTime::parse_from_rfc3339(&last_act)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+        };
 
         Ok(session)
     }
@@ -318,28 +325,30 @@ impl AuthDatabaseManager {
                         row.get::<_, String>(6)?,
                     ))
                 },
-            )
-            .map(
-                |(session_id, user_id, access_enc, refresh_enc, created, expires, last_act)| {
-                    let access = decrypt_token(&access_enc).unwrap_or(access_enc);
-                    let refresh = decrypt_token(&refresh_enc).unwrap_or(refresh_enc);
-                    Session {
-                        session_id,
-                        user_id,
-                        access_token: access,
-                        refresh_token: refresh,
-                        created_at: DateTime::parse_from_rfc3339(&created)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        expires_at: DateTime::parse_from_rfc3339(&expires)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        last_activity_at: DateTime::parse_from_rfc3339(&last_act)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                    }
-                },
             )?;
+
+        let (session_id, user_id, access_enc, refresh_enc, created, expires, last_act) = session;
+        let access = decrypt_token(&access_enc).map_err(|e| {
+            anyhow!("[AUTH] Access token decryption failed for session {}: {}", session_id, e)
+        })?;
+        let refresh = decrypt_token(&refresh_enc).map_err(|e| {
+            anyhow!("[AUTH] Refresh token decryption failed for session {}: {}", session_id, e)
+        })?;
+        let session = Session {
+            session_id,
+            user_id,
+            access_token: access,
+            refresh_token: refresh,
+            created_at: DateTime::parse_from_rfc3339(&created)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+            expires_at: DateTime::parse_from_rfc3339(&expires)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+            last_activity_at: DateTime::parse_from_rfc3339(&last_act)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+        };
 
         Ok(session)
     }

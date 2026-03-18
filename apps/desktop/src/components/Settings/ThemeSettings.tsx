@@ -1,4 +1,4 @@
-import { Moon, Sun, Palette, Upload, Download, Trash2, Plus } from 'lucide-react';
+import { Moon, Sun, Palette, Upload, Download, Trash2, Plus, Type } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -288,6 +288,8 @@ function ThemeSwatch({ theme, isActive, isCustom, onClick, onExport, onDelete }:
 export function ThemeSettings() {
   const selectedTheme = useSettingsStore((s) => s.windowPreferences.selectedTheme);
   const setSelectedTheme = useSettingsStore((s) => s.setSelectedTheme);
+  const dyslexicFont = useSettingsStore((s) => s.windowPreferences.dyslexicFont ?? false);
+  const setDyslexicFont = useSettingsStore((s) => s.setDyslexicFont);
 
   // Use a counter to force re-render after custom theme mutations
   const [customThemes, setCustomThemes] = useState<ThemeDefinition[]>(() => getCustomThemes());
@@ -427,6 +429,47 @@ export function ThemeSettings() {
           </p>
         </div>
       )}
+
+      {/* Accessibility */}
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <Type className="h-4 w-4 text-muted-foreground" />
+          <h4 className="text-sm font-medium">Accessibility</h4>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 pr-4">
+              <p className="text-sm font-medium text-foreground">Dyslexic Friendly Font</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Uses OpenDyslexic, a typeface designed to improve readability for people with
+                dyslexia. Applies to all text in the application.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={dyslexicFont}
+              onClick={() => setDyslexicFont(!dyslexicFont)}
+              className={[
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors',
+                dyslexicFont ? 'bg-primary' : 'bg-muted',
+              ].join(' ')}
+            >
+              <span
+                className={[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  dyslexicFont ? 'translate-x-6' : 'translate-x-1',
+                ].join(' ')}
+              />
+            </button>
+          </div>
+          {dyslexicFont && (
+            <p className="mt-3 rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
+              OpenDyslexic font is active. The font will load on first use.
+            </p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,3 +1,9 @@
+//! LLM routing, provider adapters, SSE streaming, cost tracking, and model management.
+//!
+//! Central module for all LLM interactions. The [`llm_router`] handles multi-provider
+//! routing with automatic failover. [`sse_parser`] processes Server-Sent Events from
+//! streaming providers. [`provider_adapter`] normalizes API formats across 22+ providers.
+
 pub mod background_manager;
 pub mod cache_manager;
 pub mod capability_detection;
@@ -469,6 +475,8 @@ pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub parameters: serde_json::Value,
+    #[serde(default)]
+    pub strict: Option<bool>,
 }
 
 impl ToolDefinition {}
