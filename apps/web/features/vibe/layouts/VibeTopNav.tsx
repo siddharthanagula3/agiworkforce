@@ -35,22 +35,22 @@ export function VibeTopNav() {
           <SelectContent>
             <SelectItem value="claude-sonnet-4-20250514">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Claude Sonnet 4</span>
+                <span className="font-medium">Claude Sonnet 4.6</span>
               </div>
             </SelectItem>
             <SelectItem value="claude-3-5-sonnet-20241022">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Claude 3.5 Sonnet</span>
+                <span className="font-medium">Claude Sonnet 4.6</span>
               </div>
             </SelectItem>
             <SelectItem value="gpt-4o">
               <div className="flex items-center gap-2">
-                <span className="font-medium">GPT-4o</span>
+                <span className="font-medium">GPT-5.4</span>
               </div>
             </SelectItem>
             <SelectItem value="gemini-2.0-flash">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Gemini 2.0 Flash</span>
+                <span className="font-medium">Gemini 3.1 Flash Lite</span>
               </div>
             </SelectItem>
           </SelectContent>

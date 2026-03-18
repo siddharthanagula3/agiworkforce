@@ -29,7 +29,7 @@ const features: Feature[] = [
   {
     icon: <Monitor className="h-5 w-5" />,
     title: 'Multi-LLM Support',
-    description: 'GPT-5, Claude 4.5, Gemini 3, and local models',
+    description: 'GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro, Llama 3, and local models',
   },
 ];
 
@@ -91,36 +91,88 @@ export function ApplicationPreview() {
               </button>
             </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black">
-              {/* Demo video placeholder - shows app preview with animated features */}
-              <div className="text-center p-8 max-w-xl">
-                <div className="mb-6 relative">
-                  <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
-                  <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl inline-block">
-                    <Play className="h-16 w-16 text-white" fill="currentColor" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-6">
+              {/* Feature showcase grid — replaces fake video player */}
+              <div className="w-full max-w-2xl">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wide">
+                      Multi-Model
+                    </div>
+                    <div className="space-y-1.5">
+                      {['GPT-5.4', 'Claude Opus 4.6', 'Gemini 3.1 Flash', 'Llama 3 (local)'].map(
+                        (m) => (
+                          <div key={m} className="flex items-center gap-2 text-xs text-zinc-300">
+                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                            {m}
+                          </div>
+                        ),
+                      )}
+                    </div>
                   </div>
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-3">See AGI Workforce in Action</h3>
-                <p className="text-zinc-400 mb-6">
-                  Watch how our AI autonomously completes tasks - from browsing the web to editing
-                  files, all with natural language commands.
-                </p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                    💬 Natural Language
-                  </span>
-                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-sm">
-                    ↩️ Fully Reversible
-                  </span>
-                  <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
-                    🤖 Multi-LLM
-                  </span>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-semibold text-purple-400 mb-2 uppercase tracking-wide">
+                      Tool Execution
+                    </div>
+                    <div className="space-y-1.5">
+                      {[
+                        'Read file.ts',
+                        'Write output.md',
+                        'Bash: npm install',
+                        'WebSearch: query',
+                      ].map((t) => (
+                        <div
+                          key={t}
+                          className="flex items-center gap-2 text-xs text-zinc-300 font-mono"
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-purple-400 shrink-0" />
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-semibold text-emerald-400 mb-2 uppercase tracking-wide">
+                      Privacy
+                    </div>
+                    <div className="space-y-1.5">
+                      {[
+                        'Keys encrypted locally',
+                        'Zero cloud relay',
+                        'Argon2id + AES-GCM',
+                        'Offline capable',
+                      ].map((p) => (
+                        <div key={p} className="flex items-center gap-2 text-xs text-zinc-300">
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-semibold text-amber-400 mb-2 uppercase tracking-wide">
+                      Desktop Automation
+                    </div>
+                    <div className="space-y-1.5">
+                      {[
+                        'Screen capture',
+                        'Browser control',
+                        'Keyboard & mouse',
+                        'App automation',
+                      ].map((a) => (
+                        <div key={a} className="flex items-center gap-2 text-xs text-zinc-300">
+                          <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                          {a}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowVideo(false)}
-                  className="mt-6 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="w-full text-sm text-zinc-500 hover:text-zinc-300 transition-colors text-center"
                 >
-                  ← Back to screenshot
+                  Back to screenshot
                 </button>
               </div>
             </div>
@@ -138,7 +190,7 @@ export function ApplicationPreview() {
               ↩️ Everything is reversible
             </div>
             <div className="rounded-full bg-purple-600/90 backdrop-blur-xs px-3 py-1 text-xs font-medium text-white">
-              🤖 GPT-5, Claude 4.5, Gemini 3 & more
+              GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro & more
             </div>
           </div>
         </div>
