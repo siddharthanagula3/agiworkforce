@@ -593,7 +593,7 @@ _Full research: docs/COMPETITIVE_WEB_RESEARCH.md (20 parallel agents)_
 ### Stabilization Items Verified
 
 - [x] **Agent loop**: COMPLETE — LLM → tool parse → execute → feed back as role=tool → loop until no tool calls. Verified in send_message_execution.rs lines 702-1070.
-- [x] **Scheduler naming**: CONSISTENT — All 11 commands use `scheduler_*_job` pattern. Zero _task/_job mixing.
+- [x] **Scheduler naming**: CONSISTENT — All 11 commands use `scheduler_*_job` pattern. Zero \_task/\_job mixing.
 - [x] **IPC camelCase**: CLEAN — Zero snake_case parameter keys found in invoke() calls across all TS files.
 - [x] **Hardcoded secrets**: CLEAN — Only test fixtures (AWS example keys, synthetic patterns). Supabase anon key in .env.local is public-safe by design.
 - [x] **TODO/FIXME markers**: 1 legitimate TODO (core.rs:115 mutex migration) — architectural, not a stub.
@@ -607,16 +607,16 @@ _Full research: docs/COMPETITIVE_WEB_RESEARCH.md (20 parallel agents)_
 
 ### Feature Completeness Matrix
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Tasks/Cowork tab | COMPLETE | TasksView + TaskCreationDialog + SubtaskTimeline + agentTaskStore |
-| Artifact renderers | COMPLETE (13/18) | Mermaid, SVG, Markdown, React, Code, HTML, Chart all working |
-| Settings polish | COMPLETE | System theme, dyslexic font, per-conversation model |
-| Project knowledge base | PARTIAL | File upload works; per-project model UI exists but no DB column |
-| Memory panel | COMPLETE | Pause, export, import (fixed), incognito toggle |
-| Keyboard shortcuts | COMPLETE | Double-Alt quick entry, Caps Lock voice, QuickQuery overlay |
-| MCP health dashboard | COMPLETE | Status indicators, reconnect/disconnect, integrated in Settings |
-| Document creation | PARTIAL | Inline preview + download working; Show in Finder calls missing `open_file_location` |
+| Feature                | Status           | Notes                                                                                |
+| ---------------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| Tasks/Cowork tab       | COMPLETE         | TasksView + TaskCreationDialog + SubtaskTimeline + agentTaskStore                    |
+| Artifact renderers     | COMPLETE (13/18) | Mermaid, SVG, Markdown, React, Code, HTML, Chart all working                         |
+| Settings polish        | COMPLETE         | System theme, dyslexic font, per-conversation model                                  |
+| Project knowledge base | PARTIAL          | File upload works; per-project model UI exists but no DB column                      |
+| Memory panel           | COMPLETE         | Pause, export, import (fixed), incognito toggle                                      |
+| Keyboard shortcuts     | COMPLETE         | Double-Alt quick entry, Caps Lock voice, QuickQuery overlay                          |
+| MCP health dashboard   | COMPLETE         | Status indicators, reconnect/disconnect, integrated in Settings                      |
+| Document creation      | PARTIAL          | Inline preview + download working; Show in Finder calls missing `open_file_location` |
 
 ### Known Deferred Items
 

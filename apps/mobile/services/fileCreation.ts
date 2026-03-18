@@ -41,11 +41,13 @@ export interface ExportResult {
  * collapses whitespace, and truncates to 64 characters.
  */
 function sanitizeFileName(title: string): string {
-  return title
-    .replace(/[^a-zA-Z0-9\s\-_]/g, '')
-    .replace(/\s+/g, '_')
-    .slice(0, 64)
-    .replace(/_+$/, '') || 'export';
+  return (
+    title
+      .replace(/[^a-zA-Z0-9\s\-_]/g, '')
+      .replace(/\s+/g, '_')
+      .slice(0, 64)
+      .replace(/_+$/, '') || 'export'
+  );
 }
 
 /**
@@ -56,10 +58,7 @@ function markdownToHtml(content: string, title: string): string {
   let html = content;
 
   // Escape HTML entities first (but preserve markdown syntax)
-  html = html
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   // Code blocks (``` ... ```) — must be processed before inline formatting
   html = html.replace(
