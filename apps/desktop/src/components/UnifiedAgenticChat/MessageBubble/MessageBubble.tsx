@@ -239,8 +239,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const registerMcpApp = useMcpAppStore((state) => state.registerApp);
 
   // Tool Call Actions ID - Hoisted for store access
-  const actionId =
-    message.metadata?.actionId || (message.metadata?.action_id as string | undefined);
+  const actionId = message.metadata?.actionId;
 
   // Track tool state from store for real-time updates
   const toolState = useToolStore(
@@ -338,11 +337,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   const isToolCall = useMemo(() => {
     const meta = message.metadata;
-    return !!(meta?.tool || meta?.tool_call || meta?.event === 'tool');
+    return !!(meta?.tool || meta?.toolCall || meta?.event === 'tool');
   }, [message.metadata]);
 
   // Tool call metadata
-  const toolName = message.metadata?.tool || message.metadata?.tool_call || message.metadata?.name;
+  const toolName = message.metadata?.tool || message.metadata?.toolCall || message.metadata?.name;
 
   // AUDIT-UI-052: Look up pending approval request ID for this tool
   const pendingApprovalId = useToolStore(
@@ -520,7 +519,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         ),
       ] as Array<Record<string, unknown>>;
 
-      const toolCallId = String(actionId || message.metadata?.tool_call || '');
+      const toolCallId = String(actionId || message.metadata?.toolCall || '');
       const matchedArtifact =
         artifacts.find((artifact) => String(artifact['id'] || '') === toolCallId) ||
         artifacts[artifacts.length - 1];

@@ -193,11 +193,6 @@ impl ComputerUseAgent {
 
         session.start();
 
-        // Initial safety check
-        if !self.safety_layer.config().detect_prompt_injection {
-            // Task safety is already checked in safety layer
-        }
-
         // Focus target application if specified
         if let Some(ref app_name) = task.target_application {
             let activation = self.window_coordinator.activate_by_title(app_name).await;
@@ -257,7 +252,7 @@ impl ComputerUseAgent {
                     &mut session,
                     state,
                     CompletionReason::SafetyBlocked {
-                        reason: format!("{:?}", reason),
+                        reason: serde_json::to_string(&reason).unwrap_or_else(|_| format!("{reason:?}")),
                     },
                 );
             }
@@ -307,7 +302,7 @@ impl ComputerUseAgent {
                             &mut session,
                             state,
                             CompletionReason::SafetyBlocked {
-                                reason: format!("{:?}", reason),
+                                reason: serde_json::to_string(&reason).unwrap_or_else(|_| format!("{reason:?}")),
                             },
                         );
                     }

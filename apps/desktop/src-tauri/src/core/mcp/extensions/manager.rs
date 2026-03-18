@@ -361,8 +361,8 @@ impl ExtensionManager {
 
     /// Check for available updates
     pub fn check_updates(&self) -> ExtensionResult<Vec<UpdateInfo>> {
-        // For now, we don't have a remote registry to check against
-        // This would connect to a registry API to check versions
+        // No remote registry configured yet — return empty list
+        tracing::debug!("check_updates called but no remote registry is configured; update checking is not yet implemented");
         Ok(Vec::new())
     }
 

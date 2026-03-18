@@ -36,8 +36,7 @@ function loadQueue(): OfflineQueueState {
       toolExecutions: [],
     });
     return data || { messages: [], toolExecutions: [] };
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to load queue:', error);
+  } catch {
     return { messages: [], toolExecutions: [] };
   }
 }
@@ -45,8 +44,8 @@ function loadQueue(): OfflineQueueState {
 function saveQueue(queue: OfflineQueueState): void {
   try {
     safeSetJSON(OFFLINE_QUEUE_KEY, queue);
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to save queue:', error);
+  } catch {
+    // Queue persistence failed — items may be lost on reload
   }
 }
 
@@ -129,8 +128,8 @@ export function clearQueuedMessage(messageId: string): void {
       messages: queue.messages.filter((m) => m.id !== messageId),
     };
     saveQueue(updated);
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to clear message:', error);
+  } catch {
+    // Message removal failed silently
   }
 }
 
@@ -142,16 +141,16 @@ export function clearQueuedToolExecution(toolId: string): void {
       toolExecutions: queue.toolExecutions.filter((t) => t.id !== toolId),
     };
     saveQueue(updated);
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to clear tool execution:', error);
+  } catch {
+    // Tool execution removal failed silently
   }
 }
 
 export function clearAllQueued(): void {
   try {
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to clear all queued items:', error);
+  } catch {
+    // Queue clear failed silently
   }
 }
 
@@ -198,7 +197,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
     for (const message of queue.messages) {
       try {
         if (message.retryCount >= MAX_RETRIES) {
-          console.warn(`[OfflineQueue] Max retries exceeded for message ${message.id}`);
           summary.messagesFailed++;
           clearQueuedMessage(message.id);
           continue;
@@ -210,7 +208,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
           clearQueuedMessage(message.id);
         }
       } catch (error) {
-        console.error(`[OfflineQueue] Failed to sync message ${message.id}:`, error);
         incrementMessageRetry(message.id);
         summary.messagesFailed++;
 
@@ -223,7 +220,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
     for (const tool of queue.toolExecutions) {
       try {
         if (tool.retryCount >= MAX_RETRIES) {
-          console.warn(`[OfflineQueue] Max retries exceeded for tool ${tool.id}`);
           summary.toolsFailed++;
           clearQueuedToolExecution(tool.id);
           continue;
@@ -235,7 +231,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
           clearQueuedToolExecution(tool.id);
         }
       } catch (error) {
-        console.error(`[OfflineQueue] Failed to sync tool ${tool.id}:`, error);
         incrementToolRetry(tool.id);
         summary.toolsFailed++;
 
@@ -253,7 +248,6 @@ export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncS
 
     return summary;
   } catch (error) {
-    console.error('[OfflineQueue] Sync failed with fatal error:', error);
     summary.totalTime = Date.now() - startTime;
     callbacks?.onSyncComplete?.(false, summary);
     throw error;
@@ -264,8 +258,7 @@ export function getLastSyncTime(): Date | null {
   try {
     const queue = loadQueue();
     return queue.lastSyncTime ? new Date(queue.lastSyncTime) : null;
-  } catch (error) {
-    console.error('[OfflineQueue] Failed to get last sync time:', error);
+  } catch {
     return null;
   }
 }

@@ -67,7 +67,9 @@ pub struct SynthesisConfig {
     pub volume: f32,
     /// Pitch adjustment in semitones (-12 to +12)
     pub pitch_semitones: f32,
-    /// Whether to output raw PCM or WAV
+    /// Whether to output raw PCM or WAV.
+    /// NOTE: Currently unused — `--output_raw` is always passed to Piper unconditionally.
+    /// Retained for API compatibility; always set to `true`.
     pub output_raw: bool,
 }
 

@@ -86,7 +86,6 @@ export const useChatStore = create<ChatState>()(
           set({ conversations: data.conversations ?? [] });
         } catch (err) {
           // Keep existing conversations on failure — offline resilience
-          console.warn('Failed to load conversations:', err);
           set({
             error: err instanceof Error ? err.message : 'Failed to load conversations',
           });
@@ -143,7 +142,6 @@ export const useChatStore = create<ChatState>()(
         try {
           await api.delete(`/api/chat/conversations/${id}`);
         } catch (err) {
-          console.warn('Failed to delete conversation on server:', err);
           set({
             error: err instanceof Error ? err.message : 'Failed to delete conversation',
           });
@@ -167,7 +165,6 @@ export const useChatStore = create<ChatState>()(
             },
           }));
         } catch (err) {
-          console.warn('Failed to load messages:', err);
           set({
             error: err instanceof Error ? err.message : 'Failed to load messages',
           });
@@ -390,9 +387,7 @@ export const useChatStore = create<ChatState>()(
                 streamingConversationId = null;
               },
 
-              onError: (error: Error) => {
-                console.warn('Streaming error:', error.message);
-
+              onError: (_error: Error) => {
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
                 const updatedMsgs = msgs.map((m) =>
@@ -494,7 +489,6 @@ export const useChatStore = create<ChatState>()(
         try {
           await api.put(`/api/chat/conversations/${id}`, { title });
         } catch (err) {
-          console.warn('Failed to rename conversation on server:', err);
           set({
             error: err instanceof Error ? err.message : 'Failed to rename conversation',
           });

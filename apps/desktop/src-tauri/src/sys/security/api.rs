@@ -142,7 +142,7 @@ impl ApiSecurityManager {
         }
 
         let payload = format!("{}:{}:{}", key_id, timestamp, body);
-        let expected_signature = compute_hmac(&key.key_secret, &payload);
+        let expected_signature = compute_hmac(&key.key_secret, &payload)?;
 
         if !constant_time_compare(signature, &expected_signature) {
             return Err("Invalid signature".to_string());
@@ -183,24 +183,18 @@ impl Default for ApiSecurityManager {
     }
 }
 
-pub fn compute_hmac(secret: &str, payload: &str) -> String {
+pub fn compute_hmac(secret: &str, payload: &str) -> Result<String, String> {
     use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(mac) => mac,
-        Err(e) => {
-            tracing::error!("Failed to create HMAC: {}. This should never happen.", e);
-
-            return String::new();
-        }
-    };
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("Failed to create HMAC: {}", e))?;
     mac.update(payload.as_bytes());
 
     let result = mac.finalize();
     let code_bytes = result.into_bytes();
 
-    hex::encode(code_bytes)
+    Ok(hex::encode(code_bytes))
 }
 
 fn constant_time_compare(a: &str, b: &str) -> bool {
@@ -344,12 +338,12 @@ mod tests {
         let secret = "my_secret_key";
         let payload = "test_payload_data";
 
-        let signature1 = compute_hmac(secret, payload);
-        let signature2 = compute_hmac(secret, payload);
+        let signature1 = compute_hmac(secret, payload).unwrap();
+        let signature2 = compute_hmac(secret, payload).unwrap();
 
         assert_eq!(signature1, signature2);
 
-        let different_signature = compute_hmac("different_secret", payload);
+        let different_signature = compute_hmac("different_secret", payload).unwrap();
         assert_ne!(signature1, different_signature);
     }
 
@@ -361,7 +355,7 @@ mod tests {
         let timestamp = Utc::now().timestamp().to_string();
         let body = r#"{"test": "data"}"#;
         let payload = format!("{}:{}:{}", key.key_id, timestamp, body);
-        let signature = compute_hmac(&key.key_secret, &payload);
+        let signature = compute_hmac(&key.key_secret, &payload).unwrap();
 
         assert!(manager
             .validate_signature(&key.key_id, &timestamp, body, &signature)

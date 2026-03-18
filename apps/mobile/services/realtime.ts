@@ -161,9 +161,11 @@ function handleMessageChange(
  * Returns an unsubscribe function.
  */
 export async function subscribeToRealtime(): Promise<() => void> {
+  // Clean up any existing channels before creating new ones to prevent duplicate subscriptions
+  unsubscribeFromRealtime();
+
   const user = await getCurrentUser();
   if (!user) {
-    console.warn('[realtime] No authenticated user — skipping Realtime subscription');
     return () => {};
   }
 

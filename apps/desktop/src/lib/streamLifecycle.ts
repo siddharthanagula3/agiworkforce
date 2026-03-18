@@ -140,7 +140,7 @@ export function buildToolCallMessageUpdate(input: {
   return {
     metadata: {
       tool: input.toolName,
-      tool_call: input.toolCallId,
+      toolCall: input.toolCallId,
       actionId: input.toolCallId,
       name: input.toolName,
       status: 'running',

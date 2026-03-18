@@ -61,10 +61,12 @@ pub async fn execute_api_call(
 
     let auth = parse_auth_from_parameters(parameters)?;
 
-    let timeout_ms = parameters
-        .get("timeout_ms")
-        .and_then(|v| v.as_u64())
-        .or(Some(30000));
+    let timeout_ms = Some(
+        parameters
+            .get("timeout_ms")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(30_000),
+    );
 
     let request = ApiRequest {
         method: http_method,

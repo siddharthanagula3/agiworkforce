@@ -15,6 +15,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauri } from '../lib/tauri-mock';
+import { storageFallback } from '../lib/storageFallback';
 
 export interface ProjectFile {
   id: string;
@@ -123,18 +124,6 @@ interface ProjectState {
   clearError: () => void;
 }
 
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
-
 // Version for storage migration
 const PROJECT_STORE_VERSION = 1;
 
@@ -145,16 +134,6 @@ const MAX_RECENT_FOLDERS = 10;
  * Formats a folder path for display (e.g., ~/Projects/my-app)
  */
 function formatFolderPath(path: string): string {
-  // Replace home directory with ~
-  const homeDir =
-    typeof window !== 'undefined' && 'process' in window
-      ? ((window as unknown as { process?: { env?: { HOME?: string } } }).process?.env?.HOME ?? '')
-      : '';
-
-  if (homeDir && path.startsWith(homeDir)) {
-    return '~' + path.slice(homeDir.length);
-  }
-
   // If on Windows, try to shorten common paths
   if (path.includes('\\Users\\')) {
     const match = path.match(/[A-Z]:\\Users\\[^\\]+\\(.+)/i);
@@ -513,13 +492,7 @@ export const useProjectStore = create<ProjectState>()(
           currentFolder: state.currentFolder,
           recentFolders: state.recentFolders,
         }),
-        migrate: (persistedState: unknown, version: number) => {
-          // Migration logic for future schema changes
-          if (version === 0) {
-            return persistedState as ProjectState;
-          }
-          return persistedState as ProjectState;
-        },
+        migrate: (state) => state as ProjectState,
       },
     ),
     { name: 'ProjectStore', enabled: import.meta.env.DEV },

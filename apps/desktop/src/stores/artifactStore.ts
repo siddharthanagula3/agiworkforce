@@ -411,11 +411,11 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             const response = await invoke<ArtifactResponse<Artifact>>('artifact_create', {
               title,
-              artifact_type: artifactType,
+              artifactType,
               content,
               metadata,
-              conversation_id: conversationId,
-              message_id: messageId,
+              conversationId,
+              messageId,
               tags,
             });
 
@@ -449,10 +449,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             const response = await invoke<ArtifactResponse<Artifact>>('artifact_create_streaming', {
               title,
-              artifact_type: artifactType,
+              artifactType,
               metadata,
-              conversation_id: conversationId,
-              message_id: messageId,
+              conversationId,
+              messageId,
             });
 
             if (response.success && response.data) {
@@ -501,7 +501,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
               'artifact_finalize_streaming',
               {
                 id,
-                change_description: changeDescription,
+                changeDescription,
               },
             );
 
@@ -569,7 +569,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
             const response = await invoke<ArtifactResponse<Artifact>>('artifact_update', {
               id,
               content,
-              change_description: changeDescription,
+              changeDescription,
               title,
               metadata,
               tags,
@@ -598,41 +598,44 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           set({ isLoading: true });
           try {
             // Attempt the dedicated Tauri command first
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
-              id,
-              hunks: diff.hunks.map((h) => ({
-                start_line: h.startLine,
-                end_line: h.endLine,
-                original_content: h.originalContent,
-                new_content: h.newContent,
-              })),
-              change_description: diff.changeDescription,
-            });
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isLoading: false };
+            try {
+              const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
+                id,
+                hunks: diff.hunks.map((h) => ({
+                  start_line: h.startLine,
+                  end_line: h.endLine,
+                  original_content: h.originalContent,
+                  new_content: h.newContent,
+                })),
+                changeDescription: diff.changeDescription,
               });
-              return artifact;
+
+              if (response.success && response.data) {
+                const artifact = response.data;
+                set((state) => {
+                  const newArtifacts = new Map(state.artifacts);
+                  newArtifacts.set(artifact.id, artifact);
+                  return { artifacts: newArtifacts, isLoading: false };
+                });
+                return artifact;
+              }
+
+              // artifact_apply_diff returned a non-success — fall through to local fallback
+            } catch {
+              // Command not yet registered — apply the diff locally and call artifact_update
             }
 
-            // artifact_apply_diff returned a non-success — fall through to local fallback
-          } catch {
-            // Command not yet registered — apply the diff locally and call artifact_update
-          }
+            // Fallback: compute new content locally and call the existing update path
+            const cached = get().artifacts.get(id);
+            if (!cached) {
+              return null;
+            }
 
-          // Fallback: compute new content locally and call the existing update path
-          const cached = get().artifacts.get(id);
-          if (!cached) {
+            const newContent = applyDiff(cached.content, diff);
+            return get().updateArtifact(id, newContent, diff.changeDescription);
+          } finally {
             set({ isLoading: false });
-            return null;
           }
-
-          const newContent = applyDiff(cached.content, diff);
-          return get().updateArtifact(id, newContent, diff.changeDescription);
         },
 
         // Rollback artifact to version
@@ -794,12 +797,12 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           set({ isLoading: true });
           try {
             const response = await invoke<ArtifactResponse<ArtifactSummary[]>>('artifact_list', {
-              artifact_types: filter?.artifactTypes,
+              artifactTypes: filter?.artifactTypes,
               statuses: filter?.statuses,
               tags: filter?.tags,
-              conversation_id: filter?.conversationId,
-              search_query: filter?.searchQuery,
-              pinned_only: filter?.pinnedOnly,
+              conversationId: filter?.conversationId,
+              searchQuery: filter?.searchQuery,
+              pinnedOnly: filter?.pinnedOnly,
               limit: filter?.limit,
               offset: filter?.offset,
             });
@@ -822,7 +825,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             const response = await invoke<ArtifactResponse<ArtifactSummary[]>>(
               'artifact_get_by_conversation',
-              { conversation_id: conversationId },
+              { conversationId },
             );
             return response.success && response.data ? response.data : [];
           } catch (error) {
@@ -852,8 +855,8 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             const response = await invoke<ArtifactResponse<VersionDiff>>('artifact_get_diff', {
               id,
-              from_version: fromVersion,
-              to_version: toVersion,
+              fromVersion,
+              toVersion,
             });
             return response.success ? (response.data ?? null) : null;
           } catch (error) {

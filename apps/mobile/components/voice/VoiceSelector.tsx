@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
-import { View, Pressable, FlatList, ActivityIndicator } from 'react-native';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { View, Pressable, ActivityIndicator } from 'react-native';
+import BottomSheet, { BottomSheetFlatList, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -136,7 +136,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             No English voices available
           </Text>
         ) : (
-          <FlatList
+          <BottomSheetFlatList
             data={voices}
             renderItem={renderVoiceItem}
             keyExtractor={(item) => item.identifier}

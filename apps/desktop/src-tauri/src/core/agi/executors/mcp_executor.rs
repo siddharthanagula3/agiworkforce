@@ -341,7 +341,7 @@ impl McpExecutor {
     ///
     /// * `tool_id` - The tool ID to check
     pub fn is_mcp_tool(tool_id: &str) -> bool {
-        tool_id.starts_with(&format!("{}{}", MCP_TOOL_PREFIX, TOOL_ID_DELIMITER))
+        tool_id.starts_with("mcp__")
     }
 
     /// Refreshes the cached tool names from connected MCP servers.

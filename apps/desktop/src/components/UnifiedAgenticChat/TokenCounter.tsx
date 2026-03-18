@@ -167,7 +167,6 @@ export const TokenCounter = ({
 
   return (
     <div className={cn('space-y-2 rounded-lg border border-border bg-card p-3', className)}>
-      {}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity className={cn('h-4 w-4', statusColor)} />
@@ -182,10 +181,8 @@ export const TokenCounter = ({
         </div>
       </div>
 
-      {}
       <div className="space-y-1">
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
-          {}
           {inputTokens > 0 || outputTokens > 0 ? (
             <>
               <div
@@ -234,10 +231,8 @@ export const TokenCounter = ({
         </div>
       </div>
 
-      {}
       {showDetails && (
         <div className="grid grid-cols-2 gap-3 border-t border-border pt-2">
-          {}
           {(inputTokens > 0 || outputTokens > 0) && (
             <>
               <div className="space-y-1">

@@ -66,7 +66,6 @@ export interface FileDiff {
  */
 export async function revertChanges(filePaths: string[]): Promise<RevertResult> {
   if (!isTauri) {
-    console.info('[codeEditing] revertChanges (mock)', filePaths);
     return {
       success: true,
       reverted_files: filePaths,
@@ -76,11 +75,10 @@ export async function revertChanges(filePaths: string[]): Promise<RevertResult> 
 
   try {
     const result = await invoke<RevertResult>('revert_changes', {
-      file_paths: filePaths,
+      filePaths,
     });
     return result;
   } catch (error) {
-    console.error('[codeEditing] Failed to revert changes:', error);
     return {
       success: false,
       reverted_files: [],
@@ -102,18 +100,16 @@ export async function applyChanges(
   filePaths: string[],
 ): Promise<{ success: boolean; applied: string[]; failed: string[] }> {
   if (!isTauri) {
-    console.info('[codeEditing] applyChanges (mock)', filePaths);
     return { success: true, applied: filePaths, failed: [] };
   }
 
   try {
     const result = await invoke<{ success: boolean; applied: string[]; failed: string[] }>(
       'apply_changes',
-      { file_paths: filePaths },
+      { filePaths },
     );
     return result;
-  } catch (error) {
-    console.error('[codeEditing] Failed to apply changes:', error);
+  } catch {
     return { success: false, applied: [], failed: filePaths };
   }
 }
@@ -126,15 +122,13 @@ export async function applyChanges(
  */
 export async function getFileDiff(filePath: string): Promise<FileDiff | null> {
   if (!isTauri) {
-    console.info('[codeEditing] getFileDiff (mock)', filePath);
     return null;
   }
 
   try {
     const result = await invoke<FileDiff>('get_file_diff', { filePath });
     return result;
-  } catch (error) {
-    console.error('[codeEditing] Failed to get file diff:', error);
+  } catch {
     return null;
   }
 }
@@ -146,15 +140,13 @@ export async function getFileDiff(filePath: string): Promise<FileDiff | null> {
  */
 export async function listPendingEdits(): Promise<PendingEdit[]> {
   if (!isTauri) {
-    console.info('[codeEditing] listPendingEdits (mock)');
     return [];
   }
 
   try {
     const result = await invoke<PendingEdit[]>('code_list_pending_edits');
     return result;
-  } catch (error) {
-    console.error('[codeEditing] Failed to list pending edits:', error);
+  } catch {
     return [];
   }
 }
@@ -167,15 +159,13 @@ export async function listPendingEdits(): Promise<PendingEdit[]> {
  */
 export async function applyEdit(editId: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[codeEditing] applyEdit (mock)', editId);
     return true;
   }
 
   try {
     await invoke('code_apply_edit', { editId });
     return true;
-  } catch (error) {
-    console.error('[codeEditing] Failed to apply edit:', error);
+  } catch {
     return false;
   }
 }
@@ -188,15 +178,13 @@ export async function applyEdit(editId: string): Promise<boolean> {
  */
 export async function rejectEdit(editId: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[codeEditing] rejectEdit (mock)', editId);
     return true;
   }
 
   try {
     await invoke('code_reject_edit', { editId });
     return true;
-  } catch (error) {
-    console.error('[codeEditing] Failed to reject edit:', error);
+  } catch {
     return false;
   }
 }
