@@ -184,7 +184,7 @@ export async function subscribeToRealtime(): Promise<() => void> {
     )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[realtime] Subscribed to conversations');
+        // Subscribed to conversations — no-op
       }
     });
 
@@ -203,7 +203,7 @@ export async function subscribeToRealtime(): Promise<() => void> {
     )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[realtime] Subscribed to messages');
+        // Subscribed to messages — no-op
       }
     });
 

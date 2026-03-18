@@ -5,10 +5,20 @@ import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, BackHandler, Platform, ToastAndroid } from 'react-native';
+import {
+  View,
+  ActivityIndicator,
+  BackHandler,
+  Platform,
+  ToastAndroid,
+  Pressable,
+  Text,
+} from 'react-native';
+import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/authStore';
-import { colors } from '@/lib/theme';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
+import { useBiometricGate } from '@/hooks/useBiometricGate';
+import { useTheme } from '@/hooks/useTheme';
 import {
   registerForPushNotifications,
   setupNotificationListeners,
@@ -22,6 +32,8 @@ export default function RootLayout() {
   const router = useRouter();
   const url = useURL();
   const backPressCount = useRef(0);
+  const { colors: themeColors, statusBarStyle } = useTheme();
+  const { isUnlocked, authenticate } = useBiometricGate();
 
   // Initialise MMKV encryption before any store access.
   // This must run before initialize() so that the Zustand persist middleware
@@ -103,6 +115,44 @@ export default function RootLayout() {
     }
   }, [url, session, isInitialized, router]);
 
+  // C1b: Share intent handling — receive text/URL shared from other apps
+  useEffect(() => {
+    if (!session || !isInitialized) return;
+
+    const handleShare = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (!initialUrl) return;
+
+      // Android share intents come as plain text content, not URLs
+      // They are typically passed as EXTRA_TEXT via the intent
+      // expo-linking captures these in the URL query params
+      const parsed = Linking.parse(initialUrl);
+      const sharedText =
+        (parsed.queryParams?.['android.intent.extra.TEXT'] as string | undefined) ??
+        (parsed.queryParams?.text as string | undefined);
+
+      if (sharedText && sharedText.trim()) {
+        // Create a new chat with the shared content
+        const { createConversation, sendMessage } = await import('@/stores/chatStore').then((m) =>
+          m.useChatStore.getState(),
+        );
+        const { selectedModel } = await import('@/stores/modelStore').then((m) =>
+          m.useModelStore.getState(),
+        );
+        const title = sharedText.length > 40 ? sharedText.slice(0, 40).trim() + '...' : sharedText;
+        try {
+          const id = await createConversation(title);
+          sendMessage(id, sharedText, selectedModel);
+          router.push(`/(app)/chat/${id}` as Parameters<typeof router.push>[0]);
+        } catch {
+          // Fall through — app opens normally
+        }
+      }
+    };
+
+    handleShare();
+  }, [session, isInitialized, router]);
+
   // C2: Android hardware back button — navigate back or double-press to exit
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -131,20 +181,59 @@ export default function RootLayout() {
       <View
         style={{
           flex: 1,
-          backgroundColor: colors.background,
+          backgroundColor: themeColors.background,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <ActivityIndicator color={colors.teal} size="large" />
+        <ActivityIndicator color={themeColors.teal} size="large" />
       </View>
+    );
+  }
+
+  if (!isUnlocked) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style={statusBarStyle} />
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: themeColors.background,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+            }}
+          >
+            <Fingerprint size={48} color={themeColors.teal} />
+            <Text style={{ color: themeColors.textPrimary, fontSize: 18, fontWeight: '600' }}>
+              Locked
+            </Text>
+            <Text style={{ color: themeColors.textMuted, fontSize: 14 }}>
+              Authenticate to continue
+            </Text>
+            <Pressable
+              onPress={authenticate}
+              style={{
+                marginTop: 8,
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                backgroundColor: themeColors.teal,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '600' }}>Unlock</Text>
+            </Pressable>
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar style={statusBarStyle} />
         <Slot />
       </SafeAreaProvider>
     </GestureHandlerRootView>
