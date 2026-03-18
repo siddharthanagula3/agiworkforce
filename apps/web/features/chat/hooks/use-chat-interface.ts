@@ -10,6 +10,7 @@ import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../services/document-generation-service';
 import { retryWithBackoff, getErrorMessage, isRetryableError } from '@shared/utils/error-handling';
+import { useStyleStore, getStyleInstruction } from '../stores/style-store';
 
 interface SendMessageParams {
   content: string;
@@ -395,10 +396,23 @@ export const useChat = (sessionId?: string) => {
           enhancedContent = content + toolRouterResult.enhancedContext;
         }
 
+        // Prepend response style instruction as a system message if a non-default style is selected
+        const styleInstruction = getStyleInstruction(
+          useStyleStore.getState().style,
+          useStyleStore.getState().activeCustomStyleId,
+        );
+        let styledHistory = conversationHistory;
+        if (styleInstruction) {
+          styledHistory = [
+            { role: 'system', content: `[Response Style] ${styleInstruction}` },
+            ...conversationHistory,
+          ];
+        }
+
         // Use employee chat service for dynamic selection with retry logic
         const result = await retryWithBackoff(
           () =>
-            employeeChatService.sendMessage(enhancedContent, conversationHistory, {
+            employeeChatService.sendMessage(enhancedContent, styledHistory, {
               userId: user.id,
               sessionId,
             }),
