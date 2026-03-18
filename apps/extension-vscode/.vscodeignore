@@ -7,11 +7,14 @@ src/**
 .vscode-test/**
 esbuild.js
 tsconfig.json
+.tsbuildinfo
 .eslintrc*
 eslint.config*
 .editorconfig
 .gitignore
 .gitattributes
+vitest.config.ts
+scripts/**
 
 # Node modules (esbuild bundles dependencies into out/extension.js)
 node_modules/**
@@ -22,16 +25,20 @@ coverage/**
 *.spec.ts
 
 # Misc dev artifacts
-*.map
+out/**/*.map
 *.log
 *.tmp
 .DS_Store
 Thumbs.db
+.cache/**
 
 # pnpm / npm lockfiles (not needed in VSIX)
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
+
+# Docs (not needed in VSIX)
+COMPETITIVE_VSCODE_RESEARCH.md
 
 # CI/CD
 .github/**

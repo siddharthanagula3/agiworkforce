@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 import { streamChatCompletion, AgiWorkforceApiError, type ChatMessage } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
+import { getContextBuilder } from '../services/contextBuilder';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ function gatherEditorContext(): EditorContext {
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
-function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): string {
+async function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): Promise<string> {
   const { command, planModeEnabled, planOnly, mcpEnabled, desktopBridgeEnabled } = options;
   const parts: string[] = [
     'You are AGI Workforce, a model-agnostic AI coding assistant integrated into VS Code.',
@@ -144,6 +145,12 @@ function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): string {
     parts.push(
       '\nPlan mode is enabled and user confirmed execution. Execute the plan and clearly summarize what was applied.',
     );
+  }
+
+  // Append rich workspace context (diagnostics, git, open files, structure)
+  const workspaceContext = await getContextBuilder().buildFullContext();
+  if (workspaceContext !== '') {
+    parts.push('\n' + workspaceContext);
   }
 
   return parts.join('\n');
@@ -302,7 +309,7 @@ export function createChatHandler(
     const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
     const planOnly = planModeEnabled && !isExecutionConfirmation(request.prompt);
 
-    const systemPrompt = buildSystemPrompt(editorCtx, {
+    const systemPrompt = await buildSystemPrompt(editorCtx, {
       command: request.command ?? '',
       planModeEnabled,
       planOnly,

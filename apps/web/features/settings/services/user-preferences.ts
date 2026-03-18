@@ -196,7 +196,16 @@ export interface UserSettings {
   max_concurrent_jobs?: number;
 
   // AI preferences
-  default_ai_provider?: 'openai' | 'anthropic' | 'google' | 'perplexity';
+  default_ai_provider?:
+    | 'openai'
+    | 'anthropic'
+    | 'google'
+    | 'perplexity'
+    | 'grok'
+    | 'deepseek'
+    | 'qwen'
+    | 'moonshot'
+    | 'zhipu';
   default_ai_model?: string;
   prefer_streaming?: boolean;
   ai_temperature?: number;
