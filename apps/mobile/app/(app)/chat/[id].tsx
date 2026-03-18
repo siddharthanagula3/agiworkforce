@@ -35,6 +35,7 @@ export default function ChatScreen() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -91,11 +92,10 @@ export default function ChatScreen() {
   }, [stopSpeaking]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, attachments?: import('@/components/chat/AttachmentPreview').Attachment[]) => {
       if (!id) return;
-      // Interrupt any ongoing TTS when the user sends a new message.
       stopSpeaking();
-      sendMessage(id, text, selectedModel);
+      sendMessage(id, text, selectedModel, attachments);
     },
     [id, selectedModel, sendMessage, stopSpeaking],
   );
@@ -141,6 +141,14 @@ export default function ChatScreen() {
       return `Got it. Processing: "${text}"`;
     },
     [id, sendMessage, selectedModel, stopSpeaking],
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (!id) return;
+      deleteMessage(id, messageId);
+    },
+    [id, deleteMessage],
   );
 
   const handleBack = useCallback(() => {
@@ -209,6 +217,7 @@ export default function ChatScreen() {
             messages={conversationMessages}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            onDeleteMessage={handleDeleteMessage}
             onRefresh={handleRefresh}
             refreshing={refreshing}
           />

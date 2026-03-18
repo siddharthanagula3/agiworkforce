@@ -43,6 +43,42 @@ export const colors = {
   transparent: 'transparent',
 } as const;
 
+export const lightColors = {
+  ...colors,
+  background: '#ffffff',
+  surfaceBase: '#ffffff',
+  surfaceElevated: '#f5f5f5',
+  surfaceOverlay: '#ebebeb',
+  surfaceHover: '#e0e0e0',
+  charcoal900: '#f0f0f0',
+  charcoal800: '#e5e5e5',
+  charcoal700: '#d4d4d4',
+  textPrimary: '#1a1a1a',
+  textSecondary: 'rgba(26, 26, 26, 0.75)',
+  textMuted: 'rgba(26, 26, 26, 0.5)',
+  border: 'rgba(0, 0, 0, 0.08)',
+  borderLight: 'rgba(0, 0, 0, 0.06)',
+} as const;
+
+/**
+ * A widened color map where string literal types are relaxed to plain `string`.
+ * This allows `lightColors` (which overrides specific literal hex values) to
+ * satisfy the same interface as the dark-mode `colors` object.
+ */
+export type ColorScheme = {
+  [K in keyof typeof colors]: string;
+};
+
+export function getColors(
+  mode: 'dark' | 'light' | 'system',
+  systemScheme: string | null | undefined,
+): ColorScheme {
+  if (mode === 'system') {
+    return systemScheme === 'light' ? lightColors : colors;
+  }
+  return mode === 'light' ? lightColors : colors;
+}
+
 export const spacing = {
   xs: 4,
   sm: 8,
