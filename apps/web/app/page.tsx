@@ -11,6 +11,7 @@ import {
   Wrench,
   MessageSquare,
 } from 'lucide-react';
+import { cn } from '@shared/lib/utils';
 import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
 import { CtaSection } from '../components/marketing/CtaSection';
@@ -196,6 +197,39 @@ export default function Home() {
               </div>
 
               <ApplicationPreview />
+            </div>
+          </section>
+
+          {/* Provider Trust Bar */}
+          <section className="border-y border-zinc-800/50 bg-zinc-950/50 py-16">
+            <div className="container mx-auto px-4">
+              <p className="mb-8 text-center text-sm font-medium uppercase tracking-widest text-zinc-500">
+                Works with every major AI provider
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+                {[
+                  { name: 'Anthropic', color: 'text-orange-400' },
+                  { name: 'OpenAI', color: 'text-emerald-400' },
+                  { name: 'Google', color: 'text-blue-400' },
+                  { name: 'xAI', color: 'text-zinc-300' },
+                  { name: 'DeepSeek', color: 'text-cyan-400' },
+                  { name: 'Ollama', color: 'text-zinc-300' },
+                  { name: 'Mistral', color: 'text-amber-400' },
+                  { name: 'Perplexity', color: 'text-teal-400' },
+                  { name: 'Qwen', color: 'text-violet-400' },
+                ].map((provider) => (
+                  <div
+                    key={provider.name}
+                    className="flex items-center gap-2 text-lg font-semibold opacity-70 transition-opacity hover:opacity-100"
+                  >
+                    <Bot className={cn('h-5 w-5', provider.color)} />
+                    <span className="text-zinc-400">{provider.name}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-8 text-center text-sm text-zinc-500">
+                No vendor lock-in. Switch models anytime. Your keys, your data.
+              </p>
             </div>
           </section>
 

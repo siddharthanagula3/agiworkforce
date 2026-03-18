@@ -31,7 +31,8 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onChatParticipant:agiworkforce.agi"
+    "onChatParticipant:agiworkforce.agi",
+    "onView:agi-workforce.sidebar"
   ],
   "main": "./out/extension.js",
   "icon": "media/icon.png",
@@ -131,6 +132,61 @@
         "command": "agi.test.run",
         "title": "AGI: Run Tests",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "agi-workforce.resetTokenCounter",
+        "title": "AGI Workforce: Reset Token Counter",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "agi-workforce.docs",
+        "title": "AGI Workforce: Generate Docs",
+        "icon": "$(book)"
+      },
+      {
+        "command": "agi-workforce.codeReview",
+        "title": "AGI Workforce: Code Review",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "agi-workforce.sendFeedback",
+        "title": "AGI Workforce: Send Feedback",
+        "icon": "$(feedback)"
+      },
+      {
+        "command": "agi-workforce.runCommand",
+        "title": "AGI Workforce: Run Terminal Command",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "agi-workforce.explainTerminal",
+        "title": "AGI Workforce: Explain Terminal Output",
+        "icon": "$(output)"
+      },
+      {
+        "command": "agi-workforce.suggestCommand",
+        "title": "AGI Workforce: Suggest Terminal Command",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "agi-workforce.explainError",
+        "title": "AGI Workforce: Explain Error",
+        "icon": "$(error)"
+      },
+      {
+        "command": "agi-workforce.askAboutCode",
+        "title": "AGI Workforce: Ask About Code",
+        "icon": "$(question)"
+      },
+      {
+        "command": "agi-workforce.newConversation",
+        "title": "AGI Workforce: New Conversation",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agi-workforce.modelDashboard",
+        "title": "AGI Workforce: Model Dashboard",
+        "icon": "$(graph)"
       }
     ],
     "chatParticipants": [
@@ -254,6 +310,24 @@
           "command": "agi-workforce.generateTests",
           "when": "editorHasSelection",
           "group": "agi-workforce@4"
+        },
+        {
+          "command": "agi-workforce.docs",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@5"
+        },
+        {
+          "command": "agi-workforce.codeReview",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@6"
+        },
+        {
+          "command": "agi-workforce.askAboutCode",
+          "group": "agi-workforce@7"
+        },
+        {
+          "command": "agi-workforce.explainError",
+          "group": "agi-workforce@8"
         }
       ],
       "commandPalette": [
@@ -263,6 +337,14 @@
         },
         {
           "command": "agi-workforce.fix",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "agi-workforce.docs",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "agi-workforce.codeReview",
           "when": "editorTextFocus"
         }
       ]
@@ -306,6 +388,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show AGI Workforce quick actions on hover over identifiers"
+        },
+        "agiWorkforce.codeLensEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show 'Ask AI', 'Tests', 'Docs' lenses above functions and classes"
         },
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
@@ -379,13 +466,35 @@
         "command": "agi-workforce.agentMode",
         "key": "ctrl+shift+alt+g",
         "mac": "cmd+shift+alt+g"
+      },
+      {
+        "command": "agi-workforce.askAboutCode",
+        "key": "ctrl+shift+alt+a",
+        "mac": "cmd+shift+alt+a",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "agi-workforce.explainError",
+        "key": "ctrl+shift+alt+x",
+        "mac": "cmd+shift+alt+x",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "agi-workforce.runCommand",
+        "key": "ctrl+shift+alt+t",
+        "mac": "cmd+shift+alt+t"
+      },
+      {
+        "command": "agi-workforce.newConversation",
+        "key": "ctrl+shift+alt+n",
+        "mac": "cmd+shift+alt+n"
       }
     ]
   },
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "package": "node esbuild.js --production && vsce package --no-dependencies",
+    "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -404,9 +513,10 @@
     "@typescript-eslint/parser": "^8.0.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.0",
-    "@vscode/vsce": "^3.0.0",
+    "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.3",
     "eslint": "^9.39.4",
+    "minimatch": "^3.1.5",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

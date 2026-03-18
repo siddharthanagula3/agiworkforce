@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 import { chatCompletion, type ChatMessage } from '../utils/api';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
+import { getContextBuilder } from '../services/contextBuilder';
 import * as telemetry from '../services/telemetry';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,10 +250,13 @@ export class AgentModePanel {
       // Include open editor context
       const editorContext = this.getOpenEditorsContext();
 
+      // Include rich context (diagnostics, git, workspace structure)
+      const richContext = await getContextBuilder().buildFullContext({ includeOpenFiles: false });
+
       // Build augmented message
       const augmentedMessages = [...this.messages];
-      if (wsContext || editorContext) {
-        const contextMsg = [wsContext, editorContext].filter(Boolean).join('\n\n');
+      if (wsContext || editorContext || richContext) {
+        const contextMsg = [wsContext, editorContext, richContext].filter(Boolean).join('\n\n');
         augmentedMessages.splice(1, 0, {
           role: 'system',
           content: `Current workspace context:\n${contextMsg}`,
@@ -437,32 +441,36 @@ export class AgentModePanel {
       );
     }
 
-    // Ask user to apply or reject
-    const fileList = edits.map((e) => e.filePath).join(', ');
-    const choice = await vscode.window.showInformationMessage(
-      `AGI Agent proposes edits to ${edits.length} file(s): ${fileList}`,
-      { modal: true },
-      'Apply All',
-      'Cancel',
-    );
+    // Per-file accept/reject via QuickPick
+    const pickItems = edits.map((e) => ({
+      label: e.filePath,
+      description: e.originalContent === '' ? '(new file)' : '(modified)',
+      picked: true,
+      edit: e,
+    }));
 
-    if (choice === 'Apply All') {
+    const selected = await vscode.window.showQuickPick(pickItems, {
+      title: `AGI Agent: Select files to apply (${edits.length} proposed)`,
+      canPickMany: true,
+      placeHolder: 'Uncheck files you want to skip',
+    });
+
+    if (selected !== undefined && selected.length > 0) {
+      const approvedEdits = selected.map((s) => s.edit);
       const batch: EditBatch = {
         id: batchId,
         timestamp: Date.now(),
-        edits,
-        description: `Edited ${edits.length} file(s): ${descriptions.join(', ')}`,
+        edits: approvedEdits,
+        description: `Edited ${approvedEdits.length} file(s): ${approvedEdits.map((e) => e.filePath).join(', ')}`,
       };
 
       const wsEdit = new vscode.WorkspaceEdit();
 
-      for (const edit of edits) {
+      for (const edit of approvedEdits) {
         if (edit.originalContent === '') {
-          // New file — create it
           wsEdit.createFile(edit.uri, { overwrite: true });
           wsEdit.insert(edit.uri, new vscode.Position(0, 0), edit.newContent);
         } else {
-          // Existing file — replace entire content
           const doc = await vscode.workspace.openTextDocument(edit.uri);
           const fullRange = new vscode.Range(
             doc.positionAt(0),
@@ -478,11 +486,13 @@ export class AgentModePanel {
         this.postMessage({
           type: 'editsApplied',
           batchId,
-          files: edits.map((e) => e.filePath),
+          files: approvedEdits.map((e) => e.filePath),
         });
+        const skipped = edits.length - approvedEdits.length;
+        const skippedMsg = skipped > 0 ? ` (${skipped} file(s) skipped)` : '';
         this.postMessage({
           type: 'systemMessage',
-          text: `Applied edits to ${edits.length} file(s). Use "Undo Batch" to revert.`,
+          text: `Applied edits to ${approvedEdits.length} file(s)${skippedMsg}. Use "Undo Batch" to revert.`,
         });
       } else {
         this.postMessage({ type: 'error', text: 'Failed to apply edits.' });

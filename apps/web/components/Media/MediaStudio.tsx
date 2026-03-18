@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Image, Video, Sparkles, Loader2, Settings2 } from 'lucide-react';
+import { Image as ImageIcon, Video, Sparkles, Loader2, Settings2 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
@@ -101,7 +101,7 @@ export function MediaStudio() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Image className="w-4 h-4" aria-hidden="true" />
+              <ImageIcon className="w-4 h-4" aria-hidden="true" />
               Image
             </button>
             <button
