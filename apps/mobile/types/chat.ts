@@ -7,12 +7,23 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 
 export type MessageType = 'text' | 'image';
 
+export interface MessageAttachment {
+  /** Remote URL after upload */
+  url: string;
+  /** MIME type */
+  mimeType: string;
+  /** Original file name */
+  fileName: string;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
   role: MessageRole;
   content: string;
   createdAt: string;
+  /** Uploaded attachments (images, files) */
+  attachments?: MessageAttachment[];
   /** Thinking/reasoning content from Claude or similar */
   reasoning?: string;
   /** Inline artifacts (code, research, email, etc.) */

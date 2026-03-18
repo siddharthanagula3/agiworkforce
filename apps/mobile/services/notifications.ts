@@ -184,9 +184,12 @@ let tokenSubscription: Notifications.Subscription | null = null;
  */
 export function setupNotificationListeners(): () => void {
   // Foreground notification received (for in-app handling like badge updates)
-  foregroundSubscription = Notifications.addNotificationReceivedListener((_notification) => {
-    // Could update badge count or show in-app toast here.
-    // For now the OS handler (setNotificationHandler above) shows the alert.
+  foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
+    // Update app badge count when a notification arrives while app is in foreground
+    const data = notification.request.content.data as NotificationData | undefined;
+    if (data?.type === 'agent_approval_needed') {
+      Notifications.setBadgeCountAsync(1).catch(() => {});
+    }
   });
 
   // User tapped a notification (foreground or background)

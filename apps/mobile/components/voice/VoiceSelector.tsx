@@ -1,18 +1,18 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
-import BottomSheet, { BottomSheetFlatList, BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as TTS from '@/services/tts';
 import { colors } from '@/lib/theme';
+import { VOICE_PRESETS, findVoiceForPreset } from '@/lib/voicePresets';
 import type { VoiceInfo } from '@/services/tts';
 
 /**
  * VoiceSelector bottom-sheet panel.
- * Lists available English TTS voices from expo-speech, lets the user
- * preview each with a sample utterance, and persists the selection to
- * the settings store.
+ * Shows branded voice presets at the top, followed by the raw system voice list.
+ * Selecting a preset automatically applies its matched system voice, rate, and pitch.
  *
  * @example
  *   const ref = useRef<BottomSheet>(null);
@@ -22,9 +22,14 @@ import type { VoiceInfo } from '@/services/tts';
 export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_props, ref) {
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
+
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
+  const setSpeechRate = useSettingsStore((s) => s.setSpeechRate);
+  const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
+  const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
+  const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
 
   useEffect(() => {
     TTS.getEnglishVoices()
@@ -34,6 +39,31 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const handleSelectPreset = useCallback(
+    (presetId: string) => {
+      const preset = VOICE_PRESETS.find((p) => p.id === presetId);
+      if (!preset) return;
+
+      setSelectedPresetId(preset.id);
+      setSpeechRate(preset.rate);
+      setSpeechPitch(preset.pitch);
+
+      // Find matching system voice
+      const matchedVoiceId = findVoiceForPreset(preset, voices);
+      if (matchedVoiceId) {
+        setSelectedVoiceId(matchedVoiceId);
+      }
+
+      // Play a sample with the preset settings
+      TTS.speak('Hello! This is a sample of my voice.', {
+        voice: matchedVoiceId ?? undefined,
+        rate: preset.rate,
+        pitch: preset.pitch,
+      }).catch(() => undefined);
+    },
+    [voices, setSelectedPresetId, setSpeechRate, setSpeechPitch, setSelectedVoiceId],
+  );
 
   const handlePlaySample = useCallback(
     async (voice: VoiceInfo) => {
@@ -45,19 +75,21 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
     [speechRate],
   );
 
-  const handleSelect = useCallback(
+  const handleSelectSystemVoice = useCallback(
     (voice: VoiceInfo) => {
+      // Selecting a raw system voice clears the preset
+      setSelectedPresetId(null);
       setSelectedVoiceId(voice.identifier);
     },
-    [setSelectedVoiceId],
+    [setSelectedPresetId, setSelectedVoiceId],
   );
 
   const renderVoiceItem = useCallback(
     ({ item }: { item: VoiceInfo }) => {
-      const isSelected = selectedVoiceId === item.identifier;
+      const isSelected = selectedVoiceId === item.identifier && selectedPresetId === null;
       return (
         <Pressable
-          onPress={() => handleSelect(item)}
+          onPress={() => handleSelectSystemVoice(item)}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -106,28 +138,120 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
         </Pressable>
       );
     },
-    [selectedVoiceId, handleSelect, handlePlaySample],
+    [selectedVoiceId, selectedPresetId, handleSelectSystemVoice, handlePlaySample],
   );
 
   return (
     <BottomSheet
       ref={ref}
       index={-1}
-      snapPoints={['50%', '80%']}
+      snapPoints={['50%', '85%']}
       enablePanDownToClose
       backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
       handleIndicatorStyle={{ backgroundColor: colors.textMuted }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 16 }}>
+      <BottomSheetScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Sheet title */}
         <Text
           style={{
             fontSize: 16,
             fontWeight: '600',
             color: colors.textPrimary,
-            marginBottom: 12,
+            marginBottom: 16,
           }}
         >
           Select Voice
+        </Text>
+
+        {/* Branded voice presets grid */}
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: '600',
+            color: colors.textMuted,
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+            marginBottom: 10,
+          }}
+        >
+          Voice Presets
+        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginBottom: 24,
+          }}
+        >
+          {VOICE_PRESETS.map((preset) => {
+            const isSelected = selectedPresetId === preset.id;
+            return (
+              <Pressable
+                key={preset.id}
+                onPress={() => handleSelectPreset(preset.id)}
+                style={{
+                  width: '48%',
+                  padding: 12,
+                  borderRadius: 10,
+                  backgroundColor: isSelected
+                    ? 'rgba(33, 128, 141, 0.18)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  borderWidth: 1,
+                  borderColor: isSelected ? 'rgba(33, 128, 141, 0.5)' : 'rgba(255, 255, 255, 0.08)',
+                }}
+                accessibilityLabel={`${preset.name} voice preset: ${preset.description}`}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: isSelected ? colors.teal : colors.textPrimary,
+                    }}
+                  >
+                    {preset.name}
+                  </Text>
+                  {isSelected && <Check size={14} color={colors.teal} />}
+                </View>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: colors.textMuted,
+                    lineHeight: 15,
+                  }}
+                >
+                  {preset.description}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* System voices section */}
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: '600',
+            color: colors.textMuted,
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+            marginBottom: 10,
+          }}
+        >
+          System Voices
         </Text>
         {loading ? (
           <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
@@ -136,14 +260,9 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             No English voices available
           </Text>
         ) : (
-          <BottomSheetFlatList
-            data={voices}
-            renderItem={renderVoiceItem}
-            keyExtractor={(item) => item.identifier}
-            showsVerticalScrollIndicator={false}
-          />
+          voices.map((item) => <View key={item.identifier}>{renderVoiceItem({ item })}</View>)
         )}
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheet>
   );
 });

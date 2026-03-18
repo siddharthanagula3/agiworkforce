@@ -9,6 +9,8 @@ interface MessageListProps {
   onApprove?: (approvalId: string) => void;
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onRetryMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
 }
@@ -22,6 +24,8 @@ export function MessageList({
   onApprove,
   onReject,
   onDeleteMessage,
+  onRetryMessage,
+  onEditMessage,
   onRefresh,
   refreshing = false,
 }: MessageListProps) {
@@ -52,9 +56,11 @@ export function MessageList({
         onApprove={onApprove}
         onReject={onReject}
         onDeleteMessage={onDeleteMessage}
+        onRetryMessage={onRetryMessage}
+        onEditMessage={onEditMessage}
       />
     ),
-    [onApprove, onReject, onDeleteMessage],
+    [onApprove, onReject, onDeleteMessage, onRetryMessage, onEditMessage],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
