@@ -162,6 +162,54 @@ _Updated: 2026-03-18 (Session 8 — autonomous stabilization + VISION.md + relea
 - Job autofill: LinkedIn + Lever specific
 - Built-in shortcuts: Cmd+Shift+A/C
 
+## [MOBILE-UI] Mobile UI Parity Audit (2026-03-18)
+
+_Full scorecard: docs/MOBILE_UI_PARITY_SCORECARD.md_
+
+### Overall Score: 4.6/5 vs Claude Mobile
+
+| Category    | Score | Notes                                               |
+| ----------- | ----- | --------------------------------------------------- |
+| Chat UI     | 4.6/5 | Streaming, code copy, search, export all working    |
+| Voice       | 4.2/5 | Full voice mode, system TTS (no branded voices)     |
+| Navigation  | 4.5/5 | 5 tabs, projects, deep linking, error boundary      |
+| Companion   | 5.0/5 | QR pair, WebRTC, agent dashboard (unique)           |
+| Settings    | 4.8/5 | Theme, biometric, auto-approve, device integrations |
+| Data & Sync | 4.6/5 | 3-device sync wired, MMKV offline, SecureStore      |
+| App Store   | 4.3/5 | Clean builds, missing privacy manifest              |
+
+### Verified Working (this session)
+
+- [x] Project instructions injected into chat as system message
+- [x] Conversation sync wired via startBackgroundSync
+- [x] FileExportButton wired in MessageBubble for assistant messages
+- [x] Projects tab in tab bar (5 tabs total)
+- [x] 5 pre-existing TypeScript errors fixed
+- [x] expo-sharing + expo-print installed
+- [x] expo-file-system/legacy migration for SDK 55
+- [x] 0 console.logs, 0 TypeScript errors, expo export clean
+
+### Gaps vs Claude (prioritized)
+
+- [ ] **Voice personalities**: branded AI voices (Claude has 5)
+- [ ] **LaTeX rendering**: math equation display in messages
+- [ ] **Message retry/edit**: retry or edit sent messages
+- [ ] **iOS privacy manifest**: NSPrivacyAccessedAPITypes
+- [ ] **Onboarding polish**: feature highlights + animations
+
+### AGI Workforce Advantages (10 unique features)
+
+1. Multi-LLM (20+ models, 7 providers)
+2. Companion pairing (QR → WebRTC → agent control)
+3. Agent oversight (approve/deny with risk levels)
+4. Scheduling from mobile
+5. Image generation with progress
+6. File export (PDF + Text)
+7. Auto-approve modes (Ask/Smart/Full)
+8. Conversation search with snippets
+9. Projects with custom instructions
+10. Multi-model comparison
+
 ## [MOBILE-AUDIT] Mobile Wave Verification (2026-03-18)
 
 ### Wave Items — All Verified
