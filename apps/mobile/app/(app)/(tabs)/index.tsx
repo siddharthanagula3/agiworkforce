@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from 'react';
-import { View, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -33,6 +33,7 @@ export default function HomeScreen() {
 
   const conversations = useChatStore((s) => s.conversations);
   const loadConversations = useChatStore((s) => s.loadConversations);
+  const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);
   const agents = useAgentStore((s) => s.agents);
   const connectionStatus = useConnectionStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
@@ -43,7 +44,7 @@ export default function HomeScreen() {
     s.pendingApprovals.filter((r) => r.status === 'pending'),
   );
 
-  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -55,9 +56,17 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [loadConversations]);
 
-  const handleNewChat = useCallback(() => {
-    router.push('/(app)/chat/new' as Parameters<typeof router.push>[0]);
-  }, [router]);
+  const createConversation = useChatStore((s) => s.createConversation);
+
+  const handleNewChat = useCallback(async () => {
+    try {
+      const conversationId = await createConversation();
+      router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+    } catch {
+      // Fallback: navigate to chat tab
+      router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+    }
+  }, [createConversation, router]);
 
   const handleOpenChat = useCallback(
     (id: string) => {
@@ -216,7 +225,14 @@ export default function HomeScreen() {
               Recent Conversations
             </Text>
           </View>
-          {recentConversations.length === 0 ? (
+          {isLoadingConversations && recentConversations.length === 0 ? (
+            <Card>
+              <View className="items-center py-6">
+                <ActivityIndicator color={colors.teal} size="small" />
+                <Text className="text-white/30 text-xs mt-3">Loading conversations...</Text>
+              </View>
+            </Card>
+          ) : recentConversations.length === 0 ? (
             <Card>
               <View className="items-center py-6">
                 <MessageSquarePlus size={28} color={colors.textMuted} />
@@ -290,8 +306,6 @@ export default function HomeScreen() {
 // ---------------------------------------------------------------------------
 // Quick Action Button
 // ---------------------------------------------------------------------------
-
-import React from 'react';
 
 interface QuickActionProps {
   icon: React.ReactNode;

@@ -67,7 +67,7 @@ export function requestAgentRefresh(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('request_agents');
+  sendControl('request_agents_refresh');
 }
 
 /**

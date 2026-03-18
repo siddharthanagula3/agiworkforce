@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Pressable, ScrollView, RefreshControl } from 'react-native';
+import { View, Pressable, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import type GorhomBottomSheet from '@gorhom/bottom-sheet';
@@ -119,6 +119,17 @@ export default function MessagingScreen() {
           />
         }
       >
+        {loading && platforms.length === 0 ? (
+          <View className="items-center py-12">
+            <ActivityIndicator color={colors.teal} size="small" />
+            <Text className="text-white/30 text-xs mt-3">Loading platforms...</Text>
+          </View>
+        ) : platforms.length === 0 ? (
+          <View className="items-center py-12">
+            <MessageCircle size={32} color={colors.textMuted} />
+            <Text className="text-white/50 text-sm mt-3">No messaging platforms available</Text>
+          </View>
+        ) : null}
         {platforms.map((platform) => (
           <PlatformCard
             key={platform.id}
