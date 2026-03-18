@@ -29,8 +29,19 @@ import type {
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
 import { runPlatformJobAutofill } from './jobAutofill';
+import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
+import { extractPageMetadata } from './page-metadata';
+import type { PageMetadata } from './page-metadata';
+import { detectNLWeb } from './nlweb';
+
+import type { ConsoleLogEntry } from './types';
 
 const MAX_CONTEXT_HTML_CHARS = 100_000;
+const MAX_CONSOLE_BUFFER = 200;
+const MAX_CONSOLE_ENTRY_CHARS = 1000;
+
+/** Circular buffer for captured console logs */
+const consoleLogBuffer: ConsoleLogEntry[] = [];
 
 interface ActionExecutionResult {
   success?: boolean;
@@ -73,6 +84,12 @@ function initialize(): void {
   // notifyTabReady() sends TAB_READY which triggers syncTabContextWithDesktop() in background.ts,
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
+
+  // Patch console to capture logs
+  patchConsole();
+
+  // WebMCP: discover tools and watch for changes
+  initWebMCP();
 
   logger.info('Content script initialized');
 }
@@ -216,6 +233,19 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'GET_RECORDED_ACTIONS':
       return handleGetRecordedActions();
 
+    case 'WEBMCP_DISCOVER_TOOLS':
+      return handleWebMCPDiscoverTools();
+
+    case 'WEBMCP_CALL_TOOL':
+      return handleWebMCPCallTool(message as import('./types').WebMCPCallToolMessage);
+
+    case 'GET_CONSOLE_LOGS':
+      return { success: true, logs: [...consoleLogBuffer] } as ExtensionResponse;
+
+    case 'CLEAR_CONSOLE_LOGS':
+      consoleLogBuffer.length = 0;
+      return { success: true } as ExtensionResponse;
+
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
   }
@@ -234,24 +264,38 @@ async function notifyTabReady(): Promise<void> {
 
 function buildCurrentPageContext(): Record<string, unknown> {
   const selectedText = window.getSelection()?.toString() || '';
+
+  // Extract structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.)
+  let metadata: PageMetadata | undefined;
+  try {
+    metadata = extractPageMetadata();
+  } catch (e) {
+    logger.debug('Failed to extract page metadata for context', e);
+  }
+
   return {
     url: window.location.href,
     title: document.title || 'Untitled',
     html: document.documentElement.outerHTML.substring(0, MAX_CONTEXT_HTML_CHARS),
     selectedText: selectedText.substring(0, 2_000),
     timestamp: Date.now(),
+    ...(metadata ? { metadata } : {}),
   };
 }
 
 async function syncPageContext(reason: string): Promise<void> {
   try {
+    const pageContext = buildCurrentPageContext();
     await chrome.runtime.sendMessage({
       type: 'SYNC_PAGE_CONTEXT',
       timestamp: Date.now(),
       context: {
-        ...buildCurrentPageContext(),
+        ...pageContext,
         reason,
       },
+      // Structured metadata is included inside context.metadata via buildCurrentPageContext(),
+      // but also surfaced at the top level for consumers that expect it there.
+      ...(pageContext['metadata'] ? { metadata: pageContext['metadata'] } : {}),
     });
   } catch (error) {
     logger.debug('Failed to sync page context', { reason, error });
@@ -1065,10 +1109,20 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
 async function handleAutoFillJobApplication(
   message: AutoFillJobApplicationMessage,
 ): Promise<ExtensionResponse> {
-  const profile = message.profile ?? {};
-  const options = message.options ?? {};
-  const response = await runPlatformJobAutofill(profile, options);
-  return response as ExtensionResponse;
+  const profile =
+    typeof message.profile === 'object' && message.profile !== null ? message.profile : {};
+  const options =
+    typeof message.options === 'object' && message.options !== null ? message.options : {};
+  try {
+    const response = await runPlatformJobAutofill(profile, options);
+    return response as ExtensionResponse;
+  } catch (error) {
+    logger.error('Job autofill failed', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Autofill failed',
+    } as ExtensionResponse;
+  }
 }
 
 /**
@@ -1585,6 +1639,56 @@ let _indicatorShadow: ShadowRoot | null = null;
 
 /**
  * Add automation indicator to page using a shadow DOM container.
+ * Monkey-patch console methods to capture logs into a circular buffer.
+ * Only captures logs from the page — our own logger uses a different path.
+ */
+function patchConsole(): void {
+  const levels: Array<'log' | 'warn' | 'error' | 'info' | 'debug'> = [
+    'log',
+    'warn',
+    'error',
+    'info',
+    'debug',
+  ];
+
+  for (const level of levels) {
+    const original = console[level];
+    console[level] = (...args: unknown[]) => {
+      // Call original first
+      original.apply(console, args);
+
+      // Skip our own extension logs to avoid polluting the page's console buffer
+      const firstArg = args[0];
+      if (typeof firstArg === 'string' && firstArg.startsWith('[AGI Workforce]')) return;
+
+      // Capture into buffer
+      const message = args
+        .map((a) => {
+          if (typeof a === 'string') return a;
+          try {
+            return JSON.stringify(a);
+          } catch {
+            return String(a);
+          }
+        })
+        .join(' ')
+        .slice(0, MAX_CONSOLE_ENTRY_CHARS);
+
+      consoleLogBuffer.push({
+        level,
+        message,
+        timestamp: Date.now(),
+      });
+
+      // Keep buffer bounded
+      while (consoleLogBuffer.length > MAX_CONSOLE_BUFFER) {
+        consoleLogBuffer.shift();
+      }
+    };
+  }
+}
+
+/**
  * Shadow DOM prevents page CSS/JS from hiding, restyling, or detecting it via
  * the predictable #agi-workforce-indicator selector.
  */
@@ -1711,7 +1815,9 @@ function injectFloatingOverlay(): void {
   tooltip.textContent = 'Ask AGI Workforce';
 
   btn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'open_side_panel' });
+    chrome.runtime.sendMessage({ type: 'open_side_panel' }).catch((err: unknown) => {
+      logger.warn('Failed to open side panel', err);
+    });
   });
 
   shadow.appendChild(style);
@@ -1723,6 +1829,93 @@ function injectFloatingOverlay(): void {
 /**
  * Validate message structure
  */
+// ─── WebMCP integration ───────────────────────────────────────────────────────
+
+/**
+ * Initialize WebMCP tool discovery on the current page.
+ * Discovers tools and watches for changes, reporting back to the background script.
+ */
+function initWebMCP(): void {
+  // Delay discovery slightly to let page scripts register their tools
+  setTimeout(() => {
+    const discovery = discoverAllTools();
+    if (discovery.tools.length > 0) {
+      logger.info(`WebMCP: discovered ${discovery.tools.length} tool(s)`, {
+        tools: discovery.tools.map((t) => t.name),
+        url: discovery.url,
+      });
+      // Notify background about discovered tools
+      chrome.runtime
+        .sendMessage({
+          type: 'WEBMCP_TOOLS_CHANGED',
+          tools: discovery.tools,
+          url: discovery.url,
+          timestamp: Date.now(),
+        })
+        .catch(() => {
+          // Background may not be listening yet
+        });
+    }
+
+    // Watch for dynamic tool changes
+    watchForToolChanges((tools) => {
+      chrome.runtime
+        .sendMessage({
+          type: 'WEBMCP_TOOLS_CHANGED',
+          tools,
+          url: window.location.href,
+          timestamp: Date.now(),
+        })
+        .catch(() => {});
+    });
+
+    // NLWeb detection — async and non-blocking. Runs after WebMCP discovery
+    // to avoid contention on the initial page load network requests.
+    detectNLWeb(window.location.href)
+      .then((nlwebResult) => {
+        if (nlwebResult.supported) {
+          logger.info('NLWeb: detected support', {
+            endpoints: nlwebResult.endpoints.length,
+            schemaTypes: nlwebResult.schemaTypes,
+            url: nlwebResult.url,
+          });
+          // Notify background about NLWeb availability
+          chrome.runtime
+            .sendMessage({
+              type: 'NLWEB_DETECTED',
+              nlweb: nlwebResult,
+              url: window.location.href,
+              timestamp: Date.now(),
+            })
+            .catch(() => {
+              // Background may not be listening yet
+            });
+        }
+      })
+      .catch((err) => {
+        logger.debug('NLWeb detection failed (non-fatal)', err);
+      });
+  }, 1000);
+}
+
+function handleWebMCPDiscoverTools(): ExtensionResponse {
+  const discovery = discoverAllTools();
+  return {
+    success: true,
+    supported: discovery.supported,
+    tools: discovery.tools,
+    url: discovery.url,
+  } as ExtensionResponse;
+}
+
+async function handleWebMCPCallTool(
+  message: import('./types').WebMCPCallToolMessage,
+): Promise<ExtensionResponse> {
+  const { toolName, arguments: args } = message;
+  const result = await callTool({ name: toolName, arguments: args });
+  return result as ExtensionResponse;
+}
+
 // [H9 fix] Allowlist of known message types — prevents unknown type strings from being processed
 // Note: CAPTURE_SCREENSHOT is intentionally excluded — it is handled in background.ts, not here.
 const VALID_MESSAGE_TYPES = new Set([
@@ -1765,6 +1958,9 @@ const VALID_MESSAGE_TYPES = new Set([
   'START_RECORDING',
   'STOP_RECORDING',
   'GET_RECORDED_ACTIONS',
+  // WebMCP
+  'WEBMCP_DISCOVER_TOOLS',
+  'WEBMCP_CALL_TOOL',
 ]);
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

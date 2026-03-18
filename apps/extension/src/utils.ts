@@ -39,7 +39,7 @@ export async function saveConfig(config: Partial<ExtensionConfig>): Promise<void
     const current = await getConfig();
     await chrome.storage.local.set({ config: { ...current, ...config } });
   } catch (error) {
-    console.error('Failed to save config:', error);
+    logger.error('Failed to save config', error);
   }
 }
 
@@ -409,7 +409,7 @@ export const storageUtils = {
   async getItem<T>(key: string, defaultValue?: T): Promise<T | undefined> {
     try {
       const result = await chrome.storage.local.get(key);
-      return result[key] ?? defaultValue;
+      return (result[key] as T | undefined) ?? defaultValue;
     } catch (error) {
       logger.error(`Failed to get item: ${key}`, error);
       return defaultValue;
@@ -460,9 +460,22 @@ export const validators = {
   isSafeUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
-      // Block chrome://, about://, etc
-      const unsafeProtocols = ['chrome:', 'about:', 'data:'];
+      const unsafeProtocols = ['chrome:', 'about:', 'data:', 'javascript:', 'file:'];
       return !unsafeProtocols.some((proto) => parsed.protocol === proto);
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Validate that a URL points to a local address only (for bridge connections)
+   */
+  isLocalUrl(url: string): boolean {
+    try {
+      const normalized = url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+      const parsed = new URL(normalized);
+      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+      return localHosts.has(parsed.hostname);
     } catch {
       return false;
     }

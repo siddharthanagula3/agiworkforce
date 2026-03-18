@@ -14,7 +14,9 @@
     "contextMenus",
     "sidePanel",
     "scripting",
-    "cookies"
+    "cookies",
+    "notifications",
+    "tabGroups"
   ],
   "host_permissions": [
     "https://api.agiworkforce.com/*",
