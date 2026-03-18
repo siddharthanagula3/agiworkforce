@@ -1,98 +1,149 @@
 # CLI Competitive Scorecard — 4-Way Comparison
 
-**Last updated**: 2026-03-18
+**Last updated**: 2026-03-18 (verified from competitor source code + live docs)
 **AGI Workforce CLI**: 23 source files, 23,258 lines Rust, 705 tests, 3.9MB binary
+
+## Sources
+
+- Claude Code: WebFetch docs.anthropic.com + live docs (60+ pages, 22 hook events, 30+ tools, 50+ flags)
+- Codex CLI: Source code exploration ~/Desktop/codex-cli/ (Rust + ratatui TUI, 45+ crates)
+- Gemini CLI: Source code exploration ~/Desktop/gemini-cli/ (TypeScript + Ink/React, 7 packages)
+- OpenCode: Source code exploration ~/Desktop/opencode/ (TypeScript + SolidJS/OpenTUI, 57 components)
 
 ## Feature Matrix
 
-| #   | Feature                       | Claude Code             | Gemini CLI          | Codex CLI                | OpenCode                | AGI Workforce                                       | Score         |
-| --- | ----------------------------- | ----------------------- | ------------------- | ------------------------ | ----------------------- | --------------------------------------------------- | ------------- |
-| 1   | Interactive REPL              | ✅ rustyline            | ✅ readline         | ✅ ink-based             | ✅ bubbletea TUI        | ✅ rustyline                                        | PARITY        |
-| 2   | Streaming markdown            | ✅ terminal-md          | ✅ marked+chalk     | ✅ ink components        | ✅ glamour              | ✅ custom FSM renderer                              | PARITY        |
-| 3   | Agent mode (auto)             | ✅ 25 iterations        | ✅ via tools        | ✅ full-auto sandbox     | ✅ agentic loop         | ✅ 25 iterations, loop detection                    | PARITY        |
-| 4   | **Subagent parallelism**      | ✅ Agent tool           | ❌                  | ❌                       | ❌                      | ✅ task tool, 7 concurrent threads                  | **PARITY**    |
-| 5   | **Agent Teams**               | ✅ TeamCreate           | ❌                  | ❌                       | ❌                      | ✅ --team, inbox messaging, shared tasks            | **PARITY**    |
-| 6   | Skills system                 | ✅ .claude/skills/      | ❌                  | ❌                       | ❌                      | ✅ .agiworkforce/skills/, scoring, categories       | **PARITY**    |
-| 7   | Hooks system                  | ✅ 23 events, 4 types   | ❌                  | ❌                       | ❌                      | ✅ 16 events, command type, JSON protocol           | PARITY        |
-| 8   | MCP tools                     | ✅ stdio+SSE+HTTP       | ✅ extensions       | ❌                       | ❌                      | ✅ stdio transport, tool discovery                  | PARTIAL       |
-| 9   | Session management            | ✅ SQLite sessions      | ❌                  | ❌                       | ✅ SQLite               | ✅ SQLite + JSON legacy, search, rename             | **ADVANTAGE** |
-| 10  | Checkpoints / rewind          | ✅ /rewind              | ❌                  | ❌                       | ❌                      | ✅ /rewind N, auto-checkpoint per turn              | **PARITY**    |
-| 11  | **Hierarchical memory**       | ✅ CLAUDE.md 3-tier     | ❌                  | ❌                       | ❌                      | ✅ global/project/local CLAUDE.md, /memory cmd      | **PARITY**    |
-| 12  | Permission / sandbox          | ✅ 5 modes, allowlist   | ✅ OAuth scopes     | ✅ seatbelt/tofu sandbox | ✅ approval prompts     | ✅ 3-tier (always/session/deny) + safety classifier | PARTIAL       |
-| 13  | Fast mode                     | ✅ /fast toggles model  | ❌                  | ❌                       | ❌                      | ✅ /fast, configurable fast_model                   | **PARITY**    |
-| 14  | Pipe / print mode             | ✅ -p, --print          | ✅ --prompt         | ✅ --quiet               | ✅ piped output         | ✅ --print, --raw, stdin pipe                       | **PARITY**    |
-| 15  | Output formats                | ✅ --output-format json | ✅ JSON output      | ✅ --json                | ❌                      | ✅ --output json/text/stream-json                   | **PARITY**    |
-| 16  | **Multi-model routing**       | ❌ Claude only          | ✅ Gemini only      | ❌ OpenAI only           | ✅ multi-provider       | ✅ 7 providers, 18+ models                          | **ADVANTAGE** |
-| 17  | **BYOK (bring your own key)** | ❌ Anthropic account    | ❌ Google account   | ❌ OpenAI account        | ✅ env vars             | ✅ 7 provider env vars, /setup wizard               | **ADVANTAGE** |
-| 18  | **Fallback chains**           | ❌                      | ❌                  | ❌                       | ❌                      | ✅ fallback_chain config, --fallback-model          | **UNIQUE**    |
-| 19  | Plan mode (read-only)         | ✅ /plan                | ❌                  | ❌                       | ❌                      | ✅ /plan, filters to read-only tools                | **PARITY**    |
-| 20  | Side queries (/btw)           | ✅ /btw                 | ❌                  | ❌                       | ❌                      | ✅ /btw, isolated context                           | **PARITY**    |
-| 21  | Git diff display              | ✅ /diff                | ❌                  | ❌                       | ✅ diff view            | ✅ /diff, colored +/-, stat summary                 | **PARITY**    |
-| 22  | Context compaction            | ✅ auto + /compact      | ❌                  | ❌                       | ❌                      | ✅ auto at 90% + /compact [focus]                   | **PARITY**    |
-| 23  | /config set/get               | ✅ config management    | ❌                  | ❌                       | ✅ settings             | ✅ /config set/get, TOML persistence                | **PARITY**    |
-| 24  | Branch/fork                   | ✅ /fork                | ❌                  | ❌                       | ❌                      | ✅ /branch, saves to SQLite session                 | **PARITY**    |
-| 25  | Shell completions             | ✅ bash/zsh/fish        | ❌                  | ❌                       | ❌                      | ✅ bash/zsh/fish via clap_complete                  | **PARITY**    |
-| 26  | Subscription auth             | ❌                      | ❌                  | ❌                       | ❌                      | ✅ Copilot + ChatGPT Plus OAuth                     | **UNIQUE**    |
-| 27  | Safety classifier             | ❌ (blanket sandbox)    | ❌                  | ✅ seatbelt              | ❌                      | ✅ 250+ rules, 3-tier (safe/unknown/dangerous)      | **ADVANTAGE** |
-| 28  | Cost tracking                 | ✅ /cost                | ❌                  | ❌                       | ❌                      | ✅ /cost, per-turn + session totals, pricing DB     | **PARITY**    |
-| 29  | Model catalog                 | ❌ (single model)       | ❌ (single)         | ❌ (single)              | ✅ model list           | ✅ 18+ models, capabilities, pricing, deprecation   | **ADVANTAGE** |
-| 30  | Max turns limit               | ✅ --max-turns          | ❌                  | ❌                       | ❌                      | ✅ --max-turns N                                    | **PARITY**    |
-| 31  | TUI framework                 | ❌ (basic readline)     | ❌ (basic readline) | ✅ ink (React-like)      | ✅ bubbletea (full TUI) | ❌ (rustyline, no TUI)                              | GAP           |
-| 32  | Vim mode                      | ❌                      | ❌                  | ❌                       | ✅ vim keybindings      | ✅ AGIWORKFORCE_VI=1 or EDITOR=vi                   | **PARITY**    |
-| 33  | LSP integration               | ✅ LSP tool             | ❌                  | ❌                       | ✅ LSP diagnostics      | ❌                                                  | GAP           |
-| 34  | Notebook editing              | ✅ NotebookEdit tool    | ❌                  | ❌                       | ❌                      | ❌                                                  | GAP           |
-| 35  | Cron/scheduled tasks          | ✅ CronCreate/Delete    | ❌                  | ❌                       | ❌                      | ❌                                                  | GAP           |
+| #   | Feature                 | Claude Code                                   | Gemini CLI                  | Codex CLI               | OpenCode                    | AGI Workforce                           | Score         |
+| --- | ----------------------- | --------------------------------------------- | --------------------------- | ----------------------- | --------------------------- | --------------------------------------- | ------------- |
+| 1   | Interactive REPL        | ✅ rustyline                                  | ✅ Ink (React)              | ✅ ratatui TUI          | ✅ SolidJS/OpenTUI          | ✅ rustyline + vi mode                  | PARITY        |
+| 2   | Streaming markdown      | ✅ custom renderer                            | ✅ AnsiOutput               | ✅ markdown_stream      | ✅ OpenTUI renderer         | ✅ custom FSM renderer                  | PARITY        |
+| 3   | Agent mode (auto)       | ✅ 25 turns default                           | ✅ ReAct loop               | ✅ full-auto + sandbox  | ✅ build agent              | ✅ 25 turns + loop detection            | PARITY        |
+| 4   | Subagent parallelism    | ✅ Agent tool (types: Explore, Plan, general) | ❌                          | ✅ spawn_agent + fork   | ❌                          | ✅ task tool, 7 concurrent threads      | **PARITY**    |
+| 5   | Agent Teams             | ✅ experimental (messaging + task claiming)   | ❌                          | ❌                      | ❌                          | ✅ --team, inbox, shared tasks, deps    | **PARITY**    |
+| 6   | Skills system           | ✅ SKILL.md + frontmatter, 5 bundled          | ❌                          | ❌                      | ❌                          | ✅ .agiworkforce/skills/, scoring       | **PARITY**    |
+| 7   | Hooks system            | ✅ 22 events, 4 types (cmd/http/prompt/agent) | ❌                          | ✅ Smart Approvals      | ❌                          | ✅ 16 events, command type              | PARTIAL       |
+| 8   | MCP tools               | ✅ stdio+SSE+HTTP, OAuth                      | ✅ stdio+SSE+HTTP, OAuth    | ✅ MCP + Agents SDK     | ✅ stdio+SSE+HTTP           | ✅ stdio only                           | PARTIAL       |
+| 9   | Session management      | ✅ persist, resume, fork, name, export        | ✅ checkpointing            | ✅ thread/rollout JSONL | ✅ SQLite + Drizzle ORM     | ✅ SQLite + JSON, search, rename        | PARITY        |
+| 10  | Checkpoints / rewind    | ✅ /rewind code+conversation                  | ❌                          | ✅ rollout replay       | ✅ session revert           | ✅ /rewind N, auto-checkpoint           | **PARITY**    |
+| 11  | Hierarchical memory     | ✅ managed/project/user + rules/              | ✅ global/extension/project | ❌                      | ❌                          | ✅ global/project/local, /memory cmd    | **PARITY**    |
+| 12  | Permission / sandbox    | ✅ 5 modes, 78 rules, managed policy          | ✅ Docker/gVisor sandbox    | ✅ Seatbelt + Landlock  | ✅ ask permission per tool  | ✅ 3-tier + 250-rule safety classifier  | PARTIAL       |
+| 13  | Fast mode               | ✅ /fast → Haiku                              | ❌                          | ❌                      | ❌                          | ✅ /fast, configurable fast_model       | **PARITY**    |
+| 14  | Pipe / print mode       | ✅ -p + --output-format                       | ✅ non-interactive          | ✅ --quiet              | ✅ piped output             | ✅ --print, --raw, stdin pipe           | **PARITY**    |
+| 15  | Output formats          | ✅ text/json/stream-json                      | ✅ JSON                     | ✅ --json               | ❌                          | ✅ text/json/stream-json                | **PARITY**    |
+| 16  | **Multi-model routing** | ❌ Claude only                                | ❌ Gemini only              | ❌ OpenAI (+Ollama)     | ✅ 75+ providers            | ✅ 7 providers, 18+ models              | **ADVANTAGE** |
+| 17  | **BYOK**                | ❌ Anthropic acct                             | ❌ Google acct              | ❌ OpenAI acct          | ✅ env vars                 | ✅ 7 provider env vars, /setup wizard   | **ADVANTAGE** |
+| 18  | **Fallback chains**     | ✅ --fallback-model (single)                  | ❌                          | ❌                      | ❌                          | ✅ fallback_chain config (multi-model)  | **ADVANTAGE** |
+| 19  | Plan mode               | ✅ /plan + EnterPlanMode tool                 | ❌                          | ❌                      | ✅ Tab to switch plan agent | ✅ /plan, filters to read-only tools    | **PARITY**    |
+| 20  | Side queries (/btw)     | ✅ /btw                                       | ❌                          | ❌                      | ❌                          | ✅ /btw, isolated context               | **PARITY**    |
+| 21  | Git diff display        | ✅ /diff interactive                          | ❌                          | ✅ diff_render.rs       | ✅ npm diff                 | ✅ /diff, colored, stat summary         | **PARITY**    |
+| 22  | Context compaction      | ✅ auto 95% + /compact [focus]                | ❌                          | ❌                      | ✅ session compaction       | ✅ auto 90% + /compact [focus]          | **PARITY**    |
+| 23  | /config set/get         | ✅ /config                                    | ❌                          | ✅ config.toml          | ✅ tui.json settings        | ✅ /config set/get, TOML persistence    | **PARITY**    |
+| 24  | Branch/fork             | ✅ /branch, /fork                             | ❌                          | ✅ thread fork          | ✅ parent/child sessions    | ✅ /branch → SQLite session             | **PARITY**    |
+| 25  | Shell completions       | ✅ bash/zsh/fish                              | ❌                          | ❌                      | ❌                          | ✅ bash/zsh/fish via clap_complete      | **PARITY**    |
+| 26  | **Subscription auth**   | ❌                                            | ❌                          | ❌                      | ❌                          | ✅ Copilot + ChatGPT Plus OAuth         | **UNIQUE**    |
+| 27  | **Safety classifier**   | ❌ (rule-based perms)                         | ❌                          | ✅ execpolicy rules     | ❌                          | ✅ 250+ rules, 3-tier classification    | **ADVANTAGE** |
+| 28  | Cost tracking           | ✅ /cost, /usage                              | ❌                          | ❌                      | ❌                          | ✅ /cost per-turn + session, pricing DB | **PARITY**    |
+| 29  | **Model catalog**       | ❌ (single model)                             | ❌ (single)                 | ❌ (single)             | ✅ model list               | ✅ 18+ models, pricing, deprecation     | **ADVANTAGE** |
+| 30  | Max turns limit         | ✅ --max-turns                                | ❌                          | ❌                      | ❌                          | ✅ --max-turns N                        | **PARITY**    |
+| 31  | Vim mode                | ✅ /vim toggle                                | ❌                          | ❌                      | ✅ hjkl + leader key        | ✅ AGIWORKFORCE_VI=1                    | **PARITY**    |
+| 32  | ! bash prefix           | ✅ ! runs shell direct                        | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 33  | @ file mentions         | ✅ @ autocomplete                             | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 34  | --effort level          | ✅ low/medium/high/max                        | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 35  | TUI framework           | ❌ (readline)                                 | ✅ Ink (React)              | ✅ ratatui              | ✅ OpenTUI (SolidJS)        | ❌ (rustyline)                          | GAP           |
+| 36  | OS sandbox              | ❌                                            | ✅ Docker/gVisor            | ✅ Seatbelt/Landlock    | ❌                          | ❌                                      | GAP           |
+| 37  | LSP integration         | ✅ LSP tool                                   | ❌                          | ❌                      | ✅ LSP tool                 | ❌                                      | GAP           |
+| 38  | Voice dictation         | ✅ hold Space PTT                             | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 39  | Extensions marketplace  | ❌ (plugins)                                  | ✅ marketplace              | ❌                      | ❌                          | ❌                                      | GAP           |
+| 40  | Web/remote sessions     | ✅ --remote, --teleport                       | ❌                          | ❌                      | ✅ HTTP remote attach       | ❌                                      | GAP           |
 
 ## Scoring Summary
 
-| Category      | Score | Details                                                              |
-| ------------- | ----- | -------------------------------------------------------------------- |
-| **PARITY**    | 20/35 | Feature-matched with market leaders                                  |
-| **ADVANTAGE** | 5/35  | Multi-model, BYOK, fallback chains, safety classifier, model catalog |
-| **UNIQUE**    | 2/35  | Fallback chains, subscription auth — no competitor has these         |
-| **PARTIAL**   | 2/35  | MCP (stdio only), permissions (simpler model)                        |
-| **GAP**       | 3/35  | TUI framework, LSP, notebook editing, cron                           |
+| Category      | Score | Details                                                                      |
+| ------------- | ----- | ---------------------------------------------------------------------------- |
+| **PARITY**    | 19/40 | Feature-matched with market leaders                                          |
+| **ADVANTAGE** | 5/40  | Multi-model, BYOK, fallback chains, safety classifier, model catalog         |
+| **UNIQUE**    | 1/40  | Subscription auth (Copilot + ChatGPT Plus OAuth)                             |
+| **PARTIAL**   | 3/40  | Hooks (16 vs 22), MCP (stdio only), permissions (simpler model)              |
+| **GAP**       | 9/40  | ! prefix, @ mentions, --effort, TUI, sandbox, LSP, voice, extensions, remote |
+
+**Overall parity: 62.5%** (25/40 at parity or better)
 
 ## AGI Workforce Killer Advantages
 
 ### 1. Multi-Model Routing (7 providers, 18+ models)
 
-No other CLI tool supports switching between Anthropic, OpenAI, Google, Mistral, xAI, DeepSeek, and Ollama in a single session. Claude Code is Claude-only. Gemini CLI is Gemini-only. Codex CLI is OpenAI-only.
+Claude Code: Claude only. Gemini CLI: Gemini only. Codex CLI: OpenAI + Ollama. OpenCode: 75+ providers (closest competitor but TypeScript, not standalone binary). AGI Workforce is the only **Rust-native** CLI with multi-provider support.
 
 ### 2. BYOK (Bring Your Own Key)
 
-Users bring their own API keys via environment variables. No account required with any specific provider. Interactive `/setup` wizard for key configuration.
+No vendor lock-in. Users configure any provider via env vars or `/setup` wizard. No account creation required.
 
-### 3. Fallback Chains
+### 3. Fallback Chains (UNIQUE)
 
-`fallback_chain = ["claude-opus-4-6", "gpt-4o", "gemini-2.5-pro"]` — automatic failover on provider failure. No competitor has this.
+`fallback_chain = ["claude-opus-4-6", "gpt-4o", "gemini-2.5-pro"]` — automatic cross-provider failover. Claude Code's `--fallback-model` is single-model only. No other CLI has multi-step fallback.
 
-### 4. Subscription Auth
+### 4. Command Safety Classifier
 
-Route through Copilot or ChatGPT Plus subscriptions — use models you already pay for. Unique to AGI Workforce.
+250+ heuristic rules with 3-tier classification (Safe/Unknown/Dangerous). More granular than Codex's policy engine or Claude Code's permission modes. Detects dangerous patterns in pipes, redirects, and compound commands.
 
-### 5. Command Safety Classifier
+### 5. Subscription Auth (UNIQUE)
 
-250+ safety rules with 3-tier classification (Safe/Unknown/Dangerous). More granular than Codex's blanket sandbox or Claude Code's permission modes.
+Route through Copilot or ChatGPT Plus subscriptions. Use models you already pay for without separate API keys.
+
+## Competitor Patterns Worth Adopting
+
+### From Codex CLI (Rust, ratatui)
+
+- **Approval modal UX**: Show command + risk level + "Approve/Deny/Always OK/Edit" keyboard shortcuts
+- **SQ/EQ event pattern**: Submission queue / event queue for async message handling
+- **Agent nicknames**: Visual distinction between parent and sub-agents in chat output
+- **Rollout-based persistence**: Append-only JSONL (vs mutation-heavy SQLite)
+- **Seatbelt/Landlock sandbox**: OS-level process isolation
+
+### From Gemini CLI (TypeScript, Ink)
+
+- **Composite strategy routing**: FallbackStrategy → OverrideStrategy → ClassifierStrategy → DefaultStrategy
+- **Streaming event types**: CHUNK | RETRY | AGENT_EXECUTION_STOPPED (vs generic "data arrived")
+- **Extensions marketplace**: Pre-packaged integrations with installation and playbooks
+- **Content validation during streaming**: Auto-remove malformed model outputs
+- **MessageBus for tool confirmations**: Decouple execution from confirmation UI
+
+### From OpenCode (TypeScript, SolidJS/OpenTUI)
+
+- **Leader-key bindings**: Vim-style leader key with 2s timeout for power users
+- **Drizzle ORM for sessions**: Type-safe SQLite queries with parent/child session relationships
+- **Permission patterns with wildcards**: Per-tool allowlists with glob support
+- **60 FPS target rendering**: Granular reactivity for smooth TUI updates
+- **Session summary stats**: Track additions, deletions, files changed per session
+
+### From Claude Code (Node.js, rustyline)
+
+- **22 hook events with 4 types** (command/http/prompt/agent): Our 16 events are close; add 6 more
+- **! prefix for direct bash**: Zero-friction shell command execution
+- **@ file mention autocomplete**: Fast file path injection into prompts
+- **--effort level**: Preset bundles (low=fast/cheap, max=thorough/expensive)
+- **Rules system**: `.claude/rules/` with path-scoped conditional loading
+- **Auto-memory**: Agent writes notes for itself across sessions
 
 ## Gaps to Close (Priority Order)
 
-### P0 — Must Fix
+### P0 — Quick Wins (< 50 LOC each)
 
-1. **TUI Framework** (GAP): Consider ratatui for a proper terminal UI with panels, scrolling, and key bindings. OpenCode and Codex CLI both use full TUI frameworks.
-2. ~~**Hooks coverage**~~: FIXED — expanded from 6 to 16 events (PreEdit, PostEdit, PreCommand, PostCommand, PlanModeChanged, ContextCompacted, SubagentSpawned, SubagentCompleted, Notification, Stop).
-3. **MCP transports** (PARTIAL): Add SSE and streamable HTTP transports alongside stdio.
+1. **`!` bash prefix** in REPL — direct shell execution without tool call overhead
+2. **`--effort` flag** — preset bundles for max_turns + max_tokens + temperature
+3. **`/status` command** — show version, model, provider, auth status, context usage
 
-### P1 — Should Fix
+### P1 — Medium Effort
 
-4. ~~**Vim mode**~~: FIXED — `AGIWORKFORCE_VI=1` or `EDITOR=vi` activates vi keybindings in rustyline.
-5. **LSP integration**: Add a tool that reads LSP diagnostics for the current project.
-6. **Notebook editing**: Add a tool for editing .ipynb files.
+4. **6 more hook events** — match Claude Code's 22 (add WorktreeCreate/Remove, PreCompact/PostCompact, ConfigChange, TeammateIdle)
+5. **MCP SSE transport** — add SSE alongside existing stdio support
+6. **`/doctor` command** — diagnose API keys, config, MCP servers, git
 
-### P2 — Nice to Have
+### P2 — Larger Efforts (Future Sprint)
 
-7. **Cron/scheduled tasks**: Add /cron command for scheduled agent runs.
-8. **Git worktree isolation**: Run subagents in isolated git worktrees.
+7. **TUI framework** — migrate from rustyline to ratatui (major effort, separate sprint)
+8. **OS sandbox** — Seatbelt (macOS) / Landlock (Linux) for `--dangerously-skip-permissions`
+9. **LSP integration** — tool that reads diagnostics from running language servers
+10. **Remote sessions** — web-based session continuation
 
 ## Architecture Notes
 
@@ -100,9 +151,15 @@ Route through Copilot or ChatGPT Plus subscriptions — use models you already p
 
 The CLI is intentionally self-contained (23K LOC Rust, zero Tauri dependencies). Shared core crate extraction is planned but not yet implemented. This is correct for v0.1.0 — the desktop backend uses Tauri-specific patterns (managed state, IPC events) that would need abstraction before sharing.
 
-### Binary Size
+### Binary Size Comparison
 
-3.9MB release binary with LTO, opt-level=z, strip=true, panic=abort. Competitive with Codex CLI (~5MB) and smaller than Gemini CLI (~15MB node bundle).
+| CLI           | Size  | Language   | Runtime       |
+| ------------- | ----- | ---------- | ------------- |
+| AGI Workforce | 3.9MB | Rust       | None (static) |
+| Codex CLI     | ~5MB  | Rust       | None (static) |
+| Claude Code   | ~60MB | Node.js    | Node runtime  |
+| Gemini CLI    | ~15MB | TypeScript | Node runtime  |
+| OpenCode      | ~12MB | TypeScript | Bun runtime   |
 
 ### Test Coverage
 
