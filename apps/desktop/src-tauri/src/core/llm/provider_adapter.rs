@@ -266,6 +266,8 @@ impl ProviderAdapterFactory {
             Provider::Sambanova => Box::new(OpenAIAdapter),
             Provider::Azure => Box::new(OpenAIAdapter), // Azure OpenAI uses OpenAI format
             Provider::Bedrock => Box::new(BedrockAdapter), // Bedrock Converse API format
+            Provider::NvidiaNim => Box::new(OpenAIAdapter), // NVIDIA NIM uses OpenAI-compatible format
+            Provider::OpenRouter => Box::new(OpenAIAdapter), // OpenRouter uses OpenAI-compatible format
         }
     }
 }
@@ -665,7 +667,34 @@ impl OpenAIAdapter {
         }
 
         // Add response format (structured outputs)
-        if let Some(format) = &request.response_format {
+        // Priority: output_config (new typed API) > response_format (legacy)
+        if let Some(oc) = &request.output_config {
+            use super::OutputFormat;
+            match &oc.format {
+                OutputFormat::JsonSchema { name, schema, description } => {
+                    let mut schema_obj = serde_json::json!({
+                        "name": name,
+                        "schema": schema,
+                    });
+                    if let Some(desc) = description {
+                        schema_obj["description"] = serde_json::json!(desc);
+                    }
+                    api_request["text"] = serde_json::json!({
+                        "format": {
+                            "type": "json_schema",
+                            "json_schema": schema_obj,
+                        }
+                    });
+                    tracing::info!(
+                        schema_name = %name,
+                        "OpenAI Responses API structured output requested (json_schema)"
+                    );
+                }
+                OutputFormat::Text => {
+                    // Text is the default for Responses API; no action needed.
+                }
+            }
+        } else if let Some(format) = &request.response_format {
             if let Some(json_schema) = &format.json_schema {
                 api_request["text"] = serde_json::json!({
                     "format": "json_schema",
@@ -804,7 +833,35 @@ impl OpenAIAdapter {
         }
 
         // Add response_format for structured outputs
-        if let Some(format) = &request.response_format {
+        // Priority: output_config (new typed API) > response_format (legacy)
+        if let Some(oc) = &request.output_config {
+            use super::OutputFormat;
+            match &oc.format {
+                OutputFormat::JsonSchema { name, schema, description } => {
+                    let mut schema_obj = serde_json::json!({
+                        "name": name,
+                        "schema": schema,
+                        "strict": true,
+                    });
+                    if let Some(desc) = description {
+                        schema_obj["description"] = serde_json::json!(desc);
+                    }
+                    api_request["response_format"] = serde_json::json!({
+                        "type": "json_schema",
+                        "json_schema": schema_obj,
+                    });
+                    tracing::info!(
+                        schema_name = %name,
+                        "OpenAI Chat Completions structured output requested (json_schema)"
+                    );
+                }
+                OutputFormat::Text => {
+                    api_request["response_format"] = serde_json::json!({
+                        "type": "text"
+                    });
+                }
+            }
+        } else if let Some(format) = &request.response_format {
             api_request["response_format"] = serde_json::to_value(format)?;
         }
 
@@ -1841,11 +1898,40 @@ impl ProviderAdapter for AnthropicAdapter {
             anthropic_request["effort"] = serde_json::json!(effort);
         }
 
-        // ── Structured outputs ─────────────────────────────────────────
-        // Anthropic does NOT support OpenAI's `response_format`. It uses
-        // a prefill technique or tool_use with json schema instead.
-        // Sending `response_format` would be silently ignored.
-        // Skip this parameter for Anthropic.
+        // ── Structured outputs (Anthropic output_config) ──────────────
+        // Anthropic does NOT support OpenAI's `response_format`.  Instead it uses
+        // `output_config` with a `format` field that supports `json_schema` and `text`.
+        // When `output_config` is set with a JSON schema, the API guarantees the response
+        // conforms to that schema exactly.
+        if let Some(oc) = &request.output_config {
+            use super::OutputFormat;
+            match &oc.format {
+                OutputFormat::JsonSchema { name, schema, description } => {
+                    let mut schema_obj = serde_json::json!({
+                        "type": "json_schema",
+                        "name": name,
+                        "schema": schema,
+                    });
+                    if let Some(desc) = description {
+                        schema_obj["description"] = serde_json::json!(desc);
+                    }
+                    anthropic_request["output_config"] = serde_json::json!({
+                        "format": schema_obj
+                    });
+                    tracing::info!(
+                        schema_name = %name,
+                        "Anthropic structured output requested (json_schema)"
+                    );
+                }
+                OutputFormat::Text => {
+                    // Text is the default; no need to set output_config.
+                    // But set it explicitly if the caller requested it.
+                    anthropic_request["output_config"] = serde_json::json!({
+                        "format": { "type": "text" }
+                    });
+                }
+            }
+        }
 
         // ── Metadata ─────────────────────────────────────────────────
         if let Some(metadata) = &request.metadata {
@@ -2004,6 +2090,10 @@ impl ProviderAdapter for AnthropicAdapter {
     }
 
     fn supports_batch_processing(&self) -> bool {
+        true
+    }
+
+    fn supports_structured_outputs(&self) -> bool {
         true
     }
 }

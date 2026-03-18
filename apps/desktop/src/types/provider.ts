@@ -16,6 +16,8 @@ export type Provider =
   | 'fireworks'
   | 'cerebras'
   | 'deepinfra'
+  | 'nvidia_nim'
+  | 'open_router'
   | 'cohere'
   | 'ai21'
   | 'sambanova'
