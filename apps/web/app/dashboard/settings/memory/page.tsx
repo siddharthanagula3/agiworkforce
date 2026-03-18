@@ -153,7 +153,7 @@ export default function MemoryPage() {
       toast.error(`Failed to delete ${failedCount} memories`);
     }
     const successIds = memories
-      .filter((_, i) => results[i].status === 'fulfilled')
+      .filter((_, i) => results[i]?.status === 'fulfilled')
       .map((m) => m.id);
     setMemories((prev) => prev.filter((m) => !successIds.includes(m.id)));
     if (failedCount === 0) {

@@ -162,6 +162,46 @@ _Updated: 2026-03-18 (Session 8 — autonomous stabilization + VISION.md + relea
 - Job autofill: LinkedIn + Lever specific
 - Built-in shortcuts: Cmd+Shift+A/C
 
+## [EXTENSION-AUDIT] Chrome Extension — Principal Architect Audit (2026-03-18)
+
+_19 source files audited across all modules. Tab group UX gap closed._
+
+### Tab Group UX (GAP CLOSED)
+
+- [x] **PRIOR STATE**: `ensureTabGroup()` only auto-grouped tabs created via `CREATE_TAB` message. No user-facing way to add existing tabs.
+- [x] **FIX: Message types**: `ADD_TAB_TO_GROUP` / `REMOVE_TAB_FROM_GROUP` in types.ts
+- [x] **FIX: Background handlers**: Group/ungroup current tab via `ensureTabGroup()` + `chrome.tabs.ungroup()`
+- [x] **FIX: Context menu**: "Add Tab to AGI Workforce Group" right-click item on all pages
+- [x] **FIX: Side panel**: Group/Ungroup toggle button in toolbar (visual feedback via `.has-context` class)
+
+### Feature Verification (ALL CONFIRMED WORKING)
+
+- [x] **WebMCP**: Imperative (navigator.modelContext) + declarative (HTML form attributes) discovery, callTool invocation, MutationObserver + toolschanged event watching, tool catalog forwarded to native host + side panel
+- [x] **Job autofill**: LinkedIn Easy Apply (13 field types, multi-step modal detection, step counter) + Lever (12 fields + custom questions + EEO awareness). React-compatible native value setter. Profile in chrome.storage.sync.
+- [x] **Workflow recording**: START_RECORDING/STOP_RECORDING/GET_RECORDED_ACTIONS in content script. Saved shortcuts with CRUD (50 cap). Replay via RUN_PAGE_ACTIONS. Side panel dropdown UI.
+- [x] **Scheduled tasks**: Alarm-based hourly/daily/weekly/monthly. CRUD handlers. MV3 restart recovery via `restoreScheduledTaskAlarms()`. Execution: shortcut replay OR chat prompt. Notifications on completion.
+- [x] **Side panel chat**: SSE streaming, 11 models, 6 slash commands, DOMPurify sanitization, page context capture, voice input, console log viewer, persistent history (50 msgs).
+- [x] **Content script page reading**: dom-reader.ts (SmartDOMReader), page-metadata.ts (JSON-LD/OG/Twitter/Schema.org), nlweb.ts (4-step detection), llms-txt.ts discovery. No page layout interference (shadow DOM indicator).
+- [x] **Native messaging**: connectNative with handshake + exponential backoff (8 max attempts). Permanent error detection. 10s request timeout. Clean disconnect on suspend.
+- [x] **Platform prompts**: 8 platforms (Slack, Gmail, GCal, GDocs, GitHub, Notion, Linear, Figma) with navigation tips + DOM patterns.
+- [x] **Notifications**: chrome.notifications.create on errors/shortcut replay/task completion. Click opens side panel.
+- [x] **Console log reader**: Monkey-patched circular buffer (200 entries), filters [AGI Workforce] prefix, UI with refresh/clear.
+
+### Security (ALL PASS)
+
+- [x] Manifest V3 compliant. CSP: no unsafe-eval. 11 permissions all justified.
+- [x] Zero eval(), zero new Function(), zero innerHTML with user input.
+- [x] API keys in chrome.storage.session only. Zero localStorage/sessionStorage.
+- [x] Bridge URL restricted to localhost. Cookie domain blocklist for sensitive sites.
+- [x] Built output verified: zero eval/Function in dist/.
+
+### Build (ALL PASS)
+
+- [x] `tsc --noEmit`: 0 errors
+- [x] `pnpm build`: 4 IIFE bundles (background 30.7KB, content 58KB, popup 4.9KB, side_panel 67KB)
+- [x] `vitest run`: 194/194 tests pass
+- [x] `extension.zip`: 83KB, Chrome Web Store ready
+
 ## [MOBILE-VERIFY] Mobile App — App Store Verification (2026-03-17)
 
 - [x] **[MOBILE-VERIFY] TSC**: `tsc --noEmit` — 0 errors
