@@ -1894,6 +1894,28 @@ function buildUI(): void {
   micBtn.innerHTML = '🎤';
   toolbar.appendChild(micBtn);
 
+  // Tab group toggle button
+  const groupBtn = el('button', {
+    class: 'sp-tool-btn',
+    id: 'sp-group-btn',
+    title: 'Add current tab to AGI Workforce group',
+  });
+  groupBtn.innerHTML = '📂 Group';
+  let isGrouped = false;
+  groupBtn.addEventListener('click', () => {
+    const msgType = isGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
+    chrome.runtime.sendMessage(
+      { type: msgType },
+      (response: { success?: boolean; grouped?: boolean } | undefined) => {
+        if (chrome.runtime.lastError || !response?.success) return;
+        isGrouped = response.grouped ?? false;
+        groupBtn.innerHTML = isGrouped ? '📂 Ungroup' : '📂 Group';
+        groupBtn.classList.toggle('has-context', isGrouped);
+      },
+    );
+  });
+  toolbar.appendChild(groupBtn);
+
   // Shortcuts button + dropdown
   const shortcutsWrapper = el('div', { class: 'sp-shortcuts-wrapper' });
   const shortcutsBtn = el('button', {
