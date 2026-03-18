@@ -162,6 +162,54 @@ _Updated: 2026-03-18 (Session 8 — autonomous stabilization + VISION.md + relea
 - Job autofill: LinkedIn + Lever specific
 - Built-in shortcuts: Cmd+Shift+A/C
 
+## [MOBILE-AUDIT] Mobile Wave Verification (2026-03-18)
+
+### Wave Items — All Verified
+
+| Wave Item                | Status   | Evidence                                                                                           |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------- |
+| W1.3 Projects System     | COMPLETE | `stores/projectStore.ts` + `app/(app)/(tabs)/projects.tsx` + `components/projects/ProjectCard.tsx` |
+| W1.3 Project→Chat wiring | FIXED    | `chatStore.sendMessage` now injects `activeProject.instructions` as system message                 |
+| W2.2 File Creation       | COMPLETE | `services/fileCreation.ts` (PDF via expo-print, text via expo-file-system/legacy)                  |
+| W2.2 FileExportButton    | COMPLETE | `components/chat/FileExportButton.tsx` (4-action bottom sheet)                                     |
+| W2.6 Device Integrations | COMPLETE | `services/deviceIntegrations.ts` (calendar + contacts) + `app/(app)/settings/integrations.tsx`     |
+| W2.7 Conversation Sync   | FIXED    | `services/conversationSync.ts` + now wired via `startBackgroundSync` in `app/_layout.tsx`          |
+| W3.5 App Store Config    | COMPLETE | app.json + eas.json (3 profiles) — placeholder creds deferred                                      |
+
+### TypeScript Fixes (5 pre-existing errors resolved)
+
+- [x] `fileCreation.ts`: `expo-file-system` → `expo-file-system/legacy` (SDK 55 API change)
+- [x] `projects.tsx`: `FlashList` → `FlatList` (`estimatedItemSize` removed in flash-list v2)
+- [x] `FileExportButton.tsx`: `??` and `||` operator precedence — added parens
+- [x] `VoiceSelector.tsx`: implicit `any` on `keyExtractor` — added `VoiceInfo` type
+- [x] `fileCreation.ts`: ESLint `no-useless-escape` — removed `\-` and `\*` escapes
+
+### Build Verification
+
+- [x] `tsc --noEmit`: 0 errors
+- [x] `expo export --platform ios`: clean (3810 modules)
+- [x] `console.log`: 0 remaining
+- [x] ESLint + Prettier: passed on all staged files
+
+### Existing Infrastructure Verified
+
+- [x] Companion pairing: QR scan → WebRTC → agent oversight → approve/deny
+- [x] Chat streaming: SSE + reconnect + vision + file attachments
+- [x] Voice: Whisper STT + Deepgram + expo-speech TTS + voice selector
+- [x] Scheduling: CRUD + recurrence picker + toggle + run history
+- [x] Auth: SecureStore (CRIT-005 enforced) + Apple/Google OAuth
+- [x] Push notifications: channels + tap routing + cold-start handler
+- [x] Onboarding: 3-slide flow with MMKV persistence
+- [x] Theme: dark/light/system with StatusBar + tab bar wired
+- [x] Biometric lock: Face ID/fingerprint with background re-lock
+
+### Deferred (non-blocking)
+
+- [ ] Apple/Google submit credentials (placeholders in eas.json)
+- [ ] Real EAS project ID for push notifications
+- [ ] iOS privacy manifest (NSPrivacyAccessedAPITypes)
+- [ ] `google-services.json` for Android Play Store submit
+
 ## [EXTENSION-AUDIT] Chrome Extension — Principal Architect Audit (2026-03-18)
 
 _19 source files audited across all modules. Tab group UX gap closed._
