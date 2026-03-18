@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from '@shared/ui/radio-group';
 import { User, Brain, Key, Palette, Bell, Eye, EyeOff, Save, Shield, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
+import { useSettingsStore, type ChatFont } from '@/stores/settingsStore';
 
 // ---------------------------------------------------------------------------
 // Profile Tab
@@ -310,6 +311,15 @@ function AppearanceTab() {
   const [theme, setTheme] = useState('dark');
   const [language, setLanguage] = useState('en');
   const [fontSize, setFontSize] = useState('medium');
+  const { chatFont, setChatFont } = useSettingsStore();
+
+  useEffect(() => {
+    if (chatFont !== 'default') {
+      document.documentElement.setAttribute('data-chat-font', chatFont);
+    } else {
+      document.documentElement.removeAttribute('data-chat-font');
+    }
+  }, [chatFont]);
 
   return (
     <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
@@ -359,6 +369,34 @@ function AppearanceTab() {
               </div>
             ))}
           </RadioGroup>
+        </div>
+
+        {/* Chat Font */}
+        <div className="space-y-2">
+          <Label>Chat Font</Label>
+          <div className="flex gap-2">
+            {[
+              { value: 'default', label: 'Default' },
+              { value: 'system', label: 'System' },
+              { value: 'dyslexic', label: 'Dyslexic Friendly' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setChatFont(opt.value as ChatFont)}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-sm transition-colors',
+                  chatFont === opt.value
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border hover:bg-muted/60',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dyslexic Friendly uses OpenDyslexic font for improved readability
+          </p>
         </div>
       </CardContent>
     </Card>

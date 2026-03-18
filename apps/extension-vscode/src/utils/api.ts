@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
+import { getModelMetrics } from '../services/modelMetrics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,6 +441,8 @@ export async function streamChatCompletion(
     'X-Client': 'vscode-extension',
   };
 
+  const requestStartTime = Date.now();
+
   if (streaming) {
     if (cancellationToken.isCancellationRequested) {
       throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
@@ -459,6 +462,7 @@ export async function streamChatCompletion(
       ),
     );
     callbacks.onDone();
+    getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
   } else {
     // Non-streaming fallback
     const response = await httpsPost(
@@ -480,6 +484,11 @@ export async function streamChatCompletion(
     const content = parsed.choices?.[0]?.message?.content ?? '';
     callbacks.onToken(content);
     callbacks.onDone();
+    getModelMetrics().recordRequest(
+      model,
+      Date.now() - requestStartTime,
+      parsed.usage?.total_tokens,
+    );
   }
 }
 

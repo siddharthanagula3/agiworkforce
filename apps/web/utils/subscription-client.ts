@@ -33,13 +33,13 @@ export async function refreshSubscriptionStatus(): Promise<ClientSubscription | 
       .maybeSingle();
 
     if (error) {
-      console.error('[subscription] Error refreshing subscription:', error);
+      // Silently handle subscription refresh failure
       return null;
     }
 
     return subscription;
   } catch (error) {
-    console.error('[subscription] Error refreshing subscription:', error);
+    // Silently handle subscription refresh failure
     return null;
   }
 }
