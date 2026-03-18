@@ -1051,6 +1051,45 @@ async function handleMessageAsync(
     case 'DELETE_SCHEDULED_TASK':
       return handleDeleteScheduledTask(message as import('./types').DeleteScheduledTaskMessage);
 
+    // ── NLWeb cross-origin probe (content script → background fetch) ─────
+    case 'NLWEB_PROBE' as ExtensionMessage['type']: {
+      const probe = message as unknown as { probeUrl?: string; method?: 'GET' | 'HEAD' };
+      const probeUrl = probe.probeUrl;
+      const method = probe.method ?? 'HEAD';
+      if (!probeUrl || typeof probeUrl !== 'string') {
+        return { success: false, error: 'Missing probeUrl' } as ExtensionResponse;
+      }
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch(probeUrl, {
+          method,
+          signal: controller.signal,
+          credentials: 'omit',
+          cache: 'no-store',
+        });
+        clearTimeout(timeoutId);
+        const headers: Record<string, string> = {};
+        resp.headers.forEach((value, key) => {
+          headers[key.toLowerCase()] = value;
+        });
+        let body: string | undefined;
+        if (method === 'GET' && resp.ok) {
+          try {
+            body = await resp.text();
+          } catch {
+            /* non-fatal */
+          }
+        }
+        return { success: true, status: resp.status, headers, body } as ExtensionResponse;
+      } catch (e) {
+        return {
+          success: false,
+          error: e instanceof Error ? e.message : 'Probe fetch failed',
+        } as ExtensionResponse;
+      }
+    }
+
     case 'BRIDGE_URL_CHANGED': {
       // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
