@@ -27,6 +27,7 @@ import {
 } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
+import { getContextBuilder } from '../services/contextBuilder';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -37,14 +38,20 @@ type WebviewToExtMessage =
   | { type: 'ready' }
   | { type: 'getModel' }
   | { type: 'openSettings' }
-  | { type: 'cancel' };
+  | { type: 'cancel' }
+  | { type: 'fileSearch'; payload: { query: string } }
+  | { type: 'shareDiagnostics' }
+  | { type: 'clearConversation' };
 
 type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
   | { type: 'done' }
   | { type: 'error'; payload: { message: string } }
   | { type: 'apiKeyStatus'; payload: { hasKey: boolean } }
-  | { type: 'model'; payload: { model: string } };
+  | { type: 'model'; payload: { model: string } }
+  | { type: 'fileSearchResults'; payload: { files: string[] } }
+  | { type: 'conversationCleared' }
+  | { type: 'addUserMessage'; payload: { text: string } };
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
@@ -370,6 +377,37 @@ function getWebviewContent(
     pre code { color: #e6edf3; }
     :not(pre) > code { background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 3px; color: #79c0ff; }
     strong { font-weight: 600; }
+
+    /* ── @mention dropdown ── */
+    .input-wrapper { position: relative; flex: 1; }
+    .mention-dropdown {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      max-height: 180px;
+      overflow-y: auto;
+      display: none;
+      z-index: 10;
+      margin-bottom: 4px;
+    }
+    .mention-dropdown.visible { display: block; }
+    .mention-item {
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mention-item.selected, .mention-item:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
   </style>
 </head>
 <body>
@@ -378,7 +416,8 @@ function getWebviewContent(
   <div class="header">
     <span class="header-title">AGI Workforce</span>
     <div class="header-actions">
-      <button class="icon-btn" id="clearBtn" title="Clear conversation">✕</button>
+      <button class="icon-btn" id="diagBtn" title="Share diagnostics">⚡</button>
+      <button class="icon-btn" id="clearBtn" title="New conversation">✕</button>
       <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
     </div>
   </div>
@@ -422,12 +461,15 @@ function getWebviewContent(
       </select>
     </div>
     <div class="input-row">
-      <textarea
-        id="userInput"
-        placeholder="Ask about your code…"
-        rows="1"
-        spellcheck="true"
-      ></textarea>
+      <div class="input-wrapper">
+        <div class="mention-dropdown" id="mentionDropdown"></div>
+        <textarea
+          id="userInput"
+          placeholder="Ask about your code… (use @ to reference files)"
+          rows="1"
+          spellcheck="true"
+        ></textarea>
+      </div>
       <button id="sendBtn" title="Send (Enter)"></button>
     </div>
   </div>
@@ -445,9 +487,14 @@ function getWebviewContent(
     const apiKeyBanner = document.getElementById('apiKeyBanner');
     const apiKeyInput = document.getElementById('apiKeyInput');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const diagBtn = document.getElementById('diagBtn');
+    const mentionDropdown = document.getElementById('mentionDropdown');
 
     // ── State ─────────────────────────────────────────────────────────────────
     let streaming = false;
+    let mentionIndex = -1;
+    let mentionQuery = '';
+    let mentionStart = -1;
     let currentAssistantEl = null;
     let accumulatedContent = '';
 
@@ -577,20 +624,53 @@ function getWebviewContent(
     sendBtn.addEventListener('click', sendMessage);
 
     userInput.addEventListener('keydown', (e) => {
+      // @mention dropdown navigation
+      if (mentionDropdown.classList.contains('visible')) {
+        var items = mentionDropdown.querySelectorAll('.mention-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (mentionIndex < items.length - 1) {
+            if (items[mentionIndex]) items[mentionIndex].classList.remove('selected');
+            mentionIndex++;
+            if (items[mentionIndex]) { items[mentionIndex].classList.add('selected'); items[mentionIndex].scrollIntoView({ block: 'nearest' }); }
+          }
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (mentionIndex > 0) {
+            if (items[mentionIndex]) items[mentionIndex].classList.remove('selected');
+            mentionIndex--;
+            if (items[mentionIndex]) { items[mentionIndex].classList.add('selected'); items[mentionIndex].scrollIntoView({ block: 'nearest' }); }
+          }
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          var sel = items[mentionIndex];
+          if (sel) insertMention(sel.textContent);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          hideMentionDropdown();
+          return;
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
 
-    userInput.addEventListener('input', autoResize);
+    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
 
     clearBtn.addEventListener('click', () => {
-      messagesEl.innerHTML =
-        '<div class="message system">Conversation cleared. Ask anything about your code.</div>';
-      streaming = false;
-      currentAssistantEl = null;
-      setStreaming(false);
+      vscode.postMessage({ type: 'clearConversation' });
+    });
+
+    diagBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'shareDiagnostics' });
     });
 
     settingsBtn.addEventListener('click', () => {
@@ -649,7 +729,77 @@ function getWebviewContent(
         const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
         if (opt) modelSelect.value = msg.payload.model;
       }
+
+      else if (msg.type === 'fileSearchResults') {
+        showMentionResults(msg.payload.files);
+      }
+
+      else if (msg.type === 'conversationCleared') {
+        messagesEl.innerHTML =
+          '<div class="message system">New conversation. Ask anything about your code.</div>';
+        streaming = false;
+        currentAssistantEl = null;
+        setStreaming(false);
+      }
+
+      else if (msg.type === 'addUserMessage') {
+        addMessage('user', msg.payload.text);
+      }
     });
+
+    // ── @mention autocomplete ─────────────────────────────────────────────────
+    function detectMention() {
+      var val = userInput.value;
+      var pos = userInput.selectionStart;
+      var i = pos - 1;
+      while (i >= 0 && val[i] !== '@' && val[i] !== ' ' && val[i] !== '\\n') { i--; }
+      if (i >= 0 && val[i] === '@') {
+        var query = val.substring(i + 1, pos);
+        if (query.length > 0 && !/\\s/.test(query)) {
+          mentionStart = i;
+          mentionQuery = query;
+          vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
+          return;
+        }
+      }
+      hideMentionDropdown();
+    }
+
+    function hideMentionDropdown() {
+      mentionDropdown.className = 'mention-dropdown';
+      mentionDropdown.innerHTML = '';
+      mentionIndex = -1;
+      mentionQuery = '';
+      mentionStart = -1;
+    }
+
+    function showMentionResults(files) {
+      if (files.length === 0) { hideMentionDropdown(); return; }
+      mentionDropdown.innerHTML = '';
+      mentionIndex = 0;
+      files.forEach(function(f, idx) {
+        var item = document.createElement('div');
+        item.className = 'mention-item' + (idx === 0 ? ' selected' : '');
+        item.textContent = f;
+        item.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          insertMention(f);
+        });
+        mentionDropdown.appendChild(item);
+      });
+      mentionDropdown.className = 'mention-dropdown visible';
+    }
+
+    function insertMention(file) {
+      var val = userInput.value;
+      var before = val.substring(0, mentionStart);
+      var after = val.substring(userInput.selectionStart);
+      userInput.value = before + '@' + file + ' ' + after;
+      var newPos = mentionStart + file.length + 2;
+      userInput.setSelectionRange(newPos, newPos);
+      hideMentionDropdown();
+      userInput.focus();
+    }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });
@@ -768,6 +918,61 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._currentCancelSource?.cancel();
         break;
       }
+
+      case 'fileSearch': {
+        const query = (msg as { type: 'fileSearch'; payload: { query: string } }).payload.query;
+        try {
+          const files = await vscode.workspace.findFiles(`**/*${query}*`, '**/node_modules/**', 15);
+          const paths = files.map((f) => vscode.workspace.asRelativePath(f));
+          this._post({ type: 'fileSearchResults', payload: { files: paths } });
+        } catch {
+          this._post({ type: 'fileSearchResults', payload: { files: [] } });
+        }
+        break;
+      }
+
+      case 'shareDiagnostics': {
+        const editor = vscode.window.activeTextEditor;
+        if (editor === undefined) {
+          this._post({ type: 'error', payload: { message: 'No active editor for diagnostics.' } });
+          break;
+        }
+        const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+        if (diagnostics.length === 0) {
+          this._post({
+            type: 'error',
+            payload: { message: 'No diagnostics found in active file.' },
+          });
+          break;
+        }
+        const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
+        const diagText = diagnostics
+          .slice(0, 20)
+          .map((d) => {
+            const sev =
+              d.severity === vscode.DiagnosticSeverity.Error
+                ? 'ERROR'
+                : d.severity === vscode.DiagnosticSeverity.Warning
+                  ? 'WARNING'
+                  : 'INFO';
+            return `[${sev}] Line ${d.range.start.line + 1}: ${d.message}${d.source ? ` (${d.source})` : ''}`;
+          })
+          .join('\n');
+        const userMsg = `Here are the diagnostics for ${relativePath}:\n\n${diagText}\n\nPlease explain these issues and suggest fixes.`;
+        this._post({
+          type: 'addUserMessage',
+          payload: { text: `Analyzing diagnostics for ${relativePath}...` },
+        });
+        await this._handleSendMessage(userMsg);
+        break;
+      }
+
+      case 'clearConversation': {
+        this._conversationHistory = [];
+        this._currentCancelSource?.cancel();
+        this._post({ type: 'conversationCleared' });
+        break;
+      }
     }
   }
 
@@ -777,17 +982,50 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._currentCancelSource = new vscode.CancellationTokenSource();
     const token = this._currentCancelSource.token;
 
-    // Append user turn to history
+    // Resolve @file references — read file content for context
+    const fileRefPattern = /@([\w./_-]+\.\w+)/g;
+    const contextBlocks: string[] = [];
+    let fileRefMatch: RegExpExecArray | null;
+    while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
+      const ref = fileRefMatch[1];
+      if (!ref) continue;
+      try {
+        const files = await vscode.workspace.findFiles(`**/${ref}`, '**/node_modules/**', 1);
+        if (files.length > 0) {
+          const doc = await vscode.workspace.openTextDocument(files[0]!);
+          const content = doc.getText().slice(0, 5000);
+          contextBlocks.push(`--- @${ref} ---\n\`\`\`${doc.languageId}\n${content}\n\`\`\``);
+        }
+      } catch {
+        // File not found — skip
+      }
+    }
+
+    // Append user turn to history (original text, not resolved)
     this._conversationHistory.push({ role: 'user', content: text });
 
-    const systemPrompt =
+    // Build context-enriched system prompt
+    let systemPrompt =
       'You are AGI Workforce, a model-agnostic AI coding assistant. ' +
       'Be concise, helpful, and format code in Markdown fenced blocks.';
+
+    const workspaceContext = await getContextBuilder().buildFullContext();
+    if (workspaceContext !== '') {
+      systemPrompt += '\n\n' + workspaceContext;
+    }
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...this._conversationHistory,
     ];
+
+    // Inject @file content as context if any references found
+    if (contextBlocks.length > 0) {
+      messages.splice(1, 0, {
+        role: 'system',
+        content: 'Referenced files:\n' + contextBlocks.join('\n\n'),
+      });
+    }
 
     const assistantTokens: string[] = [];
 
@@ -858,5 +1096,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Programmatically reveal the sidebar panel. */
   public reveal(): void {
     this._view?.show?.(true);
+  }
+
+  /** Clear conversation history and notify the webview. */
+  public resetConversation(): void {
+    this._conversationHistory = [];
+    this._currentCancelSource?.cancel();
+    this._post({ type: 'conversationCleared' });
   }
 }

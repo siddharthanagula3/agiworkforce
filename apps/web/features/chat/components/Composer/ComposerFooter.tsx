@@ -7,6 +7,7 @@ import { Command, CommandList, CommandItem, CommandGroup, CommandInput } from '@
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/components/UnifiedAgenticChat/BudgetTrackerDisplay';
 import { AgentModeSwitcher } from './AgentModeSwitcher';
+import { StyleSelector } from './StyleSelector';
 import type { ChatMode } from '@features/chat/types';
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -56,6 +57,9 @@ export function ComposerFooter({
         <span className="text-xs text-muted-foreground">{hint}</span>
 
         <div className="flex items-center gap-2">
+          {/* Response style selector */}
+          <StyleSelector />
+
           {/* Agent mode switcher */}
           <AgentModeSwitcher mode={chatMode} onChange={setChatMode} />
 
@@ -64,6 +68,7 @@ export function ComposerFooter({
             <Popover open={open} onOpenChange={setOpen}>
               <PopoverTrigger asChild>
                 <button
+                  id="model-selector"
                   className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   aria-label="Change model"
                 >

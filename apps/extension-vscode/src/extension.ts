@@ -10,7 +10,6 @@
  */
 
 import * as vscode from 'vscode';
-import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import { registerChatParticipant } from './providers/chatParticipant';
@@ -26,8 +25,14 @@ import {
 import { getApiKey, setApiKey, clearApiKey, chatCompletion, type ChatMessage } from './utils/api';
 import { applyLlmEdit } from './utils/applyEdit';
 import { AgentModePanel } from './providers/agentModeProvider';
+import { AgiCodeLensProvider } from './providers/codeLensProvider';
+import { AgiDiagnosticsProvider } from './providers/diagnosticsProvider';
 import * as telemetry from './services/telemetry';
+import { activateTokenCounter } from './services/tokenCounter';
 import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridge';
+import { activateTerminal } from './providers/terminalProvider';
+import { activateErrorExplainer } from './providers/errorExplainerProvider';
+import { ModelMetricsPanel, initModelMetrics } from './services/modelMetrics';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -37,6 +42,13 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(telemetry.activate(context));
   } catch {
     // Telemetry failure must not block extension activation
+  }
+
+  // ── 0a. Model Metrics ──────────────────────────────────────────────────────
+  try {
+    initModelMetrics(context);
+  } catch {
+    // Metrics failure must not block extension activation
   }
 
   // ── 0b. Desktop Bridge ──────────────────────────────────────────────────────
@@ -102,6 +114,59 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerHoverProvider('*', new AgiHoverProvider()),
   );
 
+  // ── 4b. CodeLens provider (Ask AI / Tests / Docs above functions) ────────
+  const codeLensProvider = new AgiCodeLensProvider();
+  let codeLensRegistration: vscode.Disposable | undefined;
+
+  const syncCodeLensProvider = (): void => {
+    const enabled =
+      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('codeLensEnabled') ?? true;
+
+    if (!enabled) {
+      codeLensRegistration?.dispose();
+      codeLensRegistration = undefined;
+      return;
+    }
+
+    if (codeLensRegistration !== undefined) {
+      return;
+    }
+
+    codeLensRegistration = vscode.languages.registerCodeLensProvider('*', codeLensProvider);
+    context.subscriptions.push(codeLensRegistration);
+  };
+
+  try {
+    syncCodeLensProvider();
+  } catch {
+    /* non-critical */
+  }
+
+  // ── 4c. Diagnostics provider (AI code review) ────────────────────────────
+  const diagnosticsProvider = new AgiDiagnosticsProvider();
+  context.subscriptions.push(diagnosticsProvider);
+
+  // ── 4d. Token counter ────────────────────────────────────────────────────
+  try {
+    activateTokenCounter(context);
+  } catch {
+    // Token counter is non-critical — don't block activation
+  }
+
+  // ── 4e. Terminal integration ──────────────────────────────────────────────
+  try {
+    activateTerminal(context, context.secrets);
+  } catch {
+    // Terminal integration is non-critical
+  }
+
+  // ── 4f. Error explainer + "Ask about code" ───────────────────────────────
+  try {
+    activateErrorExplainer(context);
+  } catch {
+    // Error explainer is non-critical
+  }
+
   let inlineCompletionRegistration: vscode.Disposable | undefined;
 
   const syncInlineCompletionProvider = (): void => {
@@ -126,7 +191,11 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(inlineCompletionRegistration);
   };
 
-  syncInlineCompletionProvider();
+  try {
+    syncInlineCompletionProvider();
+  } catch {
+    /* non-critical */
+  }
 
   // ── 5. Commands ─────────────────────────────────────────────────────────────
   context.subscriptions.push(
@@ -169,6 +238,56 @@ export function activate(context: vscode.ExtensionContext): void {
     // ── agi-workforce.generateTests ───────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.generateTests', async () => {
       await runInlineCommand(context, 'tests');
+    }),
+
+    // ── agi-workforce.docs ─────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.docs', async () => {
+      await runInlineCommand(context, 'docs');
+    }),
+
+    // ── agi-workforce.codeReview ───────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.codeReview', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: No active editor.');
+        return;
+      }
+
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'AGI Workforce: Running Code Review…',
+          cancellable: true,
+        },
+        async (_progress, progressToken) => {
+          const cancelSource = new vscode.CancellationTokenSource();
+          progressToken.onCancellationRequested(() => cancelSource.cancel());
+
+          try {
+            const result = await diagnosticsProvider.reviewCode(
+              editor,
+              context.secrets,
+              cancelSource.token,
+            );
+            cancelSource.dispose();
+
+            if (result.diagnosticCount === 0) {
+              vscode.window.showInformationMessage(
+                'AGI Workforce: Code looks good! No issues found.',
+              );
+            } else {
+              vscode.window.showInformationMessage(
+                `AGI Workforce: Found ${result.diagnosticCount} issue(s). Check the Problems panel.`,
+              );
+            }
+          } catch (err) {
+            cancelSource.dispose();
+            if (err instanceof Error && err.message.includes('CANCELLED')) return;
+            const message = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`AGI Workforce: Code review failed — ${message}`);
+          }
+        },
+      );
     }),
 
     // ── agi-workforce.setApiKey ───────────────────────────────────────────────
@@ -342,11 +461,15 @@ export function activate(context: vscode.ExtensionContext): void {
           lines.push(`${heading}`, '', msg.content, '');
         }
 
-        const doc = await vscode.workspace.openTextDocument({
-          content: lines.join('\n'),
-          language: 'markdown',
-        });
-        await vscode.window.showTextDocument(doc, { preview: true });
+        try {
+          const doc = await vscode.workspace.openTextDocument({
+            content: lines.join('\n'),
+            language: 'markdown',
+          });
+          await vscode.window.showTextDocument(doc, { preview: true });
+        } catch {
+          vscode.window.showErrorMessage('AGI Workforce: Failed to open conversation.');
+        }
       },
     ),
 
@@ -486,6 +609,79 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    // ── agi-workforce.sendFeedback ──────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.sendFeedback', async () => {
+      const FEEDBACK_TYPES: vscode.QuickPickItem[] = [
+        {
+          label: '$(bug) Report a Bug',
+          description: 'Something is broken or not working as expected',
+        },
+        {
+          label: '$(lightbulb) Feature Request',
+          description: 'Suggest a new feature or improvement',
+        },
+        { label: '$(comment) General Feedback', description: 'Share thoughts about the extension' },
+      ];
+
+      const picked = await vscode.window.showQuickPick(FEEDBACK_TYPES, {
+        title: 'AGI Workforce — Send Feedback',
+        placeHolder: 'What kind of feedback?',
+      });
+
+      if (picked === undefined) return;
+
+      const feedbackText = await vscode.window.showInputBox({
+        title: 'AGI Workforce — Send Feedback',
+        prompt: `${picked.label.replace(/\$\([^)]+\)\s*/, '')}: Describe your feedback`,
+        placeHolder: 'Your feedback here…',
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() === '' ? 'Feedback cannot be empty.' : undefined),
+      });
+
+      if (feedbackText === undefined) return;
+
+      const feedbackType = picked.label.includes('Bug')
+        ? 'bug'
+        : picked.label.includes('Feature')
+          ? 'feature'
+          : 'general';
+
+      // Try to send via desktop bridge if connected
+      const bridge = getDesktopBridge();
+      if (bridge !== undefined && bridge.status === 'connected') {
+        const result = await bridge.sendToDesktop('feedback', {
+          type: feedbackType,
+          message: feedbackText.trim(),
+          extensionVersion:
+            vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
+            '0.1.0',
+          vscodeVersion: vscode.version,
+          platform: process.platform,
+        });
+        if (result.ok) {
+          vscode.window.showInformationMessage('AGI Workforce: Thank you for your feedback!');
+          telemetry.logEvent(telemetry.TelemetryEvents.EXTENSION_ACTIVATED, {
+            action: 'feedback_sent',
+            feedbackType,
+          });
+          return;
+        }
+      }
+
+      // Fallback: open GitHub issues
+      const encoded = encodeURIComponent(
+        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: 0.1.0\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
+      );
+      void vscode.env.openExternal(
+        vscode.Uri.parse(
+          `https://github.com/agiworkforce/agiworkforce/issues/new?title=${encodeURIComponent(`[VS Code Extension] ${feedbackType}: ${feedbackText.trim().slice(0, 60)}`)}&body=${encoded}`,
+        ),
+      );
+      vscode.window.showInformationMessage(
+        'AGI Workforce: Opening GitHub to submit your feedback. Thank you!',
+      );
+    }),
+
     // ── agi.git.status ───────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.git.status', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -558,6 +754,17 @@ export function activate(context: vscode.ExtensionContext): void {
       terminal.show();
       terminal.sendText(testCmd);
     }),
+
+    // ── agi-workforce.newConversation ─────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.newConversation', () => {
+      sidebarProvider.resetConversation();
+      sidebarProvider.reveal();
+    }),
+
+    // ── agi-workforce.modelDashboard ──────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.modelDashboard', () => {
+      ModelMetricsPanel.createOrShow(context.extensionUri, context);
+    }),
   );
 
   // ── Status bar item ──────────────────────────────────────────────────────
@@ -604,6 +811,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
         syncInlineCompletionProvider();
+      }
+
+      if (e.affectsConfiguration('agiWorkforce.codeLensEnabled')) {
+        syncCodeLensProvider();
       }
 
       if (
@@ -656,7 +867,7 @@ export function deactivate(): void {
  */
 async function runInlineCommand(
   context: vscode.ExtensionContext,
-  command: 'explain' | 'fix' | 'refactor' | 'tests',
+  command: 'explain' | 'fix' | 'refactor' | 'tests' | 'docs',
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) {
@@ -693,6 +904,7 @@ async function runInlineCommand(
     fix: `Find and fix any bugs or issues in the following ${lang} code. Provide the corrected code and explain each fix:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
     refactor: `Refactor the following ${lang} code to improve readability, maintainability, and performance. Explain each change:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
     tests: `Generate comprehensive unit tests for the following ${lang} code. Cover edge cases, error paths, and happy paths:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
+    docs: `Generate clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) for the following ${lang} code:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
   };
 
   const messages: ChatMessage[] = [
@@ -761,6 +973,7 @@ function commandLabel(command: string): string {
     fix: 'Fix Issues',
     refactor: 'Refactor',
     tests: 'Generate Tests',
+    docs: 'Generate Docs',
   };
   return labels[command] ?? command;
 }
@@ -885,21 +1098,4 @@ function updateBridgeReachabilityStatus(context: vscode.ExtensionContext, port: 
   }
 
   refresh();
-}
-
-function _isLocalPortReachable(port: number, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    const finish = (value: boolean): void => {
-      socket.removeAllListeners();
-      socket.destroy();
-      resolve(value);
-    };
-
-    socket.setTimeout(timeoutMs);
-    socket.once('connect', () => finish(true));
-    socket.once('timeout', () => finish(false));
-    socket.once('error', () => finish(false));
-    socket.connect(port, '127.0.0.1');
-  });
 }

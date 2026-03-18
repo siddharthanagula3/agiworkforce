@@ -93,7 +93,7 @@ export function saveSession(session: {
     // Update metadata
     updateSessionMetadata();
   } catch (error) {
-    console.error('[SessionStorage] Failed to save session:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -105,7 +105,7 @@ export function loadSession(sessionId: string): StoredChatSession | null {
     const sessions = loadAllSessions();
     return sessions.find((s) => s.id === sessionId) ?? null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to load session:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -118,7 +118,7 @@ export function loadAllSessions(): StoredChatSession[] {
     const data = safeGetJSON<StoredChatSession[]>(SESSION_STORAGE_KEY, []);
     return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error('[SessionStorage] Failed to load sessions:', error);
+    // Silently handle localStorage failure
     return [];
   }
 }
@@ -140,7 +140,7 @@ export function deleteSession(sessionId: string): void {
 
     updateSessionMetadata();
   } catch (error) {
-    console.error('[SessionStorage] Failed to delete session:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -154,7 +154,7 @@ export function clearAllSessions(): void {
     localStorage.removeItem(CURRENT_SESSION_KEY);
     // Don't call updateSessionMetadata() as we want to clear metadata too
   } catch (error) {
-    console.error('[SessionStorage] Failed to clear sessions:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -165,7 +165,7 @@ export function saveCurrentSessionId(sessionId: string): void {
   try {
     safeSetJSON(CURRENT_SESSION_KEY, sessionId);
   } catch (error) {
-    console.error('[SessionStorage] Failed to save current session ID:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -177,7 +177,7 @@ export function loadCurrentSessionId(): string | null {
     const id = safeGetJSON<string>(CURRENT_SESSION_KEY, '');
     return typeof id === 'string' && id ? id : null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to load current session ID:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -189,7 +189,7 @@ export function clearCurrentSessionId(): void {
   try {
     localStorage.removeItem(CURRENT_SESSION_KEY);
   } catch (error) {
-    console.error('[SessionStorage] Failed to clear current session ID:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -200,7 +200,7 @@ export function saveModelSelection(model: { modelId: string; provider: string })
   try {
     safeSetJSON(MODEL_SELECTION_KEY, model);
   } catch (error) {
-    console.error('[SessionStorage] Failed to save model selection:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -215,7 +215,7 @@ export function loadModelSelection(): { modelId: string; provider: string } | nu
     });
     return data && data.modelId ? data : null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to load model selection:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -227,7 +227,7 @@ export function saveSidebarState(collapsed: boolean): void {
   try {
     safeSetJSON(SIDEBAR_STATE_KEY, collapsed);
   } catch (error) {
-    console.error('[SessionStorage] Failed to save sidebar state:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -239,7 +239,7 @@ export function loadSidebarState(): boolean | null {
     const data = safeGetJSON<boolean>(SIDEBAR_STATE_KEY, false);
     return typeof data === 'boolean' ? data : null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to load sidebar state:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -251,7 +251,7 @@ export function saveThemePreference(theme: 'light' | 'dark' | 'system'): void {
   try {
     safeSetJSON(THEME_PREFERENCE_KEY, theme);
   } catch (error) {
-    console.error('[SessionStorage] Failed to save theme preference:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -266,7 +266,7 @@ export function loadThemePreference(): 'light' | 'dark' | 'system' | null {
     }
     return null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to load theme preference:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -282,7 +282,7 @@ function updateSessionMetadata(): void {
     };
     safeSetJSON(SESSION_METADATA_KEY, metadata);
   } catch (error) {
-    console.error('[SessionStorage] Failed to update metadata:', error);
+    // Silently handle localStorage failure
   }
 }
 
@@ -297,7 +297,7 @@ export function getSessionMetadata(): SessionStorageMetadata | null {
     });
     return data && data.version ? data : null;
   } catch (error) {
-    console.error('[SessionStorage] Failed to get metadata:', error);
+    // Silently handle localStorage failure
     return null;
   }
 }
@@ -323,7 +323,7 @@ export function getSessionStorageSize(): number {
 
     return JSON.stringify(data).length;
   } catch (error) {
-    console.error('[SessionStorage] Failed to calculate size:', error);
+    // Silently handle localStorage failure
     return 0;
   }
 }
@@ -353,7 +353,7 @@ export function exportSessions(): string {
 
     return JSON.stringify(backup, null, 2);
   } catch (error) {
-    console.error('[SessionStorage] Failed to export sessions:', error);
+    // Silently handle localStorage failure
     return '';
   }
 }
@@ -395,7 +395,7 @@ export function importSessions(jsonString: string): boolean {
 
     return true;
   } catch (error) {
-    console.error('[SessionStorage] Failed to import sessions:', error);
+    // Silently handle localStorage failure
     return false;
   }
 }
