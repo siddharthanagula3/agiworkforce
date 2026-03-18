@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -15,6 +16,7 @@ import {
   AlertTriangle,
   Save,
   X,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -189,6 +191,12 @@ export default function MemoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/settings/memory/import">
+            <Button variant="outline" size="sm">
+              <Upload className="mr-2 h-4 w-4" />
+              Import Memories
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Memory
