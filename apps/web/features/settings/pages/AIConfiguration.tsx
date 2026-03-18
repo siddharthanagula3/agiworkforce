@@ -25,7 +25,6 @@ import {
   EyeOff,
   TestTube,
   DollarSign,
-  Clock,
   Save,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -48,27 +47,21 @@ interface ProviderConfig {
   pricing: string;
 }
 
-// Updated: Jan 3rd 2026 - All latest models from all providers
 const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'apiKey' | 'isConfigured'>> = {
   OpenAI: {
-    name: 'OpenAI (GPT-5)',
-    models: ['gpt-5.2', 'gpt-5.1', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o3-mini'],
-    defaultModel: 'gpt-5.2',
-    costPerToken: 0.00002,
+    name: 'OpenAI',
+    models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
+    defaultModel: 'gpt-5.4',
+    costPerToken: 0.000005,
     maxTokens: 8192,
-    features: ['Streaming', 'Function Calling', 'Vision', 'Reasoning', 'Sora Video', 'Image Gen'],
+    features: ['Streaming', 'Function Calling', 'Vision', 'Reasoning', 'Image Gen'],
     documentation: 'https://platform.openai.com/docs',
     pricing: 'https://openai.com/pricing',
   },
   Anthropic: {
-    name: 'Anthropic (Claude 4.5)',
-    models: [
-      'claude-opus-4-5-20251101',
-      'claude-sonnet-4-5-20250929',
-      'claude-haiku-4-5-20251001',
-      'claude-sonnet-4-20250514',
-    ],
-    defaultModel: 'claude-sonnet-4-5-20250929',
+    name: 'Anthropic',
+    models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-3-5-sonnet-20241022'],
+    defaultModel: 'claude-sonnet-4-6',
     costPerToken: 0.000003,
     maxTokens: 8192,
     features: ['Streaming', 'Computer Use', 'Extended Thinking', 'Vision', 'Long Context'],
@@ -76,18 +69,12 @@ const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'apiKey' | 'isConfig
     pricing: 'https://www.anthropic.com/pricing',
   },
   Google: {
-    name: 'Google (Gemini 3)',
-    models: [
-      'gemini-3-pro-preview',
-      'gemini-3-flash-preview',
-      'gemini-2.5-pro',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-    ],
-    defaultModel: 'gemini-3-pro-preview',
-    costPerToken: 0.000005,
+    name: 'Google',
+    models: ['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
+    defaultModel: 'gemini-3.1-flash-lite',
+    costPerToken: 0.0000004,
     maxTokens: 8192,
-    features: ['Streaming', 'Thinking Mode', 'Vision', 'Veo 3.1 Video', 'Imagen 4'],
+    features: ['Streaming', 'Thinking Mode', 'Vision', 'Long Context', 'Grounding'],
     documentation: 'https://ai.google.dev/docs',
     pricing: 'https://ai.google.dev/pricing',
   },
@@ -190,11 +177,15 @@ const AIConfigurationPageContent: React.FC = () => {
 
   // User AI preferences
   const [defaultProvider, setDefaultProvider] = useState<string>('openai');
-  const [defaultModel, setDefaultModel] = useState<string>('gpt-4o');
+  const [defaultModel, setDefaultModel] = useState<string>('gpt-5.4');
   const [preferStreaming, setPreferStreaming] = useState<boolean>(true);
   const [aiTemperature, setAiTemperature] = useState<number>(0.7);
   const [aiMaxTokens, setAiMaxTokens] = useState<number>(4000);
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+
+  // Advanced settings (per-session state — no backend persistence needed)
+  const [autoFallback, setAutoFallback] = useState<boolean>(true);
+  const [rateLimiting, setRateLimiting] = useState<boolean>(true);
 
   // Load user preferences
   useEffect(() => {
@@ -503,7 +494,7 @@ const AIConfigurationPageContent: React.FC = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview" className="text-xs md:text-sm">
             Overview
           </TabsTrigger>
@@ -512,9 +503,6 @@ const AIConfigurationPageContent: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="advanced" className="text-xs md:text-sm">
             Advanced
-          </TabsTrigger>
-          <TabsTrigger value="usage" className="text-xs md:text-sm">
-            Usage
           </TabsTrigger>
         </TabsList>
 
@@ -655,9 +643,9 @@ const AIConfigurationPageContent: React.FC = () => {
                       <SelectValue placeholder="Select provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai">OpenAI (GPT-5)</SelectItem>
-                      <SelectItem value="anthropic">Anthropic (Claude 4.5)</SelectItem>
-                      <SelectItem value="google">Google (Gemini 3)</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
                       <SelectItem value="perplexity">Perplexity (Sonar)</SelectItem>
                       <SelectItem value="grok">xAI (Grok 4)</SelectItem>
                       <SelectItem value="deepseek">DeepSeek</SelectItem>
@@ -767,7 +755,7 @@ const AIConfigurationPageContent: React.FC = () => {
                     Automatically try other providers if one fails
                   </p>
                 </div>
-                <Switch defaultChecked />
+                <Switch checked={autoFallback} onCheckedChange={setAutoFallback} />
               </div>
 
               <div className="flex items-center justify-between">
@@ -775,25 +763,7 @@ const AIConfigurationPageContent: React.FC = () => {
                   <Label>Rate Limiting</Label>
                   <p className="text-sm text-muted-foreground">Enable automatic rate limiting</p>
                 </div>
-                <Switch defaultChecked />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Usage Tab */}
-        <TabsContent value="usage" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Usage Statistics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="py-8 text-center">
-                <Clock className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-medium">Usage tracking coming soon</h3>
-                <p className="text-muted-foreground">
-                  We&apos;re working on detailed usage analytics and cost tracking.
-                </p>
+                <Switch checked={rateLimiting} onCheckedChange={setRateLimiting} />
               </div>
             </CardContent>
           </Card>
