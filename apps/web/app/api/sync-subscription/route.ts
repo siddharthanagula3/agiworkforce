@@ -11,8 +11,13 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
-async function handleSyncSubscription(request: NextRequest): Promise<NextResponse> {
+async function handleSyncSubscription(request: NextRequest): Promise<Response> {
+  // CSRF protection for state-changing POST endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
+
   const rateLimitResponse = await withRateLimit(request, 'sync-subscription');
   if (rateLimitResponse) return rateLimitResponse;
 
