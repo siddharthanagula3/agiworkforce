@@ -13,14 +13,20 @@
  * without depending on React state.
  */
 
-import { memo, useCallback, useEffect, useState } from 'react';
-import { Brain, Zap } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Brain, Download, Pause, Play, Upload, Zap } from 'lucide-react';
+import { toast } from 'sonner';
+import { save, open as openFilePicker } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 
 import { Switch } from '@/components/ui/Switch';
 import { Label } from '@/components/ui/Label';
 import { Slider } from '@/components/ui/Slider';
 import { Separator } from '@/components/ui/Separator';
+import { Button } from '@/components/ui/Button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils';
+import { invoke, isTauri } from '@/lib/tauri-mock';
 import { MemoryManager } from './MemoryManager';
 
 // ---------------------------------------------------------------------------
@@ -33,12 +39,14 @@ export interface MemoryPanelSettings {
   isEnabled: boolean;
   autoInject: boolean;
   maxTokens: number;
+  isPaused: boolean;
 }
 
 const DEFAULT_SETTINGS: MemoryPanelSettings = {
   isEnabled: true,
   autoInject: true,
   maxTokens: 500,
+  isPaused: false,
 };
 
 export function readMemoryPanelSettings(): MemoryPanelSettings {
@@ -73,6 +81,7 @@ export interface MemoryPanelProps {
 
 export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelProps) {
   const [settings, setSettings] = useState<MemoryPanelSettings>(readMemoryPanelSettings);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Re-read from localStorage when the panel mounts (another tab may have
   // changed the settings while this component was unmounted)
@@ -88,8 +97,95 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
     });
   }, []);
 
+  const handlePauseToggle = useCallback(() => {
+    updateSettings({ isPaused: !settings.isPaused });
+    toast.info(settings.isPaused ? 'Memory creation resumed' : 'Memory creation paused');
+  }, [settings.isPaused, updateSettings]);
+
+  const handleExport = useCallback(async () => {
+    try {
+      const data = await invoke<unknown>('memory_export_json');
+      const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+
+      if (isTauri) {
+        const savePath = await save({
+          defaultPath: `memories-export-${new Date().toISOString().split('T')[0]}.json`,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+        if (savePath) {
+          await writeTextFile(savePath, json);
+          toast.success('Memories exported successfully');
+        }
+      } else {
+        // Web fallback: trigger browser download
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `memories-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast.success('Memories exported successfully');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      toast.error(`Export failed: ${message}`);
+    }
+  }, []);
+
+  const handleImportFile = useCallback(async () => {
+    try {
+      if (isTauri) {
+        const selected = await openFilePicker({
+          multiple: false,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+        if (!selected) return;
+        const filePath = typeof selected === 'string' ? selected : (selected as string[])[0];
+        if (!filePath) return;
+        const content = await readTextFile(filePath);
+        await invoke('memory_import_json', { data: content });
+        toast.success('Memories imported successfully');
+      } else {
+        // Web fallback: file input
+        importInputRef.current?.click();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Import failed';
+      toast.error(`Import failed: ${message}`);
+    }
+  }, []);
+
+  const handleImportInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const content = await file.text();
+      await invoke('memory_import_json', { data: content });
+      toast.success('Memories imported successfully');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Import failed';
+      toast.error(`Import failed: ${message}`);
+    } finally {
+      // Reset so the same file can be re-imported if needed
+      e.target.value = '';
+    }
+  }, []);
+
   return (
     <div className={cn('flex flex-col gap-6', className)}>
+      {/* Hidden file input for web-mode import */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => void handleImportInputChange(e)}
+        aria-hidden="true"
+      />
+
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                              */}
       {/* ------------------------------------------------------------------ */}
@@ -98,7 +194,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
           <Brain className="h-6 w-6 text-blue-400" />
         </div>
         <div className="flex-1">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold">Memory</h3>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -106,12 +202,82 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
                 yourself.
               </p>
             </div>
-            <Switch
-              id="memory-enabled"
-              checked={settings.isEnabled}
-              onCheckedChange={(val) => updateSettings({ isEnabled: val })}
-            />
+            {/* Toolbar: pause, export, import, enable toggle */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handlePauseToggle}
+                    disabled={!settings.isEnabled}
+                    className={cn(
+                      'h-8 w-8 p-0',
+                      settings.isPaused && 'text-amber-500 hover:text-amber-400',
+                    )}
+                    aria-label={
+                      settings.isPaused ? 'Resume memory creation' : 'Pause memory creation'
+                    }
+                  >
+                    {settings.isPaused ? (
+                      <Play className="h-4 w-4" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {settings.isPaused
+                    ? 'Resume: allow new memories to be created'
+                    : 'Pause: keep existing memories but stop creating new ones'}
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleExport()}
+                    className="h-8 w-8 p-0"
+                    aria-label="Export memories to JSON file"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export memories to JSON</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleImportFile()}
+                    className="h-8 w-8 p-0"
+                    aria-label="Import memories from JSON file"
+                  >
+                    <Upload className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Import memories from JSON</TooltipContent>
+              </Tooltip>
+
+              <Switch
+                id="memory-enabled"
+                checked={settings.isEnabled}
+                onCheckedChange={(val) => updateSettings({ isEnabled: val })}
+              />
+            </div>
           </div>
+
+          {/* Paused indicator */}
+          {settings.isEnabled && settings.isPaused && (
+            <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1">
+              <Pause className="h-3 w-3" />
+              Memory creation is paused — existing memories still available
+            </p>
+          )}
         </div>
       </div>
 

@@ -131,7 +131,7 @@ export async function getFileDiff(filePath: string): Promise<FileDiff | null> {
   }
 
   try {
-    const result = await invoke<FileDiff>('get_file_diff', { file_path: filePath });
+    const result = await invoke<FileDiff>('get_file_diff', { filePath });
     return result;
   } catch (error) {
     console.error('[codeEditing] Failed to get file diff:', error);

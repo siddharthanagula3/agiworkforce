@@ -216,6 +216,7 @@ mod tests {
                 },
                 "required": ["location"]
             }),
+            strict: None,
         }];
 
         let request = LLMRequest {
@@ -285,6 +286,7 @@ mod tests {
                         "params": { "type": "array" }
                     }
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -365,6 +367,7 @@ mod tests {
                         "additionalProperties": false
                     }
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -432,6 +435,7 @@ mod tests {
                     },
                     "required": ["city"]
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -491,6 +495,7 @@ mod tests {
                     "type": "apply_patch",
                     "validate_before_apply": true
                 }),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -1328,6 +1333,7 @@ mod tests {
                 name: "search".to_string(),
                 description: "Search".to_string(),
                 parameters: json!({"type": "object", "properties": {}}),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
@@ -1370,6 +1376,7 @@ mod tests {
                 name: "action".to_string(),
                 description: "Do action".to_string(),
                 parameters: json!({"type": "object", "properties": {}}),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Required),
             thinking_mode: None,
@@ -1412,6 +1419,7 @@ mod tests {
                 name: "get_weather".to_string(),
                 description: "Get weather".to_string(),
                 parameters: json!({"type": "object", "properties": {"city": {"type": "string"}}}),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Specific("get_weather".to_string())),
             thinking_mode: None,
@@ -1455,6 +1463,7 @@ mod tests {
                 name: "noop".to_string(),
                 description: "No-op".to_string(),
                 parameters: json!({"type": "object", "properties": {}}),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::None),
             thinking_mode: None,
@@ -1854,6 +1863,7 @@ mod tests {
                 name: "get_weather".to_string(),
                 description: "Get weather".to_string(),
                 parameters: json!({"type": "object", "properties": {"city": {"type": "string"}}}),
+                strict: None,
             }]),
             tool_choice: Some(ToolChoice::Specific("get_weather".to_string())),
             thinking_mode: None,

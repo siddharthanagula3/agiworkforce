@@ -307,6 +307,7 @@ mod tests {
                     },
                     "required": ["location"]
                 }),
+                strict: None,
             },
             ToolDefinition {
                 name: "search_web".to_string(),
@@ -318,6 +319,7 @@ mod tests {
                     },
                     "required": ["query"]
                 }),
+                strict: None,
             },
         ]
     }

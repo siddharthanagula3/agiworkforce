@@ -289,6 +289,7 @@ export interface ChatState {
   getArchivedConversations: () => ConversationSummary[];
   getConversationsByProject: (projectId: string) => ConversationSummary[];
   setConversationProject: (conversationId: string, projectId: string | null) => void;
+  setConversationModel: (conversationId: string, model: string | null) => void;
   exportConversationToMarkdown: (id?: string) => string;
 
   // Actions - Message management
@@ -732,6 +733,19 @@ export const useChatStore = create<ChatState>()(
               },
               undefined,
               'chat/setConversationProject',
+            ),
+
+          setConversationModel: (conversationId: string, model: string | null) =>
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === conversationId);
+                if (convo) {
+                  convo.modelOverride = model || undefined;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/setConversationModel',
             ),
 
           exportConversationToMarkdown: (id?: string) => {

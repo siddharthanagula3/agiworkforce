@@ -241,18 +241,21 @@ impl VisionAutomation {
             }
 
             // Fallback: if no word-level matches found but full text contains
-            // the query, return screen center as best approximation.
+            // the query, log a warning. Screen-center fallback is unreliable
+            // and should only be used when no better option exists.
             if matches.is_empty() {
-                let center_x = (img_width / 2) as i32;
-                let center_y = (img_height / 2) as i32;
                 let full_text_matched = if fuzzy {
                     ocr_result.text.to_lowercase().contains(&query_lower)
                 } else {
                     ocr_result.text.contains(query)
                 };
-                if full_text_matched {
-                    tracing::debug!(
-                        "find_text: word-level bbox unavailable, falling back to screen center"
+                if full_text_matched && img_width > 0 && img_height > 0 {
+                    let center_x = (img_width / 2) as i32;
+                    let center_y = (img_height / 2) as i32;
+                    tracing::warn!(
+                        "find_text: word-level bounding boxes unavailable for query '{}', \
+                         falling back to screen center ({}, {}) — click accuracy will be low",
+                        query, center_x, center_y
                     );
                     matches.push((center_x, center_y, ocr_result.text.clone()));
                 }

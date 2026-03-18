@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
@@ -95,6 +95,16 @@ const DesktopShell = () => {
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
   const { theme, setTheme } = useThemeContext();
+
+  // Apply dyslexic font class from persisted settings on mount
+  const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
+  useEffect(() => {
+    if (dyslexicFont) {
+      document.documentElement.classList.add('dyslexic-font');
+    } else {
+      document.documentElement.classList.remove('dyslexic-font');
+    }
+  }, [dyslexicFont]);
 
   const toggleTheme = useCallback(() => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -404,6 +414,27 @@ const DesktopShell = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Double-tap Alt to open Quick Query overlay
+  const lastAltKeyupAtRef = useRef<number>(0);
+  useEffect(() => {
+    const DOUBLE_TAP_THRESHOLD_MS = 300;
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== 'Alt') return;
+      const now = Date.now();
+      const elapsed = now - lastAltKeyupAtRef.current;
+      lastAltKeyupAtRef.current = now;
+      if (elapsed > 0 && elapsed < DOUBLE_TAP_THRESHOLD_MS) {
+        setQuickQueryOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 

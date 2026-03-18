@@ -1017,6 +1017,22 @@ export function Sidebar({
 
             <button
               type="button"
+              onClick={() => setActiveView('tasks')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'tasks'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-400/20 text-orange-400">
+                <Zap className="w-3.5 h-3.5" />
+              </span>
+              Tasks
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveView('help')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',

@@ -370,10 +370,6 @@ struct EmailAccountRecord {
     smtp_host: String,
     smtp_port: u16,
     smtp_use_tls: bool,
-    /// Password field populated by SQLite row deserialization
-    // Used by: serde — populated by SQLite query_map, not accessed directly
-    #[allow(dead_code)]
-    password: String,
     created_at: i64,
     last_sync: Option<i64>,
 }
@@ -982,7 +978,7 @@ fn map_account_row(row: &Row<'_>) -> rusqlite::Result<EmailAccountRecord> {
         smtp_host: row.get(7)?,
         smtp_port: row.get::<_, i64>(8)? as u16,
         smtp_use_tls: int_to_bool(row.get::<_, i64>(9)?),
-        password: row.get(10)?,
+        // Column 10 is password_encrypted — skip it (passwords retrieved via get_email_password)
         created_at: row.get(11)?,
         last_sync: row.get(12)?,
     })

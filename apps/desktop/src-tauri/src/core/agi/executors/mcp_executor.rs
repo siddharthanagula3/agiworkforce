@@ -127,7 +127,6 @@ pub struct McpExecutor {
     /// Registry for tool schema conversion.
     /// Schema validation is performed in `validate_tool_args()` via `McpClient::list_server_tools()`
     /// before each `execute_mcp_tool()` call, checking required fields and additionalProperties.
-    #[allow(dead_code)]
     registry: Arc<McpToolRegistry>,
     /// Cached tool names for performance.
     cached_tool_names: Arc<RwLock<Vec<String>>>,

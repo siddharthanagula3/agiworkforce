@@ -1056,6 +1056,102 @@ fn extract_base_command(command: &str) -> String {
     base.to_lowercase()
 }
 
+/// Validates a webhook URL to prevent SSRF (Server-Side Request Forgery) attacks.
+///
+/// Blocks:
+/// - Non-HTTP(S) schemes (file://, ftp://, gopher://, etc.)
+/// - Localhost and loopback addresses (127.x.x.x, [::1])
+/// - Private/internal network ranges (10.x, 172.16-31.x, 192.168.x)
+/// - Link-local addresses (169.254.x)
+/// - Metadata endpoints (169.254.169.254, common cloud metadata)
+fn validate_webhook_url(url: &str) -> std::result::Result<(), String> {
+    // Must be HTTP or HTTPS
+    let url_lower = url.to_lowercase();
+    if !url_lower.starts_with("https://") && !url_lower.starts_with("http://") {
+        return Err(format!(
+            "Webhook URL must use http:// or https:// scheme, got: {}",
+            url.chars().take(30).collect::<String>()
+        ));
+    }
+
+    // Parse the URL to extract the host
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid webhook URL: {}", e))?;
+
+    let host = parsed.host_str().unwrap_or("");
+
+    if host.is_empty() {
+        return Err("Webhook URL has no host".to_string());
+    }
+
+    // Block localhost variants
+    let host_lower = host.to_lowercase();
+    if host_lower == "localhost"
+        || host_lower == "127.0.0.1"
+        || host_lower.starts_with("127.")
+        || host_lower == "[::1]"
+        || host_lower == "::1"
+        || host_lower == "0.0.0.0"
+    {
+        tracing::warn!(
+            "[SECURITY][Scheduler] Blocked webhook to localhost/loopback: {}",
+            url
+        );
+        return Err(
+            "Webhook URL blocked: cannot target localhost or loopback addresses. \
+             Use an external URL for webhook destinations."
+                .to_string(),
+        );
+    }
+
+    // Block private/internal network ranges by parsing the IP
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        let is_private = match ip {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()           // 10.x, 172.16-31.x, 192.168.x
+                    || v4.is_link_local()         // 169.254.x
+                    || v4.is_unspecified()         // 0.0.0.0
+                    || v4.octets()[0] == 169 && v4.octets()[1] == 254 // metadata
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() || v6.is_unspecified()
+            }
+        };
+
+        if is_private {
+            tracing::warn!(
+                "[SECURITY][Scheduler] Blocked webhook to private/internal IP: {}",
+                url
+            );
+            return Err(
+                "Webhook URL blocked: cannot target private or internal network addresses. \
+                 Use a public URL for webhook destinations."
+                    .to_string(),
+            );
+        }
+    }
+
+    // Block common cloud metadata endpoints by hostname
+    let metadata_hosts = [
+        "metadata.google.internal",
+        "metadata.google",
+        "169.254.169.254",
+    ];
+    for meta_host in &metadata_hosts {
+        if host_lower == *meta_host {
+            tracing::warn!(
+                "[SECURITY][Scheduler] Blocked webhook to cloud metadata endpoint: {}",
+                url
+            );
+            return Err(
+                "Webhook URL blocked: cannot target cloud metadata endpoints.".to_string(),
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Dispatch the actual job action based on type and data.
 ///
 /// This executes the job's configured action:
@@ -1311,6 +1407,10 @@ async fn dispatch_job_action(
                 return Err("Webhook URL is empty".to_string());
             }
 
+            // SECURITY: Validate webhook URL to prevent SSRF attacks against
+            // internal network services (localhost, 127.x, 10.x, 192.168.x, etc.)
+            validate_webhook_url(url)?;
+
             let payload = action_data
                 .get("payload")
                 .cloned()
@@ -1532,6 +1632,20 @@ pub async fn scheduler_update_job(
             }
         }
         if let Some(prompt) = updates.prompt {
+            // SECURITY: For ShellCommand and Script action types, the prompt field
+            // is stored in action_data and later read as the command/script content.
+            // Validate it before storing to prevent bypass of creation-time checks.
+            match job.action_type {
+                SchedulerActionType::ShellCommand | SchedulerActionType::Script => {
+                    validate_shell_command(&prompt).map_err(|e| {
+                        Error::Generic(format!(
+                            "Prompt update rejected for {} job: {}",
+                            job.action_type, e
+                        ))
+                    })?;
+                }
+                _ => {}
+            }
             // Store the prompt in action_data
             job.action_data["prompt"] = serde_json::Value::String(prompt);
         }

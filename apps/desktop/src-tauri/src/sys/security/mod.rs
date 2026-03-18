@@ -1,3 +1,9 @@
+//! Security layer: ToolGuard validation, SecretManager encryption, auth, RBAC, rate limiting.
+//!
+//! [`tool_guard`] validates every tool execution with per-tool policies and risk levels.
+//! [`secret_manager`] encrypts API keys via Argon2id + AES-256-GCM. [`auth`] and [`auth_db`]
+//! manage sessions with constant-time token comparison. [`rbac`] provides role-based access.
+
 pub mod api;
 pub mod approval_workflow;
 pub mod audit_logger;

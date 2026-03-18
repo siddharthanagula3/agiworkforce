@@ -118,6 +118,15 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
   const [results, setResults] = useState<SwarmResult[]>([]);
   const [resultsCopied, setResultsCopied] = useState(false);
 
+  const refreshStats = useCallback(async () => {
+    try {
+      const s = await invoke<SwarmStats>('swarm_get_stats');
+      setStats(s);
+    } catch {
+      // Swarm may not be initialized yet
+    }
+  }, []);
+
   // Listen for swarm events
   useEffect(() => {
     if (!isTauri) return;
@@ -180,16 +189,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       mounted = false;
       unlisteners.forEach((u) => u());
     };
-  }, []);
-
-  const refreshStats = useCallback(async () => {
-    try {
-      const s = await invoke<SwarmStats>('swarm_get_stats');
-      setStats(s);
-    } catch {
-      // Swarm may not be initialized yet
-    }
-  }, []);
+  }, [refreshStats]);
 
   // Initialize swarm
   const handleInit = useCallback(async () => {

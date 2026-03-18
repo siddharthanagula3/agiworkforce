@@ -102,7 +102,7 @@ export function GitDiffViewer({
     try {
       const result = await invoke<GitDiff[]>('git_diff', {
         path: repoPath,
-        file_path: filePath ?? null,
+        filePath: filePath ?? null,
         staged,
       });
       setDiffs(result);

@@ -85,6 +85,11 @@ pub enum ExtensionMessage {
         format: String,
         quality: u8,
     },
+    DiscoverWebMCPTools,
+    CallWebMCPTool {
+        tool_name: String,
+        arguments: Option<serde_json::Value>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -466,6 +471,44 @@ impl ExtensionBridge {
             ExtensionResponse::Error { message } => Err(Error::Other(message)),
         }
     }
+
+    /// Discover available WebMCP tools from the browser extension.
+    pub async fn discover_webmcp_tools(&self) -> Result<Vec<serde_json::Value>> {
+        let response = self
+            .send_message(ExtensionMessage::DiscoverWebMCPTools)
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { data } => {
+                let tools = data
+                    .get("tools")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                Ok(tools)
+            }
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Invoke a WebMCP tool by name with optional arguments.
+    pub async fn call_webmcp_tool(
+        &self,
+        tool_name: &str,
+        arguments: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let response = self
+            .send_message(ExtensionMessage::CallWebMCPTool {
+                tool_name: tool_name.to_string(),
+                arguments,
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
 }
 
 fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Value> {
@@ -562,6 +605,15 @@ fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Valu
         }),
         ExtensionMessage::CaptureScreenshot { format, quality: _ } => {
             json!({ "type": "screenshot", "tab_id": null, "format": format })
+        }
+        ExtensionMessage::DiscoverWebMCPTools => {
+            json!({ "type": "WEBMCP_DISCOVER_TOOLS", "tab_id": null })
+        }
+        ExtensionMessage::CallWebMCPTool {
+            tool_name,
+            arguments,
+        } => {
+            json!({ "type": "WEBMCP_CALL_TOOL", "toolName": tool_name, "arguments": arguments, "tab_id": null })
         }
     };
 

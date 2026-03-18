@@ -7,7 +7,7 @@
  * - File/knowledge management
  * - Associated conversations
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -41,15 +41,37 @@ import {
   Plus,
   Upload,
   Brain,
+  Database,
+  Cpu,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
-import { useProjectStore, type Project, type ProjectFile } from '../../stores/projectStore';
+import {
+  useProjectStore,
+  type Project,
+  type ProjectFile,
+  type KnowledgeBaseFile,
+} from '../../stores/projectStore';
 import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
-import { isTauri } from '../../lib/tauri-mock';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { MemoryManager } from '../Memory/MemoryManager';
+import { getAllModels } from '../../constants/llm';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+
+// Supported knowledge base file extensions
+const SUPPORTED_KB_EXTENSIONS = [
+  '.txt',
+  '.md',
+  '.pdf',
+  '.csv',
+  '.json',
+  '.py',
+  '.js',
+  '.ts',
+  '.rs',
+] as const;
 
 // Project color options - defined as const tuple for type safety
 const PROJECT_COLORS = [
@@ -115,6 +137,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [autoSaveMemories, setAutoSaveMemories] = useState(true);
+  const [preferredModel, setPreferredModel] = useState<string>('');
+  const [knowledgeBaseFiles, setKnowledgeBaseFiles] = useState<KnowledgeBaseFile[]>([]);
+  const [isUploadingKb, setIsUploadingKb] = useState(false);
+  const kbDropZoneRef = useRef<HTMLDivElement>(null);
 
   // Store actions
   const createProject = useProjectStore((state) => state.createProject);
@@ -136,6 +162,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(project.icon || DEFAULT_ICON);
         setFiles(project.files);
         setConversationIds(project.conversationIds);
+        setPreferredModel(project.preferredModel ?? '');
+        setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
         // BUG-PS-01: load persisted autoSaveMemories from project settings
         const settings = getProjectSettings(project.id);
         setAutoSaveMemories(settings.autoSaveMemories ?? false);
@@ -148,6 +176,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(DEFAULT_ICON);
         setFiles([]);
         setConversationIds([]);
+        setPreferredModel('');
+        setKnowledgeBaseFiles([]);
         setAutoSaveMemories(false);
       }
       setActiveTab('general');
@@ -175,6 +205,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           files,
           conversationIds,
           isArchived: false,
+          preferredModel: preferredModel || undefined,
+          knowledgeBaseFiles,
         });
         // BUG-PS-01: persist autoSaveMemories for newly created project
         await updateProjectSettings(newProject.id, { autoSaveMemories });
@@ -187,6 +219,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           files,
           conversationIds,
+          preferredModel: preferredModel || undefined,
+          knowledgeBaseFiles,
         });
         // BUG-PS-01: persist autoSaveMemories for edited project
         await updateProjectSettings(project.id, { autoSaveMemories });
@@ -238,6 +272,92 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     );
   }, []);
 
+  const processKbFile = useCallback(async (filePath: string, fileName: string) => {
+    try {
+      const content = await invoke<string>('file_read', { path: filePath });
+      const newFile: KnowledgeBaseFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        path: filePath,
+        content: typeof content === 'string' ? content : undefined,
+        addedAt: new Date().toISOString(),
+      };
+      setKnowledgeBaseFiles((prev) => {
+        // Prevent duplicate paths
+        if (prev.some((f) => f.path === filePath)) return prev;
+        return [...prev, newFile];
+      });
+      // Store in project memory
+      if (typeof content === 'string' && content.length > 0) {
+        await invoke('memory_remember', {
+          content: `[Knowledge Base: ${fileName}]\n${content.slice(0, 8000)}`,
+          category: 'project',
+        }).catch(() => {
+          // Memory storage failure is non-fatal
+        });
+      }
+    } catch {
+      toast.error(`Failed to read file: ${fileName}`);
+    }
+  }, []);
+
+  const handleAddKbFiles = useCallback(async () => {
+    if (!isTauri) {
+      toast.error('File picker is only available in the desktop app');
+      return;
+    }
+    setIsUploadingKb(true);
+    try {
+      const selected = await openFilePicker({
+        multiple: true,
+        directory: false,
+        filters: [
+          {
+            name: 'Knowledge Base Files',
+            extensions: SUPPORTED_KB_EXTENSIONS.map((e) => e.replace('.', '')),
+          },
+        ],
+      });
+      if (selected) {
+        const fileArray = Array.isArray(selected) ? selected : [selected];
+        await Promise.all(fileArray.map((fp) => processKbFile(fp, fp.split('/').pop() ?? fp)));
+      }
+    } catch {
+      toast.error('Failed to open file picker');
+    } finally {
+      setIsUploadingKb(false);
+    }
+  }, [processKbFile]);
+
+  const handleKbDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsUploadingKb(true);
+      try {
+        const items = Array.from(e.dataTransfer.files);
+        await Promise.all(
+          items.map((file) => {
+            // In Tauri webview, file.path gives the real FS path
+            const fp = (file as File & { path?: string }).path ?? file.name;
+            return processKbFile(fp, file.name);
+          }),
+        );
+      } finally {
+        setIsUploadingKb(false);
+      }
+    },
+    [processKbFile],
+  );
+
+  const handleKbDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  }, []);
+
+  const handleRemoveKbFile = useCallback((fileId: string) => {
+    setKnowledgeBaseFiles((prev) => prev.filter((f) => f.id !== fileId));
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-zinc-900 border-zinc-700">
@@ -259,7 +379,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="bg-zinc-800 border-zinc-700">
+          <TabsList className="bg-zinc-800 border-zinc-700 flex-wrap">
             <TabsTrigger value="general" className="data-[state=active]:bg-zinc-700">
               <Settings className="w-4 h-4 mr-2" />
               General
@@ -267,6 +387,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             <TabsTrigger value="instructions" className="data-[state=active]:bg-zinc-700">
               <FileText className="w-4 h-4 mr-2" />
               Instructions
+            </TabsTrigger>
+            <TabsTrigger value="knowledge" className="data-[state=active]:bg-zinc-700">
+              <Database className="w-4 h-4 mr-2" />
+              Knowledge
             </TabsTrigger>
             <TabsTrigger value="files" className="data-[state=active]:bg-zinc-700">
               <File className="w-4 h-4 mr-2" />
@@ -318,7 +442,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 </Label>
                 <div className="flex gap-2 flex-wrap">
                   {PROJECT_COLORS.map((c) => (
-                    <button type="button"
+                    <button
+                      type="button"
                       key={c.value}
                       onClick={() => setColor(c.value)}
                       className={cn(
@@ -339,7 +464,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     // BUG-PS-05: render actual Lucide icon; fall back to first letter if not in map
                     const IconComponent = ICON_COMPONENT_MAP[i.value];
                     return (
-                      <button type="button"
+                      <button
+                        type="button"
                         key={i.value}
                         onClick={() => setIcon(i.value)}
                         className={cn(
@@ -357,6 +483,34 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     );
                   })}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-zinc-300 flex items-center gap-2">
+                  <Cpu className="w-4 h-4" />
+                  Preferred Model
+                </Label>
+                <p className="text-xs text-zinc-500">
+                  When set, this model will be auto-selected when entering a conversation in this
+                  project. Leave blank to use the global default.
+                </p>
+                <Select value={preferredModel} onValueChange={setPreferredModel}>
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue placeholder="Use global default" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
+                    <SelectItem value="" className="text-zinc-300">
+                      Use global default
+                    </SelectItem>
+                    {getAllModels()
+                      .filter((m) => m.id !== 'auto' && !m.id.startsWith('auto:'))
+                      .map((m) => (
+                        <SelectItem key={m.id} value={m.id} className="text-zinc-300">
+                          {m.name ?? m.id}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
             </TabsContent>
 
@@ -434,6 +588,90 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               </ScrollArea>
             </TabsContent>
 
+            {/* Knowledge Base Tab */}
+            <TabsContent value="knowledge" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-zinc-300">Knowledge Base</Label>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Upload files to give the AI persistent context about this project. Supported:
+                    .txt .md .pdf .csv .json .py .js .ts .rs
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddKbFiles}
+                  disabled={isUploadingKb}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {isUploadingKb ? 'Reading...' : 'Browse Files'}
+                </Button>
+              </div>
+
+              {/* Drag-and-drop zone */}
+              <div
+                ref={kbDropZoneRef}
+                onDrop={handleKbDrop}
+                onDragOver={handleKbDragOver}
+                className="border-2 border-dashed border-zinc-700 rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-zinc-500 transition-colors cursor-pointer"
+                onClick={handleAddKbFiles}
+              >
+                <Database className="w-8 h-8 opacity-40" />
+                <p className="text-sm">Drag & drop files here, or click to browse</p>
+                <p className="text-xs opacity-60">Files are read and stored as project context</p>
+              </div>
+
+              {/* Knowledge base file list */}
+              <ScrollArea className="h-[160px] border border-zinc-700 rounded-lg p-2">
+                {knowledgeBaseFiles.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                    <Database className="w-10 h-10 mb-2 opacity-30" />
+                    <p className="text-sm">No knowledge base files yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {knowledgeBaseFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between p-2 bg-zinc-800 rounded-md group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <File className="w-4 h-4 text-green-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-sm text-zinc-300 truncate block">
+                              {file.name}
+                            </span>
+                            {file.content && (
+                              <span className="text-xs text-zinc-600">
+                                {file.content.length.toLocaleString()} chars
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveKbFile(file.id)}
+                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-400 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+
+              <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                <p className="text-xs text-blue-300">
+                  Knowledge base files are read once and their content is stored locally. The AI
+                  will reference this content when answering questions within this project.
+                </p>
+              </div>
+            </TabsContent>
+
             {/* Memory Tab */}
             <TabsContent value="memory" className="space-y-4">
               <div className="space-y-4">
@@ -448,7 +686,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       </p>
                     </div>
                   </div>
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setAutoSaveMemories(!autoSaveMemories)}
                     className={cn(
                       'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
@@ -505,7 +744,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     {conversations.map((conv: ConversationSummary) => {
                       const isLinked = conversationIds.includes(conv.id);
                       return (
-                        <button type="button"
+                        <button
+                          type="button"
                           key={conv.id}
                           onClick={() => handleToggleConversation(conv.id)}
                           className={cn(

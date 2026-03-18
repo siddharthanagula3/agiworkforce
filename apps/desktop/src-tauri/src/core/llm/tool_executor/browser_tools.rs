@@ -51,7 +51,7 @@ const SAFE_PSEUDO_CLASSES: &[&str] = &[
 ///
 /// Uses a layered defense:
 /// 1. Reject empty / excessively long selectors
-/// 2. Reject characters that enable JS string breakout (`<`, `>`, `'`, `"`, `\`)
+/// 2. Reject characters that enable JS string breakout (`<`, `'`, `"`, `\`, `` ` ``)
 /// 3. Blocklist dangerous CSS/JS patterns (`@import`, `javascript:`, `expression(`)
 /// 4. Allowlist pseudo-classes — only known-safe ones are permitted
 /// 5. Reject nested `:not()` / `:has()` abuse
@@ -76,7 +76,9 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
 
     // 2. Characters that break out of a JS string literal when interpolated.
     //    Note: `>` is the CSS child combinator and is intentionally NOT blocked here.
-    for ch in ['<', '\'', '"', '\\'] {
+    //    Backtick (`) is blocked to prevent template literal injection if the
+    //    interpolation context ever changes from single-quoted to template strings.
+    for ch in ['<', '\'', '"', '\\', '`'] {
         if trimmed.contains(ch) {
             return Err(format!(
                 "contains disallowed character '{}'",
