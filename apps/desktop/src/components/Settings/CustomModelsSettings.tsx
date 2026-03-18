@@ -21,13 +21,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '../../types/customModel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
@@ -43,6 +37,7 @@ const PROVIDER_PRESETS: Record<string, string> = {
   Fireworks: 'https://api.fireworks.ai/inference/v1',
   Mistral: 'https://api.mistral.ai/v1',
   DeepSeek: 'https://api.deepseek.com/v1',
+  'NVIDIA NIM': 'https://integrate.api.nvidia.com/v1',
   Custom: '',
 };
 

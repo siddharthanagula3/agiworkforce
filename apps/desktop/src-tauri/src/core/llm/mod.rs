@@ -71,9 +71,14 @@ pub struct LLMRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<u8>,
 
-    // Response format (structured outputs)
+    // Response format (structured outputs – OpenAI style)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
+
+    // Structured output configuration (Anthropic style)
+    // When set, maps to `output_config` for Anthropic and `response_format`/`text.format` for OpenAI
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_config: Option<OutputConfig>,
 
     // Prompt caching (Anthropic, OpenAI)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -389,7 +394,7 @@ pub enum ThinkingParameter {
     },
 }
 
-/// Response format for structured outputs
+/// Response format for structured outputs (OpenAI-style)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseFormat {
     /// Format type: "json_object", "json_schema", "text"
@@ -398,6 +403,76 @@ pub struct ResponseFormat {
     /// JSON schema for structured output (when format_type is "json_schema")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json_schema: Option<serde_json::Value>,
+}
+
+/// Anthropic-style structured output configuration.
+///
+/// Used as `output_config` in the Anthropic Messages API to guarantee
+/// schema-conformant JSON responses.  For OpenAI providers, this is
+/// mapped to the `response_format` / `text.format` field instead.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputConfig {
+    /// The output format specification.
+    pub format: OutputFormat,
+}
+
+/// Output format variants for structured outputs.
+///
+/// Mirrors the Anthropic API's `output_config.format` tagged union:
+/// - `json_schema` -- guaranteed schema conformance
+/// - `text` -- plain text (default)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum OutputFormat {
+    /// JSON output conforming to a provided JSON Schema.
+    /// The API guarantees the response matches the schema exactly.
+    #[serde(rename = "json_schema")]
+    JsonSchema {
+        /// Name for this schema (used for caching/identification).
+        name: String,
+        /// The JSON Schema definition.
+        schema: serde_json::Value,
+        /// Optional human-readable description of the expected output.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+    },
+    /// Plain text output (default behavior).
+    #[serde(rename = "text")]
+    Text,
+}
+
+/// Effort level controlling how deeply the model reasons about a request.
+///
+/// Supported by Anthropic Claude Opus 4.6+ and maps to the `effort`
+/// parameter in the Messages API.  For OpenAI models this is mapped
+/// to `reasoning.effort`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EffortLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl EffortLevel {
+    /// Returns the string representation expected by the Anthropic API.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
+    /// Parse from a string value, case-insensitive.
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "low" => Some(Self::Low),
+            "medium" | "med" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
 }
 
 /// Cache control configuration for prompt caching
@@ -592,6 +667,8 @@ pub enum Provider {
     Sambanova,
     Azure,
     Bedrock,
+    NvidiaNim,
+    OpenRouter,
 }
 
 impl Provider {
@@ -620,6 +697,8 @@ impl Provider {
             Provider::Sambanova => "sambanova",
             Provider::Azure => "azure",
             Provider::Bedrock => "bedrock",
+            Provider::NvidiaNim => "nvidia_nim",
+            Provider::OpenRouter => "open_router",
         }
     }
 
@@ -650,6 +729,8 @@ impl Provider {
             "sambanova" | "samba-nova" | "samba_nova" => Some(Provider::Sambanova),
             "azure" | "azure-openai" | "azure_openai" => Some(Provider::Azure),
             "bedrock" | "aws-bedrock" | "aws_bedrock" => Some(Provider::Bedrock),
+            "nvidia_nim" | "nvidia-nim" | "nvidia" | "nim" => Some(Provider::NvidiaNim),
+            "open_router" | "openrouter" | "open-router" => Some(Provider::OpenRouter),
             _ => None,
         }
     }
