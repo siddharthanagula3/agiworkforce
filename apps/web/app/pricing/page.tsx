@@ -49,8 +49,8 @@ const ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
     id: 'models',
     question: 'Which AI models do you need?',
     options: [
-      { label: 'Economy models (GPT-4o mini, Haiku)', value: 'economy', points: 1 },
-      { label: 'Pro models (GPT-5, Claude Sonnet, Gemini Pro)', value: 'pro', points: 2 },
+      { label: 'Economy models (GPT-5.4 Mini, Haiku 4.5)', value: 'economy', points: 1 },
+      { label: 'Pro models (GPT-5.4, Claude Sonnet 4.6, Gemini 3.1 Pro)', value: 'pro', points: 2 },
       { label: 'Flagship models (Opus, o3, computer use)', value: 'flagship', points: 3 },
     ],
   },
