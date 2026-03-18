@@ -3,7 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
-import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
+import type { Attachment } from '@/components/chat/AttachmentPreview';
 
 interface ChatState {
   /** All conversation summaries for the sidebar */
@@ -24,17 +25,28 @@ interface ChatState {
   isLoadingMessages: boolean;
   /** Error message from the last failed operation */
   error: string | null;
+  /** Global search query for conversations + messages */
+  searchQuery: string;
+  /** Search results: matching conversation IDs with snippet */
+  searchResults: Array<{ conversationId: string; messageId: string; snippet: string }>;
 
   // --- Actions ---
   loadConversations: () => Promise<void>;
   createConversation: (title?: string) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
-  sendMessage: (conversationId: string, content: string, model: string) => Promise<void>;
+  sendMessage: (
+    conversationId: string,
+    content: string,
+    model: string,
+    attachments?: Attachment[],
+  ) => Promise<void>;
   stopStreaming: () => void;
   renameConversation: (id: string, title: string) => Promise<void>;
   setCurrentConversationId: (id: string | null) => void;
   clearError: () => void;
+  searchConversations: (query: string) => void;
+  deleteMessage: (conversationId: string, messageId: string) => void;
 }
 
 /** Abort controllers keyed by conversationId — supports concurrent streams */
@@ -58,6 +70,8 @@ export const useChatStore = create<ChatState>()(
       isLoadingConversations: false,
       isLoadingMessages: false,
       error: null,
+      searchQuery: '',
+      searchResults: [],
 
       setCurrentConversationId: (id) => {
         set({ currentConversationId: id });
@@ -169,12 +183,31 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendMessage: async (conversationId, content, model) => {
+      sendMessage: async (conversationId, content, model, attachments) => {
         // Cancel any existing stream for this conversation
         const existingController = abortControllers.get(conversationId);
         if (existingController) {
           existingController.abort();
           abortControllers.delete(conversationId);
+        }
+
+        // Upload attachments and build message attachment metadata
+        let uploadedAttachments: MessageAttachment[] | undefined;
+        if (attachments && attachments.length > 0) {
+          try {
+            const uploads = await Promise.all(
+              attachments.map((a) =>
+                api.uploadFile({ uri: a.uri, name: a.fileName, type: a.mimeType }),
+              ),
+            );
+            uploadedAttachments = uploads.map((u, i) => ({
+              url: u.url,
+              mimeType: attachments[i]!.mimeType,
+              fileName: attachments[i]!.fileName,
+            }));
+          } catch {
+            // Continue without attachments if upload fails
+          }
         }
 
         const userMessage: ChatMessage = {
@@ -184,6 +217,7 @@ export const useChatStore = create<ChatState>()(
           content,
           createdAt: new Date().toISOString(),
           model,
+          attachments: uploadedAttachments,
         };
 
         const assistantMessageId = generateId();
@@ -197,14 +231,62 @@ export const useChatStore = create<ChatState>()(
           model,
         };
 
-        // [C2 fix] Build message history BEFORE optimistic insertion
+        // Build message history with vision support
         const existingMessages = get().messages[conversationId] ?? [];
-        const historyMessages = [
+        const historyMessages: Array<{
+          role: string;
+          content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+        }> = [
           ...existingMessages
             .filter((m) => !m.isStreaming)
-            .map((m) => ({ role: m.role, content: m.content })),
-          { role: 'user' as const, content },
+            .map((m) => {
+              // If message has image attachments, use vision content format
+              const imageAttachments = m.attachments?.filter((a) =>
+                a.mimeType.startsWith('image/'),
+              );
+              if (imageAttachments && imageAttachments.length > 0) {
+                return {
+                  role: m.role,
+                  content: [
+                    ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+                    ...imageAttachments.map((a) => ({
+                      type: 'image_url' as const,
+                      image_url: { url: a.url },
+                    })),
+                  ],
+                };
+              }
+              return { role: m.role, content: m.content };
+            }),
         ];
+
+        // Build current user message with attachments
+        const imageUploads = uploadedAttachments?.filter((a) => a.mimeType.startsWith('image/'));
+        const fileUploads = uploadedAttachments?.filter((a) => !a.mimeType.startsWith('image/'));
+
+        // Build content prefix for file attachments
+        let messageContent = content;
+        if (fileUploads && fileUploads.length > 0) {
+          const fileRefs = fileUploads
+            .map((f) => `[Attached file: ${f.fileName} (${f.mimeType})]`)
+            .join('\n');
+          messageContent = fileRefs + (content ? '\n\n' + content : '');
+        }
+
+        if (imageUploads && imageUploads.length > 0) {
+          historyMessages.push({
+            role: 'user',
+            content: [
+              ...(messageContent ? [{ type: 'text', text: messageContent }] : []),
+              ...imageUploads.map((a) => ({
+                type: 'image_url',
+                image_url: { url: a.url },
+              })),
+            ],
+          });
+        } else {
+          historyMessages.push({ role: 'user', content: messageContent });
+        }
 
         // Add user message + placeholder assistant message
         set((state) => {
@@ -421,6 +503,61 @@ export const useChatStore = create<ChatState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      searchConversations: (query: string) => {
+        const trimmed = query.trim().toLowerCase();
+        if (!trimmed) {
+          set({ searchQuery: '', searchResults: [] });
+          return;
+        }
+
+        set({ searchQuery: trimmed });
+
+        const state = get();
+        const results: Array<{ conversationId: string; messageId: string; snippet: string }> = [];
+
+        // Search through all messages
+        for (const [convId, msgs] of Object.entries(state.messages)) {
+          for (const msg of msgs) {
+            if (msg.content.toLowerCase().includes(trimmed)) {
+              const idx = msg.content.toLowerCase().indexOf(trimmed);
+              const start = Math.max(0, idx - 30);
+              const end = Math.min(msg.content.length, idx + trimmed.length + 30);
+              const snippet =
+                (start > 0 ? '...' : '') +
+                msg.content.slice(start, end) +
+                (end < msg.content.length ? '...' : '');
+              results.push({ conversationId: convId, messageId: msg.id, snippet });
+              break; // one result per conversation
+            }
+          }
+        }
+
+        // Also search conversation titles
+        for (const conv of state.conversations) {
+          if (
+            conv.title.toLowerCase().includes(trimmed) &&
+            !results.some((r) => r.conversationId === conv.id)
+          ) {
+            results.push({ conversationId: conv.id, messageId: '', snippet: conv.title });
+          }
+        }
+
+        set({ searchResults: results });
+      },
+
+      deleteMessage: (conversationId, messageId) => {
+        set((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.filter((m) => m.id !== messageId),
+            },
+          };
+        });
       },
     }),
     {
