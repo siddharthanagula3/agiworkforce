@@ -195,3 +195,23 @@ pub async fn submit_feedback(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn record_message_feedback(
+    message_id: String,
+    conversation_id: Option<String>,
+    feedback_type: String,
+    correction: Option<String>,
+    _category: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(
+        "Message feedback: {} on message {} (conv {:?}, correction: {:?})",
+        feedback_type,
+        message_id,
+        conversation_id,
+        correction,
+    );
+    // Store locally for analytics batch upload
+    // In future: persist to SQLite analytics table
+    Ok(())
+}

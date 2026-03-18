@@ -1380,6 +1380,7 @@ pub fn run() {
             crate::sys::commands::transfer_team_ownership,
             crate::sys::commands::settings_v2_clear_cache,
             crate::sys::commands::feedback::submit_feedback,
+            crate::sys::commands::feedback::record_message_feedback,
             crate::sys::commands::feedback::get_filtered_logs,
 
             crate::sys::commands::capture_screen_full,
@@ -1644,6 +1645,7 @@ pub fn run() {
             crate::sys::commands::mcp_oauth_set_credentials,
             crate::sys::commands::mcp_list_connected_providers,
             crate::sys::commands::mcp_connect_connector,
+            crate::sys::commands::get_connector_manifests,
             crate::sys::commands::save_api_key,
 
             // MCPB (MCP Bundles)
@@ -2222,6 +2224,7 @@ pub fn run() {
             crate::sys::commands::computer_use_list_sessions,
             crate::sys::commands::computer_use_suggest_zoom_level,
             crate::sys::commands::computer_use_type_text,
+            crate::sys::commands::computer_use_stop_session,
             crate::sys::commands::computer_use_zoom_at_point,
             crate::sys::commands::contact_export_vcard,
             crate::sys::commands::contact_get,
