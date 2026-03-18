@@ -98,7 +98,7 @@ export default function RewindTimeline() {
     setConfirmState(null);
     setRewinding(checkpointId);
     try {
-      await invoke('codingCheckpointRewind', { id: checkpointId });
+      await invoke('coding_checkpoint_rewind', { id: checkpointId });
       await fetchCheckpoints();
     } catch (err) {
       console.error('[RewindTimeline] Rewind failed:', err);
