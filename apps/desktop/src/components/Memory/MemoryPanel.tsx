@@ -146,7 +146,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
         const filePath = typeof selected === 'string' ? selected : (selected as string[])[0];
         if (!filePath) return;
         const content = await readTextFile(filePath);
-        await invoke('memory_import_json', { data: content });
+        await invoke('memory_import_json_string', { json: content });
         toast.success('Memories imported successfully');
       } else {
         // Web fallback: file input
@@ -163,7 +163,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
     if (!file) return;
     try {
       const content = await file.text();
-      await invoke('memory_import_json', { data: content });
+      await invoke('memory_import_json_string', { json: content });
       toast.success('Memories imported successfully');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Import failed';

@@ -579,3 +579,49 @@ _Full research: docs/COMPETITIVE_WEB_RESEARCH.md (20 parallel agents)_
 - ~2,826 lines of dead code removed (mobile features, VS Code services)
 - CookieConsent wired (GDPR compliance)
 - API gateway hardened (Dockerfile, graceful shutdown, .env.example)
+
+## [DESKTOP-AUDIT] Post-Implementation Audit (2026-03-18)
+
+### Wave Items Verified
+
+- [x] **W1.1 Infinite Chats**: ContextCompactor WIRED — auto-compacts at 50+ msgs, `/compact` command, TokenCounter shows 80/95% warnings with Compact button. ConversationSummarizer 24h background synthesis STUBBED (initialized but no scheduler invokes it).
+- [x] **W1.2 Adaptive Thinking**: WIRED — `estimate_thinking_budget()` complexity scorer in thinking.rs, 4-tier resolve logic in send_message_setup.rs, provider adapters pass to Anthropic/OpenAI/Google. UI: Brain toggle added to ChatInputArea. `toggleThinkingMode()` now user-accessible.
+- [x] **W1.4 OAuth 2.1 Connector Framework**: WIRED (85%) — Full PKCE flow, 7 providers (GitHub/Google/Slack/Notion/Figma/Microsoft/Atlassian), AES-256-GCM token encryption, 6 Tauri commands registered. Gap: no auto-refresh on token expiry.
+- [x] **W2.1 Pre-Built Connector Library**: 63 connectors defined (15 live, 48 coming soon). Major platforms covered: Gmail, Drive, Calendar, Slack, GitHub, Notion, Linear, Figma, Stripe. Gap: Salesforce/Jira still coming-soon.
+- [x] **W2.4 Sidebar Full-Text Search**: FULLY WIRED — FTS5 virtual tables (messages_fts + conversations_fts) in migration v45, BM25 ranking, `search_chat_history` command, sidebar search modal with highlighting and navigation.
+
+### Stabilization Items Verified
+
+- [x] **Agent loop**: COMPLETE — LLM → tool parse → execute → feed back as role=tool → loop until no tool calls. Verified in send_message_execution.rs lines 702-1070.
+- [x] **Scheduler naming**: CONSISTENT — All 11 commands use `scheduler_*_job` pattern. Zero _task/_job mixing.
+- [x] **IPC camelCase**: CLEAN — Zero snake_case parameter keys found in invoke() calls across all TS files.
+- [x] **Hardcoded secrets**: CLEAN — Only test fixtures (AWS example keys, synthetic patterns). Supabase anon key in .env.local is public-safe by design.
+- [x] **TODO/FIXME markers**: 1 legitimate TODO (core.rs:115 mutex migration) — architectural, not a stub.
+- [x] **Unsafe unwraps**: 4 Mutex::lock().unwrap() in production (fallback_chain.rs) — low risk, documented.
+
+### Fixes Applied This Session
+
+- [x] **FIX**: MemoryPanel import calls wrong command — changed `memory_import_json` → `memory_import_json_string` with `{ json: content }` param
+- [x] **FIX**: Missing thinking toggle button — added Brain icon toggle to ChatInputArea next to ModelSelectorButton
+- [x] **FIX**: ConnectorHealthDashboard not in UI — integrated into Settings Connectors tab
+
+### Feature Completeness Matrix
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tasks/Cowork tab | COMPLETE | TasksView + TaskCreationDialog + SubtaskTimeline + agentTaskStore |
+| Artifact renderers | COMPLETE (13/18) | Mermaid, SVG, Markdown, React, Code, HTML, Chart all working |
+| Settings polish | COMPLETE | System theme, dyslexic font, per-conversation model |
+| Project knowledge base | PARTIAL | File upload works; per-project model UI exists but no DB column |
+| Memory panel | COMPLETE | Pause, export, import (fixed), incognito toggle |
+| Keyboard shortcuts | COMPLETE | Double-Alt quick entry, Caps Lock voice, QuickQuery overlay |
+| MCP health dashboard | COMPLETE | Status indicators, reconnect/disconnect, integrated in Settings |
+| Document creation | PARTIAL | Inline preview + download working; Show in Finder calls missing `open_file_location` |
+
+### Known Deferred Items
+
+- [ ] ConversationSummarizer 24h background job not scheduled (infrastructure exists)
+- [ ] OAuth auto-refresh on token expiry (manual refresh works)
+- [ ] Per-project model — DB column missing in Rust projects table (frontend-only persistence)
+- [ ] `open_file_location` Tauri command not implemented (Show in Finder broken)
+- [ ] Artifact types image/video/audio/music/search have no renderers (5/18)
