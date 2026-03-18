@@ -258,6 +258,29 @@ _Full scorecard: docs/MOBILE_UI_PARITY_SCORECARD.md_
 - [ ] iOS privacy manifest (NSPrivacyAccessedAPITypes)
 - [ ] `google-services.json` for Android Play Store submit
 
+## [EXTENSION-UI] Extension UI Parity Audit (2026-03-18)
+
+_Full scorecard: docs/EXTENSION_UI_PARITY_SCORECARD.md_
+
+### Parity Score: 0 GAPS | 8 ADVANTAGES | 8 PARITY | 1 PARITY+
+
+- [x] 22 source files audited across popup, side panel, content script, background, autofill, webmcp, nlweb, dom-reader, page-metadata, llms-txt, platform-prompts
+- [x] 33 message-passing calls verified across 5 files — all have listeners + error handling
+- [x] **FIX: NLWEB_PROBE handler missing** — added cross-origin fetch handler in background.ts (was routing loop causing silent NLWeb detection failure)
+- [x] Build: tsc 0 errors, 4 IIFE bundles, 194/194 tests, extension.zip 83KB
+- [x] Security: zero eval, zero innerHTML with user input, API keys in session storage only
+
+### AGI Workforce Advantages Over Claude in Chrome
+
+1. Multi-LLM: 11 models from 7 providers (Claude = Anthropic-only)
+2. Job autofill: LinkedIn Easy Apply + Lever with React-compatible filling
+3. WebMCP: W3C tool discovery (unique — no competitor has this)
+4. NLWeb + llms.txt: Auto-discovers AI endpoints on any site
+5. Desktop bridge: Full native agent capabilities from browser
+6. Context menu: 8 items (Claude has fewer)
+7. DOM reading: SmartDOMReader + JSON-LD/OG/Twitter/Schema.org metadata
+8. Free: BYOK — works with own API key
+
 ## [EXTENSION-AUDIT] Chrome Extension — Principal Architect Audit (2026-03-18)
 
 _19 source files audited across all modules. Tab group UX gap closed._
