@@ -52,7 +52,7 @@ fn default_blocking() -> bool {
     true
 }
 
-/// Hook events.
+/// Hook events — matches Claude Code's 12+ event lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HookEvent {
     SessionStart,
@@ -61,6 +61,26 @@ pub enum HookEvent {
     AfterToolUse,
     BeforeMessage,
     AfterMessage,
+    /// Fires before a file edit (write_file or edit_file tool).
+    PreEdit,
+    /// Fires after a file edit with the modified file path.
+    PostEdit,
+    /// Fires before a shell command execution.
+    PreCommand,
+    /// Fires after a shell command completes.
+    PostCommand,
+    /// Fires when the agent enters/exits plan mode.
+    PlanModeChanged,
+    /// Fires when context compaction runs.
+    ContextCompacted,
+    /// Fires when a subagent is spawned.
+    SubagentSpawned,
+    /// Fires when a subagent completes.
+    SubagentCompleted,
+    /// Fires on notification events (warnings, errors shown to user).
+    Notification,
+    /// Fires when the user stops the agentic loop (Ctrl-C or loop detection).
+    Stop,
 }
 
 impl std::fmt::Display for HookEvent {
@@ -72,6 +92,16 @@ impl std::fmt::Display for HookEvent {
             Self::AfterToolUse => write!(f, "AfterToolUse"),
             Self::BeforeMessage => write!(f, "BeforeMessage"),
             Self::AfterMessage => write!(f, "AfterMessage"),
+            Self::PreEdit => write!(f, "PreEdit"),
+            Self::PostEdit => write!(f, "PostEdit"),
+            Self::PreCommand => write!(f, "PreCommand"),
+            Self::PostCommand => write!(f, "PostCommand"),
+            Self::PlanModeChanged => write!(f, "PlanModeChanged"),
+            Self::ContextCompacted => write!(f, "ContextCompacted"),
+            Self::SubagentSpawned => write!(f, "SubagentSpawned"),
+            Self::SubagentCompleted => write!(f, "SubagentCompleted"),
+            Self::Notification => write!(f, "Notification"),
+            Self::Stop => write!(f, "Stop"),
         }
     }
 }
