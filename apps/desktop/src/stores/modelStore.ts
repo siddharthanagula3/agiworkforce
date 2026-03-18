@@ -193,7 +193,7 @@ interface ModelState {
 
   /**
    * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
-   * E.g. claude-sonnet-4-6 ↔ claude-sonnet-4-6-thinking, gpt-4o ↔ o1, etc.
+   * E.g. claude-sonnet-4-6 ↔ claude-sonnet-4-6-thinking, gpt-5.4 ↔ o3, etc.
    * Shows a toast with the result.
    */
   cycleModelVariant: () => void;
@@ -241,14 +241,14 @@ const defaultUsageStats: UsageStats = {
 const MODEL_VARIANT_MAP: Record<string, string> = {
   'claude-sonnet-4-6': 'claude-sonnet-4-6-thinking',
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6',
-  'claude-opus-4-5': 'claude-opus-4-5-thinking',
-  'claude-opus-4-5-thinking': 'claude-opus-4-5',
-  'gpt-4o': 'o1',
-  o1: 'gpt-4o',
-  'gpt-4o-mini': 'o1-mini',
-  'o1-mini': 'gpt-4o-mini',
-  'gemini-2.0-flash': 'gemini-2.0-flash-thinking',
-  'gemini-2.0-flash-thinking': 'gemini-2.0-flash',
+  'claude-opus-4-6': 'claude-opus-4-6-thinking',
+  'claude-opus-4-6-thinking': 'claude-opus-4-6',
+  'gpt-5.4': 'o3',
+  o3: 'gpt-5.4',
+  'gpt-5.4-mini': 'o3-mini',
+  'o3-mini': 'gpt-5.4-mini',
+  'gemini-3.1-flash-lite': 'gemini-3.1-flash-lite-thinking',
+  'gemini-3.1-flash-lite-thinking': 'gemini-3.1-flash-lite',
   'deepseek-chat': 'deepseek-reasoner',
   'deepseek-reasoner': 'deepseek-chat',
 };

@@ -1352,11 +1352,15 @@ impl LLMRouter {
                 }
             }
 
+            let has_structured_output = request.output_config.is_some();
+            let has_effort = request.effort.is_some();
             tracing::info!(
                 provider = %candidate.provider.as_string(),
                 model = %candidate.model,
                 candidate_index = idx,
                 total_candidates = candidates.len(),
+                structured_output = has_structured_output,
+                effort = has_effort,
                 "Attempting LLM request"
             );
 
@@ -2094,6 +2098,16 @@ impl LLMRouter {
                 TaskCategory::Complex => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
                 TaskCategory::Creative => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
             },
+            Provider::NvidiaNim => match task {
+                TaskCategory::Simple => "meta/llama-3.3-70b-instruct".to_string(),
+                TaskCategory::Complex => "meta/llama-3.3-70b-instruct".to_string(),
+                TaskCategory::Creative => "meta/llama-3.3-70b-instruct".to_string(),
+            },
+            Provider::OpenRouter => match task {
+                TaskCategory::Simple => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
+                TaskCategory::Complex => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
+                TaskCategory::Creative => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
+            },
         }
     }
 
@@ -2330,11 +2344,15 @@ impl LLMRouter {
                 }
             }
 
+            let has_structured_output = request.output_config.is_some();
+            let has_effort = request.effort.is_some();
             tracing::info!(
                 provider = %candidate.provider.as_string(),
                 model = %candidate.model,
                 candidate_index = idx,
                 total_candidates = candidates.len(),
+                structured_output = has_structured_output,
+                effort = has_effort,
                 "Attempting streaming LLM request"
             );
 

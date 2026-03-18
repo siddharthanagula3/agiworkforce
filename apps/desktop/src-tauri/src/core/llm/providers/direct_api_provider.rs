@@ -243,6 +243,8 @@ fn default_base_url(provider: Provider) -> &'static str {
         // provide sensible defaults to avoid panics.
         Provider::Ollama => "http://localhost:11434",
         Provider::ManagedCloud => "https://api.agiworkforce.com",
+        Provider::NvidiaNim => "https://integrate.api.nvidia.com/v1",
+        Provider::OpenRouter => "https://openrouter.ai/api/v1",
     }
 }
 
@@ -367,6 +369,8 @@ impl LLMProvider for DirectApiProvider {
             Provider::Sambanova => "DirectSambanova",
             Provider::Azure => "DirectAzure",
             Provider::Bedrock => "DirectBedrock",
+            Provider::NvidiaNim => "DirectNvidiaNim",
+            Provider::OpenRouter => "DirectOpenRouter",
         }
     }
 
@@ -413,6 +417,8 @@ mod tests {
             Provider::Cohere,
             Provider::AI21,
             Provider::Sambanova,
+            Provider::NvidiaNim,
+            Provider::OpenRouter,
             // Azure and Bedrock use placeholder URLs, tested separately
         ];
         for provider in providers {
