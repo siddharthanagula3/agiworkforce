@@ -1478,7 +1478,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
                     : 'text-zinc-500 hover:bg-zinc-700/50 hover:text-zinc-300',
                 )}
-                title={thinkingModeEnabled ? 'Thinking mode on — click to disable' : 'Enable extended thinking'}
+                title={
+                  thinkingModeEnabled
+                    ? 'Thinking mode on — click to disable'
+                    : 'Enable extended thinking'
+                }
               >
                 <Brain className="h-4 w-4" />
               </button>

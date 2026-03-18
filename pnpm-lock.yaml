@@ -524,6 +524,9 @@ importers:
       expo-background-fetch:
         specifier: ~55.0.10
         version: 55.0.10(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))
+      expo-calendar:
+        specifier: ^55.0.10
+        version: 55.0.10(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))
       expo-camera:
         specifier: ~55.0.10
         version: 55.0.10(@types/emscripten@1.41.5)(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
@@ -533,6 +536,9 @@ importers:
       expo-constants:
         specifier: ~55.0.8
         version: 55.0.8(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(typescript@5.9.3)
+      expo-contacts:
+        specifier: ^55.0.9
+        version: 55.0.9(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
       expo-crypto:
         specifier: ~55.0.10
         version: 55.0.10(expo@55.0.7)
@@ -557,12 +563,18 @@ importers:
       expo-notifications:
         specifier: ~55.0.13
         version: 55.0.13(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      expo-print:
+        specifier: ~55.0.9
+        version: 55.0.9(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))
       expo-router:
         specifier: ~55.0.6
         version: 55.0.6(edmv3kkzywcda2xa2eo4qskft4)
       expo-secure-store:
         specifier: ~55.0.9
         version: 55.0.9(expo@55.0.7)
+      expo-sharing:
+        specifier: ~55.0.12
+        version: 55.0.12(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
       expo-speech:
         specifier: ~55.0.9
         version: 55.0.9(expo@55.0.7)
@@ -10659,6 +10671,15 @@ packages:
     peerDependencies:
       expo: '*'
 
+  expo-calendar@55.0.10:
+    resolution:
+      {
+        integrity: sha512-UvETOHoUbXwNNT6sV61URbKhxgqHzyvtcUNTdnBo4ndLMx5Drd3KARK9YHG0wKCacBo43D/aCl8d7E2g6ngngQ==,
+      }
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   expo-camera@55.0.10:
     resolution:
       {
@@ -10690,6 +10711,16 @@ packages:
       }
     peerDependencies:
       expo: '*'
+      react-native: '*'
+
+  expo-contacts@55.0.9:
+    resolution:
+      {
+        integrity: sha512-a6krFeZy+8Xqmdxpzr2SuBoh3OkUCKVh5xiXUJ1SAdlYjuKgiRfff7jwWs5u9dgXEtp7bR4gQpkmmaIiT13I8Q==,
+      }
+    peerDependencies:
+      expo: '*'
+      react: '*'
       react-native: '*'
 
   expo-crypto@55.0.10:
@@ -10847,6 +10878,15 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-print@55.0.9:
+    resolution:
+      {
+        integrity: sha512-QCWGEMSPfBI848WvNd4P9DJEYV3J1tvEoUSjUZJEzMxTqqqSjhncwCjA9ay8MesKDW52BsTcY/vG4wUvaFOmJg==,
+      }
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   expo-router@55.0.6:
     resolution:
       {
@@ -10899,6 +10939,16 @@ packages:
         integrity: sha512-xI72FTm469FfuuBL2R5aNtthgH+GR7ygOpsx/KcPS0K8AZaZd7VjtEExbzn9/qyyYkWW3T+3dAmCDKOMX8gdmQ==,
       }
     engines: { node: '>=20.16.0' }
+
+  expo-sharing@55.0.12:
+    resolution:
+      {
+        integrity: sha512-lmusNb5eD+VJjl+Mnkr1YWb46SDBhIxMKvhfRiW68AwbQ2TJ2/UjhWC6hsXKuKQmr3YwSEkyvlQICP/LhA0U1g==,
+      }
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-speech@55.0.9:
     resolution:
@@ -25697,6 +25747,11 @@ snapshots:
     transitivePeerDependencies:
       - react-native
 
+  expo-calendar@55.0.10(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)):
+    dependencies:
+      expo: 55.0.7(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.6)(react-dom@19.2.4(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react-native: 0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
+
   expo-camera@55.0.10(@types/emscripten@1.41.5)(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4):
     dependencies:
       barcode-detector: 3.1.1(@types/emscripten@1.41.5)
@@ -25721,6 +25776,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-contacts@55.0.9(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4):
+    dependencies:
+      expo: 55.0.7(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.6)(react-dom@19.2.4(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react: 19.2.4
+      react-native: 0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
 
   expo-crypto@55.0.10(expo@55.0.7):
     dependencies:
@@ -25832,6 +25893,11 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-print@55.0.9(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)):
+    dependencies:
+      expo: 55.0.7(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.6)(react-dom@19.2.4(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react-native: 0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
+
   expo-router@55.0.6(edmv3kkzywcda2xa2eo4qskft4):
     dependencies:
       '@expo/log-box': 55.0.7(@expo/dom-webview@55.0.3)(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
@@ -25886,6 +25952,17 @@ snapshots:
       expo: 55.0.7(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.6)(react-dom@19.2.4(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
   expo-server@55.0.6: {}
+
+  expo-sharing@55.0.12(expo@55.0.7)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4):
+    dependencies:
+      '@expo/config-plugins': 55.0.6
+      '@expo/config-types': 55.0.5
+      '@expo/plist': 0.5.2
+      expo: 55.0.7(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.6)(react-dom@19.2.4(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react: 19.2.4
+      react-native: 0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
+    transitivePeerDependencies:
+      - supports-color
 
   expo-speech@55.0.9(expo@55.0.7):
     dependencies:
