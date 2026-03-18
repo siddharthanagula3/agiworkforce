@@ -64,7 +64,9 @@ import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 import { MCPServerSettings } from './MCPServerSettings';
 import { MCPToolsSettings } from './MCPToolsSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
-import { ConnectorsGallery } from '../Connectors/ConnectorsGallery';
+import { ConnectorGallery } from '../Connectors/ConnectorGallery';
+import { ConnectorHealthDashboard } from '../Connectors/ConnectorHealthDashboard';
+import { useConnectorsStore } from '../../stores/connectorsStore';
 import { VoiceSettings } from './VoiceSettings';
 import { MemoryPanel } from '../Memory/MemoryPanel';
 import { ResearchSettings } from './ResearchSettings';
@@ -198,6 +200,7 @@ function stableSerialize(value: unknown): string {
 
 export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
   const hasInitializedOpenStateRef = useRef(false);
+  const connectedConnectorCount = useConnectorsStore((state) => state.connectedIds.length);
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
@@ -598,7 +601,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate flex-1 text-left">{item.label}</span>
+                {item.key === 'connectors' && connectedConnectorCount > 0 && (
+                  <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
+                    {connectedConnectorCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -881,7 +889,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   )}
 
                   {/* Connectors Tab */}
-                  {activeTab === 'connectors' && <ConnectorsGallery />}
+                  {activeTab === 'connectors' && (
+                    <div className="space-y-6">
+                      <ConnectorGallery />
+                      <ConnectorHealthDashboard />
+                    </div>
+                  )}
 
                   {/* API Keys Tab */}
                   {activeTab === 'api-keys' && (
