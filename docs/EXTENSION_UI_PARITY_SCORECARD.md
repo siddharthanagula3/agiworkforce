@@ -1,88 +1,89 @@
 # Extension UI Parity Scorecard: AGI Workforce vs Claude in Chrome
 
 _Audit date: 2026-03-18. All 22 source files in apps/extension/src/ audited._
+_Claude in Chrome research: 21 tools documented from extension internals v1.0.56._
 
 ## Parity Matrix
 
-| UI Feature               | Claude in Chrome                                     | AGI Workforce                                                                                                                                                                                                                                                                                | Score     | Notes                                                             |
-| ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------- |
-| Side panel chat          | Side panel with streaming, markdown, thinking blocks | Side panel with SSE streaming, DOMPurify markdown, 6 slash commands, conversation persistence                                                                                                                                                                                                | PARITY+   | AGI has slash commands + voice input + page context toggle        |
-| Model selection          | Claude models only (locked to Anthropic)             | 11 models from 7 providers (Auto, Claude Sonnet/Opus/Haiku, GPT-4o/Mini, Gemini Pro/Flash, Mistral, DeepSeek, Ollama)                                                                                                                                                                        | ADVANTAGE | Multi-LLM is a key differentiator                                 |
-| Page content reading     | DOM extraction via content script                    | SmartDOMReader (dom-reader.ts), accessibility tree builder, page-metadata.ts (JSON-LD/OG/Twitter/Schema.org), NLWeb detection (nlweb.ts), llms-txt discovery                                                                                                                                 | ADVANTAGE | Richer metadata extraction than any competitor                    |
-| Form detection + filling | Basic form interaction tools                         | Full autofill system: detector.ts (LinkedIn + Lever detection), filler.ts (React-compatible native value setter, focus->input->change->blur event sequence), linkedin.ts (13 field types with prioritized selector fallback chains), lever.ts (12 fields + custom questions + EEO detection) | ADVANTAGE | Claude doesn't have job autofill at all                           |
-| Workflow recording       | Saved shortcuts for browser task replay              | START_RECORDING/STOP_RECORDING/GET_RECORDED_ACTIONS in content script, RecordedAction[] capture, saved shortcuts CRUD (50 cap) with SAVE_SHORTCUT/LIST_SHORTCUTS/DELETE_SHORTCUT/REPLAY_SHORTCUT, replay via RUN_PAGE_ACTIONS                                                                | PARITY    | Both have record-and-replay, AGI adds persistent saved shortcuts  |
-| Tab group management     | Tab groups with multi-tab context                    | ensureTabGroup() creates "AGI Workforce" blue group, auto-groups CREATE_TAB tabs, ADD_TAB_TO_GROUP/REMOVE_TAB_FROM_GROUP messages, context menu "Add Tab to AGI Workforce Group", side panel Group/Ungroup toggle                                                                            | PARITY    | Both manage tab groups; Claude may have tighter multi-tab context |
-| Scheduled browser tasks  | Recurring task scheduling with alarms                | Full CRUD: CREATE_SCHEDULED_TASK/LIST/UPDATE/DELETE, alarm-based hourly/daily/weekly/monthly, MV3 restart recovery via restoreScheduledTaskAlarms(), execution: shortcut replay OR chat prompt, notifications on completion                                                                  | PARITY    | Feature-complete implementation                                   |
-| Console log reading      | Read console output from pages                       | patchConsole() monkey-patches console.log/warn/error/info/debug, circular buffer (200 entries, 1000 chars/entry), filters [AGI Workforce] prefix, GET_CONSOLE_LOGS/CLEAR_CONSOLE_LOGS messages, side panel UI with refresh/clear                                                             | PARITY    | Feature-complete implementation                                   |
-| Desktop notifications    | Chrome notifications for task events                 | chrome.notifications.create on errors/shortcut replay/task completion, click handler opens side panel                                                                                                                                                                                        | PARITY    | Feature-complete                                                  |
-| Keyboard shortcuts       | Browser shortcuts                                    | Cmd+Shift+A (popup), Cmd+Shift+C (capture page), Cmd+R in popup (refresh)                                                                                                                                                                                                                    | PARITY    | Both have keyboard shortcuts                                      |
-| Context menu             | Right-click menu items                               | 8 items: Ask, Explain, Translate, Summarize Page, Capture Element, Get Element Info, Discover AI Tools, Add to Tab Group                                                                                                                                                                     | ADVANTAGE | More context menu options than Claude                             |
-| Platform knowledge       | Platform-specific prompts for popular sites          | getPlatformPrompt() for 8 platforms: Slack, Gmail, Google Calendar, Google Docs, GitHub, Notion, Linear, Figma -- with navigation tips, keyboard shortcuts, DOM patterns                                                                                                                     | PARITY    | Both have platform-specific knowledge                             |
-| Native messaging bridge  | N/A (Claude is cloud-only)                           | connectNative with handshake + exponential backoff (8 max), permanent error detection, message request/response with timeouts, fire-and-forget wrapper, clean disconnect on suspend                                                                                                          | ADVANTAGE | Full desktop agent capabilities from browser                      |
-| WebMCP tool discovery    | N/A                                                  | webmcp.ts: imperative (navigator.modelContext) + declarative (HTML form attributes) discovery, callTool invocation, MutationObserver + toolschanged event watching                                                                                                                           | ADVANTAGE | Unique to AGI Workforce                                           |
-| NLWeb detection          | N/A                                                  | nlweb.ts: 4-step detection (well-known, endpoint probing, JSON-LD, HTTP headers), concurrent probes                                                                                                                                                                                          | ADVANTAGE | Unique to AGI Workforce                                           |
-| llms.txt discovery       | N/A                                                  | llms-txt.ts: fetch + parse /llms.txt Markdown format                                                                                                                                                                                                                                         | ADVANTAGE | Unique to AGI Workforce                                           |
-| Multi-model routing      | Claude-only                                          | 11 models across 7 providers with BYOK (bring your own key)                                                                                                                                                                                                                                  | ADVANTAGE | Key differentiator                                                |
+| UI Feature                      | Claude in Chrome                                                                                                                                                                        | AGI Workforce                                                                                                                                                | Score        | Notes                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------ |
+| Side panel chat                 | React side panel, SSE streaming via Anthropic JS SDK, max_tokens 10000, thinking blocks, Quick Mode compact commands                                                                    | Pure TS side panel, SSE streaming, DOMPurify markdown, 6 slash commands, voice input, conversation persistence (50 msgs), page context toggle                | PARITY+      | AGI has slash commands + voice + multi-model; Claude has thinking blocks + Quick Mode                  |
+| Model selection                 | Haiku 4.5 (Pro), Sonnet/Opus 4.6 (Max/Team) — Anthropic-only                                                                                                                            | 11 models from 7 providers (Auto, Claude, GPT-4o, Gemini, Mistral, DeepSeek, Ollama) with BYOK                                                               | ADVANTAGE    | Multi-LLM is our key differentiator                                                                    |
+| Page reading                    | `read_page` (accessibility tree via `chrome.debugger` + injected JS, 50K chars, ref IDs) + `get_page_text` (article extraction, 50K chars) + `computer` (DevTools Protocol screenshots) | SmartDOMReader + accessibility tree builder + page-metadata (JSON-LD/OG/Twitter/Schema.org) + NLWeb detection + llms-txt discovery. No debugger API.         | PARITY       | Claude uses DevTools Protocol (higher fidelity screenshots); AGI has richer metadata extraction        |
+| Form detection + filling        | `form_input` tool sets values via ref IDs from accessibility tree. Dispatches change+input events. `computer` tool types via `Input.insertText` DevTools Protocol                       | Full autofill: detector (LinkedIn + Lever), filler (React-compatible native value setter), 13 LinkedIn field types, 12 Lever fields + custom questions + EEO | ADVANTAGE    | Claude has generic form filling; AGI has deep platform-specific job autofill                           |
+| Workflow recording              | rrweb DOM snapshot recording, Haiku-generated step descriptions, GIF export via `gif_creator`, speech narration during recording                                                        | START/STOP_RECORDING, RecordedAction[] event capture, saved shortcuts CRUD (50 cap), replay via RUN_PAGE_ACTIONS                                             | GAP (LOW)    | Claude's rrweb recording is higher fidelity than our event-based capture. We lack GIF export.          |
+| Tab group management            | Auto-organizes tabs, `tabs_context`/`tabs_create` tools, tab context injected as system-reminder, separate MCP tab group                                                                | ensureTabGroup() blue group, auto-groups CREATE_TAB, ADD/REMOVE_TAB_TO_GROUP, context menu, side panel toggle                                                | PARITY       | Claude injects tab context into prompts automatically; we could add this                               |
+| Scheduled tasks                 | `chrome.alarms`, configurable daily/weekly/monthly/annually                                                                                                                             | Full CRUD, alarm-based hourly/daily/weekly/monthly, MV3 restart recovery, shortcut replay OR chat prompt execution, notifications                            | PARITY       | Both use chrome.alarms; our implementation has more schedule granularity                               |
+| Console log reading             | `read_console_messages` with regex pattern filter, error-only mode, domain scoping, limit (default 100)                                                                                 | patchConsole() monkey-patch, circular buffer (200 entries), [AGI Workforce] filter, GET/CLEAR messages, side panel UI                                        | PARITY       | Both capture console output; Claude adds regex filtering                                               |
+| Network request reading         | `read_network_requests` captures XHR/Fetch/documents/images, URL pattern filter                                                                                                         | Not implemented                                                                                                                                              | GAP (MEDIUM) | Claude can inspect HTTP traffic; we can't                                                              |
+| Desktop notifications           | Notifications on task completion, CAPTCHA detection, approval requests                                                                                                                  | chrome.notifications on errors/shortcut replay/task completion, click opens side panel                                                                       | PARITY       | Feature-complete                                                                                       |
+| Keyboard shortcuts              | No dedicated hotkeys; relies on Chrome's extension shortcut system; `/` for prompt shortcuts                                                                                            | Cmd+Shift+A (popup), Cmd+Shift+C (capture), Cmd+R (refresh in popup)                                                                                         | PARITY       | Both rely on Chrome's shortcut infrastructure                                                          |
+| Vision-based computer use       | `computer_20250124` tool with DevTools Protocol: click, type, scroll, screenshot, drag, zoom. Token-optimized screenshots (28px/token)                                                  | Screenshots via captureVisibleTab, DOM-based click/type/scroll (no DevTools Protocol)                                                                        | GAP (LOW)    | Claude uses chrome.debugger for pixel-level control; we use DOM events (more compatible, less precise) |
+| Natural language element search | `find` tool does nested LLM call to Sonnet for element location                                                                                                                         | CSS selector-based element finding only                                                                                                                      | GAP (LOW)    | Claude's find tool is AI-powered; ours is selector-based (faster, deterministic)                       |
+| GIF recording                   | `gif_creator` tool records actions as animated GIFs with overlays                                                                                                                       | Not implemented                                                                                                                                              | GAP (LOW)    | Nice-to-have for sharing; not blocking                                                                 |
+| File/image upload               | `upload_image`/`file_upload` tools via DevTools Protocol                                                                                                                                | File inputs skipped in autofill (browser security model)                                                                                                     | GAP (LOW)    | Claude bypasses file input security via debugger; we respect the sandbox                               |
+| Context menu                    | Right-click actions for Claude interactions                                                                                                                                             | 8 items: Ask, Explain, Translate, Summarize, Capture Element, Get Element Info, Discover AI Tools, Add to Tab Group                                          | ADVANTAGE    | More context menu items                                                                                |
+| Platform knowledge              | Built-in knowledge of Slack, Google Calendar, Gmail, Google Docs, GitHub                                                                                                                | 8 platforms: Slack, Gmail, GCal, GDocs, GitHub, Notion, Linear, Figma                                                                                        | PARITY+      | AGI covers 3 more platforms (Notion, Linear, Figma)                                                    |
+| Permission/domain safety        | Queries anthropic.com API for domain categorization, 3-tier system (blocked/prompt-only/normal)                                                                                         | Hardcoded cookie domain blocklist for sensitive sites                                                                                                        | GAP (LOW)    | Claude has dynamic domain safety; ours is static                                                       |
+| Native messaging bridge         | `com.anthropic.claude_browser_extension` to Claude Desktop/Code                                                                                                                         | `com.agiworkforce.browser` with handshake + exponential backoff (8 max)                                                                                      | PARITY       | Both bridge to desktop apps                                                                            |
+| WebMCP tool discovery           | N/A                                                                                                                                                                                     | Imperative + declarative discovery, callTool, MutationObserver watching                                                                                      | ADVANTAGE    | Unique to AGI Workforce                                                                                |
+| NLWeb + llms.txt                | N/A                                                                                                                                                                                     | 4-step NLWeb detection + llms.txt Markdown parsing                                                                                                           | ADVANTAGE    | Unique to AGI Workforce                                                                                |
+| Multi-model routing             | Claude-only                                                                                                                                                                             | 11 models, 7 providers, BYOK                                                                                                                                 | ADVANTAGE    | Key differentiator                                                                                     |
+| Job autofill system             | N/A                                                                                                                                                                                     | LinkedIn + Lever with React-compatible filling, 25 field types                                                                                               | ADVANTAGE    | Unique to AGI Workforce                                                                                |
 
 ## Score Summary
 
-- **PARITY+** (AGI exceeds Claude): 1 feature (side panel)
-- **ADVANTAGE** (AGI has, Claude doesn't): 8 features
-- **PARITY** (both have equivalent): 8 features
-- **GAP** (Claude has, AGI lacks): 0 features
+- **PARITY+** (AGI exceeds): 2 features (side panel, platform knowledge)
+- **ADVANTAGE** (AGI has, Claude doesn't): 6 features (multi-model, WebMCP, NLWeb/llms.txt, job autofill, context menu, form filling)
+- **PARITY** (equivalent): 8 features
+- **GAP LOW** (Claude has, minor): 5 features (rrweb recording, vision computer use, find tool, GIF creator, file upload, domain safety)
+- **GAP MEDIUM**: 1 feature (network request reading)
+- **GAP HIGH**: 0 features
+
+**Overall: 16 parity-or-better / 6 gaps (0 high, 1 medium, 5 low)**
+
+## Gaps — Implementation Priority
+
+| Gap                                | Effort     | Priority | Notes                                                                   |
+| ---------------------------------- | ---------- | -------- | ----------------------------------------------------------------------- |
+| Network request reading            | S (40 LOC) | MEDIUM   | Add webRequest/webNavigation listener in background, accumulate per-tab |
+| rrweb-quality recording            | L          | LOW      | Would require rrweb dep + significant recording infra changes           |
+| Vision computer use (debugger API) | L          | LOW      | Requires `debugger` permission (shows warning bar to users)             |
+| Natural language find              | M          | LOW      | Requires LLM endpoint for element search — could use desktop bridge     |
+| GIF creator                        | M          | LOW      | Nice-to-have for sharing recorded workflows                             |
+| File upload via debugger           | M          | LOW      | Requires debugger permission; security trade-off                        |
+| Dynamic domain safety              | S          | LOW      | Query agiworkforce.com API instead of hardcoded blocklist               |
 
 ## Message Passing Connectivity Audit
 
-All 33 chrome.runtime.sendMessage / chrome.tabs.sendMessage / connectNative calls across 5 files verified:
+34 chrome.runtime.sendMessage / chrome.tabs.sendMessage / connectNative calls across 5 files verified:
 
 ### content.ts -> background.ts (6 calls)
 
-- TAB_READY: listener in handleMessageAsync
-- SYNC_PAGE_CONTEXT: listener in handleMessageAsync
-- open_side_panel: listener in handleMessageAsync
-- WEBMCP_TOOLS_CHANGED: listener in handleMessageAsync
-- NLWEB_DETECTED: falls through to forwardToContentScript default case (no-op -- acceptable, fires and forgets)
-- NLWEB_PROBE: falls through to forwardToContentScript default case -- **NOTE**: This is a probe from content->background for cross-origin fetch. The background doesn't have a dedicated NLWEB_PROBE handler -- it forwards to content script which creates a loop. However, NLWeb probing works via same-origin fetch() direct calls, so the cross-origin path is only used when the probe URL differs from the page origin, and in practice this is rare. No runtime error since the content script handles unknown messages gracefully.
+- TAB_READY: handler in handleMessageAsync
+- SYNC_PAGE_CONTEXT: handler in handleMessageAsync
+- open_side_panel: handler in handleMessageAsync
+- WEBMCP_TOOLS_CHANGED: handler in handleMessageAsync
+- NLWEB_DETECTED: fires and forgets (acceptable)
+- NLWEB_PROBE: handler added this session (was missing)
 
 ### side_panel.ts -> background.ts (15 calls)
 
-- CHAT_MESSAGE: listener in handleMessageAsync
-- GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS: forwarded to content script
-- LIST_SHORTCUTS / DELETE_SHORTCUT / REPLAY_SHORTCUT / SAVE_SHORTCUT: handlers in background
-- GET_RECORDED_ACTIONS: forwarded to content script
-- CREATE_SCHEDULED_TASK / LIST_SCHEDULED_TASKS / UPDATE_SCHEDULED_TASK / DELETE_SCHEDULED_TASK: handlers
-- ADD_TAB_TO_GROUP / REMOVE_TAB_FROM_GROUP: handlers
-- BRIDGE_URL_CHANGED: handler
+- CHAT_MESSAGE, GET_CONSOLE_LOGS, CLEAR_CONSOLE_LOGS, LIST_SHORTCUTS, DELETE_SHORTCUT, REPLAY_SHORTCUT, SAVE_SHORTCUT, GET_RECORDED_ACTIONS, CREATE/LIST/UPDATE/DELETE_SCHEDULED_TASK, ADD/REMOVE_TAB_TO/FROM_GROUP, BRIDGE_URL_CHANGED — all have handlers
 
 ### popup.ts -> background.ts (3 calls)
 
-- GET_CONNECTION_STATUS: handler
-- CAPTURE_SCREENSHOT: handler
-- WEBMCP_DISCOVER_TOOLS: forwarded to content script
+- GET_CONNECTION_STATUS, CAPTURE_SCREENSHOT, WEBMCP_DISCOVER_TOOLS — all have handlers
 
 ### background.ts -> content.ts (7 call sites)
 
-- forwardToContentScript: generic forward with 30s timeout
-- CONNECTION_STATUS_CHANGED: broadcast to all tabs
-- CAPTURE_ELEMENT / GET_ELEMENT_INFO / WEBMCP_DISCOVER_TOOLS: via contextMenu
-- chrome.sidePanel.open: on context menu clicks
+- forwardToContentScript (30s timeout), CONNECTION_STATUS_CHANGED broadcast, context menu forwards, sidePanel.open — all wired
 
-### background.ts -> native host (via connectNative)
+### background.ts -> native host (7 message types)
 
-- connect handshake: extension_id
-- ping: heartbeat
-- page_context: tab context sync
-- task_result: action execution results
-- queue_message: user chat messages
-- chat_message: streaming chat fallback
-- webmcp_tools_update: tool discovery
+- connect, ping, page_context, task_result, queue_message, chat_message, webmcp_tools_update — all with timeout + error handling
 
-### Error handling
-
-- All chrome.runtime.sendMessage calls wrapped in callbacks or .catch()
-- All chrome.tabs.sendMessage calls with error suppression
-- Native messaging: timeout (10s), reconnect with backoff, permanent error detection
-- Side panel: 90s streaming timeout prevents stuck UI
+### Error handling: all calls have .catch() or callback error checks
 
 ## Security Verification
 
@@ -90,25 +91,19 @@ All 33 chrome.runtime.sendMessage / chrome.tabs.sendMessage / connectNative call
 - All innerHTML uses DOMPurify-sanitized or static strings
 - API keys in chrome.storage.session only (cleared on browser close)
 - Bridge URL restricted to localhost/127.0.0.1
-- Cookie domain blocklist for sensitive sites (banking/gov/healthcare)
-- CSP: script-src 'self'; object-src 'self' -- no unsafe-eval
+- Cookie domain blocklist for sensitive sites
+- CSP: `script-src 'self'; object-src 'self'` — no unsafe-eval
 - 11 permissions all justified, no `<all_urls>`
 - No hardcoded secrets
+- No `chrome.debugger` usage (deliberate — avoids warning bar)
 
 ## Build Verification
 
-- tsc --noEmit: 0 errors
-- pnpm build: 4 IIFE bundles (background 30.7KB, content 58KB, popup 4.9KB, side_panel 67KB)
-- vitest run: 194/194 tests pass
-- extension.zip: 83KB, Chrome Web Store ready
-- Built JS: zero eval/Function in dist/
+- `tsc --noEmit`: 0 errors
+- `pnpm build`: 4 IIFE bundles (background 30.7KB, content 58KB, popup 4.9KB, side_panel 67KB)
+- `vitest run`: 194/194 tests pass
+- `extension.zip`: 83KB, Chrome Web Store ready
 
-## One Issue Found -- NLWEB_PROBE Handler Missing
+## Fix Applied This Session
 
-The nlweb.ts module sends NLWEB_PROBE messages to the background for cross-origin fetches, but background.ts has no dedicated handler for this message type. It falls through to the default case which forwards to the content script -- creating a routing loop. In practice this is masked because:
-
-1. Same-origin URLs use direct fetch() and never reach the background
-2. Cross-origin probes silently fail with "Unknown message type" from the content script
-3. NLWeb detection still works for same-origin sites
-
-This is a **LOW** severity issue -- NLWeb cross-origin detection fails silently but doesn't crash. Logging as non-blocking.
+**NLWEB_PROBE handler**: Content script sends NLWEB_PROBE to background for cross-origin fetches. Background now has a dedicated handler with 5s timeout fetch, returning status + headers + body. Previously fell through to default case creating a silent routing loop.
