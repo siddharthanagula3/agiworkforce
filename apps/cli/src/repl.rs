@@ -2,7 +2,7 @@ use anyhow::Result;
 use colored::Colorize;
 use dialoguer::{Input, Select};
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use rustyline::{Config, DefaultEditor, EditMode};
 
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
@@ -81,7 +81,19 @@ pub async fn run_repl(
     )
     .await;
 
-    let mut editor = DefaultEditor::new()?;
+    // Configure editor: respect EDITOR=vi or AGIWORKFORCE_VI=1 for vim mode
+    let edit_mode = if std::env::var("AGIWORKFORCE_VI").is_ok_and(|v| v == "1" || v == "true")
+        || std::env::var("EDITOR").is_ok_and(|e| e.contains("vi"))
+    {
+        EditMode::Vi
+    } else {
+        EditMode::Emacs
+    };
+    let rl_config = Config::builder()
+        .edit_mode(edit_mode)
+        .auto_add_history(false) // we add history manually
+        .build();
+    let mut editor = DefaultEditor::with_config(rl_config)?;
 
     // Load history if available
     let history_path = CliConfig::config_dir()
