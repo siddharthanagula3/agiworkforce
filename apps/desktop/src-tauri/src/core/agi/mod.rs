@@ -17,7 +17,6 @@ pub mod memory_persistence;
 pub mod orchestrator;
 /// Example orchestrator configurations for reference and testing
 // Used by: reference implementations and integration tests
-#[allow(dead_code)]
 pub mod orchestrator_examples;
 pub mod outcome_tracker;
 pub mod planner;

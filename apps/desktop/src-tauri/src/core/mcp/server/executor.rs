@@ -372,12 +372,13 @@ impl DesktopMcpServerExecutor {
                     )));
                 }
             } else {
-                tracing::warn!(
+                tracing::error!(
                     "[SECURITY][MCP] ToolConfirmationState not available — \
-                     proceeding with bash execution in degraded mode. \
-                     Command length: {} chars.",
-                    command.len()
+                     DENYING bash execution. Security state must be initialized."
                 );
+                return Ok(self.outcome_from_error(
+                    "Bash execution denied: security validation unavailable. Please restart the application.".to_string()
+                ));
             }
         }
 

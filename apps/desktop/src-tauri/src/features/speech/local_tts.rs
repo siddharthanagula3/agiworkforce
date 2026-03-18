@@ -212,10 +212,6 @@ pub struct PiperLocal {
     voice_id: String,
     /// Voice model path
     model_path: PathBuf,
-    /// Voice config path
-    // Used by: runtime voice switching — will load per-voice JSON config
-    #[allow(dead_code)]
-    config_path: PathBuf,
     /// Voice sample rate
     sample_rate: u32,
 }
@@ -250,7 +246,6 @@ impl PiperLocal {
             models_dir,
             voice_id: voice_id.to_string(),
             model_path,
-            config_path,
             sample_rate,
         })
     }
@@ -259,14 +254,12 @@ impl PiperLocal {
     pub fn new_deferred(models_dir: PathBuf, voice_id: &str) -> Self {
         let piper_path = Self::find_piper_binary().unwrap_or_else(|_| PathBuf::from("piper"));
         let model_path = models_dir.join(format!("{}.onnx", voice_id));
-        let config_path = models_dir.join(format!("{}.onnx.json", voice_id));
 
         Self {
             piper_path,
             models_dir,
             voice_id: voice_id.to_string(),
             model_path,
-            config_path,
             sample_rate: 22050,
         }
     }

@@ -68,6 +68,7 @@ pub(super) fn build_tool_definitions(
                     },
                     "required": ["query"]
                 }),
+                strict: None,
             });
             info!("[Chat] Injected Anthropic web_search server tool for web focus mode");
         }

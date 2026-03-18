@@ -1,47 +1,70 @@
 /**
  * Background Agent Store
  *
- * Manages background agents — conversations pushed to the background with "&" prefix.
- * Similar to Cursor's background agent pattern but with native desktop integration.
+ * Wires all background_agent_* Tauri commands to the frontend.
+ * The background agent system lets users push tasks to background execution
+ * using the "&" prefix pattern (e.g., "& run the test suite").
  *
- * Differentiator: Push any conversation to background, monitor live, take back control.
- * No competitor offers this level of agent management with a desktop GUI.
+ * Covered commands (sys/commands/background_agents.rs):
+ *   background_agent_push         — push a conversation to background (already used inline)
+ *   background_agent_list         — all agents including completed last 24h
+ *   background_agent_list_active  — only non-terminal agents [NEW]
+ *   background_agent_get          — get single agent by ID [NEW]
+ *   background_agent_pause        — pause a running agent [NEW]
+ *   background_agent_resume       — resume a paused agent (was inline-only) [PROMOTED]
+ *   background_agent_cancel       — cancel an agent [NEW]
+ *   background_agent_take_over    — bring agent to foreground [NEW]
+ *   background_agent_cleanup      — evict old completed agents [NEW]
+ *   background_agent_stats        — aggregate counts [NEW]
+ *   background_agent_should_push  — detect "&" prefix in goal text [NEW]
  */
+
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { invoke } from '../lib/tauri-mock';
+import { immer } from 'zustand/middleware/immer';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { toast } from 'sonner';
-import { getSimpleErrorMessage } from '../lib/errorMessages';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// =============================================================================
+// Types (mirror Rust BackgroundAgent in core/agent/background_agent.rs)
+// =============================================================================
+
+export type BackgroundAgentStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export interface BackgroundAgent {
   id: string;
   conversationId: string;
   goal: string;
-  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  status: BackgroundAgentStatus;
   priority: number;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  progress: number;
+  currentStep?: string;
+  result?: string;
   error?: string;
+  notificationSent: boolean;
 }
 
-export interface PushToBackgroundInput {
-  conversationId: string;
-  goal: string;
+export interface BackgroundAgentContext {
   workingDirectory?: string;
-  conversationHistory?: MessageInput[];
-  activeMcpServers?: string[];
+  environment: Record<string, string>;
+  conversationSnapshot: ConversationMessage[];
+  activeMcpServers: string[];
   customInstructions?: string;
-  priority?: number;
-  timeoutSecs?: number;
 }
 
-export interface MessageInput {
+export interface ConversationMessage {
   role: string;
   content: string;
-  timestamp?: string;
+  timestamp: string;
 }
 
 export interface PushResponse {
@@ -61,13 +84,6 @@ export interface TakeOverResponse {
   context: BackgroundAgentContext;
 }
 
-export interface BackgroundAgentContext {
-  workingDirectory?: string;
-  conversationSnapshot: Array<{ role: string; content: string; timestamp: string }>;
-  activeMcpServers: string[];
-  customInstructions?: string;
-}
-
 export interface BackgroundAgentStats {
   totalAgents: number;
   runningCount: number;
@@ -79,245 +95,505 @@ export interface BackgroundAgentStats {
   atCapacity: boolean;
 }
 
-// ── Store ──────────────────────────────────────────────────────────────────────
-
-interface BackgroundAgentState {
-  agents: BackgroundAgent[];
-  activeCount: number;
-  maxAgents: number;
-  stats: BackgroundAgentStats | null;
-  isLoading: boolean;
-  error: string | null;
-
-  pushToBackground: (input: PushToBackgroundInput) => Promise<PushResponse>;
-  listAgents: () => Promise<ListAgentsResponse>;
-  listActiveAgents: () => Promise<BackgroundAgent[]>;
-  getAgent: (agentId: string) => Promise<BackgroundAgent | null>;
-  pauseAgent: (agentId: string) => Promise<void>;
-  resumeAgent: (agentId: string) => Promise<void>;
-  cancelAgent: (agentId: string) => Promise<void>;
-  takeOverAgent: (agentId: string) => Promise<TakeOverResponse>;
-  getStats: () => Promise<BackgroundAgentStats>;
-  cleanup: () => Promise<number>;
-  shouldPush: (goal: string) => Promise<{ shouldPush: boolean; cleanedGoal: string }>;
-
-  clearError: () => void;
-  reset: () => void;
+export interface PushToBackgroundInput {
+  conversationId: string;
+  goal: string;
+  workingDirectory?: string;
+  conversationHistory?: Array<{ role: string; content: string; timestamp?: string }>;
+  activeMcpServers?: string[];
+  customInstructions?: string;
+  priority?: number;
+  timeoutSecs?: number;
 }
 
-const initialState = {
-  agents: [],
-  activeCount: 0,
-  maxAgents: 10,
-  stats: null,
-  isLoading: false,
-  error: null,
-};
+// =============================================================================
+// Store State
+// =============================================================================
 
-export const useBackgroundAgentStore = create<BackgroundAgentState>()(
+interface BackgroundAgentStoreState {
+  agents: BackgroundAgent[];
+  activeAgents: BackgroundAgent[];
+  stats: BackgroundAgentStats | null;
+  isLoading: boolean;
+  isTakingOver: boolean;
+  takenOverAgent: TakeOverResponse | null;
+  error: string | null;
+
+  // Actions
+  pushToBackground: (input: PushToBackgroundInput) => Promise<PushResponse | null>;
+  listAgents: () => Promise<BackgroundAgent[]>;
+  listActiveAgents: () => Promise<BackgroundAgent[]>;
+  getAgent: (agentId: string) => Promise<BackgroundAgent | null>;
+  pauseAgent: (agentId: string) => Promise<boolean>;
+  resumeAgent: (agentId: string) => Promise<boolean>;
+  cancelAgent: (agentId: string) => Promise<boolean>;
+  takeOver: (agentId: string) => Promise<TakeOverResponse | null>;
+  cleanup: () => Promise<number>;
+  fetchStats: () => Promise<BackgroundAgentStats | null>;
+  shouldPush: (goal: string) => Promise<{ shouldPush: boolean; cleanedGoal: string } | null>;
+  clearError: () => void;
+}
+
+// =============================================================================
+// Store
+// =============================================================================
+
+export const useBackgroundAgentStore = create<BackgroundAgentStoreState>()(
   devtools(
-    (set) => ({
-      ...initialState,
+    immer((set) => ({
+      agents: [],
+      activeAgents: [],
+      stats: null,
+      isLoading: false,
+      isTakingOver: false,
+      takenOverAgent: null,
+      error: null,
 
       pushToBackground: async (input) => {
-        set({ isLoading: true, error: null });
+        set(
+          (state) => {
+            state.isLoading = true;
+            state.error = null;
+          },
+          undefined,
+          'backgroundAgent/push/start',
+        );
         try {
           const response = await invoke<PushResponse>('background_agent_push', { input });
-          // Refresh agent list after push
-          const list = await invoke<ListAgentsResponse>('background_agent_list');
-          set({
-            agents: list.agents,
-            activeCount: list.activeCount,
-            maxAgents: list.maxAgents,
-            isLoading: false,
-          });
+          set(
+            (state) => {
+              state.isLoading = false;
+            },
+            undefined,
+            'backgroundAgent/push/done',
+          );
           if (response.started) {
             toast.success('Agent started in background');
           } else {
-            toast.success(`Agent queued at position ${response.queuePosition}`);
+            toast.info(`Agent queued (position ${response.queuePosition ?? '?'})`);
           }
           return response;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg, isLoading: false });
+        } catch (err) {
+          const msg = String(err);
+          set(
+            (state) => {
+              state.error = msg;
+              state.isLoading = false;
+            },
+            undefined,
+            'backgroundAgent/push/error',
+          );
           toast.error(`Failed to push to background: ${msg}`);
-          throw error;
+          return null;
         }
       },
 
       listAgents: async () => {
-        set({ isLoading: true, error: null });
+        set(
+          (state) => {
+            state.isLoading = true;
+          },
+          undefined,
+          'backgroundAgent/list/start',
+        );
         try {
           const response = await invoke<ListAgentsResponse>('background_agent_list');
-          set({
-            agents: response.agents,
-            activeCount: response.activeCount,
-            maxAgents: response.maxAgents,
-            isLoading: false,
-          });
-          return response;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg, isLoading: false });
-          throw error;
+          set(
+            (state) => {
+              state.agents = response.agents;
+              state.isLoading = false;
+            },
+            undefined,
+            'backgroundAgent/list/done',
+          );
+          return response.agents;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+              state.isLoading = false;
+            },
+            undefined,
+            'backgroundAgent/list/error',
+          );
+          return [];
         }
       },
 
       listActiveAgents: async () => {
         try {
           const agents = await invoke<BackgroundAgent[]>('background_agent_list_active');
+          set(
+            (state) => {
+              state.activeAgents = agents;
+            },
+            undefined,
+            'backgroundAgent/listActive/done',
+          );
           return agents;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          throw error;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/listActive/error',
+          );
+          return [];
         }
       },
 
       getAgent: async (agentId) => {
         try {
-          return await invoke<BackgroundAgent | null>('background_agent_get', { agentId });
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          throw error;
+          const agent = await invoke<BackgroundAgent | null>('background_agent_get', { agentId });
+          if (agent) {
+            set(
+              (state) => {
+                const idx = state.agents.findIndex((a) => a.id === agentId);
+                if (idx !== -1) {
+                  state.agents[idx] = agent;
+                }
+                const activeIdx = state.activeAgents.findIndex((a) => a.id === agentId);
+                if (activeIdx !== -1) {
+                  state.activeAgents[activeIdx] = agent;
+                }
+              },
+              undefined,
+              'backgroundAgent/get/done',
+            );
+          }
+          return agent;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/get/error',
+          );
+          return null;
         }
       },
 
       pauseAgent: async (agentId) => {
         try {
           await invoke('background_agent_pause', { agentId });
-          set((state) => ({
-            agents: state.agents.map((a) =>
-              a.id === agentId ? { ...a, status: 'paused' as const } : a,
-            ),
-          }));
+          set(
+            (state) => {
+              const agent = state.agents.find((a) => a.id === agentId);
+              if (agent) agent.status = 'paused';
+              const active = state.activeAgents.find((a) => a.id === agentId);
+              if (active) active.status = 'paused';
+            },
+            undefined,
+            'backgroundAgent/pause/done',
+          );
           toast.success('Agent paused');
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          toast.error(`Failed to pause agent: ${msg}`);
-          throw error;
+          return true;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/pause/error',
+          );
+          toast.error(`Failed to pause agent: ${err}`);
+          return false;
         }
       },
 
       resumeAgent: async (agentId) => {
         try {
           await invoke('background_agent_resume', { agentId });
-          set((state) => ({
-            agents: state.agents.map((a) =>
-              a.id === agentId ? { ...a, status: 'running' as const } : a,
-            ),
-          }));
+          set(
+            (state) => {
+              const agent = state.agents.find((a) => a.id === agentId);
+              if (agent) agent.status = 'running';
+              const active = state.activeAgents.find((a) => a.id === agentId);
+              if (active) active.status = 'running';
+            },
+            undefined,
+            'backgroundAgent/resume/done',
+          );
           toast.success('Agent resumed');
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          toast.error(`Failed to resume agent: ${msg}`);
-          throw error;
+          return true;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/resume/error',
+          );
+          toast.error(`Failed to resume agent: ${err}`);
+          return false;
         }
       },
 
       cancelAgent: async (agentId) => {
         try {
           await invoke('background_agent_cancel', { agentId });
-          set((state) => ({
-            agents: state.agents.map((a) =>
-              a.id === agentId ? { ...a, status: 'cancelled' as const } : a,
-            ),
-          }));
-          toast.success('Agent cancelled');
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          toast.error(`Failed to cancel agent: ${msg}`);
-          throw error;
+          set(
+            (state) => {
+              const agent = state.agents.find((a) => a.id === agentId);
+              if (agent) agent.status = 'cancelled';
+              state.activeAgents = state.activeAgents.filter((a) => a.id !== agentId);
+            },
+            undefined,
+            'backgroundAgent/cancel/done',
+          );
+          toast.info('Agent cancelled');
+          return true;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/cancel/error',
+          );
+          toast.error(`Failed to cancel agent: ${err}`);
+          return false;
         }
       },
 
-      takeOverAgent: async (agentId) => {
-        set({ isLoading: true, error: null });
+      takeOver: async (agentId) => {
+        set(
+          (state) => {
+            state.isTakingOver = true;
+            state.error = null;
+          },
+          undefined,
+          'backgroundAgent/takeOver/start',
+        );
         try {
           const response = await invoke<TakeOverResponse>('background_agent_take_over', {
             agentId,
           });
-          set((state) => ({
-            agents: state.agents.filter((a) => a.id !== agentId),
-            isLoading: false,
-          }));
-          toast.success('Agent taken over — restoring conversation');
+          set(
+            (state) => {
+              state.takenOverAgent = response;
+              state.isTakingOver = false;
+              // Remove from active list since it's now foreground
+              state.activeAgents = state.activeAgents.filter((a) => a.id !== agentId);
+            },
+            undefined,
+            'backgroundAgent/takeOver/done',
+          );
+          toast.success(`Took over agent: ${response.agent.goal.slice(0, 60)}`);
           return response;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg, isLoading: false });
+        } catch (err) {
+          const msg = String(err);
+          set(
+            (state) => {
+              state.error = msg;
+              state.isTakingOver = false;
+            },
+            undefined,
+            'backgroundAgent/takeOver/error',
+          );
           toast.error(`Failed to take over agent: ${msg}`);
-          throw error;
-        }
-      },
-
-      getStats: async () => {
-        try {
-          const stats = await invoke<BackgroundAgentStats>('background_agent_stats');
-          set({ stats });
-          return stats;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          throw error;
+          return null;
         }
       },
 
       cleanup: async () => {
         try {
           const count = await invoke<number>('background_agent_cleanup');
+          // Refresh the agent list
+          set(
+            (state) => {
+              state.agents = state.agents.filter(
+                (a) =>
+                  a.status !== 'completed' && a.status !== 'failed' && a.status !== 'cancelled',
+              );
+            },
+            undefined,
+            'backgroundAgent/cleanup/done',
+          );
           if (count > 0) {
-            // Refresh list after cleanup
-            const list = await invoke<ListAgentsResponse>('background_agent_list');
-            set({
-              agents: list.agents,
-              activeCount: list.activeCount,
-            });
-            toast.success(`Cleaned up ${count} old agent${count > 1 ? 's' : ''}`);
+            toast.info(`Cleaned up ${count} old agent(s)`);
           }
           return count;
-        } catch (error) {
-          const msg = getSimpleErrorMessage(error);
-          set({ error: msg });
-          throw error;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/cleanup/error',
+          );
+          return 0;
+        }
+      },
+
+      fetchStats: async () => {
+        try {
+          const stats = await invoke<BackgroundAgentStats>('background_agent_stats');
+          set(
+            (state) => {
+              state.stats = stats;
+            },
+            undefined,
+            'backgroundAgent/stats/done',
+          );
+          return stats;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/stats/error',
+          );
+          return null;
         }
       },
 
       shouldPush: async (goal) => {
         try {
-          const [shouldPush, cleanedGoal] = await invoke<[boolean, string]>(
+          const [shouldPushResult, cleanedGoal] = await invoke<[boolean, string]>(
             'background_agent_should_push',
             { goal },
           );
-          return { shouldPush, cleanedGoal };
-        } catch (error) {
-          console.warn('Failed to check shouldPush:', getSimpleErrorMessage(error));
-          return { shouldPush: false, cleanedGoal: goal };
+          return { shouldPush: shouldPushResult, cleanedGoal };
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'backgroundAgent/shouldPush/error',
+          );
+          return null;
         }
       },
 
-      clearError: () => set({ error: null }),
-      reset: () => set(initialState),
-    }),
-    { name: 'BackgroundAgentStore' },
+      clearError: () =>
+        set(
+          (state) => {
+            state.error = null;
+          },
+          undefined,
+          'backgroundAgent/clearError',
+        ),
+    })),
+    { name: 'BackgroundAgentStore', enabled: import.meta.env.DEV },
   ),
 );
 
-// ── Selectors ──────────────────────────────────────────────────────────────────
+// =============================================================================
+// Event Listener Setup
+// =============================================================================
 
-export const selectBackgroundAgents = (state: BackgroundAgentState) => state.agents;
-export const selectActiveCount = (state: BackgroundAgentState) => state.activeCount;
-export const selectMaxAgents = (state: BackgroundAgentState) => state.maxAgents;
-export const selectBackgroundAgentStats = (state: BackgroundAgentState) => state.stats;
-export const selectBackgroundAgentLoading = (state: BackgroundAgentState) => state.isLoading;
-export const selectBackgroundAgentError = (state: BackgroundAgentState) => state.error;
-export const selectRunningAgents = (state: BackgroundAgentState) =>
-  state.agents.filter((a) => a.status === 'running');
-export const selectQueuedAgents = (state: BackgroundAgentState) =>
-  state.agents.filter((a) => a.status === 'queued');
-export const selectAtCapacity = (state: BackgroundAgentState) =>
-  state.stats?.atCapacity ?? state.activeCount >= state.maxAgents;
+let _listenerCleanup: (() => void) | null = null;
+
+/** Subscribe to background agent status events from the Rust backend. */
+export function subscribeToBackgroundAgentEvents(): () => void {
+  if (_listenerCleanup) return _listenerCleanup;
+
+  const unlisteners: Promise<UnlistenFn>[] = [];
+
+  // Agent completed notification
+  unlisteners.push(
+    listen<{ agentId: string; goal: string; success: boolean; result?: string }>(
+      'background_agent:completed',
+      (event) => {
+        const { agentId, goal, success, result } = event.payload;
+        useBackgroundAgentStore.setState(
+          (state) => {
+            const agent = state.agents.find((a) => a.id === agentId);
+            if (agent) {
+              agent.status = success ? 'completed' : 'failed';
+              if (result) agent.result = result;
+            }
+            state.activeAgents = state.activeAgents.filter((a) => a.id !== agentId);
+          },
+          undefined,
+          'backgroundAgent/event/completed',
+        );
+        if (success) {
+          toast.success(`Background agent finished: ${goal.slice(0, 60)}`);
+        } else {
+          toast.error(`Background agent failed: ${goal.slice(0, 60)}`);
+        }
+      },
+    ),
+  );
+
+  // Agent progress update
+  unlisteners.push(
+    listen<{ agentId: string; progress: number; currentStep?: string }>(
+      'background_agent:progress',
+      (event) => {
+        const { agentId, progress, currentStep } = event.payload;
+        useBackgroundAgentStore.setState(
+          (state) => {
+            const agent = state.agents.find((a) => a.id === agentId);
+            if (agent) {
+              agent.progress = progress;
+              if (currentStep) agent.currentStep = currentStep;
+            }
+            const active = state.activeAgents.find((a) => a.id === agentId);
+            if (active) {
+              active.progress = progress;
+              if (currentStep) active.currentStep = currentStep;
+            }
+          },
+          undefined,
+          'backgroundAgent/event/progress',
+        );
+      },
+    ),
+  );
+
+  // Agent status change
+  unlisteners.push(
+    listen<{ agentId: string; status: BackgroundAgentStatus }>(
+      'background_agent:status_changed',
+      (event) => {
+        const { agentId, status } = event.payload;
+        useBackgroundAgentStore.setState(
+          (state) => {
+            const agent = state.agents.find((a) => a.id === agentId);
+            if (agent) agent.status = status;
+            if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+              state.activeAgents = state.activeAgents.filter((a) => a.id !== agentId);
+            }
+          },
+          undefined,
+          'backgroundAgent/event/statusChanged',
+        );
+      },
+    ),
+  );
+
+  const cleanup = () => {
+    unlisteners.forEach((p) =>
+      p
+        .then((fn) => fn())
+        .catch((err) => console.warn('[backgroundAgentStore] Unlisten failed:', err)),
+    );
+    _listenerCleanup = null;
+  };
+
+  _listenerCleanup = cleanup;
+  return cleanup;
+}
+
+// =============================================================================
+// Selectors
+// =============================================================================
+
+export const selectAllAgents = (state: BackgroundAgentStoreState) => state.agents;
+export const selectActiveAgents = (state: BackgroundAgentStoreState) => state.activeAgents;
+export const selectBackgroundAgentStats = (state: BackgroundAgentStoreState) => state.stats;
+export const selectBackgroundAgentLoading = (state: BackgroundAgentStoreState) => state.isLoading;
+export const selectIsTakingOver = (state: BackgroundAgentStoreState) => state.isTakingOver;
+export const selectTakenOverAgent = (state: BackgroundAgentStoreState) => state.takenOverAgent;
+export const selectBackgroundAgentError = (state: BackgroundAgentStoreState) => state.error;
+export const selectRunningAgentsCount = (state: BackgroundAgentStoreState) =>
+  state.agents.filter((a) => a.status === 'running').length;
+export const selectIsAtCapacity = (state: BackgroundAgentStoreState) =>
+  state.stats?.atCapacity ?? false;

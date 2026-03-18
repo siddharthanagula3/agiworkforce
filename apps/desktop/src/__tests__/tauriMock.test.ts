@@ -116,7 +116,12 @@ describe('Core data commands return expected shapes', () => {
 
   it('scheduler_add_job returns a string job ID', async () => {
     const invoke = await getRealInvoke();
-    const result = await invoke<string>('scheduler_add_job', { job: {} });
+    const result = await invoke<string>('scheduler_add_job', {
+      name: 'Test',
+      schedule: '0 0 9 * * *',
+      actionType: 'notification',
+      actionData: {},
+    });
     expect(typeof result).toBe('string');
     expect(result.startsWith('sched_mock_')).toBe(true);
   });
@@ -144,7 +149,7 @@ describe('Core data commands return expected shapes', () => {
 describe('Scheduler mutation commands return undefined', () => {
   it('scheduler_update_job returns undefined', async () => {
     const invoke = await getRealInvoke();
-    const result = await invoke('scheduler_update_job', { jobId: 'x', job: {} });
+    const result = await invoke('scheduler_update_job', { id: 'x', updates: {} });
     expect(result).toBeUndefined();
   });
 
@@ -156,13 +161,13 @@ describe('Scheduler mutation commands return undefined', () => {
 
   it('scheduler_toggle_job returns undefined', async () => {
     const invoke = await getRealInvoke();
-    const result = await invoke('scheduler_toggle_job', { jobId: 'x' });
+    const result = await invoke('scheduler_toggle_job', { id: 'x' });
     expect(result).toBeUndefined();
   });
 
   it('scheduler_run_job_now returns undefined', async () => {
     const invoke = await getRealInvoke();
-    const result = await invoke('scheduler_run_job_now', { jobId: 'x' });
+    const result = await invoke('scheduler_run_job_now', { id: 'x' });
     expect(result).toBeUndefined();
   });
 });

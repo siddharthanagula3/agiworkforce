@@ -1,3 +1,9 @@
+//! Model Context Protocol (MCP) integration layer.
+//!
+//! Supports stdio, SSE, and streamable HTTP transports. [`client`] manages connections
+//! to external MCP servers. [`server`] exposes AGI Workforce capabilities as an MCP server.
+//! [`registry`] provides O(1) tool ID resolution. [`extensions`] manages third-party integrations.
+
 pub mod client;
 pub mod config;
 pub mod error;

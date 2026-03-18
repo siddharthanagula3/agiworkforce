@@ -26,6 +26,17 @@ export interface ProjectFile {
   addedAt: string;
 }
 
+export interface KnowledgeBaseFile {
+  id: string;
+  name: string;
+  path: string;
+  size?: number;
+  mimeType?: string;
+  /** The extracted text content of the file, stored for context injection */
+  content?: string;
+  addedAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -38,6 +49,10 @@ export interface Project {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Preferred model ID for conversations in this project */
+  preferredModel?: string;
+  /** Knowledge base files with extracted content for context injection */
+  knowledgeBaseFiles?: KnowledgeBaseFile[];
 }
 
 export interface ProjectSettings {
@@ -75,6 +90,13 @@ interface ProjectState {
   // File management
   addFileToProject: (projectId: string, file: Omit<ProjectFile, 'id' | 'addedAt'>) => Promise<void>;
   removeFileFromProject: (projectId: string, fileId: string) => Promise<void>;
+
+  // Knowledge base management
+  addKnowledgeBaseFile: (
+    projectId: string,
+    file: Omit<KnowledgeBaseFile, 'id' | 'addedAt'>,
+  ) => Promise<void>;
+  removeKnowledgeBaseFile: (projectId: string, fileId: string) => Promise<void>;
 
   // Conversation linking
   linkConversation: (projectId: string, conversationId: string) => Promise<void>;
@@ -312,6 +334,34 @@ export const useProjectStore = create<ProjectState>()(
 
           const updatedFiles = project.files.filter((f) => f.id !== fileId);
           await get().updateProject(projectId, { files: updatedFiles });
+        },
+
+        // Add a knowledge base file (with extracted content)
+        addKnowledgeBaseFile: async (projectId, fileData) => {
+          const project = get().projects.find((p) => p.id === projectId);
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          const newFile: KnowledgeBaseFile = {
+            ...fileData,
+            id: crypto.randomUUID(),
+            addedAt: new Date().toISOString(),
+          };
+
+          const updatedFiles = [...(project.knowledgeBaseFiles ?? []), newFile];
+          await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
+        },
+
+        // Remove a knowledge base file
+        removeKnowledgeBaseFile: async (projectId, fileId) => {
+          const project = get().projects.find((p) => p.id === projectId);
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          const updatedFiles = (project.knowledgeBaseFiles ?? []).filter((f) => f.id !== fileId);
+          await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
         },
 
         // Link conversation to project

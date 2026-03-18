@@ -310,10 +310,6 @@ pub fn emit_tool_cancelled(
 pub struct ToolStreamContext<'a> {
     app_handle: &'a AppHandle,
     tool_id: String,
-    /// Tool name — emitted in the Started event; kept for per-tool filtering
-    /// and error reporting in future stream lifecycle methods.
-    #[allow(dead_code)]
-    tool_name: String,
     start_time: std::time::Instant,
     session_id: Option<String>,
     agent_id: Option<String>,
@@ -346,7 +342,6 @@ impl<'a> ToolStreamContext<'a> {
         Self {
             app_handle,
             tool_id,
-            tool_name,
             start_time: std::time::Instant::now(),
             session_id: None,
             agent_id: None,

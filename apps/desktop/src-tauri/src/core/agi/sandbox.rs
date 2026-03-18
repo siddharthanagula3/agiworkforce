@@ -88,10 +88,6 @@ struct LanguageRunner {
     extension: String,
     /// Additional arguments before the script
     args: Vec<String>,
-    /// Whether to write code to a file before execution
-    // Used by: LanguageRunner::for_language — set per language, consumed by execute logic
-    #[allow(dead_code)]
-    use_file: bool,
 }
 
 impl LanguageRunner {
@@ -105,19 +101,16 @@ impl LanguageRunner {
                 },
                 extension: "py".to_string(),
                 args: vec!["-u".to_string()], // Unbuffered output
-                use_file: true,
             }),
             "javascript" | "js" | "node" => Some(Self {
                 command: "node".to_string(),
                 extension: "js".to_string(),
                 args: vec![],
-                use_file: true,
             }),
             "typescript" | "ts" => Some(Self {
                 command: "npx".to_string(),
                 extension: "ts".to_string(),
                 args: vec!["ts-node".to_string()],
-                use_file: true,
             }),
             "bash" | "sh" | "shell" => Some(Self {
                 command: if cfg!(windows) {
@@ -127,7 +120,6 @@ impl LanguageRunner {
                 },
                 extension: "sh".to_string(),
                 args: vec![],
-                use_file: true,
             }),
             "powershell" | "ps1" | "pwsh" => Some(Self {
                 command: if cfg!(windows) {
@@ -141,25 +133,21 @@ impl LanguageRunner {
                     "Bypass".to_string(),
                     "-File".to_string(),
                 ],
-                use_file: true,
             }),
             "ruby" | "rb" => Some(Self {
                 command: "ruby".to_string(),
                 extension: "rb".to_string(),
                 args: vec![],
-                use_file: true,
             }),
             "perl" | "pl" => Some(Self {
                 command: "perl".to_string(),
                 extension: "pl".to_string(),
                 args: vec![],
-                use_file: true,
             }),
             "r" | "rscript" => Some(Self {
                 command: "Rscript".to_string(),
                 extension: "R".to_string(),
                 args: vec![],
-                use_file: true,
             }),
             _ => None,
         }
