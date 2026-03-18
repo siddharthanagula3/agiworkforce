@@ -74,6 +74,9 @@ export type NativeMessageType =
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
   | 'REPLAY_SHORTCUT'
+  // Tab group management
+  | 'ADD_TAB_TO_GROUP'
+  | 'REMOVE_TAB_FROM_GROUP'
   // Scheduled tasks
   | 'CREATE_SCHEDULED_TASK'
   | 'LIST_SCHEDULED_TASKS'
@@ -738,6 +741,22 @@ export interface NLWebDetectedMessage extends BaseMessage {
   url?: string;
 }
 
+// ─── Tab group management ────────────────────────────────────────────────────
+
+export interface AddTabToGroupMessage extends BaseMessage {
+  type: 'ADD_TAB_TO_GROUP';
+}
+
+export interface RemoveTabFromGroupMessage extends BaseMessage {
+  type: 'REMOVE_TAB_FROM_GROUP';
+}
+
+export interface TabGroupResponse {
+  success: boolean;
+  grouped?: boolean;
+  error?: string;
+}
+
 // ─── Console log reading ────────────────────────────────────────────────────
 
 export interface ConsoleLogEntry {
@@ -911,6 +930,9 @@ export type ExtensionMessage =
   | WebMCPToolsChangedMessage
   // NLWeb
   | NLWebDetectedMessage
+  // Tab group management
+  | AddTabToGroupMessage
+  | RemoveTabFromGroupMessage
   // Console logs
   | GetConsoleLogsMessage
   | ClearConsoleLogsMessage
@@ -962,6 +984,8 @@ export type ExtensionResponse =
   // WebMCP
   | WebMCPDiscoverToolsResponse
   | WebMCPCallToolResponse
+  // Tab group management
+  | TabGroupResponse
   // Console logs
   | GetConsoleLogsResponse
   | ClearConsoleLogsResponse
