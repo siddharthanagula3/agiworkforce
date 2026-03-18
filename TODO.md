@@ -261,25 +261,32 @@ _Full scorecard: docs/MOBILE_UI_PARITY_SCORECARD.md_
 ## [EXTENSION-UI] Extension UI Parity Audit (2026-03-18)
 
 _Full scorecard: docs/EXTENSION_UI_PARITY_SCORECARD.md_
+_Claude in Chrome research: 21 tools documented from extension internals v1.0.56_
 
-### Parity Score: 0 GAPS | 8 ADVANTAGES | 8 PARITY | 1 PARITY+
+### Parity Score: 16 parity-or-better | 6 gaps (0 HIGH, 1 MEDIUM, 5 LOW)
 
-- [x] 22 source files audited across popup, side panel, content script, background, autofill, webmcp, nlweb, dom-reader, page-metadata, llms-txt, platform-prompts
-- [x] 33 message-passing calls verified across 5 files — all have listeners + error handling
-- [x] **FIX: NLWEB_PROBE handler missing** — added cross-origin fetch handler in background.ts (was routing loop causing silent NLWeb detection failure)
+- [x] 22 source files audited across all modules
+- [x] 34 message-passing calls verified across 5 files — all have listeners + error handling
+- [x] **FIX: NLWEB_PROBE handler** — added cross-origin fetch handler in background.ts
 - [x] Build: tsc 0 errors, 4 IIFE bundles, 194/194 tests, extension.zip 83KB
-- [x] Security: zero eval, zero innerHTML with user input, API keys in session storage only
 
-### AGI Workforce Advantages Over Claude in Chrome
+### AGI Workforce Advantages (6 features Claude lacks)
 
-1. Multi-LLM: 11 models from 7 providers (Claude = Anthropic-only)
-2. Job autofill: LinkedIn Easy Apply + Lever with React-compatible filling
-3. WebMCP: W3C tool discovery (unique — no competitor has this)
-4. NLWeb + llms.txt: Auto-discovers AI endpoints on any site
-5. Desktop bridge: Full native agent capabilities from browser
-6. Context menu: 8 items (Claude has fewer)
-7. DOM reading: SmartDOMReader + JSON-LD/OG/Twitter/Schema.org metadata
-8. Free: BYOK — works with own API key
+1. Multi-LLM: 11 models from 7 providers (Claude = Anthropic-only, locked)
+2. Job autofill: LinkedIn Easy Apply + Lever with 25 field types
+3. WebMCP: W3C tool discovery (unique to AGI Workforce)
+4. NLWeb + llms.txt: AI endpoint auto-discovery
+5. Context menu: 8 items vs Claude's fewer
+6. Platform knowledge: 8 platforms vs Claude's 5
+
+### Gaps (Claude has, we don't — from 21-tool analysis)
+
+- [ ] **MEDIUM**: Network request reading — Claude's `read_network_requests` captures XHR/Fetch traffic (~40 LOC to add)
+- [ ] **LOW**: rrweb recording — Claude uses rrweb for high-fidelity DOM snapshots vs our event-based capture
+- [ ] **LOW**: Vision computer use — Claude uses `chrome.debugger` (DevTools Protocol) for pixel-level screenshots/typing (we use DOM events — more MV3-compatible)
+- [ ] **LOW**: Natural language `find` tool — Claude does nested LLM call to Sonnet for element search (we use CSS selectors)
+- [ ] **LOW**: GIF creator — Claude records browser actions as animated GIFs with overlays
+- [ ] **LOW**: Dynamic domain safety — Claude queries API for domain categorization (we have hardcoded blocklist)
 
 ## [EXTENSION-AUDIT] Chrome Extension — Principal Architect Audit (2026-03-18)
 
