@@ -1,5 +1,6 @@
 import { TextInput, View, type TextInputProps } from 'react-native';
 import { Text } from './text';
+import { colors } from '@/lib/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -15,7 +16,7 @@ export function Input({ label, error, className = '', ...props }: InputProps) {
           error ? 'border-red-500' : 'border-white/10'
         } text-white placeholder:text-white/30 ${className}`}
         placeholderTextColor="rgba(255,255,255,0.3)"
-        selectionColor="#21808d"
+        selectionColor={colors.teal}
         accessibilityLabel={label}
         accessibilityHint={error ? `Error: ${error}` : undefined}
         {...props}

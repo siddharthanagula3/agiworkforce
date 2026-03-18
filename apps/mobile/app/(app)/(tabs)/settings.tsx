@@ -22,6 +22,7 @@ import {
   Moon,
   Monitor,
   Volume2,
+  Link2,
   type LucideIcon,
 } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -384,6 +385,15 @@ export default function SettingsTabScreen() {
             icon={Calendar}
             label="Schedules"
             onPress={() => router.push('/(app)/schedules' as Parameters<typeof router.push>[0])}
+          />
+          <Separator />
+          <SettingRow
+            icon={Link2}
+            label="Device Integrations"
+            value="Calendar, Contacts"
+            onPress={() =>
+              router.push('/(app)/settings/integrations' as Parameters<typeof router.push>[0])
+            }
           />
         </Card>
 

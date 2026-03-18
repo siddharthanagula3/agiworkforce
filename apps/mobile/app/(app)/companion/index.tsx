@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
@@ -216,9 +216,10 @@ function ConnectingView() {
       <Text variant="subheading" className="text-center mb-2">
         Connecting to Desktop...
       </Text>
-      <Text className="text-white/50 text-center text-sm">
+      <Text className="text-white/50 text-center text-sm mb-6">
         Make sure AGI Workforce is open on your desktop and both devices are on the same network.
       </Text>
+      <ActivityIndicator size="small" color={colors.teal} />
     </Animated.View>
   );
 }

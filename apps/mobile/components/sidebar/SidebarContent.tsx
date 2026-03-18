@@ -19,7 +19,7 @@ export function SidebarContent() {
   }, []);
 
   return (
-    <View className="flex-1" style={{ backgroundColor: '#131514' }}>
+    <View className="flex-1" style={{ backgroundColor: colors.background }}>
       <SidebarHeader onSearchChange={handleSearchChange} />
       <ConversationList searchQuery={searchQuery} />
       <SidebarFooter />

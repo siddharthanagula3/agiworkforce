@@ -5,6 +5,9 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
+  Modal,
+  TextInput,
+  StyleSheet,
 } from 'react-native';
 import { memo, useCallback, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -22,6 +25,7 @@ import { GeneratedImage } from './GeneratedImage';
 import { ImageGenProgress } from './ImageGenProgress';
 import { ImageFullScreen } from './ImageFullScreen';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
+import { FileExportButton } from './FileExportButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { colors } from '@/lib/theme';
 import type { ChatMessage, Artifact } from '@/types/chat';
@@ -31,104 +35,65 @@ interface MessageBubbleProps {
   onApprove?: (approvalId: string) => void;
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onRetryMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
 /**
- * Renders basic inline markdown:
- * - **bold** text
- * - `inline code`
- * - ```code blocks```
- *
- * Returns an array of React Native Text/View elements.
+ * Render inline math: $...$ (not $$)
+ * Returns an array of React Native Text/View nodes.
  */
-function renderMarkdownContent(content: string): React.ReactNode[] {
-  if (!content) return [];
-
-  const elements: React.ReactNode[] = [];
-  const codeBlockRegex = /```(?:\w+)?\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Match $...$ but not $$
+  const mathRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g;
+  let lastIdx = 0;
   let keyCounter = 0;
+  let match: RegExpExecArray | null;
 
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    // Text before the code block
-    if (match.index > lastIndex) {
-      const textBefore = content.slice(lastIndex, match.index);
-      elements.push(
-        <Text
-          key={`text-${keyCounter++}`}
-          className="text-[15px] leading-relaxed text-white/90"
-          selectable
-        >
-          {renderInlineMarkdown(textBefore)}
-        </Text>,
-      );
+  while ((match = mathRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.slice(lastIdx, match.index));
     }
-
-    // Code block
-    const codeContent = match[1].trim();
-    elements.push(
-      <View
-        key={`code-${keyCounter++}`}
+    parts.push(
+      <Text
+        key={`${keyBase}-imath-${keyCounter++}`}
         style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
-          borderRadius: 8,
-          padding: 10,
-          paddingTop: 28,
-          marginVertical: 6,
-          borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.06)',
+          fontFamily: 'Menlo',
+          fontStyle: 'italic',
+          fontSize: 13,
+          backgroundColor: 'rgba(33, 128, 141, 0.08)',
+          color: colors.textPrimary,
         }}
       >
-        <CodeBlockCopyButton code={codeContent} />
-        <Text
-          style={{
-            fontSize: 13,
-            lineHeight: 19,
-            fontFamily: 'Menlo',
-            color: 'rgba(245, 247, 251, 0.85)',
-          }}
-          selectable
-        >
-          {codeContent}
-        </Text>
-      </View>,
-    );
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining text after last code block
-  if (lastIndex < content.length) {
-    const remaining = content.slice(lastIndex);
-    elements.push(
-      <Text
-        key={`text-${keyCounter++}`}
-        className="text-[15px] leading-relaxed text-white/90"
-        selectable
-      >
-        {renderInlineMarkdown(remaining)}
+        {` ${match[1].trim()} `}
       </Text>,
     );
+    lastIdx = match.index + match[0].length;
   }
 
-  return elements;
+  if (lastIdx < text.length) {
+    parts.push(text.slice(lastIdx));
+  }
+  return parts;
 }
 
 /**
- * Handles inline formatting: **bold** and `code`.
+ * Handles inline formatting: **bold**, `code`, and $inline math$.
  */
-function renderInlineMarkdown(text: string): React.ReactNode[] {
+function renderInlineMarkdown(text: string, keyBase = 'inline'): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
+  // Match bold and inline code
   const inlineRegex = /(\*\*(.+?)\*\*|`([^`]+)`)/g;
   let lastIdx = 0;
   let inlineMatch: RegExpExecArray | null;
   let inlineKey = 0;
 
   while ((inlineMatch = inlineRegex.exec(text)) !== null) {
-    // Plain text before
+    // Plain text before — pass through inline math renderer
     if (inlineMatch.index > lastIdx) {
-      parts.push(text.slice(lastIdx, inlineMatch.index));
+      const plain = text.slice(lastIdx, inlineMatch.index);
+      parts.push(...renderInlineMath(plain, `${keyBase}-pre-${inlineKey}`));
     }
 
     if (inlineMatch[2]) {
@@ -158,12 +123,141 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
     lastIdx = inlineMatch.index + inlineMatch[0].length;
   }
 
-  // Remaining plain text
+  // Remaining plain text — pass through inline math renderer
   if (lastIdx < text.length) {
-    parts.push(text.slice(lastIdx));
+    parts.push(...renderInlineMath(text.slice(lastIdx), `${keyBase}-post`));
   }
 
   return parts;
+}
+
+/**
+ * Renders basic inline markdown:
+ * - **bold** text
+ * - `inline code`
+ * - ```code blocks```
+ * - $$...$$ block math
+ * - $...$ inline math
+ *
+ * Returns an array of React Native Text/View elements.
+ */
+function renderMarkdownContent(content: string): React.ReactNode[] {
+  if (!content) return [];
+
+  const elements: React.ReactNode[] = [];
+  let remaining = content;
+  let keyCounter = 0;
+
+  // First pass: extract block math $$...$$ and code blocks ```...```
+  // Process them together in document order.
+  const blockRegex = /(\$\$([\s\S]*?)\$\$|```(?:\w+)?\n?([\s\S]*?)```)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = blockRegex.exec(content)) !== null) {
+    // Text before this block
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index);
+      elements.push(
+        <Text
+          key={`text-${keyCounter++}`}
+          className="text-[15px] leading-relaxed text-white/90"
+          selectable
+        >
+          {renderInlineMarkdown(textBefore, `il-${keyCounter}`)}
+        </Text>,
+      );
+    }
+
+    if (match[2] !== undefined) {
+      // Block math $$...$$
+      const mathContent = match[2].trim();
+      elements.push(
+        <View
+          key={`bmath-${keyCounter++}`}
+          style={{
+            backgroundColor: 'rgba(33, 128, 141, 0.08)',
+            borderRadius: 6,
+            padding: 8,
+            marginVertical: 6,
+            borderLeftWidth: 2,
+            borderLeftColor: colors.teal,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: 'Menlo',
+              fontStyle: 'italic',
+              fontSize: 14,
+              color: colors.textPrimary,
+              textAlign: 'center',
+              lineHeight: 22,
+            }}
+            selectable
+          >
+            {mathContent}
+          </Text>
+        </View>,
+      );
+    } else if (match[3] !== undefined) {
+      // Code block
+      const codeContent = match[3].trim();
+      elements.push(
+        <View
+          key={`code-${keyCounter++}`}
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            borderRadius: 8,
+            padding: 10,
+            paddingTop: 28,
+            marginVertical: 6,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.06)',
+          }}
+        >
+          <CodeBlockCopyButton code={codeContent} />
+          <Text
+            style={{
+              fontSize: 13,
+              lineHeight: 19,
+              fontFamily: 'Menlo',
+              color: 'rgba(245, 247, 251, 0.85)',
+            }}
+            selectable
+          >
+            {codeContent}
+          </Text>
+        </View>,
+      );
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text after last block
+  if (lastIndex < content.length) {
+    remaining = content.slice(lastIndex);
+    elements.push(
+      <Text
+        key={`text-${keyCounter++}`}
+        className="text-[15px] leading-relaxed text-white/90"
+        selectable
+      >
+        {renderInlineMarkdown(remaining, `il-tail-${keyCounter}`)}
+      </Text>,
+    );
+  }
+
+  // If nothing matched, render the entire content as inline text
+  if (elements.length === 0 && content.length > 0) {
+    elements.push(
+      <Text key="text-0" className="text-[15px] leading-relaxed text-white/90" selectable>
+        {renderInlineMarkdown(content, 'il-0')}
+      </Text>,
+    );
+  }
+
+  return elements;
 }
 
 /**
@@ -178,11 +272,16 @@ export const MessageBubble = memo(function MessageBubble({
   onApprove,
   onReject,
   onDeleteMessage,
+  onRetryMessage,
+  onEditMessage,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
   const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
+  const [showExportSheet, setShowExportSheet] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editText, setEditText] = useState('');
   const { width } = useWindowDimensions();
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
@@ -208,10 +307,48 @@ export const MessageBubble = memo(function MessageBubble({
     setFullScreenImageUrl(null);
   }, []);
 
+  const handleShowExport = useCallback(() => {
+    setShowExportSheet(true);
+  }, []);
+
+  const handleCloseExport = useCallback(() => {
+    setShowExportSheet(false);
+  }, []);
+
+  const handleOpenEditModal = useCallback(() => {
+    setEditText(message.content);
+    setEditModalVisible(true);
+  }, [message.content]);
+
+  const handleSubmitEdit = useCallback(() => {
+    const trimmed = editText.trim();
+    if (trimmed && onEditMessage) {
+      onEditMessage(message.id, trimmed);
+    }
+    setEditModalVisible(false);
+  }, [editText, message.id, onEditMessage]);
+
   const handleLongPress = useCallback(() => {
-    const options = ['Copy Message', ...(onDeleteMessage ? ['Delete Message'] : []), 'Cancel'];
-    const destructiveIndex = onDeleteMessage ? 1 : -1;
-    const cancelIndex = options.length - 1;
+    const exportOption = isAssistant && message.content.trim() ? ['Export Message...'] : [];
+    const deleteOption = onDeleteMessage ? ['Delete Message'] : [];
+
+    let options: string[];
+    let cancelIndex: number;
+    let destructiveIndex: number;
+
+    if (isUser) {
+      // User message: Edit, Copy, Delete, Cancel
+      const editOption = onEditMessage ? ['Edit Message'] : [];
+      options = [...editOption, 'Copy Message', ...deleteOption, 'Cancel'];
+      cancelIndex = options.length - 1;
+      destructiveIndex = onDeleteMessage ? options.indexOf('Delete Message') : -1;
+    } else {
+      // Assistant message: Retry, Copy, Export, Delete, Cancel
+      const retryOption = onRetryMessage ? ['Retry'] : [];
+      options = [...retryOption, 'Copy Message', ...exportOption, ...deleteOption, 'Cancel'];
+      cancelIndex = options.length - 1;
+      destructiveIndex = onDeleteMessage ? options.indexOf('Delete Message') : -1;
+    }
 
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -221,34 +358,62 @@ export const MessageBubble = memo(function MessageBubble({
           destructiveButtonIndex: destructiveIndex >= 0 ? destructiveIndex : undefined,
         },
         (buttonIndex) => {
-          if (buttonIndex === 0) {
+          const action = options[buttonIndex];
+          if (action === 'Copy Message') {
             copyToClipboard(message.content);
-          } else if (destructiveIndex >= 0 && buttonIndex === destructiveIndex) {
+          } else if (action === 'Export Message...') {
+            handleShowExport();
+          } else if (action === 'Delete Message') {
             onDeleteMessage?.(message.id);
+          } else if (action === 'Retry') {
+            onRetryMessage?.(message.id);
+          } else if (action === 'Edit Message') {
+            handleOpenEditModal();
           }
         },
       );
     } else {
-      Alert.alert('Message Actions', undefined, [
-        {
-          text: 'Copy Message',
-          onPress: () => {
-            copyToClipboard(message.content);
-          },
-        },
-        ...(onDeleteMessage
-          ? [
-              {
-                text: 'Delete Message',
-                style: 'destructive' as const,
-                onPress: () => onDeleteMessage(message.id),
-              },
-            ]
-          : []),
-        { text: 'Cancel', style: 'cancel' as const },
-      ]);
+      const androidActions: Array<{
+        text: string;
+        style?: 'destructive' | 'cancel';
+        onPress?: () => void;
+      }> = [];
+
+      if (isUser && onEditMessage) {
+        androidActions.push({ text: 'Edit Message', onPress: handleOpenEditModal });
+      }
+      if (!isUser && onRetryMessage) {
+        androidActions.push({ text: 'Retry', onPress: () => onRetryMessage(message.id) });
+      }
+      androidActions.push({
+        text: 'Copy Message',
+        onPress: () => copyToClipboard(message.content),
+      });
+      if (isAssistant && message.content.trim()) {
+        androidActions.push({ text: 'Export Message...', onPress: handleShowExport });
+      }
+      if (onDeleteMessage) {
+        androidActions.push({
+          text: 'Delete Message',
+          style: 'destructive' as const,
+          onPress: () => onDeleteMessage(message.id),
+        });
+      }
+      androidActions.push({ text: 'Cancel', style: 'cancel' as const });
+
+      Alert.alert('Message Actions', undefined, androidActions);
     }
-  }, [message.id, message.content, onDeleteMessage]);
+  }, [
+    message.id,
+    message.content,
+    isUser,
+    isAssistant,
+    onDeleteMessage,
+    onRetryMessage,
+    onEditMessage,
+    handleShowExport,
+    handleOpenEditModal,
+  ]);
 
   const contentElements = renderMarkdownContent(message.content);
 
@@ -408,6 +573,105 @@ export const MessageBubble = memo(function MessageBubble({
         visible={fullScreenImageUrl !== null}
         onClose={handleCloseFullScreenImage}
       />
+
+      {/* File export bottom sheet (assistant messages only) */}
+      {isAssistant && (
+        <FileExportButton
+          content={message.content}
+          title={message.model ? `${message.model} response` : undefined}
+          visible={showExportSheet}
+          onClose={handleCloseExport}
+        />
+      )}
+
+      {/* Edit message modal (Android + fallback for iOS when Alert.prompt unavailable) */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <Pressable style={editStyles.backdrop} onPress={() => setEditModalVisible(false)}>
+          <Pressable style={editStyles.dialog} onPress={() => undefined}>
+            <Text style={editStyles.dialogTitle}>Edit Message</Text>
+            <TextInput
+              style={editStyles.input}
+              value={editText}
+              onChangeText={setEditText}
+              multiline
+              autoFocus
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholder="Edit your message…"
+            />
+            <View style={editStyles.buttonRow}>
+              <Pressable
+                style={editStyles.cancelBtn}
+                onPress={() => setEditModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel edit"
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={editStyles.submitBtn}
+                onPress={handleSubmitEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Submit edit"
+              >
+                <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>Send</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
+});
+
+const editStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  dialog: {
+    width: '100%',
+    backgroundColor: '#1e2025',
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  dialogTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: '#fff',
+    minHeight: 80,
+    maxHeight: 200,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+  },
+  cancelBtn: {
+    padding: 8,
+  },
+  submitBtn: {
+    padding: 8,
+  },
 });

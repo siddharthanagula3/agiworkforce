@@ -1,10 +1,10 @@
 import { Tabs } from 'expo-router';
-import { Home, MessageSquare, Bot, Settings } from 'lucide-react-native';
+import { Home, MessageSquare, Bot, FolderOpen, Settings } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Bottom tab navigator for the main app screens.
- * Four tabs: Home, Chat, Agents, Settings.
+ * Five tabs: Home, Chat, Projects, Agents, Settings.
  * Each tab has its own stack navigator for drill-down screens.
  */
 export default function TabsLayout() {
@@ -42,6 +42,13 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color, size }) => <MessageSquare size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="projects"
+        options={{
+          title: 'Projects',
+          tabBarIcon: ({ color, size }) => <FolderOpen size={size} color={color} />,
         }}
       />
       <Tabs.Screen

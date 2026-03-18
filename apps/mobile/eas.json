@@ -15,12 +15,19 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
+        "simulator": false,
         "buildConfiguration": "Release"
       }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
