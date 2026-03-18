@@ -125,6 +125,15 @@ pub async fn run_repl(
                     continue;
                 }
 
+                // Handle ! prefix: direct bash execution (output added to context)
+                if input.starts_with('!') {
+                    let cmd = input.strip_prefix('!').unwrap_or("").trim();
+                    if !cmd.is_empty() {
+                        handle_bash_prefix(cmd, &mut session);
+                    }
+                    continue;
+                }
+
                 // Handle slash commands
                 if input.starts_with('/') {
                     let result = handle_slash_command(input, &mut session, config);
@@ -373,6 +382,18 @@ fn handle_slash_command(
         "/context" | "/ctx" => {
             eprintln!("{}", session.context_report());
         }
+        "/status" => {
+            eprintln!("{}", "Status:".cyan().bold());
+            eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
+            eprintln!("  Model:      {}", session.model);
+            eprintln!("  Provider:   {:?}", session.provider);
+            eprintln!("  Plan mode:  {}", if session.plan_mode { "ON" } else { "OFF" });
+            eprintln!("  Fast mode:  {}", if session.fast_mode { "ON" } else { "OFF" });
+            eprintln!("  Turns:      {}", session.turn_count);
+            eprintln!("  Tokens:     {} in / {} out", session.total_input_tokens, session.total_output_tokens);
+            eprintln!("  Checkpoints: {}", session.checkpoint_count());
+            eprintln!("  Skip perms: {}", session.skip_permissions);
+        }
         "/sessions" => {
             handle_sessions(arg);
         }
@@ -495,6 +516,7 @@ fn print_help() {
     eprintln!("  {}        Append text to project CLAUDE.md", "# <text>".bold());
     eprintln!();
     eprintln!("{}", "Info:".cyan().bold());
+    eprintln!("  {}           Show version, model, provider, status", "/status".bold());
     eprintln!("  {}             Show session cost summary", "/cost".bold());
     eprintln!("  {}          Show context window usage", "/context".bold());
     eprintln!("  {}           List available models", "/models".bold());
@@ -506,9 +528,12 @@ fn print_help() {
     eprintln!("  {}             Show this help", "/help".bold());
     eprintln!("  {}             Exit", "/exit".bold());
     eprintln!();
-    eprintln!("{}", "Tips:".cyan().bold());
-    eprintln!("  - End a line with \\ for multi-line input");
-    eprintln!("  - Ctrl-C cancels current input, Ctrl-D exits");
+    eprintln!("{}", "Shortcuts:".cyan().bold());
+    eprintln!("  {}           Run shell command (output added to context)", "! <command>".bold());
+    eprintln!("  {}        Append text to project CLAUDE.md", "# <text>".bold());
+    eprintln!("  {} Multi-line input", "\\".bold());
+    eprintln!("  {}              Cancel input / {} Exit", "Ctrl-C".bold(), "Ctrl-D".bold());
+    eprintln!("  {}            Set AGIWORKFORCE_VI=1 for vim keybindings", "Vi mode".bold());
 }
 
 // ---------------------------------------------------------------------------
@@ -1344,6 +1369,54 @@ fn handle_config(arg: &str, config: &mut CliConfig) {
         }
         _ => {
             output::print_warn("Usage: /config [show|get <key>|set <key> <value>]");
+        }
+    }
+}
+
+fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
+    eprintln!("{}", format!("$ {}", cmd).dimmed());
+    match std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+    {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            if !stdout.is_empty() {
+                eprint!("{}", stdout);
+            }
+            if !stderr.is_empty() {
+                eprint!("{}", stderr.to_string().red());
+            }
+
+            // Add the command and output to conversation context
+            let context_msg = format!(
+                "I ran this shell command:\n```\n$ {}\n```\nOutput:\n```\n{}{}\n```",
+                cmd,
+                stdout,
+                if stderr.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n[stderr]: {}", stderr)
+                }
+            );
+            session
+                .messages
+                .push(crate::models::Message::text("user", context_msg));
+
+            let exit_str = if output.status.success() {
+                "0".green().to_string()
+            } else {
+                format!("{}", output.status.code().unwrap_or(-1))
+                    .red()
+                    .to_string()
+            };
+            eprintln!("{}", format!("(exit {})", exit_str).dimmed());
+        }
+        Err(e) => {
+            output::print_error(&format!("Failed to execute: {}", e));
         }
     }
 }
