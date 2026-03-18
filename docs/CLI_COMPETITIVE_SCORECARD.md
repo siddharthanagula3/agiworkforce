@@ -45,9 +45,9 @@
 | 29  | **Model catalog**       | ❌ (single model)                             | ❌ (single)                 | ❌ (single)             | ✅ model list               | ✅ 18+ models, pricing, deprecation     | **ADVANTAGE** |
 | 30  | Max turns limit         | ✅ --max-turns                                | ❌                          | ❌                      | ❌                          | ✅ --max-turns N                        | **PARITY**    |
 | 31  | Vim mode                | ✅ /vim toggle                                | ❌                          | ❌                      | ✅ hjkl + leader key        | ✅ AGIWORKFORCE_VI=1                    | **PARITY**    |
-| 32  | ! bash prefix           | ✅ ! runs shell direct                        | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 32  | ! bash prefix           | ✅ ! runs shell direct                        | ❌                          | ❌                      | ❌                          | ✅ ! prefix, output added to context    | **PARITY**    |
 | 33  | @ file mentions         | ✅ @ autocomplete                             | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
-| 34  | --effort level          | ✅ low/medium/high/max                        | ❌                          | ❌                      | ❌                          | ❌                                      | GAP           |
+| 34  | --effort level          | ✅ low/medium/high/max                        | ❌                          | ❌                      | ❌                          | ✅ --effort low/medium/high/max         | **PARITY**    |
 | 35  | TUI framework           | ❌ (readline)                                 | ✅ Ink (React)              | ✅ ratatui              | ✅ OpenTUI (SolidJS)        | ❌ (rustyline)                          | GAP           |
 | 36  | OS sandbox              | ❌                                            | ✅ Docker/gVisor            | ✅ Seatbelt/Landlock    | ❌                          | ❌                                      | GAP           |
 | 37  | LSP integration         | ✅ LSP tool                                   | ❌                          | ❌                      | ✅ LSP tool                 | ❌                                      | GAP           |
@@ -57,15 +57,15 @@
 
 ## Scoring Summary
 
-| Category      | Score | Details                                                                      |
-| ------------- | ----- | ---------------------------------------------------------------------------- |
-| **PARITY**    | 19/40 | Feature-matched with market leaders                                          |
-| **ADVANTAGE** | 5/40  | Multi-model, BYOK, fallback chains, safety classifier, model catalog         |
-| **UNIQUE**    | 1/40  | Subscription auth (Copilot + ChatGPT Plus OAuth)                             |
-| **PARTIAL**   | 3/40  | Hooks (16 vs 22), MCP (stdio only), permissions (simpler model)              |
-| **GAP**       | 9/40  | ! prefix, @ mentions, --effort, TUI, sandbox, LSP, voice, extensions, remote |
+| Category      | Score | Details                                                              |
+| ------------- | ----- | -------------------------------------------------------------------- |
+| **PARITY**    | 21/40 | Feature-matched with market leaders                                  |
+| **ADVANTAGE** | 5/40  | Multi-model, BYOK, fallback chains, safety classifier, model catalog |
+| **UNIQUE**    | 1/40  | Subscription auth (Copilot + ChatGPT Plus OAuth)                     |
+| **PARTIAL**   | 3/40  | Hooks (16 vs 22), MCP (stdio only), permissions (simpler model)      |
+| **GAP**       | 7/40  | @ mentions, TUI, sandbox, LSP, voice, extensions, remote             |
 
-**Overall parity: 62.5%** (25/40 at parity or better)
+**Overall parity: 67.5%** (27/40 at parity or better)
 
 ## AGI Workforce Killer Advantages
 
@@ -128,9 +128,9 @@ Route through Copilot or ChatGPT Plus subscriptions. Use models you already pay 
 
 ### P0 — Quick Wins (< 50 LOC each)
 
-1. **`!` bash prefix** in REPL — direct shell execution without tool call overhead
-2. **`--effort` flag** — preset bundles for max_turns + max_tokens + temperature
-3. **`/status` command** — show version, model, provider, auth status, context usage
+1. ~~**`!` bash prefix**~~: DONE — `! ls -la` runs shell, output added to conversation context
+2. ~~**`--effort` flag**~~: DONE — `--effort low|medium|high|max` sets max_turns + tokens + temperature
+3. ~~**`/status` command**~~: DONE — shows version, model, provider, plan/fast mode, tokens, checkpoints
 
 ### P1 — Medium Effort
 
