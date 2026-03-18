@@ -7,7 +7,7 @@ interface RouteConfig {
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://agiworkforce.com';
+  const baseUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
   const routes: RouteConfig[] = [
     // Primary pages
