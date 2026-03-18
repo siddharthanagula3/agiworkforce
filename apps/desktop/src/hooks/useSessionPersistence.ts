@@ -93,19 +93,14 @@ function saveAllSessions(sessions: PersistedSession[]): void {
 export function useSessionPersistence(
   options: UseSessionPersistenceOptions = {},
 ): UseSessionPersistenceReturn {
-  const { autoSaveInterval = 0, debug = false } = options;
+  const { autoSaveInterval = 0 } = options;
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const log = useCallback(
-    (message: string, data?: unknown) => {
-      if (debug) {
-        console.log(`[useSessionPersistence] ${message}`, data);
-      }
-    },
-    [debug],
-  );
+  const log = useCallback((_message: string, _data?: unknown) => {
+    // Debug logging removed for production
+  }, []);
 
   const restoreSession = useCallback((): PersistedSession | null => {
     try {

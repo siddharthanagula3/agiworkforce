@@ -524,6 +524,7 @@ impl ToolExecutor {
             name: tool.id.clone(),
             description: tool.description.clone(),
             parameters,
+            strict: None,
         }
     }
 

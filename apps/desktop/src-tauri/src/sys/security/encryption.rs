@@ -116,6 +116,13 @@ pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String,
         .decode(&encrypted.nonce)
         .map_err(|e| format!("Failed to decode nonce: {}", e))?;
 
+    if nonce_bytes.len() != 12 {
+        return Err(format!(
+            "Invalid nonce length: expected 12 bytes, got {}",
+            nonce_bytes.len()
+        ));
+    }
+
     #[allow(deprecated)]
     let nonce = Nonce::from_slice(&nonce_bytes);
 

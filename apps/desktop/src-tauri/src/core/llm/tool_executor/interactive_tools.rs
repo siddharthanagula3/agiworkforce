@@ -162,7 +162,6 @@ impl ToolExecutor {
 ///
 /// Resolves the pending oneshot channel for the given question ID, unblocking
 /// the `execute_question_tool` future that is waiting for the response.
-#[allow(dead_code)]
 pub async fn submit_question_answer(id: String, answer: Value) -> Result<()> {
     let mut pending = PENDING_QUESTIONS.lock().await;
     if let Some(tx) = pending.remove(&id) {

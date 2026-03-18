@@ -390,6 +390,7 @@ impl McpToolRegistry {
                 .clone()
                 .unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
             parameters: mcp_tool.input_schema.clone(),
+            strict: None,
         }
     }
 

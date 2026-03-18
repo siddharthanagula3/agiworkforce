@@ -30,7 +30,7 @@
 //! println!("Transcript: {}", result.text);
 //! ```
 
-use super::deepgram::{DeepgramClient, DeepgramConfig, TranscriptEvent};
+use super::deepgram::{DeepgramClient, DeepgramConfig};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -135,14 +135,6 @@ impl Default for SpeechRecognitionConfig {
 struct RecognitionSession {
     /// Deepgram audio sender (if using Deepgram)
     deepgram_audio_tx: Option<mpsc::Sender<Vec<u8>>>,
-    /// Deepgram transcript receiver
-    // Used by: bidirectional streaming — will read real-time transcripts
-    #[allow(dead_code)]
-    deepgram_transcript_rx: Option<mpsc::Receiver<TranscriptEvent>>,
-    /// Whether session is active
-    // Used by: session lifecycle management — start/stop/pause
-    #[allow(dead_code)]
-    is_active: bool,
 }
 
 /// Speech recognizer with multi-provider support
@@ -251,8 +243,6 @@ impl SpeechRecognizer {
             let mut session_guard = self.session.lock().await;
             *session_guard = Some(RecognitionSession {
                 deepgram_audio_tx: Some(audio_tx),
-                deepgram_transcript_rx: None, // We're processing in a spawned task
-                is_active: true,
             });
         }
 

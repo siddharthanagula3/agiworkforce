@@ -1249,6 +1249,7 @@ mod tests {
                     },
                     "required": ["location"]
                 }),
+                strict: None,
             }]),
             ..Default::default()
         };

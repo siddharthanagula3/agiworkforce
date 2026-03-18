@@ -241,11 +241,20 @@ pub fn get_pricing(provider: &Provider, model_id: &str) -> Option<PricingEntry> 
 /// Token estimation multiplier for a provider.
 /// Returns the prompt multiplier (prompt == completion for all current providers).
 pub fn get_token_multiplier(provider: &Provider) -> f64 {
-    CONFIG
+    match CONFIG
         .providers
         .get(provider.as_string())
         .map(|p| p.token_multiplier.prompt)
-        .unwrap_or(1.0)
+    {
+        Some(m) => m,
+        None => {
+            tracing::debug!(
+                provider = %provider.as_string(),
+                "No token multiplier configured for provider, defaulting to 1.0"
+            );
+            1.0
+        }
+    }
 }
 
 /// Resolve the wire API model ID for a given catalog model ID.
