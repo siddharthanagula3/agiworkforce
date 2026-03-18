@@ -13,6 +13,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../services/modelMetrics';
+import { getTokenCounter } from '../services/tokenCounter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,6 +441,7 @@ export async function streamChatCompletion(
     if (cancellationToken.isCancellationRequested) {
       throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
     }
+    let responseChars = 0;
     await withRetry(() =>
       httpsPostStream(
         `${endpoint}/chat/completions`,
@@ -448,6 +450,7 @@ export async function streamChatCompletion(
         (chunk) => {
           const content = chunk.choices[0]?.delta?.content;
           if (content !== undefined && content !== '') {
+            responseChars += content.length;
             callbacks.onToken(content);
           }
         },
@@ -456,6 +459,7 @@ export async function streamChatCompletion(
     );
     callbacks.onDone();
     getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
+    getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
   } else {
     // Non-streaming fallback
     const response = await httpsPost(
@@ -481,6 +485,12 @@ export async function streamChatCompletion(
       model,
       Date.now() - requestStartTime,
       parsed.usage?.total_tokens,
+    );
+    getTokenCounter().addUsage(
+      parsed.usage?.prompt_tokens,
+      parsed.usage?.completion_tokens,
+      bodyStr.length,
+      content.length,
     );
   }
 }
