@@ -17,6 +17,7 @@ interface AuthState {
   signInWithGoogle: (accessToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 /** Auth subscription — tracked to prevent leaks */
@@ -156,8 +157,20 @@ export const useAuthStore = create<AuthState>()(
           }
           set({ session: data.session, user: data.session.user });
         } catch (err) {
-          console.warn('[authStore] Refresh failed:', err instanceof Error ? err.message : 'unknown error');
+          console.warn(
+            '[authStore] Refresh failed:',
+            err instanceof Error ? err.message : 'unknown error',
+          );
           set({ session: null, user: null });
+        }
+      },
+
+      resetPassword: async (email) => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: 'agiworkforce://reset-password',
+        });
+        if (error) {
+          throw error;
         }
       },
     }),

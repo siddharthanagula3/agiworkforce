@@ -8,6 +8,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { ConversationList } from '@/components/sidebar/ConversationList';
+import { SearchBar } from '@/components/sidebar/SearchBar';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -22,11 +23,14 @@ export default function ChatTabScreen() {
   const router = useRouter();
   const modelPickerRef = useRef<BottomSheet>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
-  const [searchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const searchConversations = useChatStore((s) => s.searchConversations);
+  const searchResults = useChatStore((s) => s.searchResults);
+  const storeSearchQuery = useChatStore((s) => s.searchQuery);
   const selectedModel = useModelStore((s) => s.selectedModel);
 
   useEffect(() => {
@@ -34,12 +38,15 @@ export default function ChatTabScreen() {
   }, [loadConversations]);
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (
+      text: string,
+      attachments?: import('@/components/chat/AttachmentPreview').Attachment[],
+    ) => {
       try {
         const title = text.length > 40 ? text.slice(0, 40).trim() + '...' : text;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        sendMessage(conversationId, text, selectedModel);
+        sendMessage(conversationId, text, selectedModel, attachments);
       } catch (error) {
         console.warn('Failed to create conversation:', error);
       }
@@ -73,6 +80,14 @@ export default function ChatTabScreen() {
     [createConversation, sendMessage, selectedModel],
   );
 
+  const handleSearchChange = useCallback(
+    (text: string) => {
+      setSearchQuery(text);
+      searchConversations(text);
+    },
+    [searchConversations],
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
       {/* Header */}
@@ -90,9 +105,15 @@ export default function ChatTabScreen() {
         </Pressable>
       </View>
 
+      {/* Search bar */}
+      <SearchBar value={searchQuery} onChangeText={handleSearchChange} />
+
       {/* Conversation list */}
       <View className="flex-1">
-        <ConversationList searchQuery={searchQuery} />
+        <ConversationList
+          searchQuery={searchQuery}
+          searchResults={storeSearchQuery ? searchResults : undefined}
+        />
       </View>
 
       {/* Chat input at bottom */}

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { View, RefreshControl } from 'react-native';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from '@/types/chat';
@@ -8,6 +8,7 @@ interface MessageListProps {
   messages: ChatMessage[];
   onApprove?: (approvalId: string) => void;
   onReject?: (approvalId: string, reason?: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
 }
@@ -20,10 +21,11 @@ export function MessageList({
   messages,
   onApprove,
   onReject,
+  onDeleteMessage,
   onRefresh,
   refreshing = false,
 }: MessageListProps) {
-  const listRef = useRef<FlashList<ChatMessage>>(null);
+  const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
   // Track whether the user has scrolled away from bottom
   const isNearBottomRef = useRef(true);
@@ -45,9 +47,14 @@ export function MessageList({
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <MessageBubble message={item} onApprove={onApprove} onReject={onReject} />
+      <MessageBubble
+        message={item}
+        onApprove={onApprove}
+        onReject={onReject}
+        onDeleteMessage={onDeleteMessage}
+      />
     ),
-    [onApprove, onReject],
+    [onApprove, onReject, onDeleteMessage],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -90,7 +97,6 @@ export function MessageList({
       data={messages}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-      estimatedItemSize={100}
       contentContainerStyle={{ paddingVertical: 8 }}
       showsVerticalScrollIndicator={false}
       onScroll={(event) => {

@@ -16,6 +16,7 @@ import type { ConversationSummary } from '@/types/chat';
 interface ConversationItemProps {
   conversation: ConversationSummary;
   isActive: boolean;
+  snippet?: string;
 }
 
 /**
@@ -25,7 +26,7 @@ interface ConversationItemProps {
  * - Long press for rename/delete menu
  * - Active state highlight with teal left border
  */
-export function ConversationItem({ conversation, isActive }: ConversationItemProps) {
+export function ConversationItem({ conversation, isActive, snippet }: ConversationItemProps) {
   const router = useRouter();
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -173,12 +174,17 @@ export function ConversationItem({ conversation, isActive }: ConversationItemPro
                 }}
               >
                 <Text
-                  style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.3)', flex: 1 }}
-                  numberOfLines={1}
+                  style={{
+                    fontSize: 12,
+                    color: snippet ? 'rgba(33, 128, 141, 0.7)' : 'rgba(255, 255, 255, 0.3)',
+                    flex: 1,
+                  }}
+                  numberOfLines={snippet ? 2 : 1}
                 >
-                  {conversation.lastMessage
-                    ? truncate(conversation.lastMessage, 30)
-                    : `${conversation.messageCount} messages`}
+                  {snippet ??
+                    (conversation.lastMessage
+                      ? truncate(conversation.lastMessage, 30)
+                      : `${conversation.messageCount} messages`)}
                 </Text>
                 <Text style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.2)', marginLeft: 8 }}>
                   {formatRelativeTime(conversation.updatedAt)}

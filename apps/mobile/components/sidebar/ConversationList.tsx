@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useCallback } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
-import { MessageSquare } from 'lucide-react-native';
+import { MessageSquare, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ConversationItem } from './ConversationItem';
 import { useChatStore } from '@/stores/chatStore';
@@ -58,18 +58,21 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
 
 interface ConversationListProps {
   searchQuery?: string;
+  searchResults?: Array<{ conversationId: string; messageId: string; snippet: string }>;
 }
 
 /**
  * Sidebar conversation list.
  * Groups conversations by recency and renders ConversationItem rows.
  * Pull to refresh loads from server.
+ * When searchResults is provided, renders a flat search results list with snippets.
  */
-export function ConversationList({ searchQuery }: ConversationListProps) {
+export function ConversationList({ searchQuery, searchResults }: ConversationListProps) {
   const allConversations = useChatStore((s) => s.conversations);
-  const conversations = searchQuery
-    ? allConversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    : allConversations;
+  const conversations =
+    searchQuery && !searchResults
+      ? allConversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      : allConversations;
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);
@@ -84,6 +87,54 @@ export function ConversationList({ searchQuery }: ConversationListProps) {
   const handleRefresh = useCallback(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Search results — flat list with snippets
+  if (searchResults && searchResults.length > 0 && searchQuery) {
+    return (
+      <ScrollView className="flex-1 px-3" showsVerticalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: 4, paddingTop: 8, paddingBottom: 6 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '600',
+              color: 'rgba(255,255,255,0.35)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.8,
+            }}
+          >
+            {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        {searchResults.map((result) => {
+          const conv = allConversations.find((c) => c.id === result.conversationId);
+          if (!conv) return null;
+          return (
+            <ConversationItem
+              key={`${result.conversationId}-${result.messageId}`}
+              conversation={conv}
+              isActive={conv.id === currentConversationId}
+              snippet={result.snippet}
+            />
+          );
+        })}
+        <View style={{ height: 24 }} />
+      </ScrollView>
+    );
+  }
+
+  // Search query with no results
+  if (searchQuery && searchResults && searchResults.length === 0) {
+    return (
+      <ScrollView className="flex-1 px-3">
+        <View className="items-center py-16 gap-3">
+          <Search size={32} color={colors.textMuted} />
+          <Text className="text-sm text-white/40 text-center">
+            {`No results for "${searchQuery}"`}
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   // Empty state
   if (conversations.length === 0 && !isLoadingConversations) {
