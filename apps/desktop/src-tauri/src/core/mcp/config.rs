@@ -461,18 +461,13 @@ impl McpServersConfig {
                                         ));
                                     }
                                     Err(e) => {
-                                        tracing::error!(
-                                            "Config decryption failed for API key provider '{}': {}. \
-                                             Server will start without this credential — re-enter it in Settings.",
-                                            provider,
+                                        tracing::warn!(
+                                            "Skipping MCP server '{}': failed to decrypt credential '{}': {}",
+                                            server_name,
+                                            key,
                                             e
                                         );
-                                        // Push a placeholder error so the server knows auth will fail
-                                        plan.push((
-                                            server_name.clone(),
-                                            key.clone(),
-                                            Resolved::Done(String::new()),
-                                        ));
+                                        continue;
                                     }
                                 }
                             }
@@ -497,18 +492,13 @@ impl McpServersConfig {
                                         ));
                                     }
                                     Err(e) => {
-                                        tracing::error!(
-                                            "Config decryption failed for credential {} / {}: {}. \
-                                             Server will start without this credential — re-enter it in Settings.",
+                                        tracing::warn!(
+                                            "Skipping MCP server '{}': failed to decrypt credential '{}': {}",
                                             server_name,
                                             key,
                                             e
                                         );
-                                        plan.push((
-                                            server_name.clone(),
-                                            key.clone(),
-                                            Resolved::Done(String::new()),
-                                        ));
+                                        continue;
                                     }
                                 }
                             }

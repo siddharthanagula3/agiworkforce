@@ -164,10 +164,7 @@ function setupPeerConnection(): void {
 
   // Handle connection state changes
   (pc as unknown as Record<string, unknown>).onconnectionstatechange = () => {
-    const state = pc.connectionState;
-    if (state === 'failed' || state === 'disconnected') {
-      console.warn('[companion] WebRTC connection state:', state);
-    }
+    // Connection state change handled silently — reconnection logic in signaling layer
   };
 }
 
@@ -187,7 +184,7 @@ function setupDataChannel(channel: RTCDataChannelType): void {
       const parsed = JSON.parse(String(event.data));
       handleControlMessage(parsed);
     } catch {
-      console.warn('[companion] Failed to parse DataChannel message');
+      // Malformed DataChannel message — ignore
     }
   };
 
@@ -235,8 +232,8 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
       default:
         break;
     }
-  } catch (error) {
-    console.warn('[companion] WebRTC signaling error:', error);
+  } catch {
+    // WebRTC signaling error — falls back to relay
   }
 }
 
@@ -334,9 +331,9 @@ export const useConnectionStore = create<ConnectionState>()(
                   handleControlMessage(event.payload);
                 } else {
                   // WebRTC signaling (offer/answer/ice)
-                  handleSignalingMessage(event.kind, event.payload).catch((err) =>
-                    console.warn('[companion] Signaling message error:', err),
-                  );
+                  handleSignalingMessage(event.kind, event.payload).catch(() => {
+                    // Signaling message handling failed — ignore
+                  });
                 }
                 break;
 

@@ -147,12 +147,6 @@ class WidgetRegistryImpl {
     TConfig extends BaseWidgetConfig = BaseWidgetConfig,
     TProps extends BaseWidgetProps<TConfig> = BaseWidgetProps<TConfig>,
   >(definition: WidgetDefinition<TConfig, TProps>): void {
-    if (this.widgets.has(definition.type)) {
-      console.warn(
-        `[WidgetRegistry] Widget type "${definition.type}" is already registered. Overwriting.`,
-      );
-    }
-
     // AUDIT-P3-TYPE: Convert WidgetDefinition to RegisteredWidget.
     // RegisteredWidget.component uses 'any' to support multiple prop interfaces.
     const registered: RegisteredWidget = {

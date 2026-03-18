@@ -10,7 +10,10 @@
  */
 
 import * as vscode from 'vscode';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // ─── Output limits ────────────────────────────────────────────────────────────
 
@@ -121,16 +124,17 @@ export class ContextBuilder {
    * Runs `git status --porcelain` and `git diff --stat` in the workspace root.
    * Returns a formatted string. Returns empty string if not a git repo or git is unavailable.
    */
-  getGitContext(): string {
+  async getGitContext(): Promise<string> {
     try {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (workspaceRoot === undefined) return '';
 
-      const execOpts = { cwd: workspaceRoot, encoding: 'utf-8' as const, timeout: 5000 };
+      const execOpts = { cwd: workspaceRoot, timeout: 5000 };
 
       let statusOutput = '';
       try {
-        statusOutput = execSync('git status --porcelain', execOpts).trim();
+        const result = await execFileAsync('git', ['status', '--porcelain'], execOpts);
+        statusOutput = result.stdout.trim();
       } catch {
         // Not a git repo or git not installed
         return '';
@@ -138,7 +142,8 @@ export class ContextBuilder {
 
       let diffOutput = '';
       try {
-        diffOutput = execSync('git diff --stat', execOpts).trim();
+        const result = await execFileAsync('git', ['diff', '--stat'], execOpts);
+        diffOutput = result.stdout.trim();
       } catch {
         // diff failed — continue with status only
       }
@@ -342,7 +347,7 @@ export class ContextBuilder {
 
     // 4. Git context
     if (includeGit) {
-      const gitContext = this.getGitContext();
+      const gitContext = await this.getGitContext();
       if (gitContext !== '') {
         sections.push(gitContext);
       }

@@ -416,7 +416,9 @@ impl SchedulerState {
 
                     // Record to history
                     if let Ok(mut hist) = execution_history.write() {
-                        let record_id = hist.len() as i64 + 1;
+                        // Use timestamp_millis for monotonic IDs — hist.len() collides
+                        // after history is drained at the 500-entry cap.
+                        let record_id = chrono::Utc::now().timestamp_millis();
                         hist.push(JobExecutionRecord {
                             id: record_id,
                             job_id: job_id.clone(),
@@ -741,8 +743,10 @@ pub async fn scheduler_run_job_now(
             .write()
             .map_err(|e| Error::Generic(format!("Failed to acquire history write lock: {}", e)))?;
 
+        // Use timestamp_millis for monotonic IDs — history.len() collides
+        // after history is drained at the 500-entry cap.
         let record = JobExecutionRecord {
-            id: history.len() as i64 + 1,
+            id: chrono::Utc::now().timestamp_millis(),
             job_id: id.clone(),
             started_at: started_at.to_rfc3339(),
             completed_at: Some(completed_at.to_rfc3339()),

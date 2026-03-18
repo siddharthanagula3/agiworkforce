@@ -105,6 +105,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
         goal: trimmedGoal,
         maxIterations,
         autoApprove,
+        model: chosenModel || undefined,
       });
 
       // Optimistic task add via store
@@ -136,7 +137,15 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
     } finally {
       setSubmitting(false);
     }
-  }, [goal, maxIterations, autoApprove, validateIterations, onOpenChange, selectedModel]);
+  }, [
+    goal,
+    maxIterations,
+    autoApprove,
+    chosenModel,
+    validateIterations,
+    onOpenChange,
+    selectedModel,
+  ]);
 
   const handleOpenChange = useCallback(
     (value: boolean) => {

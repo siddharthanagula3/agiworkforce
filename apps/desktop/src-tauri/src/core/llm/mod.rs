@@ -479,8 +479,6 @@ pub struct ToolDefinition {
     pub strict: Option<bool>,
 }
 
-impl ToolDefinition {}
-
 /// Tool choice configuration for LLM requests.
 ///
 /// Serializes as:

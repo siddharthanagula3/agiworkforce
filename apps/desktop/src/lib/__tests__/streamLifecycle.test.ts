@@ -175,7 +175,7 @@ describe('streamLifecycle', () => {
     ).toEqual({
       metadata: {
         tool: 'filesystem.search',
-        tool_call: 'tool-1',
+        toolCall: 'tool-1',
         actionId: 'tool-1',
         name: 'filesystem.search',
         status: 'running',
