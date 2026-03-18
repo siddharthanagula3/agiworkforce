@@ -980,6 +980,37 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    // ── Tab group management ─────────────────────────────────────────────
+    case 'ADD_TAB_TO_GROUP': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No active tab' } as ExtensionResponse;
+      }
+      await ensureTabGroup(resolvedTabId);
+      return { success: true, grouped: true } as ExtensionResponse;
+    }
+
+    case 'REMOVE_TAB_FROM_GROUP': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No active tab' } as ExtensionResponse;
+      }
+      try {
+        await chrome.tabs.ungroup(resolvedTabId);
+      } catch {
+        // Tab may not be in a group
+      }
+      return { success: true, grouped: false } as ExtensionResponse;
+    }
+
     // ── Console log reading (forwarded to content script) ────────────────
     case 'GET_CONSOLE_LOGS':
     case 'CLEAR_CONSOLE_LOGS': {
@@ -1519,6 +1550,7 @@ function setupContextMenu(): void {
     { id: 'capture-element', title: 'Capture Element', contexts: ['all'] },
     { id: 'get-element-info', title: 'Get Element Info', contexts: ['all'] },
     { id: 'discover-webmcp-tools', title: 'Discover AI Tools on Page', contexts: ['all'] },
+    { id: 'add-to-tab-group', title: 'Add Tab to AGI Workforce Group', contexts: ['page'] },
   ];
 
   for (const item of menuItems) {
@@ -1637,6 +1669,8 @@ function setupContextMenu(): void {
       if (chrome.sidePanel) {
         chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       }
+    } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
+      void ensureTabGroup(tab.id);
     }
   });
 }
