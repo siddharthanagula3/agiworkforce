@@ -27,6 +27,10 @@ interface SettingsState {
   selectedVoiceId: string | null;
   /** TTS speech rate: 0.5 = half speed, 1.0 = normal, 2.0 = double */
   speechRate: number;
+  /** TTS speech pitch: 0.5 = low, 1.0 = normal, 2.0 = high */
+  speechPitch: number;
+  /** Selected branded voice preset ID (null = no preset / custom) */
+  selectedPresetId: string | null;
 
   setAutoApproveMode: (mode: AutoApproveMode) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -38,6 +42,8 @@ interface SettingsState {
   setBiometricLockEnabled: (enabled: boolean) => void;
   setSelectedVoiceId: (voiceId: string | null) => void;
   setSpeechRate: (rate: number) => void;
+  setSpeechPitch: (pitch: number) => void;
+  setSelectedPresetId: (id: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -53,6 +59,8 @@ export const useSettingsStore = create<SettingsState>()(
       biometricLockEnabled: false,
       selectedVoiceId: null,
       speechRate: 1.0,
+      speechPitch: 1.0,
+      selectedPresetId: null,
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -64,6 +72,8 @@ export const useSettingsStore = create<SettingsState>()(
       setBiometricLockEnabled: (enabled) => set({ biometricLockEnabled: enabled }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
       setSpeechRate: (rate) => set({ speechRate: rate }),
+      setSpeechPitch: (pitch) => set({ speechPitch: pitch }),
+      setSelectedPresetId: (id) => set({ selectedPresetId: id }),
     }),
     {
       name: 'settings-store',

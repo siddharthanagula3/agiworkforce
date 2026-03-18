@@ -13,7 +13,7 @@ import { MAX_INPUT_LINES } from '@/lib/constants';
 import type { VoiceMeteringEvent } from '@/services/voice';
 
 interface ChatInputProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments?: Attachment[]) => void;
   isStreaming?: boolean;
   onStop?: () => void;
   onOpenModelPicker?: () => void;
@@ -39,7 +39,7 @@ export function ChatInput({
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return;
-    onSend(trimmed);
+    onSend(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
   };
