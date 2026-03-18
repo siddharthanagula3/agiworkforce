@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { View, RefreshControl } from 'react-native';
+import { View, RefreshControl, Text } from 'react-native';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from '@/types/chat';
 
@@ -88,7 +88,20 @@ export function MessageList({
   }, [messages]);
 
   if (messages.length === 0) {
-    return <View className="flex-1" />;
+    return (
+      <View className="flex-1 items-center justify-center px-8">
+        <Text
+          style={{
+            fontSize: 15,
+            color: 'rgba(255,255,255,0.4)',
+            textAlign: 'center',
+            lineHeight: 22,
+          }}
+        >
+          Start the conversation.{'\n'}Type a message below.
+        </Text>
+      </View>
+    );
   }
 
   return (

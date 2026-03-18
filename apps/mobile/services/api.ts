@@ -82,7 +82,7 @@ export const api = {
    */
   tagConversation: async (id: string, tags: string[], options?: RequestOptions): Promise<void> => {
     await request<void>(
-      `/conversations/${id}/tags`,
+      `/api/conversations/${id}/tags`,
       { method: 'POST', body: JSON.stringify({ tags }) },
       options,
     );
