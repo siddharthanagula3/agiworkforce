@@ -24,6 +24,8 @@ import {
   setupNotificationListeners,
   handleInitialNotification,
 } from '@/services/notifications';
+import { getMobileSyncService } from '@/services/conversationSync';
+import { useChatStore } from '@/stores/chatStore';
 import '../global.css';
 
 export default function RootLayout() {
@@ -59,6 +61,39 @@ export default function RootLayout() {
     handleInitialNotification();
 
     return removeListeners;
+  }, [session]);
+
+  // 3-device conversation sync — sync on app resume
+  useEffect(() => {
+    if (!session) return;
+
+    const syncService = getMobileSyncService();
+    syncService.startBackgroundSync(
+      () => {
+        // Convert local conversations to SyncedConversation shape for merge
+        const state = useChatStore.getState();
+        return state.conversations.map((c) => ({
+          id: c.id,
+          user_id: session.user.id,
+          title: c.title,
+          model: null,
+          is_active: true,
+          synced_from: 'mobile' as const,
+          metadata: null,
+          created_at: c.createdAt,
+          updated_at: c.updatedAt,
+          deleted_at: null,
+        }));
+      },
+      () => {
+        // Refresh local conversation list after sync completes
+        useChatStore.getState().loadConversations();
+      },
+    );
+
+    return () => {
+      syncService.stopBackgroundSync();
+    };
   }, [session]);
 
   // Auth guard + onboarding check

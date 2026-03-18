@@ -52,7 +52,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     }
 
     return BackgroundFetch.BackgroundFetchResult.NoData;
-  } catch {
+  } catch (err) {
+    console.warn(
+      '[backgroundFetch] Agent status check failed:',
+      err instanceof Error ? err.message : err,
+    );
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
