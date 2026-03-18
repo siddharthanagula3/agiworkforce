@@ -101,7 +101,6 @@ async fn detect_uncached(
         let response = client
             .post(&url)
             .json(&serde_json::json!({"name": model}))
-            .timeout(std::time::Duration::from_secs(5))
             .send()
             .await?;
         response.json::<OllamaShowResponse>().await

@@ -270,12 +270,10 @@ pub fn derive_key_with_password_base64(password_key: &[u8], purpose: KeyPurpose)
     general_purpose::STANDARD.encode(derive_key_with_password(password_key, purpose))
 }
 
-/// Check if machine-only keys are in use (for migration detection)
+/// Returns whether machine-only secrets exist that need migration.
 ///
-/// Returns `false` as the safe default. The `MasterPasswordManager` handles
-/// the actual migration tracking via its own database flag
-/// (`master_password_set`). Returning `true` unconditionally (the previous
-/// stub) caused spurious migration prompts and unnecessary work (Bug #69 fix).
+/// Always returns `false` — migration tracking is handled by `MasterPasswordManager`.
+/// This method exists for API compatibility and may be implemented in the future.
 pub fn has_machine_only_secrets() -> bool {
     false
 }

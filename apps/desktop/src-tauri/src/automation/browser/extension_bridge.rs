@@ -603,8 +603,8 @@ fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Valu
             "script": "window.localStorage.clear(); true;",
             "tab_id": null
         }),
-        ExtensionMessage::CaptureScreenshot { format, quality: _ } => {
-            json!({ "type": "screenshot", "tab_id": null, "format": format })
+        ExtensionMessage::CaptureScreenshot { format, quality } => {
+            json!({ "type": "screenshot", "tab_id": null, "format": format, "quality": quality })
         }
         ExtensionMessage::DiscoverWebMCPTools => {
             json!({ "type": "WEBMCP_DISCOVER_TOOLS", "tab_id": null })

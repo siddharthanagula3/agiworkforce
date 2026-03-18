@@ -104,9 +104,9 @@ const ChatComposerNewComponent = ({
     removeFile,
     clearAll: clearAttachments,
   } = useAttachments({
-    onError: (msg) => {
-      // Surface validation errors via console; could wire to a toast later
-      console.warn('[Attachments]', msg);
+    onError: (_msg) => {
+      // Validation errors are surfaced by the useAttachments hook via its return value.
+      // A toast notification could be wired here in the future.
     },
   });
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);

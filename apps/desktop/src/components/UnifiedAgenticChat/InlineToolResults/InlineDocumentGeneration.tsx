@@ -1,5 +1,6 @@
 import { Copy, Download, File, FileSpreadsheet, FileText, FolderOpen, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
@@ -187,7 +188,7 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
         link.click();
       }
     } catch (error) {
-      console.error('[InlineDocumentGeneration] Save As failed', error);
+      toast.error(error instanceof Error ? error.message : 'Save As failed');
     }
   };
 
@@ -196,7 +197,7 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     try {
       await invoke<void>('file_open_with_default_app', { path: resolvedPath });
     } catch (error) {
-      console.error('[InlineDocumentGeneration] Open failed', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to open document');
     }
   };
 
@@ -205,7 +206,7 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     try {
       await invoke<void>('open_file_location', { path: resolvedPath });
     } catch (error) {
-      console.error('[InlineDocumentGeneration] Open in Finder failed', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to open in Finder');
     }
   };
 

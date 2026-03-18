@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::Arc;
+use tracing::warn;
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -121,10 +122,12 @@ impl AuthDatabaseManager {
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
                     role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
-                    // AUDIT-003-003 fix: Use unwrap_or_default to prevent panic on malformed dates
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
+                        .unwrap_or_else(|e| {
+                            warn!("Failed to parse created_at timestamp: {}, using current time", e);
+                            Utc::now()
+                        }),
                     last_login_at: row
                         .get::<_, Option<String>>(5)?
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -155,10 +158,12 @@ impl AuthDatabaseManager {
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
                     role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
-                    // AUDIT-003-003 fix: Use unwrap_or_default to prevent panic on malformed dates
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
+                        .unwrap_or_else(|e| {
+                            warn!("Failed to parse created_at timestamp: {}, using current time", e);
+                            Utc::now()
+                        }),
                     last_login_at: row
                         .get::<_, Option<String>>(5)?
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())

@@ -211,12 +211,14 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
     },
   };
 
+  let browserId: string | undefined;
+  let tabId: string | undefined;
   try {
     // Launch browser, navigate to URL, get title and screenshot using individual commands
-    const browserId = await invoke<string>('browser_launch', {
+    browserId = await invoke<string>('browser_launch', {
       options: { headless: false },
     });
-    const tabId = await invoke<string>('browser_open_tab', { url });
+    tabId = await invoke<string>('browser_open_tab', { url });
 
     // Get page title
     const title = await invoke<string>('browser_get_title', { tabId: tabId ?? '' });
@@ -250,6 +252,21 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
       status: 'error',
       error: error instanceof Error ? error.message : String(error),
     };
+  } finally {
+    if (tabId) {
+      try {
+        await invoke('browser_close_tab', { tabId });
+      } catch {
+        /* cleanup best-effort */
+      }
+    }
+    if (browserId) {
+      try {
+        await invoke('browser_close', { browserId });
+      } catch {
+        /* cleanup best-effort */
+      }
+    }
   }
 
   return panel;

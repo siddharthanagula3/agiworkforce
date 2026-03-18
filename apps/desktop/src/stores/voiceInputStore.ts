@@ -327,7 +327,7 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
                 { role: 'system', content: systemContent },
                 { role: 'user', content: raw },
               ],
-              model: selectedModel ?? 'claude-haiku-4.5',
+              model: selectedModel ?? 'auto-economy',
               provider: selectedProvider ?? 'anthropic',
               max_tokens: 500,
               prefer_cloud_credits: false,
