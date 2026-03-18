@@ -30,12 +30,20 @@ const messages: ChatMessage[] = [];
 let pendingPageContext: string | null = null;
 let isStreaming = false;
 let currentStreamId: string | null = null;
+let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 // Track how many messages have already been rendered to avoid full DOM rebuilds.
 let lastRenderedCount = 0;
 
 // Auth state
 let currentApiKey: string | null = null;
 let isConnected = false;
+
+// WebMCP tools state
+interface WebMCPToolEntry {
+  name: string;
+  description: string;
+}
+let discoveredTools: WebMCPToolEntry[] = [];
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
@@ -55,6 +63,10 @@ function saveMessages(): void {
 async function loadMessages(): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.get(STORAGE_KEY, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve();
+        return;
+      }
       const stored = result[STORAGE_KEY] as ChatMessage[] | undefined;
       if (Array.isArray(stored) && stored.length > 0) {
         messages.push(...stored.slice(-MAX_STORED_MESSAGES));
@@ -91,6 +103,10 @@ function saveApiKey(key: string): void {
 async function loadApiKey(): Promise<string | null> {
   return new Promise((resolve) => {
     chrome.storage.session.get(API_KEY_STORAGE_KEY, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
       const sessionKey = result[API_KEY_STORAGE_KEY] as string | undefined;
       if (sessionKey && sessionKey.trim()) {
         resolve(sessionKey.trim());
@@ -229,6 +245,9 @@ function injectStyles(): void {
     #sp-empty-icon { font-size: 32px; opacity: 0.5; }
     #sp-empty-title { font-size: 14px; font-weight: 500; color: #64748b; }
     #sp-empty-hint { font-size: 11px; color: #334155; line-height: 1.5; }
+    #sp-empty-cmds { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .sp-cmd-chip { display: inline-block; padding: 4px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: #1e293b; color: #a5b4fc; border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid #334155; }
+    .sp-cmd-chip:hover { background: #334155; color: #c7d2fe; }
 
     /* ── Message bubbles ── */
     .sp-msg {
@@ -401,6 +420,260 @@ function injectStyles(): void {
     @keyframes sp-pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.4); opacity: 0.6; }
+    }
+
+    /* ── Console log viewer ── */
+    #sp-console-panel {
+      display: none;
+      flex-direction: column;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #0a0a10;
+      border-bottom: 1px solid #1e1e2e;
+      flex-shrink: 0;
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 11px;
+    }
+    #sp-console-panel.open { display: flex; }
+    .sp-console-entry {
+      padding: 3px 10px;
+      border-bottom: 1px solid #111118;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+    .sp-console-log { color: #e2e8f0; }
+    .sp-console-warn { color: #fbbf24; background: #1c1a05; }
+    .sp-console-error { color: #f87171; background: #1c0505; }
+    .sp-console-info { color: #60a5fa; }
+    .sp-console-debug { color: #6b7280; }
+    .sp-console-time {
+      color: #475569;
+      font-size: 9px;
+      margin-right: 6px;
+    }
+    .sp-console-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      background: #0d0d14;
+      border-bottom: 1px solid #1e1e2e;
+      position: sticky;
+      top: 0;
+    }
+    .sp-console-title { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sp-console-clear {
+      background: none;
+      border: none;
+      color: #64748b;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .sp-console-clear:hover { color: #e2e8f0; }
+
+    /* ── Shortcuts dropdown ── */
+    .sp-shortcuts-wrapper { position: relative; }
+    #sp-shortcuts-dropdown {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      margin-bottom: 4px;
+      min-width: 240px;
+      max-height: 260px;
+      overflow-y: auto;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 100;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+    }
+    #sp-shortcuts-dropdown.open { display: block; }
+    .sp-shortcut-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .sp-shortcut-item:hover { background: #1e1e2e; }
+    .sp-shortcut-name { font-size: 12px; color: #e2e8f0; flex: 1; }
+    .sp-shortcut-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .sp-shortcut-action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      transition: background 0.12s;
+    }
+    .sp-shortcut-action-btn:hover { background: #2d2d40; }
+    .sp-shortcuts-empty {
+      padding: 10px 8px;
+      color: #475569;
+      font-size: 11px;
+      text-align: center;
+    }
+    .sp-save-shortcut-row {
+      display: flex;
+      gap: 4px;
+      padding: 6px 4px 4px;
+      border-top: 1px solid #1e1e2e;
+    }
+    .sp-save-shortcut-input {
+      flex: 1;
+      background: #0f0f14;
+      border: 1px solid #1e1e2e;
+      border-radius: 4px;
+      color: #e2e8f0;
+      font-size: 11px;
+      padding: 4px 6px;
+      outline: none;
+    }
+    .sp-save-shortcut-input:focus { border-color: #4338ca; }
+    .sp-save-shortcut-btn {
+      background: #4338ca;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .sp-save-shortcut-btn:hover { background: #3730a3; }
+
+    /* ── Scheduled tasks section in settings ── */
+    .sp-tasks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .sp-task-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      font-size: 11px;
+    }
+    .sp-task-name {
+      flex: 1;
+      color: #e2e8f0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-task-schedule { color: #64748b; font-size: 10px; }
+    .sp-task-toggle {
+      appearance: none;
+      width: 28px;
+      height: 14px;
+      border-radius: 7px;
+      background: #1e1e2e;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .sp-task-toggle:checked { background: #4338ca; }
+    .sp-task-toggle::after {
+      content: '';
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+    .sp-task-toggle:checked::after { transform: translateX(14px); }
+    .sp-task-delete {
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px;
+    }
+    .sp-task-delete:hover { color: #f87171; }
+    .sp-new-task-form {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 6px;
+      border-top: 1px solid #1e1e2e;
+      margin-top: 6px;
+    }
+    .sp-new-task-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    /* ── AI Tools dropdown ── */
+    .sp-tools-wrapper {
+      position: relative;
+    }
+    #sp-tools-dropdown {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      margin-bottom: 4px;
+      min-width: 220px;
+      max-height: 240px;
+      overflow-y: auto;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 100;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+    }
+    #sp-tools-dropdown.open { display: block; }
+    #sp-tools-dropdown::-webkit-scrollbar { width: 4px; }
+    #sp-tools-dropdown::-webkit-scrollbar-track { background: transparent; }
+    #sp-tools-dropdown::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    .sp-tools-empty {
+      padding: 10px 8px;
+      color: #475569;
+      font-size: 11px;
+      text-align: center;
+    }
+    .sp-tool-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .sp-tool-item:hover { background: #1e1e2e; }
+    .sp-tool-item-name {
+      font-size: 12px;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+    .sp-tool-item-desc {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.35;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
 
     /* ── Input row ── */
@@ -579,10 +852,64 @@ function injectStyles(): void {
 
 function sanitizeHtml(dirty: string): string {
   return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'hr', 'sup', 'sub', 'del', 'ins', 'mark', 'details', 'summary'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'id', 'src', 'alt', 'title', 'width', 'height', 'colspan', 'rowspan'],
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select', 'button'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
+    ALLOWED_TAGS: [
+      'p',
+      'br',
+      'strong',
+      'em',
+      'code',
+      'pre',
+      'a',
+      'ul',
+      'ol',
+      'li',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'blockquote',
+      'span',
+      'div',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'hr',
+      'sup',
+      'sub',
+      'del',
+      'ins',
+      'mark',
+    ],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'title', 'colspan', 'rowspan'],
+    FORBID_TAGS: [
+      'script',
+      'style',
+      'iframe',
+      'object',
+      'embed',
+      'form',
+      'input',
+      'textarea',
+      'select',
+      'button',
+      'img',
+    ],
+    FORBID_ATTR: [
+      'onerror',
+      'onload',
+      'onclick',
+      'onmouseover',
+      'onfocus',
+      'onblur',
+      'src',
+      'class',
+      'id',
+    ],
     ALLOW_DATA_ATTR: false,
   });
 }
@@ -770,6 +1097,10 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
 async function capturePageContext(): Promise<string | null> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
       const tab = tabs[0];
       if (!tab?.id) {
         resolve(null);
@@ -869,8 +1200,135 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
 
 // ─── Send message ─────────────────────────────────────────────────────────────
 
+/**
+ * Expand slash commands into full prompts.
+ * Returns null if not a slash command (pass through as-is).
+ */
+function expandSlashCommand(
+  raw: string,
+): { display: string; prompt: string; captureContext: boolean } | null {
+  const trimmed = raw.trim();
+  const commands: Record<string, { display: string; prompt: string; captureContext: boolean }> = {
+    '/summarize': {
+      display: '/summarize',
+      prompt:
+        'Summarize this page concisely. Include key points, main arguments, and any important details.',
+      captureContext: true,
+    },
+    '/explain': {
+      display: '/explain',
+      prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
+      captureContext: true,
+    },
+    '/translate': {
+      display: '/translate',
+      prompt:
+        'Translate the main content of this page to English. If already in English, translate to Spanish.',
+      captureContext: true,
+    },
+    '/extract': {
+      display: '/extract',
+      prompt:
+        'Extract the key structured data from this page: names, dates, numbers, emails, URLs, addresses, and any other notable entities. Format as a bulleted list.',
+      captureContext: true,
+    },
+    '/code': {
+      display: '/code',
+      prompt:
+        'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
+      captureContext: true,
+    },
+    '/tldr': {
+      display: '/tldr',
+      prompt: 'Give me a TL;DR of this page in 2-3 sentences.',
+      captureContext: true,
+    },
+  };
+
+  // Exact match
+  if (commands[trimmed]) return commands[trimmed]!;
+
+  // Command with extra text (e.g., "/translate to French")
+  for (const [cmd, meta] of Object.entries(commands)) {
+    if (trimmed.startsWith(cmd + ' ')) {
+      const extra = trimmed.slice(cmd.length + 1).trim();
+      return {
+        display: trimmed,
+        prompt: `${meta.prompt}\n\nAdditional instruction: ${extra}`,
+        captureContext: meta.captureContext,
+      };
+    }
+  }
+
+  return null;
+}
+
 function sendMessage(text: string): void {
   if (!text.trim() || isStreaming) return;
+
+  // Expand slash commands
+  const slashCmd = expandSlashCommand(text);
+  if (slashCmd?.captureContext) {
+    // For context-requiring commands, auto-capture page context first
+    const displayText = slashCmd.display;
+    const actualPrompt = slashCmd.prompt;
+
+    // Show the slash command as the user message
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      content: displayText,
+      timestamp: Date.now(),
+    };
+    messages.push(userMsg);
+    saveMessages();
+    renderMessages();
+
+    // Capture context then stream
+    capturePageContext().then((ctx) => {
+      if (ctx) pendingPageContext = ctx;
+
+      const pageCtx = pendingPageContext;
+      pendingPageContext = null;
+      updateContextButton();
+
+      const streamId = `a-${Date.now()}`;
+      currentStreamId = streamId;
+      isStreaming = true;
+      updateSendButton();
+
+      if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
+      streamTimeoutHandle = setTimeout(() => {
+        if (isStreaming && currentStreamId === streamId) {
+          handleStreamError(streamId, 'Response timed out. Please try again.');
+        }
+        streamTimeoutHandle = null;
+      }, 90_000);
+
+      showThinking();
+
+      const history = messages
+        .slice(0, -1)
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+      chrome.runtime.sendMessage(
+        {
+          type: 'CHAT_MESSAGE',
+          id: streamId,
+          text: actualPrompt,
+          pageContext: pageCtx ?? undefined,
+          conversationHistory: history,
+          apiKey: currentApiKey ?? undefined,
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
+          }
+        },
+      );
+    });
+    return;
+  }
 
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
@@ -890,6 +1348,15 @@ function sendMessage(text: string): void {
   currentStreamId = streamId;
   isStreaming = true;
   updateSendButton();
+
+  // Safety timeout: if no chunks arrive within 90s, stop streaming to prevent stuck UI
+  if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
+  streamTimeoutHandle = setTimeout(() => {
+    if (isStreaming && currentStreamId === streamId) {
+      handleStreamError(streamId, 'Response timed out. Please try again.');
+    }
+    streamTimeoutHandle = null;
+  }, 90_000);
 
   showThinking();
 
@@ -917,6 +1384,10 @@ function sendMessage(text: string): void {
 }
 
 function handleStreamError(id: string, errorText: string): void {
+  if (streamTimeoutHandle) {
+    clearTimeout(streamTimeoutHandle);
+    streamTimeoutHandle = null;
+  }
   removeThinking();
   const assistantMsg: ChatMessage = {
     id,
@@ -978,10 +1449,64 @@ function updateContextButton(): void {
   }
 }
 
+function updateModelBadge(modelId: string): void {
+  const badge = document.getElementById('sp-model-badge');
+  if (!badge) return;
+  const short: Record<string, string> = {
+    auto: 'Auto',
+    'claude-sonnet-4-6': 'Sonnet 4.6',
+    'claude-opus-4-6': 'Opus 4.6',
+    'claude-haiku-4-5': 'Haiku 4.5',
+    'gpt-4o': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gemini-2.5-pro': 'Gemini Pro',
+    'gemini-2.5-flash': 'Gemini Flash',
+    'mistral-large': 'Mistral',
+    'deepseek-chat': 'DeepSeek',
+    'ollama-local': 'Local',
+  };
+  badge.textContent = short[modelId] ?? modelId;
+}
+
 function updateSendButton(): void {
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   btn.disabled = isStreaming;
+}
+
+function updateToolsButton(): void {
+  const btn = document.getElementById('sp-tools-btn');
+  const dropdown = document.getElementById('sp-tools-dropdown');
+  if (!btn || !dropdown) return;
+
+  const count = discoveredTools.length;
+  btn.innerHTML = `\uD83D\uDD27 AI Tools (${count})`;
+
+  if (count === 0) {
+    btn.classList.remove('has-context');
+    dropdown.innerHTML = '<div class="sp-tools-empty">No tools discovered on this page</div>';
+    return;
+  }
+
+  btn.classList.add('has-context');
+  dropdown.innerHTML = '';
+  for (const tool of discoveredTools) {
+    const item = el('div', { class: 'sp-tool-item' });
+    item.appendChild(el('div', { class: 'sp-tool-item-name' }, tool.name));
+    if (tool.description) {
+      item.appendChild(el('div', { class: 'sp-tool-item-desc' }, tool.description));
+    }
+    item.addEventListener('click', () => {
+      const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+      if (inputEl) {
+        inputEl.value = `Use the ${tool.name} tool to `;
+        inputEl.focus();
+        autoResizeInput(inputEl);
+      }
+      dropdown.classList.remove('open');
+    });
+    dropdown.appendChild(item);
+  }
 }
 
 function autoResizeInput(ta: HTMLTextAreaElement): void {
@@ -1005,12 +1530,27 @@ function buildUI(): void {
   header.appendChild(headerLeft);
 
   const headerRight = el('div', { id: 'sp-header-right' });
+  const summarizeBtn = el(
+    'button',
+    { class: 'sp-icon-btn', id: 'sp-summarize-btn', title: 'Summarize current page' },
+    '📝',
+  );
+  summarizeBtn.addEventListener('click', () => {
+    if (isStreaming) return;
+    sendMessage('/summarize');
+  });
+  headerRight.appendChild(summarizeBtn);
+
   const clearBtn = el(
     'button',
     { class: 'sp-icon-btn', id: 'sp-clear-btn', title: 'Clear conversation' },
     '🗑',
   );
   clearBtn.addEventListener('click', () => {
+    if (streamTimeoutHandle) {
+      clearTimeout(streamTimeoutHandle);
+      streamTimeoutHandle = null;
+    }
     messages.length = 0;
     lastRenderedCount = 0;
     isStreaming = false;
@@ -1030,6 +1570,21 @@ function buildUI(): void {
     const bar = document.getElementById('sp-settings-bar');
     if (bar) bar.classList.toggle('open');
   });
+  // Console toggle button in header
+  const consoleToggleBtn = el(
+    'button',
+    { class: 'sp-icon-btn', id: 'sp-console-toggle-btn', title: 'Toggle console logs' },
+    '🖥',
+  );
+  consoleToggleBtn.addEventListener('click', () => {
+    const panel = document.getElementById('sp-console-panel');
+    if (panel) {
+      const isOpen = panel.classList.toggle('open');
+      if (isOpen) refreshConsoleLogs();
+    }
+  });
+
+  headerRight.appendChild(consoleToggleBtn);
   headerRight.appendChild(settingsToggleBtn);
   headerRight.appendChild(clearBtn);
   header.appendChild(headerRight);
@@ -1055,22 +1610,169 @@ function buildUI(): void {
   bridgeUrlRow.appendChild(bridgeUrlSaveBtn);
   settingsBar.appendChild(bridgeUrlLabel);
   settingsBar.appendChild(bridgeUrlRow);
+
+  // Model selector
+  const modelLabel = el('div', { class: 'sp-settings-label' }, 'Model');
+  const modelSelect = el('select', {
+    class: 'sp-settings-input',
+    id: 'sp-model-select',
+  }) as HTMLSelectElement;
+  const models = [
+    { value: 'auto', label: 'Auto (Best Available)' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'mistral-large', label: 'Mistral Large' },
+    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+    { value: 'ollama-local', label: 'Ollama (Local)' },
+  ];
+  for (const m of models) {
+    const opt = el('option', { value: m.value }, m.label) as HTMLOptionElement;
+    modelSelect.appendChild(opt);
+  }
+  // Load persisted model selection
+  chrome.storage.local.get('agi_model', (result) => {
+    if (chrome.runtime.lastError) return;
+    const stored = result['agi_model'] as string | undefined;
+    if (stored) modelSelect.value = stored;
+    updateModelBadge(stored ?? 'auto');
+  });
+  modelSelect.addEventListener('change', () => {
+    chrome.storage.local.set({ agi_model: modelSelect.value }).catch(() => {});
+    updateModelBadge(modelSelect.value);
+  });
+  settingsBar.appendChild(modelLabel);
+  settingsBar.appendChild(modelSelect);
+
+  // Scheduled tasks section inside settings
+  const tasksLabel = el('div', { class: 'sp-settings-label' }, 'Scheduled Tasks');
+  const tasksList = el('div', { class: 'sp-tasks-list', id: 'sp-tasks-list' });
+  const newTaskForm = el('div', { class: 'sp-new-task-form' });
+  const newTaskRow1 = el('div', { class: 'sp-new-task-row' });
+  const newTaskNameInput = el('input', {
+    class: 'sp-settings-input',
+    placeholder: 'Task name',
+    id: 'sp-new-task-name',
+  }) as HTMLInputElement;
+  const newTaskPromptInput = el('input', {
+    class: 'sp-settings-input',
+    placeholder: 'Prompt to run',
+    id: 'sp-new-task-prompt',
+  }) as HTMLInputElement;
+  newTaskRow1.appendChild(newTaskNameInput);
+  newTaskRow1.appendChild(newTaskPromptInput);
+
+  const newTaskRow2 = el('div', { class: 'sp-new-task-row' });
+  const newTaskScheduleSelect = el('select', {
+    class: 'sp-settings-input',
+    id: 'sp-new-task-schedule',
+  }) as HTMLSelectElement;
+  for (const opt of [
+    { value: 'hourly', label: 'Hourly' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+  ]) {
+    newTaskScheduleSelect.appendChild(el('option', { value: opt.value }, opt.label));
+  }
+  const newTaskCreateBtn = el('button', { class: 'sp-settings-btn' }, 'Add Task');
+  newTaskCreateBtn.addEventListener('click', () => {
+    const name = newTaskNameInput.value.trim();
+    const prompt = newTaskPromptInput.value.trim();
+    if (!name || !prompt) return;
+    chrome.runtime.sendMessage(
+      {
+        type: 'CREATE_SCHEDULED_TASK',
+        task: {
+          name,
+          prompt,
+          enabled: true,
+          scheduleType: newTaskScheduleSelect.value,
+          scheduleValue: '',
+        },
+      },
+      () => {
+        if (chrome.runtime.lastError) return;
+        newTaskNameInput.value = '';
+        newTaskPromptInput.value = '';
+        refreshScheduledTasks();
+      },
+    );
+  });
+  newTaskRow2.appendChild(newTaskScheduleSelect);
+  newTaskRow2.appendChild(newTaskCreateBtn);
+
+  newTaskForm.appendChild(newTaskRow1);
+  newTaskForm.appendChild(newTaskRow2);
+
+  settingsBar.appendChild(tasksLabel);
+  settingsBar.appendChild(tasksList);
+  settingsBar.appendChild(newTaskForm);
+
   document.body.appendChild(settingsBar);
+
+  // Console log panel (hidden by default)
+  const consolePanel = el('div', { id: 'sp-console-panel' });
+  const consoleHeader = el('div', { class: 'sp-console-header' });
+  consoleHeader.appendChild(el('span', { class: 'sp-console-title' }, 'Console'));
+  const consoleClearBtn = el('button', { class: 'sp-console-clear' }, 'Clear');
+  consoleClearBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'CLEAR_CONSOLE_LOGS' }, () => {
+      if (chrome.runtime.lastError) return;
+      const entries = consolePanel.querySelector('.sp-console-entries');
+      if (entries) entries.innerHTML = '';
+    });
+  });
+  const consoleRefreshBtn = el('button', { class: 'sp-console-clear' }, 'Refresh');
+  consoleRefreshBtn.addEventListener('click', () => refreshConsoleLogs());
+  consoleHeader.appendChild(consoleRefreshBtn);
+  consoleHeader.appendChild(consoleClearBtn);
+  consolePanel.appendChild(consoleHeader);
+  consolePanel.appendChild(el('div', { class: 'sp-console-entries' }));
+  document.body.appendChild(consolePanel);
 
   // Pre-fill the current bridge URL from storage
   chrome.storage.local.get('agi_bridge_url', (result) => {
+    if (chrome.runtime.lastError) return;
     const stored = result['agi_bridge_url'] as string | undefined;
     if (stored && bridgeUrlInput instanceof HTMLInputElement) {
       bridgeUrlInput.value = stored;
     }
   });
 
-  // Save bridge URL and reconnect
+  // Save bridge URL and reconnect — only local URLs allowed
   const saveBridgeUrl = (): void => {
     const raw = (bridgeUrlInput as HTMLInputElement).value.trim();
     if (!raw) {
       chrome.storage.local.remove('agi_bridge_url');
     } else {
+      // Validate: only allow localhost/127.0.0.1 URLs to prevent data exfiltration
+      try {
+        const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+        const parsed = new URL(normalized);
+        const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+        if (!allowedHosts.has(parsed.hostname)) {
+          // Show inline error instead of saving
+          const bar = document.getElementById('sp-settings-bar');
+          if (bar) {
+            const existing = bar.querySelector('.sp-bridge-error');
+            if (existing) existing.remove();
+            const errEl = document.createElement('div');
+            errEl.className = 'sp-bridge-error';
+            errEl.style.cssText = 'color: #f87171; font-size: 10px; padding: 2px 0;';
+            errEl.textContent = 'Only local URLs (localhost, 127.0.0.1) are allowed';
+            bar.appendChild(errEl);
+            setTimeout(() => errEl.remove(), 4000);
+          }
+          return;
+        }
+      } catch {
+        return; // Invalid URL, silently reject
+      }
       chrome.storage.local
         .set({ agi_bridge_url: raw })
         .catch((err: unknown) => console.warn('[SidePanel] Failed to save bridge URL:', err));
@@ -1138,10 +1840,29 @@ function buildUI(): void {
   emptyState.innerHTML = `
     <div id="sp-empty-icon">🤖</div>
     <div id="sp-empty-title">AGI Workforce Assistant</div>
-    <div id="sp-empty-hint">Ask anything about the current page,<br>or start a conversation below.</div>
+    <div id="sp-empty-hint">Ask anything about the current page,<br>or try a slash command:</div>
+    <div id="sp-empty-cmds">
+      <span class="sp-cmd-chip">/summarize</span>
+      <span class="sp-cmd-chip">/explain</span>
+      <span class="sp-cmd-chip">/translate</span>
+      <span class="sp-cmd-chip">/extract</span>
+      <span class="sp-cmd-chip">/tldr</span>
+      <span class="sp-cmd-chip">/code</span>
+    </div>
   `;
   msgsArea.appendChild(emptyState);
   document.body.appendChild(msgsArea);
+
+  // Wire slash command chip clicks
+  setTimeout(() => {
+    const chips = document.querySelectorAll('.sp-cmd-chip');
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const cmd = chip.textContent?.trim();
+        if (cmd) sendMessage(cmd);
+      });
+    });
+  }, 0);
 
   // Toolbar (page context + mic)
   const toolbar = el('div', { id: 'sp-toolbar' });
@@ -1172,6 +1893,60 @@ function buildUI(): void {
   const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
   micBtn.innerHTML = '🎤';
   toolbar.appendChild(micBtn);
+
+  // Shortcuts button + dropdown
+  const shortcutsWrapper = el('div', { class: 'sp-shortcuts-wrapper' });
+  const shortcutsBtn = el('button', {
+    class: 'sp-tool-btn',
+    id: 'sp-shortcuts-btn',
+    title: 'Saved shortcuts',
+  });
+  shortcutsBtn.innerHTML = '⚡ Shortcuts';
+
+  const shortcutsDropdown = el('div', { id: 'sp-shortcuts-dropdown' });
+  shortcutsDropdown.innerHTML = '<div class="sp-shortcuts-empty">No saved shortcuts</div>';
+
+  shortcutsBtn.addEventListener('click', () => {
+    const isOpen = shortcutsDropdown.classList.toggle('open');
+    if (isOpen) refreshShortcuts();
+  });
+
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!shortcutsWrapper.contains(e.target as Node)) {
+      shortcutsDropdown.classList.remove('open');
+    }
+  });
+
+  shortcutsWrapper.appendChild(shortcutsDropdown);
+  shortcutsWrapper.appendChild(shortcutsBtn);
+  toolbar.appendChild(shortcutsWrapper);
+
+  // AI Tools button + dropdown
+  const toolsWrapper = el('div', { class: 'sp-tools-wrapper' });
+  const toolsBtn = el('button', {
+    class: 'sp-tool-btn',
+    id: 'sp-tools-btn',
+    title: 'WebMCP tools discovered on this page',
+  });
+  toolsBtn.innerHTML = '\uD83D\uDD27 AI Tools (0)';
+
+  const toolsDropdown = el('div', { id: 'sp-tools-dropdown' });
+  toolsDropdown.innerHTML = '<div class="sp-tools-empty">No tools discovered on this page</div>';
+
+  toolsBtn.addEventListener('click', () => {
+    toolsDropdown.classList.toggle('open');
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!toolsWrapper.contains(e.target as Node)) {
+      toolsDropdown.classList.remove('open');
+    }
+  });
+
+  toolsWrapper.appendChild(toolsDropdown);
+  toolsWrapper.appendChild(toolsBtn);
+  toolbar.appendChild(toolsWrapper);
 
   document.body.appendChild(toolbar);
 
@@ -1217,9 +1992,207 @@ function buildUI(): void {
   renderMessages();
 }
 
+// ─── Console log refresh ──────────────────────────────────────────────────
+
+function refreshConsoleLogs(): void {
+  chrome.runtime.sendMessage(
+    { type: 'GET_CONSOLE_LOGS' },
+    (
+      response:
+        | { success?: boolean; logs?: Array<{ level: string; message: string; timestamp: number }> }
+        | undefined,
+    ) => {
+      if (chrome.runtime.lastError || !response?.success) return;
+      const entries = document.querySelector('.sp-console-entries');
+      if (!entries) return;
+      entries.innerHTML = '';
+      const logs = response.logs ?? [];
+      if (logs.length === 0) {
+        entries.innerHTML =
+          '<div style="padding:10px 8px;color:#475569;font-size:11px;text-align:center">No console logs captured</div>';
+        return;
+      }
+      for (const log of logs) {
+        const entry = el('div', { class: `sp-console-entry sp-console-${log.level}` });
+        const time = new Date(log.timestamp).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+        entry.appendChild(el('span', { class: 'sp-console-time' }, time));
+        entry.appendChild(document.createTextNode(log.message));
+        entries.appendChild(entry);
+      }
+      // Scroll to bottom
+      const panel = document.getElementById('sp-console-panel');
+      if (panel) panel.scrollTop = panel.scrollHeight;
+    },
+  );
+}
+
+// ─── Shortcuts refresh ────────────────────────────────────────────────────
+
+function refreshShortcuts(): void {
+  chrome.runtime.sendMessage(
+    { type: 'LIST_SHORTCUTS' },
+    (
+      response:
+        | {
+            success?: boolean;
+            shortcuts?: Array<{ id: string; name: string; actions: unknown[]; createdAt: number }>;
+          }
+        | undefined,
+    ) => {
+      if (chrome.runtime.lastError || !response?.success) return;
+      const dropdown = document.getElementById('sp-shortcuts-dropdown');
+      if (!dropdown) return;
+      dropdown.innerHTML = '';
+      const shortcuts = response.shortcuts ?? [];
+      if (shortcuts.length === 0) {
+        dropdown.innerHTML = '<div class="sp-shortcuts-empty">No saved shortcuts</div>';
+      } else {
+        for (const sc of shortcuts) {
+          const item = el('div', { class: 'sp-shortcut-item' });
+          item.appendChild(el('span', { class: 'sp-shortcut-name' }, sc.name));
+          const actions = el('div', { class: 'sp-shortcut-actions' });
+          const playBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Replay' }, '▶');
+          playBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            chrome.runtime.sendMessage({ type: 'REPLAY_SHORTCUT', shortcutId: sc.id }, () => {});
+            dropdown.classList.remove('open');
+          });
+          const delBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Delete' }, '✕');
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
+              if (!chrome.runtime.lastError) refreshShortcuts();
+            });
+          });
+          actions.appendChild(playBtn);
+          actions.appendChild(delBtn);
+          item.appendChild(actions);
+          dropdown.appendChild(item);
+        }
+      }
+
+      // Save recording flow
+      const saveRow = el('div', { class: 'sp-save-shortcut-row' });
+      const nameInput = el('input', {
+        class: 'sp-save-shortcut-input',
+        placeholder: 'Name this shortcut…',
+      }) as HTMLInputElement;
+      const saveBtn = el('button', { class: 'sp-save-shortcut-btn' }, 'Save Recording');
+      saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        if (!name) return;
+        // Get recorded actions from content script
+        chrome.runtime.sendMessage(
+          { type: 'GET_RECORDED_ACTIONS' },
+          (recResponse: { success?: boolean; actions?: unknown[] } | undefined) => {
+            if (chrome.runtime.lastError || !recResponse?.success) return;
+            const recActions = recResponse.actions ?? [];
+            if (recActions.length === 0) return;
+            chrome.runtime.sendMessage(
+              {
+                type: 'SAVE_SHORTCUT',
+                name,
+                actions: recActions,
+              },
+              () => {
+                if (!chrome.runtime.lastError) {
+                  nameInput.value = '';
+                  refreshShortcuts();
+                }
+              },
+            );
+          },
+        );
+      });
+      saveRow.appendChild(nameInput);
+      saveRow.appendChild(saveBtn);
+      dropdown.appendChild(saveRow);
+    },
+  );
+}
+
+// ─── Scheduled tasks refresh ──────────────────────────────────────────────
+
+function refreshScheduledTasks(): void {
+  chrome.runtime.sendMessage(
+    { type: 'LIST_SCHEDULED_TASKS' },
+    (
+      response:
+        | {
+            success?: boolean;
+            tasks?: Array<{
+              id: string;
+              name: string;
+              enabled: boolean;
+              scheduleType: string;
+              lastRun?: number;
+            }>;
+          }
+        | undefined,
+    ) => {
+      if (chrome.runtime.lastError || !response?.success) return;
+      const list = document.getElementById('sp-tasks-list');
+      if (!list) return;
+      list.innerHTML = '';
+      const tasks = response.tasks ?? [];
+      if (tasks.length === 0) {
+        list.innerHTML =
+          '<div style="padding:6px 0;color:#475569;font-size:11px">No scheduled tasks</div>';
+        return;
+      }
+      for (const task of tasks) {
+        const item = el('div', { class: 'sp-task-item' });
+        const toggle = el('input', {
+          type: 'checkbox',
+          class: 'sp-task-toggle',
+        }) as HTMLInputElement;
+        toggle.checked = task.enabled;
+        toggle.addEventListener('change', () => {
+          chrome.runtime.sendMessage(
+            {
+              type: 'UPDATE_SCHEDULED_TASK',
+              taskId: task.id,
+              updates: { enabled: toggle.checked },
+            },
+            () => {},
+          );
+        });
+        item.appendChild(toggle);
+        item.appendChild(el('span', { class: 'sp-task-name' }, task.name));
+        item.appendChild(el('span', { class: 'sp-task-schedule' }, task.scheduleType));
+        const delBtn = el('button', { class: 'sp-task-delete', title: 'Delete task' }, '✕');
+        delBtn.addEventListener('click', () => {
+          chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
+            if (!chrome.runtime.lastError) refreshScheduledTasks();
+          });
+        });
+        item.appendChild(delBtn);
+        list.appendChild(item);
+      }
+    },
+  );
+}
+
 // ─── Message listener (streaming chunks) ─────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg: unknown) => {
+  const envelope = msg as { type: string };
+
+  // Handle WebMCP tool discovery updates from the background
+  if (envelope.type === 'WEBMCP_TOOLS_CHANGED') {
+    const toolsMsg = msg as { tools: WebMCPToolEntry[] };
+    discoveredTools = (toolsMsg.tools ?? []).map((t) => ({
+      name: t.name,
+      description: t.description,
+    }));
+    updateToolsButton();
+    return;
+  }
+
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
   if (chunk.id !== currentStreamId) return;
@@ -1249,6 +2222,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.done) {
+    if (streamTimeoutHandle) {
+      clearTimeout(streamTimeoutHandle);
+      streamTimeoutHandle = null;
+    }
     const existing = messages.find((m) => m.id === chunk.id);
     if (existing) {
       existing.streaming = false;
@@ -1282,6 +2259,64 @@ Promise.all([
       renderMessages();
     }
   }),
-]).catch(() => {
-  // Boot errors must not surface to the user.
+])
+  .then(() => {
+    // Check for pending chat from context menu (selection, summarize, explain, translate)
+    checkPendingChat();
+    // Load scheduled tasks into settings panel
+    refreshScheduledTasks();
+  })
+  .catch(() => {
+    // Boot errors must not surface to the user.
+  });
+
+/**
+ * Check for pending chat actions from context menu (stored in session storage by background).
+ */
+function checkPendingChat(): void {
+  chrome.storage.session.get('agi_pending_chat', (result) => {
+    if (chrome.runtime.lastError) return;
+    const pending = result['agi_pending_chat'] as
+      | { type: string; text: string; url: string; timestamp: number }
+      | undefined;
+    if (!pending || Date.now() - pending.timestamp > 30_000) return;
+
+    // Clear immediately so it doesn't re-fire
+    chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+
+    let prompt = '';
+    switch (pending.type) {
+      case 'ask':
+        prompt = pending.text;
+        break;
+      case 'explain':
+        prompt = `Explain the following:\n\n"${pending.text}"`;
+        break;
+      case 'translate':
+        prompt = `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
+        break;
+      case 'summarize':
+        // Auto-capture page context then send
+        capturePageContext().then((ctx) => {
+          if (ctx) pendingPageContext = ctx;
+          sendMessage(
+            'Summarize this page concisely. Include key points, main arguments, and any important details.',
+          );
+        });
+        return;
+      default:
+        return;
+    }
+
+    if (prompt) {
+      sendMessage(prompt);
+    }
+  });
+}
+
+// Also listen for changes to agi_pending_chat while side panel is already open
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session' && changes['agi_pending_chat']?.newValue) {
+    checkPendingChat();
+  }
 });

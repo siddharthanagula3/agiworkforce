@@ -3,8 +3,16 @@
  * Handles communication between popup, content scripts, and desktop app
  */
 
-import type { ExtensionMessage, ExtensionResponse, ConnectionStatus, RunPageAction } from './types';
+import type {
+  ExtensionMessage,
+  ExtensionResponse,
+  ConnectionStatus,
+  RunPageAction,
+  SavedShortcut,
+  ScheduledTask,
+} from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { getPlatformPrompt } from './platform-prompts';
 
 // Service worker state
 interface BackgroundState {
@@ -78,6 +86,16 @@ const pendingRequests = new Map<
 >();
 const lastPageContextSyncByTab = new Map<number, { fingerprint: string; at: number }>();
 
+// WebMCP: per-tab tool catalog
+const webmcpToolsByTab = new Map<
+  number,
+  {
+    tools: import('./types').WebMCPToolInfo[];
+    url: string;
+    timestamp: number;
+  }
+>();
+
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
@@ -87,6 +105,13 @@ const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
 const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
+const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
+const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
+const MAX_SHORTCUTS = 50;
+const MAX_TASKS = 50;
+const TASK_ALARM_PREFIX = 'agi_task_';
+const TAB_GROUP_NAME = 'AGI Workforce';
+
 let nativeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let nativeReconnectAttempt = 0;
 let nativeHandshakeInFlight = false;
@@ -169,6 +194,9 @@ function initialize(): void {
 
   // Check initial connection status via native messaging heartbeat
   checkDesktopConnection();
+
+  // Restore scheduled task alarms (MV3 restarts clear alarms)
+  void restoreScheduledTaskAlarms();
 
   // Periodic connection check is handled by the 'keep-alive' alarm (see below)
 
@@ -357,6 +385,271 @@ function handleNativeDisconnect(): void {
   scheduleNativeReconnect('native_disconnect');
 }
 
+// ─── Notifications (Gap 2) ──────────────────────────────────────────────────
+
+function showNotification(title: string, message: string, tabId?: number): void {
+  if (!chrome.notifications?.create) return;
+  const notifId = `agi_${Date.now()}`;
+  chrome.notifications.create(
+    notifId,
+    {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title,
+      message,
+    },
+    () => {
+      if (chrome.runtime.lastError) {
+        logger.debug('Notification create failed', chrome.runtime.lastError.message);
+      }
+    },
+  );
+  // Store tabId for click handler
+  if (tabId) {
+    chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
+  }
+}
+
+chrome.notifications?.onClicked?.addListener((notifId: string) => {
+  // Open side panel when notification clicked
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (tab?.id && chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  });
+  chrome.notifications.clear(notifId, () => {});
+});
+
+// ─── Tab Groups (Gap 5) ─────────────────────────────────────────────────────
+
+async function ensureTabGroup(tabId: number): Promise<void> {
+  if (!chrome.tabGroups) return;
+  try {
+    const groups = await chrome.tabGroups.query({ title: TAB_GROUP_NAME });
+    if (groups.length > 0 && groups[0]?.id !== undefined) {
+      await chrome.tabs.group({ tabIds: [tabId], groupId: groups[0].id });
+    } else {
+      const groupId = await chrome.tabs.group({ tabIds: [tabId] });
+      await chrome.tabGroups.update(groupId, { title: TAB_GROUP_NAME, color: 'blue' });
+    }
+  } catch {
+    // tabGroups API may not be available in all contexts
+  }
+}
+
+// ─── Saved Shortcuts (Gap 4) ────────────────────────────────────────────────
+
+async function loadShortcuts(): Promise<SavedShortcut[]> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve([]);
+        return;
+      }
+      resolve((result[SHORTCUTS_STORAGE_KEY] as SavedShortcut[] | undefined) ?? []);
+    });
+  });
+}
+
+async function saveShortcuts(shortcuts: SavedShortcut[]): Promise<void> {
+  await chrome.storage.local.set({ [SHORTCUTS_STORAGE_KEY]: shortcuts });
+}
+
+async function handleSaveShortcut(
+  message: import('./types').SaveShortcutMessage,
+): Promise<ExtensionResponse> {
+  const shortcuts = await loadShortcuts();
+  if (shortcuts.length >= MAX_SHORTCUTS) {
+    return {
+      success: false,
+      error: `Maximum ${MAX_SHORTCUTS} shortcuts reached`,
+    } as ExtensionResponse;
+  }
+  const shortcut: SavedShortcut = {
+    id: `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: message.name.slice(0, 100),
+    actions: message.actions,
+    createdAt: Date.now(),
+    url: message.url,
+  };
+  shortcuts.push(shortcut);
+  await saveShortcuts(shortcuts);
+  return { success: true, shortcuts } as ExtensionResponse;
+}
+
+async function handleListShortcuts(): Promise<ExtensionResponse> {
+  const shortcuts = await loadShortcuts();
+  return { success: true, shortcuts } as ExtensionResponse;
+}
+
+async function handleDeleteShortcut(
+  message: import('./types').DeleteShortcutMessage,
+): Promise<ExtensionResponse> {
+  let shortcuts = await loadShortcuts();
+  shortcuts = shortcuts.filter((s) => s.id !== message.shortcutId);
+  await saveShortcuts(shortcuts);
+  return { success: true, shortcuts } as ExtensionResponse;
+}
+
+async function handleReplayShortcut(
+  message: import('./types').ReplayShortcutMessage,
+): Promise<ExtensionResponse> {
+  const shortcuts = await loadShortcuts();
+  const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
+  if (!shortcut) {
+    return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
+  }
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab?.id) {
+    return { success: false, error: 'No active tab' } as ExtensionResponse;
+  }
+  const taskId = `replay_${Date.now()}`;
+  const result = await forwardToContentScript(activeTab.id, {
+    type: 'RUN_PAGE_ACTIONS',
+    tabId: activeTab.id,
+    taskId,
+    actions: shortcut.actions,
+  } as ExtensionMessage);
+  showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
+  return result;
+}
+
+// ─── Scheduled Tasks (Gap 6) ────────────────────────────────────────────────
+
+async function loadScheduledTasks(): Promise<ScheduledTask[]> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(TASKS_STORAGE_KEY, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve([]);
+        return;
+      }
+      resolve((result[TASKS_STORAGE_KEY] as ScheduledTask[] | undefined) ?? []);
+    });
+  });
+}
+
+async function saveScheduledTasks(tasks: ScheduledTask[]): Promise<void> {
+  await chrome.storage.local.set({ [TASKS_STORAGE_KEY]: tasks });
+}
+
+function getAlarmPeriod(task: ScheduledTask): number {
+  switch (task.scheduleType) {
+    case 'hourly':
+      return 60;
+    case 'daily':
+      return 60 * 24;
+    case 'weekly':
+      return 60 * 24 * 7;
+    case 'monthly':
+      return 60 * 24 * 30;
+    default:
+      return 60 * 24;
+  }
+}
+
+async function registerTaskAlarm(task: ScheduledTask): Promise<void> {
+  if (!task.enabled) return;
+  const alarmName = `${TASK_ALARM_PREFIX}${task.id}`;
+  await chrome.alarms.create(alarmName, {
+    periodInMinutes: getAlarmPeriod(task),
+    delayInMinutes: getAlarmPeriod(task),
+  });
+}
+
+async function unregisterTaskAlarm(taskId: string): Promise<void> {
+  await chrome.alarms.clear(`${TASK_ALARM_PREFIX}${taskId}`);
+}
+
+async function executeScheduledTask(task: ScheduledTask): Promise<void> {
+  logger.info('Executing scheduled task', { id: task.id, name: task.name });
+
+  if (task.shortcutId) {
+    await handleReplayShortcut({
+      type: 'REPLAY_SHORTCUT',
+      shortcutId: task.shortcutId,
+    } as import('./types').ReplayShortcutMessage);
+  } else if (task.prompt) {
+    // Send as chat message via the same path as side panel
+    const chatMsg: import('./types').ChatMessageMessage = {
+      type: 'CHAT_MESSAGE',
+      id: `task_${task.id}_${Date.now()}`,
+      text: task.prompt,
+      timestamp: Date.now(),
+    };
+    void handleChatMessage(chatMsg, {} as chrome.runtime.MessageSender);
+  }
+
+  // Update lastRun
+  const tasks = await loadScheduledTasks();
+  const updated = tasks.map((t) => (t.id === task.id ? { ...t, lastRun: Date.now() } : t));
+  await saveScheduledTasks(updated);
+
+  showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
+}
+
+async function handleCreateScheduledTask(
+  message: import('./types').CreateScheduledTaskMessage,
+): Promise<ExtensionResponse> {
+  const tasks = await loadScheduledTasks();
+  if (tasks.length >= MAX_TASKS) {
+    return { success: false, error: `Maximum ${MAX_TASKS} tasks reached` } as ExtensionResponse;
+  }
+  const task: ScheduledTask = {
+    ...message.task,
+    id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: Date.now(),
+  };
+  tasks.push(task);
+  await saveScheduledTasks(tasks);
+  await registerTaskAlarm(task);
+  return { success: true, tasks } as ExtensionResponse;
+}
+
+async function handleListScheduledTasks(): Promise<ExtensionResponse> {
+  const tasks = await loadScheduledTasks();
+  return { success: true, tasks } as ExtensionResponse;
+}
+
+async function handleUpdateScheduledTask(
+  message: import('./types').UpdateScheduledTaskMessage,
+): Promise<ExtensionResponse> {
+  const tasks = await loadScheduledTasks();
+  const idx = tasks.findIndex((t) => t.id === message.taskId);
+  if (idx === -1) {
+    return { success: false, error: 'Task not found' } as ExtensionResponse;
+  }
+  const updated = { ...tasks[idx]!, ...message.updates };
+  tasks[idx] = updated;
+  await saveScheduledTasks(tasks);
+  await unregisterTaskAlarm(message.taskId);
+  await registerTaskAlarm(updated);
+  return { success: true, tasks } as ExtensionResponse;
+}
+
+async function handleDeleteScheduledTask(
+  message: import('./types').DeleteScheduledTaskMessage,
+): Promise<ExtensionResponse> {
+  let tasks = await loadScheduledTasks();
+  tasks = tasks.filter((t) => t.id !== message.taskId);
+  await saveScheduledTasks(tasks);
+  await unregisterTaskAlarm(message.taskId);
+  return { success: true, tasks } as ExtensionResponse;
+}
+
+/** Re-register all task alarms on service worker startup (MV3 restarts kill alarms). */
+async function restoreScheduledTaskAlarms(): Promise<void> {
+  const tasks = await loadScheduledTasks();
+  for (const task of tasks) {
+    if (task.enabled) {
+      await registerTaskAlarm(task);
+    }
+  }
+  if (tasks.length > 0) {
+    logger.info(`Restored ${tasks.length} scheduled task alarm(s)`);
+  }
+}
+
 /**
  * Handle incoming messages from popup or content scripts
  */
@@ -524,7 +817,7 @@ async function handleMessageAsync(
           format?: 'png' | 'jpeg';
           quality?: number;
         };
-        const options: chrome.tabs.CaptureVisibleTabOptions = {
+        const options: { format?: 'png' | 'jpeg'; quality?: number } = {
           format: screenshotMsg.format ?? 'png',
           quality: screenshotMsg.quality ?? 90,
         };
@@ -632,12 +925,115 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
+    // ── WebMCP ─────────────────────────────────────────────────────────────
+    case 'WEBMCP_DISCOVER_TOOLS':
+    case 'WEBMCP_CALL_TOOL': {
+      // Forward to content script on the active tab
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      }
+      return forwardToContentScript(resolvedTabId, message);
+    }
+
+    case 'WEBMCP_TOOLS_CHANGED': {
+      // Store discovered tools per tab for native messaging bridge
+      const toolsMsg = message as import('./types').WebMCPToolsChangedMessage;
+      const toolsTabId = sender?.tab?.id;
+      if (toolsTabId && toolsMsg.tools) {
+        webmcpToolsByTab.set(toolsTabId, {
+          tools: toolsMsg.tools,
+          url: toolsMsg.url || '',
+          timestamp: Date.now(),
+        });
+        logger.info(`WebMCP: ${toolsMsg.tools.length} tool(s) on tab ${toolsTabId}`, {
+          tools: toolsMsg.tools.map((t: import('./types').WebMCPToolInfo) => t.name),
+        });
+        // Forward to side panel so it can display the discovered tools
+        chrome.runtime
+          .sendMessage({
+            type: 'WEBMCP_TOOLS_CHANGED',
+            tools: toolsMsg.tools,
+            url: toolsMsg.url,
+          })
+          .catch(() => {
+            // Side panel may not be open; ignore
+          });
+        // Forward to native messaging if connected
+        if (state.isNativeConnected && state.nativePort) {
+          try {
+            state.nativePort.postMessage({
+              type: 'webmcp_tools_update',
+              tab_id: toolsTabId,
+              tools: toolsMsg.tools,
+              url: toolsMsg.url,
+            });
+          } catch {
+            // Native port may be disconnected
+          }
+        }
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
+    // ── Console log reading (forwarded to content script) ────────────────
+    case 'GET_CONSOLE_LOGS':
+    case 'CLEAR_CONSOLE_LOGS': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      }
+      return forwardToContentScript(resolvedTabId, message);
+    }
+
+    // ── Saved shortcuts ───────────────────────────────────────────────────
+    case 'SAVE_SHORTCUT':
+      return handleSaveShortcut(message as import('./types').SaveShortcutMessage);
+
+    case 'LIST_SHORTCUTS':
+      return handleListShortcuts();
+
+    case 'DELETE_SHORTCUT':
+      return handleDeleteShortcut(message as import('./types').DeleteShortcutMessage);
+
+    case 'REPLAY_SHORTCUT':
+      return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
+
+    // ── Scheduled tasks ───────────────────────────────────────────────────
+    case 'CREATE_SCHEDULED_TASK':
+      return handleCreateScheduledTask(message as import('./types').CreateScheduledTaskMessage);
+
+    case 'LIST_SCHEDULED_TASKS':
+      return handleListScheduledTasks();
+
+    case 'UPDATE_SCHEDULED_TASK':
+      return handleUpdateScheduledTask(message as import('./types').UpdateScheduledTaskMessage);
+
+    case 'DELETE_SCHEDULED_TASK':
+      return handleDeleteScheduledTask(message as import('./types').DeleteScheduledTaskMessage);
+
     case 'BRIDGE_URL_CHANGED': {
-      // The side panel has updated agi_bridge_url in chrome.storage.local.
-      // The new URL will be picked up automatically on the next handleChatMessage()
-      // call because getAgiBridgeBaseUrl() reads from storage at invocation time.
-      // Log for debugging and acknowledge.
-      logger.info('Bridge URL updated', { url: message.url ?? '(default)' });
+      // Validate the new URL before accepting it
+      const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
+      if (newUrl) {
+        const validated = validateBridgeUrl(newUrl);
+        if (!validated) {
+          logger.error('Bridge URL change rejected: non-local URL', { url: newUrl });
+          return {
+            success: false,
+            error: 'Only local URLs (localhost/127.0.0.1) are allowed',
+          } as ExtensionResponse;
+        }
+      }
+      logger.info('Bridge URL updated', { url: newUrl ?? '(default)' });
       return { success: true } as ExtensionResponse;
     }
 
@@ -813,6 +1209,10 @@ async function handleCreateTab(
       url: message.url,
       active: message.active !== false,
     });
+    // Add to AGI Workforce tab group
+    if (tab.id) {
+      void ensureTabGroup(tab.id);
+    }
     return {
       success: true,
       data: {
@@ -1105,39 +1505,86 @@ function setupContextMenu(): void {
     return;
   }
 
-  chrome.contextMenus.removeAll();
-
-  chrome.contextMenus.create({
-    id: 'capture-element',
-    title: 'Capture Element',
-    contexts: ['all'],
+  chrome.contextMenus.removeAll(() => {
+    if (chrome.runtime.lastError) {
+      logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
+    }
   });
 
-  chrome.contextMenus.create({
-    id: 'get-element-info',
-    title: 'Get Element Info',
-    contexts: ['all'],
-  });
+  const menuItems: chrome.contextMenus.CreateProperties[] = [
+    { id: 'ask-agi-workforce', title: 'Ask AGI Workforce about "%s"', contexts: ['selection'] },
+    { id: 'explain-selection', title: 'Explain this', contexts: ['selection'] },
+    { id: 'translate-selection', title: 'Translate this', contexts: ['selection'] },
+    { id: 'summarize-page', title: 'Summarize this page', contexts: ['page'] },
+    { id: 'capture-element', title: 'Capture Element', contexts: ['all'] },
+    { id: 'get-element-info', title: 'Get Element Info', contexts: ['all'] },
+    { id: 'discover-webmcp-tools', title: 'Discover AI Tools on Page', contexts: ['all'] },
+  ];
 
-  // Show only when text is selected
-  chrome.contextMenus.create({
-    id: 'ask-agi-workforce',
-    title: 'Ask AGI Workforce',
-    contexts: ['selection'],
-  });
+  for (const item of menuItems) {
+    chrome.contextMenus.create(item, () => {
+      if (chrome.runtime.lastError) {
+        logger.warn(
+          `contextMenus.create(${item.id ?? 'unknown'}) failed`,
+          chrome.runtime.lastError.message,
+        );
+      }
+    });
+  }
 
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) return;
 
     if (info.menuItemId === 'capture-element') {
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'CAPTURE_ELEMENT',
-      });
+      chrome.tabs
+        .sendMessage(tab.id, {
+          type: 'CAPTURE_ELEMENT',
+        })
+        .catch((err: unknown) => {
+          logger.warn('Failed to send CAPTURE_ELEMENT to tab', err);
+        });
     } else if (info.menuItemId === 'get-element-info') {
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'GET_ELEMENT_INFO',
-      });
+      chrome.tabs
+        .sendMessage(tab.id, {
+          type: 'GET_ELEMENT_INFO',
+        })
+        .catch((err: unknown) => {
+          logger.warn('Failed to send GET_ELEMENT_INFO to tab', err);
+        });
+    } else if (info.menuItemId === 'discover-webmcp-tools') {
+      chrome.tabs.sendMessage(
+        tab.id,
+        { type: 'WEBMCP_DISCOVER_TOOLS' },
+        (response: { tools?: import('./types').WebMCPToolInfo[] } | undefined) => {
+          if (chrome.runtime.lastError) {
+            logger.warn('WebMCP discover failed', chrome.runtime.lastError.message);
+            return;
+          }
+          const tools = response?.tools ?? [];
+          logger.info(`WebMCP: discovered ${tools.length} tool(s) on tab ${tab!.id}`, {
+            tools: tools.map((t) => t.name),
+          });
+          if (tab!.id != null) {
+            webmcpToolsByTab.set(tab!.id, {
+              tools,
+              url: info.pageUrl ?? '',
+              timestamp: Date.now(),
+            });
+          }
+        },
+      );
     } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+      // Store selection for side panel to pick up, then open it
+      chrome.storage.session
+        .set({
+          agi_pending_chat: {
+            type: 'ask',
+            text: info.selectionText,
+            url: info.pageUrl ?? '',
+            timestamp: Date.now(),
+          },
+        })
+        .catch(() => {});
       void sendNativeMessage({
         type: 'selected_text_query',
         tabId: tab.id,
@@ -1145,6 +1592,48 @@ function setupContextMenu(): void {
         selectedText: info.selectionText,
         timestamp: Date.now(),
       });
+      if (chrome.sidePanel) {
+        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+      }
+    } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
+      chrome.storage.session
+        .set({
+          agi_pending_chat: {
+            type: 'explain',
+            text: info.selectionText,
+            url: info.pageUrl ?? '',
+            timestamp: Date.now(),
+          },
+        })
+        .catch(() => {});
+      if (chrome.sidePanel) {
+        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+      }
+    } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
+      chrome.storage.session
+        .set({
+          agi_pending_chat: {
+            type: 'translate',
+            text: info.selectionText,
+            url: info.pageUrl ?? '',
+            timestamp: Date.now(),
+          },
+        })
+        .catch(() => {});
+      if (chrome.sidePanel) {
+        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+      }
+    } else if (info.menuItemId === 'summarize-page' && tab.id) {
+      chrome.storage.session
+        .set({
+          agi_pending_chat: {
+            type: 'summarize',
+            text: '',
+            url: info.pageUrl ?? '',
+            timestamp: Date.now(),
+          },
+        })
+        .catch(() => {});
       if (chrome.sidePanel) {
         chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       }
@@ -1169,6 +1658,7 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 chrome.tabs.onRemoved.addListener((tabId) => {
   state.rateLimiter.reset(tabId);
   lastPageContextSyncByTab.delete(tabId);
+  webmcpToolsByTab.delete(tabId);
   logger.debug('Cleaned up rate limit for tab', { tabId });
 });
 
@@ -1249,22 +1739,64 @@ async function captureCurrentPage(): Promise<void> {
 /** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
 const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
 
+/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted. */
+const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+
+/**
+ * Validate that a bridge URL points to a local address.
+ * Returns the normalized URL if valid, null if rejected.
+ */
+function validateBridgeUrl(raw: string): string | null {
+  try {
+    // Normalize protocol for URL parsing
+    const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+    const parsed = new URL(normalized);
+
+    // Only allow http/https schemes
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      logger.warn('Bridge URL rejected: unsupported protocol', { protocol: parsed.protocol });
+      return null;
+    }
+
+    // Only allow local hostnames — never route bridge traffic to remote servers
+    if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
+      logger.warn('Bridge URL rejected: non-local hostname', { hostname: parsed.hostname });
+      return null;
+    }
+
+    // Strip trailing slash
+    return normalized.replace(/\/$/, '');
+  } catch {
+    logger.warn('Bridge URL rejected: invalid URL', { raw });
+    return null;
+  }
+}
+
 /**
  * Resolve the configured bridge URL from storage, falling back to the default.
  * Returns a base HTTP(S) URL derived from the stored ws:// or http:// value.
+ * Rejects non-local URLs to prevent data exfiltration.
  */
 async function getAgiBridgeBaseUrl(): Promise<string> {
   return new Promise((resolve) => {
     chrome.storage.local.get('agi_bridge_url', (result) => {
+      if (chrome.runtime.lastError) {
+        logger.warn('Failed to read bridge URL from storage', chrome.runtime.lastError.message);
+        resolve(DEFAULT_AGI_BRIDGE_URL);
+        return;
+      }
       const raw = (result['agi_bridge_url'] as string | undefined)?.trim();
       if (!raw) {
         resolve(DEFAULT_AGI_BRIDGE_URL);
         return;
       }
-      // Accept ws://, wss://, http://, https:// — normalise to http(s)://
-      const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
-      // Strip trailing slash
-      resolve(normalized.replace(/\/$/, ''));
+      const validated = validateBridgeUrl(raw);
+      if (!validated) {
+        logger.error('Stored bridge URL failed validation, using default', { raw });
+        resolve(DEFAULT_AGI_BRIDGE_URL);
+        return;
+      }
+      resolve(validated);
     });
   });
 }
@@ -1290,9 +1822,23 @@ async function handleChatMessage(
   };
 
   // Build message array for the API
-  const messages: Array<{ role: string; content: string }> = [
-    ...conversationHistory.map((h) => ({ role: h.role, content: h.content })),
-  ];
+  const messages: Array<{ role: string; content: string }> = [];
+
+  // Prepend platform-specific knowledge prompt if on a known site (Gap 1)
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabUrl = activeTab?.url;
+    if (tabUrl) {
+      const platformPrompt = getPlatformPrompt(tabUrl);
+      if (platformPrompt) {
+        messages.push({ role: 'system', content: platformPrompt });
+      }
+    }
+  } catch {
+    // Tab query failed — proceed without platform prompt
+  }
+
+  messages.push(...conversationHistory.map((h) => ({ role: h.role, content: h.content })));
 
   // Append page context to the user message if provided
   const userContent = pageContext
@@ -1424,6 +1970,7 @@ async function handleChatMessage(
     logger.error('handleChatMessage error', error);
     const errText = error instanceof Error ? error.message : 'Unknown error';
     broadcastChunk('', true, errText);
+    showNotification('Chat Error', errText);
   }
 }
 
@@ -1443,7 +1990,11 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 
 // Handle service worker keep-alive and periodic connection checks
-chrome.alarms.create('keep-alive', { periodInMinutes: 0.5 });
+chrome.alarms.create('keep-alive', { periodInMinutes: 0.5 }, () => {
+  if (chrome.runtime.lastError) {
+    logger.warn('Failed to create keep-alive alarm', chrome.runtime.lastError.message);
+  }
+});
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
@@ -1451,6 +2002,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (!nativeReconnectGaveUp && !state.isNativeConnected) {
       void connectToNativeHost();
     }
+    return;
+  }
+
+  // Handle scheduled task alarms (Gap 6)
+  if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
+    const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
+    void loadScheduledTasks().then((tasks) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task?.enabled) {
+        void executeScheduledTask(task);
+      }
+    });
   }
 });
 
