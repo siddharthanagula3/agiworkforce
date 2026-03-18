@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
+import { useProjectStore } from '@/stores/projectStore';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/components/chat/AttachmentPreview';
 
@@ -47,6 +48,8 @@ interface ChatState {
   clearError: () => void;
   searchConversations: (query: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  retryMessage: (conversationId: string, messageId: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
 }
 
 /** Abort controllers keyed by conversationId — supports concurrent streams */
@@ -283,6 +286,20 @@ export const useChatStore = create<ChatState>()(
           });
         } else {
           historyMessages.push({ role: 'user', content: messageContent });
+        }
+
+        // Inject active project instructions as a system message
+        const projectState = useProjectStore.getState();
+        if (projectState.activeProjectId) {
+          const activeProject = projectState.projects.find(
+            (p) => p.id === projectState.activeProjectId,
+          );
+          if (activeProject?.instructions?.trim()) {
+            historyMessages.unshift({
+              role: 'system',
+              content: activeProject.instructions.trim(),
+            });
+          }
         }
 
         // Add user message + placeholder assistant message
@@ -552,6 +569,57 @@ export const useChatStore = create<ChatState>()(
             },
           };
         });
+      },
+
+      retryMessage: (conversationId, messageId) => {
+        const state = get();
+        const msgs = state.messages[conversationId];
+        if (!msgs) return;
+
+        const msgIndex = msgs.findIndex((m) => m.id === messageId);
+        if (msgIndex < 0) return;
+
+        const assistantMsg = msgs[msgIndex];
+        if (!assistantMsg || assistantMsg.role !== 'assistant') return;
+
+        // Find the preceding user message
+        const userMsg = msgIndex > 0 ? msgs[msgIndex - 1] : null;
+        if (!userMsg || userMsg.role !== 'user') return;
+
+        const userContent = userMsg.content;
+        const userModel = userMsg.model ?? assistantMsg.model ?? 'claude-3-5-sonnet-20241022';
+
+        // Remove both the user message and assistant message
+        const trimmedMsgs = msgs.slice(0, msgIndex - 1);
+        set((s) => ({
+          messages: { ...s.messages, [conversationId]: trimmedMsgs },
+        }));
+
+        // Re-send the user message
+        get().sendMessage(conversationId, userContent, userModel);
+      },
+
+      editMessage: (conversationId, messageId, newContent) => {
+        const state = get();
+        const msgs = state.messages[conversationId];
+        if (!msgs) return;
+
+        const msgIndex = msgs.findIndex((m) => m.id === messageId);
+        if (msgIndex < 0) return;
+
+        const targetMsg = msgs[msgIndex];
+        if (!targetMsg || targetMsg.role !== 'user') return;
+
+        const userModel = targetMsg.model ?? 'claude-3-5-sonnet-20241022';
+
+        // Keep messages up to (but not including) the target message
+        const trimmedMsgs = msgs.slice(0, msgIndex);
+        set((s) => ({
+          messages: { ...s.messages, [conversationId]: trimmedMsgs },
+        }));
+
+        // Re-send with new content
+        get().sendMessage(conversationId, newContent, userModel);
       },
     }),
     {

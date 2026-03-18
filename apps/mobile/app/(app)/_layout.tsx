@@ -42,7 +42,9 @@ export default function AppLayout() {
       <Stack.Screen name="schedules/create" />
       <Stack.Screen name="settings/index" />
       <Stack.Screen name="settings/memory" />
+      <Stack.Screen name="settings/integrations" />
       <Stack.Screen name="messaging/index" />
+      <Stack.Screen name="feedback" />
     </Stack>
   );
 }

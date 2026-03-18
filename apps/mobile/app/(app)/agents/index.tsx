@@ -103,7 +103,6 @@ export default function AgentsScreen() {
         <FlashList
           data={agents}
           numColumns={numColumns}
-          estimatedItemSize={160}
           contentContainerStyle={{ padding: 12 }}
           refreshControl={
             <RefreshControl

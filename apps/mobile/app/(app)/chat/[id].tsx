@@ -36,6 +36,8 @@ export default function ChatScreen() {
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const retryMessage = useChatStore((s) => s.retryMessage);
+  const editMessage = useChatStore((s) => s.editMessage);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -151,6 +153,24 @@ export default function ChatScreen() {
     [id, deleteMessage],
   );
 
+  const handleRetryMessage = useCallback(
+    (messageId: string) => {
+      if (!id) return;
+      stopSpeaking();
+      retryMessage(id, messageId);
+    },
+    [id, retryMessage, stopSpeaking],
+  );
+
+  const handleEditMessage = useCallback(
+    (messageId: string, newContent: string) => {
+      if (!id) return;
+      stopSpeaking();
+      editMessage(id, messageId, newContent);
+    },
+    [id, editMessage, stopSpeaking],
+  );
+
   const handleBack = useCallback(() => {
     stopSpeaking();
     if (router.canGoBack()) {
@@ -218,6 +238,8 @@ export default function ChatScreen() {
             onApprove={approveRequest}
             onReject={rejectRequest}
             onDeleteMessage={handleDeleteMessage}
+            onRetryMessage={handleRetryMessage}
+            onEditMessage={handleEditMessage}
             onRefresh={handleRefresh}
             refreshing={refreshing}
           />

@@ -259,24 +259,32 @@ export async function transcribeWithDeepgram(uri: string, apiKey: string): Promi
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formData.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
 
-  const response = await fetch(DEEPGRAM_ENDPOINT, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: formData,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Deepgram error ${response.status}: ${body}`);
-  }
+  try {
+    const response = await fetch(DEEPGRAM_ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
+      signal: controller.signal,
+    });
 
-  const data = (await response.json()) as {
-    results?: {
-      channels?: Array<{
-        alternatives?: Array<{ transcript?: string }>;
-      }>;
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Deepgram error ${response.status}: ${body}`);
+    }
+
+    const data = (await response.json()) as {
+      results?: {
+        channels?: Array<{
+          alternatives?: Array<{ transcript?: string }>;
+        }>;
+      };
     };
-  };
 
-  return data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
+    return data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
