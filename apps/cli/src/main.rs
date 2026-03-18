@@ -179,6 +179,23 @@ struct Cli {
     /// Also activatable via AGI_TEAM=1 environment variable.
     #[arg(long)]
     team: bool,
+
+    /// Effort level preset: low (fast/cheap), medium (default), high (thorough), max (exhaustive)
+    #[arg(long, value_name = "LEVEL", value_enum)]
+    effort: Option<EffortLevel>,
+}
+
+/// Effort level presets that bundle max_turns + max_tokens + temperature.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum EffortLevel {
+    /// Fast responses, minimal tool use (max_turns=3, max_tokens=2048)
+    Low,
+    /// Default balanced settings
+    Medium,
+    /// Thorough analysis and implementation (max_turns=50, max_tokens=16384)
+    High,
+    /// Exhaustive — use all available context (max_turns=100, max_tokens=32768)
+    Max,
 }
 
 /// Output format for structured data.
@@ -364,7 +381,26 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Apply CLI overrides to config
+    // Apply --effort preset (before individual overrides so explicit flags win)
+    let effort_max_turns = match cli.effort {
+        Some(EffortLevel::Low) => {
+            app_config.default.max_tokens = 2048;
+            app_config.default.temperature = Some(0.3);
+            Some(3usize)
+        }
+        Some(EffortLevel::Medium) => None, // use defaults
+        Some(EffortLevel::High) => {
+            app_config.default.max_tokens = 16384;
+            Some(50usize)
+        }
+        Some(EffortLevel::Max) => {
+            app_config.default.max_tokens = 32768;
+            Some(100usize)
+        }
+        None => None,
+    };
+
+    // Apply CLI overrides to config (explicit flags override effort presets)
     if let Some(ref max_tokens) = cli.max_tokens {
         app_config.default.max_tokens = *max_tokens;
     }
@@ -406,6 +442,9 @@ async fn main() -> Result<()> {
     // --print: force oneshot mode with raw output (for piping)
     let raw_output = cli.raw || cli.print;
 
+    // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
+    let effective_max_turns = cli.max_turns.or(effort_max_turns);
+
     // Determine mode: one-shot if we have a prompt (from arg or stdin) or --print, REPL otherwise
     if let Some(ref prompt) = final_prompt {
         return run_oneshot(
@@ -416,7 +455,7 @@ async fn main() -> Result<()> {
             raw_output,
             &sys_context,
             effective_system_prompt.as_deref(),
-            cli.max_turns,
+            effective_max_turns,
             cli.dangerously_skip_permissions,
         )
         .await;
@@ -480,7 +519,7 @@ async fn main() -> Result<()> {
         &sys_context,
         effective_system_prompt.as_deref(),
         resume_messages,
-        cli.max_turns,
+        effective_max_turns,
         cli.dangerously_skip_permissions,
         cli.fallback_model,
         cli.name,
