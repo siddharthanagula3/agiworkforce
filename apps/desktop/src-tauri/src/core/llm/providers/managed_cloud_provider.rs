@@ -74,7 +74,7 @@ impl ManagedCloudProvider {
         // Cloud-specific aliases not in models.json (pattern-based rules that
         // cannot be expressed as simple key-value pairs in the JSON map).
         match trimmed.as_str() {
-            m if m.starts_with("gpt-5.2-codex-") => "gpt-5.2-codex".to_string(),
+            m if m.starts_with("gpt-5.4-codex-") || m.starts_with("gpt-5.2-codex-") => "gpt-5.4-codex".to_string(),
             m if m.starts_with("gpt-5.3-codex-") => "gpt-5.3-codex".to_string(),
             // Keep the trimmed/lowercased model ID when no alias is needed.
             _ => trimmed,
@@ -304,15 +304,15 @@ impl ManagedCloudProvider {
         }
 
         // GPT-5 nano doesn't support custom temperature (only default value of 1.0)
-        // Remove temperature parameter for gpt-5-nano to avoid API errors
-        if canonical_model == "gpt-5-nano" {
+        // Remove temperature parameter for gpt-5.4-nano to avoid API errors
+        if canonical_model == "gpt-5.4-nano" {
             transformed
                 .as_object_mut()
                 .and_then(|obj| obj.remove("temperature"));
         }
 
         // Map desktop Codex quality variants to OpenAI reasoning effort.
-        // This keeps "gpt-5.2-codex-low|medium|high|xhigh" behavior after
+        // This keeps "gpt-5.4-codex-low|medium|high|xhigh" behavior after
         // alias normalization to the canonical API model.
         if let Some(effort) = Self::codex_effort_override(&request.model) {
             if transformed
@@ -853,7 +853,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5-nano".to_string(),
+            model: "gpt-5.4-nano".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,

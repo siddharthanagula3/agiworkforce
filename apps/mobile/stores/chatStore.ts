@@ -50,6 +50,9 @@ interface ChatState {
   deleteMessage: (conversationId: string, messageId: string) => void;
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  pinConversation: (id: string) => Promise<void>;
+  makeConversationPermanent: (id: string) => void;
+  clearQueuedPlaceholders: (conversationId: string) => void;
 }
 
 /** Abort controllers keyed by conversationId — supports concurrent streams */
@@ -620,6 +623,47 @@ export const useChatStore = create<ChatState>()(
 
         // Re-send with new content
         get().sendMessage(conversationId, newContent, userModel);
+      },
+
+      pinConversation: async (id) => {
+        const conv = get().conversations.find((c) => c.id === id);
+        if (!conv) return;
+        const pinned = !conv.pinned;
+        set((state) => ({
+          conversations: state.conversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
+        }));
+        try {
+          await api.put(`/api/chat/conversations/${id}`, { pinned });
+        } catch {
+          // Revert on failure
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === id ? { ...c, pinned: !pinned } : c,
+            ),
+          }));
+        }
+      },
+
+      makeConversationPermanent: (id) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, temporary: false } : c,
+          ),
+        }));
+      },
+
+      clearQueuedPlaceholders: (conversationId) => {
+        set((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs) return state;
+          // Remove any streaming placeholder messages that were queued offline
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.filter((m) => !m.isStreaming),
+            },
+          };
+        });
       },
     }),
     {

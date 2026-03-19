@@ -377,6 +377,19 @@ function getWebviewContent(
     pre code { color: #e6edf3; }
     :not(pre) > code { background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 3px; color: #79c0ff; }
     strong { font-weight: 600; }
+    em { font-style: italic; }
+    del { text-decoration: line-through; opacity: 0.6; }
+    h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
+    h2 { font-size: 16px; } h3 { font-size: 14px; } h4 { font-size: 13px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+    li { margin-left: 16px; list-style: disc; }
+    blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
+    .code-block-wrapper { position: relative; margin: 8px 0; }
+    .code-block-wrapper pre { margin: 0; }
+    .code-lang { position: absolute; top: 4px; left: 8px; font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .copy-btn { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-secondary); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+    .code-block-wrapper:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
 
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
@@ -541,6 +554,7 @@ function getWebviewContent(
     function renderMarkdown(text) {
       var bt = String.fromCharCode(96); // backtick char
       var bt3 = bt + bt + bt;
+      var star = String.fromCharCode(42); // asterisk char
       // Escape HTML entities first (DOMPurify-lite approach)
       var html = text
         .replace(/&/g, '&amp;')
@@ -548,29 +562,66 @@ function getWebviewContent(
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-      // Fenced code blocks
+      // Fenced code blocks with language label + copy button
       var codeBlockRe = new RegExp(bt3 + '(\\\\w*)?\\\\n([\\\\s\\\\S]*?)' + bt3, 'g');
       html = html.replace(codeBlockRe, function(m, lang, code) {
-        return '<pre><code>' + code.replace(/\\n$/, '') + '</code></pre>';
+        var langLabel = lang ? '<span class="code-lang">' + lang + '</span>' : '';
+        var copyBtn = '<button class="copy-btn" onclick="copyCode(this)" title="Copy">Copy</button>';
+        return '<div class="code-block-wrapper">' + langLabel + copyBtn + '<pre><code>' + code.replace(/\\n$/, '') + '</code></pre></div>';
       });
 
       // Inline code
       var inlineCodeRe = new RegExp(bt + '([^' + bt + ']+?)' + bt, 'g');
       html = html.replace(inlineCodeRe, '<code>$1</code>');
 
-      // Bold: **...**
-      html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+      // Bold
+      var boldRe = new RegExp(star + star + '(.+?)' + star + star, 'g');
+      html = html.replace(boldRe, '<strong>$1</strong>');
 
-      // Newlines to <br> (but not inside <pre> blocks)
-      var parts = html.split(/(<pre[\\s\\S]*?<\\/pre>)/g);
+      // Italic
+      var italicRe = new RegExp(star + '(.+?)' + star, 'g');
+      html = html.replace(italicRe, '<em>$1</em>');
+
+      // Strikethrough
+      html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+      // Headers
+      html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+      // Horizontal rules
+      html = html.replace(/^---$/gm, '<hr>');
+
+      // Unordered lists
+      html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+
+      // Block quotes
+      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+      // Newlines to <br> (but not inside code blocks)
+      var splitRe = new RegExp('(<(?:pre|div class="code-block-wrapper")[\\\\s\\\\S]*?<\\\\/(?:pre|div)>)', 'g');
+      var parts = html.split(splitRe);
       for (var i = 0; i < parts.length; i++) {
-        if (!parts[i].startsWith('<pre')) {
+        if (!parts[i].startsWith('<pre') && !parts[i].startsWith('<div class="code-block')) {
           parts[i] = parts[i].replace(/\\n/g, '<br>');
         }
       }
       html = parts.join('');
 
       return html;
+    }
+
+    // Copy code to clipboard
+    function copyCode(btn) {
+      var pre = btn.parentElement.querySelector('pre code');
+      if (pre) {
+        var text = pre.textContent || '';
+        navigator.clipboard.writeText(text).then(function() {
+          btn.textContent = 'Copied!';
+          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+        });
+      }
     }
 
     // ── HTML sanitizer (defense-in-depth for innerHTML) ──────────────────

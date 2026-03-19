@@ -148,7 +148,7 @@ function ToolTimeline({ tools, className }: ToolTimelineProps) {
         <Wrench className="w-3 h-3 shrink-0" />
         <span>
           {hasRunning ? (
-            <span className="text-violet-400">Running tools...</span>
+            <span className="text-primary">Running tools...</span>
           ) : (
             <>
               {tools.length} tool{tools.length !== 1 ? 's' : ''}

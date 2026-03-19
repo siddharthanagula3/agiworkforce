@@ -20,9 +20,10 @@ export const SUPPORTED_MODELS = [
   'claude-opus-4',
   'claude-sonnet-4',
   // OpenAI GPT-5 models
-  'gpt-5.2',
-  'gpt-5-pro',
-  'gpt-5-nano',
+  'gpt-5.4',
+  'gpt-5.4-pro',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
   'o3',
   // OpenAI GPT-4 models
   'gpt-4o',

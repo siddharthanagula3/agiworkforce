@@ -153,6 +153,12 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "reasoningEffort")]
     pub reasoning_effort: Option<String>,
 
+    /// Structured output configuration (Anthropic output_config / OpenAI response_format).
+    /// When set, guarantees the LLM response conforms to the provided JSON schema.
+    /// Frontend sends camelCase: `outputConfig`.
+    #[serde(default, alias = "outputConfig")]
+    pub output_config: Option<crate::core::llm::OutputConfig>,
+
     /// Temperature override from frontend settings (0.0–2.0).
     /// When present, overrides the backend DEFAULT_TEMPERATURE constant.
     #[serde(default, alias = "temperature")]

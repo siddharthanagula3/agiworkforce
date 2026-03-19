@@ -1,8 +1,3 @@
-/**
- * Background service worker for AGI Workforce extension
- * Handles communication between popup, content scripts, and desktop app
- */
-
 import type {
   ExtensionMessage,
   ExtensionResponse,
@@ -14,7 +9,6 @@ import type {
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { getPlatformPrompt } from './platform-prompts';
 
-// Service worker state
 interface BackgroundState {
   isNativeConnected: boolean;
   nativePort: chrome.runtime.Port | null;
@@ -177,35 +171,14 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
   return false;
 }
 
-/**
- * Initialize the background service worker
- */
 function initialize(): void {
-  logger.info('Background service worker initializing');
-
-  // Set up message listeners
   chrome.runtime.onMessage.addListener(handleMessage);
-
-  // Set up context menu
   setupContextMenu();
-
-  // Connect to native host
   connectToNativeHost();
-
-  // Check initial connection status via native messaging heartbeat
   checkDesktopConnection();
-
-  // Restore scheduled task alarms (MV3 restarts clear alarms)
   void restoreScheduledTaskAlarms();
-
-  // Periodic connection check is handled by the 'keep-alive' alarm (see below)
-
-  logger.info('Background service worker initialized');
 }
 
-/**
- * Connect to the native messaging host
- */
 function connectToNativeHost(): void {
   if (state.nativePort || nativeHandshakeInFlight || nativeReconnectGaveUp) {
     return;
@@ -250,6 +223,20 @@ function connectToNativeHost(): void {
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
+
+        // Drain any messages queued while disconnected
+        if (state.messageQueue.length > 0 && !state.isProcessingQueue) {
+          state.isProcessingQueue = true;
+          const queued = state.messageQueue.splice(0);
+          for (const msg of queued) {
+            try {
+              await handleMessage(msg, {} as chrome.runtime.MessageSender, () => {});
+            } catch {
+              // Best-effort drain — don't block reconnection
+            }
+          }
+          state.isProcessingQueue = false;
+        }
       } catch (error) {
         logger.warn('Native host handshake failed', error);
         try {
@@ -267,8 +254,6 @@ function connectToNativeHost(): void {
         nativeHandshakeInFlight = false;
       }
     })();
-
-    logger.info('Connected to native host');
   } catch (error) {
     logger.error('Failed to connect to native host', error);
     nativeHandshakeInFlight = false;
@@ -323,9 +308,6 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
   });
 }
 
-/**
- * Handle messages from the native host
- */
 function handleNativeMessage(message: NativeMessageEnvelope): void {
   logger.debug('Received native message', message);
 
@@ -344,9 +326,6 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
   }
 }
 
-/**
- * Handle native host disconnection
- */
 function handleNativeDisconnect(): void {
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
@@ -385,8 +364,6 @@ function handleNativeDisconnect(): void {
   scheduleNativeReconnect('native_disconnect');
 }
 
-// ─── Notifications (Gap 2) ──────────────────────────────────────────────────
-
 function showNotification(title: string, message: string, tabId?: number): void {
   if (!chrome.notifications?.create) return;
   const notifId = `agi_${Date.now()}`;
@@ -421,8 +398,6 @@ chrome.notifications?.onClicked?.addListener((notifId: string) => {
   chrome.notifications.clear(notifId, () => {});
 });
 
-// ─── Tab Groups (Gap 5) ─────────────────────────────────────────────────────
-
 async function ensureTabGroup(tabId: number): Promise<void> {
   if (!chrome.tabGroups) return;
   try {
@@ -437,8 +412,6 @@ async function ensureTabGroup(tabId: number): Promise<void> {
     // tabGroups API may not be available in all contexts
   }
 }
-
-// ─── Saved Shortcuts (Gap 4) ────────────────────────────────────────────────
 
 async function loadShortcuts(): Promise<SavedShortcut[]> {
   return new Promise((resolve) => {
@@ -514,8 +487,6 @@ async function handleReplayShortcut(
   showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
   return result;
 }
-
-// ─── Scheduled Tasks (Gap 6) ────────────────────────────────────────────────
 
 async function loadScheduledTasks(): Promise<ScheduledTask[]> {
   return new Promise((resolve) => {
@@ -650,9 +621,6 @@ async function restoreScheduledTaskAlarms(): Promise<void> {
   }
 }
 
-/**
- * Handle incoming messages from popup or content scripts
- */
 function handleMessage(
   message: unknown,
   sender: chrome.runtime.MessageSender,
@@ -666,7 +634,6 @@ function handleMessage(
     return false;
   }
 
-  // Handle async response
   handleMessageAsync(msg, sender)
     .then((response) => {
       sendResponse(response);
@@ -679,13 +646,9 @@ function handleMessage(
       } as ExtensionResponse);
     });
 
-  // Return true to indicate we'll send response asynchronously
   return true;
 }
 
-/**
- * Async message handler
- */
 async function handleMessageAsync(
   message: ExtensionMessage,
   sender: chrome.runtime.MessageSender,
@@ -695,7 +658,6 @@ async function handleMessageAsync(
   const tabId = sender.tab?.id ?? message.tabId;
   const windowId = sender.tab?.windowId;
 
-  // Check rate limits
   if (state.rateLimiter.isLimited(tabId || 0, message.type)) {
     return {
       success: false,
@@ -840,7 +802,6 @@ async function handleMessageAsync(
       }
     }
 
-    // ── Cookie handlers ────────────────────────────────────────────────────
     case 'GET_COOKIES': {
       const cookieMsg = message as import('./types').GetCookiesMessage;
       return handleGetCookies(cookieMsg);
@@ -856,7 +817,6 @@ async function handleMessageAsync(
       return handleClearCookies(cookieMsg);
     }
 
-    // ── Tab management handlers ────────────────────────────────────────────
     case 'GET_ALL_TABS': {
       return handleGetAllTabs();
     }
@@ -876,7 +836,6 @@ async function handleMessageAsync(
       return handleSwitchTab(tabMsg);
     }
 
-    // ── Accessibility ──────────────────────────────────────────────────────
     case 'GET_ACCESSIBILITY_TREE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -889,7 +848,6 @@ async function handleMessageAsync(
       return handleGetAccessibilityTree(resolvedTabId);
     }
 
-    // ── Recording handlers (delegated to content script) ──────────────────
     case 'START_RECORDING':
     case 'STOP_RECORDING':
     case 'GET_RECORDED_ACTIONS': {
@@ -904,7 +862,6 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
-    // ── Element interaction handlers (forwarded to content script) ─────────
     case 'SELECT_OPTION':
     case 'CHECK':
     case 'UNCHECK':
@@ -925,7 +882,6 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
-    // ── WebMCP ─────────────────────────────────────────────────────────────
     case 'WEBMCP_DISCOVER_TOOLS':
     case 'WEBMCP_CALL_TOOL': {
       // Forward to content script on the active tab
@@ -980,7 +936,6 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    // ── Tab group management ─────────────────────────────────────────────
     case 'ADD_TAB_TO_GROUP': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -1011,7 +966,6 @@ async function handleMessageAsync(
       return { success: true, grouped: false } as ExtensionResponse;
     }
 
-    // ── Console log reading (forwarded to content script) ────────────────
     case 'GET_CONSOLE_LOGS':
     case 'CLEAR_CONSOLE_LOGS': {
       let resolvedTabId = tabId;
@@ -1025,7 +979,6 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
-    // ── Saved shortcuts ───────────────────────────────────────────────────
     case 'SAVE_SHORTCUT':
       return handleSaveShortcut(message as import('./types').SaveShortcutMessage);
 
@@ -1038,7 +991,6 @@ async function handleMessageAsync(
     case 'REPLAY_SHORTCUT':
       return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
 
-    // ── Scheduled tasks ───────────────────────────────────────────────────
     case 'CREATE_SCHEDULED_TASK':
       return handleCreateScheduledTask(message as import('./types').CreateScheduledTaskMessage);
 
@@ -1051,7 +1003,6 @@ async function handleMessageAsync(
     case 'DELETE_SCHEDULED_TASK':
       return handleDeleteScheduledTask(message as import('./types').DeleteScheduledTaskMessage);
 
-    // ── NLWeb cross-origin probe (content script → background fetch) ─────
     case 'NLWEB_PROBE' as ExtensionMessage['type']: {
       const probe = message as unknown as { probeUrl?: string; method?: 'GET' | 'HEAD' };
       const probeUrl = probe.probeUrl;
@@ -1124,8 +1075,6 @@ async function handleMessageAsync(
   }
 }
 
-// ─── Cookie domain security ───────────────────────────────────────────────────
-
 /** Domains where cookie operations are blocked (sensitive sites). */
 const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
   /bank/i,
@@ -1145,8 +1094,6 @@ function isCookieDomainAllowed(urlOrDomain: string): boolean {
   const domain = urlOrDomain.replace(/^https?:\/\//, '').split('/')[0] ?? '';
   return !BLOCKED_COOKIE_DOMAINS.some((pattern) => pattern.test(domain));
 }
-
-// ─── Cookie handlers ──────────────────────────────────────────────────────────
 
 async function handleGetCookies(
   message: import('./types').GetCookiesMessage,
@@ -1247,8 +1194,6 @@ async function handleClearCookies(
   }
 }
 
-// ─── Tab management handlers ──────────────────────────────────────────────────
-
 async function handleGetAllTabs(): Promise<ExtensionResponse> {
   try {
     const tabs = await chrome.tabs.query({});
@@ -1330,8 +1275,6 @@ async function handleSwitchTab(
   }
 }
 
-// ─── Accessibility tree handler ───────────────────────────────────────────────
-
 async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionResponse> {
   try {
     const response = (await forwardToContentScript(tabId, {
@@ -1356,8 +1299,6 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
     } as ExtensionResponse;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function syncTabContextWithDesktop(
   tabId: number,
@@ -1472,9 +1413,6 @@ async function syncTabContextWithDesktop(
   } as ExtensionResponse;
 }
 
-/**
- * Forward message to content script
- */
 async function forwardToContentScript(
   tabId: number,
   message: ExtensionMessage,
@@ -1494,9 +1432,6 @@ async function forwardToContentScript(
   }
 }
 
-/**
- * Check desktop app connection status
- */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
     if (!nativeReconnectGaveUp && !nativeHandshakeInFlight) {
@@ -1537,9 +1472,6 @@ async function checkDesktopConnection(): Promise<void> {
   scheduleNativeReconnect('ping_failed');
 }
 
-/**
- * Notify all tabs of connection status change
- */
 async function notifyConnectionStatusChange(): Promise<void> {
   try {
     const tabs = await chrome.tabs.query({});
@@ -1566,9 +1498,6 @@ async function notifyConnectionStatusChange(): Promise<void> {
   }
 }
 
-/**
- * Set up context menu
- */
 function setupContextMenu(): void {
   if (!chrome.contextMenus?.removeAll || !chrome.contextMenus?.create) {
     logger.warn('contextMenus API unavailable; skipping context menu setup');
@@ -1725,9 +1654,6 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
     });
 }
 
-/**
- * Handle tab removal - clean up rate limits
- */
 chrome.tabs.onRemoved.addListener((tabId) => {
   state.rateLimiter.reset(tabId);
   lastPageContextSyncByTab.delete(tabId);
@@ -1749,9 +1675,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   });
 });
 
-/**
- * Handle chrome commands (keyboard shortcuts)
- */
 chrome.commands.onCommand.addListener((command) => {
   logger.debug('Command received', { command });
 
@@ -1762,9 +1685,6 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
-/**
- * Capture current active page
- */
 async function captureCurrentPage(): Promise<void> {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1786,14 +1706,9 @@ async function captureCurrentPage(): Promise<void> {
       timestamp: Date.now(),
     });
 
-    logger.info('Page captured and forwarded', { tabId: tab.id });
-
-    // Increment action count
     const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
       actionCount: 0,
     });
-
-    // Safety check for stats
     const actionCount = stats?.actionCount ?? 0;
 
     await storageUtils.setItem('stats', {
@@ -1804,11 +1719,6 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-/**
- * Handle a CHAT_MESSAGE from the side panel.
- * Calls the AGI Workforce API with streaming and forwards CHAT_CHUNK messages
- * back to all extension views (the side panel listens via chrome.runtime.onMessage).
- */
 /** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
 const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
 
@@ -2047,9 +1957,6 @@ async function handleChatMessage(
   }
 }
 
-/**
- * Validate message structure
- */
 function isValidMessage(message: unknown): message is ExtensionMessage {
   if (typeof message !== 'object' || message === null) {
     return false;

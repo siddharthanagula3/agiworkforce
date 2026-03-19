@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
@@ -18,7 +18,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { supabase } from '@shared/lib/supabase-client';
 
 interface PublicArtifact {
   id: string;
@@ -35,21 +34,6 @@ interface PublicArtifact {
   tags: string[];
 }
 
-interface DatabaseArtifact {
-  id: string;
-  title: string;
-  type: string;
-  description: string;
-  content: string;
-  language?: string;
-  author: string;
-  author_id: string;
-  views: number;
-  likes: number;
-  created_at: string;
-  tags: string[];
-}
-
 /**
  * Artifact Gallery Page
  *
@@ -62,74 +46,11 @@ interface DatabaseArtifact {
  * - Replit Community
  */
 const ArtifactGalleryPage: React.FC = () => {
-  const [artifacts, setArtifacts] = useState<PublicArtifact[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Community artifacts table does not exist yet — gallery shows empty state
+  const artifacts: PublicArtifact[] = [];
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'trending'>('recent');
-
-  const loadPublicArtifacts = useCallback(async () => {
-    try {
-      setIsLoading(true);
-
-      let query = supabase.from('public_artifacts').select('*').eq('is_public', true); // Only show public artifacts
-
-      // Filter by type
-      if (selectedType !== 'all') {
-        query = query.eq('type', selectedType);
-      }
-
-      // Sort
-      switch (sortBy) {
-        case 'popular':
-          query = query.order('likes', { ascending: false });
-          break;
-        case 'trending':
-          query = query.order('views', { ascending: false });
-          break;
-        default:
-          query = query.order('created_at', { ascending: false });
-      }
-
-      query = query.limit(50);
-
-      // Updated: Jan 15th 2026 - Removed console statements for production
-      const { data, error } = await query;
-
-      if (error) {
-        // FIXED: Don't silently fall back to demo data
-        // Show empty state instead to indicate the feature needs setup
-        setArtifacts([]);
-      } else {
-        const mappedArtifacts =
-          data?.map((artifact: DatabaseArtifact) => ({
-            id: artifact.id,
-            title: artifact.title,
-            type: artifact.type as 'html' | 'react' | 'svg' | 'mermaid' | 'code',
-            description: artifact.description,
-            content: artifact.content,
-            language: artifact.language,
-            author: artifact.author,
-            authorId: artifact.author_id,
-            views: artifact.views || 0,
-            likes: artifact.likes || 0,
-            createdAt: artifact.created_at,
-            tags: artifact.tags || [],
-          })) || [];
-
-        setArtifacts(mappedArtifacts);
-      }
-    } catch (_error) {
-      // FIXED: Show empty state on error, not demo data
-      setArtifacts([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sortBy, selectedType]);
-
-  useEffect(() => {
-    loadPublicArtifacts();
-  }, [loadPublicArtifacts]);
 
   const filteredArtifacts = artifacts.filter(
     (artifact) =>
@@ -228,23 +149,14 @@ const ArtifactGalleryPage: React.FC = () => {
 
       {/* Artifact Grid */}
       <div className="container mx-auto px-4 py-8">
-        {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-lg font-medium">Loading artifacts...</div>
-              <div className="text-sm text-muted-foreground">
-                Fetching amazing community creations
-              </div>
-            </div>
-          </div>
-        ) : filteredArtifacts.length === 0 ? (
+        {filteredArtifacts.length === 0 ? (
           <div className="flex h-64 items-center justify-center">
             <div className="text-center">
               <div className="mb-4 text-lg font-medium">No artifacts found</div>
               <div className="text-sm text-muted-foreground">
                 {searchQuery
                   ? 'Try adjusting your search or filters'
-                  : 'Be the first to share an artifact!'}
+                  : 'Community artifacts coming soon — create artifacts in chat to see them here.'}
               </div>
             </div>
           </div>

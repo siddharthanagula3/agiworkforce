@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn test_zero_tokens_returns_zero() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.2", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4", 0, 0);
         assert_eq!(cost, 0.0, "Zero tokens must produce zero cost");
     }
 
@@ -216,11 +216,11 @@ mod tests {
     #[test]
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.2: $1.75/M input, $14.00/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.2", 1_000_000, 1_000_000);
+        // gpt-5.4: $2.50/M input, $15.00/M output
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4", 1_000_000, 1_000_000);
         assert!(
-            (cost - 15.75).abs() < 1e-9,
-            "Expected $15.75 for gpt-5.2 1M+1M tokens, got ${}",
+            (cost - 17.50).abs() < 1e-9,
+            "Expected $17.50 for gpt-5.4 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -228,11 +228,11 @@ mod tests {
     #[test]
     fn test_openai_gpt5_nano_cost() {
         let calc = CostCalculator::new();
-        // gpt-5-nano: $0.05/M input, $0.40/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5-nano", 1_000_000, 0);
+        // gpt-5.4-nano: $0.20/M input, $1.25/M output
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 0);
         assert!(
-            (cost - 0.05).abs() < 1e-9,
-            "Expected $0.05 for gpt-5-nano 1M input only, got ${}",
+            (cost - 0.20).abs() < 1e-9,
+            "Expected $0.20 for gpt-5.4-nano 1M input only, got ${}",
             cost
         );
     }

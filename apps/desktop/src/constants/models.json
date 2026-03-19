@@ -5,13 +5,19 @@
     "managed_cloud": {
       "label": "Managed Cloud",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 1.0, "outputPerMillion": 1.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.0,
+        "outputPerMillion": 1.0
+      },
       "modelPrefixes": ["ideogram"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "deepseek-chat",
       "taskRouting": {
-        "fast_completion": "gpt-5-nano",
+        "fast_completion": "gpt-5.4-nano",
         "code_generation": "deepseek-chat",
         "complex_reasoning": "deepseek-reasoner",
         "chat": "deepseek-chat",
@@ -23,39 +29,51 @@
     "openai": {
       "label": "OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 1.0, "outputPerMillion": 1.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.0,
+        "outputPerMillion": 1.0
+      },
       "modelPrefixes": ["gpt-", "o1", "o3", "o4", "dall-e", "tts-", "whisper", "sora", "gpt-image"],
       "aliases": [],
-      "defaultModel": "gpt-5.2",
+      "defaultModel": "gpt-5.4",
       "taskRouting": {
-        "fast_completion": "gpt-5-nano",
-        "code_generation": "gpt-5.2-codex-medium",
+        "fast_completion": "gpt-5.4-nano",
+        "code_generation": "gpt-5.4-codex-medium",
         "complex_reasoning": "o3",
-        "chat": "gpt-5.2",
-        "vision": "gpt-5.2",
-        "long_context": "gpt-5.2"
+        "chat": "gpt-5.4",
+        "vision": "gpt-5.4",
+        "long_context": "gpt-5.4"
       },
       "canonicalization": {
-        "gpt-5.2-codex-low": "gpt-5.2-codex",
-        "gpt-5.2-codex-medium": "gpt-5.2-codex",
-        "gpt-5.2-codex-high": "gpt-5.2-codex",
-        "gpt-5.2-codex-xhigh": "gpt-5.2-codex",
-        "gpt-5.2-codex": "gpt-5.2-codex",
-        "gpt-5-codex": "gpt-5.2-codex",
+        "gpt-5.4-codex-low": "gpt-5.4-codex",
+        "gpt-5.4-codex-medium": "gpt-5.4-codex",
+        "gpt-5.4-codex-high": "gpt-5.4-codex",
+        "gpt-5.4-codex-xhigh": "gpt-5.4-codex",
+        "gpt-5.4-codex": "gpt-5.4-codex",
+        "gpt-5-codex": "gpt-5.4-codex",
         "gpt-5.3-codex-low": "gpt-5.3-codex",
         "gpt-5.3-codex-medium": "gpt-5.3-codex",
         "gpt-5.3-codex-high": "gpt-5.3-codex",
         "gpt-5.3-codex-xhigh": "gpt-5.3-codex",
-        "gpt-5-pro": "gpt-5.2-pro",
-        "gpt-5-pro-2026-01": "gpt-5.2-pro"
+        "gpt-5-pro": "gpt-5.4-pro",
+        "gpt-5-pro-2026-01": "gpt-5.4-pro"
       }
     },
     "anthropic": {
       "label": "Anthropic",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 3.0, "outputPerMillion": 15.0 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3.0,
+        "outputPerMillion": 15.0
+      },
       "modelPrefixes": ["claude"],
       "aliases": [],
       "defaultModel": "claude-sonnet-4-6",
@@ -77,8 +95,14 @@
     "google": {
       "label": "Google",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 0.95, "completion": 0.95 },
-      "defaultPricing": { "inputPerMillion": 1.0, "outputPerMillion": 5.0 },
+      "tokenMultiplier": {
+        "prompt": 0.95,
+        "completion": 0.95
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.0,
+        "outputPerMillion": 5.0
+      },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
       "defaultModel": "gemini-3.1-pro-preview",
@@ -95,8 +119,14 @@
     "xai": {
       "label": "xAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0.5
+      },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
       "defaultModel": "grok-4",
@@ -115,8 +145,14 @@
     "deepseek": {
       "label": "DeepSeek",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 0.28, "outputPerMillion": 0.42 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.28,
+        "outputPerMillion": 0.42
+      },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
       "defaultModel": "deepseek-chat",
@@ -136,8 +172,14 @@
     "qwen": {
       "label": "Qwen",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 2.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 2.0
+      },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "qwen-max",
@@ -154,8 +196,14 @@
     "moonshot": {
       "label": "Moonshot AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.6, "outputPerMillion": 3.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.6,
+        "outputPerMillion": 3.0
+      },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
       "defaultModel": "kimi-k2.5-thinking",
@@ -172,8 +220,14 @@
     "perplexity": {
       "label": "Perplexity",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 1.0, "outputPerMillion": 1.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.0,
+        "outputPerMillion": 1.0
+      },
       "modelPrefixes": ["sonar"],
       "aliases": ["perplexity", "pplx", "sonar"],
       "defaultModel": "sonar-deep-research",
@@ -190,8 +244,14 @@
     "zhipu": {
       "label": "ZhipuAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.14, "outputPerMillion": 0.42 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.14,
+        "outputPerMillion": 0.42
+      },
       "modelPrefixes": ["glm"],
       "aliases": ["zhipu", "zhipuai", "bigmodel", "glm"],
       "defaultModel": "glm-4.7",
@@ -208,8 +268,14 @@
     "mistral": {
       "label": "Mistral AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5
+      },
       "modelPrefixes": ["mistral", "codestral", "pixtral"],
       "aliases": ["mistral", "mistral-ai", "mistral_ai"],
       "defaultModel": "mistral-large-3",
@@ -226,8 +292,14 @@
     "groq": {
       "label": "Groq",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.27, "outputPerMillion": 0.27 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.27,
+        "outputPerMillion": 0.27
+      },
       "modelPrefixes": [],
       "aliases": ["groq"],
       "defaultModel": "llama-3.3-70b-versatile",
@@ -244,8 +316,14 @@
     "together": {
       "label": "Together AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.88, "outputPerMillion": 0.88 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.88,
+        "outputPerMillion": 0.88
+      },
       "modelPrefixes": [],
       "aliases": ["together", "together-ai", "together_ai", "togetherai"],
       "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -262,8 +340,14 @@
     "fireworks": {
       "label": "Fireworks AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.9, "outputPerMillion": 0.9 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.9,
+        "outputPerMillion": 0.9
+      },
       "modelPrefixes": ["accounts/fireworks"],
       "aliases": ["fireworks", "fireworks-ai", "fireworks_ai", "fireworksai"],
       "defaultModel": "accounts/fireworks/models/llama-v3p3-70b-instruct",
@@ -280,8 +364,14 @@
     "cerebras": {
       "label": "Cerebras",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.1, "outputPerMillion": 0.1 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.1
+      },
       "modelPrefixes": [],
       "aliases": ["cerebras"],
       "defaultModel": "llama-3.3-70b",
@@ -298,8 +388,14 @@
     "deepinfra": {
       "label": "DeepInfra",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.35, "outputPerMillion": 0.35 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.35,
+        "outputPerMillion": 0.35
+      },
       "modelPrefixes": [],
       "aliases": ["deepinfra", "deep-infra", "deep_infra"],
       "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
@@ -316,8 +412,14 @@
     "cohere": {
       "label": "Cohere",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 2.5, "outputPerMillion": 10.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10.0
+      },
       "modelPrefixes": ["command"],
       "aliases": ["cohere"],
       "defaultModel": "command-r-plus",
@@ -334,8 +436,14 @@
     "ai21": {
       "label": "AI21 Labs",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.8 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0.8
+      },
       "modelPrefixes": ["jamba"],
       "aliases": ["ai21", "ai21-labs", "ai21_labs"],
       "defaultModel": "jamba-1.5-large",
@@ -352,8 +460,14 @@
     "sambanova": {
       "label": "Sambanova",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.1, "outputPerMillion": 0.1 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.1
+      },
       "modelPrefixes": ["Meta-Llama"],
       "aliases": ["sambanova", "samba-nova", "samba_nova"],
       "defaultModel": "Meta-Llama-3.3-70B-Instruct",
@@ -370,8 +484,14 @@
     "azure": {
       "label": "Azure OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 2.5, "outputPerMillion": 10.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10.0
+      },
       "modelPrefixes": [],
       "aliases": ["azure", "azure-openai", "azure_openai"],
       "defaultModel": "gpt-4o",
@@ -388,8 +508,14 @@
     "bedrock": {
       "label": "AWS Bedrock",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 3.0, "outputPerMillion": 15.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3.0,
+        "outputPerMillion": 15.0
+      },
       "modelPrefixes": ["anthropic.", "amazon.", "meta.", "ai21.", "cohere.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
       "defaultModel": "anthropic.claude-3-5-sonnet-20241022-v2:0",
@@ -406,8 +532,14 @@
     "nvidia_nim": {
       "label": "NVIDIA NIM",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5
+      },
       "modelPrefixes": ["nvidia/", "meta/", "mistralai/"],
       "aliases": ["nvidia_nim", "nvidia-nim", "nim"],
       "defaultModel": "nvidia/llama-3.3-nemotron-super-49b-v1",
@@ -424,8 +556,14 @@
     "open_router": {
       "label": "OpenRouter",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.0, "completion": 1.0 },
-      "defaultPricing": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 },
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.0,
+        "outputPerMillion": 0.0
+      },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
       "defaultModel": "meta-llama/llama-3.3-70b-instruct:free",
@@ -442,8 +580,14 @@
     "ollama": {
       "label": "Ollama (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.0,
+        "outputPerMillion": 0.0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "llama4-maverick",
@@ -570,269 +714,6 @@
       "qualityTier": "best",
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026"
-    },
-    "gpt-5.2": {
-      "id": "gpt-5.2",
-      "apiModelId": "gpt-5.2",
-      "name": "GPT-5.2",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "contextWindow": 400000,
-      "inputCost": 1.75,
-      "outputCost": 14.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 80.0,
-        "sweBenchPro": 55.6,
-        "aiderPolyglot": 88.0,
-        "mmlu": 93.2,
-        "gpqa": 92.4,
-        "aime": 100.0,
-        "gdpvalWinsOrTies": 70.9,
-        "tau2Telecom": 96.7
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Agentic Tasks", "Complex Reasoning", "Research"],
-      "released": "December 2025"
-    },
-    "gpt-5.2-codex-low": {
-      "id": "gpt-5.2-codex-low",
-      "apiModelId": "gpt-5.2-codex-low",
-      "name": "GPT-5.2 Codex (Low)",
-      "provider": "openai",
-      "modelType": "code",
-      "contextWindow": 400000,
-      "inputCost": 1.25,
-      "outputCost": 10.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 56.8,
-        "sweBenchPro": 56.8,
-        "terminalBench2": 77.3,
-        "osWorldVerified": 64.7,
-        "gdpvalWinsOrTies": 70.9,
-        "ctfChallenges": 77.6,
-        "sweLancerIcDiamond": 81.4
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
-      "released": "2026"
-    },
-    "gpt-5.2-codex-medium": {
-      "id": "gpt-5.2-codex-medium",
-      "apiModelId": "gpt-5.2-codex-medium",
-      "name": "GPT-5.2 Codex (Medium)",
-      "provider": "openai",
-      "modelType": "code",
-      "contextWindow": 400000,
-      "inputCost": 1.25,
-      "outputCost": 10.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 56.8,
-        "sweBenchPro": 56.8,
-        "terminalBench2": 77.3,
-        "osWorldVerified": 64.7,
-        "gdpvalWinsOrTies": 70.9,
-        "ctfChallenges": 77.6,
-        "sweLancerIcDiamond": 81.4
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
-      "released": "2026"
-    },
-    "gpt-5.2-codex-high": {
-      "id": "gpt-5.2-codex-high",
-      "apiModelId": "gpt-5.2-codex-high",
-      "name": "GPT-5.2 Codex (High)",
-      "provider": "openai",
-      "modelType": "code",
-      "contextWindow": 400000,
-      "inputCost": 1.25,
-      "outputCost": 10.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 56.8,
-        "sweBenchPro": 56.8,
-        "terminalBench2": 77.3,
-        "osWorldVerified": 64.7,
-        "gdpvalWinsOrTies": 70.9,
-        "ctfChallenges": 77.6,
-        "sweLancerIcDiamond": 81.4
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
-      "released": "2026"
-    },
-    "gpt-5.2-codex-xhigh": {
-      "id": "gpt-5.2-codex-xhigh",
-      "apiModelId": "gpt-5.2-codex-xhigh",
-      "name": "GPT-5.2 Codex (XHigh)",
-      "provider": "openai",
-      "modelType": "code",
-      "contextWindow": 400000,
-      "inputCost": 1.25,
-      "outputCost": 10.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 56.8,
-        "sweBenchPro": 56.8,
-        "terminalBench2": 77.3,
-        "osWorldVerified": 64.7,
-        "gdpvalWinsOrTies": 70.9,
-        "ctfChallenges": 77.6,
-        "sweLancerIcDiamond": 81.4
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
-      "released": "2026"
-    },
-    "gpt-5-pro": {
-      "id": "gpt-5-pro",
-      "apiModelId": "gpt-5.2-pro",
-      "name": "GPT-5 Pro",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "contextWindow": 512000,
-      "inputCost": 5.0,
-      "outputCost": 30.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 75.4,
-        "humaneval": 98.2,
-        "mmlu": 94.8,
-        "gpqa": 93.8,
-        "aime": 94.6
-      },
-      "speed": "slow",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Research", "Hard Reasoning", "Long-form Analysis", "Enterprise Tasks"],
-      "released": "January 2026"
-    },
-    "gpt-5-nano": {
-      "id": "gpt-5-nano",
-      "apiModelId": "gpt-5-nano",
-      "name": "GPT-5 Nano",
-      "provider": "openai",
-      "modelType": "chat",
-      "contextWindow": 128000,
-      "inputCost": 0.05,
-      "outputCost": 0.4,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 18.0,
-        "humaneval": 80.0,
-        "mmlu": 78.0,
-        "gpqa": 35.0,
-        "aime": 20.0
-      },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Simple Tasks", "Classification", "Summarization", "High Volume"],
-      "released": "September 2025"
     },
     "gpt-5.3-codex": {
       "id": "gpt-5.3-codex",
@@ -1488,42 +1369,6 @@
       "bestFor": ["Coding", "Cost-Effective", "Technical Tasks", "Reasoning"],
       "released": "January 2026"
     },
-    "deepseek-r1": {
-      "id": "deepseek-r1",
-      "apiModelId": "deepseek-reasoner",
-      "name": "DeepSeek R1",
-      "provider": "deepseek",
-      "modelType": "reasoning",
-      "contextWindow": 128000,
-      "inputCost": 0.55,
-      "outputCost": 1.68,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": {
-        "swebench": 55.0,
-        "humaneval": 90.0,
-        "mmlu": 87.0,
-        "gpqa": 68.0,
-        "aime": 75.0
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Reasoning", "Math", "Coding", "Budget Reasoning"],
-      "released": "January 2025"
-    },
     "qwen-max": {
       "id": "qwen-max",
       "apiModelId": "qwen-max",
@@ -1811,9 +1656,9 @@
       "name": "Mistral Large 3",
       "provider": "mistral",
       "modelType": "reasoning",
-      "contextWindow": 131072,
-      "inputCost": 2.0,
-      "outputCost": 6.0,
+      "contextWindow": 262000,
+      "inputCost": 0.5,
+      "outputCost": 1.5,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2100,7 +1945,9 @@
         "research": false,
         "codeExecution": false
       },
-      "benchmarks": { "mmlu": 75.0 },
+      "benchmarks": {
+        "mmlu": 75.0
+      },
       "speed": "fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -2130,7 +1977,10 @@
         "research": false,
         "codeExecution": false
       },
-      "benchmarks": { "mmlu": 82.0, "gpqa": 55.0 },
+      "benchmarks": {
+        "mmlu": 82.0,
+        "gpqa": 55.0
+      },
       "speed": "medium",
       "quality": "good",
       "qualityTier": "balanced",
@@ -2160,7 +2010,10 @@
         "research": true,
         "codeExecution": false
       },
-      "benchmarks": { "mmlu": 85.0, "gpqa": 62.0 },
+      "benchmarks": {
+        "mmlu": 85.0,
+        "gpqa": 62.0
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -2190,7 +2043,9 @@
         "research": true,
         "codeExecution": false
       },
-      "benchmarks": { "mmlu": 88.0 },
+      "benchmarks": {
+        "mmlu": 88.0
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -2220,7 +2075,9 @@
         "research": true,
         "codeExecution": false
       },
-      "benchmarks": { "mmlu": 88.0 },
+      "benchmarks": {
+        "mmlu": 88.0
+      },
       "speed": "slow",
       "quality": "excellent",
       "qualityTier": "best",
@@ -2777,6 +2634,334 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Research", "Free Tier"],
       "released": "2025"
+    },
+    "gpt-5.4": {
+      "id": "gpt-5.4",
+      "apiModelId": "gpt-5.4",
+      "name": "GPT-5.4",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 2.5,
+      "outputCost": 15.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 80.0,
+        "sweBenchPro": 55.6,
+        "aiderPolyglot": 88.0,
+        "mmlu": 93.2,
+        "gpqa": 92.4,
+        "aime": 100.0,
+        "gdpvalWinsOrTies": 70.9,
+        "tau2Telecom": 96.7
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Agentic Tasks", "Complex Reasoning", "Research"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-codex-low": {
+      "id": "gpt-5.4-codex-low",
+      "apiModelId": "gpt-5.4-codex-low",
+      "name": "GPT-5.4 Codex (Low)",
+      "provider": "openai",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 56.8,
+        "sweBenchPro": 56.8,
+        "terminalBench2": 77.3,
+        "osWorldVerified": 64.7,
+        "gdpvalWinsOrTies": 70.9,
+        "ctfChallenges": 77.6,
+        "sweLancerIcDiamond": 81.4
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-codex-medium": {
+      "id": "gpt-5.4-codex-medium",
+      "apiModelId": "gpt-5.4-codex-medium",
+      "name": "GPT-5.4 Codex (Medium)",
+      "provider": "openai",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 56.8,
+        "sweBenchPro": 56.8,
+        "terminalBench2": 77.3,
+        "osWorldVerified": 64.7,
+        "gdpvalWinsOrTies": 70.9,
+        "ctfChallenges": 77.6,
+        "sweLancerIcDiamond": 81.4
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-codex-high": {
+      "id": "gpt-5.4-codex-high",
+      "apiModelId": "gpt-5.4-codex-high",
+      "name": "GPT-5.4 Codex (High)",
+      "provider": "openai",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 56.8,
+        "sweBenchPro": 56.8,
+        "terminalBench2": 77.3,
+        "osWorldVerified": 64.7,
+        "gdpvalWinsOrTies": 70.9,
+        "ctfChallenges": 77.6,
+        "sweLancerIcDiamond": 81.4
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-codex-xhigh": {
+      "id": "gpt-5.4-codex-xhigh",
+      "apiModelId": "gpt-5.4-codex-xhigh",
+      "name": "GPT-5.4 Codex (Xhigh)",
+      "provider": "openai",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 56.8,
+        "sweBenchPro": 56.8,
+        "terminalBench2": 77.3,
+        "osWorldVerified": 64.7,
+        "gdpvalWinsOrTies": 70.9,
+        "ctfChallenges": 77.6,
+        "sweLancerIcDiamond": 81.4
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Coding", "Agentic Coding", "Tool Use"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-pro": {
+      "id": "gpt-5.4-pro",
+      "apiModelId": "gpt-5.4-pro",
+      "name": "GPT-5.4 Pro",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 30.0,
+      "outputCost": 180.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 75.4,
+        "humaneval": 98.2,
+        "mmlu": 94.8,
+        "gpqa": 93.8,
+        "aime": 94.6
+      },
+      "speed": "slow",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Complex Research", "Hard Reasoning", "Long-form Analysis", "Enterprise Tasks"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-nano": {
+      "id": "gpt-5.4-nano",
+      "apiModelId": "gpt-5.4-nano",
+      "name": "GPT-5.4 Nano",
+      "provider": "openai",
+      "modelType": "chat",
+      "contextWindow": 128000,
+      "inputCost": 0.2,
+      "outputCost": 1.25,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 18.0,
+        "humaneval": 80.0,
+        "mmlu": 78.0,
+        "gpqa": 35.0,
+        "aime": 20.0
+      },
+      "speed": "very-fast",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Simple Tasks", "Classification", "Summarization", "High Volume"],
+      "released": "March 2026"
+    },
+    "gpt-5.4-mini": {
+      "id": "gpt-5.4-mini",
+      "apiModelId": "gpt-5.4-mini",
+      "name": "GPT-5.4 Mini",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 400000,
+      "inputCost": 0.75,
+      "outputCost": 4.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Coding", "Computer Use", "Agent Workflows", "High-Volume Tasks"],
+      "released": "March 2026"
+    },
+    "deepseek-reasoner": {
+      "id": "deepseek-reasoner",
+      "apiModelId": "deepseek-reasoner",
+      "name": "DeepSeek Reasoner (V3.2)",
+      "provider": "deepseek",
+      "modelType": "reasoning",
+      "contextWindow": 128000,
+      "inputCost": 0.28,
+      "outputCost": 0.42,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarks": {
+        "swebench": 55.0,
+        "humaneval": 90.0,
+        "mmlu": 87.0,
+        "gpqa": 68.0,
+        "aime": 75.0
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Reasoning", "Math", "Coding", "Budget Reasoning"],
+      "released": "January 2025"
     }
   },
   "tierAllowedModels": {
@@ -2794,14 +2979,14 @@
       "qwen-turbo",
       "qwen-coder-flash",
       "grok-4-mini",
-      "gpt-5-nano",
+      "gpt-5.4-nano",
       "sonar",
       "codestral-2"
     ],
     "pro_additions": [
-      "gpt-5.2",
-      "gpt-5.2-codex-low",
-      "gpt-5.2-codex-medium",
+      "gpt-5.4",
+      "gpt-5.4-codex-low",
+      "gpt-5.4-codex-medium",
       "gpt-5.3-codex",
       "claude-sonnet-4.6",
       "claude-sonnet-4.5",
@@ -2816,88 +3001,230 @@
     ],
     "flagship_additions": [
       "claude-opus-4.6",
-      "gpt-5-pro",
+      "gpt-5.4-pro",
       "o3",
       "grok-4",
       "deepseek-r1",
       "kimi-k2.5-thinking",
-      "gpt-5.2-codex-xhigh",
-      "gpt-5.2-codex-high"
+      "gpt-5.4-codex-xhigh",
+      "gpt-5.4-codex-high"
     ]
   },
   "modelPresets": {
     "managed_cloud": [
-      { "value": "auto-economy", "label": "Auto (Economy)" },
-      { "value": "auto-balanced", "label": "Auto Balanced" },
-      { "value": "auto-premium", "label": "Auto (Best Model)" }
+      {
+        "value": "auto-economy",
+        "label": "Auto (Economy)"
+      },
+      {
+        "value": "auto-balanced",
+        "label": "Auto Balanced"
+      },
+      {
+        "value": "auto-premium",
+        "label": "Auto (Best Model)"
+      }
     ],
     "ollama": [],
     "openai": [
-      { "value": "gpt-5-pro", "label": "GPT-5 Pro" },
-      { "value": "gpt-5.2", "label": "GPT-5.2" },
-      { "value": "gpt-5.2-codex-low", "label": "GPT-5.2 Codex (Low)" },
-      { "value": "gpt-5.2-codex-medium", "label": "GPT-5.2 Codex (Medium)" },
-      { "value": "gpt-5.2-codex-high", "label": "GPT-5.2 Codex (High)" },
-      { "value": "gpt-5.2-codex-xhigh", "label": "GPT-5.2 Codex (XHigh)" },
-      { "value": "gpt-5-nano", "label": "GPT-5 Nano" }
+      {
+        "value": "gpt-5.4-pro",
+        "label": "GPT-5.4 Pro"
+      },
+      {
+        "value": "gpt-5.4",
+        "label": "GPT-5.4"
+      },
+      {
+        "value": "gpt-5.4-codex-low",
+        "label": "GPT-5.4 Codex (Low)"
+      },
+      {
+        "value": "gpt-5.4-codex-medium",
+        "label": "GPT-5.4 Codex (Medium)"
+      },
+      {
+        "value": "gpt-5.4-codex-high",
+        "label": "GPT-5.4 Codex (High)"
+      },
+      {
+        "value": "gpt-5.4-codex-xhigh",
+        "label": "GPT-5.4 Codex (XHigh)"
+      },
+      {
+        "value": "gpt-5.4-mini",
+        "label": "GPT-5.4 Mini"
+      },
+      {
+        "value": "gpt-5.4-nano",
+        "label": "GPT-5.4 Nano"
+      }
     ],
     "anthropic": [
-      { "value": "claude-opus-4.6", "label": "Claude 4.6 Opus" },
-      { "value": "claude-sonnet-4.6", "label": "Claude 4.6 Sonnet" },
-      { "value": "claude-sonnet-4.5", "label": "Claude 4.5 Sonnet" },
-      { "value": "claude-haiku-4.5", "label": "Claude 4.5 Haiku" }
+      {
+        "value": "claude-opus-4.6",
+        "label": "Claude 4.6 Opus"
+      },
+      {
+        "value": "claude-sonnet-4.6",
+        "label": "Claude 4.6 Sonnet"
+      },
+      {
+        "value": "claude-sonnet-4.5",
+        "label": "Claude 4.5 Sonnet"
+      },
+      {
+        "value": "claude-haiku-4.5",
+        "label": "Claude 4.5 Haiku"
+      }
     ],
     "google": [
-      { "value": "gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro" },
-      { "value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite" },
-      { "value": "gemini-3.1-flash-image", "label": "Gemini 3.1 Flash Image" }
+      {
+        "value": "gemini-3.1-pro-preview",
+        "label": "Gemini 3.1 Pro"
+      },
+      {
+        "value": "gemini-3.1-flash-lite",
+        "label": "Gemini 3.1 Flash Lite"
+      },
+      {
+        "value": "gemini-3.1-flash-image",
+        "label": "Gemini 3.1 Flash Image"
+      }
     ],
     "xai": [
-      { "value": "grok-4-1-fast-reasoning", "label": "Grok 4.1 Fast Reasoning" },
-      { "value": "grok-4", "label": "Grok 4" },
-      { "value": "grok-4-fast-reasoning", "label": "Grok 4 Fast Reasoning" },
-      { "value": "grok-4-fast-non-reasoning", "label": "Grok 4 Fast (Non-Reasoning)" },
-      { "value": "grok-4-mini", "label": "Grok 4 Mini" }
+      {
+        "value": "grok-4-1-fast-reasoning",
+        "label": "Grok 4.1 Fast Reasoning"
+      },
+      {
+        "value": "grok-4",
+        "label": "Grok 4"
+      },
+      {
+        "value": "grok-4-fast-reasoning",
+        "label": "Grok 4 Fast Reasoning"
+      },
+      {
+        "value": "grok-4-fast-non-reasoning",
+        "label": "Grok 4 Fast (Non-Reasoning)"
+      },
+      {
+        "value": "grok-4-mini",
+        "label": "Grok 4 Mini"
+      }
     ],
     "deepseek": [
-      { "value": "deepseek-chat", "label": "DeepSeek Chat (V3)" },
-      { "value": "deepseek-r1", "label": "DeepSeek R1" }
+      {
+        "value": "deepseek-chat",
+        "label": "DeepSeek Chat (V3)"
+      },
+      {
+        "value": "deepseek-r1",
+        "label": "DeepSeek R1"
+      }
     ],
     "qwen": [
-      { "value": "qwen-max", "label": "Qwen Max" },
-      { "value": "qwen-turbo", "label": "Qwen Turbo" },
-      { "value": "qwen-flash", "label": "Qwen Flash" },
-      { "value": "qwen-coder-flash", "label": "Qwen Coder Flash" }
+      {
+        "value": "qwen-max",
+        "label": "Qwen Max"
+      },
+      {
+        "value": "qwen-turbo",
+        "label": "Qwen Turbo"
+      },
+      {
+        "value": "qwen-flash",
+        "label": "Qwen Flash"
+      },
+      {
+        "value": "qwen-coder-flash",
+        "label": "Qwen Coder Flash"
+      }
     ],
     "moonshot": [
-      { "value": "kimi-k2.5", "label": "Kimi K2.5" },
-      { "value": "kimi-k2.5-thinking", "label": "Kimi K2.5 Thinking" }
+      {
+        "value": "kimi-k2.5",
+        "label": "Kimi K2.5"
+      },
+      {
+        "value": "kimi-k2.5-thinking",
+        "label": "Kimi K2.5 Thinking"
+      }
     ],
     "perplexity": [
-      { "value": "sonar", "label": "Sonar" },
-      { "value": "sonar-reasoning", "label": "Sonar Reasoning" },
-      { "value": "sonar-pro", "label": "Sonar Pro" },
-      { "value": "sonar-deep-research", "label": "Sonar Deep Research" }
+      {
+        "value": "sonar",
+        "label": "Sonar"
+      },
+      {
+        "value": "sonar-reasoning",
+        "label": "Sonar Reasoning"
+      },
+      {
+        "value": "sonar-pro",
+        "label": "Sonar Pro"
+      },
+      {
+        "value": "sonar-deep-research",
+        "label": "Sonar Deep Research"
+      }
     ],
     "zhipu": [
-      { "value": "glm-4.7", "label": "GLM-4.7" },
-      { "value": "glm-4.6v", "label": "GLM-4.6V (Vision)" },
-      { "value": "glm-4.6v-flash", "label": "GLM-4.6V Flash" }
+      {
+        "value": "glm-4.7",
+        "label": "GLM-4.7"
+      },
+      {
+        "value": "glm-4.6v",
+        "label": "GLM-4.6V (Vision)"
+      },
+      {
+        "value": "glm-4.6v-flash",
+        "label": "GLM-4.6V Flash"
+      }
     ],
     "mistral": [
-      { "value": "mistral-large-3", "label": "Mistral Large 3" },
-      { "value": "mistral-medium-3", "label": "Mistral Medium 3" },
-      { "value": "codestral-2", "label": "Codestral 2" }
+      {
+        "value": "mistral-large-3",
+        "label": "Mistral Large 3"
+      },
+      {
+        "value": "mistral-medium-3",
+        "label": "Mistral Medium 3"
+      },
+      {
+        "value": "codestral-2",
+        "label": "Codestral 2"
+      }
     ],
     "nvidia_nim": [
-      { "value": "nvidia/llama-3.1-nemotron-ultra-253b-v1", "label": "Llama Nemotron Ultra 253B" },
-      { "value": "nvidia/llama-3.3-nemotron-super-49b-v1", "label": "Llama Nemotron Super 49B" },
-      { "value": "nvidia/llama-3.1-nemotron-nano-8b-v1", "label": "Llama Nemotron Nano 8B" },
-      { "value": "nvidia/llama-3.3-70b-instruct", "label": "Llama 3.3 70B Instruct" }
+      {
+        "value": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        "label": "Llama Nemotron Ultra 253B"
+      },
+      {
+        "value": "nvidia/llama-3.3-nemotron-super-49b-v1",
+        "label": "Llama Nemotron Super 49B"
+      },
+      {
+        "value": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "label": "Llama Nemotron Nano 8B"
+      },
+      {
+        "value": "nvidia/llama-3.3-70b-instruct",
+        "label": "Llama 3.3 70B Instruct"
+      }
     ],
     "open_router": [
-      { "value": "meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (Free)" },
-      { "value": "qwen/qwen3-coder:free", "label": "Qwen3 Coder (Free)" },
+      {
+        "value": "meta-llama/llama-3.3-70b-instruct:free",
+        "label": "Llama 3.3 70B (Free)"
+      },
+      {
+        "value": "qwen/qwen3-coder:free",
+        "label": "Qwen3 Coder (Free)"
+      },
       {
         "value": "nvidia/nemotron-3-super-120b-a12b:free",
         "label": "Nemotron 3 Super 120B (Free)"

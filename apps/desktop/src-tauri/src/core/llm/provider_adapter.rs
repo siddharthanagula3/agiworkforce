@@ -359,9 +359,11 @@ impl OpenAIAdapter {
             Some("low")
         } else if model.ends_with("-medium") {
             Some("medium")
-        } else if model.ends_with("-high") || model.ends_with("-xhigh") {
-            // OpenAI reasoning.effort does not have xhigh, map to high.
+        } else if model.ends_with("-high") {
             Some("high")
+        } else if model.ends_with("-xhigh") {
+            // GPT-5.4 supports xhigh natively (added in GPT-5.4, not available in GPT-5.2)
+            Some("xhigh")
         } else {
             None
         }
@@ -608,63 +610,52 @@ impl OpenAIAdapter {
             api_request["instructions"] = serde_json::json!(system);
         }
 
-        // Add reasoning effort for reasoning models
-        if request.model.starts_with("gpt-5") || request.model.starts_with("o") {
-            if let Some(thinking) = &request.thinking {
+        // Determine reasoning effort for GPT-5 / o-series models.
+        // GPT-5.4 supports: none (default), low, medium, high, xhigh.
+        // temperature, top_p, logprobs are ONLY allowed when effort is "none" (unset).
+        let resolved_reasoning_effort: Option<String> =
+            if request.model.starts_with("gpt-5") || request.model.starts_with("o") {
                 use super::ThinkingParameter;
-                // Map our thinking parameter to reasoning.effort
-                match thinking {
-                    ThinkingParameter::Budget { budget_tokens, .. } => {
-                        // Map budget tokens to effort level
-                        let effort = if *budget_tokens < 1000 {
-                            "low"
-                        } else if *budget_tokens < 5000 {
-                            "medium"
-                        } else {
-                            "high"
-                        };
-                        let chosen_effort = codex_effort_override.unwrap_or(effort);
-                        api_request["reasoning"] = serde_json::json!({
-                            "effort": chosen_effort
-                        });
-                    }
-                    ThinkingParameter::Level { level, .. } => {
-                        // Map thinking level to effort
-                        let effort = match level.as_str() {
+                let raw_effort: Option<&str> = if let Some(thinking) = &request.thinking {
+                    match thinking {
+                        ThinkingParameter::Budget { budget_tokens, .. } => {
+                            let e = if *budget_tokens < 1000 {
+                                "low"
+                            } else if *budget_tokens < 5000 {
+                                "medium"
+                            } else {
+                                "high"
+                            };
+                            Some(e)
+                        }
+                        ThinkingParameter::Level { level, .. } => Some(match level.as_str() {
                             "low" => "low",
                             "medium" => "medium",
-                            "high" | "extreme" => "high",
+                            "high" => "high",
+                            // xhigh is natively supported in GPT-5.4
+                            "extreme" | "xhigh" => "xhigh",
                             _ => "medium",
-                        };
-                        let chosen_effort = codex_effort_override.unwrap_or(effort);
-                        api_request["reasoning"] = serde_json::json!({
-                            "effort": chosen_effort
-                        });
+                        }),
+                        ThinkingParameter::Enabled(true) => Some("medium"),
+                        // Disabled → leave unset so temperature/top_p are allowed
+                        ThinkingParameter::Enabled(false) => None,
+                        ThinkingParameter::Adaptive { .. } => Some("medium"),
                     }
-                    ThinkingParameter::Enabled(true) => {
-                        let chosen_effort = codex_effort_override.unwrap_or("medium");
-                        api_request["reasoning"] = serde_json::json!({
-                            "effort": chosen_effort
-                        });
-                    }
-                    ThinkingParameter::Enabled(false) => {
-                        // Don't add reasoning parameter if disabled
-                    }
-                    ThinkingParameter::Adaptive { .. } => {
-                        // OpenAI Responses API doesn't expose an "adaptive" reasoning mode.
-                        // Use a balanced default unless explicitly overridden.
-                        let chosen_effort = codex_effort_override.unwrap_or("medium");
-                        api_request["reasoning"] = serde_json::json!({
-                            "effort": chosen_effort
-                        });
-                    }
-                }
-            } else if let Some(effort) = codex_effort_override {
-                api_request["reasoning"] = serde_json::json!({
-                    "effort": effort
-                });
-            }
+                } else {
+                    None
+                };
+                raw_effort
+                    .map(|e| codex_effort_override.unwrap_or(e).to_string())
+                    .or_else(|| codex_effort_override.map(|e| e.to_string()))
+            } else {
+                None
+            };
+
+        if let Some(ref effort) = resolved_reasoning_effort {
+            api_request["reasoning"] = serde_json::json!({ "effort": effort });
         }
+        // temperature, top_p, logprobs are forbidden for GPT-5 when any reasoning effort is set
+        let suppress_sampling_params = resolved_reasoning_effort.is_some();
 
         // Add response format (structured outputs)
         // Priority: output_config (new typed API) > response_format (legacy)
@@ -703,14 +694,20 @@ impl OpenAIAdapter {
             }
         }
 
-        // Add temperature
-        if let Some(temp) = request.temperature {
-            api_request["temperature"] = serde_json::json!(temp);
+        // temperature and top_p are forbidden for GPT-5/o-series when reasoning effort is set.
+        // When effort is unset (default "none"), sampling params are allowed.
+        if !suppress_sampling_params {
+            if let Some(temp) = request.temperature {
+                api_request["temperature"] = serde_json::json!(temp);
+            }
+            if let Some(top_p) = request.top_p {
+                api_request["top_p"] = serde_json::json!(top_p);
+            }
         }
 
-        // Add max_tokens
+        // Responses API uses max_output_tokens (not max_tokens)
         if let Some(max_tokens) = request.max_tokens {
-            api_request["max_tokens"] = serde_json::json!(max_tokens);
+            api_request["max_output_tokens"] = serde_json::json!(max_tokens);
         }
 
         // Add tools (nested format)
@@ -726,11 +723,6 @@ impl OpenAIAdapter {
         // Add streaming
         if request.stream {
             api_request["stream"] = serde_json::json!(true);
-        }
-
-        // Add top_p
-        if let Some(top_p) = request.top_p {
-            api_request["top_p"] = serde_json::json!(top_p);
         }
 
         // Add metadata

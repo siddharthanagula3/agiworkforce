@@ -39,6 +39,9 @@ yarn.lock
 
 # Docs (not needed in VSIX)
 COMPETITIVE_VSCODE_RESEARCH.md
+PLAN.md
+TODO.md
+docs/**
 
 # CI/CD
 .github/**

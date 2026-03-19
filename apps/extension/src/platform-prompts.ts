@@ -1,9 +1,3 @@
-/**
- * Platform-specific knowledge prompts for popular web applications.
- * Returns navigation tips, keyboard shortcuts, and element patterns
- * that help the AI assistant operate more effectively on each site.
- */
-
 const PLATFORM_PROMPTS: Record<string, string> = {
   'slack.com': `You are assisting on Slack. Key navigation:
 - Cmd/Ctrl+K: Quick Switcher (search channels/DMs)
@@ -76,10 +70,6 @@ const PLATFORM_PROMPTS: Record<string, string> = {
 - Zoom: Cmd/Ctrl+scroll, Shift+1 to fit all`,
 };
 
-/**
- * Returns a platform-specific system prompt for the given URL, or null if
- * the URL doesn't match any known platform.
- */
 export function getPlatformPrompt(url: string): string | null {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');

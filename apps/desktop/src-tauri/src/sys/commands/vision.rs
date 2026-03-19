@@ -11,7 +11,7 @@ use tauri::State;
 
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const JPEG_QUALITY: u8 = 85;
-const DEFAULT_VISION_MODEL: &str = "gpt-5.2";
+const DEFAULT_VISION_MODEL: &str = "gpt-5.4";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VisionRequest {

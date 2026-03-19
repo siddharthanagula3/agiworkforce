@@ -1,11 +1,4 @@
-/**
- * Side panel — AGI Workforce streaming chat interface
- * Pure DOM/TypeScript, no framework. CSS injected via <style> tag.
- */
-
 import DOMPurify from 'dompurify';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ChatMessage {
   id: string;
@@ -24,8 +17,6 @@ interface ChatChunk {
   error?: string;
 }
 
-// ─── State ───────────────────────────────────────────────────────────────────
-
 const messages: ChatMessage[] = [];
 let pendingPageContext: string | null = null;
 let isStreaming = false;
@@ -34,24 +25,24 @@ let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 // Track how many messages have already been rendered to avoid full DOM rebuilds.
 let lastRenderedCount = 0;
 
-// Auth state
 let currentApiKey: string | null = null;
 let isConnected = false;
 
-// WebMCP tools state
 interface WebMCPToolEntry {
   name: string;
   description: string;
 }
 let discoveredTools: WebMCPToolEntry[] = [];
 
-// ─── Persistence helpers ──────────────────────────────────────────────────────
+let isRecording = false;
+let recordingActionCount = 0;
+
+type SidePanelTab = 'chat' | 'workflows';
 
 const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
 const API_KEY_STORAGE_KEY = 'agi_api_key';
 
-/** Persist current messages array to chrome.storage.local (capped at 50). */
 function saveMessages(): void {
   const toSave = messages.slice(-MAX_STORED_MESSAGES);
   chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch(() => {
@@ -59,7 +50,6 @@ function saveMessages(): void {
   });
 }
 
-/** Load persisted messages from chrome.storage.local into the messages array. */
 async function loadMessages(): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.get(STORAGE_KEY, (result) => {
@@ -77,16 +67,12 @@ async function loadMessages(): Promise<void> {
   });
 }
 
-/** Clear persisted messages from chrome.storage.local. */
 function clearStoredMessages(): void {
   chrome.storage.local.remove(STORAGE_KEY).catch(() => {
     // Ignore storage errors.
   });
 }
 
-/**
- * Save the API key to chrome.storage.session (cleared on browser close).
- */
 function saveApiKey(key: string): void {
   chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: key }).catch((err: unknown) => {
     // CRIT-004: Do NOT fall back to chrome.storage.local for credentials.
@@ -128,15 +114,12 @@ async function loadApiKey(): Promise<string | null> {
   });
 }
 
-/** Remove the stored API key from both session and local storage. */
 function clearStoredApiKey(): void {
   chrome.storage.session.remove(API_KEY_STORAGE_KEY).catch(() => {});
   chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {
     // Ignore storage errors.
   });
 }
-
-// ─── CSS ─────────────────────────────────────────────────────────────────────
 
 function injectStyles(): void {
   const style = document.createElement('style');
@@ -551,75 +534,6 @@ function injectStyles(): void {
     }
     .sp-save-shortcut-btn:hover { background: #3730a3; }
 
-    /* ── Scheduled tasks section in settings ── */
-    .sp-tasks-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-height: 160px;
-      overflow-y: auto;
-    }
-    .sp-task-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 0;
-      font-size: 11px;
-    }
-    .sp-task-name {
-      flex: 1;
-      color: #e2e8f0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sp-task-schedule { color: #64748b; font-size: 10px; }
-    .sp-task-toggle {
-      appearance: none;
-      width: 28px;
-      height: 14px;
-      border-radius: 7px;
-      background: #1e1e2e;
-      position: relative;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .sp-task-toggle:checked { background: #4338ca; }
-    .sp-task-toggle::after {
-      content: '';
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: white;
-      top: 2px;
-      left: 2px;
-      transition: transform 0.2s;
-    }
-    .sp-task-toggle:checked::after { transform: translateX(14px); }
-    .sp-task-delete {
-      background: none;
-      border: none;
-      color: #64748b;
-      cursor: pointer;
-      font-size: 12px;
-      padding: 2px;
-    }
-    .sp-task-delete:hover { color: #f87171; }
-    .sp-new-task-form {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding-top: 6px;
-      border-top: 1px solid #1e1e2e;
-      margin-top: 6px;
-    }
-    .sp-new-task-row {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }
-
     /* ── AI Tools dropdown ── */
     .sp-tools-wrapper {
       position: relative;
@@ -844,11 +758,110 @@ function injectStyles(): void {
     }
     #sp-status-pill.connected .sp-status-dot { background: #22c55e; }
     #sp-status-pill.disconnected .sp-status-dot { background: #ef4444; }
+
+    /* ── Tab bar ── */
+    #sp-tab-bar {
+      display: flex;
+      background: #13131a;
+      border-bottom: 1px solid #1e1e2e;
+      flex-shrink: 0;
+    }
+    .sp-tab {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 9px 0;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .sp-tab:hover { color: #94a3b8; }
+    .sp-tab.sp-tab-active { color: #6366f1; border-bottom-color: #6366f1; }
+    #sp-chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+    #sp-chat-panel.sp-tab-hidden { display: none; }
+    #sp-workflows { display: none; flex: 1; overflow-y: auto; padding: 12px 10px; flex-direction: column; gap: 16px; }
+    #sp-workflows.sp-tab-visible { display: flex; }
+    #sp-workflows::-webkit-scrollbar { width: 4px; }
+    #sp-workflows::-webkit-scrollbar-track { background: transparent; }
+    #sp-workflows::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    .sp-wf-section { background: #1a1a28; border: 1px solid #1e1e2e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .sp-wf-section-header { display: flex; align-items: center; justify-content: space-between; }
+    .sp-wf-section-title { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+    .sp-wf-empty { color: #475569; font-size: 11px; line-height: 1.55; padding: 4px 0; }
+    .sp-wf-shortcuts-list { display: flex; flex-direction: column; gap: 6px; }
+    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-shortcut-icon { font-size: 14px; flex-shrink: 0; }
+    .sp-wf-shortcut-info { flex: 1; min-width: 0; }
+    .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-shortcut-meta { font-size: 10px; color: #475569; margin-top: 1px; }
+    .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .sp-wf-btn-replay { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-btn-replay:hover { background: #312e81; }
+    .sp-wf-btn-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-btn-delete:hover { color: #f87171; border-color: #7f1d1d; }
+    .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
+    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-task-info { flex: 1; min-width: 0; }
+    .sp-wf-task-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: #7c3aed; background: #1e1b4b; border: 1px solid #312e81; border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .sp-wf-task-toggle:checked { background: #4338ca; }
+    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
+    .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
+    .sp-wf-task-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-task-delete:hover { color: #f87171; border-color: #7f1d1d; }
+    .sp-wf-new-task-btn { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-new-task-btn:hover { background: #312e81; }
+    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-new-task-form.open { display: flex; }
+    .sp-wf-form-label { font-size: 10px; color: #64748b; margin-bottom: 1px; }
+    .sp-wf-form-input { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
+    .sp-wf-form-input:focus { border-color: #4338ca; }
+    .sp-wf-form-input::placeholder { color: #334155; }
+    .sp-wf-form-select { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
+    .sp-wf-form-save-btn { background: #4338ca; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
+    .sp-wf-form-save-btn:hover { background: #3730a3; }
+    .sp-wf-form-cancel-btn { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
+    .sp-wf-form-cancel-btn:hover { color: #e2e8f0; }
+    .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .sp-wf-group-desc { font-size: 11px; color: #64748b; line-height: 1.55; }
+    .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: #13131a; border: 1px solid #1e1e2e; border-radius: 6px; color: #94a3b8; font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+    .sp-wf-group-action-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-wf-group-action-btn.active { color: #86efac; border-color: #166534; background: #052e16; }
+    .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
+    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: #dc2626; border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
+    .sp-wf-record-btn:hover { background: #b91c1c; transform: scale(1.02); }
+    .sp-wf-record-btn.recording { background: #450a0a; border: 1px solid #dc2626; animation: sp-record-pulse 1.5s infinite; }
+    .sp-wf-record-btn.recording:hover { background: #7f1d1d; }
+    @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); } }
+    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: white; flex-shrink: 0; }
+    .sp-wf-record-btn.recording .sp-wf-record-dot { background: #ef4444; animation: sp-pulse 1s infinite; }
+    .sp-wf-action-counter { font-size: 11px; color: #94a3b8; flex: 1; }
+    .sp-wf-action-counter strong { color: #e2e8f0; }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: #0f0f14; border: 1px solid #312e81; border-radius: 8px; }
+    .sp-wf-save-dialog.open { display: flex; }
+    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: #a5b4fc; }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: #312e81; color: #a5b4fc; border-radius: 9px; padding: 0 5px; }
+    .sp-model-selector-wrap { position: relative; }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: #1e1b4b; border: 1px solid #312e81; border-radius: 5px; padding: 3px 8px; color: #a5b4fc; font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
+    #sp-model-selector-btn:hover { background: #312e81; border-color: #4338ca; }
+    #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
+    #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
+    #sp-model-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 180px; max-height: 280px; overflow-y: auto; background: #13131a; border: 1px solid #1e1e2e; border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    #sp-model-dropdown.open { display: block; }
+    .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: #94a3b8; }
+    .sp-model-option:hover { background: #1e1e2e; color: #e2e8f0; }
+    .sp-model-option.selected { color: #a5b4fc; background: #1e1b4b; }
+    .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
+    .sp-model-option-label { flex: 1; }
   `;
   document.head.appendChild(style);
 }
-
-// ─── HTML sanitizer (DOMPurify) ─────────────────────────────────────────────
 
 function sanitizeHtml(dirty: string): string {
   return DOMPurify.sanitize(dirty, {
@@ -914,59 +927,42 @@ function sanitizeHtml(dirty: string): string {
   });
 }
 
-// ─── Markdown renderer (regex-based, no deps) ────────────────────────────────
-
 function renderMarkdown(text: string): string {
-  let html = text
-    // Escape HTML entities first
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  // Fenced code blocks (``` ... ```)
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code: string) => {
     return `<pre><code>${code.trimEnd()}</code></pre>`;
   });
 
-  // Inline code (`...`)
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
-  // Headings
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Bold + italic (*** or ___)
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
 
-  // Bold (** or __)
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
 
-  // Italic (* or _) — avoid matching list bullets
+  // Negative lookahead/behind avoids matching list bullets
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
   html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
 
-  // Blockquotes
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // Horizontal rules
   html = html.replace(/^---+$/gm, '<hr>');
 
-  // Unordered lists
   html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
 
-  // Ordered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Links [text](url) — sanitize URL to block javascript: and other non-http schemes
+  // Only allow http(s) URLs to block javascript: scheme injection
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
     const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
     return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   });
 
-  // Paragraphs — double newlines become paragraph breaks
   html = html
     .split(/\n{2,}/)
     .map((block) => {
@@ -980,8 +976,6 @@ function renderMarkdown(text: string): string {
 
   return html;
 }
-
-// ─── DOM helpers ─────────────────────────────────────────────────────────────
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -1001,8 +995,6 @@ function scrollToBottom(): void {
   const msgs = document.getElementById('sp-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
-
-// ─── Render ──────────────────────────────────────────────────────────────────
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1092,8 +1084,6 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
   scrollToBottom();
 }
 
-// ─── Page context ─────────────────────────────────────────────────────────────
-
 async function capturePageContext(): Promise<string | null> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -1122,8 +1112,6 @@ async function capturePageContext(): Promise<string | null> {
     });
   });
 }
-
-// ─── Voice input ─────────────────────────────────────────────────────────────
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -1198,12 +1186,6 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
   });
 }
 
-// ─── Send message ─────────────────────────────────────────────────────────────
-
-/**
- * Expand slash commands into full prompts.
- * Returns null if not a slash command (pass through as-is).
- */
 function expandSlashCommand(
   raw: string,
 ): { display: string; prompt: string; captureContext: boolean } | null {
@@ -1245,10 +1227,9 @@ function expandSlashCommand(
     },
   };
 
-  // Exact match
   if (commands[trimmed]) return commands[trimmed]!;
 
-  // Command with extra text (e.g., "/translate to French")
+  // e.g. "/translate to French"
   for (const [cmd, meta] of Object.entries(commands)) {
     if (trimmed.startsWith(cmd + ' ')) {
       const extra = trimmed.slice(cmd.length + 1).trim();
@@ -1266,14 +1247,12 @@ function expandSlashCommand(
 function sendMessage(text: string): void {
   if (!text.trim() || isStreaming) return;
 
-  // Expand slash commands
   const slashCmd = expandSlashCommand(text);
   if (slashCmd?.captureContext) {
     // For context-requiring commands, auto-capture page context first
     const displayText = slashCmd.display;
     const actualPrompt = slashCmd.prompt;
 
-    // Show the slash command as the user message
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
@@ -1284,7 +1263,6 @@ function sendMessage(text: string): void {
     saveMessages();
     renderMessages();
 
-    // Capture context then stream
     capturePageContext().then((ctx) => {
       if (ctx) pendingPageContext = ctx;
 
@@ -1375,7 +1353,6 @@ function sendMessage(text: string): void {
       apiKey: currentApiKey ?? undefined,
     },
     () => {
-      // Acknowledge — streaming chunks arrive via onMessage
       if (chrome.runtime.lastError) {
         handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
       }
@@ -1404,9 +1381,6 @@ function handleStreamError(id: string, errorText: string): void {
   updateSendButton();
 }
 
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
-
-/** Update the connection status pill based on current auth state. */
 function updateConnectionStatus(): void {
   const pill = document.getElementById('sp-status-pill');
   if (!pill) return;
@@ -1419,7 +1393,6 @@ function updateConnectionStatus(): void {
   }
 }
 
-/** Validate a key by testing connectivity to the desktop bridge. */
 async function validateAndSaveApiKey(key: string): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) return;
@@ -1431,8 +1404,6 @@ async function validateAndSaveApiKey(key: string): Promise<void> {
   isConnected = true;
   updateConnectionStatus();
 }
-
-// ─── Update helpers ───────────────────────────────────────────────────────────
 
 let contextBtn: HTMLButtonElement | null = null;
 
@@ -1514,19 +1485,77 @@ function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
 }
 
-// ─── Build UI ─────────────────────────────────────────────────────────────────
-
 function buildUI(): void {
   document.body.innerHTML = '';
 
-  // Header
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
   headerLeft.appendChild(el('div', { id: 'sp-logo' }, '🤖'));
   const titleWrap = el('div', {});
   titleWrap.appendChild(el('div', { id: 'sp-title' }, 'AGI Workforce'));
-  titleWrap.appendChild(el('div', { id: 'sp-model-badge' }, 'AI Assistant'));
   headerLeft.appendChild(titleWrap);
+
+  const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
+  const modelSelectorBtn = el('button', { id: 'sp-model-selector-btn' });
+  modelSelectorBtn.innerHTML =
+    '<span id="sp-model-badge">AI Assistant</span><span class="sp-chevron">▾</span>';
+  const modelDropdownEl = el('div', { id: 'sp-model-dropdown' });
+  const modelOptionsList = [
+    { value: 'auto', label: 'Auto (Best Available)' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'mistral-large', label: 'Mistral Large' },
+    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+    { value: 'ollama-local', label: 'Ollama (Local)' },
+  ];
+  let currentModelValue = 'auto';
+  function renderModelDropdown(): void {
+    modelDropdownEl.innerHTML = '';
+    for (const m of modelOptionsList) {
+      const opt = el('div', {
+        class: `sp-model-option${m.value === currentModelValue ? ' selected' : ''}`,
+      });
+      opt.appendChild(
+        el('span', { class: 'sp-model-option-check' }, m.value === currentModelValue ? '✓' : ''),
+      );
+      opt.appendChild(el('span', { class: 'sp-model-option-label' }, m.label));
+      opt.addEventListener('click', () => {
+        currentModelValue = m.value;
+        chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
+        updateModelBadge(m.value);
+        renderModelDropdown();
+        modelDropdownEl.classList.remove('open');
+        modelSelectorBtn.classList.remove('open');
+      });
+      modelDropdownEl.appendChild(opt);
+    }
+  }
+  modelSelectorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpenNow = modelDropdownEl.classList.toggle('open');
+    modelSelectorBtn.classList.toggle('open', isOpenNow);
+  });
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!modelSelectorWrap.contains(e.target as Node)) {
+      modelDropdownEl.classList.remove('open');
+      modelSelectorBtn.classList.remove('open');
+    }
+  });
+  chrome.storage.local.get('agi_model', (result) => {
+    if (chrome.runtime.lastError) return;
+    const stored = result['agi_model'] as string | undefined;
+    if (stored) currentModelValue = stored;
+    updateModelBadge(stored ?? 'auto');
+    renderModelDropdown();
+  });
+  modelSelectorWrap.appendChild(modelSelectorBtn);
+  modelSelectorWrap.appendChild(modelDropdownEl);
+  headerLeft.appendChild(modelSelectorWrap);
   header.appendChild(headerLeft);
 
   const headerRight = el('div', { id: 'sp-header-right' });
@@ -1570,7 +1599,6 @@ function buildUI(): void {
     const bar = document.getElementById('sp-settings-bar');
     if (bar) bar.classList.toggle('open');
   });
-  // Console toggle button in header
   const consoleToggleBtn = el(
     'button',
     { class: 'sp-icon-btn', id: 'sp-console-toggle-btn', title: 'Toggle console logs' },
@@ -1590,7 +1618,6 @@ function buildUI(): void {
   header.appendChild(headerRight);
   document.body.appendChild(header);
 
-  // Settings bar (hidden by default, toggled via header button)
   const settingsBar = el('div', { id: 'sp-settings-bar' });
 
   const bridgeUrlLabel = el('div', { class: 'sp-settings-label' }, 'Bridge URL');
@@ -1611,111 +1638,8 @@ function buildUI(): void {
   settingsBar.appendChild(bridgeUrlLabel);
   settingsBar.appendChild(bridgeUrlRow);
 
-  // Model selector
-  const modelLabel = el('div', { class: 'sp-settings-label' }, 'Model');
-  const modelSelect = el('select', {
-    class: 'sp-settings-input',
-    id: 'sp-model-select',
-  }) as HTMLSelectElement;
-  const models = [
-    { value: 'auto', label: 'Auto (Best Available)' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'mistral-large', label: 'Mistral Large' },
-    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-    { value: 'ollama-local', label: 'Ollama (Local)' },
-  ];
-  for (const m of models) {
-    const opt = el('option', { value: m.value }, m.label) as HTMLOptionElement;
-    modelSelect.appendChild(opt);
-  }
-  // Load persisted model selection
-  chrome.storage.local.get('agi_model', (result) => {
-    if (chrome.runtime.lastError) return;
-    const stored = result['agi_model'] as string | undefined;
-    if (stored) modelSelect.value = stored;
-    updateModelBadge(stored ?? 'auto');
-  });
-  modelSelect.addEventListener('change', () => {
-    chrome.storage.local.set({ agi_model: modelSelect.value }).catch(() => {});
-    updateModelBadge(modelSelect.value);
-  });
-  settingsBar.appendChild(modelLabel);
-  settingsBar.appendChild(modelSelect);
-
-  // Scheduled tasks section inside settings
-  const tasksLabel = el('div', { class: 'sp-settings-label' }, 'Scheduled Tasks');
-  const tasksList = el('div', { class: 'sp-tasks-list', id: 'sp-tasks-list' });
-  const newTaskForm = el('div', { class: 'sp-new-task-form' });
-  const newTaskRow1 = el('div', { class: 'sp-new-task-row' });
-  const newTaskNameInput = el('input', {
-    class: 'sp-settings-input',
-    placeholder: 'Task name',
-    id: 'sp-new-task-name',
-  }) as HTMLInputElement;
-  const newTaskPromptInput = el('input', {
-    class: 'sp-settings-input',
-    placeholder: 'Prompt to run',
-    id: 'sp-new-task-prompt',
-  }) as HTMLInputElement;
-  newTaskRow1.appendChild(newTaskNameInput);
-  newTaskRow1.appendChild(newTaskPromptInput);
-
-  const newTaskRow2 = el('div', { class: 'sp-new-task-row' });
-  const newTaskScheduleSelect = el('select', {
-    class: 'sp-settings-input',
-    id: 'sp-new-task-schedule',
-  }) as HTMLSelectElement;
-  for (const opt of [
-    { value: 'hourly', label: 'Hourly' },
-    { value: 'daily', label: 'Daily' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'monthly', label: 'Monthly' },
-  ]) {
-    newTaskScheduleSelect.appendChild(el('option', { value: opt.value }, opt.label));
-  }
-  const newTaskCreateBtn = el('button', { class: 'sp-settings-btn' }, 'Add Task');
-  newTaskCreateBtn.addEventListener('click', () => {
-    const name = newTaskNameInput.value.trim();
-    const prompt = newTaskPromptInput.value.trim();
-    if (!name || !prompt) return;
-    chrome.runtime.sendMessage(
-      {
-        type: 'CREATE_SCHEDULED_TASK',
-        task: {
-          name,
-          prompt,
-          enabled: true,
-          scheduleType: newTaskScheduleSelect.value,
-          scheduleValue: '',
-        },
-      },
-      () => {
-        if (chrome.runtime.lastError) return;
-        newTaskNameInput.value = '';
-        newTaskPromptInput.value = '';
-        refreshScheduledTasks();
-      },
-    );
-  });
-  newTaskRow2.appendChild(newTaskScheduleSelect);
-  newTaskRow2.appendChild(newTaskCreateBtn);
-
-  newTaskForm.appendChild(newTaskRow1);
-  newTaskForm.appendChild(newTaskRow2);
-
-  settingsBar.appendChild(tasksLabel);
-  settingsBar.appendChild(tasksList);
-  settingsBar.appendChild(newTaskForm);
-
   document.body.appendChild(settingsBar);
 
-  // Console log panel (hidden by default)
   const consolePanel = el('div', { id: 'sp-console-panel' });
   const consoleHeader = el('div', { class: 'sp-console-header' });
   consoleHeader.appendChild(el('span', { class: 'sp-console-title' }, 'Console'));
@@ -1735,7 +1659,6 @@ function buildUI(): void {
   consolePanel.appendChild(el('div', { class: 'sp-console-entries' }));
   document.body.appendChild(consolePanel);
 
-  // Pre-fill the current bridge URL from storage
   chrome.storage.local.get('agi_bridge_url', (result) => {
     if (chrome.runtime.lastError) return;
     const stored = result['agi_bridge_url'] as string | undefined;
@@ -1792,7 +1715,6 @@ function buildUI(): void {
     if (e.key === 'Enter') saveBridgeUrl();
   });
 
-  // Auth bar (API key entry + connection status)
   const authBar = el('div', { id: 'sp-auth-bar' });
 
   const authInput = el('input', {
@@ -1813,7 +1735,6 @@ function buildUI(): void {
   authBar.appendChild(statusPill);
   document.body.appendChild(authBar);
 
-  // Wire auth save button
   const saveKey = (): void => {
     const val = authInput.value.trim();
     if (!val) {
@@ -1834,7 +1755,34 @@ function buildUI(): void {
     if (e.key === 'Enter') saveKey();
   });
 
-  // Messages area
+  const tabBar = el('div', { id: 'sp-tab-bar' });
+  const chatTabBtn = el('button', { class: 'sp-tab sp-tab-active', 'data-tab': 'chat' }, 'Chat');
+  const workflowsTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'workflows' }, 'Workflows');
+  tabBar.appendChild(chatTabBtn);
+  tabBar.appendChild(workflowsTabBtn);
+  document.body.appendChild(tabBar);
+
+  function switchTab(tab: SidePanelTab): void {
+    const chatPanelEl = document.getElementById('sp-chat-panel');
+    const workflowsPanelEl = document.getElementById('sp-workflows');
+    const inputAreaEl = document.getElementById('sp-input-area');
+    const toolbarEl = document.getElementById('sp-toolbar');
+    chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
+    workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
+    if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
+    if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
+    if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
+    if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
+    if (tab === 'workflows') {
+      refreshWorkflowsShortcuts();
+      refreshWorkflowsTasks();
+    }
+  }
+  chatTabBtn.addEventListener('click', () => switchTab('chat'));
+  workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
+
+  const chatPanel = el('div', { id: 'sp-chat-panel' });
+
   const msgsArea = el('div', { id: 'sp-messages' });
   const emptyState = el('div', { id: 'sp-empty' });
   emptyState.innerHTML = `
@@ -1851,9 +1799,9 @@ function buildUI(): void {
     </div>
   `;
   msgsArea.appendChild(emptyState);
-  document.body.appendChild(msgsArea);
+  chatPanel.appendChild(msgsArea);
+  document.body.appendChild(chatPanel);
 
-  // Wire slash command chip clicks
   setTimeout(() => {
     const chips = document.querySelectorAll('.sp-cmd-chip');
     chips.forEach((chip) => {
@@ -1864,7 +1812,311 @@ function buildUI(): void {
     });
   }, 0);
 
-  // Toolbar (page context + mic)
+  const workflowsPanel = el('div', { id: 'sp-workflows' });
+
+  const recordSection = el('div', { class: 'sp-wf-section' });
+  const recordHeader = el('div', { class: 'sp-wf-section-header' });
+  recordHeader.appendChild(el('div', { class: 'sp-wf-section-title' }, 'Recording'));
+  recordSection.appendChild(recordHeader);
+  const recordBar = el('div', { class: 'sp-wf-record-bar' });
+  const recordBtn = el('button', { class: 'sp-wf-record-btn', id: 'sp-wf-record-btn' });
+  recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Record';
+  const actionCounter = el('div', { class: 'sp-wf-action-counter', id: 'sp-wf-action-counter' });
+  actionCounter.style.display = 'none';
+  recordBar.appendChild(recordBtn);
+  recordBar.appendChild(actionCounter);
+  recordSection.appendChild(recordBar);
+
+  const saveDialog = el('div', { class: 'sp-wf-save-dialog', id: 'sp-wf-save-dialog' });
+  saveDialog.appendChild(el('div', { class: 'sp-wf-save-dialog-title' }, 'Save this recording'));
+  const saveNameInput = el('input', {
+    class: 'sp-wf-form-input',
+    placeholder: 'Workflow name...',
+    id: 'sp-wf-save-name',
+  }) as HTMLInputElement;
+  saveDialog.appendChild(saveNameInput);
+  const saveDialogActions = el('div', { class: 'sp-wf-form-actions' });
+  const saveCancelBtn = el('button', { class: 'sp-wf-form-cancel-btn' }, 'Discard');
+  const saveConfirmBtn = el('button', { class: 'sp-wf-form-save-btn' }, 'Save');
+  saveDialogActions.appendChild(saveCancelBtn);
+  saveDialogActions.appendChild(saveConfirmBtn);
+  saveDialog.appendChild(saveDialogActions);
+  recordSection.appendChild(saveDialog);
+
+  let recordingPollInterval: ReturnType<typeof setInterval> | null = null;
+  function startRecordingPoll() {
+    stopRecordingPoll();
+    recordingPollInterval = setInterval(() => {
+      chrome.runtime.sendMessage(
+        { type: 'GET_RECORDED_ACTIONS' },
+        (resp: { success?: boolean; actions?: unknown[] } | undefined) => {
+          if (chrome.runtime.lastError || !resp?.success) return;
+          recordingActionCount = resp.actions?.length ?? 0;
+          const counter = document.getElementById('sp-wf-action-counter');
+          if (counter)
+            counter.innerHTML = `<strong>${recordingActionCount}</strong> actions recorded`;
+        },
+      );
+    }, 1500);
+  }
+  function stopRecordingPoll() {
+    if (recordingPollInterval !== null) {
+      clearInterval(recordingPollInterval);
+      recordingPollInterval = null;
+    }
+  }
+  recordBtn.addEventListener('click', () => {
+    if (isRecording) {
+      chrome.runtime.sendMessage({ type: 'STOP_RECORDING' }, () => {
+        if (chrome.runtime.lastError) {
+          const origText = recordBtn.innerHTML;
+          recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Error';
+          setTimeout(() => {
+            recordBtn.innerHTML = origText;
+          }, 1500);
+          return;
+        }
+        isRecording = false;
+        stopRecordingPoll();
+        recordBtn.classList.remove('recording');
+        recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Record';
+        actionCounter.style.display = 'none';
+        saveDialog.classList.add('open');
+        saveNameInput.value = '';
+        saveNameInput.focus();
+      });
+    } else {
+      chrome.runtime.sendMessage({ type: 'START_RECORDING' }, () => {
+        if (chrome.runtime.lastError) {
+          const origText = recordBtn.innerHTML;
+          recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Error';
+          setTimeout(() => {
+            recordBtn.innerHTML = origText;
+          }, 1500);
+          return;
+        }
+        isRecording = true;
+        recordingActionCount = 0;
+        recordBtn.classList.add('recording');
+        recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Stop';
+        actionCounter.style.display = '';
+        actionCounter.innerHTML = '<strong>0</strong> actions recorded';
+        saveDialog.classList.remove('open');
+        startRecordingPoll();
+      });
+    }
+  });
+  saveCancelBtn.addEventListener('click', () => saveDialog.classList.remove('open'));
+  saveConfirmBtn.addEventListener('click', () => {
+    const name = saveNameInput.value.trim();
+    if (!name) {
+      saveNameInput.style.borderColor = '#dc2626';
+      setTimeout(() => {
+        saveNameInput.style.borderColor = '';
+      }, 1500);
+      return;
+    }
+    chrome.runtime.sendMessage(
+      { type: 'GET_RECORDED_ACTIONS' },
+      (recResp: { success?: boolean; actions?: unknown[] } | undefined) => {
+        if (chrome.runtime.lastError || !recResp?.success) {
+          const origPlaceholder = saveNameInput.placeholder;
+          saveNameInput.placeholder = 'Failed to retrieve actions';
+          saveNameInput.style.borderColor = '#dc2626';
+          setTimeout(() => {
+            saveNameInput.placeholder = origPlaceholder;
+            saveNameInput.style.borderColor = '';
+          }, 2000);
+          return;
+        }
+        const recActions = recResp.actions ?? [];
+        if (recActions.length === 0) {
+          saveDialog.classList.remove('open');
+          return;
+        }
+        chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: recActions }, () => {
+          if (chrome.runtime.lastError) {
+            const origPlaceholder = saveNameInput.placeholder;
+            saveNameInput.placeholder = 'Failed to save shortcut';
+            saveNameInput.style.borderColor = '#dc2626';
+            setTimeout(() => {
+              saveNameInput.placeholder = origPlaceholder;
+              saveNameInput.style.borderColor = '';
+            }, 2000);
+            return;
+          }
+          saveDialog.classList.remove('open');
+          refreshWorkflowsShortcuts();
+        });
+      },
+    );
+  });
+  saveNameInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') saveConfirmBtn.click();
+  });
+  workflowsPanel.appendChild(recordSection);
+
+  const shortcutsSection = el('div', { class: 'sp-wf-section' });
+  const shortcutsSectionHeader = el('div', { class: 'sp-wf-section-header' });
+  const shortcutsTitle = el('div', { class: 'sp-wf-section-title' });
+  shortcutsTitle.innerHTML =
+    'Saved Shortcuts <span class="sp-wf-count-badge" id="sp-wf-shortcuts-count">0</span>';
+  shortcutsSectionHeader.appendChild(shortcutsTitle);
+  shortcutsSection.appendChild(shortcutsSectionHeader);
+  const wfShortcutsList = el('div', { class: 'sp-wf-shortcuts-list', id: 'sp-wf-shortcuts-list' });
+  wfShortcutsList.innerHTML = '<div class="sp-wf-empty">Record your first workflow</div>';
+  shortcutsSection.appendChild(wfShortcutsList);
+  workflowsPanel.appendChild(shortcutsSection);
+
+  const tasksSection = el('div', { class: 'sp-wf-section' });
+  const tasksSectionHeader = el('div', { class: 'sp-wf-section-header' });
+  const tasksTitle = el('div', { class: 'sp-wf-section-title' });
+  tasksTitle.innerHTML =
+    'Scheduled Tasks <span class="sp-wf-count-badge" id="sp-wf-tasks-count">0</span>';
+  tasksSectionHeader.appendChild(tasksTitle);
+  const newTaskBtn = el(
+    'button',
+    { class: 'sp-wf-new-task-btn', id: 'sp-wf-new-task-btn' },
+    '+ New Task',
+  );
+  tasksSectionHeader.appendChild(newTaskBtn);
+  tasksSection.appendChild(tasksSectionHeader);
+  const wfTasksList = el('div', { class: 'sp-wf-tasks-list', id: 'sp-wf-tasks-list' });
+  wfTasksList.innerHTML = '<div class="sp-wf-empty">No scheduled tasks</div>';
+  tasksSection.appendChild(wfTasksList);
+
+  const newTaskForm = el('div', { class: 'sp-wf-new-task-form', id: 'sp-wf-new-task-form' });
+  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Task Name'));
+  const ntNameInput = el('input', {
+    class: 'sp-wf-form-input',
+    placeholder: 'e.g. Check news',
+    id: 'sp-wf-nt-name',
+  }) as HTMLInputElement;
+  newTaskForm.appendChild(ntNameInput);
+  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Prompt'));
+  const ntPromptInput = el('input', {
+    class: 'sp-wf-form-input',
+    placeholder: 'What should the AI do?',
+    id: 'sp-wf-nt-prompt',
+  }) as HTMLInputElement;
+  newTaskForm.appendChild(ntPromptInput);
+  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Schedule'));
+  const ntScheduleSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-wf-nt-schedule',
+  }) as HTMLSelectElement;
+  for (const opt of [
+    { value: 'hourly', label: 'Hourly' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+  ]) {
+    ntScheduleSelect.appendChild(el('option', { value: opt.value }, opt.label));
+  }
+  newTaskForm.appendChild(ntScheduleSelect);
+  const ntFormActions = el('div', { class: 'sp-wf-form-actions' });
+  const ntCancelBtn = el('button', { class: 'sp-wf-form-cancel-btn' }, 'Cancel');
+  const ntSaveBtn = el('button', { class: 'sp-wf-form-save-btn' }, 'Create Task');
+  ntFormActions.appendChild(ntCancelBtn);
+  ntFormActions.appendChild(ntSaveBtn);
+  newTaskForm.appendChild(ntFormActions);
+  tasksSection.appendChild(newTaskForm);
+  workflowsPanel.appendChild(tasksSection);
+
+  newTaskBtn.addEventListener('click', () => {
+    newTaskForm.classList.toggle('open');
+    if (newTaskForm.classList.contains('open')) ntNameInput.focus();
+  });
+  ntCancelBtn.addEventListener('click', () => {
+    newTaskForm.classList.remove('open');
+    ntNameInput.value = '';
+    ntPromptInput.value = '';
+  });
+  ntSaveBtn.addEventListener('click', () => {
+    const name = ntNameInput.value.trim();
+    const prompt = ntPromptInput.value.trim();
+    if (!name || !prompt) {
+      if (!name) {
+        ntNameInput.style.borderColor = '#dc2626';
+        setTimeout(() => {
+          ntNameInput.style.borderColor = '';
+        }, 1500);
+      }
+      if (!prompt) {
+        ntPromptInput.style.borderColor = '#dc2626';
+        setTimeout(() => {
+          ntPromptInput.style.borderColor = '';
+        }, 1500);
+      }
+      return;
+    }
+    chrome.runtime.sendMessage(
+      {
+        type: 'CREATE_SCHEDULED_TASK',
+        task: {
+          name,
+          prompt,
+          enabled: true,
+          scheduleType: ntScheduleSelect.value,
+          scheduleValue: '',
+        },
+      },
+      () => {
+        if (chrome.runtime.lastError) return;
+        ntNameInput.value = '';
+        ntPromptInput.value = '';
+        newTaskForm.classList.remove('open');
+        refreshWorkflowsTasks();
+      },
+    );
+  });
+
+  const groupsSection = el('div', { class: 'sp-wf-section' });
+  groupsSection.appendChild(
+    (() => {
+      const h = el('div', { class: 'sp-wf-section-header' });
+      h.appendChild(el('div', { class: 'sp-wf-section-title' }, 'Tab Groups'));
+      return h;
+    })(),
+  );
+  groupsSection.appendChild(
+    el('div', { class: 'sp-wf-group-desc' }, 'Organize tabs into groups for focused workflows.'),
+  );
+  const groupBtnsRow = el('div', { class: 'sp-wf-group-btns' });
+  const wfGroupAddBtn = el('button', { class: 'sp-wf-group-action-btn' }, '+ Group Tab');
+  const wfGroupRemoveBtn = el('button', { class: 'sp-wf-group-action-btn' }, '- Ungroup Tab');
+  wfGroupAddBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage(
+      { type: 'ADD_TAB_TO_GROUP' },
+      (resp: { success?: boolean } | undefined) => {
+        if (chrome.runtime.lastError || !resp?.success) return;
+        wfGroupAddBtn.classList.add('active');
+        wfGroupAddBtn.textContent = 'Grouped!';
+        setTimeout(() => {
+          wfGroupAddBtn.classList.remove('active');
+          wfGroupAddBtn.textContent = '+ Group Tab';
+        }, 1500);
+      },
+    );
+  });
+  wfGroupRemoveBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage(
+      { type: 'REMOVE_TAB_FROM_GROUP' },
+      (resp: { success?: boolean } | undefined) => {
+        if (chrome.runtime.lastError || !resp?.success) return;
+        wfGroupRemoveBtn.textContent = 'Removed!';
+        setTimeout(() => {
+          wfGroupRemoveBtn.textContent = '- Ungroup Tab';
+        }, 1500);
+      },
+    );
+  });
+  groupBtnsRow.appendChild(wfGroupAddBtn);
+  groupBtnsRow.appendChild(wfGroupRemoveBtn);
+  groupsSection.appendChild(groupBtnsRow);
+  workflowsPanel.appendChild(groupsSection);
+  document.body.appendChild(workflowsPanel);
+
   const toolbar = el('div', { id: 'sp-toolbar' });
 
   contextBtn = el('button', {
@@ -1894,7 +2146,6 @@ function buildUI(): void {
   micBtn.innerHTML = '🎤';
   toolbar.appendChild(micBtn);
 
-  // Tab group toggle button
   const groupBtn = el('button', {
     class: 'sp-tool-btn',
     id: 'sp-group-btn',
@@ -1916,7 +2167,6 @@ function buildUI(): void {
   });
   toolbar.appendChild(groupBtn);
 
-  // Shortcuts button + dropdown
   const shortcutsWrapper = el('div', { class: 'sp-shortcuts-wrapper' });
   const shortcutsBtn = el('button', {
     class: 'sp-tool-btn',
@@ -1943,7 +2193,6 @@ function buildUI(): void {
   shortcutsWrapper.appendChild(shortcutsBtn);
   toolbar.appendChild(shortcutsWrapper);
 
-  // AI Tools button + dropdown
   const toolsWrapper = el('div', { class: 'sp-tools-wrapper' });
   const toolsBtn = el('button', {
     class: 'sp-tool-btn',
@@ -1959,7 +2208,6 @@ function buildUI(): void {
     toolsDropdown.classList.toggle('open');
   });
 
-  // Close dropdown when clicking outside
   document.addEventListener('click', (e: MouseEvent) => {
     if (!toolsWrapper.contains(e.target as Node)) {
       toolsDropdown.classList.remove('open');
@@ -1972,7 +2220,6 @@ function buildUI(): void {
 
   document.body.appendChild(toolbar);
 
-  // Input area
   const inputArea = el('div', { id: 'sp-input-area' });
   const inputRow = el('div', { id: 'sp-input-row' });
 
@@ -2007,14 +2254,9 @@ function buildUI(): void {
   inputArea.appendChild(inputRow);
   document.body.appendChild(inputArea);
 
-  // Wire up voice after DOM is ready
   setupVoiceInput(micBtn, inputEl);
-
-  // Initial render
   renderMessages();
 }
-
-// ─── Console log refresh ──────────────────────────────────────────────────
 
 function refreshConsoleLogs(): void {
   chrome.runtime.sendMessage(
@@ -2045,14 +2287,11 @@ function refreshConsoleLogs(): void {
         entry.appendChild(document.createTextNode(log.message));
         entries.appendChild(entry);
       }
-      // Scroll to bottom
       const panel = document.getElementById('sp-console-panel');
       if (panel) panel.scrollTop = panel.scrollHeight;
     },
   );
 }
-
-// ─── Shortcuts refresh ────────────────────────────────────────────────────
 
 function refreshShortcuts(): void {
   chrome.runtime.sendMessage(
@@ -2097,7 +2336,6 @@ function refreshShortcuts(): void {
         }
       }
 
-      // Save recording flow
       const saveRow = el('div', { class: 'sp-save-shortcut-row' });
       const nameInput = el('input', {
         class: 'sp-save-shortcut-input',
@@ -2137,9 +2375,72 @@ function refreshShortcuts(): void {
   );
 }
 
-// ─── Scheduled tasks refresh ──────────────────────────────────────────────
+function refreshWorkflowsShortcuts(): void {
+  chrome.runtime.sendMessage(
+    { type: 'LIST_SHORTCUTS' },
+    (
+      response:
+        | {
+            success?: boolean;
+            shortcuts?: Array<{ id: string; name: string; actions: unknown[]; createdAt: number }>;
+          }
+        | undefined,
+    ) => {
+      if (chrome.runtime.lastError || !response?.success) return;
+      const list = document.getElementById('sp-wf-shortcuts-list');
+      const countBadge = document.getElementById('sp-wf-shortcuts-count');
+      if (!list) return;
+      list.innerHTML = '';
+      const shortcuts = response.shortcuts ?? [];
+      if (countBadge) countBadge.textContent = String(shortcuts.length);
+      if (shortcuts.length === 0) {
+        list.innerHTML = '<div class="sp-wf-empty">Record your first workflow</div>';
+        return;
+      }
+      for (const sc of shortcuts) {
+        const item = el('div', { class: 'sp-wf-shortcut-item' });
+        item.appendChild(el('div', { class: 'sp-wf-shortcut-icon' }, '⚡'));
+        const info = el('div', { class: 'sp-wf-shortcut-info' });
+        info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
+        const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
+        const dateStr = new Date(sc.createdAt).toLocaleDateString([], {
+          month: 'short',
+          day: 'numeric',
+        });
+        info.appendChild(
+          el('div', { class: 'sp-wf-shortcut-meta' }, `${actionsCount} actions · ${dateStr}`),
+        );
+        item.appendChild(info);
+        const btns = el('div', { class: 'sp-wf-shortcut-btns' });
+        const playBtn = el(
+          'button',
+          { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
+          '▶ Play',
+        );
+        playBtn.addEventListener('click', () => {
+          playBtn.textContent = '...';
+          (playBtn as HTMLButtonElement).disabled = true;
+          chrome.runtime.sendMessage({ type: 'REPLAY_SHORTCUT', shortcutId: sc.id }, () => {
+            playBtn.textContent = '▶ Play';
+            (playBtn as HTMLButtonElement).disabled = false;
+          });
+        });
+        btns.appendChild(playBtn);
+        const delBtn = el('button', { class: 'sp-wf-btn-delete', title: 'Delete' }, '✕');
+        delBtn.addEventListener('click', () => {
+          chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
+            if (!chrome.runtime.lastError) refreshWorkflowsShortcuts();
+          });
+        });
+        btns.appendChild(delBtn);
+        item.appendChild(btns);
+        list.appendChild(item);
+      }
+    },
+  );
+}
 
-function refreshScheduledTasks(): void {
+function refreshWorkflowsTasks(): void {
   chrome.runtime.sendMessage(
     { type: 'LIST_SCHEDULED_TASKS' },
     (
@@ -2151,45 +2452,54 @@ function refreshScheduledTasks(): void {
               name: string;
               enabled: boolean;
               scheduleType: string;
+              scheduleValue: string;
               lastRun?: number;
             }>;
           }
         | undefined,
     ) => {
       if (chrome.runtime.lastError || !response?.success) return;
-      const list = document.getElementById('sp-tasks-list');
+      const list = document.getElementById('sp-wf-tasks-list');
+      const countBadge = document.getElementById('sp-wf-tasks-count');
       if (!list) return;
       list.innerHTML = '';
       const tasks = response.tasks ?? [];
+      if (countBadge) countBadge.textContent = String(tasks.length);
       if (tasks.length === 0) {
-        list.innerHTML =
-          '<div style="padding:6px 0;color:#475569;font-size:11px">No scheduled tasks</div>';
+        list.innerHTML = '<div class="sp-wf-empty">No scheduled tasks</div>';
         return;
       }
       for (const task of tasks) {
-        const item = el('div', { class: 'sp-task-item' });
+        const item = el('div', { class: 'sp-wf-task-item' });
         const toggle = el('input', {
           type: 'checkbox',
-          class: 'sp-task-toggle',
+          class: 'sp-wf-task-toggle',
         }) as HTMLInputElement;
         toggle.checked = task.enabled;
         toggle.addEventListener('change', () => {
+          const previousState = !toggle.checked;
           chrome.runtime.sendMessage(
             {
               type: 'UPDATE_SCHEDULED_TASK',
               taskId: task.id,
               updates: { enabled: toggle.checked },
             },
-            () => {},
+            (resp: { success?: boolean } | undefined) => {
+              if (chrome.runtime.lastError || !resp?.success) {
+                toggle.checked = previousState;
+              }
+            },
           );
         });
         item.appendChild(toggle);
-        item.appendChild(el('span', { class: 'sp-task-name' }, task.name));
-        item.appendChild(el('span', { class: 'sp-task-schedule' }, task.scheduleType));
-        const delBtn = el('button', { class: 'sp-task-delete', title: 'Delete task' }, '✕');
+        const info = el('div', { class: 'sp-wf-task-info' });
+        info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
+        info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
+        item.appendChild(info);
+        const delBtn = el('button', { class: 'sp-wf-task-delete', title: 'Delete task' }, '✕');
         delBtn.addEventListener('click', () => {
           chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
-            if (!chrome.runtime.lastError) refreshScheduledTasks();
+            if (!chrome.runtime.lastError) refreshWorkflowsTasks();
           });
         });
         item.appendChild(delBtn);
@@ -2199,12 +2509,9 @@ function refreshScheduledTasks(): void {
   );
 }
 
-// ─── Message listener (streaming chunks) ─────────────────────────────────────
-
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   const envelope = msg as { type: string };
 
-  // Handle WebMCP tool discovery updates from the background
   if (envelope.type === 'WEBMCP_TOOLS_CHANGED') {
     const toolsMsg = msg as { tools: WebMCPToolEntry[] };
     discoveredTools = (toolsMsg.tools ?? []).map((t) => ({
@@ -2224,7 +2531,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
-  // First chunk — remove thinking dots, add assistant message
   if (!messages.find((m) => m.id === chunk.id)) {
     removeThinking();
     const assistantMsg: ChatMessage = {
@@ -2237,7 +2543,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     messages.push(assistantMsg);
     renderMessages();
   } else {
-    // Append to existing streaming message
     const existing = messages.find((m) => m.id === chunk.id)!;
     existing.content += chunk.text;
     updateStreamingBubble(chunk.id, existing.content, chunk.done);
@@ -2256,18 +2561,14 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     isStreaming = false;
     currentStreamId = null;
     updateSendButton();
-    // Persist completed conversation turn, then do final render to remove cursor.
     saveMessages();
     renderMessages();
   }
 });
 
-// ─── Boot ─────────────────────────────────────────────────────────────────────
-
 injectStyles();
 buildUI();
 
-// Load persisted API key and messages after UI is ready.
 Promise.all([
   loadApiKey().then((key) => {
     if (key) {
@@ -2285,16 +2586,11 @@ Promise.all([
   .then(() => {
     // Check for pending chat from context menu (selection, summarize, explain, translate)
     checkPendingChat();
-    // Load scheduled tasks into settings panel
-    refreshScheduledTasks();
   })
   .catch(() => {
     // Boot errors must not surface to the user.
   });
 
-/**
- * Check for pending chat actions from context menu (stored in session storage by background).
- */
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
@@ -2336,7 +2632,6 @@ function checkPendingChat(): void {
   });
 }
 
-// Also listen for changes to agi_pending_chat while side panel is already open
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && changes['agi_pending_chat']?.newValue) {
     checkPendingChat();

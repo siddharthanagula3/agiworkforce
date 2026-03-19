@@ -281,6 +281,43 @@ impl KnowledgeBase {
         Ok(result)
     }
 
+    /// Get all knowledge chunks for a given project.
+    pub fn get_project_chunks(&self, project_id: &str) -> Result<Vec<KnowledgeChunk>> {
+        let conn = Connection::open(&self.db_path)?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
+             FROM knowledge_chunks WHERE project_id = ?1 ORDER BY chunk_index ASC",
+        )?;
+
+        let chunks = stmt.query_map([project_id], |row| {
+            let embedding_bytes: Option<Vec<u8>> = row.get(5)?;
+            let embedding = embedding_bytes
+                .map(|bytes| bincode::deserialize(&bytes))
+                .transpose()
+                .ok()
+                .flatten();
+
+            Ok(KnowledgeChunk {
+                id: row.get(0)?,
+                document_id: row.get(1)?,
+                project_id: row.get(2)?,
+                content: row.get(3)?,
+                chunk_index: row.get(4)?,
+                embedding,
+                metadata: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for chunk in chunks {
+            result.push(chunk?);
+        }
+
+        Ok(result)
+    }
+
     pub fn add_memory(&self, memory: ProjectMemory) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 

@@ -65,9 +65,10 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-haiku-4.5': 200_000,
   'claude-haiku-4-5': 200_000,
   // OpenAI GPT-5
-  'gpt-5.2': 128_000,
-  'gpt-5-pro': 128_000,
-  'gpt-5-nano': 128_000,
+  'gpt-5.4': 1_000_000,
+  'gpt-5.4-pro': 1_050_000,
+  'gpt-5.4-mini': 400_000,
+  'gpt-5.4-nano': 128_000,
   'gpt-5-codex': 128_000,
   o3: 200_000,
   // Google Gemini

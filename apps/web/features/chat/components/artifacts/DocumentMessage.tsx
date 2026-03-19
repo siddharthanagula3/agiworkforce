@@ -115,11 +115,7 @@ export const DocumentMessage: React.FC<DocumentMessageProps> = ({
                   </div>
                 </div>
               ) : (
-                <EnhancedMarkdownRenderer
-                  content={document.content}
-                  enableMath={true}
-                  enableCodeCopy={true}
-                />
+                <EnhancedMarkdownRenderer content={document.content} enableMath={true} />
               )}
             </div>
           </ScrollArea>

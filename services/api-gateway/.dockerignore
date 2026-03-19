@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+
+# Development files
+*.log
+*.md
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker files (prevent recursive build context)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Deployment configs (not needed in image)
+railway.toml
+fly.toml
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__/
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cache
+.cache/
+.tsbuildinfo

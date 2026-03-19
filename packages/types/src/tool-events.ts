@@ -363,4 +363,19 @@ export interface ToolLabelEntry {
    * `undefined` (absent) means the tool was dispatched independently.
    */
   parallelGroup?: string;
+
+  /**
+   * Short preview of the tool output, populated from `ToolEventCompleted.result_preview`.
+   *
+   * For file-edit tools this is a unified diff string.
+   * For Bash/terminal tools this contains the stdout/stderr snippet.
+   * Absent while the tool is still running.
+   */
+  resultPreview?: string;
+
+  /**
+   * Checkpoint ID for file-edit tools that support undo via `coding_checkpoint_rewind`.
+   * Absent for all other tool types.
+   */
+  checkpointId?: string;
 }
