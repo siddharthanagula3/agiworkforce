@@ -245,18 +245,26 @@ export default function AboutPage() {
           {/* Company Info */}
           <section className="py-24 bg-zinc-950">
             <div className="container mx-auto px-4">
-              <div className="grid md:grid-cols-3 gap-8 text-center">
+              <div className="grid md:grid-cols-4 gap-8 text-center">
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-blue-500 mb-2">2025</div>
-                  <div className="text-zinc-400">Founded</div>
+                  <div className="text-4xl font-bold text-blue-500 mb-2">9+</div>
+                  <div className="text-zinc-300 font-medium">AI Providers</div>
+                  <div className="text-sm text-zinc-500 mt-1">OpenAI, Anthropic, Google & more</div>
                 </div>
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-blue-500 mb-2">Austin, TX</div>
-                  <div className="text-zinc-400">Headquarters</div>
+                  <div className="text-4xl font-bold text-blue-500 mb-2">140+</div>
+                  <div className="text-zinc-300 font-medium">AI Skills</div>
+                  <div className="text-sm text-zinc-500 mt-1">Across 9 industries</div>
                 </div>
                 <div className="p-8">
-                  <div className="text-2xl font-bold text-blue-500 mb-2">Tauri + Rust + React</div>
-                  <div className="text-zinc-400">Open Source Tools</div>
+                  <div className="text-4xl font-bold text-blue-500 mb-2">macOS</div>
+                  <div className="text-zinc-300 font-medium">Windows &amp; Linux</div>
+                  <div className="text-sm text-zinc-500 mt-1">Native desktop app</div>
+                </div>
+                <div className="p-8">
+                  <div className="text-4xl font-bold text-blue-500 mb-2">BYOK</div>
+                  <div className="text-zinc-300 font-medium">Own Your Keys</div>
+                  <div className="text-sm text-zinc-500 mt-1">No middleman, no markup</div>
                 </div>
               </div>
             </div>

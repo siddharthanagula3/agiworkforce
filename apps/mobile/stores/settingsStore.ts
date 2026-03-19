@@ -5,6 +5,7 @@ import type { AutoApproveMode } from '@/types/chat';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
+export type TTSProvider = 'system' | 'cloud';
 
 interface SettingsState {
   /** Auto-approve mode for tool execution */
@@ -31,6 +32,12 @@ interface SettingsState {
   speechPitch: number;
   /** Selected branded voice preset ID (null = no preset / custom) */
   selectedPresetId: string | null;
+  /** TTS provider: system (free) or cloud (premium) */
+  ttsProvider: TTSProvider;
+  /** Auto-listen after AI speaks in voice conversation mode */
+  autoListenEnabled: boolean;
+  /** Temporary chat mode: conversations won't be saved */
+  isTemporaryChat: boolean;
 
   setAutoApproveMode: (mode: AutoApproveMode) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -44,6 +51,9 @@ interface SettingsState {
   setSpeechRate: (rate: number) => void;
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
+  setTtsProvider: (provider: TTSProvider) => void;
+  setAutoListenEnabled: (enabled: boolean) => void;
+  setTemporaryChat: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -61,6 +71,9 @@ export const useSettingsStore = create<SettingsState>()(
       speechRate: 1.0,
       speechPitch: 1.0,
       selectedPresetId: null,
+      ttsProvider: 'system',
+      autoListenEnabled: true,
+      isTemporaryChat: false,
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -74,6 +87,9 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechRate: (rate) => set({ speechRate: rate }),
       setSpeechPitch: (pitch) => set({ speechPitch: pitch }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
+      setTtsProvider: (provider) => set({ ttsProvider: provider }),
+      setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
+      setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
     }),
     {
       name: 'settings-store',

@@ -6,6 +6,7 @@
 
 pub mod client;
 pub mod config;
+pub mod connectors;
 pub mod error;
 pub mod events;
 pub mod extensions;

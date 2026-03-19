@@ -1,7 +1,3 @@
-/**
- * Utility functions for AGI Workforce extension
- */
-
 import type { ExtensionConfig, RateLimitState } from './types';
 
 /** Default WebSocket port — must match AGI_REALTIME_PORT env var in the Rust backend (default: 8787) */
@@ -17,9 +13,6 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
   requestTimeoutMs: 30000,
 };
 
-/**
- * Get stored configuration
- */
 export async function getConfig(): Promise<ExtensionConfig> {
   try {
     const stored = await chrome.storage.local.get('config');
@@ -31,9 +24,6 @@ export async function getConfig(): Promise<ExtensionConfig> {
   }
 }
 
-/**
- * Save configuration
- */
 export async function saveConfig(config: Partial<ExtensionConfig>): Promise<void> {
   try {
     const current = await getConfig();
@@ -43,9 +33,6 @@ export async function saveConfig(config: Partial<ExtensionConfig>): Promise<void
   }
 }
 
-/**
- * Logger with conditional output
- */
 export const logger = {
   debug: (message: string, data?: unknown) => {
     if (DEFAULT_CONFIG.enableLogging) {
@@ -63,16 +50,10 @@ export const logger = {
   },
 };
 
-/**
- * Sleep for specified milliseconds
- */
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Retry a function with exponential backoff
- */
 export async function retry<T>(
   fn: () => Promise<T>,
   maxRetries: number = DEFAULT_CONFIG.maxRetries,
@@ -96,9 +77,6 @@ export async function retry<T>(
   throw lastError;
 }
 
-/**
- * Timeout wrapper for promises
- */
 export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number = DEFAULT_CONFIG.requestTimeoutMs,
@@ -121,9 +99,6 @@ export async function withTimeout<T>(
   }
 }
 
-/**
- * Rate limit state management
- */
 export class RateLimiter {
   private state: Map<string, RateLimitState> = new Map();
   private readonly maxRequestsPerMinute: number;
@@ -134,9 +109,6 @@ export class RateLimiter {
     this.screenshotCooldownMs = screenshotCooldownMs;
   }
 
-  /**
-   * Check if a request should be rate limited
-   */
   isLimited(tabId: number, messageType: string): boolean {
     const now = Date.now();
     const key = `${tabId}:${messageType}`;
@@ -171,9 +143,6 @@ export class RateLimiter {
     return false;
   }
 
-  /**
-   * Reset rate limit state for a tab
-   */
   reset(tabId: number): void {
     const keys = Array.from(this.state.keys());
     keys.forEach((key) => {
@@ -183,21 +152,12 @@ export class RateLimiter {
     });
   }
 
-  /**
-   * Clear all rate limit state
-   */
   clear(): void {
     this.state.clear();
   }
 }
 
-/**
- * DOM utilities for content script
- */
 export const domUtils = {
-  /**
-   * Find element by selector with error handling
-   */
   querySelector(selector: string): Element | null {
     try {
       return document.querySelector(selector);
@@ -207,9 +167,6 @@ export const domUtils = {
     }
   },
 
-  /**
-   * Find all elements matching selector
-   */
   querySelectorAll(selector: string): Element[] {
     try {
       return Array.from(document.querySelectorAll(selector));
@@ -219,9 +176,6 @@ export const domUtils = {
     }
   },
 
-  /**
-   * Wait for element to appear
-   */
   async waitForSelector(
     selector: string,
     timeoutMs: number = 5000,
@@ -247,9 +201,6 @@ export const domUtils = {
     return null;
   },
 
-  /**
-   * Click element safely
-   */
   safeClick(element: Element, button: 'left' | 'middle' | 'right' = 'left'): boolean {
     try {
       const mouseEvent = new MouseEvent('click', {
@@ -273,25 +224,16 @@ export const domUtils = {
     }
   },
 
-  /**
-   * Get text content from element
-   */
   getText(element: Element | null): string {
     if (!element) return '';
     return element.textContent ?? '';
   },
 
-  /**
-   * Get element's position and size
-   */
   getElementRect(element: Element | null): DOMRect | null {
     if (!element) return null;
     return element.getBoundingClientRect();
   },
 
-  /**
-   * Scroll element into view
-   */
   scrollIntoView(element: Element): boolean {
     try {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -302,9 +244,6 @@ export const domUtils = {
     }
   },
 
-  /**
-   * Check if element is visible
-   */
   isVisible(element: Element | null): boolean {
     if (!element) return false;
 
@@ -321,20 +260,11 @@ export const domUtils = {
   },
 };
 
-/**
- * Form utilities
- */
 export const formUtils = {
-  /**
-   * Get all forms on the page
-   */
   getForms(): HTMLFormElement[] {
     return Array.from(document.querySelectorAll('form'));
   },
 
-  /**
-   * Get form fields
-   */
   getFormFields(
     form: HTMLFormElement | null = null,
   ): Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> {
@@ -343,9 +273,6 @@ export const formUtils = {
     return Array.from(fields) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
   },
 
-  /**
-   * Fill form field
-   */
   fillField(
     field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
     value: string,
@@ -377,9 +304,6 @@ export const formUtils = {
     }
   },
 
-  /**
-   * Submit form
-   */
   submitForm(form: HTMLFormElement | null = null): boolean {
     try {
       if (form) {
@@ -399,13 +323,7 @@ export const formUtils = {
   },
 };
 
-/**
- * Storage utilities with encryption
- */
 export const storageUtils = {
-  /**
-   * Get item from local storage
-   */
   async getItem<T>(key: string, defaultValue?: T): Promise<T | undefined> {
     try {
       const result = await chrome.storage.local.get(key);
@@ -416,9 +334,6 @@ export const storageUtils = {
     }
   },
 
-  /**
-   * Set item in local storage
-   */
   async setItem<T>(key: string, value: T): Promise<void> {
     try {
       await chrome.storage.local.set({ [key]: value });
@@ -427,9 +342,6 @@ export const storageUtils = {
     }
   },
 
-  /**
-   * Remove item from local storage
-   */
   async removeItem(key: string): Promise<void> {
     try {
       await chrome.storage.local.remove(key);
@@ -438,9 +350,6 @@ export const storageUtils = {
     }
   },
 
-  /**
-   * Clear all storage
-   */
   async clear(): Promise<void> {
     try {
       await chrome.storage.local.clear();
@@ -450,13 +359,7 @@ export const storageUtils = {
   },
 };
 
-/**
- * Validation utilities
- */
 export const validators = {
-  /**
-   * Validate URL is safe
-   */
   isSafeUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
@@ -467,9 +370,6 @@ export const validators = {
     }
   },
 
-  /**
-   * Validate that a URL points to a local address only (for bridge connections)
-   */
   isLocalUrl(url: string): boolean {
     try {
       const normalized = url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
@@ -481,9 +381,6 @@ export const validators = {
     }
   },
 
-  /**
-   * Validate CSS selector
-   */
   isValidSelector(selector: string): boolean {
     try {
       document.querySelector(selector);
@@ -493,9 +390,6 @@ export const validators = {
     }
   },
 
-  /**
-   * Sanitize input for XSS prevention
-   */
   sanitizeInput(input: string): string {
     const div = document.createElement('div');
     div.textContent = input;

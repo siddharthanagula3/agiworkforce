@@ -352,7 +352,7 @@ export default function AIChatFeaturePage() {
                       <div className="h-px bg-white/10" />
                       <div className="flex justify-between">
                         <span>Model</span>
-                        <span className="text-white">claude-opus-4-6</span>
+                        <span className="text-white">claude-sonnet-4-6</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Key Storage</span>

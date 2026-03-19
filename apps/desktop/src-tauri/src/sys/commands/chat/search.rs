@@ -325,6 +325,41 @@ pub fn search_chat_history_semantic(
     search_chat_history_semantic_inner(&query, limit, db.inner())
 }
 
+/// Search past conversations by keyword query, returning ranked results with
+/// conversation context. Wraps `features::search::conversation_search`.
+///
+/// Parameters use camelCase on the frontend (IPC convention):
+/// - `query` — keyword query (required)
+/// - `limit` — max results (optional, default 5)
+/// - `conversationId` — scope to a single conversation (optional)
+#[tauri::command]
+pub fn search_past_conversations(
+    query: String,
+    limit: Option<usize>,
+    conversation_id: Option<i64>,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<crate::features::search::ConversationSearchResult>, String> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Err("Search query cannot be empty".to_string());
+    }
+    let conn = db.connection()?;
+    crate::features::search::search_past_conversations(&conn, trimmed, limit, conversation_id)
+}
+
+/// Return the N most recently updated conversations with message counts.
+///
+/// Parameters use camelCase on the frontend (IPC convention):
+/// - `limit` — number of conversations to return (optional, default 10)
+#[tauri::command]
+pub fn get_recent_conversations(
+    limit: Option<usize>,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<crate::features::search::ConversationSummary>, String> {
+    let conn = db.connection()?;
+    crate::features::search::get_recent_conversations(&conn, limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

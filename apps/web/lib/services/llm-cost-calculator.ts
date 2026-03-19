@@ -31,16 +31,14 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // OpenAI (Updated 2026-01-28)
   // https://platform.openai.com/docs/models
   // ---------------------------------------------------------------------------
-  // GPT-5 Pro (Flagship)
-  'gpt-5-pro': { inputCostPer1MTokens: 5.0, outputCostPer1MTokens: 30.0 },
-  // GPT-5.2 Family
-  'gpt-5.2': { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 },
-  'gpt-5.2-pro': { inputCostPer1MTokens: 3.5, outputCostPer1MTokens: 28.0 },
-  'gpt-5.2-codex': { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 },
+  // GPT-5.4 Family (March 2026)
+  'gpt-5.4': { inputCostPer1MTokens: 2.5, outputCostPer1MTokens: 15.0 },
+  'gpt-5.4-pro': { inputCostPer1MTokens: 30.0, outputCostPer1MTokens: 180.0 },
+  'gpt-5.4-mini': { inputCostPer1MTokens: 0.75, outputCostPer1MTokens: 4.5 },
+  'gpt-5.4-nano': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 1.25 },
+  'gpt-5.4-codex': { inputCostPer1MTokens: 2.5, outputCostPer1MTokens: 15.0 },
   // GPT-5 Family
   'gpt-5': { inputCostPer1MTokens: 1.25, outputCostPer1MTokens: 10.0 },
-  'gpt-5-mini': { inputCostPer1MTokens: 0.25, outputCostPer1MTokens: 2.0 },
-  'gpt-5-nano': { inputCostPer1MTokens: 0.05, outputCostPer1MTokens: 0.4 },
   // O-Series Reasoning
   o3: { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 },
   'o3-pro': { inputCostPer1MTokens: 4.0, outputCostPer1MTokens: 16.0 },
@@ -183,7 +181,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
 // These should reflect the most commonly used/recommended model per provider
 // =============================================================================
 const PROVIDER_DEFAULTS: Record<string, ModelPricing> = {
-  openai: { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 }, // GPT-5.2
+  openai: { inputCostPer1MTokens: 2.5, outputCostPer1MTokens: 15.0 }, // GPT-5.4
   anthropic: { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 }, // Sonnet 4.5
   google: { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 }, // Gemini 3 Flash
   xai: { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 }, // Grok 4 Fast

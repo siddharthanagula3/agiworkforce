@@ -10,10 +10,12 @@ import {
   Bell,
   Calendar,
   CheckCircle,
+  ChevronDown,
   Clock,
   Code,
   Filter,
   Globe,
+  History,
   MoreHorizontal,
   Pause,
   Play,
@@ -24,10 +26,15 @@ import {
   Workflow,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useScheduler } from '@/hooks/useScheduler';
-import type { ScheduledJob, SchedulerActionType, JobStatus } from '@/hooks/useScheduler';
+import type {
+  ScheduledJob,
+  SchedulerActionType,
+  JobStatus,
+  JobHistoryEntry,
+} from '@/hooks/useScheduler';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import {
@@ -304,6 +311,79 @@ function JobCard({ job, onEdit, onToggle, onDelete, onRunNow }: JobCardProps) {
 }
 
 // ============================================================================
+// History Entry Component
+// ============================================================================
+
+interface HistoryEntryProps {
+  entry: JobHistoryEntry;
+  jobName: string;
+}
+
+function HistoryEntry({ entry, jobName }: HistoryEntryProps) {
+  const [errorExpanded, setErrorExpanded] = useState(false);
+
+  const statusVariant =
+    entry.status === 'completed'
+      ? 'default'
+      : entry.status === 'failed'
+        ? 'destructive'
+        : 'secondary';
+
+  const statusIcon =
+    entry.status === 'completed' ? (
+      <CheckCircle className="h-3 w-3" />
+    ) : entry.status === 'failed' ? (
+      <XCircle className="h-3 w-3" />
+    ) : (
+      <Clock className="h-3 w-3" />
+    );
+
+  const duration =
+    entry.durationMs !== undefined
+      ? entry.durationMs < 1000
+        ? `${entry.durationMs}ms`
+        : `${(entry.durationMs / 1000).toFixed(1)}s`
+      : null;
+
+  return (
+    <div className="rounded-lg border p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium truncate">{jobName}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {duration && <span className="text-xs text-muted-foreground">{duration}</span>}
+          <Badge variant={statusVariant} className="flex items-center gap-1 capitalize">
+            {statusIcon}
+            {entry.status}
+          </Badge>
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        {formatDistanceToNow(new Date(entry.startedAt), { addSuffix: true })}
+      </div>
+      {entry.error && (
+        <div className="mt-2">
+          <button
+            className="flex items-center gap-1 text-xs text-destructive hover:underline"
+            onClick={() => setErrorExpanded((v) => !v)}
+          >
+            <ChevronDown
+              className={cn('h-3 w-3 transition-transform', errorExpanded && 'rotate-180')}
+            />
+            {errorExpanded ? 'Hide error' : 'Show error'}
+          </button>
+          {errorExpanded && (
+            <p className="mt-1 rounded bg-destructive/10 px-2 py-1 text-xs text-destructive font-mono break-all">
+              {entry.error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -311,6 +391,9 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null);
+  const [activePanel, setActivePanel] = useState<'jobs' | 'history'>('jobs');
+  const [history, setHistory] = useState<JobHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Use the scheduler hook
   const {
@@ -327,7 +410,23 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
     runNow,
     refresh,
     clearError,
+    getHistory,
   } = useScheduler();
+
+  // Build a jobId → name lookup map
+  const jobNameMap = useMemo<Record<string, string>>(
+    () => Object.fromEntries(jobs.map((j) => [j.id, j.name])),
+    [jobs],
+  );
+
+  // Load history when History tab becomes active
+  useEffect(() => {
+    if (activePanel !== 'history') return;
+    setHistoryLoading(true);
+    getHistory(undefined, 100)
+      .then((records) => setHistory([...records].sort((a, b) => b.id - a.id)))
+      .finally(() => setHistoryLoading(false));
+  }, [activePanel, getHistory]);
 
   // Filter jobs based on active filter
   const filteredJobs = useMemo(() => {
@@ -446,8 +545,15 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
 
   const handleRefresh = useCallback(() => {
     clearError();
-    refresh().catch(console.error);
-  }, [refresh, clearError]);
+    if (activePanel === 'history') {
+      setHistoryLoading(true);
+      getHistory(undefined, 100)
+        .then((records) => setHistory([...records].sort((a, b) => b.id - a.id)))
+        .finally(() => setHistoryLoading(false));
+    } else {
+      refresh().catch(console.error);
+    }
+  }, [refresh, clearError, activePanel, getHistory]);
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
@@ -455,8 +561,8 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Scheduled Jobs</h2>
-          {jobCount > 0 && (
+          <h2 className="text-lg font-semibold">Scheduler</h2>
+          {activePanel === 'jobs' && jobCount > 0 && (
             <span className="text-sm text-muted-foreground">({activeJobCount} active)</span>
           )}
         </div>
@@ -466,142 +572,203 @@ export function SchedulerPanel({ className, onJobTriggered }: SchedulerPanelProp
             size="icon"
             className="h-8 w-8"
             onClick={handleRefresh}
-            disabled={isLoading}
+            disabled={isLoading || historyLoading}
           >
-            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4', (isLoading || historyLoading) && 'animate-spin')} />
           </Button>
-          <Button size="sm" onClick={handleNewJob}>
-            <Plus className="mr-1 h-4 w-4" />
-            New Job
-          </Button>
+          {activePanel === 'jobs' && (
+            <Button size="sm" onClick={handleNewJob}>
+              <Plus className="mr-1 h-4 w-4" />
+              New Job
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Tabs/Filters */}
-      <Tabs
-        value={activeFilter}
-        onValueChange={(v) => setActiveFilter(v as FilterType)}
-        className="flex-1 flex flex-col"
-      >
-        <div className="border-b px-4">
-          <TabsList className="h-10 w-full justify-start bg-transparent p-0">
-            <TabsTrigger
-              value="all"
-              className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
-            >
-              <Filter className="mr-1.5 h-3.5 w-3.5" />
-              All
-              {counts.all > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({counts.all})</span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="active"
-              className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
-            >
-              <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
-              Active
-              {counts.active > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({counts.active})</span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="paused"
-              className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
-            >
-              <Pause className="mr-1.5 h-3.5 w-3.5" />
-              Paused
-              {counts.paused > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({counts.paused})</span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="failed"
-              className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
-            >
-              <XCircle className="mr-1.5 h-3.5 w-3.5" />
-              Failed
-              {counts.failed > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({counts.failed})</span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      {/* Top-level panel toggle: Jobs | History */}
+      <div className="border-b px-4">
+        <TabsList className="h-10 w-full justify-start bg-transparent p-0">
+          <TabsTrigger
+            value="jobs"
+            onClick={() => setActivePanel('jobs')}
+            data-state={activePanel === 'jobs' ? 'active' : 'inactive'}
+            className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+          >
+            <Calendar className="mr-1.5 h-3.5 w-3.5" />
+            Jobs
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            onClick={() => setActivePanel('history')}
+            data-state={activePanel === 'history' ? 'active' : 'inactive'}
+            className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+          >
+            <History className="mr-1.5 h-3.5 w-3.5" />
+            History
+            {history.length > 0 && (
+              <span className="ml-1.5 text-xs text-muted-foreground">({history.length})</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
-        {/* Content */}
-        <TabsContent value={activeFilter} className="flex-1 m-0">
-          <ScrollArea className="h-full">
-            <div className="p-4 space-y-3">
-              {/* Error state */}
-              {error && (
-                <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  {error}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto h-6 px-2"
-                    onClick={clearError}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              )}
+      {activePanel === 'jobs' ? (
+        /* Jobs panel: filter tabs + job list */
+        <Tabs
+          value={activeFilter}
+          onValueChange={(v) => setActiveFilter(v as FilterType)}
+          className="flex-1 flex flex-col"
+        >
+          <div className="border-b px-4">
+            <TabsList className="h-10 w-full justify-start bg-transparent p-0">
+              <TabsTrigger
+                value="all"
+                className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                <Filter className="mr-1.5 h-3.5 w-3.5" />
+                All
+                {counts.all > 0 && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">({counts.all})</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="active"
+                className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                Active
+                {counts.active > 0 && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">({counts.active})</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="paused"
+                className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                <Pause className="mr-1.5 h-3.5 w-3.5" />
+                Paused
+                {counts.paused > 0 && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">({counts.paused})</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="failed"
+                className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                Failed
+                {counts.failed > 0 && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">({counts.failed})</span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-              {/* Loading state */}
-              {isLoading && jobs.length === 0 && (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="rounded-lg border p-4">
-                      <div className="flex items-start gap-4">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-4 w-1/3" />
-                          <Skeleton className="h-3 w-1/2" />
-                          <Skeleton className="h-3 w-1/4" />
+          <TabsContent value={activeFilter} className="flex-1 m-0">
+            <ScrollArea className="h-full">
+              <div className="p-4 space-y-3">
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    {error}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-6 px-2"
+                      onClick={clearError}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                )}
+                {isLoading && jobs.length === 0 && (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="rounded-lg border p-4">
+                        <div className="flex items-start gap-4">
+                          <Skeleton className="h-10 w-10 rounded-full" />
+                          <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-1/3" />
+                            <Skeleton className="h-3 w-1/2" />
+                            <Skeleton className="h-3 w-1/4" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Empty state */}
-              {!isLoading && sortedJobs.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="rounded-full bg-muted p-4 mb-4">
-                    <Calendar className="h-8 w-8 text-muted-foreground" />
+                    ))}
                   </div>
-                  <h3 className="font-medium text-lg mb-1">No scheduled jobs</h3>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-[300px]">
-                    {activeFilter === 'all'
-                      ? 'Create your first scheduled job to automate tasks.'
-                      : `No ${activeFilter} jobs found.`}
-                  </p>
-                  {activeFilter === 'all' && (
-                    <Button onClick={handleNewJob}>
-                      <Plus className="mr-1 h-4 w-4" />
-                      Create Job
-                    </Button>
-                  )}
+                )}
+                {!isLoading && sortedJobs.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="rounded-full bg-muted p-4 mb-4">
+                      <Calendar className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-medium text-lg mb-1">No scheduled jobs</h3>
+                    <p className="text-sm text-muted-foreground mb-4 max-w-[300px]">
+                      {activeFilter === 'all'
+                        ? 'Create your first scheduled job to automate tasks.'
+                        : `No ${activeFilter} jobs found.`}
+                    </p>
+                    {activeFilter === 'all' && (
+                      <Button onClick={handleNewJob}>
+                        <Plus className="mr-1 h-4 w-4" />
+                        Create Job
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {sortedJobs.map((job) => (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    onEdit={handleEdit}
+                    onToggle={handleToggle}
+                    onDelete={handleDelete}
+                    onRunNow={handleRunNow}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      ) : (
+        /* History panel */
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-2">
+            {historyLoading && (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="mt-2 h-3 w-1/4" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {!historyLoading && history.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="rounded-full bg-muted p-4 mb-4">
+                  <History className="h-8 w-8 text-muted-foreground" />
                 </div>
-              )}
-
-              {/* Job list */}
-              {sortedJobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onEdit={handleEdit}
-                  onToggle={handleToggle}
-                  onDelete={handleDelete}
-                  onRunNow={handleRunNow}
+                <h3 className="font-medium text-lg mb-1">No execution history</h3>
+                <p className="text-sm text-muted-foreground max-w-[280px]">
+                  Job executions will appear here once jobs have run.
+                </p>
+              </div>
+            )}
+            {!historyLoading &&
+              history.map((entry) => (
+                <HistoryEntry
+                  key={entry.id}
+                  entry={entry}
+                  jobName={jobNameMap[entry.jobId] ?? entry.jobId}
                 />
               ))}
-            </div>
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
+          </div>
+        </ScrollArea>
+      )}
 
       {/* Dialog */}
       <JobCreationDialog

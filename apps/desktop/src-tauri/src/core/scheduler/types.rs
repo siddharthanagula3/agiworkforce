@@ -285,6 +285,17 @@ pub enum JobAction {
         payload: serde_json::Value,
     },
 
+    /// Run memory summarization (daily batch synthesis of conversations into long-term memory).
+    #[allow(dead_code)]
+    RunMemorySummarization {
+        /// Maximum number of conversations to summarize per run.
+        max_conversations: Option<usize>,
+    },
+
+    /// Run memory decay (weekly importance decay on stale memories).
+    #[allow(dead_code)]
+    RunMemoryDecay,
+
     /// Execute a custom callback (internal use).
     #[serde(skip)]
     Callback(CallbackAction),

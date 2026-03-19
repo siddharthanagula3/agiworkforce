@@ -462,6 +462,11 @@ pub fn run() {
             // Knowledge base state
             app.manage(crate::sys::commands::knowledge::KnowledgeState::new());
 
+            // Project knowledge RAG state (shares the main DB path)
+            app.manage(crate::sys::commands::knowledge::ProjectKnowledgeState::new(
+                db_path.clone(),
+            ));
+
             // Project-scoped memory state for project-specific long-term memories
             match ProjectMemoryState::new(&db_path.to_string_lossy()) {
                 Ok(project_memory_state) => {
@@ -561,6 +566,9 @@ pub fn run() {
 
             // Scheduler state for proactive task scheduling
             let scheduler_state = SchedulerState::new();
+            // Register default memory maintenance jobs (daily summarization + weekly decay).
+            // Idempotent — skips if jobs already exist.
+            scheduler_state.register_default_memory_jobs();
             // Start the background polling loop so scheduled jobs fire automatically.
             // The loop polls every 30 seconds and dispatches any jobs whose next_run
             // is in the past. Without this, jobs are stored but never auto-executed.
@@ -622,8 +630,8 @@ pub fn run() {
             tracing::info!("Capability state initialized");
 
             // Artifact state for live previews and versioned artifacts
-            app.manage(crate::sys::commands::artifacts::ArtifactState::new());
-            tracing::info!("Artifact state initialized");
+            app.manage(crate::sys::commands::artifacts::ArtifactState::with_db(db_conn_arc.clone()));
+            tracing::info!("Artifact state initialized with DB persistence");
 
             // Background Agent Manager for "&" prefix background tasks
             {
@@ -993,6 +1001,10 @@ pub fn run() {
             crate::sys::commands::knowledge_add,
             crate::sys::commands::knowledge_query,
 
+            // Project knowledge RAG commands
+            crate::sys::commands::project_search_knowledge,
+            crate::sys::commands::project_add_knowledge_file,
+
             // Completion / Ghost Text
             crate::sys::commands::get_code_completion,
             crate::sys::commands::get_prompt_completion,
@@ -1028,6 +1040,8 @@ pub fn run() {
             crate::sys::commands::chat_compact_context,
             crate::sys::commands::chat::clear_local_database,
             crate::sys::commands::search_chat_history,
+            crate::sys::commands::chat::search::search_past_conversations,
+            crate::sys::commands::chat::search::get_recent_conversations,
             crate::sys::commands::conversation_export,
             crate::sys::commands::conversation_export_pdf,
             crate::sys::commands::conversation_fork,
@@ -1558,6 +1572,8 @@ pub fn run() {
             crate::sys::commands::document_create_excel_numbers,
             crate::sys::commands::document_create_pdf,
             crate::sys::commands::document_create_pdf_simple,
+            crate::sys::commands::document_create_powerpoint,
+            crate::sys::commands::document_create_powerpoint_simple,
             // Memory commands (persistent cross-session memory)
             crate::sys::commands::memory_remember,
             crate::sys::commands::memory_recall,
@@ -2049,6 +2065,7 @@ pub fn run() {
             crate::sys::commands::artifacts::artifact_get_diff,
             crate::sys::commands::artifacts::artifact_get_stats,
             crate::sys::commands::artifacts::artifact_apply_diff,
+            crate::sys::commands::artifacts::artifact_list_persisted,
 
             // Updater (only available when not building for App Store)
             #[cfg(feature = "updater")]

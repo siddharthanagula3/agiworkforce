@@ -344,7 +344,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             .order('updated_at', { ascending: false });
 
           if (error) {
-            console.error('[ChatStore] Failed to load sessions from DB:', error);
             return;
           }
 
@@ -375,8 +374,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
               state.dbLoaded = true;
             });
           }
-        } catch (err) {
-          console.error('[ChatStore] DB session load error:', err);
+        } catch {
           set((state) => {
             state.dbLoaded = true;
           });
@@ -392,7 +390,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             .order('timestamp', { ascending: true });
 
           if (error) {
-            console.error('[ChatStore] Failed to load messages from DB:', error);
             return;
           }
 
@@ -418,8 +415,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
               state.messages[sessionId] = dbMessages;
             });
           }
-        } catch (err) {
-          console.error('[ChatStore] DB message load error:', err);
+        } catch {
+          // error is already handled by the early return above
         }
       },
 
@@ -436,8 +433,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
             metadata: message.metadata || {},
             is_streaming: false,
           });
-        } catch (err) {
-          console.error('[ChatStore] Failed to save message to DB:', err);
+        } catch {
+          // fire-and-forget DB save; failure is non-fatal
         }
       },
 
@@ -456,8 +453,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
             is_pinned: session.isPinned ?? false,
             is_archived: session.isArchived ?? false,
           });
-        } catch (err) {
-          console.error('[ChatStore] Failed to save session to DB:', err);
+        } catch {
+          // fire-and-forget DB save; failure is non-fatal
         }
       },
     })),

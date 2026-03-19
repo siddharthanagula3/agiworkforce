@@ -20,6 +20,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { cn } from '@shared/lib/utils';
+import MermaidRenderer from './MermaidRenderer';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,29 @@ function CsvBlock({ code }: { code: string }) {
   const lines = code.trim().split('\n').filter(Boolean);
   if (lines.length === 0) return null;
 
-  const parseRow = (row: string) => row.split(',').map((cell) => cell.replace(/^"|"$/g, '').trim());
+  const parseRow = (row: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+      const char = row[i];
+      if (char === '"') {
+        if (inQuotes && row[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
 
   const headers = parseRow(lines[0] ?? '');
   const rows = lines.slice(1).map(parseRow);
@@ -241,7 +264,9 @@ function JsonBlock({ code }: { code: string }) {
       <pre className="overflow-x-auto bg-zinc-950 p-4 max-h-[400px]">
         <code
           className="text-sm leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }) }}
+          dangerouslySetInnerHTML={{
+            __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }),
+          }}
         />
       </pre>
     </div>
@@ -257,9 +282,9 @@ function MermaidBlock({ code }: { code: string }) {
         <span className="text-xs font-medium text-muted-foreground">mermaid · diagram</span>
         <CopyButton text={code} />
       </div>
-      <pre className="overflow-x-auto bg-zinc-950 p-4">
-        <code className="text-sm text-zinc-200 leading-relaxed">{code}</code>
-      </pre>
+      <div className="bg-background p-4">
+        <MermaidRenderer code={code} />
+      </div>
     </div>
   );
 }

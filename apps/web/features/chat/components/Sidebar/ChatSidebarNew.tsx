@@ -433,8 +433,9 @@ function CollapsedSidebar({
         <Plus className="h-4 w-4" />
       </button>
       <button
+        onClick={() => onToggleSidebar?.()}
         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-        aria-label="Search"
+        aria-label="Search conversations"
       >
         <Search className="h-4 w-4" />
       </button>

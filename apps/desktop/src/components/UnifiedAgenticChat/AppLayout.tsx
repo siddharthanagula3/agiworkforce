@@ -43,7 +43,18 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [customInstructionsConversationId, setCustomInstructionsConversationId] = useState<
     string | undefined
   >(undefined);
-  const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
+  const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
+  const openArtifactPanel = useArtifactStore((state) => state.openPanel);
+  const artifactPanelOpen = useArtifactStore((state) => state.panelOpen);
+  // Derived from artifactStore.panelOpen — the canonical source of truth.
+  const isArtifactPanelOpen = artifactPanelOpen;
+  const setIsArtifactPanelOpen = useCallback(
+    (open: boolean) => {
+      if (open) openArtifactPanel();
+      else closeArtifactPanel();
+    },
+    [openArtifactPanel, closeArtifactPanel],
+  );
   const [artifactPanelWidthState, setArtifactPanelWidthState] = useState(
     ARTIFACT_PANEL_DEFAULT_WIDTH,
   );
@@ -53,7 +64,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
 
-  const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
   const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
   const canAccessMediaLab = useMemo(
@@ -81,10 +91,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     (panel: NonNullable<RightPanel>) => {
       setActiveRightPanel(panel);
       setIsArtifactPanelOpen(false);
-      closeArtifactPanel();
       closeSidecar();
     },
-    [closeArtifactPanel, closeSidecar],
+    [setIsArtifactPanelOpen, closeSidecar],
   );
 
   const [isResizing, setIsResizing] = useState(false);
@@ -103,11 +112,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const wasRightPanelVisibleRef = useRef(false);
 
   const handleNewChat = useCallback(async () => {
-    closeArtifactPanel();
     setIsArtifactPanelOpen(false);
     await resetInFlightChatState();
     createConversation('New chat');
-  }, [closeArtifactPanel, createConversation]);
+  }, [setIsArtifactPanelOpen, createConversation]);
 
   const handleToggleMediaLab = useCallback(() => {
     if (!canAccessMediaLab) {
@@ -123,7 +131,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
       return next;
     });
-  }, [canAccessMediaLab, closeSidecar]);
+  }, [canAccessMediaLab, closeSidecar, setIsArtifactPanelOpen]);
 
   useEffect(() => {
     if (!canAccessMediaLab && isMediaLabOpen) {
@@ -248,6 +256,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
+        onToggleArtifacts={() => setIsArtifactPanelOpen(!isArtifactPanelOpen)}
+        artifactPanelOpen={isArtifactPanelOpen}
       />
 
       {}
