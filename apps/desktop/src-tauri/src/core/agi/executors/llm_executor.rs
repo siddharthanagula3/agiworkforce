@@ -13,7 +13,7 @@
 //!
 //! The executor supports model preferences through parameters:
 //! - `provider`: Override the default provider (anthropic, openai, google, etc.)
-//! - `model`: Specify a particular model (claude-haiku-4-5, gpt-5-nano, etc.)
+//! - `model`: Specify a particular model (claude-haiku-4-5, gpt-5.4-nano, etc.)
 //! - `temperature`: Control response randomness (0.0 - 1.0, default 0.7)
 //! - `max_tokens`: Limit response length (default 2000)
 //! - `stream`: Enable streaming responses (default false)
@@ -184,7 +184,7 @@ impl LlmExecutor {
             (Some(p), Some(m)) => (*p, m.clone()),
             (Some(p), None) => (*p, self.default_model_for_provider(*p)),
             (None, Some(m)) => (self.infer_provider_from_model(m), m.clone()),
-            (None, None) => (Provider::ManagedCloud, "gpt-5-nano".to_string()),
+            (None, None) => (Provider::ManagedCloud, "gpt-5.4-nano".to_string()),
         };
 
         // Build router preferences
@@ -380,7 +380,7 @@ impl LlmExecutor {
     fn default_model_for_provider(&self, provider: Provider) -> String {
         match provider {
             Provider::Ollama => "llama4-maverick".to_string(),
-            _ => "gpt-5-nano".to_string(),
+            _ => "gpt-5.4-nano".to_string(),
         }
     }
 
@@ -554,7 +554,7 @@ mod tests {
             Provider::Anthropic
         );
         assert_eq!(
-            executor.infer_provider_from_model("gpt-5-nano"),
+            executor.infer_provider_from_model("gpt-5.4-nano"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -602,15 +602,15 @@ mod tests {
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "gpt-5-nano"
+            "gpt-5.4-nano"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
-            "gpt-5-nano"
+            "gpt-5.4-nano"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gpt-5-nano"
+            "gpt-5.4-nano"
         );
     }
 

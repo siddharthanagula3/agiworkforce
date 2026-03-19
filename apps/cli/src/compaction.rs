@@ -1,7 +1,5 @@
 //! Context compaction — token estimation, usage tracking, and message pruning.
 //!
-//! Phase 5 of the CLI implementation plan.
-//!
 //! Implements a multi-phase compaction strategy adapted from OpenCode + Gemini CLI + Codex:
 //! 1. Reverse token budget: Walk tool outputs backward, truncating older ones first
 //! 2. History split: Keep last 30% of messages untouched, compress only older 70%

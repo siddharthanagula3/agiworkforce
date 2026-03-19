@@ -105,9 +105,7 @@ function deriveDisplayArgs(argumentsText?: string | null): string {
   return '';
 }
 
-export function resolveToolTimelineLabel(
-  input: ResolveToolTimelineLabelInput,
-): ToolTimelineLabel {
+export function resolveToolTimelineLabel(input: ResolveToolTimelineLabelInput): ToolTimelineLabel {
   if (input.existing) {
     return input.existing;
   }
@@ -154,10 +152,12 @@ export function buildTerminalToolTimelineUpdate(input: {
   success: boolean;
   error?: string | null;
   durationMs?: number;
+  resultPreview?: string | null;
 }): Partial<ToolLabelEntry> {
   return {
     status: input.success ? 'completed' : 'error',
     ...(input.success ? {} : { error: input.error || 'Tool execution failed' }),
     ...(typeof input.durationMs === 'number' ? { durationMs: input.durationMs } : {}),
+    ...(input.resultPreview ? { resultPreview: input.resultPreview } : {}),
   };
 }

@@ -2,12 +2,14 @@
 //!
 //! Provides persistent storage and retrieval of artifacts with version history.
 
+use super::persistence;
 use super::types::*;
 use chrono::Utc;
 use parking_lot::RwLock;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Artifact store manages artifacts in memory with optional persistence
 pub struct ArtifactStore {
@@ -19,6 +21,8 @@ pub struct ArtifactStore {
     by_type: RwLock<HashMap<ArtifactType, Vec<String>>>,
     /// Maximum versions to keep per artifact
     max_versions: usize,
+    /// Optional database connection for persistence
+    db_conn: Option<Arc<Mutex<Connection>>>,
 }
 
 impl Default for ArtifactStore {
@@ -35,7 +39,101 @@ impl ArtifactStore {
             by_conversation: RwLock::new(HashMap::new()),
             by_type: RwLock::new(HashMap::new()),
             max_versions,
+            db_conn: None,
         }
+    }
+
+    /// Create a new artifact store with database persistence
+    pub fn with_db(max_versions: usize, conn: Arc<Mutex<Connection>>) -> Self {
+        Self {
+            artifacts: RwLock::new(HashMap::new()),
+            by_conversation: RwLock::new(HashMap::new()),
+            by_type: RwLock::new(HashMap::new()),
+            max_versions,
+            db_conn: Some(conn),
+        }
+    }
+
+    /// Persist an artifact and its latest version to DB (best-effort, logs errors)
+    fn persist_artifact(&self, artifact: &Artifact) {
+        if let Some(ref db) = self.db_conn {
+            let conn = match db.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("Failed to acquire DB lock for artifact {}: {}", artifact.id, e);
+                    return;
+                }
+            };
+            if let Err(e) = persistence::save_artifact_to_db(&conn, artifact) {
+                tracing::warn!("Failed to persist artifact {}: {}", artifact.id, e);
+            }
+            // Persist the latest version
+            if let Some(latest_version) = artifact.versions.last() {
+                if let Err(e) = persistence::save_artifact_version_to_db(
+                    &conn,
+                    &artifact.id,
+                    latest_version,
+                ) {
+                    tracing::warn!(
+                        "Failed to persist artifact version {}_v{}: {}",
+                        artifact.id,
+                        latest_version.version,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    /// Persist deletion to DB (best-effort)
+    fn persist_delete(&self, id: &str) {
+        if let Some(ref db) = self.db_conn {
+            let conn = match db.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("Failed to acquire DB lock for deleting artifact {}: {}", id, e);
+                    return;
+                }
+            };
+            if let Err(e) = persistence::delete_artifact_from_db(&conn, id) {
+                tracing::warn!("Failed to delete artifact {} from DB: {}", id, e);
+            }
+        }
+    }
+
+    /// Load all artifacts from DB into memory cache.
+    /// Called on startup or when the in-memory cache is empty.
+    pub fn load_from_db(&self) -> Result<usize, String> {
+        let db = match &self.db_conn {
+            Some(db) => db,
+            None => return Ok(0),
+        };
+        let artifacts = {
+            let conn = db.lock().map_err(|e| e.to_string())?;
+            persistence::list_artifacts_from_db(&conn, None, None)?
+        }; // db lock released here
+        let count = artifacts.len();
+        for artifact in artifacts {
+            self.insert_artifact(artifact);
+        }
+        Ok(count)
+    }
+
+    /// Load artifacts for a specific conversation from DB into memory cache.
+    pub fn load_conversation_from_db(&self, conversation_id: &str) -> Result<usize, String> {
+        let db = match &self.db_conn {
+            Some(db) => db,
+            None => return Ok(0),
+        };
+        let artifacts = {
+            let conn = db.lock().map_err(|e| e.to_string())?;
+            persistence::list_artifacts_from_db(&conn, Some(conversation_id), None)?
+        }; // db lock released here
+        let count = artifacts.len();
+        for artifact in artifacts {
+            self.insert_artifact(artifact);
+        }
+        Ok(count)
     }
 
     /// Generate a unique artifact ID
@@ -78,6 +176,9 @@ impl ArtifactStore {
 
         // Store the artifact
         self.insert_artifact(artifact.clone());
+
+        // Persist to DB
+        self.persist_artifact(&artifact);
 
         Ok(artifact)
     }
@@ -139,7 +240,12 @@ impl ArtifactStore {
         }
 
         artifact.finalize_streaming(change_description);
-        Ok(artifact.clone())
+        let result = artifact.clone();
+
+        // Persist finalized artifact to DB
+        self.persist_artifact(&result);
+
+        Ok(result)
     }
 
     /// Get an artifact by ID
@@ -178,7 +284,12 @@ impl ArtifactStore {
         // Prune old versions if necessary
         self.prune_versions(artifact);
 
-        Ok(artifact.clone())
+        let result = artifact.clone();
+
+        // Persist updated artifact to DB
+        self.persist_artifact(&result);
+
+        Ok(result)
     }
 
     /// Rollback an artifact to a specific version
@@ -189,7 +300,12 @@ impl ArtifactStore {
             .ok_or_else(|| format!("Artifact not found: {}", id))?;
 
         artifact.rollback_to_version(version)?;
-        Ok(artifact.clone())
+        let result = artifact.clone();
+
+        // Persist rollback to DB
+        self.persist_artifact(&result);
+
+        Ok(result)
     }
 
     /// Delete an artifact
@@ -211,6 +327,9 @@ impl ArtifactStore {
             ids.retain(|i| i != id);
         }
 
+        // Persist deletion to DB
+        self.persist_delete(id);
+
         Ok(())
     }
 
@@ -222,6 +341,9 @@ impl ArtifactStore {
             .ok_or_else(|| format!("Artifact not found: {}", id))?;
 
         artifact.archive();
+
+        // Persist status change to DB
+        self.persist_artifact(artifact);
         Ok(())
     }
 
@@ -233,6 +355,9 @@ impl ArtifactStore {
             .ok_or_else(|| format!("Artifact not found: {}", id))?;
 
         artifact.unarchive();
+
+        // Persist status change to DB
+        self.persist_artifact(artifact);
         Ok(())
     }
 
@@ -245,6 +370,9 @@ impl ArtifactStore {
 
         artifact.pinned = pinned;
         artifact.updated_at = Utc::now();
+
+        // Persist pin change to DB
+        self.persist_artifact(artifact);
         Ok(())
     }
 
@@ -261,6 +389,9 @@ impl ArtifactStore {
             }
         }
         artifact.updated_at = Utc::now();
+
+        // Persist tag changes to DB
+        self.persist_artifact(artifact);
         Ok(())
     }
 
@@ -273,6 +404,9 @@ impl ArtifactStore {
 
         artifact.tags.retain(|t| !tags.contains(t));
         artifact.updated_at = Utc::now();
+
+        // Persist tag changes to DB
+        self.persist_artifact(artifact);
         Ok(())
     }
 
@@ -407,6 +541,7 @@ impl ArtifactStore {
     /// Import artifacts from backup
     pub fn import_all(&self, artifacts: Vec<Artifact>) {
         for artifact in artifacts {
+            self.persist_artifact(&artifact);
             self.insert_artifact(artifact);
         }
     }
@@ -480,6 +615,14 @@ pub type SharedArtifactStore = Arc<ArtifactStore>;
 /// Create a new shared artifact store
 pub fn create_shared_store(max_versions: usize) -> SharedArtifactStore {
     Arc::new(ArtifactStore::new(max_versions))
+}
+
+/// Create a new shared artifact store with database persistence
+pub fn create_shared_store_with_db(
+    max_versions: usize,
+    conn: Arc<Mutex<Connection>>,
+) -> SharedArtifactStore {
+    Arc::new(ArtifactStore::with_db(max_versions, conn))
 }
 
 #[cfg(test)]

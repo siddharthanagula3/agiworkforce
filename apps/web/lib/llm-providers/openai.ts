@@ -19,8 +19,10 @@ const MODELS_REQUIRING_MAX_COMPLETION_TOKENS = [
   // GPT-5 series (reasoning models)
   'gpt-5',
   'gpt-5-turbo',
-  'gpt-5-mini',
-  'gpt-5-nano',
+  'gpt-5.4',
+  'gpt-5.4-pro',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
   // O-series (reasoning models)
   'o1',
   'o1-mini',

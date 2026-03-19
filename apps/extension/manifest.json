@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AGI Workforce Browser Automation",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Intelligent browser automation and integration for AGI Workforce desktop application",
   "author": "AGI Workforce",
   "homepage_url": "https://agiworkforce.com",
@@ -34,6 +34,7 @@
     {
       "matches": ["http://*/*", "https://*/*"],
       "js": ["src/content.js"],
+      "type": "module",
       "run_at": "document_idle",
       "all_frames": false,
       "match_about_blank": false
@@ -74,6 +75,6 @@
   "side_panel": {
     "default_path": "src/side_panel.html"
   },
-  "minimum_chrome_version": "114",
+  "minimum_chrome_version": "132",
   "offline_enabled": false
 }

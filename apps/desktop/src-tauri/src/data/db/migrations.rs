@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 59;
+const CURRENT_VERSION: i32 = 60;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -187,6 +187,9 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "token_usage",
         // First-run marker (added in v29, v37)
         "sample_data_marker",
+        // Artifacts persistence (added in v60)
+        "artifacts",
+        "artifact_versions",
     ])
 });
 
@@ -551,6 +554,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 59 {
         run_migration_in_transaction(conn, 59, apply_migration_v59)?;
+    }
+
+    if current_version < 60 {
+        run_migration_in_transaction(conn, 60, apply_migration_v60)?;
     }
 
     Ok(())
@@ -5191,6 +5198,47 @@ fn apply_migration_v59(conn: &Connection) -> Result<()> {
         skipped_duplicate_sessions = skipped_duplicates,
         "Migration v59: rebuilt auth_sessions to use hashed lookups, encrypted storage, and redacted legacy columns"
     );
+
+    Ok(())
+}
+
+/// Migration v60: Create artifacts and artifact_versions tables for persistent artifact storage.
+/// Moves artifact data from in-memory-only to SQLite persistence with full version history.
+fn apply_migration_v60(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS artifacts (
+            id TEXT PRIMARY KEY,
+            artifact_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            language TEXT,
+            metadata TEXT,
+            conversation_id TEXT,
+            version INTEGER NOT NULL DEFAULT 1,
+            content_hash TEXT,
+            status TEXT NOT NULL DEFAULT 'complete',
+            is_pinned INTEGER NOT NULL DEFAULT 0,
+            is_archived INTEGER NOT NULL DEFAULT 0,
+            tags TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(artifact_type);
+        CREATE INDEX IF NOT EXISTS idx_artifacts_status ON artifacts(status);
+
+        CREATE TABLE IF NOT EXISTS artifact_versions (
+            id TEXT PRIMARY KEY,
+            artifact_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            content_hash TEXT,
+            change_description TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (artifact_id) REFERENCES artifacts(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_artifact_versions_artifact ON artifact_versions(artifact_id);",
+    )?;
 
     Ok(())
 }

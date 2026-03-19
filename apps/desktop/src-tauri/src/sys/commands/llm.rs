@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 
 use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
-const DEFAULT_MODEL: &str = "gpt-5-nano";
+const DEFAULT_MODEL: &str = "gpt-5.4-nano";
 
 /// Managed state holding rate limiters for LLM and MCP tool execution.
 ///
@@ -922,7 +922,7 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LLMResponse {
                 content: format!("echo: {}", request.messages[0].content),
-                model: "gpt-5-nano".to_string(),
+                model: "gpt-5.4-nano".to_string(),
                 cached: false,
                 tokens: Some(12),
                 prompt_tokens: Some(7),
@@ -968,7 +968,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5-nano".to_string(),
+            model: "gpt-5.4-nano".to_string(),
             temperature: Some(0.0),
             max_tokens: Some(32),
             stream: false,
@@ -980,7 +980,7 @@ mod tests {
 
         let preferences = RouterPreferences {
             provider: Some(Provider::OpenAI),
-            model: Some("gpt-5-nano".to_string()),
+            model: Some("gpt-5.4-nano".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,

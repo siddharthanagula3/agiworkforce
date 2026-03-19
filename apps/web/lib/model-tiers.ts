@@ -54,8 +54,9 @@ export const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterpris
   // Anthropic — Claude Sonnet 4.6 (Oct 2025, $15/1M output)
   'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4-6-20251029': ['pro', 'max', 'enterprise'],
-  // Mistral — Mistral Medium 3 (latest mid-tier, $2.00/1M output)
+  // Mistral — Mistral Medium 3.1 (Aug 2025, API ID: mistral-medium-2508, $2.00/1M output)
   'mistral-medium-3': ['pro', 'max', 'enterprise'],
+  'mistral-medium-2508': ['pro', 'max', 'enterprise'],
   // Qwen — Qwen 3.5 Plus (Feb 2026, $2.40/1M output)
   'qwen3.5-plus': ['pro', 'max', 'enterprise'],
   // DeepSeek — Reasoner / V3.2 thinking mode ($1.10/1M output)

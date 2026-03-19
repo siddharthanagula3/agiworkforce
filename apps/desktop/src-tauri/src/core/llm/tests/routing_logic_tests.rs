@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_provider_default_model_spot_checks() {
-        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.2");
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.4");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4-6");
         assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn test_infer_provider_gpt_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.2"));
+        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.4"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -600,15 +600,15 @@ mod tests {
     fn test_infer_provider_openai_gpt_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("gpt-5.2"),
+            router.infer_provider_from_model("gpt-5.4"),
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("gpt-5-nano"),
+            router.infer_provider_from_model("gpt-5.4-nano"),
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("GPT-5.2"),
+            router.infer_provider_from_model("GPT-5.4"),
             Provider::OpenAI
         );
     }
@@ -1008,10 +1008,10 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_openai_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.2"));
+        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.4"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.2");
+        assert_eq!(suggestion.model, "gpt-5.4");
     }
 
     #[test]
