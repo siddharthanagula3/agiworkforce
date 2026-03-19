@@ -53,6 +53,8 @@ pub struct McpTimeouts {
     /// Timeout for executing a tool call (default: 120s — tool calls can be slow).
     pub call_tool: Duration,
     /// Timeout for health check pings (default: 5s).
+    /// Used by is_alive() for periodic server health verification.
+    #[allow(dead_code)]
     pub health_check: Duration,
 }
 
@@ -108,10 +110,10 @@ impl std::fmt::Display for JsonRpcError {
 
 /// Send SIGTERM to the child process, wait briefly, then SIGKILL if needed.
 ///
-/// On Unix we use `nix::sys::signal::kill` for proper signal delivery instead
-/// of the async `child.kill()` which is unavailable in sync Drop contexts.
+/// Async version — uses `tokio::time::sleep` to avoid blocking the runtime.
+/// Used by `kill_child()` and other async methods.
 #[cfg(unix)]
-fn kill_process_gracefully(child: &mut Child) {
+async fn kill_process_gracefully(child: &mut Child) {
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
@@ -121,8 +123,31 @@ fn kill_process_gracefully(child: &mut Child) {
         // Try graceful SIGTERM first
         let _ = kill(pid, Signal::SIGTERM);
 
-        // Give the process 2 seconds to exit
-        std::thread::sleep(Duration::from_secs(2));
+        // Give the process 2 seconds to exit (non-blocking)
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // If still alive, force SIGKILL
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = kill(pid, Signal::SIGKILL);
+        }
+    }
+}
+
+/// Sync version for Drop context (cannot use async).
+/// Uses a short thread::sleep (100ms max) since Drop must be synchronous.
+#[cfg(unix)]
+fn kill_process_gracefully_sync(child: &mut Child) {
+    use nix::sys::signal::{kill, Signal};
+    use nix::unistd::Pid;
+
+    if let Some(pid) = child.id() {
+        let pid = Pid::from_raw(pid as i32);
+
+        // Try graceful SIGTERM first
+        let _ = kill(pid, Signal::SIGTERM);
+
+        // Short sleep — Drop must not block long
+        std::thread::sleep(Duration::from_millis(100));
 
         // If still alive, force SIGKILL
         if child.try_wait().ok().flatten().is_none() {
@@ -332,6 +357,8 @@ impl McpConnection {
     ///
     /// Sends a cheap `tools/list` request with a short timeout.
     /// Returns `false` on timeout, connection errors, or a dead child process.
+    /// Will be used for auto-reconnect logic in the REPL loop.
+    #[allow(dead_code)]
     pub async fn is_alive(&mut self) -> bool {
         // Quick check: has the child process already exited?
         if let Ok(Some(_status)) = self.child.try_wait() {
@@ -406,39 +433,48 @@ impl McpConnection {
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
 
-        // Read lines until we get our response (skip notifications)
-        loop {
-            line.clear();
-            let bytes_read = tokio::time::timeout(timeout, reader.read_line(&mut line))
-                .await
-                .context(format!(
-                    "[{}] MCP server response timeout ({}ms) on '{}'",
-                    self.server_name,
-                    timeout.as_millis(),
-                    request.method,
-                ))?
-                .context(format!(
-                    "[{}] Failed to read from MCP server",
-                    self.server_name
-                ))?;
+        let server_name = self.server_name.clone();
+        let expected_id = self.request_id;
+        let method_name = request.method.clone();
 
-            if bytes_read == 0 {
-                bail!("[{}] MCP server closed connection", self.server_name);
-            }
+        // Wrap the entire read loop in a timeout to prevent unbounded reads
+        // if the server sends infinite non-matching lines or never responds.
+        match tokio::time::timeout(timeout, async {
+            loop {
+                line.clear();
+                let bytes_read = reader.read_line(&mut line)
+                    .await
+                    .context(format!(
+                        "[{}] Failed to read from MCP server",
+                        server_name
+                    ))?;
 
-            let response: JsonRpcResponse = match serde_json::from_str(line.trim()) {
-                Ok(r) => r,
-                Err(_) => continue, // Skip non-JSON-RPC lines (notifications, etc.)
-            };
-
-            // Check if this is our response (matching ID)
-            if response.id == Some(self.request_id) {
-                if let Some(error) = response.error {
-                    bail!("[{}] {}", self.server_name, error);
+                if bytes_read == 0 {
+                    bail!("[{}] MCP server closed connection", server_name);
                 }
-                return Ok(response.result);
+
+                let response: JsonRpcResponse = match serde_json::from_str(line.trim()) {
+                    Ok(r) => r,
+                    Err(_) => continue, // Skip non-JSON-RPC lines (notifications, etc.)
+                };
+
+                // Check if this is our response (matching ID)
+                if response.id == Some(expected_id) {
+                    if let Some(error) = response.error {
+                        bail!("[{}] {}", server_name, error);
+                    }
+                    return Ok(response.result);
+                }
+                // Otherwise it's a notification or response to a different request -- skip
             }
-            // Otherwise it's a notification or response to a different request -- skip
+        }).await {
+            Ok(result) => result,
+            Err(_) => Err(anyhow::anyhow!(
+                "[{}] MCP server response timeout ({}ms) on '{}'",
+                self.server_name,
+                timeout.as_millis(),
+                method_name,
+            )),
         }
     }
 
@@ -471,7 +507,7 @@ impl McpConnection {
     /// Kill the child process, using process-group cleanup on Unix.
     async fn kill_child(&mut self) {
         #[cfg(unix)]
-        kill_process_gracefully(&mut self.child);
+        kill_process_gracefully(&mut self.child).await;
 
         #[cfg(not(unix))]
         {
@@ -498,9 +534,9 @@ impl McpConnection {
 
 impl Drop for McpConnection {
     fn drop(&mut self) {
-        // Best-effort cleanup — use process-group kill on Unix
+        // Best-effort cleanup — use sync version (Drop cannot be async)
         #[cfg(unix)]
-        kill_process_gracefully(&mut self.child);
+        kill_process_gracefully_sync(&mut self.child);
 
         #[cfg(not(unix))]
         {
@@ -621,6 +657,8 @@ impl McpManager {
     }
 
     /// Get all discovered MCP tools.
+    /// Accessor for callers that need the raw tool list (e.g. /mcp list command).
+    #[allow(dead_code)]
     pub fn tools(&self) -> &[McpTool] {
         &self.tools
     }

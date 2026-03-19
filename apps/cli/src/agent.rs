@@ -348,6 +348,10 @@ pub struct AgentSession {
     /// Fallback model to try on primary model failure (from --fallback-model flag).
     #[allow(dead_code)]
     pub fallback_model: Option<String>,
+    /// Optional allowlist of tools this session may use. When `Some`, only
+    /// tools whose names appear in the list are available. Used by A2A
+    /// delegated tasks to restrict external agents to a safe tool subset.
+    pub allowed_tools: Option<Vec<String>>,
     /// Subagent manager for parallel task execution.
     subagent_manager: Option<subagent::SubagentManager>,
     /// Optional team manager for teammate messaging and shared tasks.
@@ -439,6 +443,7 @@ impl AgentSession {
             checkpoints: Vec::new(),
             session_name: None,
             fallback_model: None,
+            allowed_tools: None,
             subagent_manager: None,
             team_manager: None,
         }

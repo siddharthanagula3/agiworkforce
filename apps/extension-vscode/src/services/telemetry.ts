@@ -14,15 +14,27 @@ import * as vscode from 'vscode';
 
 export const TelemetryEvents = {
   EXTENSION_ACTIVATED: 'extension/activated',
-  COMPLETION_REQUESTED: 'completion/requested',
-  COMPLETION_ACCEPTED: 'completion/accepted',
-  CHAT_MESSAGE_SENT: 'chat/messageSent',
   INLINE_COMMAND_EXECUTED: 'inlineCommand/executed',
   MODEL_SELECTED: 'model/selected',
   ERROR_OCCURRED: 'error/occurred',
 } as const;
 
 type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
+
+// ─── Telemetry endpoint allowlist ────────────────────────────────────────────
+
+const ALLOWED_TELEMETRY_DOMAINS = ['agiworkforce.com', 'localhost', '127.0.0.1'];
+
+function isAllowedTelemetryEndpoint(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_TELEMETRY_DOMAINS.some(
+      (domain) => parsed.hostname === domain || parsed.hostname.endsWith('.' + domain),
+    );
+  } catch {
+    return false;
+  }
+}
 
 // ─── Telemetry service ───────────────────────────────────────────────────────
 
@@ -65,11 +77,21 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     vscode.workspace.getConfiguration('agiWorkforce').get<string>('telemetryEndpoint') ??
     'https://telemetry.agiworkforce.com/v1/events';
 
+  // Security: validate the endpoint against the domain allowlist to prevent data exfiltration
+  // via malicious configuration. If invalid, all telemetry is silently suppressed.
+  if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) {
+    console.warn(
+      `[AGI Workforce] Telemetry endpoint "${telemetryEndpoint}" is not in the allowed domain list. Telemetry is disabled.`,
+    );
+  }
+
   /** Fire-and-forget HTTP POST. Never throws — telemetry must not affect the caller. */
   function postEvent(payload: Record<string, unknown>): void {
     // Guard: only post when VS Code global telemetry is enabled.
     if (!vscode.env.isTelemetryEnabled) return;
     if (!telemetryEndpoint) return;
+    // Guard: only post to allowed telemetry domains.
+    if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) return;
     try {
       // Use fetch (available in VS Code's Node.js 18+ runtime via global).
       void fetch(telemetryEndpoint, {
