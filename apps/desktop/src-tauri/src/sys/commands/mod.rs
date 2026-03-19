@@ -93,6 +93,7 @@ pub mod teams;
 pub mod templates;
 pub mod terminal;
 pub mod thinking;
+pub mod triggers;
 
 pub mod code_search; // Grep + Glob + Formatter pipeline (OpenCode parity)
 pub mod swarm; // Added in Phase 26
@@ -213,6 +214,7 @@ pub use templates::*;
 pub use terminal::*;
 pub use test_runner::*;
 pub use thinking::*;
+pub use triggers::*;
 pub use tool_confirmation::*;
 pub use tray::*;
 pub use tutorials::*;
