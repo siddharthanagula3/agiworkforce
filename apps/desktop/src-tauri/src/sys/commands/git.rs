@@ -867,8 +867,48 @@ pub async fn git_reset(
     path: String,
     commit: String,
     mode: String,
+    files: Option<Vec<String>>,
 ) -> Result<String, String> {
     tracing::info!("Resetting to {} ({})", commit, mode);
+
+    // If files specified, reset only those files (git reset HEAD -- <files>)
+    if let Some(ref file_list) = files {
+        if !file_list.is_empty() {
+            tracing::info!("Resetting {} specific files", file_list.len());
+
+            let confirmation_args = serde_json::json!({
+                "path": path,
+                "files": file_list
+            });
+
+            if crate::sys::security::command_validator::requires_confirmation("git reset") {
+                crate::sys::commands::tool_confirmation::request_confirmation_simple(
+                    &app,
+                    "git_reset",
+                    &confirmation_args,
+                )
+                .await?;
+            }
+
+            let path_clone = path.clone();
+            let file_list_clone = file_list.clone();
+            return spawn_blocking(move || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.current_dir(&path_clone).arg("reset").arg("HEAD").arg("--");
+                for f in &file_list_clone {
+                    cmd.arg(f);
+                }
+                let output = cmd.output().map_err(|e| e.to_string())?;
+                if output.status.success() {
+                    Ok(format!("Reset {} file(s) successfully", file_list_clone.len()))
+                } else {
+                    Err(String::from_utf8_lossy(&output.stderr).to_string())
+                }
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+    }
 
     // AUDIT-FIX: Enforce user confirmation for reset
     let confirmation_args = serde_json::json!({
@@ -903,6 +943,51 @@ pub async fn git_reset(
         repo.reset(&object, reset_type, None)
             .map(|_| "Reset successful".to_string())
             .map_err(|e| e.message().to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn git_checkout_files(
+    app: tauri::AppHandle,
+    path: String,
+    files: Vec<String>,
+) -> Result<String, String> {
+    tracing::info!("Checking out {} files to discard changes", files.len());
+
+    if files.is_empty() {
+        return Err("No files specified".to_string());
+    }
+
+    // AUDIT-FIX: Enforce user confirmation for checkout (destructive operation)
+    let confirmation_args = serde_json::json!({
+        "path": path,
+        "files": files
+    });
+
+    if crate::sys::security::command_validator::requires_confirmation("git checkout") {
+        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "git_checkout_files",
+            &confirmation_args,
+        )
+        .await?;
+    }
+
+    let files_clone = files.clone();
+    spawn_blocking(move || {
+        let mut cmd = std::process::Command::new("git");
+        cmd.current_dir(&path).arg("checkout").arg("--");
+        for f in &files_clone {
+            cmd.arg(f);
+        }
+        let output = cmd.output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(format!("Discarded changes in {} file(s)", files_clone.len()))
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
     })
     .await
     .map_err(|e| e.to_string())?

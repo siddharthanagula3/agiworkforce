@@ -253,6 +253,14 @@ function generateTitleFromMessage(content: string): string {
 // Storage version for migrations
 const STORAGE_VERSION = 1;
 
+/**
+ * Atomic dedup guard for tool timeline entries.
+ * Tracks recently added (messageId:entryId) pairs to prevent duplicate pushes
+ * when rapid Tauri events cause overlapping set() calls.
+ * Entries are cleaned up after 10 seconds to avoid unbounded growth.
+ */
+const _recentTimelineIds = new Set<string>();
+
 // ToolLabelEntry is now defined in @agiworkforce/types and re-exported here.
 import type { ToolLabelEntry } from '@agiworkforce/types';
 export type { ToolLabelEntry };
@@ -413,11 +421,139 @@ export interface ChatState {
   ) => Promise<void>;
   deleteBranch: (conversationId: number, branchId: string) => Promise<void>;
 
+  // Actions - Backend-wired chat commands
+  /** Fetch a single conversation from the backend by its database ID */
+  getConversationFromBackend: (dbId: number, userId: string) => Promise<BackendConversation | null>;
+  /** Create a conversation in the backend and link the ID mapping */
+  createConversationInBackend: (
+    title: string,
+    userId: string,
+  ) => Promise<BackendConversation | null>;
+  /** Persist a conversation title rename to the backend */
+  renameConversationInBackend: (dbId: number, title: string, userId: string) => Promise<boolean>;
+  /** Persist a message to the backend */
+  createMessageInBackend: (params: {
+    conversationId: number;
+    userId: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    tokens?: number;
+    cost?: number;
+  }) => Promise<BackendMessage | null>;
+  /** Update a message's content in the backend */
+  updateMessageInBackend: (messageDbId: number, content: string) => Promise<BackendMessage | null>;
+  /** Delete a message from the backend */
+  deleteMessageFromBackend: (messageDbId: number) => Promise<boolean>;
+  /** Get conversation stats from the backend (token counts, cost) */
+  getConversationStatsFromBackend: (
+    conversationDbId: number,
+  ) => Promise<BackendConversationStats | null>;
+  /** Full-text search across all chat messages (FTS5/BM25) */
+  searchChatHistory: (query: string, limit?: number) => Promise<ChatSearchResult[]>;
+  /** Semantic search across all chat messages (FTS5 + TF-IDF reranking) */
+  searchChatHistorySemantic: (query: string, limit?: number) => Promise<ChatSearchResult[]>;
+  /** Search past conversations by keyword with conversation context */
+  searchPastConversations: (
+    query: string,
+    limit?: number,
+    conversationId?: number,
+  ) => Promise<ConversationSearchResult[]>;
+  /** Get the N most recently updated conversations with message counts */
+  getRecentConversations: (limit?: number) => Promise<ConversationSearchResult[]>;
+  /** Export a conversation to markdown via the backend */
+  exportConversationFromBackend: (
+    conversationDbId: number,
+    format?: string,
+  ) => Promise<string | null>;
+  /** Get cost overview (today, month, budget) */
+  getCostOverview: (userId: string) => Promise<CostOverviewResponse | null>;
+  /** Get cost analytics with timeseries, provider breakdown, and top conversations */
+  getCostAnalytics: (
+    userId: string,
+    days?: number,
+    provider?: string,
+    model?: string,
+  ) => Promise<CostAnalyticsResponse | null>;
+  /** Compact context for a conversation to reduce token usage */
+  compactContext: (
+    conversationDbId: number,
+    userId: string,
+    focus?: string,
+  ) => Promise<ContextCompactionResponse | null>;
+
+  // Stream watchdog for inactivity detection
+  lastStreamActivityAt: number | null;
+  streamWatchdogTimerId: ReturnType<typeof setTimeout> | null;
+
+  // Actions - Stream watchdog
+  markStreamActivity: () => void;
+  startStreamWatchdog: () => void;
+  stopStreamWatchdog: () => void;
+  handleStreamInactivityTimeout: () => void;
+
   // Actions - Clear/export
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
   linkConversationId: (uuid: string, dbId: number) => void;
   resetOnLogout: () => void;
+}
+
+// === Backend response types for wired commands ===
+
+/** Search result from FTS5/BM25 or semantic search */
+export interface ChatSearchResult {
+  messageId: number;
+  conversationId: number;
+  conversationTitle: string | null;
+  contentSnippet: string;
+  role: string;
+  createdAt: string;
+  rank: number;
+}
+
+/** Conversation search result from search_past_conversations / get_recent_conversations */
+export interface ConversationSearchResult {
+  conversationId: number;
+  title: string;
+  messageCount: number;
+  lastUpdated: string;
+  snippet?: string;
+  score?: number;
+}
+
+/** Backend conversation stats */
+export interface BackendConversationStats {
+  messageCount: number;
+  totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCost: number;
+}
+
+/** Cost overview response */
+export interface CostOverviewResponse {
+  todayTotal: number;
+  monthTotal: number;
+  monthlyBudget: number | null;
+  remainingBudget: number | null;
+}
+
+/** Cost analytics response */
+export interface CostAnalyticsResponse {
+  timeseries: Array<{ date: string; cost: number; tokens: number }>;
+  providers: Array<{ provider: string; totalCost: number; messageCount: number }>;
+  topConversations: Array<{ conversationId: number; title: string; totalCost: number }>;
+}
+
+/** Context compaction response */
+export interface ContextCompactionResponse {
+  messagesCompacted: number;
+  tokensBefore: number;
+  tokensAfter: number;
+  savingsPercent: number;
+  summaryCreated: boolean;
+  focus: string | null;
+  message: string;
 }
 
 /**
@@ -477,6 +613,8 @@ export const useChatStore = create<ChatState>()(
           agenticLoopStatus: null,
           activeBranchId: DEFAULT_BRANCH_ID,
           branches: [] as BranchSummary[],
+          lastStreamActivityAt: null as number | null,
+          streamWatchdogTimerId: null as ReturnType<typeof setTimeout> | null,
 
           // Conversation management
           ensureActiveConversation: () =>
@@ -1228,7 +1366,7 @@ export const useChatStore = create<ChatState>()(
               'chat/setLoadingMessages',
             ),
 
-          setStreamingMessage: (id) =>
+          setStreamingMessage: (id) => {
             set(
               (state) => {
                 state.currentStreamingMessageId = id;
@@ -1236,7 +1374,14 @@ export const useChatStore = create<ChatState>()(
               },
               undefined,
               'chat/setStreamingMessage',
-            ),
+            );
+            // Start or stop the stream watchdog based on streaming state
+            if (id !== null) {
+              get().startStreamWatchdog();
+            } else {
+              get().stopStreamWatchdog();
+            }
+          },
 
           appendToStreamingMessage: (content) =>
             set(
@@ -1639,15 +1784,24 @@ export const useChatStore = create<ChatState>()(
           addToolTimelineEntry: (messageId, entry) =>
             set(
               (state) => {
+                // Atomic dedup guard: check module-level Set BEFORE touching the draft.
+                // This prevents duplicate pushes when rapid Tauri events cause
+                // overlapping set() calls that both read the same base state.
+                const dedupKey = `${messageId}:${entry.id}`;
+                if (_recentTimelineIds.has(dedupKey)) return;
+
                 if (!state.toolTimelineByMessage[messageId]) {
                   state.toolTimelineByMessage[messageId] = [];
                 }
                 const entries = state.toolTimelineByMessage[messageId]!;
-                // Deduplicate: skip if an entry with the same id already exists
+                // Secondary dedup: skip if an entry with the same id already exists in draft
                 if (entries.some((e) => e.id === entry.id)) return;
                 // Cap per-message timeline at 200 entries to prevent unbounded growth
                 if (entries.length < 200) {
                   entries.push(entry);
+                  // Track in dedup guard and auto-clean after 10s
+                  _recentTimelineIds.add(dedupKey);
+                  setTimeout(() => _recentTimelineIds.delete(dedupKey), 10_000);
                 }
               },
               undefined,
@@ -1812,6 +1966,347 @@ export const useChatStore = create<ChatState>()(
             }
           },
 
+          // === Backend-wired chat commands ===
+
+          getConversationFromBackend: async (dbId: number, userId: string) => {
+            try {
+              return await invoke<BackendConversation>('chat_get_conversation', {
+                id: dbId,
+                userId,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to get conversation from backend:', error);
+              return null;
+            }
+          },
+
+          createConversationInBackend: async (title: string, userId: string) => {
+            try {
+              const conv = await invoke<BackendConversation>('chat_create_conversation', {
+                request: { title, user_id: userId },
+              });
+              // Link the database ID to the frontend UUID system
+              if (conv) {
+                dbIdToUuid(conv.id);
+              }
+              return conv;
+            } catch (error) {
+              console.error('[ChatStore] Failed to create conversation in backend:', error);
+              return null;
+            }
+          },
+
+          renameConversationInBackend: async (dbId: number, title: string, userId: string) => {
+            try {
+              await invoke('chat_update_conversation', {
+                id: dbId,
+                request: { title, user_id: userId },
+              });
+              return true;
+            } catch (error) {
+              console.error('[ChatStore] Failed to rename conversation in backend:', error);
+              return false;
+            }
+          },
+
+          createMessageInBackend: async (params) => {
+            try {
+              return await invoke<BackendMessage>('chat_create_message', {
+                request: {
+                  conversation_id: params.conversationId,
+                  user_id: params.userId,
+                  role: params.role,
+                  content: params.content,
+                  tokens: params.tokens ?? null,
+                  cost: params.cost ?? null,
+                },
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to create message in backend:', error);
+              return null;
+            }
+          },
+
+          updateMessageInBackend: async (messageDbId: number, content: string) => {
+            try {
+              return await invoke<BackendMessage>('chat_update_message', {
+                id: messageDbId,
+                content,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to update message in backend:', error);
+              return null;
+            }
+          },
+
+          deleteMessageFromBackend: async (messageDbId: number) => {
+            try {
+              await invoke('chat_delete_message', { id: messageDbId });
+              return true;
+            } catch (error) {
+              console.error('[ChatStore] Failed to delete message from backend:', error);
+              return false;
+            }
+          },
+
+          getConversationStatsFromBackend: async (conversationDbId: number) => {
+            try {
+              return await invoke<BackendConversationStats>('chat_get_conversation_stats', {
+                conversationId: conversationDbId,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to get conversation stats from backend:', error);
+              return null;
+            }
+          },
+
+          searchChatHistory: async (query: string, limit?: number) => {
+            try {
+              return await invoke<ChatSearchResult[]>('search_chat_history', {
+                query,
+                limit: limit ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to search chat history:', error);
+              return [];
+            }
+          },
+
+          searchChatHistorySemantic: async (query: string, limit?: number) => {
+            try {
+              return await invoke<ChatSearchResult[]>('search_chat_history_semantic', {
+                query,
+                limit: limit ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to search chat history (semantic):', error);
+              return [];
+            }
+          },
+
+          searchPastConversations: async (
+            query: string,
+            limit?: number,
+            conversationId?: number,
+          ) => {
+            try {
+              return await invoke<ConversationSearchResult[]>('search_past_conversations', {
+                query,
+                limit: limit ?? null,
+                conversationId: conversationId ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to search past conversations:', error);
+              return [];
+            }
+          },
+
+          getRecentConversations: async (limit?: number) => {
+            try {
+              return await invoke<ConversationSearchResult[]>('get_recent_conversations', {
+                limit: limit ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to get recent conversations:', error);
+              return [];
+            }
+          },
+
+          exportConversationFromBackend: async (conversationDbId: number, format?: string) => {
+            try {
+              return await invoke<string>('conversation_export', {
+                conversationId: conversationDbId.toString(),
+                format: format ?? 'markdown',
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to export conversation from backend:', error);
+              return null;
+            }
+          },
+
+          getCostOverview: async (userId: string) => {
+            try {
+              return await invoke<CostOverviewResponse>('chat_get_cost_overview', {
+                userId,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to get cost overview:', error);
+              return null;
+            }
+          },
+
+          getCostAnalytics: async (
+            userId: string,
+            days?: number,
+            provider?: string,
+            model?: string,
+          ) => {
+            try {
+              return await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
+                userId,
+                days: days ?? null,
+                provider: provider ?? null,
+                model: model ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to get cost analytics:', error);
+              return null;
+            }
+          },
+
+          compactContext: async (conversationDbId: number, userId: string, focus?: string) => {
+            try {
+              return await invoke<ContextCompactionResponse>('chat_compact_context', {
+                conversationId: conversationDbId,
+                userId,
+                focus: focus ?? null,
+              });
+            } catch (error) {
+              console.error('[ChatStore] Failed to compact context:', error);
+              return null;
+            }
+          },
+
+          // Stream watchdog actions
+          markStreamActivity: () => {
+            set(
+              (state) => {
+                state.lastStreamActivityAt = Date.now();
+              },
+              undefined,
+              'chat/markStreamActivity',
+            );
+          },
+
+          startStreamWatchdog: () => {
+            // Clear any existing watchdog
+            const existing = get().streamWatchdogTimerId;
+            if (existing !== null) {
+              clearInterval(existing);
+            }
+
+            let timeoutSeconds = 30;
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { useSettingsStore } = require('../settingsStore') as {
+                useSettingsStore: {
+                  getState: () => {
+                    executionPreferences: {
+                      streamInactivityTimeoutSeconds: number;
+                    };
+                  };
+                };
+              };
+              timeoutSeconds =
+                useSettingsStore.getState().executionPreferences.streamInactivityTimeoutSeconds;
+            } catch {
+              // Use default 30s
+            }
+
+            const checkInterval = Math.max(5000, (timeoutSeconds * 1000) / 2);
+            const timerId = setInterval(() => {
+              const state = get();
+              if (!state.isStreaming) {
+                // No active stream — stop the watchdog
+                get().stopStreamWatchdog();
+                return;
+              }
+              const lastActivity = state.lastStreamActivityAt;
+              if (lastActivity === null) {
+                return;
+              }
+              const elapsed = Date.now() - lastActivity;
+              if (elapsed >= timeoutSeconds * 1000) {
+                get().handleStreamInactivityTimeout();
+              }
+            }, checkInterval);
+
+            set(
+              (state) => {
+                state.streamWatchdogTimerId = timerId as unknown as ReturnType<typeof setTimeout>;
+                state.lastStreamActivityAt = Date.now();
+              },
+              undefined,
+              'chat/startStreamWatchdog',
+            );
+          },
+
+          stopStreamWatchdog: () => {
+            const timerId = get().streamWatchdogTimerId;
+            if (timerId !== null) {
+              clearInterval(timerId as unknown as ReturnType<typeof setInterval>);
+            }
+            set(
+              (state) => {
+                state.streamWatchdogTimerId = null;
+                state.lastStreamActivityAt = null;
+              },
+              undefined,
+              'chat/stopStreamWatchdog',
+            );
+          },
+
+          handleStreamInactivityTimeout: () => {
+            const state = get();
+            const { currentStreamingMessageId, isStreaming } = state;
+
+            if (!isStreaming) {
+              get().stopStreamWatchdog();
+              return;
+            }
+
+            console.warn(
+              '[ChatStore] Stream inactivity timeout triggered for message:',
+              currentStreamingMessageId,
+            );
+
+            // Force-reset streaming state
+            set(
+              (s) => {
+                s.isStreaming = false;
+                s.isLoading = false;
+                s.currentStreamingMessageId = null;
+
+                // Mark the streaming message as timed out
+                if (currentStreamingMessageId) {
+                  const msgIdx = s.messages.findIndex((m) => m.id === currentStreamingMessageId);
+                  if (msgIdx !== -1 && s.messages[msgIdx]) {
+                    s.messages[msgIdx]!.streaming = false;
+                    s.messages[msgIdx]!.error =
+                      'Stream timed out due to inactivity. You can retry by sending your message again.';
+                  }
+                  // Sync with messagesByConversation
+                  const convoId = s.activeConversationId;
+                  if (convoId && s.messagesByConversation[convoId]) {
+                    const convoMsgIdx = s.messagesByConversation[convoId]!.findIndex(
+                      (m) => m.id === currentStreamingMessageId,
+                    );
+                    if (convoMsgIdx !== -1 && s.messagesByConversation[convoId]![convoMsgIdx]) {
+                      s.messagesByConversation[convoId]![convoMsgIdx]!.streaming = false;
+                      s.messagesByConversation[convoId]![convoMsgIdx]!.error =
+                        'Stream timed out due to inactivity. You can retry by sending your message again.';
+                    }
+                  }
+                }
+              },
+              undefined,
+              'chat/handleStreamInactivityTimeout',
+            );
+
+            get().stopStreamWatchdog();
+
+            // Notify the user via Sonner toast (lazy import to avoid circular deps)
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { toast } = require('sonner') as { toast: typeof import('sonner').toast };
+              toast.warning(
+                'Stream timed out due to inactivity. The response may be incomplete. You can retry by sending your message again.',
+              );
+            } catch {
+              // Toast not available in test environment
+            }
+          },
+
           // Clear/export
           clearHistory: () => {
             set(
@@ -1860,6 +2355,8 @@ export const useChatStore = create<ChatState>()(
           },
 
           resetOnLogout: () => {
+            // Stop the stream watchdog before resetting state
+            get().stopStreamWatchdog();
             set(
               (state) => {
                 state.conversations = [];
@@ -1891,10 +2388,18 @@ export const useChatStore = create<ChatState>()(
                 state.agenticLoopStatus = null;
                 state.activeBranchId = DEFAULT_BRANCH_ID;
                 state.branches = [];
+                state.lastStreamActivityAt = null;
+                state.streamWatchdogTimerId = null;
               },
               undefined,
               'chat/resetOnLogout',
             );
+
+            // Clear pending persist timer to prevent stale data writes after logout
+            if (_persistTimer !== null) {
+              clearTimeout(_persistTimer);
+              _persistTimer = null;
+            }
 
             // STR-002 fix: Use centralized cleanup function
             clearIdMappings();
@@ -2044,6 +2549,18 @@ export async function initializeChatStoreModelStoreSubscription(): Promise<void>
   })();
 
   return subscriptionState.pending;
+}
+
+/**
+ * Tears down the cross-store model subscription.
+ * Call during logout/cleanup to prevent leaked listeners.
+ */
+export function teardownChatStoreModelStoreSubscription(): void {
+  const subscriptionState = getChatStoreModelSubscriptionState();
+  subscriptionState.unsubscribe?.();
+  subscriptionState.unsubscribe = null;
+  subscriptionState.initialized = false;
+  subscriptionState.pending = null;
 }
 
 if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {

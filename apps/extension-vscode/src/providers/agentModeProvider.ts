@@ -7,10 +7,25 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as crypto from 'crypto';
 import { chatCompletion, type ChatMessage } from '../utils/api';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
 import { getContextBuilder } from '../services/contextBuilder';
 import * as telemetry from '../services/telemetry';
+import {
+  parsePatchBlocks,
+  applyPatchBatch,
+  storeBatchForUndo,
+  undoPatchBatch as undoPatchBatchEngine,
+  applyPatchAggressive,
+  showOriginalContext,
+  getPatchOutputChannel,
+  type PatchBlock,
+  type BatchResult,
+} from '../services/patchEngine';
+import { getContextPanelProvider } from './contextPanelProvider';
+import { getContextBudget } from '../services/contextBudget';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +102,7 @@ export class AgentModePanel {
 
   private messages: ChatMessage[] = [];
   private editHistory: EditBatch[] = [];
+  private patchBatchHistory: BatchResult[] = [];
   private isProcessing = false;
   private _planMode = false;
   private _originalContents = new Map<string, string>();
@@ -167,9 +183,15 @@ export class AgentModePanel {
               await this.undoBatch(message.batchId);
             }
             break;
+          case 'undoPatchBatch':
+            if (message.batchId) {
+              await this.handleUndoPatchBatch(message.batchId);
+            }
+            break;
           case 'clearHistory':
             this.messages = [];
             this.editHistory = [];
+            this.patchBatchHistory = [];
             this._iterationCount = 0;
             this.postMessage({ type: 'cleared' });
             break;
@@ -205,14 +227,30 @@ export class AgentModePanel {
       'To request reading a file:',
       '@read path/to/file.ts',
       '',
-      'To suggest an edit to a file (provide the COMPLETE new file content):',
+      'To edit a file, use search-and-replace patches (PREFERRED):',
+      '```patch:path/to/file.ts',
+      '<<<<<<< SEARCH',
+      'exact existing code to find',
+      '=======',
+      'replacement code',
+      '>>>>>>> REPLACE',
+      '```',
+      '',
+      'Rules for patches:',
+      '- The SEARCH block must match exactly in the file.',
+      '- You can include multiple SEARCH/REPLACE blocks per file.',
+      '- Always read a file before editing it.',
+      '- Only include the code that changes, not the entire file.',
+      '- An empty SEARCH block means insert at beginning of file.',
+      '- An empty REPLACE block means delete the matched text.',
+      '',
+      'Legacy format (for full file replacement):',
       '```edit:path/to/file.ts',
       '<complete new file content here>',
       '```',
       '',
-      'You can include multiple @read and ```edit blocks in a single response.',
-      'Always read files before editing them to understand the current content.',
-      'When editing, provide the complete file content, not just the changed parts.',
+      'You can include multiple @read, ```patch, and ```edit blocks in a single response.',
+      'Prefer ```patch over ```edit — it is more efficient and less error-prone.',
       'Explain your changes clearly before providing edit blocks.',
     ];
 
@@ -242,11 +280,12 @@ export class AgentModePanel {
       this.messages.push({ role: 'user', content: text });
 
       try {
-        // Gather workspace context
+        // Gather workspace context with model-aware budget
         if (this.indexer.isStale()) {
           await this.indexer.index();
         }
-        const wsContext = this.indexer.getRelevantContext(text);
+        const budget = getContextBudget('agent');
+        const wsContext = this.indexer.getRelevantContext(text, budget.indexerChars);
 
         // Include open editor context
         const editorContext = this.getOpenEditorsContext();
@@ -254,10 +293,15 @@ export class AgentModePanel {
         // Include rich context (diagnostics, git, workspace structure)
         const richContext = await getContextBuilder().buildFullContext({ includeOpenFiles: false });
 
+        // Include pinned files from ContextPanel (wired into actual prompt)
+        const pinnedContext = this.getPinnedFilesContext();
+
         // Build augmented message
         const augmentedMessages = [...this.messages];
-        if (wsContext || editorContext || richContext) {
-          const contextMsg = [wsContext, editorContext, richContext].filter(Boolean).join('\n\n');
+        if (wsContext || editorContext || richContext || pinnedContext) {
+          const contextMsg = [pinnedContext, wsContext, editorContext, richContext]
+            .filter(Boolean)
+            .join('\n\n');
           augmentedMessages.splice(1, 0, {
             role: 'system',
             content: `Current workspace context:\n${contextMsg}`,
@@ -301,9 +345,15 @@ export class AgentModePanel {
           }
         }
 
-        // Check for file edits
+        // Check for patch blocks (new format) first, then legacy edit blocks
+        const patchRequests = parsePatchBlocks(response);
         const editRequests = parseFileEdits(response);
-        if (editRequests.length > 0) {
+
+        if (patchRequests.length > 0) {
+          this.postMessage({ type: 'assistantMessage', text: response });
+          this.postMessage({ type: 'thinking', active: false });
+          await this.handlePatchRequests(patchRequests);
+        } else if (editRequests.length > 0) {
           this.postMessage({ type: 'assistantMessage', text: response });
           this.postMessage({ type: 'thinking', active: false });
           await this.handleEditRequests(editRequests);
@@ -366,11 +416,14 @@ export class AgentModePanel {
 
         this.messages.push({ role: 'assistant', content: response });
 
+        const patchRequests = parsePatchBlocks(response);
         const editRequests = parseFileEdits(response);
         this.postMessage({ type: 'assistantMessage', text: response });
         this.postMessage({ type: 'thinking', active: false });
 
-        if (editRequests.length > 0) {
+        if (patchRequests.length > 0) {
+          await this.handlePatchRequests(patchRequests);
+        } else if (editRequests.length > 0) {
           await this.handleEditRequests(editRequests);
         }
       } catch (err) {
@@ -396,7 +449,12 @@ export class AgentModePanel {
     const edits: FileEdit[] = [];
 
     for (const req of editRequests) {
-      const fileUri = vscode.Uri.joinPath(rootUri, req.filePath);
+      // Validate that the LLM-provided path stays within the workspace root
+      const resolvedPath = path.resolve(rootUri.fsPath, req.filePath);
+      if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+        throw new Error('Path traversal detected: file path outside workspace');
+      }
+      const fileUri = vscode.Uri.file(resolvedPath);
       let originalContent = '';
       let language = 'plaintext';
 
@@ -507,6 +565,370 @@ export class AgentModePanel {
     }
   }
 
+  private async handlePatchRequests(patchRequests: PatchBlock[]): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders === undefined || workspaceFolders.length === 0) {
+      this.postMessage({ type: 'error', text: 'No workspace folder open.' });
+      return;
+    }
+
+    // Group by file for display.
+    const fileSet = new Set(patchRequests.map((p) => p.filePath));
+    const fileCount = fileSet.size;
+    const hunkCount = patchRequests.length;
+
+    // Show QuickPick to let user decide.
+    const ACCEPT_LABEL = '$(check-all) Apply All Patches';
+    const REJECT_LABEL = '$(close-all) Reject All Patches';
+
+    const pickItems: vscode.QuickPickItem[] = [
+      {
+        label: ACCEPT_LABEL,
+        description: `Apply ${hunkCount} patch(es) across ${fileCount} file(s)`,
+      },
+      { label: REJECT_LABEL, description: 'Discard all proposed patches' },
+      { label: '', kind: vscode.QuickPickItemKind.Separator },
+      ...[...fileSet].map((fp) => {
+        const count = patchRequests.filter((p) => p.filePath === fp).length;
+        return { label: fp, description: `${count} patch(es)`, picked: true };
+      }),
+    ];
+
+    const selected = await vscode.window.showQuickPick(pickItems, {
+      title: `AGI Agent: ${hunkCount} patch(es) across ${fileCount} file(s)`,
+      canPickMany: true,
+      placeHolder: 'Select files to patch, or pick Apply All / Reject All',
+    });
+
+    if (selected === undefined || selected.length === 0) {
+      this.postMessage({ type: 'systemMessage', text: 'Patches cancelled.' });
+      return;
+    }
+
+    if (selected.some((s) => s.label === REJECT_LABEL)) {
+      this.postMessage({ type: 'systemMessage', text: 'All proposed patches rejected.' });
+      return;
+    }
+
+    // Determine which patches to apply.
+    let patchesToApply: PatchBlock[];
+    if (selected.some((s) => s.label === ACCEPT_LABEL)) {
+      patchesToApply = patchRequests;
+    } else {
+      const selectedFiles = new Set(selected.map((s) => s.label));
+      patchesToApply = patchRequests.filter((p) => selectedFiles.has(p.filePath));
+    }
+
+    if (patchesToApply.length === 0) {
+      this.postMessage({ type: 'systemMessage', text: 'No patches selected.' });
+      return;
+    }
+
+    // Apply patches.
+    const result = await applyPatchBatch(patchesToApply);
+
+    // Store for undo.
+    storeBatchForUndo(result);
+    this.patchBatchHistory.push(result);
+
+    // Report results with confidence indicators.
+    const appliedCount = result.applied.length;
+    const failedCount = result.failed.length;
+
+    // Build confidence summary for applied patches.
+    const confidenceSummary = this._buildConfidenceSummary(result);
+
+    if (failedCount === 0) {
+      this.postMessage({
+        type: 'editsApplied',
+        batchId: result.batchId,
+        files: [...new Set(result.applied.map((p) => p.filePath))],
+      });
+      this.postMessage({
+        type: 'systemMessage',
+        text: `Applied ${appliedCount} patch(es) successfully.${confidenceSummary} Use "Undo Batch" to revert.`,
+      });
+    } else {
+      if (appliedCount > 0) {
+        this.postMessage({
+          type: 'editsApplied',
+          batchId: result.batchId,
+          files: [...new Set(result.applied.map((p) => p.filePath))],
+        });
+      }
+
+      const failedMsg = result.failed.map((f) => `  ${f.filePath}: ${f.error}`).join('\n');
+      this.postMessage({
+        type: 'systemMessage',
+        text:
+          `Applied ${appliedCount}/${appliedCount + failedCount} patches.${confidenceSummary} ` +
+          `${failedCount} failed:\n${failedMsg}`,
+      });
+
+      // Show failure recovery actions for each failed patch.
+      await this._handleFailedPatches(result.failed, patchesToApply);
+    }
+  }
+
+  /**
+   * Build a human-readable confidence summary for applied patches.
+   */
+  private _buildConfidenceSummary(result: BatchResult): string {
+    const highCount = result.applied.filter((p) => p.confidence === 'high').length;
+    const mediumCount = result.applied.filter((p) => p.confidence === 'medium').length;
+    const lowCount = result.applied.filter((p) => p.confidence === 'low').length;
+
+    const parts: string[] = [];
+    if (highCount > 0) parts.push(`${highCount} high`);
+    if (mediumCount > 0) parts.push(`${mediumCount} medium`);
+    if (lowCount > 0) parts.push(`${lowCount} low`);
+
+    if (parts.length === 0) return '';
+    return ` Confidence: ${parts.join(', ')}.`;
+  }
+
+  /**
+   * Handle failed patches by offering recovery actions:
+   * - Show Failed Patch: opens raw patch content in a new editor tab
+   * - Apply Manually: opens a diff editor with the intended change
+   * - Retry with Fuzzy: tries again with aggressive fuzzy matching
+   */
+  private async _handleFailedPatches(
+    failedPatches: Array<PatchBlock & { error: string }>,
+    _allPatches: PatchBlock[],
+  ): Promise<void> {
+    const outputChannel = getPatchOutputChannel();
+
+    for (const failedPatch of failedPatches) {
+      // Log failure details to output channel.
+      outputChannel.appendLine(`--- FAILED PATCH ---`);
+      outputChannel.appendLine(`File: ${failedPatch.filePath}`);
+      outputChannel.appendLine(`Error: ${failedPatch.error}`);
+      outputChannel.appendLine(`Search text (${failedPatch.search.length} chars):`);
+      outputChannel.appendLine(failedPatch.search);
+      outputChannel.appendLine(`Replace text (${failedPatch.replace.length} chars):`);
+      outputChannel.appendLine(failedPatch.replace);
+      outputChannel.appendLine(`---`);
+
+      // Show notification with recovery actions.
+      const choice = await vscode.window.showWarningMessage(
+        `Patch failed for ${failedPatch.filePath}: ${failedPatch.error}`,
+        'Show Failed Patch',
+        'Apply Manually',
+        'Retry with Fuzzy',
+        'Show Logs',
+      );
+
+      if (choice === 'Show Failed Patch') {
+        await this._showFailedPatchContent(failedPatch);
+      } else if (choice === 'Apply Manually') {
+        await this._openManualDiffEditor(failedPatch);
+      } else if (choice === 'Retry with Fuzzy') {
+        await this._retryWithAggressiveFuzzy(failedPatch);
+      } else if (choice === 'Show Logs') {
+        outputChannel.show(true);
+      }
+    }
+  }
+
+  /**
+   * Show the raw patch content in a new editor tab for inspection.
+   */
+  private async _showFailedPatchContent(patch: PatchBlock & { error: string }): Promise<void> {
+    const content = [
+      `# Failed Patch: ${patch.filePath}`,
+      `# Error: ${patch.error}`,
+      '',
+      '<<<<<<< SEARCH',
+      patch.search,
+      '=======',
+      patch.replace,
+      '>>>>>>> REPLACE',
+    ].join('\n');
+
+    const doc = await vscode.workspace.openTextDocument({
+      content,
+      language: 'diff',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  }
+
+  /**
+   * Open a diff editor showing the intended change so the user can apply it manually.
+   */
+  private async _openManualDiffEditor(patch: PatchBlock & { error: string }): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders === undefined || workspaceFolders.length === 0) return;
+
+    const rootUri = workspaceFolders[0]!.uri;
+
+    // Validate that the path stays within the workspace root (prevent path traversal)
+    const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
+    if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+      this.postMessage({
+        type: 'error',
+        text: `Path traversal blocked: ${patch.filePath} resolves outside workspace.`,
+      });
+      return;
+    }
+    const fileUri = vscode.Uri.file(resolvedPath);
+
+    let currentContent: string;
+    try {
+      const doc = await vscode.workspace.openTextDocument(fileUri);
+      currentContent = doc.getText();
+    } catch {
+      this.postMessage({
+        type: 'error',
+        text: `Cannot open ${patch.filePath} for manual editing.`,
+      });
+      return;
+    }
+
+    // Create the intended content by applying the search/replace
+    const intendedContent = currentContent.replace(patch.search, patch.replace);
+
+    // If the search text was not found, show what the patch expected
+    if (intendedContent === currentContent && patch.search !== '') {
+      await showOriginalContext(patch.search, currentContent.substring(0, 500), patch.filePath);
+      return;
+    }
+
+    // Open diff view
+    const originalUri = fileUri.with({ scheme: 'agi-original', query: `manual-${Date.now()}` });
+    const modifiedUri = fileUri.with({ scheme: 'agi-modified', query: `manual-${Date.now()}` });
+
+    this._originalContents.set(originalUri.toString(), currentContent);
+    this._modifiedContents.set(modifiedUri.toString(), intendedContent);
+
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      originalUri,
+      modifiedUri,
+      `Manual Apply: ${patch.filePath}`,
+      { preview: true },
+    );
+
+    // Ask if user wants to apply
+    const applyChoice = await vscode.window.showInformationMessage(
+      `Apply the intended change to ${patch.filePath}?`,
+      'Apply',
+      'Cancel',
+    );
+
+    if (applyChoice === 'Apply') {
+      const doc = await vscode.workspace.openTextDocument(fileUri);
+      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+      const wsEdit = new vscode.WorkspaceEdit();
+      wsEdit.replace(fileUri, fullRange, intendedContent);
+      const applied = await vscode.workspace.applyEdit(wsEdit);
+      if (applied) {
+        this.postMessage({
+          type: 'systemMessage',
+          text: `Manually applied patch to ${patch.filePath}.`,
+        });
+      } else {
+        this.postMessage({
+          type: 'error',
+          text: `Failed to manually apply patch to ${patch.filePath}.`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Retry a failed patch with aggressive fuzzy matching
+   * (ignore all whitespace, case-insensitive).
+   */
+  private async _retryWithAggressiveFuzzy(patch: PatchBlock & { error: string }): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders === undefined || workspaceFolders.length === 0) return;
+
+    const rootUri = workspaceFolders[0]!.uri;
+
+    // Validate that the path stays within the workspace root (prevent path traversal)
+    const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
+    if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+      this.postMessage({
+        type: 'error',
+        text: `Path traversal blocked: ${patch.filePath} resolves outside workspace.`,
+      });
+      return;
+    }
+    const fileUri = vscode.Uri.file(resolvedPath);
+
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(fileUri);
+    } catch {
+      this.postMessage({
+        type: 'error',
+        text: `Cannot open ${patch.filePath} for retry.`,
+      });
+      return;
+    }
+
+    const result = applyPatchAggressive(document, patch);
+
+    if (result.success && result.range !== undefined) {
+      // Show what was matched for review
+      const confidenceIcon =
+        result.confidence === 'high'
+          ? '$(pass-filled)'
+          : result.confidence === 'medium'
+            ? '$(warning)'
+            : '$(error)';
+
+      const confirmChoice = await vscode.window.showWarningMessage(
+        `${confidenceIcon} Aggressive fuzzy match found (${result.confidence} confidence, ${(result.whitespaceDiffPercent ?? 0).toFixed(1)}% diff). Apply?`,
+        'Apply',
+        'Show Context',
+        'Cancel',
+      );
+
+      if (confirmChoice === 'Apply') {
+        const wsEdit = new vscode.WorkspaceEdit();
+        wsEdit.replace(fileUri, result.range, patch.replace);
+        const applied = await vscode.workspace.applyEdit(wsEdit);
+        if (applied) {
+          this.postMessage({
+            type: 'systemMessage',
+            text: `Applied patch to ${patch.filePath} with aggressive fuzzy matching (${result.confidence} confidence).`,
+          });
+        } else {
+          this.postMessage({
+            type: 'error',
+            text: `Failed to apply fuzzy-matched patch to ${patch.filePath}.`,
+          });
+        }
+      } else if (confirmChoice === 'Show Context' && result.expectedText && result.matchedText) {
+        await showOriginalContext(result.expectedText, result.matchedText, patch.filePath);
+      }
+    } else {
+      this.postMessage({
+        type: 'systemMessage',
+        text: `Aggressive fuzzy retry also failed for ${patch.filePath}. The code may have changed significantly.`,
+      });
+    }
+  }
+
+  private async handleUndoPatchBatch(batchId: string): Promise<void> {
+    const success = await undoPatchBatchEngine(batchId);
+    if (success) {
+      this.patchBatchHistory = this.patchBatchHistory.filter((b) => b.batchId !== batchId);
+      this.postMessage({
+        type: 'systemMessage',
+        text: `Reverted patch batch ${batchId}.`,
+      });
+      this.postMessage({ type: 'batchUndone', batchId });
+    } else {
+      this.postMessage({
+        type: 'error',
+        text: `Failed to undo patch batch ${batchId}. Some files may have been moved or deleted.`,
+      });
+    }
+  }
+
   private async applyEdits(
     approvedEdits: FileEdit[],
     batchId: string,
@@ -607,10 +1029,29 @@ export class AgentModePanel {
 
     for (const filePath of paths) {
       try {
-        const fileUri = vscode.Uri.joinPath(rootUri, filePath);
+        // Validate that the path stays within the workspace root (prevent path traversal)
+        const resolvedPath = path.resolve(rootUri.fsPath, filePath);
+        if (
+          !resolvedPath.startsWith(rootUri.fsPath + path.sep) &&
+          resolvedPath !== rootUri.fsPath
+        ) {
+          results.push({
+            path: filePath,
+            content: `(path traversal blocked: ${filePath} resolves outside workspace)`,
+            language: 'plaintext',
+          });
+          continue;
+        }
+        const fileUri = vscode.Uri.file(resolvedPath);
         const doc = await vscode.workspace.openTextDocument(fileUri);
-        // Cap file content at 10k chars to avoid token overflow
-        const content = doc.getText().slice(0, 10000);
+        // Cap file content at 50k chars; add truncation indicator so the LLM knows.
+        const FILE_READ_CAP = 50_000;
+        const fullContent = doc.getText();
+        const truncated = fullContent.length > FILE_READ_CAP;
+        const content = truncated
+          ? fullContent.slice(0, FILE_READ_CAP) +
+            `\n... [TRUNCATED: file is ${fullContent.length} chars, showing first ${FILE_READ_CAP}]`
+          : fullContent;
         results.push({
           path: filePath,
           content,
@@ -636,6 +1077,28 @@ export class AgentModePanel {
     for (const editor of editors.slice(0, 5)) {
       const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
       lines.push(`- ${relativePath} (${editor.document.languageId})`);
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Build context from pinned files in the ContextPanel.
+   * This wires the previously display-only pinned files into the actual prompt.
+   */
+  private getPinnedFilesContext(): string {
+    const provider = getContextPanelProvider();
+    if (provider === undefined) return '';
+
+    const contextFiles = provider.getContextFiles();
+    if (contextFiles.length === 0) return '';
+
+    const lines: string[] = ['Pinned/context files:'];
+    for (const filePath of contextFiles.slice(0, 10)) {
+      const relativePath = vscode.workspace.asRelativePath(filePath);
+      lines.push(`- ${relativePath}`);
+    }
+    if (contextFiles.length > 10) {
+      lines.push(`  ... (${contextFiles.length - 10} more)`);
     }
     return lines.join('\n');
   }
@@ -981,10 +1444,5 @@ export class AgentModePanel {
 }
 
 function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let nonce = '';
-  for (let i = 0; i < 32; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return nonce;
+  return crypto.randomBytes(16).toString('hex');
 }

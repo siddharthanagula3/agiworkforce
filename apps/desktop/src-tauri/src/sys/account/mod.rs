@@ -349,7 +349,8 @@ static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
 /// 2) `AGI_API_URL` environment variable
 /// 3) Production default
 pub fn get_api_base_url() -> String {
-    if let Ok(url) = API_BASE_URL_OVERRIDE.read() {
+    {
+        let url = API_BASE_URL_OVERRIDE.read().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(value) = url.clone() {
             return value;
         }
@@ -358,6 +359,57 @@ pub fn get_api_base_url() -> String {
     let raw =
         std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     raw.trim_end_matches('/').to_string()
+}
+
+/// Validate that an API base URL is safe to use (prevents SSRF).
+///
+/// Rules:
+/// - `https://` scheme is required, except for `http://localhost` and `http://127.0.0.1`
+/// - Domain must match the allowlist: `*.agiworkforce.com`, `localhost`, or `127.0.0.1`
+fn validate_api_base_url(url: &str) -> Result<(), String> {
+    // Parse the URL to extract scheme and host
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    let scheme = parsed.scheme();
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL must contain a host".to_string())?;
+
+    // C6: Reject URLs containing credentials (userinfo) to prevent SSRF bypass
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("API base URL must not contain credentials (userinfo)".to_string());
+    }
+
+    let is_localhost = matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]" | "0.0.0.0");
+
+    // Enforce https:// except for localhost / 127.0.0.1 / ::1 / 0.0.0.0
+    if scheme == "http" && !is_localhost {
+        return Err(
+            "API base URL must use https:// (http:// is only allowed for localhost, 127.0.0.1, ::1, and 0.0.0.0)"
+                .to_string(),
+        );
+    }
+    if scheme != "http" && scheme != "https" {
+        return Err(format!(
+            "API base URL must use http or https scheme, got: {}",
+            scheme
+        ));
+    }
+
+    // Domain allowlist: *.agiworkforce.com, localhost, 127.0.0.1
+    let allowed = is_localhost
+        || host == "agiworkforce.com"
+        || host.ends_with(".agiworkforce.com");
+
+    if !allowed {
+        return Err(format!(
+            "API base URL host '{}' is not in the allowlist. \
+             Allowed: *.agiworkforce.com, localhost, 127.0.0.1, ::1, 0.0.0.0",
+            host
+        ));
+    }
+
+    Ok(())
 }
 
 /// Store API base URL from frontend (called on startup so Rust and the UI share the same backend base).
@@ -373,8 +425,61 @@ pub fn account_store_api_base_url(apiBaseUrl: String) -> Result<(), String> {
         return Err("API base URL must start with http:// or https://".to_string());
     }
 
-    let mut url = API_BASE_URL_OVERRIDE.write().map_err(|e| e.to_string())?;
+    // SSRF protection: validate against scheme and domain allowlist
+    validate_api_base_url(&sanitized)?;
+
+    let mut url = API_BASE_URL_OVERRIDE.write().unwrap_or_else(|poisoned| poisoned.into_inner());
     *url = Some(sanitized);
+    Ok(())
+}
+
+/// Validate that a token is JWT-shaped: 3 dot-separated base64url segments,
+/// length between 20 and 8192 characters, and non-empty.
+fn validate_token_format(token: &str, label: &str) -> Result<(), String> {
+    if token.is_empty() {
+        return Err(format!("{} cannot be empty", label));
+    }
+    if token.len() < 20 {
+        return Err(format!(
+            "{} is too short ({} chars, minimum 20)",
+            label,
+            token.len()
+        ));
+    }
+    if token.len() > 8192 {
+        return Err(format!(
+            "{} is too long ({} chars, maximum 8192)",
+            label,
+            token.len()
+        ));
+    }
+
+    // JWT must have exactly 3 dot-separated base64url segments
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(format!(
+            "{} must be a valid JWT (expected 3 dot-separated segments, got {})",
+            label,
+            parts.len()
+        ));
+    }
+
+    // Each segment must be non-empty and contain only base64url characters
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            return Err(format!("{} has empty JWT segment at position {}", label, i));
+        }
+        if !part
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '=')
+        {
+            return Err(format!(
+                "{} contains invalid base64url characters in segment {}",
+                label, i
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -382,7 +487,8 @@ pub fn account_store_api_base_url(apiBaseUrl: String) -> Result<(), String> {
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
-    let mut token = ACCESS_TOKEN.write().map_err(|e| e.to_string())?;
+    validate_token_format(&accessToken, "Access token")?;
+    let mut token = ACCESS_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(accessToken);
     Ok(())
 }
@@ -391,7 +497,8 @@ pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
-    let mut token = REFRESH_TOKEN.write().map_err(|e| e.to_string())?;
+    validate_token_format(&refreshToken, "Refresh token")?;
+    let mut token = REFRESH_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(refreshToken);
     Ok(())
 }
@@ -399,10 +506,12 @@ pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
 /// Clear stored tokens (called on logout)
 #[tauri::command]
 pub fn account_clear_tokens() -> Result<(), String> {
-    if let Ok(mut token) = ACCESS_TOKEN.write() {
+    {
+        let mut token = ACCESS_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
         *token = None;
     }
-    if let Ok(mut token) = REFRESH_TOKEN.write() {
+    {
+        let mut token = REFRESH_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
         *token = None;
     }
     Ok(())
@@ -410,14 +519,14 @@ pub fn account_clear_tokens() -> Result<(), String> {
 
 // Helpers to get tokens from in-memory storage
 pub fn get_access_token() -> Result<String, String> {
-    let token = ACCESS_TOKEN.read().map_err(|e| e.to_string())?;
+    let token = ACCESS_TOKEN.read().unwrap_or_else(|poisoned| poisoned.into_inner());
     token
         .clone()
         .ok_or_else(|| "No access token stored. Please sign in.".to_string())
 }
 
 pub fn get_refresh_token() -> Result<String, String> {
-    let token = REFRESH_TOKEN.read().map_err(|e| e.to_string())?;
+    let token = REFRESH_TOKEN.read().unwrap_or_else(|poisoned| poisoned.into_inner());
     token
         .clone()
         .ok_or_else(|| "No refresh token stored. Please sign in.".to_string())
@@ -542,6 +651,20 @@ pub async fn report_llm_usage(
     output_tokens: Option<i32>,
     state: State<'_, ApiState>,
 ) -> Result<DeductCreditsResponse, String> {
+    // Validate amount_cents bounds
+    if amount_cents <= 0 {
+        return Err(format!(
+            "amount_cents must be positive, got {}",
+            amount_cents
+        ));
+    }
+    if amount_cents > 100_000 {
+        return Err(format!(
+            "amount_cents exceeds maximum single deduction of $1000 (100000 cents), got {}",
+            amount_cents
+        ));
+    }
+
     let token = get_access_token()?;
     let api_base = get_api_base_url();
 
@@ -596,4 +719,87 @@ pub async fn report_llm_usage(
     }
 
     parse_json_response(&response)
+}
+
+// ---------------------------------------------------------------------------
+// Device Management
+// ---------------------------------------------------------------------------
+
+/// A connected device session visible in account settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectedDevice {
+    /// Unique device identifier.
+    pub id: String,
+    /// Human-readable device name (e.g. "Siddhartha's MacBook Pro").
+    pub name: String,
+    /// Device category: "desktop", "mobile", or "browser".
+    pub device_type: String,
+    /// Operating system: "macos", "windows", "linux", "ios", "android".
+    pub platform: String,
+    /// ISO 8601 timestamp of the last heartbeat / activity.
+    pub last_seen: String,
+    /// `true` when this entry represents the device making the request.
+    pub current: bool,
+}
+
+/// Return the list of devices connected to the current account.
+///
+/// For now this returns at minimum the current device derived from
+/// environment signals.  When the backend API gains a `/api/devices`
+/// endpoint this will proxy through to it.
+#[tauri::command]
+pub async fn account_list_devices() -> Result<Vec<ConnectedDevice>, String> {
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "Desktop".to_string());
+
+    let platform = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    };
+
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let current_device = ConnectedDevice {
+        id: generate_device_fingerprint(&hostname),
+        name: hostname,
+        device_type: "desktop".to_string(),
+        platform: platform.to_string(),
+        last_seen: now,
+        current: true,
+    };
+
+    Ok(vec![current_device])
+}
+
+/// Disconnect / revoke a device session by its identifier.
+///
+/// Validates the `device_id` format (must be a 64-character hex SHA-256
+/// digest) and returns `Ok(())`.  Once the backend API exposes a revocation
+/// endpoint this will forward the call.
+#[tauri::command]
+pub async fn account_disconnect_device(device_id: String) -> Result<(), String> {
+    // Validate device_id looks like a hex SHA-256 digest (64 hex chars).
+    if device_id.len() != 64 || !device_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!(
+            "Invalid device_id format: expected 64 hex characters, got {} characters",
+            device_id.len()
+        ));
+    }
+
+    // Check that the caller is not trying to disconnect the current device.
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "Desktop".to_string());
+    let current_fingerprint = generate_device_fingerprint(&hostname);
+
+    if device_id == current_fingerprint {
+        return Err("Cannot disconnect the current device. Sign out instead.".to_string());
+    }
+
+    // TODO: Forward to backend API when /api/devices/:id/revoke is available.
+    Ok(())
 }

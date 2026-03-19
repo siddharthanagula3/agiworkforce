@@ -1,16 +1,31 @@
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
-const APP_DATA_DIR_ENV: &str = "AGIWORKFORCE_APP_DATA_DIR";
+/// Thread-safe, single-write storage for the resolved app data directory.
+/// Populated once by `set_app_data_dir()` during `setup()` in lib.rs,
+/// then read by `app_data_dir()` and its downstream callers.
+/// Replaces the previous `std::env::set_var` approach which is unsound
+/// in multi-threaded programs (UB per POSIX, Rust 1.66+ warning).
+static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Called once during Tauri `setup()` to publish the resolved app data dir.
+/// Subsequent calls are harmless no-ops (`OnceLock::set` returns `Err` if
+/// already initialised, but we intentionally ignore that).
+pub fn set_app_data_dir(path: PathBuf) {
+    let _ = APP_DATA_DIR.set(path);
+}
 
 pub fn app_data_dir() -> anyhow::Result<PathBuf> {
-    if let Ok(dir_override) = std::env::var(APP_DATA_DIR_ENV) {
-        let dir = PathBuf::from(dir_override);
+    // Primary: OnceLock set during setup().
+    if let Some(dir) = APP_DATA_DIR.get() {
         if !dir.exists() {
-            std::fs::create_dir_all(&dir)?;
+            std::fs::create_dir_all(dir)?;
         }
-        return Ok(dir);
+        return Ok(dir.clone());
     }
 
+    // Fallback for code that runs before setup() (e.g. telemetry init)
+    // or in standalone/test contexts where Tauri setup hasn't executed.
     let dir = dirs::data_local_dir()
         .ok_or_else(|| anyhow::anyhow!("Failed to get local data directory"))?
         .join("agiworkforce");

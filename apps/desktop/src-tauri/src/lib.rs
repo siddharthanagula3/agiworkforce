@@ -35,9 +35,22 @@ use crate::sys::diagnostics::DiagnosticsState;
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
 use anyhow::Context;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{async_runtime, Manager};
 use tokio::sync::Mutex as TokioMutex;
+
+/// Managed state holding the resolved app data directory.
+/// Replaces `std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", ...)` which is
+/// unsafe in multi-threaded contexts (UB per POSIX `setenv` + Rust 1.66+ lint).
+/// Injected via `app.manage()` inside `setup()` so every Tauri command can
+/// retrieve it with `State<AppDirs>`.  The companion `OnceLock` in
+/// `sys::utils` allows non-command code to resolve the same path without
+/// needing a Tauri handle.
+#[derive(Debug, Clone)]
+pub struct AppDirs {
+    pub data_dir: PathBuf,
+}
 
 /// Returns `true` when this process already holds macOS Accessibility permission.
 /// Uses `AXIsProcessTrusted()` which **never prompts** — it only reads the TCC database.
@@ -176,11 +189,14 @@ pub fn run() {
                 tracing::error!("Failed to create data directory: {}", e);
             }
 
-            // Ensure utility/path helpers resolve to the same app-data root as startup DB init.
-            std::env::set_var(
-                "AGIWORKFORCE_APP_DATA_DIR",
-                app_data_dir.to_string_lossy().to_string(),
-            );
+            // Publish the resolved data-dir via thread-safe OnceLock (replaces env var).
+            // This MUST happen before anything calls `sys::utils::app_data_dir()`.
+            crate::sys::utils::set_app_data_dir(app_data_dir.clone());
+
+            // Also expose via Tauri managed state for commands that accept State<AppDirs>.
+            app.manage(AppDirs {
+                data_dir: app_data_dir.clone(),
+            });
 
             // Install native messaging manifest
             if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(Some("bblfoadbknbnmbchfjpgcefpkccpdnfc")) {
@@ -765,23 +781,48 @@ pub fn run() {
 
             // Generate secure token for realtime auth
             let realtime_token = uuid::Uuid::new_v4().to_string();
-            // Write token to file for Native Host to read
-            if let Err(e) = std::fs::write(app_data_dir.join(".ipc_token"), &realtime_token) {
-                tracing::error!("Failed to write .ipc_token: {}", e);
-            }
-            // Restrict .ipc_token to owner-only read/write (0600 on Unix).
-            #[cfg(unix)]
+            // Write token atomically with restricted permissions from the start.
+            // Using OpenOptions ensures the file is created with 0o600 on Unix
+            // *before* any content is written, eliminating the TOCTOU race where
+            // another process could read the token between write and chmod.
             {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(
-                    app_data_dir.join(".ipc_token"),
-                    std::fs::Permissions::from_mode(0o600),
-                );
+                use std::io::Write;
+                let token_path = app_data_dir.join(".ipc_token");
+
+                #[cfg(unix)]
+                let file_result = {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .mode(0o600)
+                        .open(&token_path)
+                };
+
+                #[cfg(not(unix))]
+                let file_result = {
+                    // On Windows, the file lives inside %APPDATA%\com.agiworkforce.desktop\
+                    // which is already user-scoped. The default ACL (owner-only for APPDATA)
+                    // provides equivalent protection, so no additional ACL is needed.
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&token_path)
+                };
+
+                match file_result {
+                    Ok(mut file) => {
+                        if let Err(e) = file.write_all(realtime_token.as_bytes()) {
+                            tracing::error!("Failed to write .ipc_token content: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to create .ipc_token: {}", e);
+                    }
+                }
             }
-            // On Windows, the file lives inside %APPDATA%\com.agiworkforce.desktop\
-            // which is already user-scoped. The write above uses the default ACL
-            // (owner-only for APPDATA), so no additional ACL manipulation is needed.
-            // This comment documents the intentional no-op for future auditors.
 
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
                 presence_manager.clone(),
@@ -954,6 +995,10 @@ pub fn run() {
                     tracing::error!("[window] initialization failed: {err:?}");
                 }
             }
+
+            // SwarmState moved inside setup() so it has access to the app handle
+            // and initializes alongside all other managed state.
+            app.manage(crate::sys::commands::swarm::SwarmState::new());
 
             Ok(())
         })
@@ -1265,6 +1310,7 @@ pub fn run() {
             crate::sys::commands::git_stash,
             crate::sys::commands::git_stash_pop,
             crate::sys::commands::git_reset,
+            crate::sys::commands::git_checkout_files,
             // Git merge, conflict resolution, and PR commands
             crate::sys::commands::git_merge,
             crate::sys::commands::git_fetch,
@@ -2521,7 +2567,6 @@ pub fn run() {
             crate::core::agent::triggers::update_trigger,
             crate::core::agent::triggers::get_trigger_executions,
         ])
-        .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
